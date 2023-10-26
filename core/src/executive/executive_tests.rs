@@ -10,7 +10,8 @@ use crate::{
     state::{State, Substate},
     test_helpers::get_state_for_genesis_write,
     vm::{
-        self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
+        self, ActionParams, ActionValue, CallType, CreateContractAddress,
+        CreateType, Env,
     },
     vm_factory::VmFactory,
 };
@@ -93,6 +94,7 @@ fn test_sender_balance() {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new("3331600055".from_hex().unwrap()));
     params.value = ActionValue::Transfer(U256::from(0x7));
+    params.create_type = CreateType::CREATE;
     let storage_limit_in_drip = U256::MAX;
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -124,7 +126,7 @@ fn test_sender_balance() {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
         let res = ex
-            .create(params.clone(), &mut substate, &mut tracer)
+            .call(params.clone(), &mut substate, &mut tracer)
             .expect("no db error")
             .expect("no vm error");
         state
@@ -209,6 +211,7 @@ fn test_create_contract_out_of_depth() {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(100));
+    params.create_type = CreateType::CREATE;
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
@@ -224,7 +227,7 @@ fn test_create_contract_out_of_depth() {
     let FinalizationResult { gas_left, .. } = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
-        ex.create(params, &mut substate, &mut tracer)
+        ex.call(params, &mut substate, &mut tracer)
             .expect("no db error")
             .expect("no vm error")
     };
@@ -288,7 +291,7 @@ fn test_suicide_when_creation() {
         return_data: _,
         ..
     } = ex
-        .create(params, &mut substate, &mut tracer)
+        .call(params, &mut substate, &mut tracer)
         .expect("no db error")
         .expect("no vm error");
 
@@ -523,7 +526,7 @@ fn test_keccak() {
     let mut tracer = ();
     let result = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        ex.create(params, &mut substate, &mut tracer)
+        ex.call(params, &mut substate, &mut tracer)
             .expect("no db error")
     };
 
@@ -652,7 +655,7 @@ fn test_deposit_withdraw_lock() {
     // deposit 10^18 - 1, not enough
     params.call_type = CallType::Call;
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a763ffff".from_hex().unwrap());
-    let mut tracer = ();
+
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
@@ -773,7 +776,7 @@ fn test_deposit_withdraw_lock() {
     );
     // withdraw more than staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
-    let mut tracer = ();
+
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");

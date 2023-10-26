@@ -44,7 +44,6 @@ use super::{
 use crate::{
     bytes::Bytes,
     hash::keccak,
-    observer::VmObserve,
     vm::{
         self, ActionParams, ActionValue, CallType, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ParamsType,
@@ -212,11 +211,9 @@ pub struct Interpreter<Cost: CostType> {
 impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
-        tracer: &mut dyn VmObserve,
-    ) -> vm::ExecTrapResult<GasLeft>
-    {
+    ) -> vm::ExecTrapResult<GasLeft> {
         loop {
-            let result = self.step(context, tracer);
+            let result = self.step(context);
             match result {
                 InterpreterResult::Continue => {}
                 InterpreterResult::Done(value) => {
@@ -364,9 +361,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 
     /// Execute a single step on the VM.
     #[inline(always)]
-    pub fn step(
-        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn VmObserve,
-    ) -> InterpreterResult {
+    pub fn step(&mut self, context: &mut dyn vm::Context) -> InterpreterResult {
         if self.done {
             return InterpreterResult::Stopped;
         }
@@ -382,7 +377,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     .as_u256(),
             )))
         } else {
-            self.step_inner(context, tracer)
+            self.step_inner(context)
         };
 
         if let &InterpreterResult::Done(_) = &result {
@@ -395,7 +390,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Inner helper function for step.
     #[inline(always)]
     fn step_inner(
-        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn VmObserve,
+        &mut self, context: &mut dyn vm::Context,
     ) -> InterpreterResult {
         let result = match self.resume_result.take() {
             Some(result) => result,
@@ -501,7 +496,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                     context,
                     instruction,
                     requirements.provide_gas,
-                    tracer,
                 ) {
                     Err(x) => {
                         return InterpreterResult::Done(Err(x));
@@ -691,7 +685,6 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn exec_instruction(
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
-        tracer: &mut dyn VmObserve,
     ) -> vm::Result<InstructionResult<Cost>>
     {
         trace!("exec instruction: {:?}", instruction);
@@ -993,7 +986,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
                 let refund_address = u256_to_address(&address);
-                context.suicide(&refund_address, tracer)?;
+                context.suicide(&refund_address)?;
                 return Ok(InstructionResult::StopExecution);
             }
             instructions::LOG0
@@ -1677,7 +1670,7 @@ mod tests {
         params.value = ActionValue::Transfer(100_000.into());
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new();
-        let mut tracer = ();
+
         context
             .balances
             .insert(Address::from_low_u64_be(5), 1_000_000_000.into());
@@ -1686,8 +1679,7 @@ mod tests {
         //let gas_left = {
         {
             let vm = interpreter(params, &context);
-            test_finalize(vm.exec(&mut context, &mut tracer).ok().unwrap())
-                .unwrap()
+            test_finalize(vm.exec(&mut context).ok().unwrap()).unwrap()
         };
 
         assert_eq!(context.calls.len(), 1);
@@ -1704,7 +1696,7 @@ mod tests {
         params.gas_price = 1.into();
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new_spec();
-        let mut tracer = ();
+
         context
             .balances
             .insert(Address::from_low_u64_be(5), 1_000_000_000.into());
@@ -1712,7 +1704,7 @@ mod tests {
 
         let err = {
             let vm = interpreter(params, &context);
-            test_finalize(vm.exec(&mut context, &mut tracer).ok().unwrap())
+            test_finalize(vm.exec(&mut context).ok().unwrap())
                 .err()
                 .unwrap()
         };

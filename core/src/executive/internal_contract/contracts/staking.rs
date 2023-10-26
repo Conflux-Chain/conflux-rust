@@ -51,7 +51,7 @@ impl UpfrontPaymentTrait for Deposit {
 impl SimpleExecutionTrait for Deposit {
     fn execute_inner(
         &self, input: U256, params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<()>
     {
         deposit(
@@ -60,7 +60,7 @@ impl SimpleExecutionTrait for Deposit {
             context.env,
             context.spec,
             context.state,
-            tracer,
+            context.tracer,
         )
     }
 }
@@ -87,7 +87,7 @@ impl UpfrontPaymentTrait for Withdraw {
 impl SimpleExecutionTrait for Withdraw {
     fn execute_inner(
         &self, input: U256, params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<()>
     {
         withdraw(
@@ -96,7 +96,7 @@ impl SimpleExecutionTrait for Withdraw {
             context.env,
             context.spec,
             context.state,
-            tracer,
+            context.tracer,
         )
     }
 }
@@ -120,7 +120,7 @@ impl UpfrontPaymentTrait for VoteLock {
 impl SimpleExecutionTrait for VoteLock {
     fn execute_inner(
         &self, inputs: (U256, U256), params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<()>
     {
         vote_lock(inputs.0, inputs.1, params, context.env, context.state)
@@ -135,7 +135,7 @@ impl_function_type!(GetStakingBalance, "query_with_default_gas");
 impl SimpleExecutionTrait for GetStakingBalance {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<U256>
     {
         Ok(context.state.staking_balance(&input)?)
@@ -161,7 +161,7 @@ impl UpfrontPaymentTrait for GetLockedStakingBalance {
 impl SimpleExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<U256>
     {
         Ok(get_locked_staking(
@@ -192,7 +192,7 @@ impl UpfrontPaymentTrait for GetVotePower {
 impl SimpleExecutionTrait for GetVotePower {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<U256>
     {
         Ok(get_vote_power(

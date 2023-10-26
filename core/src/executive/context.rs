@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // Transaction execution environment.
+pub use super::executive::FrameContext;
 use super::{
     executive::*,
     internal_contract::{suicide as suicide_impl, InternalRefContext},
@@ -57,79 +58,71 @@ impl OriginInfo {
     pub fn recipient(&self) -> &Address { &self.address }
 }
 
-/// Implementation of EVM context.
-pub struct Context<
-    'a, /* Lifetime of transaction executive. */
-    'b, /* Lifetime of call-create executive. */
-> {
-    state: &'b mut State,
-    callstack: &'b mut CallStackInfo,
-    local_part: &'b mut LocalContext<'a>,
+pub struct Context<'a> {
+    space: Space,
+    env: &'a Env,
+    depth: usize,
+    create_address: &'a Option<Address>,
+    origin: &'a OriginInfo,
+    substate: &'a mut Substate,
+    machine: &'a Machine,
+    spec: &'a Spec,
+    static_flag: bool,
+
+    state: &'a mut State,
+    callstack: &'a mut CallStackInfo,
+    tracer: &'a mut dyn VmObserve,
 }
 
-/// The `LocalContext` only contains the parameters can be owned by an
-/// executive. It will be never change during the lifetime of its corresponding
-/// executive.
-pub struct LocalContext<'a> {
-    pub space: Space,
-    pub env: &'a Env,
-    pub depth: usize,
-    pub is_create: bool,
-    pub origin: OriginInfo,
-    pub substate: Substate,
-    pub machine: &'a Machine,
-    pub spec: &'a Spec,
-    pub static_flag: bool,
-}
-
-impl<'a, 'b> LocalContext<'a> {
-    pub fn new(
-        space: Space, env: &'a Env, machine: &'a Machine, spec: &'a Spec,
-        depth: usize, origin: OriginInfo, substate: Substate, is_create: bool,
-        static_flag: bool,
+impl<'a> Context<'a> {
+    pub fn new<'b, 'c>(
+        frame_context: &'a mut FrameContext<'b>,
+        runtime_resources: &'a mut RuntimeRes<'c>,
     ) -> Self
     {
-        LocalContext {
+        let space = frame_context.space;
+        let env = &frame_context.env;
+        let depth = frame_context.depth;
+        let create_address = &frame_context.create_address;
+        let origin = &frame_context.origin;
+        let substate = &mut frame_context.substate;
+        let machine = frame_context.machine;
+        let spec = frame_context.spec;
+        let static_flag = frame_context.static_flag;
+
+        let state = &mut *runtime_resources.state;
+        let callstack = &mut *runtime_resources.callstack;
+        let tracer = &mut *runtime_resources.tracer;
+        Context {
             space,
             env,
             depth,
+            create_address,
             origin,
             substate,
             machine,
             spec,
-            is_create,
             static_flag,
-        }
-    }
-
-    /// The `LocalContext` only contains the parameters can be owned by an
-    /// executive. For the parameters shared between executives (like `&mut
-    /// State`), the executive should activate `LocalContext` by passing in
-    /// these parameters.
-    pub fn activate(
-        &'b mut self, state: &'b mut State, callstack: &'b mut CallStackInfo,
-    ) -> Context<'a, 'b> {
-        Context {
             state,
-            local_part: self,
             callstack,
+            tracer,
         }
     }
 }
 
-impl<'a, 'b> ContextTrait for Context<'a, 'b> {
+impl<'a> ContextTrait for Context<'a> {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         let caller = AddressWithSpace {
-            address: self.local_part.origin.address,
-            space: self.local_part.space,
+            address: self.origin.address,
+            space: self.space,
         };
         self.state.storage_at(&caller, key).map_err(Into::into)
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
         let caller = AddressWithSpace {
-            address: self.local_part.origin.address,
-            space: self.local_part.space,
+            address: self.origin.address,
+            space: self.space,
         };
         if self.is_static_or_reentrancy() {
             Err(vm::Error::MutableCallInStaticContext)
@@ -139,8 +132,8 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
                     &caller,
                     key,
                     value,
-                    self.local_part.origin.storage_owner,
-                    &mut self.local_part.substate,
+                    self.origin.storage_owner,
+                    &mut self.substate,
                 )
                 .map_err(Into::into)
         }
@@ -149,7 +142,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     fn exists(&self, address: &Address) -> vm::Result<bool> {
         let address = AddressWithSpace {
             address: *address,
-            space: self.local_part.space,
+            space: self.space,
         };
         self.state.exists(&address).map_err(Into::into)
     }
@@ -157,28 +150,25 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     fn exists_and_not_null(&self, address: &Address) -> vm::Result<bool> {
         let address = AddressWithSpace {
             address: *address,
-            space: self.local_part.space,
+            space: self.space,
         };
         self.state.exists_and_not_null(&address).map_err(Into::into)
     }
 
     fn origin_balance(&self) -> vm::Result<U256> {
-        self.balance(&self.local_part.origin.address)
-            .map_err(Into::into)
+        self.balance(&self.origin.address).map_err(Into::into)
     }
 
     fn balance(&self, address: &Address) -> vm::Result<U256> {
         let address = AddressWithSpace {
             address: *address,
-            space: self.local_part.space,
+            space: self.space,
         };
         self.state.balance(&address).map_err(Into::into)
     }
 
     fn blockhash(&mut self, number: &U256) -> H256 {
-        if self.local_part.space == Space::Ethereum
-            && self.local_part.spec.cip98
-        {
+        if self.space == Space::Ethereum && self.spec.cip98 {
             return if U256::from(self.env().epoch_height) == number + 1 {
                 self.env().last_hash.clone()
             } else {
@@ -203,15 +193,15 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     >
     {
         let caller = AddressWithSpace {
-            address: self.local_part.origin.address,
-            space: self.local_part.space,
+            address: self.origin.address,
+            space: self.space,
         };
 
         let create_type = CreateType::from_address_scheme(&address_scheme);
         // create new contract address
         let (address_with_space, code_hash) = self::contract_address(
             address_scheme,
-            self.local_part.env.number.into(),
+            self.env.number.into(),
             &caller,
             &self.state.nonce(&caller)?,
             &code,
@@ -223,7 +213,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
         // address. This should generally not happen. Unless we enable
         // account dust in future. We add this check just in case it
         // helps in future.
-        if self.local_part.space == Space::Native
+        if self.space == Space::Native
             && self.state.is_contract_with_code(&address_with_space)?
         {
             debug!("Contract address conflict!");
@@ -233,14 +223,14 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
 
         // prepare the params
         let params = ActionParams {
-            space: self.local_part.space,
+            space: self.space,
             code_address: address.clone(),
             address: address.clone(),
-            sender: self.local_part.origin.address.clone(),
-            original_sender: self.local_part.origin.original_sender,
-            storage_owner: self.local_part.origin.storage_owner,
+            sender: self.origin.address.clone(),
+            original_sender: self.origin.original_sender,
+            storage_owner: self.origin.storage_owner,
             gas: *gas,
-            gas_price: self.local_part.origin.gas_price,
+            gas_price: self.origin.gas_price,
             value: ActionValue::Transfer(*value),
             code: Some(Arc::new(code.to_vec())),
             code_hash,
@@ -251,7 +241,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
         };
 
         if !self.is_static_or_reentrancy() {
-            if !self.local_part.spec.keep_unsigned_nonce
+            if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
                 self.state.inc_nonce(&caller)?;
@@ -269,14 +259,12 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     {
         trace!(target: "context", "call");
 
-        let code_address_with_space =
-            code_address.with_space(self.local_part.space);
+        let code_address_with_space = code_address.with_space(self.space);
 
         let (code, code_hash) = if let Some(contract) = self
-            .local_part
             .machine
             .internal_contracts()
-            .contract(&code_address_with_space, self.local_part.spec)
+            .contract(&code_address_with_space, self.spec)
         {
             (Some(contract.code()), Some(contract.code_hash()))
         } else {
@@ -287,15 +275,15 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
         };
 
         let mut params = ActionParams {
-            space: self.local_part.space,
+            space: self.space,
             sender: *sender_address,
             address: *receive_address,
-            value: ActionValue::Apparent(self.local_part.origin.value),
+            value: ActionValue::Apparent(self.origin.value),
             code_address: *code_address,
-            original_sender: self.local_part.origin.original_sender,
-            storage_owner: self.local_part.origin.storage_owner,
+            original_sender: self.origin.original_sender,
+            storage_owner: self.origin.storage_owner,
             gas: *gas,
-            gas_price: self.local_part.origin.gas_price,
+            gas_price: self.origin.gas_price,
             code,
             code_hash,
             data: Some(data.to_vec()),
@@ -312,12 +300,11 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
-        let address = address.with_space(self.local_part.space);
+        let address = address.with_space(self.space);
         if let Some(contract) = self
-            .local_part
             .machine
             .internal_contracts()
-            .contract(&address, self.local_part.spec)
+            .contract(&address, self.spec)
         {
             Ok(Some(contract.code()))
         } else {
@@ -326,13 +313,12 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
-        let address = address.with_space(self.local_part.space);
+        let address = address.with_space(self.space);
 
         if let Some(contract) = self
-            .local_part
             .machine
             .internal_contracts()
-            .contract(&address, self.local_part.spec)
+            .contract(&address, self.spec)
         {
             Ok(Some(contract.code_hash()))
         } else {
@@ -341,13 +327,12 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
-        let address = address.with_space(self.local_part.space);
+        let address = address.with_space(self.space);
 
         if let Some(contract) = self
-            .local_part
             .machine
             .internal_contracts()
-            .contract(&address, self.local_part.spec)
+            .contract(&address, self.spec)
         {
             Ok(Some(contract.code_size()))
         } else {
@@ -362,12 +347,12 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        let address = self.local_part.origin.address.clone();
-        self.local_part.substate.logs.push(LogEntry {
+        let address = self.origin.address.clone();
+        self.substate.logs.push(LogEntry {
             address,
             topics,
             data: data.to_vec(),
-            space: self.local_part.space,
+            space: self.space,
         });
 
         Ok(())
@@ -377,35 +362,27 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
         self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
     where Self: Sized {
-        let caller = self
-            .local_part
-            .origin
-            .address
-            .with_space(self.local_part.space);
+        let caller = self.origin.address.with_space(self.space);
 
-        match self.local_part.is_create {
+        match self.create_address.is_some() {
             false => Ok(*gas),
             true if apply_state => {
-                let create_data_gas = self.local_part.spec.create_data_gas
-                    * match self.local_part.space {
+                let create_data_gas = self.spec.create_data_gas
+                    * match self.space {
                         Space::Native => 1,
-                        Space::Ethereum => self.local_part.spec.evm_gas_ratio,
+                        Space::Ethereum => self.spec.evm_gas_ratio,
                     };
                 let return_cost = U256::from(data.len()) * create_data_gas;
                 if return_cost > *gas
-                    || data.len() > self.local_part.spec.create_data_limit
+                    || data.len() > self.spec.create_data_limit
                 {
-                    return match self
-                        .local_part
-                        .spec
-                        .exceptional_failed_code_deposit
-                    {
+                    return match self.spec.exceptional_failed_code_deposit {
                         true => Err(vm::Error::OutOfGas),
                         false => Ok(*gas),
                     };
                 }
 
-                if self.local_part.space == Space::Native {
+                if self.space == Space::Native {
                     let collateral_units_for_code =
                         code_collateral_units(data.len());
                     let collateral_in_drips =
@@ -415,14 +392,14 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
                         "ret()  collateral_for_code={:?}",
                         collateral_in_drips
                     );
-                    self.local_part.substate.record_storage_occupy(
-                        &self.local_part.origin.storage_owner,
+                    self.substate.record_storage_occupy(
+                        &self.origin.storage_owner,
                         collateral_units_for_code,
                     );
                 }
 
-                let owner = if self.local_part.space == Space::Native {
-                    self.local_part.origin.storage_owner
+                let owner = if self.space == Space::Native {
+                    self.origin.storage_owner
                 } else {
                     Address::zero()
                 };
@@ -435,45 +412,38 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
         }
     }
 
-    fn suicide(
-        &mut self, refund_address: &Address, tracer: &mut dyn VmObserve,
-    ) -> vm::Result<()> {
+    fn suicide(&mut self, refund_address: &Address) -> vm::Result<()> {
         if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
         suicide_impl(
-            &self
-                .local_part
-                .origin
-                .address
-                .with_space(self.local_part.space),
-            &refund_address.with_space(self.local_part.space),
+            &self.origin.address.with_space(self.space),
+            &refund_address.with_space(self.space),
             self.state,
-            &self.local_part.spec,
-            &mut self.local_part.substate,
-            tracer,
+            &self.spec,
+            &mut self.substate,
+            self.tracer,
         )
     }
 
-    fn spec(&self) -> &Spec { &self.local_part.spec }
+    fn spec(&self) -> &Spec { &self.spec }
 
-    fn env(&self) -> &Env { &self.local_part.env }
+    fn env(&self) -> &Env { &self.env }
 
-    fn space(&self) -> Space { self.local_part.space }
+    fn space(&self) -> Space { self.space }
 
     fn chain_id(&self) -> u64 {
-        let space = self.local_part.space;
-        self.local_part
-            .machine
+        let space = self.space;
+        self.machine
             .params()
             .chain_id
             .read()
-            .get_chain_id(self.local_part.env.epoch_height)
+            .get_chain_id(self.env.epoch_height)
             .in_space(space) as u64
     }
 
-    fn depth(&self) -> usize { self.local_part.depth }
+    fn depth(&self) -> usize { self.depth }
 
     fn trace_next_instruction(
         &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
@@ -497,22 +467,22 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
         // TODO
     }
 
-    fn is_static(&self) -> bool { self.local_part.static_flag }
+    fn is_static(&self) -> bool { self.static_flag }
 
     fn is_static_or_reentrancy(&self) -> bool {
-        self.local_part.static_flag
-            || self.callstack.in_reentrancy(self.local_part.spec)
+        self.static_flag || self.callstack.in_reentrancy(self.spec)
     }
 
     fn internal_ref(&mut self) -> InternalRefContext {
         InternalRefContext {
-            env: self.local_part.env,
-            spec: self.local_part.spec,
+            env: self.env,
+            spec: self.spec,
             callstack: self.callstack,
             state: self.state,
-            substate: &mut self.local_part.substate,
-            static_flag: self.local_part.static_flag,
-            depth: self.local_part.depth,
+            substate: &mut self.substate,
+            static_flag: self.static_flag,
+            depth: self.depth,
+            tracer: self.tracer,
         }
     }
 }
@@ -521,8 +491,9 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
 /// calls from test.
 #[cfg(test)]
 mod tests {
-    use super::{LocalContext, OriginInfo};
+    use super::{FrameContext, OriginInfo};
     use crate::{
+        executive::executive::OwnedRuntimeRes,
         machine::{new_machine_with_builtin, Machine},
         state::{CallStackInfo, State, Substate},
         test_helpers::get_state_for_genesis_write,
@@ -617,9 +588,8 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::new();
 
-        let mut lctx = LocalContext::new(
+        let mut lctx = FrameContext::new(
             Space::Native,
             &setup.env,
             &setup.machine,
@@ -627,10 +597,12 @@ mod tests {
             0, /* depth */
             origin,
             setup.substate,
-            true,  /* is_create */
+            None,
             false, /* static_flag */
         );
-        let ctx = lctx.activate(state, &mut callstack);
+        let mut owned_res = OwnedRuntimeRes::from(state);
+        let mut resources = owned_res.as_res();
+        let ctx = lctx.make_vm_context(&mut resources);
 
         assert_eq!(ctx.env().number, 100);
     }
@@ -640,9 +612,8 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::new();
 
-        let mut lctx = LocalContext::new(
+        let mut lctx = FrameContext::new(
             Space::Native,
             &setup.env,
             &setup.machine,
@@ -650,10 +621,12 @@ mod tests {
             0, /* depth */
             origin,
             setup.substate,
-            true,  /* is_create */
+            None,
             false, /* static_flag */
         );
-        let mut ctx = lctx.activate(state, &mut callstack);
+        let mut owned_res = OwnedRuntimeRes::from(state);
+        let mut resources = owned_res.as_res();
+        let mut ctx = lctx.make_vm_context(&mut resources);
 
         let hash = ctx.blockhash(
             &"0000000000000000000000000000000000000000000000000000000000120000"
@@ -760,10 +733,9 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::new();
 
         {
-            let mut lctx = LocalContext::new(
+            let mut lctx = FrameContext::new(
                 Space::Native,
                 &setup.env,
                 &setup.machine,
@@ -771,11 +743,18 @@ mod tests {
                 0, /* depth */
                 origin,
                 setup.substate,
-                true,  /* is_create */
+                None,
                 false, /* static_flag */
             );
-            let mut ctx = lctx.activate(state, &mut callstack);
-            ctx.log(log_topics, &log_data).unwrap();
+
+            {
+                let mut owned_res = OwnedRuntimeRes::from(state);
+                let mut resources = owned_res.as_res();
+
+                let mut ctx = lctx.make_vm_context(&mut resources);
+                ctx.log(log_topics, &log_data).unwrap();
+            }
+
             assert_eq!(lctx.substate.logs.len(), 1);
         }
     }
@@ -788,7 +767,6 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let mut origin = get_test_origin();
-        let mut callstack = CallStackInfo::new();
 
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();
@@ -808,7 +786,7 @@ mod tests {
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
 
         {
-            let mut lctx = LocalContext::new(
+            let mut lctx = FrameContext::new(
                 Space::Native,
                 &setup.env,
                 &setup.machine,
@@ -816,12 +794,13 @@ mod tests {
                 0, /* depth */
                 origin,
                 setup.substate,
-                true,  /* is_create */
+                None,
                 false, /* static_flag */
             );
-            let mut ctx = lctx.activate(state, &mut callstack);
-            let mut tracer = ();
-            ctx.suicide(&refund_account, &mut tracer).unwrap();
+            let mut owned_res = OwnedRuntimeRes::from(state);
+            let mut resources = owned_res.as_res();
+            let mut ctx = lctx.make_vm_context(&mut resources);
+            ctx.suicide(&refund_account).unwrap();
             assert_eq!(lctx.substate.suicides.len(), 1);
         }
     }

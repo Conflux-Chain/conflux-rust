@@ -4,7 +4,7 @@
 
 use crate::{
     internal_bail,
-    observer::{AddressPocket, VmObserve},
+    observer::AddressPocket,
     state::{cleanup_mode, State, Substate},
     vm::{self, ActionParams, Spec},
 };
@@ -15,7 +15,7 @@ use super::super::components::InternalRefContext;
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+    context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -66,7 +66,7 @@ pub fn set_sponsor_for_gas(
         }
         // refund to previous sponsor
         if prev_sponsor.is_some() {
-            tracer.trace_internal_transfer(
+            context.tracer.trace_internal_transfer(
                 AddressPocket::SponsorBalanceForGas(contract_address),
                 AddressPocket::Balance(
                     prev_sponsor.unwrap().with_native_space(),
@@ -79,7 +79,7 @@ pub fn set_sponsor_for_gas(
                 cleanup_mode(substate, &spec),
             )?;
         }
-        tracer.trace_internal_transfer(
+        context.tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForGas(contract_address),
             sponsor_balance,
@@ -105,7 +105,7 @@ pub fn set_sponsor_for_gas(
             internal_bail!("cannot change upper_bound to a smaller one");
         }
 
-        tracer.trace_internal_transfer(
+        context.tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForGas(contract_address),
             sponsor_balance,
@@ -129,7 +129,7 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams,
-    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+    context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -173,12 +173,12 @@ pub fn set_sponsor_for_collateral(
         }
         // refund to previous sponsor
         if let Some(ref prev_sponsor) = prev_sponsor {
-            tracer.trace_internal_transfer(
+            context.tracer.trace_internal_transfer(
                 AddressPocket::SponsorBalanceForStorage(contract_address),
                 AddressPocket::Balance(prev_sponsor.with_native_space()),
                 prev_sponsor_balance,
             );
-            tracer.trace_internal_transfer(
+            context.tracer.trace_internal_transfer(
                 AddressPocket::Balance(params.address.with_space(params.space)),
                 AddressPocket::Balance(prev_sponsor.with_native_space()),
                 collateral_for_storage,
@@ -191,7 +191,7 @@ pub fn set_sponsor_for_collateral(
         } else {
             assert_eq!(collateral_for_storage, U256::zero());
         }
-        tracer.trace_internal_transfer(
+        context.tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForStorage(contract_address),
             sponsor_balance - collateral_for_storage,
@@ -208,7 +208,7 @@ pub fn set_sponsor_for_collateral(
             spec.cip107,
         )?
     } else {
-        tracer.trace_internal_transfer(
+        context.tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForStorage(contract_address),
             sponsor_balance,
@@ -226,7 +226,7 @@ pub fn set_sponsor_for_collateral(
         )?
     };
     if !converted_storage_point.is_zero() {
-        tracer.trace_internal_transfer(
+        context.tracer.trace_internal_transfer(
             AddressPocket::SponsorBalanceForStorage(contract_address),
             AddressPocket::MintBurn,
             converted_storage_point,

@@ -2,15 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{context::OriginInfo, Executed, ExecutionError};
+use super::{
+    context::{Context, OriginInfo},
+    Executed, ExecutionError,
+};
 use crate::{
-    builtin::Builtin,
     bytes::Bytes,
     evm::{FinalizationResult, Finalize},
     executive::{
-        context::LocalContext,
         executed::{ExecutionOutcome, ToRepackError, TxDropError},
-        internal_contract::InternalContractTrait,
         vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
         CollateralCheckResultToVmResult,
     },
@@ -25,10 +25,9 @@ use crate::{
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
-        CreateType, Env, Exec, ExecTrapError, ExecTrapResult, GasLeft,
-        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError, TrapResult,
+        CreateType, Env, Exec, ExecTrapError, GasLeft, ResumeCall,
+        ResumeCreate, ReturnData, Spec, TrapError, TrapResult,
     },
-    vm_factory::VmFactory,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_state::{CleanupMode, CollateralCheckResult};
@@ -320,40 +319,131 @@ impl Observer {
     }
 }
 
-enum CallCreateExecutiveKind<'a> {
-    Transfer,
-    CallBuiltin(&'a Builtin),
-    CallInternalContract(&'a Box<dyn InternalContractTrait>),
-    ExecCall,
-    ExecCreate,
+pub struct FreshFrame<'a> {
+    params: ActionParams,
+    context: FrameContext<'a>,
 }
 
-pub struct CallCreateExecutive<'a> {
-    context: LocalContext<'a>,
-    factory: &'a VmFactory,
-    status: ExecutiveStatus,
-    create_address: Option<Address>,
-    kind: CallCreateExecutiveKind<'a>,
+pub struct SuspendedFrame<'a> {
+    resumer: FrameResumer,
+    context: FrameContext<'a>,
 }
 
-pub enum ExecutiveStatus {
-    Input(ActionParams),
-    Running,
-    ResumeCall(Box<dyn ResumeCall>),
-    ResumeCreate(Box<dyn ResumeCreate>),
-    Done,
+pub struct RuntimeRes<'a> {
+    pub state: &'a mut State,
+    pub callstack: &'a mut CallStackInfo,
+    pub tracer: &'a mut dyn VmObserve,
 }
 
-impl<'a> CallCreateExecutive<'a> {
-    /// Create a new call executive using raw data.
-    pub fn new_call_raw(
-        params: ActionParams, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, factory: &'a VmFactory, depth: usize,
-        parent_static_flag: bool,
+#[cfg(test)]
+mod runtime_res_test {
+    use super::RuntimeRes;
+    use crate::state::CallStackInfo;
+
+    use super::State;
+
+    pub struct OwnedRuntimeRes<'a> {
+        state: &'a mut State,
+        callstack: CallStackInfo,
+        tracer: (),
+    }
+
+    impl<'a> From<&'a mut State> for OwnedRuntimeRes<'a> {
+        fn from(state: &'a mut State) -> Self {
+            OwnedRuntimeRes {
+                state,
+                callstack: CallStackInfo::new(),
+                tracer: (),
+            }
+        }
+    }
+
+    impl<'a> OwnedRuntimeRes<'a> {
+        pub fn as_res<'b>(&'b mut self) -> RuntimeRes<'b> {
+            RuntimeRes {
+                state: &mut self.state,
+                callstack: &mut self.callstack,
+                tracer: &mut self.tracer,
+            }
+        }
+    }
+}
+#[cfg(test)]
+pub use runtime_res_test::OwnedRuntimeRes;
+
+/// The `LocalContext` only contains the parameters can be owned by an
+/// executive. It will be never change during the lifetime of its corresponding
+/// executive.
+pub struct FrameContext<'a> {
+    pub space: Space,
+    pub env: &'a Env,
+    pub depth: usize,
+    pub create_address: Option<Address>,
+    pub origin: OriginInfo,
+    pub substate: Substate,
+    pub machine: &'a Machine,
+    pub spec: &'a Spec,
+    pub static_flag: bool,
+}
+
+impl<'a> FrameContext<'a> {
+    pub fn new(
+        space: Space, env: &'a Env, machine: &'a Machine, spec: &'a Spec,
+        depth: usize, origin: OriginInfo, substate: Substate,
+        create_address: Option<Address>, static_flag: bool,
     ) -> Self
     {
+        FrameContext {
+            space,
+            env,
+            depth,
+            origin,
+            substate,
+            machine,
+            spec,
+            create_address,
+            static_flag,
+        }
+    }
+
+    /// The `LocalContext` only contains the parameters can be owned by an
+    /// executive. For the parameters shared between executives (like `&mut
+    /// State`), the executive should activate `LocalContext` by passing in
+    /// these parameters.
+    pub fn make_vm_context<'b, 'c>(
+        &'b mut self, resources: &'b mut RuntimeRes<'c>,
+    ) -> Context<'b> {
+        Context::new(self, resources)
+    }
+}
+
+pub enum FrameResumer {
+    ResumeFromCall(Box<dyn ResumeCall>),
+    ResumeFromCreate(Box<dyn ResumeCreate>),
+}
+
+pub struct InvokeInfo<'a> {
+    callee: FreshFrame<'a>,
+    caller: SuspendedFrame<'a>,
+}
+
+pub enum ExecResult<'a> {
+    Return(vm::Result<ExecutiveResult>),
+    Invoke(InvokeInfo<'a>),
+}
+
+impl<'a> FreshFrame<'a> {
+    /// Create a new call executive using raw data.
+    pub fn new(
+        params: ActionParams, env: &'a Env, machine: &'a Machine,
+        spec: &'a Spec, depth: usize, parent_static_flag: bool,
+    ) -> Self
+    {
+        let is_create = params.create_type != CreateType::None;
+        let create_address = is_create.then_some(params.code_address);
         trace!(
-            "Executive::call(params={:?}) self.env={:?}, parent_static={}",
+            "Executive::{:?}(params={:?}) self.env={:?}, parent_static={}",
+            if is_create { "create" } else { "call" },
             params,
             env,
             parent_static_flag,
@@ -365,34 +455,8 @@ impl<'a> CallCreateExecutive<'a> {
         let substate = Substate::new();
         // This logic is moved from function exec.
         let origin = OriginInfo::from(&params);
-        let code_address = AddressWithSpace {
-            address: params.code_address,
-            space: params.space,
-        };
 
-        // Builtin is located for both Conflux Space and EVM Space.
-        let kind =
-            if let Some(builtin) = machine.builtin(&code_address, env.number) {
-                trace!("CallBuiltin");
-                CallCreateExecutiveKind::CallBuiltin(builtin)
-            } else if let Some(internal) =
-                machine.internal_contracts().contract(&code_address, spec)
-            {
-                debug!(
-                    "CallInternalContract: address={:?} data={:?}",
-                    code_address, params.data
-                );
-                CallCreateExecutiveKind::CallInternalContract(internal)
-            } else {
-                if params.code.is_some() {
-                    trace!("ExecCall");
-                    CallCreateExecutiveKind::ExecCall
-                } else {
-                    trace!("Transfer");
-                    CallCreateExecutiveKind::Transfer
-                }
-            };
-        let context = LocalContext::new(
+        let context = FrameContext::new(
             params.space,
             env,
             machine,
@@ -400,253 +464,209 @@ impl<'a> CallCreateExecutive<'a> {
             depth,
             origin,
             substate,
-            /* is_create: */ false,
+            create_address,
             static_flag,
         );
-        Self {
-            context,
-            factory,
-            // Instead of put params to Exective kind, we put it into status.
-            status: ExecutiveStatus::Input(params),
-            create_address: None,
-            kind,
-        }
+        FreshFrame { context, params }
     }
+}
 
-    /// Create a new create executive using raw data.
-    pub fn new_create_raw(
-        params: ActionParams, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, factory: &'a VmFactory, depth: usize,
-        static_flag: bool,
-    ) -> Self
-    {
-        trace!(
-            "Executive::create(params={:?}) self.env={:?}, static={}",
-            params,
-            env,
-            static_flag
-        );
-
-        let origin = OriginInfo::from(&params);
-
-        let kind = CallCreateExecutiveKind::ExecCreate;
-
-        let substate = Substate::new();
-
-        let context = LocalContext::new(
-            params.space,
-            env,
-            machine,
-            spec,
-            depth,
-            origin,
-            substate,
-            /* is_create */ true,
-            static_flag,
-        );
-
-        Self {
-            context,
-            create_address: Some(params.code_address),
-            status: ExecutiveStatus::Input(params),
-            factory,
-            kind,
-        }
-    }
-
+impl<'a> FrameContext<'a> {
     /// This executive always contain an unconfirmed substate, returns a mutable
     /// reference to it.
     pub fn unconfirmed_substate(&mut self) -> &mut Substate {
-        &mut self.context.substate
+        &mut self.substate
     }
 
     /// Get the recipient of this executive. The recipient is the address whose
     /// state will change.
-    pub fn get_recipient(&self) -> &Address { &self.context.origin.recipient() }
+    pub fn get_recipient(&self) -> &Address { &self.origin.recipient() }
+}
 
-    fn check_static_flag(
-        params: &ActionParams, static_flag: bool, is_create: bool,
-    ) -> vm::Result<()> {
-        // This is the function check whether contract creation or value
-        // transferring happens in static context at callee executive. However,
-        // it is meaningless because the caller has checked this constraint
-        // before message call. Currently, if we panic when this
-        // function returns error, all the tests can still pass.
-        // So we no longer check the logic for reentrancy here,
-        // TODO: and later we will check if we can safely remove this function.
-        if is_create {
-            if static_flag {
-                return Err(vm::Error::MutableCallInStaticContext);
-            }
+fn check_static_flag(
+    params: &ActionParams, static_flag: bool, is_create: bool,
+) -> vm::Result<()> {
+    // This is the function check whether contract creation or value
+    // transferring happens in static context at callee executive. However,
+    // it is meaningless because the caller has checked this constraint
+    // before message call. Currently, if we panic when this
+    // function returns error, all the tests can still pass.
+    // So we no longer check the logic for reentrancy here,
+    // TODO: and later we will check if we can safely remove this function.
+    if is_create {
+        if static_flag {
+            return Err(vm::Error::MutableCallInStaticContext);
+        }
+    } else {
+        if static_flag
+            && (params.call_type == CallType::StaticCall
+                || params.call_type == CallType::Call)
+            && params.value.value() > U256::zero()
+        {
+            return Err(vm::Error::MutableCallInStaticContext);
+        }
+    }
+
+    Ok(())
+}
+
+fn transfer_exec_balance(
+    params: &ActionParams, spec: &Spec, state: &mut State,
+    substate: &mut Substate,
+) -> DbResult<()>
+{
+    let sender = AddressWithSpace {
+        address: params.sender,
+        space: params.space,
+    };
+    let receiver = AddressWithSpace {
+        address: params.address,
+        space: params.space,
+    };
+    if let ActionValue::Transfer(val) = params.value {
+        state.transfer_balance(
+            &sender,
+            &receiver,
+            &val,
+            cleanup_mode(substate, &spec),
+        )?;
+    }
+
+    Ok(())
+}
+
+fn transfer_exec_balance_and_init_contract(
+    params: &ActionParams, spec: &Spec, state: &mut State,
+    substate: &mut Substate, storage_layout: Option<StorageLayout>,
+) -> DbResult<()>
+{
+    let sender = AddressWithSpace {
+        address: params.sender,
+        space: params.space,
+    };
+    let receiver = AddressWithSpace {
+        address: params.address,
+        space: params.space,
+    };
+    if let ActionValue::Transfer(val) = params.value {
+        // It is possible to first send money to a pre-calculated
+        // contract address.
+        let prev_balance = state.balance(&receiver)?;
+        state.sub_balance(&sender, &val, &mut cleanup_mode(substate, &spec))?;
+        let admin = if params.space == Space::Native {
+            params.original_sender
         } else {
-            if static_flag
-                && (params.call_type == CallType::StaticCall
-                    || params.call_type == CallType::Call)
-                && params.value.value() > U256::zero()
-            {
-                return Err(vm::Error::MutableCallInStaticContext);
-            }
-        }
-
-        Ok(())
+            Address::zero()
+        };
+        state.new_contract_with_admin(
+            &receiver,
+            &admin,
+            val.saturating_add(prev_balance),
+            storage_layout,
+            spec.cip107,
+        )?;
+    } else {
+        // In contract creation, the `params.value` should never be
+        // `Apparent`.
+        unreachable!();
     }
 
-    fn transfer_exec_balance(
-        params: &ActionParams, spec: &Spec, state: &mut State,
-        substate: &mut Substate,
-    ) -> DbResult<()>
-    {
-        let sender = AddressWithSpace {
-            address: params.sender,
-            space: params.space,
-        };
-        let receiver = AddressWithSpace {
-            address: params.address,
-            space: params.space,
-        };
-        if let ActionValue::Transfer(val) = params.value {
-            state.transfer_balance(
-                &sender,
-                &receiver,
-                &val,
-                cleanup_mode(substate, &spec),
-            )?;
-        }
+    Ok(())
+}
 
-        Ok(())
-    }
-
-    fn transfer_exec_balance_and_init_contract(
-        params: &ActionParams, spec: &Spec, state: &mut State,
-        substate: &mut Substate, storage_layout: Option<StorageLayout>,
-    ) -> DbResult<()>
-    {
-        let sender = AddressWithSpace {
-            address: params.sender,
-            space: params.space,
-        };
-        let receiver = AddressWithSpace {
-            address: params.address,
-            space: params.space,
-        };
-        if let ActionValue::Transfer(val) = params.value {
-            // It is possible to first send money to a pre-calculated
-            // contract address.
-            let prev_balance = state.balance(&receiver)?;
-            state.sub_balance(
-                &sender,
-                &val,
-                &mut cleanup_mode(substate, &spec),
-            )?;
-            let admin = if params.space == Space::Native {
-                params.original_sender
-            } else {
-                Address::zero()
-            };
-            state.new_contract_with_admin(
-                &receiver,
-                &admin,
-                val.saturating_add(prev_balance),
-                storage_layout,
-                spec.cip107,
-            )?;
-        } else {
-            // In contract creation, the `params.value` should never be
-            // `Apparent`.
-            unreachable!();
-        }
-
-        Ok(())
-    }
-
+impl<'a> FrameContext<'a> {
     /// When the executive (the inner EVM) returns, this function will process
     /// the rest tasks: If the execution successes, this function collects
     /// storage collateral change from the cache to substate, merge substate to
     /// its parent and settles down bytecode for newly created contract. If the
     /// execution fails, this function reverts state and drops substate.
     fn process_return(
-        mut self, result: vm::Result<GasLeft>, state: &mut State,
-        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
-    ) -> DbResult<vm::Result<ExecutiveResult>>
-    {
-        let context = self.context.activate(state, callstack);
+        mut self, result: vm::Result<GasLeft>, resources: &mut RuntimeRes<'a>,
+    ) -> DbResult<vm::Result<ExecutiveResult>> {
+        let context = self.make_vm_context(resources);
         // The post execution task in spec is completed here.
         let finalized_result = result.finalize(context);
         let finalized_result = vm::separate_out_db_error(finalized_result)?;
-
-        self.status = ExecutiveStatus::Done;
 
         let apply_state =
             finalized_result.as_ref().map_or(false, |r| r.apply_state);
         let maybe_substate;
         if apply_state {
-            let mut substate = self.context.substate;
+            let mut substate = self.substate;
             if let Some(create_address) = self.create_address {
                 substate
                     .contracts_created
-                    .push(create_address.with_space(self.context.space));
+                    .push(create_address.with_space(self.space));
             }
             maybe_substate = Some(substate);
-            state.discard_checkpoint();
+            resources.state.discard_checkpoint();
         } else {
             maybe_substate = None;
-            state.revert_to_checkpoint();
+            resources.state.revert_to_checkpoint();
         }
 
         let create_address = self.create_address;
         let executive_result = finalized_result.map(|result| {
             ExecutiveResult::new(result, create_address, maybe_substate)
         });
-        if self.context.is_create {
-            tracer.record_create_result(&executive_result);
+        if self.create_address.is_some() {
+            resources.tracer.record_create_result(&executive_result);
         } else {
-            tracer.record_call_result(&executive_result);
+            resources.tracer.record_call_result(&executive_result);
         }
 
-        callstack.pop();
+        resources.callstack.pop();
 
         Ok(executive_result)
     }
 
     /// If the executive triggers a sub-call during execution, this function
     /// outputs a trap error with sub-call parameters and return point.
-    fn process_trap(
-        mut self, trap_err: ExecTrapError,
-    ) -> ExecutiveTrapError<'a> {
-        match trap_err {
+    fn process_invoke(self, trap_err: ExecTrapError) -> InvokeInfo<'a> {
+        let (params, resumer) = match trap_err {
             TrapError::Call(subparams, resume) => {
-                self.status = ExecutiveStatus::ResumeCall(resume);
-                TrapError::Call(subparams, self)
+                (subparams, FrameResumer::ResumeFromCall(resume))
             }
             TrapError::Create(subparams, resume) => {
-                self.status = ExecutiveStatus::ResumeCreate(resume);
-                TrapError::Create(subparams, self)
+                (subparams, FrameResumer::ResumeFromCreate(resume))
             }
-        }
+        };
+        let callee = FreshFrame::new(
+            params,
+            self.env,
+            self.machine,
+            self.spec,
+            self.depth + 1,
+            self.static_flag,
+        );
+        let caller = self.suspend(resumer);
+        InvokeInfo { callee, caller }
     }
 
+    fn suspend(self, resumer: FrameResumer) -> SuspendedFrame<'a> {
+        SuspendedFrame {
+            context: self,
+            resumer,
+        }
+    }
+}
+
+impl<'a> FreshFrame<'a> {
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
     /// `resume` to continue the execution.
     pub fn exec(
-        mut self, state: &mut State, callstack: &mut CallStackInfo,
-        tracer: &mut dyn VmObserve,
-    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
-    {
-        let status =
-            std::mem::replace(&mut self.status, ExecutiveStatus::Running);
-        let params = if let ExecutiveStatus::Input(params) = status {
-            params
-        } else {
-            panic!("Status should be input parameter")
-        };
-
-        let is_create = self.create_address.is_some();
-        assert_eq!(is_create, self.context.is_create);
+        self, resources: &mut RuntimeRes<'a>,
+    ) -> DbResult<ExecResult<'a>> {
+        let FreshFrame {
+            mut context,
+            params,
+        } = self;
+        let is_create = context.create_address.is_some();
 
         // By technical specification and current implementation, the EVM should
         // guarantee the current executive satisfies static_flag.
-        Self::check_static_flag(&params, self.context.static_flag, is_create)
+        check_static_flag(&params, context.static_flag, is_create)
             .expect("check_static_flag should always success because EVM has checked it.");
 
         // Trace task
@@ -655,182 +675,162 @@ impl<'a> CallCreateExecutive<'a> {
                 "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
                 params.address
             );
-            tracer.record_create(&params);
+            resources.tracer.record_create(&params);
         } else {
-            tracer.record_call(&params);
+            resources.tracer.record_call(&params);
         }
 
         // Make checkpoint for this executive, callstack is always maintained
         // with checkpoint.
-        state.checkpoint();
+        resources.state.checkpoint();
 
-        let contract_address = self.get_recipient().clone();
-        callstack
-            .push(contract_address.with_space(self.context.space), is_create);
+        let contract_address = context.get_recipient().clone();
+        resources
+            .callstack
+            .push(contract_address.with_space(context.space), is_create);
 
         // Pre execution: transfer value and init contract.
-        let spec = self.context.spec;
+        let spec = &context.spec;
         if is_create {
-            Self::transfer_exec_balance_and_init_contract(
+            transfer_exec_balance_and_init_contract(
                 &params,
                 spec,
-                state,
+                resources.state,
                 // It is a bug in the Parity version.
-                &mut self.context.substate,
+                &mut context.substate,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
             )?
         } else {
-            Self::transfer_exec_balance(
+            transfer_exec_balance(
                 &params,
                 spec,
-                state,
-                &mut self.context.substate,
+                resources.state,
+                &mut context.substate,
             )?
         };
 
-        // Fetch execution model and execute
-        let exec: Box<dyn Exec> = match self.kind {
-            CallCreateExecutiveKind::Transfer => {
-                Box::new(NoopExec { gas: params.gas })
-            }
-            CallCreateExecutiveKind::CallBuiltin(builtin) => {
-                Box::new(BuiltinExec { builtin, params })
-            }
-            CallCreateExecutiveKind::CallInternalContract(internal) => {
-                Box::new(InternalContractExec { internal, params })
-            }
-            CallCreateExecutiveKind::ExecCall
-            | CallCreateExecutiveKind::ExecCreate => {
-                let factory = self.context.machine.vm_factory();
-                factory.create(params, self.context.spec, self.context.depth)
-            }
-        };
-        let mut context = self.context.activate(state, callstack);
-        let output = exec.exec(&mut context, tracer);
-
-        // Post execution.
-        self.process_output(output, state, callstack, tracer)
+        let exec = context.make_exec(params);
+        context.run(exec, resources)
     }
+}
 
+impl<'a> FrameContext<'a> {
+    fn make_exec(&self, params: ActionParams) -> Box<dyn 'a + Exec> {
+        let is_create = self.create_address.is_some();
+        let code_address = params.code_address.with_space(params.space);
+        let internal_contract_map = self.machine.internal_contracts();
+
+        // Builtin is located for both Conflux Space and EVM Space.
+        if let Some(builtin) =
+            self.machine.builtin(&code_address, self.env.number)
+        {
+            trace!("CallBuiltin");
+            return Box::new(BuiltinExec { builtin, params });
+        }
+
+        if let Some(internal) =
+            internal_contract_map.contract(&code_address, &self.spec)
+        {
+            debug!(
+                "CallInternalContract: address={:?} data={:?}",
+                code_address, params.data
+            );
+            return Box::new(InternalContractExec { internal, params });
+        }
+
+        if is_create || params.code.is_some() {
+            trace!("CallCreate");
+            let factory = self.machine.vm_factory_ref();
+            factory.create(params, self.spec, self.depth)
+        } else {
+            trace!("Transfer");
+            Box::new(NoopExec { gas: params.gas })
+        }
+    }
+}
+
+impl<'a> SuspendedFrame<'a> {
     pub fn resume(
-        mut self, mut result: vm::Result<ExecutiveResult>, state: &mut State,
-        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
-    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
+        self, mut result: vm::Result<ExecutiveResult>,
+        resources: &mut RuntimeRes<'a>,
+    ) -> DbResult<ExecResult<'a>>
     {
-        let status =
-            std::mem::replace(&mut self.status, ExecutiveStatus::Running);
-
-        accrue_substate(self.unconfirmed_substate(), &mut result);
+        let SuspendedFrame {
+            mut context,
+            resumer,
+        } = self;
+        accrue_substate(context.unconfirmed_substate(), &mut result);
 
         // Process resume tasks, which is defined in Instruction Set
         // Specification of tech-specification.
-        let exec = match status {
-            ExecutiveStatus::ResumeCreate(resume) => {
+        let exec = match resumer {
+            FrameResumer::ResumeFromCreate(resume) => {
                 let result = into_contract_create_result(result);
                 resume.resume_create(result)
             }
-            ExecutiveStatus::ResumeCall(resume) => {
+            FrameResumer::ResumeFromCall(resume) => {
                 let result = into_message_call_result(result);
                 resume.resume_call(result)
             }
-            ExecutiveStatus::Input(_)
-            | ExecutiveStatus::Done
-            | ExecutiveStatus::Running => {
-                panic!("Incorrect executive status in resume");
-            }
         };
-
-        let mut context = self.context.activate(state, callstack);
-        let output = exec.exec(&mut context, tracer);
 
         // Post execution.
-        self.process_output(output, state, callstack, tracer)
+        context.run(exec, resources)
     }
+}
 
+impl<'a> FrameContext<'a> {
     #[inline]
-    fn process_output(
-        self, output: ExecTrapResult<GasLeft>, state: &mut State,
-        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
-    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
-    {
+    fn run(
+        mut self, exec: Box<dyn 'a + Exec>, resources: &mut RuntimeRes<'a>,
+    ) -> DbResult<ExecResult<'a>> {
+        let mut vm_context = self.make_vm_context(resources);
+        let output = exec.exec(&mut vm_context);
+
         // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
         // (result of self).
-        let trap_result = match output {
-            TrapResult::Return(result) => TrapResult::Return(
-                self.process_return(result, state, callstack, tracer)?,
-            ),
+        let exec_result = match output {
+            TrapResult::Return(result) => {
+                ExecResult::Return(self.process_return(result, resources)?)
+            }
+
             TrapResult::SubCallCreate(trap_err) => {
-                TrapResult::SubCallCreate(self.process_trap(trap_err))
+                ExecResult::Invoke(self.process_invoke(trap_err))
             }
         };
-        Ok(trap_result)
+        Ok(exec_result)
     }
+}
 
-    /// Execute the top call-create executive. This function handles resume
-    /// traps and sub-level tracing. The caller is expected to handle
-    /// current-level tracing.
-    pub fn consume(
-        self, state: &'a mut State, top_substate: &mut Substate,
-        tracer: &mut dyn VmObserve,
-    ) -> DbResult<vm::Result<FinalizationResult>>
-    {
-        let mut callstack = CallStackInfo::new();
-        let mut executive_stack: Vec<Self> = Vec::new();
+/// Execute the top call-create executive. This function handles resume
+/// traps and sub-level tracing. The caller is expected to handle
+/// current-level tracing.
+pub fn consume<'a>(
+    main_frame: FreshFrame<'a>, mut resources: RuntimeRes<'a>,
+    top_substate: &mut Substate,
+) -> DbResult<vm::Result<FinalizationResult>>
+{
+    let mut frame_stack: Vec<SuspendedFrame> = Vec::new();
 
-        let mut last_res = self.exec(state, &mut callstack, tracer)?;
+    let mut last_result = main_frame.exec(&mut resources)?;
 
-        loop {
-            last_res = match last_res {
-                TrapResult::Return(mut result) => {
-                    let parent = match executive_stack.pop() {
-                        Some(x) => x,
-                        None => {
-                            accrue_substate(top_substate, &mut result);
-                            return Ok(result.map(Into::into));
-                        }
-                    };
+    loop {
+        last_result = match last_result {
+            ExecResult::Return(mut result) => {
+                let frame = match frame_stack.pop() {
+                    Some(x) => x,
+                    None => {
+                        accrue_substate(top_substate, &mut result);
+                        return Ok(result.map(Into::into));
+                    }
+                };
 
-                    parent.resume(result, state, &mut callstack, tracer)?
-                }
-                TrapResult::SubCallCreate(trap_err) => {
-                    let (callee, caller) = Self::from_trap_error(trap_err);
-                    executive_stack.push(caller);
-
-                    callee.exec(state, &mut callstack, tracer)?
-                }
+                frame.resume(result, &mut resources)?
             }
-        }
-    }
-
-    /// Output callee executive and caller executive from trap kind error.
-    pub fn from_trap_error(trap_err: ExecutiveTrapError<'a>) -> (Self, Self) {
-        match trap_err {
-            TrapError::Call(params, parent) => (
-                /* callee */
-                CallCreateExecutive::new_call_raw(
-                    params,
-                    parent.context.env,
-                    parent.context.machine,
-                    parent.context.spec,
-                    parent.factory,
-                    parent.context.depth + 1,
-                    parent.context.static_flag,
-                ),
-                /* caller */ parent,
-            ),
-            TrapError::Create(params, parent) => (
-                /* callee */
-                CallCreateExecutive::new_create_raw(
-                    params,
-                    parent.context.env,
-                    parent.context.machine,
-                    parent.context.spec,
-                    parent.factory,
-                    parent.context.depth + 1,
-                    parent.context.static_flag,
-                ),
-                /* callee */ parent,
-            ),
+            ExecResult::Invoke(InvokeInfo { callee, caller }) => {
+                frame_stack.push(caller);
+                callee.exec(&mut resources)?
+            }
         }
     }
 }
@@ -890,12 +890,12 @@ impl ExecutiveResult {
     }
 }
 
-/// Trap result returned by executive.
-pub type ExecutiveTrapResult<'a, T> =
-    vm::TrapResult<T, CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
+// /// Trap result returned by executive.
+// pub type ExecutiveTrapResult<'a, T> =
+//     vm::TrapResult<T, CallCreateFrame<'a>, CallCreateFrame<'a>>;
 
-pub type ExecutiveTrapError<'a> =
-    vm::TrapError<CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
+// pub type ExecutiveTrapError<'a> =
+//     vm::TrapError<CallCreateFrame<'a>, CallCreateFrame<'a>>;
 
 pub type Executive<'a> = ExecutiveGeneric<'a>;
 
@@ -950,44 +950,26 @@ impl<'a> ExecutiveGeneric<'a> {
         }
     }
 
-    pub fn create(
-        &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn VmObserve,
-    ) -> DbResult<vm::Result<FinalizationResult>>
-    {
-        let vm_factory = self.machine.vm_factory();
-        let result = CallCreateExecutive::new_create_raw(
-            params,
-            self.env,
-            self.machine,
-            self.spec,
-            &vm_factory,
-            self.depth,
-            self.static_flag,
-        )
-        .consume(self.state, substate, tracer)?;
-
-        Ok(result)
-    }
-
     pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
         tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
-        let vm_factory = self.machine.vm_factory();
-        let result = CallCreateExecutive::new_call_raw(
+        let main_frame = FreshFrame::new(
             params,
             self.env,
             self.machine,
             self.spec,
-            &vm_factory,
             self.depth,
             self.static_flag,
-        )
-        .consume(self.state, substate, tracer)?;
-
-        Ok(result)
+        );
+        let mut callstack = CallStackInfo::new();
+        let resources = RuntimeRes {
+            state: &mut self.state,
+            callstack: &mut callstack,
+            tracer,
+        };
+        consume(main_frame, resources, substate)
     }
 
     pub fn transact_virtual(
@@ -1569,105 +1551,31 @@ impl<'a> ExecutiveGeneric<'a> {
         let total_storage_limit =
             self.state.collateral_for_storage(&sender.address)? + storage_cost;
 
+        let mut substate = Substate::new();
+        let params = self.make_action_params(tx, storage_owner, init_gas)?;
+
+        if !self.check_create_address(&params)? {
+            return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(vm::Error::ConflictAddress(
+                    params.address.clone(),
+                )),
+                Executed::execution_error_fully_charged(
+                    tx,
+                    gas_sponsored,
+                    storage_sponsored,
+                    observer.tracer.map_or(Default::default(), |t| t.drain()),
+                    &spec,
+                ),
+            ));
+        }
+
         // Initialize the checkpoint for transaction execution. This checkpoint
-        // can be reverted by "deploying contract on conflict address" or "not
-        // enough balance for storage".
+        // can be reverted by "not enough balance for storage".
         self.state.checkpoint();
         observer.as_state_tracer().checkpoint();
-        let mut substate = Substate::new();
 
-        let res = match tx.action() {
-            Action::Create => {
-                let address_scheme = match tx.space() {
-                    Space::Native => {
-                        CreateContractAddress::FromSenderNonceAndCodeHash
-                    }
-                    Space::Ethereum => CreateContractAddress::FromSenderNonce,
-                };
-                let (new_address, _code_hash) = contract_address(
-                    address_scheme,
-                    self.env.number.into(),
-                    &sender,
-                    &nonce,
-                    &tx.data(),
-                );
-
-                // For a contract address already with code, we do not allow
-                // overlap the address. This should generally
-                // not happen. Unless we enable account dust in
-                // future. We add this check just in case it
-                // helps in future.
-                if sender.space == Space::Native
-                    && self.state.is_contract_with_code(&new_address)?
-                {
-                    observer.as_state_tracer().revert_to_checkpoint();
-                    self.state.revert_to_checkpoint();
-                    return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
-                        ExecutionError::VmError(vm::Error::ConflictAddress(
-                            new_address.address.clone(),
-                        )),
-                        Executed::execution_error_fully_charged(
-                            tx,
-                            gas_sponsored,
-                            storage_sponsored,
-                            observer
-                                .tracer
-                                .map_or(Default::default(), |t| t.drain()),
-                            &spec,
-                        ),
-                    ));
-                }
-
-                let params = ActionParams {
-                    space: sender.space,
-                    code_address: new_address.address,
-                    code_hash: None,
-                    address: new_address.address,
-                    sender: sender.address,
-                    original_sender: sender.address,
-                    storage_owner,
-                    gas: init_gas,
-                    gas_price: *tx.gas_price(),
-                    value: ActionValue::Transfer(*tx.value()),
-                    code: Some(Arc::new(tx.data().clone())),
-                    data: None,
-                    call_type: CallType::None,
-                    create_type: CreateType::CREATE,
-                    params_type: vm::ParamsType::Embedded,
-                };
-                self.create(
-                    params,
-                    &mut substate,
-                    &mut *observer.as_vm_observe(),
-                )?
-            }
-            Action::Call(ref address) => {
-                let address = address.with_space(sender.space);
-                let params = ActionParams {
-                    space: sender.space,
-                    code_address: address.address,
-                    address: address.address,
-                    sender: sender.address,
-                    original_sender: sender.address,
-                    storage_owner,
-                    gas: init_gas,
-                    gas_price: *tx.gas_price(),
-                    value: ActionValue::Transfer(*tx.value()),
-                    code: self.state.code(&address)?,
-                    code_hash: self.state.code_hash(&address)?,
-                    data: Some(tx.data().clone()),
-                    call_type: CallType::Call,
-                    create_type: CreateType::None,
-                    params_type: vm::ParamsType::Separate,
-                };
-                self.call(
-                    params,
-                    &mut substate,
-                    &mut *observer.as_vm_observe(),
-                )?
-            }
-        };
-
+        let res =
+            self.call(params, &mut substate, &mut *observer.as_vm_observe())?;
         // Charge collateral and process the checkpoint.
         let (result, output) = {
             let res = res.and_then(|finalize_res| {
@@ -1739,6 +1647,84 @@ impl<'a> ExecutiveGeneric<'a> {
             observer,
             estimated_gas_limit,
         )?)
+    }
+
+    fn make_action_params(
+        &self, tx: &SignedTransaction, storage_owner: Address, init_gas: U256,
+    ) -> DbResult<ActionParams> {
+        let sender = tx.sender();
+        let nonce = tx.nonce();
+        match tx.action() {
+            Action::Create => {
+                let address_scheme = match tx.space() {
+                    Space::Native => {
+                        CreateContractAddress::FromSenderNonceAndCodeHash
+                    }
+                    Space::Ethereum => CreateContractAddress::FromSenderNonce,
+                };
+                let (new_address, _code_hash) = contract_address(
+                    address_scheme,
+                    self.env.number.into(),
+                    &sender,
+                    &nonce,
+                    &tx.data(),
+                );
+
+                Ok(ActionParams {
+                    space: sender.space,
+                    code_address: new_address.address,
+                    code_hash: None,
+                    address: new_address.address,
+                    sender: sender.address,
+                    original_sender: sender.address,
+                    storage_owner,
+                    gas: init_gas,
+                    gas_price: *tx.gas_price(),
+                    value: ActionValue::Transfer(*tx.value()),
+                    code: Some(Arc::new(tx.data().clone())),
+                    data: None,
+                    call_type: CallType::None,
+                    create_type: CreateType::CREATE,
+                    params_type: vm::ParamsType::Embedded,
+                })
+            }
+            Action::Call(ref address) => {
+                let address = address.with_space(sender.space);
+                Ok(ActionParams {
+                    space: sender.space,
+                    code_address: address.address,
+                    address: address.address,
+                    sender: sender.address,
+                    original_sender: sender.address,
+                    storage_owner,
+                    gas: init_gas,
+                    gas_price: *tx.gas_price(),
+                    value: ActionValue::Transfer(*tx.value()),
+                    code: self.state.code(&address)?,
+                    code_hash: self.state.code_hash(&address)?,
+                    data: Some(tx.data().clone()),
+                    call_type: CallType::Call,
+                    create_type: CreateType::None,
+                    params_type: vm::ParamsType::Separate,
+                })
+            }
+        }
+    }
+
+    /// For a contract address already with code, we do not allow overlap the
+    /// address. This should generally not happen. Unless we enable account dust
+    /// in future. We add this check just in case it helps in future.
+    fn check_create_address(&self, params: &ActionParams) -> DbResult<bool> {
+        if params.create_type != CreateType::CREATE {
+            return Ok(true);
+        }
+
+        if params.space != Space::Native {
+            return Ok(true);
+        }
+
+        let new_address = params.address.with_native_space();
+        self.state.is_contract_with_code(&new_address).map(|x| !x)
     }
 
     // TODO: maybe we can find a better interface for doing the suicide
