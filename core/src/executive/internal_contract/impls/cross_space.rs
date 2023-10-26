@@ -23,8 +23,8 @@ use cfx_types::{
 };
 use keccak_hash::keccak;
 use primitives::{
-    Action, Eip155Transaction, LogEntry, Receipt, SignedTransaction,
-    TransactionOutcome,
+    log_entry::build_bloom, Action, Eip155Transaction, LogEntry, Receipt,
+    SignedTransaction, TransactionOutcome,
 };
 use solidity_abi::{ABIDecodable, ABIEncodable};
 use std::{marker::PhantomData, sync::Arc};
@@ -553,13 +553,15 @@ type Bytes20 = [u8; 20];
 pub fn build_bloom_and_recover_phantom(
     logs: &[LogEntry], tx_hash: H256,
 ) -> (Vec<PhantomTransaction>, Bloom) {
+    (recover_phantom(logs, tx_hash), build_bloom(logs))
+}
+pub fn recover_phantom(
+    logs: &[LogEntry], tx_hash: H256,
+) -> Vec<PhantomTransaction> {
     let mut phantom_txs: Vec<PhantomTransaction> = Default::default();
     let mut maybe_working_tx: Option<PhantomTransaction> = None;
-    let mut all_bloom = Bloom::default();
     let mut cross_space_nonce = 0u32;
     for log in logs.iter() {
-        let log_bloom = log.bloom();
-        all_bloom.accrue_bloom(&log_bloom);
         if log.address == CROSS_SPACE_CONTRACT_ADDRESS {
             let event_sig = log.topics.first().unwrap();
             if event_sig == &CallEvent::EVENT_SIG
@@ -639,12 +641,12 @@ pub fn build_bloom_and_recover_phantom(
             if let Some(ref mut working_tx) = maybe_working_tx {
                 // The receipt is generated in cross-space call
                 working_tx.logs.push(log.clone());
-                working_tx.log_bloom.accrue_bloom(&log_bloom);
+                working_tx.log_bloom.accrue_bloom(&log.bloom());
             } else {
                 // The receipt is generated in evm-space transaction. Does
                 // nothing.
             }
         }
     }
-    return (phantom_txs, all_bloom);
+    return phantom_txs;
 }

@@ -3,8 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 mod context;
-mod estimation;
-mod executed;
 mod executive;
 #[cfg(test)]
 mod executive_tests;
@@ -13,11 +11,15 @@ pub mod internal_contract;
 mod vm_exec;
 
 pub use self::{
-    estimation::{EstimateRequest, TransactCheckSettings, TransactOptions},
-    executed::*,
     executive::{
-        contract_address, gas_required_for, CollateralCheckError,
-        CollateralCheckResult, Executive, ExecutiveGeneric,
+        contract_address,
+        estimation::{
+            EstimateRequest, EstimationContext, TransactOptions,
+            TransactSettings,
+        },
+        executed::{revert_reason_decode, Executed},
+        execution_outcome::*,
+        gas_required_for, ExecutiveContext,
     },
     frame::FrameReturn,
     internal_contract::{InternalContractMap, InternalContractTrait},

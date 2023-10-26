@@ -1,7 +1,6 @@
 use super::{AccountEntryProtectedMethods, RequireCache, State};
-use crate::hash::KECCAK_EMPTY;
+use crate::{hash::KECCAK_EMPTY, state::CleanupMode};
 use cfx_bytes::Bytes;
-use cfx_state::CleanupMode;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,

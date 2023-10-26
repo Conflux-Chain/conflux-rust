@@ -695,6 +695,11 @@ impl TransactionPool {
     pub fn recycle_transactions(
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
+        trace!(
+            "To re-add transactions to transaction pool. \
+             transactions={:?}",
+            &transactions
+        );
         if transactions.is_empty() || !self.ready_for_mining() {
             // Fast return.
             return;

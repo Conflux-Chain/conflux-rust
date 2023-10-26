@@ -92,7 +92,7 @@ impl State {
                 // clone_to_checkpoint.
                 // A cache entries will never be removed, except it is revert to
                 // an Unchanged checkpoint. If this exceptional case happens,
-                // this entry has never be loaded or write during transaction
+                // this entry has never be loaded or written during transaction
                 // execution (regardless the reverted operations), and thus
                 // cannot have keys in the checkpoint.
 

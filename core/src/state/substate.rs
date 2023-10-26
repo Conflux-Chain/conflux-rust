@@ -6,7 +6,10 @@ use super::CleanupMode;
 use crate::evm::{CleanDustMode, Spec};
 use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace};
-use primitives::LogEntry;
+use primitives::{
+    receipt::{SortedStorageChanges, StorageChange},
+    LogEntry,
+};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
@@ -150,6 +153,33 @@ impl Substate {
             (inc - sub, 0)
         } else {
             (0, sub - inc)
+        }
+    }
+
+    pub fn compute_storage_changes(&self) -> SortedStorageChanges {
+        let mut storage_collateralized = vec![];
+        let mut storage_released = vec![];
+
+        let mut affected_address: Vec<_> =
+            self.keys_for_collateral_changed().iter().cloned().collect();
+        affected_address.sort();
+        for address in affected_address {
+            let (inc, sub) = self.get_collateral_change(&address);
+            if inc > 0 {
+                storage_collateralized.push(StorageChange {
+                    address: *address,
+                    collaterals: inc.into(),
+                });
+            } else if sub > 0 {
+                storage_released.push(StorageChange {
+                    address: *address,
+                    collaterals: sub.into(),
+                });
+            }
+        }
+        SortedStorageChanges {
+            storage_collateralized,
+            storage_released,
         }
     }
 

@@ -138,9 +138,10 @@ fn make_executable<'a>(
     if let Some(internal) =
         internal_contract_map.contract(&code_address, &context.spec)
     {
-        debug!(
+        trace!(
             "CallInternalContract: address={:?} data={:?}",
-            code_address, params.data
+            code_address,
+            params.data
         );
         return Box::new(InternalContractExec { internal, params });
     }

@@ -12,10 +12,9 @@ mod substate;
 mod trace;
 
 use cfx_bytes::Bytes;
-use cfx_state::CleanupMode;
-use cfx_types::Address;
+use cfx_types::{Address, AddressWithSpace};
 use primitives::{DepositList, VoteStakeList};
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 pub use overlay_account::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 pub use state_object::{
@@ -32,4 +31,17 @@ trait AccountEntryProtectedMethods {
     fn code_size(&self) -> Option<usize>;
     fn code(&self) -> Option<Arc<Bytes>>;
     fn code_owner(&self) -> Option<Address>;
+}
+
+/// Mode of dealing with null accounts.
+#[derive(PartialEq)]
+pub enum CleanupMode<'a> {
+    /// Create accounts which would be null.
+    ForceCreate,
+    /// Don't delete null accounts upon touching, but also don't create them.
+    NoEmpty,
+    /// Mark all touched accounts.
+    /// TODO: We have not implemented the correct behavior of TrackTouched for
+    /// internal Contracts.
+    TrackTouched(&'a mut HashSet<AddressWithSpace>),
 }

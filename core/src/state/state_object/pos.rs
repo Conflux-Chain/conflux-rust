@@ -3,12 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use super::State;
-use crate::executive::internal_contract::{pos_internal_entries, IndexStatus};
+use crate::{
+    executive::internal_contract::{pos_internal_entries, IndexStatus},
+    state::CleanupMode,
+};
 use cfx_math::sqrt_u256;
 use cfx_parameters::{
     internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS, staking::*,
 };
-use cfx_state::CleanupMode;
 use cfx_statedb::{
     global_params::{
         DistributablePoSInterest, InterestRate, LastDistributeBlock,
