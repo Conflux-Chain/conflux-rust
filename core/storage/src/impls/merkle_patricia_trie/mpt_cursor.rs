@@ -1280,6 +1280,12 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                             child_node.path_start_steps % 2 != 0,
                         );
 
+                        if is_save_as_mode {
+                            MptCursorRw::<Mpt, Self>::copy_subtree_without_root(
+                                        &mut child_node,
+                                    )?;
+                        }
+
                         child_node
                     }
                     None => {

@@ -4,14 +4,31 @@
 
 #[cfg(test)]
 pub fn open_snapshot_db_for_testing(
-    snapshot_path: &Path, readonly: bool,
+    snapshot_path: &Path, readonly: bool, mpt_snapshot_path: &Path,
 ) -> Result<SnapshotDbSqlite> {
-    SnapshotDbSqlite::open(
+    use crate::impls::storage_db::snapshot_mpt_db_sqlite::SnapshotMptDbSqlite;
+
+    use super::SnapshotKvDbSqlite;
+
+    let mpt_snapshot = Arc::new(SnapshotMptDbSqlite::open(
+        mpt_snapshot_path,
+        readonly,
+        &Default::default(),
+        &Arc::new(Semaphore::new(DEFAULT_MAX_OPEN_SNAPSHOTS as usize)),
+        None,
+    )?);
+
+    let kv_snapshot = SnapshotKvDbSqlite::open(
         snapshot_path,
         readonly,
         &Default::default(),
         &Arc::new(Semaphore::new(DEFAULT_MAX_OPEN_SNAPSHOTS as usize)),
-    )
+    )?;
+
+    Ok(SnapshotDbSqlite {
+        snapshot_db: Arc::new(kv_snapshot),
+        mpt_snapshot_db: Some(mpt_snapshot),
+    })
 }
 
 pub trait MptValueKind: Debug {
@@ -87,7 +104,7 @@ use std::fmt::Debug;
 #[cfg(test)]
 use crate::impls::{
     defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
-    storage_db::snapshot_db_sqlite::SnapshotDbTrait,
+    storage_db::snapshot_kv_db_sqlite::SnapshotDbTrait,
 };
 #[cfg(test)]
 use std::{path::Path, sync::Arc};

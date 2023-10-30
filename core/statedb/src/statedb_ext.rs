@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
 use rlp::Rlp;
 
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
@@ -41,6 +42,8 @@ pub trait StateDbExt {
     fn get_vote_list(
         &self, address: &AddressWithSpace,
     ) -> Result<Option<VoteStakeList>>;
+
+    fn get_system_storage(&self, key: &[u8]) -> Result<U256>;
 
     fn get_global_param<T: GlobalParamKey>(&self) -> Result<U256>;
     fn set_global_param<T: GlobalParamKey>(
@@ -198,6 +201,15 @@ impl StateDbExt for StateDbGeneric {
 
     fn get_global_param<T: GlobalParamKey>(&self) -> Result<U256> {
         Ok(self.get::<U256>(T::STORAGE_KEY)?.unwrap_or_default())
+    }
+
+    fn get_system_storage(&self, key: &[u8]) -> Result<U256> {
+        let storage_key = StorageKey::StorageKey {
+            address_bytes: SYSTEM_STORAGE_ADDRESS.as_bytes(),
+            storage_key: key,
+        }
+        .with_native_space();
+        Ok(self.get::<U256>(storage_key)?.unwrap_or_default())
     }
 
     fn set_global_param<T: GlobalParamKey>(
