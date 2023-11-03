@@ -19,6 +19,7 @@ fn test_empty_genesis_block() {
         .get_state_trees(
             &StateIndex::new_for_test_only_delta_mpt(&genesis_epoch_id),
             /* try_open = */ false,
+            true,
         )
         .unwrap();
 }

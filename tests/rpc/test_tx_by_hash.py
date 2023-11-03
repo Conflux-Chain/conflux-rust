@@ -46,7 +46,7 @@ class TestGetTxByHash(RpcClient):
 
         tx2 = self.get_tx(tx_hash)
         assert_equal(tx2["from"], self.GENESIS_ADDR)
-        assert_equal(tx2["to"], to)
+        assert_equal(tx2["to"], to.lower())
         assert_equal(tx2["nonce"], hex(tx.nonce))
         assert_equal(tx2["gas"], hex(tx.gas))
         assert_equal(tx2["gasPrice"], hex(tx.gas_price))

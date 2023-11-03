@@ -133,18 +133,24 @@ pub trait SnapshotDbTrait:
     fn create(
         snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
-        open_semaphore: &Arc<Semaphore>,
+        open_semaphore: &Arc<Semaphore>, mpt_table_in_current_db: bool,
     ) -> StorageResult<Self>;
 
-    fn direct_merge(&mut self) -> StorageResult<MerkleHash>;
+    fn direct_merge(
+        &mut self, old_snapshot_db: Option<&Arc<Self>>,
+        mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
+    ) -> StorageResult<MerkleHash>;
 
     fn copy_and_merge(
-        &mut self, old_snapshot_db: &Self,
+        &mut self, old_snapshot_db: &Arc<Self>,
+        mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
     ) -> StorageResult<MerkleHash>;
 
     fn start_transaction(&mut self) -> StorageResult<()>;
 
     fn commit_transaction(&mut self) -> StorageResult<()>;
+
+    fn is_mpt_table_in_current_db(&self) -> bool;
 
     fn snapshot_kv_iterator(
         &self,
@@ -163,7 +169,10 @@ pub trait SnapshotDbTrait:
 use crate::{
     impls::{
         errors::Result as StorageResult,
-        storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+        storage_db::{
+            snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+            snapshot_mpt_db_sqlite::SnapshotMptDbSqlite,
+        },
     },
     storage_db::{
         KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead, KeyValueDbTraitRead,
