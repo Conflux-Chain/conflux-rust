@@ -1,5 +1,5 @@
 use crate::{
-    observer::VmObserve,
+    observer::TracerTrait,
     state::{CallStackInfo, State, Substate},
     vm::{self, ActionParams, Env, Spec},
 };
@@ -18,7 +18,7 @@ pub struct InternalRefContext<'a> {
     pub callstack: &'a mut CallStackInfo,
     pub state: &'a mut State,
     pub substate: &'a mut Substate,
-    pub tracer: &'a mut dyn VmObserve,
+    pub tracer: &'a mut dyn TracerTrait,
     pub static_flag: bool,
     pub depth: usize,
 }

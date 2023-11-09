@@ -4,7 +4,7 @@ use crate::{
         internal_contract::storage_point_prop, CollateralCheckError,
         CollateralCheckResult,
     },
-    observer::VmObserve,
+    observer::TracerTrait,
     state::trace::{
         trace_convert_stroage_points, trace_occupy_collateral,
         trace_refund_collateral,
@@ -96,7 +96,7 @@ impl State {
     #[cfg(test)]
     pub fn settle_collateral_and_check(
         &mut self, storage_owner: &Address, storage_limit: &U256,
-        substate: &mut Substate, tracer: &mut dyn VmObserve, spec: &Spec,
+        substate: &mut Substate, tracer: &mut dyn TracerTrait, spec: &Spec,
         dry_run: bool,
     ) -> DbResult<CollateralCheckResult>
     {
@@ -154,7 +154,7 @@ impl State {
 /// Charges or refund storage collateral and update `total_storage_tokens`.
 fn settle_collateral_for_address(
     state: &mut State, addr: &Address, substate: &Substate,
-    tracer: &mut dyn VmObserve, spec: &Spec, dry_run: bool,
+    tracer: &mut dyn TracerTrait, spec: &Spec, dry_run: bool,
 ) -> DbResult<CollateralCheckResult>
 {
     let addr_with_space = addr.with_native_space();
@@ -213,7 +213,7 @@ fn settle_collateral_for_address(
 /// checked out. This function should only be called in post-processing
 /// of a transaction.
 pub fn settle_collateral_for_all(
-    state: &mut State, substate: &Substate, tracer: &mut dyn VmObserve,
+    state: &mut State, substate: &Substate, tracer: &mut dyn TracerTrait,
     spec: &Spec, dry_run: bool,
 ) -> DbResult<CollateralCheckResult>
 {

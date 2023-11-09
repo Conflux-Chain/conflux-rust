@@ -11,7 +11,7 @@ use super::{
 use crate::{
     bytes::Bytes,
     machine::Machine,
-    observer::VmObserve,
+    observer::TracerTrait,
     state::{CallStackInfo, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -71,7 +71,7 @@ pub struct Context<'a> {
 
     state: &'a mut State,
     callstack: &'a mut CallStackInfo,
-    tracer: &'a mut dyn VmObserve,
+    tracer: &'a mut dyn TracerTrait,
 }
 
 impl<'a> Context<'a> {

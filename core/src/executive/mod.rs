@@ -17,7 +17,7 @@ pub use self::{
     executed::*,
     executive::{
         contract_address, gas_required_for, CollateralCheckError,
-        CollateralCheckResult, Executive, ExecutiveGeneric, Observer,
+        CollateralCheckResult, Executive, ExecutiveGeneric,
     },
     frame::FrameReturn,
     internal_contract::{InternalContractMap, InternalContractTrait},

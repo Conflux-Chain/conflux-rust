@@ -1,4 +1,7 @@
-use super::VmObserve;
+use super::{
+    internal_transfer::AddressPocket, CallTracer, CheckpointTracer,
+    InternalTransferTracer,
+};
 use crate::{
     executive::FrameReturn,
     observer::trace::{
@@ -7,7 +10,6 @@ use crate::{
     },
     vm::{ActionParams, Result as VmResult},
 };
-pub use cfx_state::tracer::{AddressPocket, StateTracer};
 use cfx_types::U256;
 
 /// Simple executive tracer. Traces all calls and creates.
@@ -17,7 +19,7 @@ pub struct ExecutiveTracer {
     valid_indices: CheckpointLog<usize>,
 }
 
-impl StateTracer for ExecutiveTracer {
+impl InternalTransferTracer for ExecutiveTracer {
     fn trace_internal_transfer(
         &mut self, from: AddressPocket, to: AddressPocket, value: U256,
     ) {
@@ -30,19 +32,21 @@ impl StateTracer for ExecutiveTracer {
         self.valid_indices.push(self.traces.len());
         self.traces.push(action);
     }
+}
 
-    fn checkpoint(&mut self) { self.valid_indices.checkpoint(); }
+impl CheckpointTracer for ExecutiveTracer {
+    fn trace_checkpoint(&mut self) { self.valid_indices.checkpoint(); }
 
-    fn discard_checkpoint(&mut self) {
+    fn trace_checkpoint_discard(&mut self) {
         self.valid_indices.discard_checkpoint();
     }
 
-    fn revert_to_checkpoint(&mut self) {
+    fn trace_checkpoint_revert(&mut self) {
         self.valid_indices.revert_checkpoint();
     }
 }
 
-impl VmObserve for ExecutiveTracer {
+impl CallTracer for ExecutiveTracer {
     fn record_call(&mut self, params: &ActionParams) {
         let action = Action::Call(Call::from(params.clone()));
 
@@ -62,12 +66,12 @@ impl VmObserve for ExecutiveTracer {
         );
 
         self.valid_indices.push(self.traces.len());
+        self.traces.push(action);
         if success {
             self.valid_indices.discard_checkpoint();
         } else {
             self.valid_indices.revert_checkpoint();
         }
-        self.traces.push(action);
     }
 
     fn record_create(&mut self, params: &ActionParams) {
@@ -88,12 +92,12 @@ impl VmObserve for ExecutiveTracer {
         );
 
         self.valid_indices.push(self.traces.len());
+        self.traces.push(action);
         if success {
             self.valid_indices.discard_checkpoint();
         } else {
             self.valid_indices.revert_checkpoint();
         }
-        self.traces.push(action);
     }
 }
 

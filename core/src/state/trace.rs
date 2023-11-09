@@ -1,10 +1,10 @@
-use cfx_state::tracer::AddressPocket::*;
+use crate::observer::AddressPocket::*;
 use cfx_types::{address_util::AddressUtil, Address, AddressSpaceUtil, U256};
 
-use crate::observer::VmObserve;
+use crate::observer::TracerTrait;
 
 pub fn trace_convert_stroage_points(
-    tracer: &mut dyn VmObserve, addr: Address, from_balance: U256,
+    tracer: &mut dyn TracerTrait, addr: Address, from_balance: U256,
     from_collateral: U256,
 )
 {
@@ -25,7 +25,7 @@ pub fn trace_convert_stroage_points(
 }
 
 pub fn trace_refund_collateral(
-    tracer: &mut dyn VmObserve, addr: Address, by: U256,
+    tracer: &mut dyn TracerTrait, addr: Address, by: U256,
 ) {
     if !by.is_zero() {
         tracer.trace_internal_transfer(
@@ -41,7 +41,7 @@ pub fn trace_refund_collateral(
 }
 
 pub fn trace_occupy_collateral(
-    tracer: &mut dyn VmObserve, addr: Address, by: U256,
+    tracer: &mut dyn TracerTrait, addr: Address, by: U256,
 ) {
     if !by.is_zero() {
         tracer.trace_internal_transfer(

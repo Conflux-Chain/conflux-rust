@@ -1,5 +1,5 @@
-use super::{Executed, ExecutionError, Observer};
-use crate::{executive::executed::ExecutionOutcome, vm};
+use super::{Executed, ExecutionError};
+use crate::{executive::executed::ExecutionOutcome, observer::Observer, vm};
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_state::CleanupMode;
 use cfx_statedb::Result as DbResult;

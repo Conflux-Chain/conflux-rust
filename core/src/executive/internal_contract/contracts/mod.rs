@@ -28,7 +28,7 @@ mod preludes {
         evm::{ActionParams, Spec},
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_event, make_solidity_function,
-        observer::VmObserve,
+        observer::TracerTrait,
         spec::CommonParams,
         vm,
     };

@@ -15,9 +15,7 @@ use crate::{
     },
     hash::keccak,
     machine::Machine,
-    observer::{
-        tracer::ExecutiveTracer, AddressPocket, GasMan, StateTracer, VmObserve,
-    },
+    observer::{AddressPocket, AsTracer, Observer, TracerTrait},
     state::{
         cleanup_mode, settle_collateral_for_all, CallStackInfo, State, Substate,
     },
@@ -119,54 +117,6 @@ pub fn contract_address(
     return (address.with_space(sender.space), code_hash);
 }
 
-pub struct Observer {
-    pub tracer: Option<ExecutiveTracer>,
-    pub gas_man: Option<GasMan>,
-    _noop: (),
-}
-
-impl Observer {
-    pub fn as_vm_observe<'a>(&'a mut self) -> Box<dyn VmObserve + 'a> {
-        match (self.tracer.as_mut(), self.gas_man.as_mut()) {
-            (Some(tracer), Some(gas_man)) => Box::new((tracer, gas_man)),
-            (Some(tracer), None) => Box::new(tracer),
-            (None, Some(gas_man)) => Box::new(gas_man),
-            (None, None) => Box::new(&mut self._noop),
-        }
-    }
-
-    pub fn as_state_tracer(&mut self) -> &mut dyn StateTracer {
-        match self.tracer.as_mut() {
-            None => &mut self._noop,
-            Some(tracer) => tracer,
-        }
-    }
-
-    pub fn with_tracing() -> Self {
-        Observer {
-            tracer: Some(ExecutiveTracer::default()),
-            gas_man: None,
-            _noop: (),
-        }
-    }
-
-    pub fn with_no_tracing() -> Self {
-        Observer {
-            tracer: None,
-            gas_man: None,
-            _noop: (),
-        }
-    }
-
-    pub fn virtual_call() -> Self {
-        Observer {
-            tracer: Some(ExecutiveTracer::default()),
-            gas_man: Some(GasMan::default()),
-            _noop: (),
-        }
-    }
-}
-
 // /// Trap result returned by executive.
 // pub type ExecutiveTrapResult<'a, T> =
 //     vm::TrapResult<T, CallCreateFrame<'a>, CallCreateFrame<'a>>;
@@ -228,14 +178,14 @@ impl<'a> ExecutiveGeneric<'a> {
     }
 
     pub fn exec_tx(
-        &mut self, params: ActionParams, tracer: &mut dyn VmObserve,
+        &mut self, params: ActionParams, tracer: &mut dyn TracerTrait,
         total_storage_limit: U256, check_settings: &TransactCheckSettings,
     ) -> DbResult<(FrameResult, Bytes)>
     {
         // Initialize the checkpoint for transaction execution. This checkpoint
         // can be reverted by "not enough balance for storage".
         self.state.checkpoint();
-        tracer.checkpoint();
+        tracer.trace_checkpoint();
 
         let sender = params.sender.with_space(params.space);
 
@@ -275,7 +225,7 @@ impl<'a> ExecutiveGeneric<'a> {
         // Charge collateral and process the checkpoint.
         let out = match &res {
             Ok(res) => {
-                tracer.discard_checkpoint();
+                tracer.trace_checkpoint_discard();
                 self.state.discard_checkpoint();
                 res.return_data.to_vec()
             }
@@ -284,7 +234,7 @@ impl<'a> ExecutiveGeneric<'a> {
                 Vec::new()
             }
             Err(_) => {
-                tracer.revert_to_checkpoint();
+                tracer.trace_checkpoint_revert();
                 self.state.revert_to_checkpoint();
                 Vec::new()
             }
@@ -293,7 +243,7 @@ impl<'a> ExecutiveGeneric<'a> {
     }
 
     fn exec_vm(
-        &mut self, params: ActionParams, tracer: &mut dyn VmObserve,
+        &mut self, params: ActionParams, tracer: &mut dyn TracerTrait,
     ) -> DbResult<FrameResult> {
         let main_frame = FreshFrame::new(
             params,
@@ -315,7 +265,7 @@ impl<'a> ExecutiveGeneric<'a> {
     #[cfg(test)]
     pub fn call_for_test(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn VmObserve,
+        tracer: &mut dyn TracerTrait,
     ) -> DbResult<vm::Result<crate::evm::FinalizationResult>>
     {
         let mut frame_result = self.exec_vm(params, tracer)?;
@@ -457,6 +407,8 @@ impl<'a> ExecutiveGeneric<'a> {
             mut observer,
             check_settings,
         } = options;
+        let mut tracer_owned = observer.as_tracer();
+        let tracer = &mut *tracer_owned;
 
         let spec = &self.spec;
         let sender = tx.sender();
@@ -577,11 +529,12 @@ impl<'a> ExecutiveGeneric<'a> {
                 &actual_gas_cost,
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
-            observer.as_state_tracer().trace_internal_transfer(
+            tracer.trace_internal_transfer(
                 AddressPocket::Balance(sender.address.with_space(tx.space())),
                 AddressPocket::GasPayment,
                 actual_gas_cost,
             );
+            std::mem::drop(tracer_owned);
             if tx.space() == Space::Ethereum {
                 self.state.sub_total_evm_tokens(actual_gas_cost);
             }
@@ -619,7 +572,7 @@ impl<'a> ExecutiveGeneric<'a> {
         };
 
         if !gas_sponsored {
-            observer.as_state_tracer().trace_internal_transfer(
+            tracer.trace_internal_transfer(
                 AddressPocket::Balance(sender.address.with_space(tx.space())),
                 AddressPocket::GasPayment,
                 gas_cost,
@@ -632,7 +585,7 @@ impl<'a> ExecutiveGeneric<'a> {
         // Don't subtract total_evm_balance here. It is maintained properly in
         // `finalize`.
         } else {
-            observer.as_state_tracer().trace_internal_transfer(
+            tracer.trace_internal_transfer(
                 AddressPocket::SponsorBalanceForGas(code_address),
                 AddressPocket::GasPayment,
                 gas_cost,
@@ -661,6 +614,7 @@ impl<'a> ExecutiveGeneric<'a> {
         let params = self.make_action_params(tx, storage_owner, init_gas)?;
 
         if !self.check_create_address(&params)? {
+            std::mem::drop(tracer_owned);
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(vm::Error::ConflictAddress(
                     params.address.clone(),
@@ -675,12 +629,8 @@ impl<'a> ExecutiveGeneric<'a> {
             ));
         }
 
-        let (mut result, output) = self.exec_tx(
-            params,
-            &mut *observer.as_vm_observe(),
-            total_storage_limit,
-            &check_settings,
-        )?;
+        let (mut result, output) =
+            self.exec_tx(params, tracer, total_storage_limit, &check_settings)?;
         accrue_substate(&mut tx_substate, &mut result);
 
         let refund_receiver = if gas_sponsored {
@@ -688,6 +638,8 @@ impl<'a> ExecutiveGeneric<'a> {
         } else {
             None
         };
+
+        std::mem::drop(tracer_owned);
 
         let estimated_gas_limit = observer
             .gas_man
@@ -793,7 +745,7 @@ impl<'a> ExecutiveGeneric<'a> {
     // post-processing.
     fn kill_process(
         &mut self, suicides: &HashSet<AddressWithSpace>,
-        tracer: &mut dyn VmObserve, spec: &Spec,
+        tracer: &mut dyn TracerTrait, spec: &Spec,
     ) -> DbResult<Substate>
     {
         let mut substate = Substate::new();
@@ -923,6 +875,9 @@ impl<'a> ExecutiveGeneric<'a> {
         mut observer: Observer, estimated_gas_limit: Option<U256>,
     ) -> DbResult<ExecutionOutcome>
     {
+        let mut tracer_owned = observer.as_tracer();
+        let tracer = &mut *tracer_owned;
+
         let gas_left = match result {
             Ok(FrameReturn { gas_left, .. }) => gas_left,
             _ => 0.into(),
@@ -950,14 +905,14 @@ impl<'a> ExecutiveGeneric<'a> {
         };
 
         if let Some(r) = refund_receiver {
-            observer.as_state_tracer().trace_internal_transfer(
+            tracer.trace_internal_transfer(
                 AddressPocket::GasPayment,
                 AddressPocket::SponsorBalanceForGas(r),
                 refund_value.clone(),
             );
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
-            observer.as_state_tracer().trace_internal_transfer(
+            tracer.trace_internal_transfer(
                 AddressPocket::GasPayment,
                 AddressPocket::Balance(tx.sender()),
                 refund_value.clone(),
@@ -975,12 +930,11 @@ impl<'a> ExecutiveGeneric<'a> {
 
         // perform suicides
 
-        let subsubstate = self.kill_process(
-            &substate.suicides,
-            &mut *observer.as_vm_observe(),
-            &self.spec,
-        )?;
+        let subsubstate =
+            self.kill_process(&substate.suicides, tracer, &self.spec)?;
         substate.accrue(subsubstate);
+
+        std::mem::drop(tracer_owned);
 
         // TODO should be added back after enabling dust collection
         // Should be executed once per block, instead of per transaction?
