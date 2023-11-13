@@ -77,6 +77,6 @@ impl InternalContractMap {
         }
         self.builtin
             .get(&address.address)
-            .filter(|&func| func.is_active(spec))
+            .filter(|&contract| contract.is_active(spec))
     }
 }

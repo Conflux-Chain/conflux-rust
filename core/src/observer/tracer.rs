@@ -3,12 +3,12 @@ use super::{
     InternalTransferTracer,
 };
 use crate::{
-    executive::FrameReturn,
+    executive::{FrameResult, FrameReturn},
     observer::trace::{
         Action, Call, CallResult, Create, CreateResult, ExecTrace,
         InternalTransferAction,
     },
-    vm::{ActionParams, Result as VmResult},
+    vm::ActionParams,
 };
 use cfx_types::U256;
 
@@ -56,7 +56,7 @@ impl CallTracer for ExecutiveTracer {
         self.traces.push(action);
     }
 
-    fn record_call_result(&mut self, result: &VmResult<FrameReturn>) {
+    fn record_call_result(&mut self, result: &FrameResult) {
         let action = Action::CallResult(CallResult::from(result));
         let success = matches!(
             result,
@@ -82,7 +82,7 @@ impl CallTracer for ExecutiveTracer {
         self.traces.push(action);
     }
 
-    fn record_create_result(&mut self, result: &VmResult<FrameReturn>) {
+    fn record_create_result(&mut self, result: &FrameResult) {
         let action = Action::CreateResult(CreateResult::from(result));
         let success = matches!(
             result,

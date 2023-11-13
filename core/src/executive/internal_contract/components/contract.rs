@@ -13,10 +13,12 @@ use crate::{
     evm::Spec,
     hash::keccak,
     spec::CommonParams,
-    vm::{self, ActionParams, ExecTrapResult, GasLeft, TrapResult},
+    vm::{self, ActionParams, GasLeft},
 };
 
-use super::{InternalRefContext, IsActive, SolidityFunctionTrait};
+use super::{
+    InternalRefContext, InternalTrapResult, IsActive, SolidityFunctionTrait,
+};
 
 lazy_static! {
     static ref INTERNAL_CONTRACT_CODE: Arc<Bytes> =
@@ -38,14 +40,14 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, context: &mut InternalRefContext,
-    ) -> ExecTrapResult<GasLeft> {
+    ) -> InternalTrapResult<GasLeft> {
         let func_table = self.get_func_table();
 
         let (solidity_fn, call_params) =
             match load_solidity_fn(&params.data, func_table, context.spec) {
                 Ok(res) => res,
                 Err(err) => {
-                    return TrapResult::Return(Err(err));
+                    return InternalTrapResult::Return(Err(err));
                 }
             };
 

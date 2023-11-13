@@ -211,6 +211,10 @@ impl fmt::Display for Error {
 
 pub type Result<T> = ::std::result::Result<T, Error>;
 
+/// Separate out database-related errors from other EVM errors.
+/// The EVM itself does not distinguish between errors that originate from
+/// within (e.g., index out-of-bounds) and those that come from external
+/// sources like database operations.
 pub fn separate_out_db_error<T>(result: Result<T>) -> DbResult<Result<T>> {
     match result {
         Err(Error::StateDbError(err)) => Err(err.0),

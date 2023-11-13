@@ -1,8 +1,5 @@
 pub use super::internal_transfer::AddressPocket;
-use crate::{
-    executive::FrameReturn,
-    vm::{ActionParams, Result as VmResult},
-};
+use crate::{executive::FrameResult, vm::ActionParams};
 
 use impl_tools::autoimpl;
 use impl_trait_for_tuples::impl_for_tuples;
@@ -27,11 +24,11 @@ pub trait CallTracer {
     fn record_call(&mut self, params: &ActionParams) {}
 
     /// Prepares call result trace
-    fn record_call_result(&mut self, result: &VmResult<FrameReturn>) {}
+    fn record_call_result(&mut self, result: &FrameResult) {}
 
     /// Prepares create trace for given params.
     fn record_create(&mut self, params: &ActionParams) {}
 
     /// Prepares create result trace
-    fn record_create_result(&mut self, result: &VmResult<FrameReturn>) {}
+    fn record_create_result(&mut self, result: &FrameResult) {}
 }

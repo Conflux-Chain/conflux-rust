@@ -8,9 +8,9 @@ mod executive;
 mod executive_tests;
 mod frame;
 pub mod internal_contract;
-mod vm_exec;
 
 pub use self::{
+    context::Context,
     executive::{
         contract_address,
         estimation::{
@@ -21,6 +21,6 @@ pub use self::{
         execution_outcome::*,
         gas_required_for, ExecutiveContext,
     },
-    frame::FrameReturn,
+    frame::{Executable, ExecutableOutcome, FrameResult, FrameReturn},
     internal_contract::{InternalContractMap, InternalContractTrait},
 };

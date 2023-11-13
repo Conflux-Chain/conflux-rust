@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    executive::FrameReturn,
-    vm::{ActionParams, Result as VmResult},
-};
+use crate::{executive::FrameResult, vm::ActionParams};
 use cfx_parameters::{
     block::CROSS_SPACE_GAS_RATIO,
     internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS,
@@ -12,14 +9,14 @@ use cfx_types::U256;
 const EVM_RATIO: (u64, u64) = (64, 63);
 const CROSS_SPACE_RATIO: (u64, u64) = (CROSS_SPACE_GAS_RATIO, 1);
 
-struct ExecutiveLevel {
+struct FrameGasInfo {
     init_gas: U256,
     gas_cost_in_subcall: U256,
     gas_limit_for_subcall: U256,
     cross_space_internal: bool,
 }
 
-impl ExecutiveLevel {
+impl FrameGasInfo {
     #[inline]
     fn gas_cost(&self, gas_left: &U256) -> U256 {
         // Due to gas stipend, the gas_left could be larger than gas cost.
@@ -44,7 +41,7 @@ impl ExecutiveLevel {
 #[derive(Default)]
 pub struct GasMan {
     gas_limit: U256,
-    gas_record: Vec<ExecutiveLevel>,
+    gas_record: Vec<FrameGasInfo>,
 }
 
 impl GasMan {
@@ -53,7 +50,7 @@ impl GasMan {
     fn record_call_create(
         &mut self, gas_pass_in: &U256, cross_space_internal: bool,
     ) {
-        self.gas_record.push(ExecutiveLevel {
+        self.gas_record.push(FrameGasInfo {
             init_gas: gas_pass_in.clone(),
             gas_cost_in_subcall: U256::zero(),
             gas_limit_for_subcall: U256::zero(),
@@ -69,7 +66,7 @@ impl GasMan {
             EVM_RATIO
         };
 
-        if let Some(ExecutiveLevel {
+        if let Some(FrameGasInfo {
             gas_cost_in_subcall,
             gas_limit_for_subcall,
             ..
@@ -91,7 +88,7 @@ impl CallTracer for GasMan {
         self.record_call_create(&params.gas, cross_space_internal);
     }
 
-    fn record_call_result(&mut self, result: &VmResult<FrameReturn>) {
+    fn record_call_result(&mut self, result: &FrameResult) {
         let gas_left =
             result.as_ref().map_or(U256::zero(), |r| r.gas_left.clone());
         self.record_return(&gas_left);
@@ -101,7 +98,7 @@ impl CallTracer for GasMan {
         self.record_call_create(&params.gas, false);
     }
 
-    fn record_create_result(&mut self, result: &VmResult<FrameReturn>) {
+    fn record_create_result(&mut self, result: &FrameResult) {
         let gas_left =
             result.as_ref().map_or(U256::zero(), |r| r.gas_left.clone());
         self.record_return(&gas_left);

@@ -55,10 +55,6 @@ impl Machine {
 
     pub fn spec(&self, number: BlockNumber) -> Spec {
         let mut spec = self.params.spec(number);
-        /*
-        let account_start_nonce = (_block_number * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64).int();
-        let contract_start_nonce = (_block_number * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64).int();
-        */
         if let Some(ref rules) = self.spec_rules {
             (rules)(&mut spec, number)
         }

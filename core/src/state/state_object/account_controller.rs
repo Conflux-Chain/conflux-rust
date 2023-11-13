@@ -47,7 +47,7 @@ impl State {
         let address = address.with_native_space();
         let mut account = Account::new_empty(&address);
         account.code_hash = H256::default();
-        *&mut *self.write_account_or_new_lock(&address)? =
+        *self.write_account_or_new_lock(&address)? =
             OverlayAccount::from_loaded(&address, account);
         Ok(())
     }

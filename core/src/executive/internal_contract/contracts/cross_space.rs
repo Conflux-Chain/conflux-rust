@@ -8,7 +8,7 @@ use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, H160, U256};
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 
-use crate::{evm::CallType, vm::ExecTrapResult};
+use crate::evm::CallType;
 
 use super::{super::impls::cross_space::*, preludes::*};
 
@@ -80,7 +80,7 @@ impl ExecutionTrait for CreateToEVM {
     fn execute_inner(
         &self, init: Bytes, params: &ActionParams, gas_left: U256,
         context: &mut InternalRefContext,
-    ) -> ExecTrapResult<Bytes20>
+    ) -> InternalTrapResult<Bytes20>
     {
         let trap = create_to_evmcore(init, None, params, gas_left, context);
         process_trap(trap, PhantomData)
@@ -107,7 +107,7 @@ impl ExecutionTrait for TransferToEVM {
     fn execute_inner(
         &self, to: Bytes20, params: &ActionParams, gas_left: U256,
         context: &mut InternalRefContext,
-    ) -> ExecTrapResult<Bytes>
+    ) -> InternalTrapResult<Bytes>
     {
         let trap = call_to_evmcore(
             H160(to),
@@ -141,7 +141,7 @@ impl ExecutionTrait for CallToEVM {
     fn execute_inner(
         &self, (to, data): (Bytes20, Bytes), params: &ActionParams,
         gas_left: U256, context: &mut InternalRefContext,
-    ) -> ExecTrapResult<Bytes>
+    ) -> InternalTrapResult<Bytes>
     {
         let trap = call_to_evmcore(
             H160(to),
@@ -175,7 +175,7 @@ impl ExecutionTrait for StaticCallToEVM {
     fn execute_inner(
         &self, (to, data): (Bytes20, Bytes), params: &ActionParams,
         gas_left: U256, context: &mut InternalRefContext,
-    ) -> ExecTrapResult<Bytes>
+    ) -> InternalTrapResult<Bytes>
     {
         let trap = call_to_evmcore(
             H160(to),

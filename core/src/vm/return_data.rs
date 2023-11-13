@@ -22,6 +22,8 @@
 
 use cfx_types::U256;
 
+use super::Spec;
+
 /// Return data buffer. Holds memory from a previous call and a slice into that
 /// memory.
 #[derive(Debug)]
@@ -35,6 +37,16 @@ impl ::std::ops::Deref for ReturnData {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] { &self.mem[self.offset..self.offset + self.size] }
+}
+
+impl From<Vec<u8>> for ReturnData {
+    fn from(value: Vec<u8>) -> Self {
+        ReturnData {
+            offset: 0,
+            size: value.len(),
+            mem: value,
+        }
+    }
 }
 
 impl ReturnData {
@@ -68,4 +80,26 @@ pub enum GasLeft {
         /// Apply or revert state changes on revert.
         apply_state: bool,
     },
+}
+
+impl GasLeft {
+    pub fn charge_return_data_gas(
+        mut self, spec: &Spec,
+    ) -> super::Result<GasLeft> {
+        match &mut self {
+            GasLeft::NeedsReturn { gas_left, data, .. } => {
+                let length = data.len();
+                let return_cost =
+                    U256::from((length + 31) / 32 * spec.memory_gas);
+
+                if *gas_left < return_cost {
+                    Err(super::Error::OutOfGas)
+                } else {
+                    *gas_left -= return_cost;
+                    Ok(self)
+                }
+            }
+            _ => Ok(self),
+        }
+    }
 }

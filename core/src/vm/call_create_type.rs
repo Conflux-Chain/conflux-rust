@@ -20,7 +20,7 @@
 
 //! EVM call types.
 
-use crate::evm::CreateContractAddress;
+use super::CreateContractAddress;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::Serialize;
 
