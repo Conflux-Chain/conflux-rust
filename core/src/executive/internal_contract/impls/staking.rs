@@ -4,11 +4,10 @@
 
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
-    evm::Spec,
     internal_bail,
     observer::{AddressPocket, TracerTrait},
     state::State,
-    vm::{self, ActionParams, Env},
+    vm::{self, ActionParams, Env, Spec},
 };
 use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_types::{Address, AddressSpaceUtil, U256};

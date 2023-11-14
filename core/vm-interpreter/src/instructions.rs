@@ -22,7 +22,7 @@
 
 pub use self::Instruction::*;
 
-use super::Spec;
+use cfx_vm_types::Spec;
 
 macro_rules! enum_with_from_u8 {
 	(

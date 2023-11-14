@@ -19,8 +19,8 @@
 // See http://www.gnu.org/licenses/
 
 //! Evm interface.
-use crate::vm::{Context, Error, GasLeft, Result, ReturnData};
 use cfx_types::{U128, U256, U512};
+use cfx_vm_types::{Context, Error, GasLeft, Result, ReturnData};
 use std::{cmp, fmt, ops};
 
 /// Finalization result. Gas Left: either it is a known value, or it needs to

@@ -25,11 +25,10 @@ mod preludes {
     #[cfg(test)]
     pub(super) use crate::{check_event_signature, check_func_signature};
     pub(super) use crate::{
-        evm::{ActionParams, Spec},
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_event, make_solidity_function,
         spec::CommonParams,
-        vm,
+        vm::{self, ActionParams, Spec},
     };
 
     pub(super) use super::super::components::{

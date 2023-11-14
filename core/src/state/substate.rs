@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::CleanupMode;
-use crate::evm::{CleanDustMode, Spec};
+use crate::vm::{CleanDustMode, Spec};
 use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace};
 use primitives::{

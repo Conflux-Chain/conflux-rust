@@ -1,5 +1,5 @@
 use crate::{
-    evm::{ActionParams, CallType, CreateContractAddress, Finalize, GasLeft},
+    evm::Finalize,
     executive::{
         context::Context,
         contract_address,
@@ -11,7 +11,10 @@ use crate::{
     internal_bail,
     observer::AddressPocket,
     state::cleanup_mode,
-    vm::{self, ActionValue, Context as _, CreateType, ParamsType, Spec},
+    vm::{
+        self, ActionParams, ActionValue, CallType, Context as _,
+        CreateContractAddress, CreateType, GasLeft, ParamsType, Spec,
+    },
 };
 
 use cfx_parameters::{

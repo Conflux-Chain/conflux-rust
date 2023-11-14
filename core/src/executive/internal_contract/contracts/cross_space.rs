@@ -8,7 +8,7 @@ use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, H160, U256};
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 
-use crate::evm::CallType;
+use crate::vm::CallType;
 
 use super::{super::impls::cross_space::*, preludes::*};
 

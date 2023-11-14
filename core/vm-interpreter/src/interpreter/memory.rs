@@ -18,8 +18,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::vm::ReturnData;
 use cfx_types::U256;
+use cfx_vm_types::ReturnData;
 
 const MAX_RETURN_WASTE_BYTES: usize = 16384;
 

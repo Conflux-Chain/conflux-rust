@@ -41,17 +41,15 @@ use super::{
     evm::CostType,
     instructions::{self, Instruction, InstructionInfo},
 };
-use crate::{
-    bytes::Bytes,
-    hash::keccak,
-    vm::{
-        self, ActionParams, ActionValue, CallType, ContractCreateResult,
-        CreateContractAddress, GasLeft, MessageCallResult, ParamsType,
-        ReturnData, Spec, TrapError, TrapKind,
-    },
-};
 use bit_set::BitSet;
+use cfx_bytes::Bytes;
 use cfx_types::{Address, BigEndianHash, Space, H256, U256, U512};
+use cfx_vm_types::{
+    self as vm, ActionParams, ActionValue, CallType, ContractCreateResult,
+    CreateContractAddress, GasLeft, MessageCallResult, ParamsType, ReturnData,
+    Spec, TrapError, TrapKind,
+};
+use keccak_hash::keccak;
 use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
 
 const GASOMETER_PROOF: &str = "If gasometer is None, Err is immediately returned in step; this function is only called by step; qed";
@@ -1625,13 +1623,13 @@ fn address_to_u256(value: Address) -> U256 { H256::from(value).into_uint() }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{factory::Factory, vmtype::VMType};
-    use crate::vm::{
-        self,
+    use crate::{factory::Factory, vmtype::VMType};
+    use cfx_types::Address;
+    use cfx_vm_types::{
+        self as vm,
         tests::{test_finalize, MockContext},
         ActionParams, ActionValue, Exec,
     };
-    use cfx_types::Address;
     use rustc_hex::FromHex;
     use std::sync::Arc;
 
@@ -1695,6 +1693,6 @@ mod tests {
                 .unwrap()
         };
 
-        assert_eq!(err, crate::vm::Error::OutOfBounds);
+        assert_eq!(err, cfx_vm_types::Error::OutOfBounds);
     }
 }

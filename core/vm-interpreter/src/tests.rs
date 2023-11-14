@@ -18,16 +18,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{factory::Factory, vmtype::VMType};
-use crate::{
-    evm::interpreter::MAX_SUB_STACK_SIZE,
-    vm::{
-        self,
-        tests::{test_finalize, MockCall, MockCallType, MockContext},
-        ActionParams, ActionValue, Context,
-    },
+use super::{
+    factory::Factory, interpreter::MAX_SUB_STACK_SIZE, vmtype::VMType,
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
+use cfx_vm_types::{
+    self as vm,
+    tests::{test_finalize, MockCall, MockCallType, MockContext},
+    ActionParams, ActionValue, Context,
+};
 use rustc_hex::FromHex;
 use std::{
     collections::{HashMap, HashSet},

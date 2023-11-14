@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Open Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::super::instructions::{self, Instruction};
-use crate::hash::KECCAK_EMPTY;
+use crate::instructions::{self, Instruction};
 use bit_set::BitSet;
 use cfx_types::H256;
+use keccak_hash::KECCAK_EMPTY;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use memory_cache::MemoryLruCache;
 use parking_lot::Mutex;

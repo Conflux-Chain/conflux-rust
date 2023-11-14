@@ -23,6 +23,7 @@ cfx-vm-tracer-derive = {path="../util/cfx-vm-tracer-derive"}
 cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }
 cfx-vm-types = { path = "vm-types" }
+cfx-vm-interpreter = { path = "vm-interpreter" }
 channel = { path = "./src/pos/common/channel"}
 clap = "2"
 dag = {path = "../util/dag"}

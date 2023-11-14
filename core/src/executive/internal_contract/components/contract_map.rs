@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use cfx_types::{Address, AddressWithSpace, Space};
 use primitives::BlockNumber;
 
-use crate::{evm::Spec, spec::CommonParams};
+use crate::{spec::CommonParams, vm::Spec};
 
 use super::{super::contracts::all_internal_contracts, InternalContractTrait};
 

@@ -51,7 +51,6 @@ use crate::{
         pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
-    evm::Spec,
     executive::{
         internal_contract::storage_point_prop, EstimateRequest,
         EstimationContext, ExecutionOutcome, ExecutiveContext, TransactOptions,
@@ -71,7 +70,7 @@ use crate::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
     },
-    vm::Env,
+    vm::{Env, Spec},
     SharedTransactionPool,
 };
 

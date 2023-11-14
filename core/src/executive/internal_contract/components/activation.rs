@@ -1,4 +1,4 @@
-use crate::evm::Spec;
+use crate::vm::Spec;
 pub use primitives::BlockNumber;
 
 pub trait IsActive {

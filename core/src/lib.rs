@@ -19,6 +19,7 @@ extern crate db as ext_db;
 extern crate lazy_static;
 #[macro_use]
 extern crate static_assertions;
+extern crate cfx_vm_interpreter as evm;
 extern crate cfx_vm_types as vm;
 extern crate sha3_macro;
 extern crate substrate_bn as bn;
@@ -35,7 +36,6 @@ pub mod client;
 pub mod consensus;
 pub mod db;
 pub mod error;
-mod evm;
 pub mod executive;
 pub mod light_protocol;
 pub mod machine;

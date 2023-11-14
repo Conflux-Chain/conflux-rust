@@ -2,12 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[macro_use]
+extern crate log;
+
 mod evm;
 #[macro_use]
 pub mod factory;
 mod instructions;
 mod interpreter;
 mod vmtype;
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(test)]
 mod tests;
@@ -17,8 +22,4 @@ pub use self::{
     factory::Factory,
     instructions::GasPriceTier,
     vmtype::VMType,
-};
-pub use crate::vm::{
-    ActionParams, CallType, CleanDustMode, Context, ContractCreateResult,
-    CreateContractAddress, Env, GasLeft, MessageCallResult, ReturnData, Spec,
 };

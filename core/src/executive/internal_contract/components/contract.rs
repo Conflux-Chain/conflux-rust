@@ -10,10 +10,9 @@ use solidity_abi::ABIDecodeError;
 
 use crate::{
     bytes::Bytes,
-    evm::Spec,
     hash::keccak,
     spec::CommonParams,
-    vm::{self, ActionParams, GasLeft},
+    vm::{self, ActionParams, GasLeft, Spec},
 };
 
 use super::{

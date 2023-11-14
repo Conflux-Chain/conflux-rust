@@ -872,6 +872,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-vm-interpreter"
+version = "2.0.2"
+dependencies = [
+ "bit-set 0.4.0",
+ "cfx-bytes",
+ "cfx-types",
+ "cfx-vm-types",
+ "keccak-hash",
+ "lazy_static",
+ "log",
+ "malloc_size_of",
+ "memory-cache",
+ "parking_lot 0.11.2",
+ "rustc-hex",
+]
+
+[[package]]
 name = "cfx-vm-tracer-derive"
 version = "0.1.0"
 dependencies = [
@@ -921,6 +938,7 @@ dependencies = [
  "cfx-storage",
  "cfx-types",
  "cfx-utils",
+ "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
  "cfxkey",

@@ -18,16 +18,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::u256_to_address;
 use cfx_types::{Space, U256};
+use cfx_vm_types::{self as vm, Spec};
 use std::cmp;
 
 use super::{
-    super::evm,
     instructions::{self, Instruction, InstructionInfo},
     stack::Stack,
+    u256_to_address,
 };
-use crate::vm::{self, Spec};
+use crate::CostType;
 
 macro_rules! overflowing {
     ($x:expr) => {{
@@ -39,7 +39,7 @@ macro_rules! overflowing {
     }};
 }
 
-enum Request<Cost: evm::CostType> {
+enum Request<Cost: CostType> {
     Gas(Cost),
     GasMem(Cost, Cost),
     GasMemProvide(Cost, Cost, Option<U256>),
@@ -58,7 +58,7 @@ pub struct Gasometer<Gas> {
     pub current_mem_gas: Gas,
 }
 
-impl<Gas: evm::CostType> Gasometer<Gas> {
+impl<Gas: CostType> Gasometer<Gas> {
     pub fn new(current_gas: Gas) -> Self {
         Gasometer {
             current_gas,
@@ -385,16 +385,12 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
 }
 
 #[inline]
-fn mem_needed_const<Gas: evm::CostType>(
-    mem: &U256, add: usize,
-) -> vm::Result<Gas> {
+fn mem_needed_const<Gas: CostType>(mem: &U256, add: usize) -> vm::Result<Gas> {
     Gas::from_u256(overflowing!(mem.overflowing_add(U256::from(add))))
 }
 
 #[inline]
-fn mem_needed<Gas: evm::CostType>(
-    offset: &U256, size: &U256,
-) -> vm::Result<Gas> {
+fn mem_needed<Gas: CostType>(offset: &U256, size: &U256) -> vm::Result<Gas> {
     if size.is_zero() {
         return Ok(Gas::from(0));
     }
@@ -403,12 +399,12 @@ fn mem_needed<Gas: evm::CostType>(
 }
 
 #[inline]
-fn add_gas_usize<Gas: evm::CostType>(value: Gas, num: usize) -> (Gas, bool) {
+fn add_gas_usize<Gas: CostType>(value: Gas, num: usize) -> (Gas, bool) {
     value.overflow_add(Gas::from(num))
 }
 
 #[inline]
-fn to_word_size<Gas: evm::CostType>(value: Gas) -> (Gas, bool) {
+fn to_word_size<Gas: CostType>(value: Gas) -> (Gas, bool) {
     let (gas, overflow) = add_gas_usize(value, 31);
     if overflow {
         return (gas, overflow);

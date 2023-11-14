@@ -1,7 +1,7 @@
 use cfx_types::H256;
 use solidity_abi::{ABIEncodable, EventIndexEncodable};
 
-use crate::{evm::ActionParams, vm};
+use crate::vm::{self, ActionParams};
 
 use super::context::InternalRefContext;
 
