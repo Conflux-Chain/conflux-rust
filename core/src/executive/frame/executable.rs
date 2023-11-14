@@ -4,7 +4,7 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     executive::{context::Context, internal_contract::InternalContractExec},
     vm::{
-        self, separate_out_db_error, ActionParams, Context as _, Exec,
+        self, separate_out_db_error, ActionParams, Exec,
         ReturnData, TrapError, TrapResult,
     },
 };
@@ -106,10 +106,9 @@ pub struct NoopExec {
 
 impl Executable for NoopExec {
     fn execute(
-        self: Box<Self>, context: Context,
+        self: Box<Self>, _: Context,
     ) -> DbResult<ExecutableOutcome> {
         let result = FinalizationResult {
-            space: context.space(),
             gas_left: self.gas,
             apply_state: true,
             return_data: ReturnData::empty(),

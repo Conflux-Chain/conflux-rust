@@ -2,7 +2,6 @@ use super::{Executable, FrameResult, FrameReturn};
 use crate::vm::{
     ContractCreateResult, MessageCallResult, ResumeCall, ResumeCreate,
 };
-use cfx_types::AddressWithSpace;
 
 /// `Resumable` is a trait representing objects for resuming the execution of a
 /// frame, which is suspended due to the invocation of another frame. The caller
@@ -48,7 +47,6 @@ fn into_message_call_result(result: FrameResult) -> MessageCallResult {
 fn into_contract_create_result(result: FrameResult) -> ContractCreateResult {
     match result {
         Ok(FrameReturn {
-            space,
             gas_left,
             apply_state: true,
             create_address,
@@ -58,7 +56,6 @@ fn into_contract_create_result(result: FrameResult) -> ContractCreateResult {
             // process_return.
             let address = create_address
                 .expect("ExecutiveResult for Create executive should be some.");
-            let address = AddressWithSpace { address, space };
             ContractCreateResult::Created(address, gas_left)
         }
         Ok(FrameReturn {

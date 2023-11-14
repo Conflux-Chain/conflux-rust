@@ -29,7 +29,7 @@ use super::{
     Error,
 };
 use cfx_bytes::Bytes;
-use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
+use cfx_types::{Address, Space, H256, U256};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ use std::sync::Arc;
 pub enum ContractCreateResult {
     /// Returned when creation was successful.
     /// Contains an address of newly created contract and gas left.
-    Created(AddressWithSpace, U256),
+    Created(Address, U256),
     /// Returned when contract creation failed.
     /// Returns the reason so block trace can record it.
     Failed(Error),

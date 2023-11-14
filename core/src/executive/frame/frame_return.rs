@@ -67,7 +67,6 @@ pub struct FrameReturn {
 impl Into<FinalizationResult> for FrameReturn {
     fn into(self) -> FinalizationResult {
         FinalizationResult {
-            space: self.space,
             gas_left: self.gas_left,
             apply_state: self.apply_state,
             return_data: self.return_data,
@@ -87,7 +86,7 @@ impl FrameReturn {
             create_address = None;
         };
         FrameReturn {
-            space: result.space,
+            space: frame_local.space,
             gas_left: result.gas_left,
             apply_state: result.apply_state,
             return_data: result.return_data,
