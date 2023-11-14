@@ -19,6 +19,7 @@ extern crate db as ext_db;
 extern crate lazy_static;
 #[macro_use]
 extern crate static_assertions;
+extern crate cfx_vm_types as vm;
 extern crate sha3_macro;
 extern crate substrate_bn as bn;
 
@@ -51,7 +52,6 @@ pub mod sync;
 pub mod transaction_pool;
 pub mod unique_id;
 pub mod verification;
-pub mod vm;
 pub mod vm_factory;
 
 #[cfg(test)]

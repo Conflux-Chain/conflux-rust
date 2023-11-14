@@ -18,9 +18,10 @@ use crate::bytes::Bytes;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, H256, H512, U256, U512,
 };
+use cfx_vm_types::CreateContractAddress;
 use cfxcore::{
-    executive::contract_address, vm::CreateContractAddress,
-    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+    executive::contract_address, SharedConsensusGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use keylib::{public_to_address, Generator, KeyPair, Random, Secret};
 use lazy_static::lazy_static;

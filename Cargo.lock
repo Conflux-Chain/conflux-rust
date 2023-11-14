@@ -881,6 +881,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-vm-types"
+version = "2.0.2"
+dependencies = [
+ "bls-signatures",
+ "cfx-bytes",
+ "cfx-parameters",
+ "cfx-statedb",
+ "cfx-types",
+ "keccak-hash",
+ "primitives",
+ "rlp",
+ "rlp_derive",
+ "serde",
+ "serde_derive",
+ "solidity-abi",
+]
+
+[[package]]
 name = "cfxcore"
 version = "2.0.2"
 dependencies = [
@@ -904,6 +922,7 @@ dependencies = [
  "cfx-types",
  "cfx-utils",
  "cfx-vm-tracer-derive",
+ "cfx-vm-types",
  "cfxkey",
  "channel",
  "clap",
@@ -1171,6 +1190,7 @@ dependencies = [
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
+ "cfx-vm-types",
  "cfxcore",
  "cfxcore-accounts",
  "cfxkey",
@@ -7046,6 +7066,7 @@ version = "0.1.0"
 dependencies = [
  "cfx-bytes",
  "cfx-types",
+ "cfx-vm-types",
  "cfxcore",
  "cfxkey",
  "clap",

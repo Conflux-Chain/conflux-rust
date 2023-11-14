@@ -20,10 +20,8 @@
 
 //! Cost spec and other parameterisations for the EVM.
 
-use crate::spec::CommonParams;
 use cfx_parameters::consensus_internal::DAO_PARAMETER_VOTE_PERIOD;
 use cfx_types::{address_util::AddressUtil, Address};
-use primitives::BlockNumber;
 
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
@@ -306,33 +304,7 @@ impl Spec {
         }
     }
 
-    pub fn new_spec_from_common_params(
-        params: &CommonParams, number: BlockNumber,
-    ) -> Spec {
-        let mut spec = Self::genesis_spec();
-        spec.cip43_contract = number >= params.transition_numbers.cip43a;
-        spec.cip43_init = number >= params.transition_numbers.cip43a
-            && number < params.transition_numbers.cip43b;
-        spec.cip62 = number >= params.transition_numbers.cip62;
-        spec.cip64 = number >= params.transition_numbers.cip64;
-        spec.cip71 = number >= params.transition_numbers.cip71;
-        spec.cip90 = number >= params.transition_numbers.cip90b;
-        spec.cip78a = number >= params.transition_numbers.cip78a;
-        spec.cip78b = number >= params.transition_numbers.cip78b;
-        spec.cip94 = number >= params.transition_numbers.cip94;
-        spec.cip94_activation_block_number = params.transition_numbers.cip94;
-        spec.cip97 = number >= params.transition_numbers.cip97;
-        spec.cip98 = number >= params.transition_numbers.cip98;
-        spec.cip105 = number >= params.transition_numbers.cip105;
-        spec.cip_sigma_fix = number >= params.transition_numbers.cip_sigma_fix;
-        spec.params_dao_vote_period = params.params_dao_vote_period;
-        spec.cip107 = number >= params.transition_numbers.cip107;
-        spec.cip118 = number >= params.transition_numbers.cip118;
-        spec.cip119 = number >= params.transition_numbers.cip119;
-        spec
-    }
-
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testonly_code"))]
     pub fn new_spec_for_test() -> Spec { Self::genesis_spec() }
 
     /// Returns wasm spec
@@ -348,7 +320,7 @@ impl Spec {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testonly_code"))]
 impl Default for Spec {
     fn default() -> Self { Spec::new_spec_for_test() }
 }

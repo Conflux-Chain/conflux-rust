@@ -228,7 +228,7 @@ pub enum TrapResult<T, Call, Create> {
 }
 
 impl<T, Call, Create> TrapResult<T, Call, Create> {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testonly_code"))]
     pub fn ok(self) -> Option<Result<T>> {
         if let TrapResult::Return(result) = self {
             Some(result)

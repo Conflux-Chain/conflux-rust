@@ -5,7 +5,8 @@
 use crate::rpc::types::{Log, RpcAddress};
 use cfx_addr::Network;
 use cfx_types::{AddressSpaceUtil, Bloom, Space, H256, U256, U64};
-use cfxcore::{executive::contract_address, vm::CreateContractAddress};
+use cfx_vm_types::CreateContractAddress;
+use cfxcore::executive::contract_address;
 use primitives::{
     receipt::{
         Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,

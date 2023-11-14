@@ -13,27 +13,26 @@ mod staking;
 pub(super) mod system_storage;
 
 mod preludes {
-    pub use keccak_hash::keccak;
+    pub(super) use keccak_hash::keccak;
     #[cfg(test)]
-    pub use rustc_hex::FromHex;
+    pub(super) use rustc_hex::FromHex;
 
-    pub use cfx_statedb::Result as DbResult;
-    pub use cfx_types::{Address, H256};
-    pub use primitives::BlockNumber;
-    pub use sha3_macro::keccak;
+    pub(super) use cfx_statedb::Result as DbResult;
+    pub(super) use cfx_types::{Address, H256};
+    pub(super) use primitives::BlockNumber;
+    pub(super) use sha3_macro::keccak;
 
     #[cfg(test)]
-    pub use crate::{check_event_signature, check_func_signature};
-    pub use crate::{
+    pub(super) use crate::{check_event_signature, check_func_signature};
+    pub(super) use crate::{
         evm::{ActionParams, Spec},
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_event, make_solidity_function,
-        observer::TracerTrait,
         spec::CommonParams,
         vm,
     };
 
-    pub use super::super::components::{
+    pub(super) use super::super::components::{
         activation::IsActive,
         context::InternalRefContext,
         contract::{InternalContractTrait, SolFnTable},

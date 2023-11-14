@@ -7,11 +7,11 @@ use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
 use cfx_statedb::StateDb;
 use cfx_storage::{state_manager::StateIndex, StorageManagerTrait};
 use cfx_types::{H256, U256};
+use cfx_vm_types::Env;
 use cfxcore::{
     executive::{ExecutiveContext, TransactOptions},
     machine::new_machine_with_builtin,
     state::State,
-    vm::Env,
     vm_factory::VmFactory,
 };
 use cfxkey::{Generator, KeyPair, Random};

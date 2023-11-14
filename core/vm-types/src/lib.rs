@@ -10,7 +10,7 @@ mod error;
 mod return_data;
 mod spec;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testonly_code"))]
 pub mod tests;
 
 pub use self::{

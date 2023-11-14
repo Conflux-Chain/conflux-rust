@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{message::Bytes, vm};
+use crate::{message::Bytes, vm::Spec};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::{
     block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
@@ -137,6 +137,30 @@ impl Default for CommonParams {
 }
 
 impl CommonParams {
+    pub fn spec(&self, number: BlockNumber) -> Spec {
+        let mut spec = Spec::genesis_spec();
+        spec.cip43_contract = number >= self.transition_numbers.cip43a;
+        spec.cip43_init = number >= self.transition_numbers.cip43a
+            && number < self.transition_numbers.cip43b;
+        spec.cip62 = number >= self.transition_numbers.cip62;
+        spec.cip64 = number >= self.transition_numbers.cip64;
+        spec.cip71 = number >= self.transition_numbers.cip71;
+        spec.cip90 = number >= self.transition_numbers.cip90b;
+        spec.cip78a = number >= self.transition_numbers.cip78a;
+        spec.cip78b = number >= self.transition_numbers.cip78b;
+        spec.cip94 = number >= self.transition_numbers.cip94;
+        spec.cip94_activation_block_number = self.transition_numbers.cip94;
+        spec.cip97 = number >= self.transition_numbers.cip97;
+        spec.cip98 = number >= self.transition_numbers.cip98;
+        spec.cip105 = number >= self.transition_numbers.cip105;
+        spec.cip_sigma_fix = number >= self.transition_numbers.cip_sigma_fix;
+        spec.params_dao_vote_period = self.params_dao_vote_period;
+        spec.cip107 = number >= self.transition_numbers.cip107;
+        spec.cip118 = number >= self.transition_numbers.cip118;
+        spec.cip119 = number >= self.transition_numbers.cip119;
+        spec
+    }
+
     /// Return the base reward for a block.
     /// `past_block_count` may be used for reward decay again in the future.
     pub fn base_reward_in_ucfx(
@@ -164,10 +188,6 @@ impl CommonParams {
         } else {
             None
         }
-    }
-
-    pub fn spec(&self, number: BlockNumber) -> vm::Spec {
-        vm::Spec::new_spec_from_common_params(&self, number)
     }
 
     pub fn can_pack_evm_transaction(&self, height: BlockHeight) -> bool {

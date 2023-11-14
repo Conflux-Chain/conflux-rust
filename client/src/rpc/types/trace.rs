@@ -7,6 +7,7 @@ use crate::rpc::types::Bytes;
 use cfx_addr::Network;
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_types::{Space, H160, H256, U256, U64};
+use cfx_vm_types::{CallType, CreateType};
 use cfxcore::{
     executive::internal_contract::evm_map,
     observer::trace::{
@@ -17,7 +18,6 @@ use cfxcore::{
         LocalizedTrace as PrimitiveLocalizedTrace, Outcome,
         TransactionExecTraces,
     },
-    vm::{CallType, CreateType},
 };
 use primitives::SignedTransaction;
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};

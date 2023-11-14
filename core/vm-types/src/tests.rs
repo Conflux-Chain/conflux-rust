@@ -25,7 +25,7 @@ use super::{
 };
 use cfx_bytes::Bytes;
 use cfx_types::{address_util::AddressUtil, Address, Space, H256, U256};
-use hash::keccak;
+use keccak_hash::keccak;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,

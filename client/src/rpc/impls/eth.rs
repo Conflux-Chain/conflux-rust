@@ -23,6 +23,7 @@ use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
 };
+use cfx_vm_types::Error as VmError;
 use cfxcore::{
     consensus::PhantomBlock,
     executive::{
@@ -32,7 +33,7 @@ use cfxcore::{
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    vm, ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
+    ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use clap::crate_version;
@@ -712,7 +713,7 @@ impl Eth for EthHandler {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(vm::Error::Reverted),
+                ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => bail!(call_execution_error(
                 format!(
@@ -762,7 +763,7 @@ impl Eth for EthHandler {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(vm::Error::Reverted),
+                ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => {
                 let (revert_error, innermost_error, errors) =

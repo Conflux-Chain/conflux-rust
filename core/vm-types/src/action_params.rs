@@ -20,12 +20,9 @@
 
 //! Evm input params.
 use super::call_create_type::{CallType, CreateType};
-use crate::bytes::Bytes;
+use cfx_bytes::Bytes;
 use cfx_types::{Address, Space, H256, U256};
 use std::sync::Arc;
-
-#[cfg(test)]
-use crate::hash::KECCAK_EMPTY;
 
 /// Transaction value
 #[derive(Clone, Debug)]
@@ -102,10 +99,11 @@ pub struct ActionParams {
     pub params_type: ParamsType,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "testonly_code"))]
 impl Default for ActionParams {
     /// Returns default ActionParams initialized with zeros
     fn default() -> ActionParams {
+        use keccak_hash::KECCAK_EMPTY;
         ActionParams {
             space: Space::Native,
             code_address: Address::default(),

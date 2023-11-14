@@ -19,6 +19,7 @@ use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
     U64,
 };
+use cfx_vm_types::Error as VmError;
 use cfxcore::{
     executive::{
         internal_contract::storage_point_prop, ExecutionError,
@@ -27,7 +28,7 @@ use cfxcore::{
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
-    vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
@@ -1235,7 +1236,7 @@ impl RpcImpl {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(vm::Error::Reverted),
+                ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => bail!(call_execution_error(
                 "Transaction reverted".into(),
@@ -1278,7 +1279,7 @@ impl RpcImpl {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(vm::Error::Reverted),
+                ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => {
                 let network_type = *self.sync.network.get_network_type();
