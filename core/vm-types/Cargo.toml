@@ -13,10 +13,11 @@ edition = "2018"
 # cfxkey = { path = "../accounts/cfxkey" }
 # cfx-addr = { path = "../cfx_addr/rust" }
 cfx-bytes = { path = "../../cfx_bytes" }
+cfx-db-errors = { path = "../db-errors" }
 # cfx-math = { path = "../cfx_math"}
 # cfx-internal-common = { path = "internal_common" }
-cfx-parameters = { path = "../parameters" }
-cfx-statedb = { path = "../statedb" }
+# cfx-parameters = { path = "../parameters" }
+# cfx-statedb = { path = "../statedb" }
 # cfx-state = { path = "state" }
 # cfx-storage = { path = "storage", optional = true }
 # cfx-vm-tracer-derive = {path="../util/cfx-vm-tracer-derive"}

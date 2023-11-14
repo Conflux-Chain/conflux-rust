@@ -725,6 +725,68 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-db-errors"
+version = "2.0.2"
+dependencies = [
+ "cfx-types",
+ "error-chain",
+ "primitives",
+ "rlp",
+ "sqlite",
+ "strfmt",
+]
+
+[[package]]
+name = "cfx-executor"
+version = "2.0.2"
+dependencies = [
+ "bls-signatures",
+ "byteorder",
+ "cfx-bytes",
+ "cfx-internal-common",
+ "cfx-math",
+ "cfx-parameters",
+ "cfx-statedb",
+ "cfx-storage",
+ "cfx-types",
+ "cfx-vm-interpreter",
+ "cfx-vm-tracer-derive",
+ "cfx-vm-types",
+ "cfxkey",
+ "diem-crypto",
+ "diem-types",
+ "error-chain",
+ "impl-tools",
+ "impl-trait-for-tuples 0.2.2",
+ "keccak-hash",
+ "lazy_static",
+ "log",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "num",
+ "parity-crypto",
+ "parking_lot 0.11.2",
+ "pow-types",
+ "primitives",
+ "rand 0.8.5",
+ "rlp",
+ "rlp_derive",
+ "rustc-hex",
+ "secret-store",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "sha3-macro",
+ "solidity-abi",
+ "solidity-abi-derive",
+ "strum 0.20.0",
+ "strum_macros 0.20.1",
+ "substrate-bn",
+ "tiny-keccak 2.0.2",
+ "toml",
+]
+
+[[package]]
 name = "cfx-internal-common"
 version = "1.0.0"
 dependencies = [
@@ -757,9 +819,13 @@ dependencies = [
 name = "cfx-parameters"
 version = "1.0.0"
 dependencies = [
+ "cfx-bytes",
  "cfx-types",
+ "cfx-vm-types",
+ "cfxkey",
  "hex-literal",
  "lazy_static",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -781,6 +847,7 @@ dependencies = [
 name = "cfx-statedb"
 version = "1.0.0"
 dependencies = [
+ "cfx-db-errors",
  "cfx-internal-common",
  "cfx-parameters",
  "cfx-storage",
@@ -801,6 +868,7 @@ version = "1.0.0"
 dependencies = [
  "cfg-if 0.1.10",
  "cfx-bytes",
+ "cfx-db-errors",
  "cfx-internal-common",
  "cfx-types",
  "delegate 0.5.2",
@@ -903,8 +971,7 @@ version = "2.0.2"
 dependencies = [
  "bls-signatures",
  "cfx-bytes",
- "cfx-parameters",
- "cfx-statedb",
+ "cfx-db-errors",
  "cfx-types",
  "keccak-hash",
  "primitives",
@@ -930,6 +997,7 @@ dependencies = [
  "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
+ "cfx-executor",
  "cfx-internal-common",
  "cfx-math",
  "cfx-parameters",
@@ -1202,6 +1270,7 @@ dependencies = [
  "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
+ "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
  "cfx-state",

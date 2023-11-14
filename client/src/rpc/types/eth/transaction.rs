@@ -20,8 +20,7 @@
 
 use crate::rpc::types::Bytes;
 use cfx_types::{H160, H256, H512, U256, U64};
-use cfx_vm_types::CreateContractAddress;
-use cfxcore::executive::contract_address;
+use cfx_vm_types::{contract_address, CreateContractAddress};
 use primitives::{transaction::eip155_signature, Action, SignedTransaction};
 use rlp::Encodable;
 use serde::Serialize;
@@ -150,12 +149,12 @@ impl Transaction {
             Action::Create => {
                 let (new_contract_address, _) = contract_address(
                     CreateContractAddress::FromSenderNonce,
-                    0.into(),
-                    &t.sender(),
+                    0,
+                    &t.sender().address,
                     t.nonce(),
                     t.data(),
                 );
-                Some(new_contract_address.address)
+                Some(new_contract_address)
             }
             Action::Call(_) => None,
         }

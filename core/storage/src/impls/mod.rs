@@ -5,7 +5,6 @@
 #[macro_use]
 pub(super) mod merkle_patricia_trie;
 pub(super) mod delta_mpt;
-pub(super) mod errors;
 pub(super) mod node_merkle_proof;
 pub(super) mod proof_merger;
 pub(super) mod recording_storage;
@@ -17,6 +16,8 @@ pub(super) mod state_manager;
 pub(super) mod state_proof;
 pub(super) mod storage_db;
 pub(super) mod storage_manager;
+
+pub(super) use cfx_db_errors::storage as errors;
 
 pub mod defaults {
     pub use super::delta_mpt::DEFAULT_NODE_MAP_SIZE;

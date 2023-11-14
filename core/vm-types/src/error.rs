@@ -22,7 +22,7 @@
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
 use bls_signatures::Error as CryptoError;
-use cfx_statedb::{Error as DbError, Result as DbResult};
+use cfx_db_errors::statedb::{Error as DbError, Result as DbResult};
 use cfx_types::{Address, U256};
 use solidity_abi::ABIDecodeError;
 use std::fmt;

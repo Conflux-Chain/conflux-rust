@@ -20,6 +20,7 @@ cfxcore-accounts = { path = "../accounts" }
 cfxstore = { path = "../accounts/cfxstore" }
 cfx-internal-common = { path = "../core/internal_common" }
 cfx-state = { path = "../core/state" }
+cfx-executor = { path = "../core/executor" }
 cfx-statedb = { path = "../core/statedb" }
 cfx-storage = { path = "../core/storage" }
 cfx-vm-types = { path = "../core/vm-types" }
@@ -103,7 +104,7 @@ bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", r
 [dev-dependencies]
 criterion = "0.3"
 cfx-parameters = { path = "../core/parameters" }
-cfxcore = { path = "../core", features = ["testonly_code"] }
+cfx-executor = { path = "../core/executor", features = ["testonly_code"] }
 serial_test = "0.5.1"
 
 [features]

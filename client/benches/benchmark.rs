@@ -3,17 +3,17 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_bytes::Bytes;
-use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
-use cfx_statedb::StateDb;
-use cfx_storage::{state_manager::StateIndex, StorageManagerTrait};
-use cfx_types::{H256, U256};
-use cfx_vm_types::Env;
-use cfxcore::{
+use cfx_executor::{
     executive::{ExecutiveContext, TransactOptions},
     machine::new_machine_with_builtin,
     state::State,
     vm_factory::VmFactory,
 };
+use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
+use cfx_statedb::StateDb;
+use cfx_storage::{state_manager::StateIndex, StorageManagerTrait};
+use cfx_types::{H256, U256};
+use cfx_vm_types::Env;
 use cfxkey::{Generator, KeyPair, Random};
 use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Criterion};

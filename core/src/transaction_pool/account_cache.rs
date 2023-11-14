@@ -1,7 +1,5 @@
-use crate::{
-    state::State,
-    transaction_pool::transaction_pool_inner::TX_POOL_GET_STATE_TIMER,
-};
+use crate::transaction_pool::transaction_pool_inner::TX_POOL_GET_STATE_TIMER;
+use cfx_executor::state::State;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressWithSpace, U256};
 use metrics::MeterTimer;

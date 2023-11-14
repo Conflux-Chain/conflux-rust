@@ -138,3 +138,4 @@ rustc-hex = "2.1"
 # impl-tools = "^0.10"
 
 [dev-dependencies]
+cfx-vm-types = { path = "../vm-types", features = ["testonly_code"] }

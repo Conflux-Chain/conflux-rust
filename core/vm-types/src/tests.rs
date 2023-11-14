@@ -24,6 +24,7 @@ use super::{
     ReturnData, Spec,
 };
 use cfx_bytes::Bytes;
+use cfx_db_errors::statedb::Result as DbResult;
 use cfx_types::{address_util::AddressUtil, Address, Space, H256, U256};
 use keccak_hash::keccak;
 use std::{
@@ -144,9 +145,7 @@ impl Context for MockContext {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address: CreateContractAddress,
-    ) -> cfx_statedb::Result<
-        ::std::result::Result<ContractCreateResult, TrapKind>,
-    >
+    ) -> DbResult<::std::result::Result<ContractCreateResult, TrapKind>>
     {
         self.calls.insert(MockCall {
             call_type: MockCallType::Create,
@@ -168,7 +167,7 @@ impl Context for MockContext {
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, _call_type: CallType,
-    ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
+    ) -> DbResult<::std::result::Result<MessageCallResult, TrapKind>>
     {
         self.calls.insert(MockCall {
             call_type: MockCallType::Call,

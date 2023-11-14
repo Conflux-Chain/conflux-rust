@@ -27,12 +27,11 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_executor::executive::{EstimateRequest, ExecutionOutcome};
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_types::{hexstr_to_h256, Address, H256, U64};
 use cfxcore::{
-    consensus::pos_handler::PosVerifier,
-    executive::{EstimateRequest, ExecutionOutcome},
-    rpc_errors::invalid_params_check,
+    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph,
 };

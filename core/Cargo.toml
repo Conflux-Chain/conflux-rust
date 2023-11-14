@@ -24,6 +24,7 @@ cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }
 cfx-vm-types = { path = "vm-types" }
 cfx-vm-interpreter = { path = "vm-interpreter" }
+cfx-executor = { path = "executor" }
 channel = { path = "./src/pos/common/channel"}
 clap = "2"
 dag = {path = "../util/dag"}

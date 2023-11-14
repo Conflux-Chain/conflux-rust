@@ -20,6 +20,7 @@ use slab::Slab;
 use tokio02::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
 
+use cfx_executor::machine::Machine;
 use cfx_types::{H256, U256};
 use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -37,7 +38,6 @@ use crate::{
     channel::Channel,
     consensus::{pos_handler::PosVerifier, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
-    machine::Machine,
     pow::{PowComputer, ProofOfWorkConfig},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,

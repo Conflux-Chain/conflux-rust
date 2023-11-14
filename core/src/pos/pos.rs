@@ -6,6 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    genesis_block::GenesisPosState,
     pos::{
         consensus::{
             consensus_provider::start_consensus,
@@ -26,9 +27,9 @@ use crate::{
         },
         state_sync::bootstrapper::StateSyncBootstrapper,
     },
-    spec::genesis::GenesisPosState,
     sync::ProtocolConfiguration,
 };
+
 use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::db::FakeLedgerBlockDB;
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};

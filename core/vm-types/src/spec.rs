@@ -19,8 +19,6 @@
 // See http://www.gnu.org/licenses/
 
 //! Cost spec and other parameterisations for the EVM.
-
-use cfx_parameters::consensus_internal::DAO_PARAMETER_VOTE_PERIOD;
 use cfx_types::{address_util::AddressUtil, Address};
 
 /// Definition of the cost spec and other parameterisations for the VM.
@@ -293,7 +291,7 @@ impl Spec {
             cip94: false,
             evm_gas_ratio: 2,
             cip94_activation_block_number: u64::MAX,
-            params_dao_vote_period: DAO_PARAMETER_VOTE_PERIOD,
+            params_dao_vote_period: 0,
             cip97: false,
             cip98: false,
             cip105: false,

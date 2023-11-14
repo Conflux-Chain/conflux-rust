@@ -6,10 +6,10 @@ use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
     consensus::consensus_inner::consensus_executor::RewardExecutionInfo,
-    executive::internal_contract::make_staking_events,
     ext_db::SystemDB,
     pow::{PowComputer, TargetDifficultyManager},
 };
+use cfx_executor::executive::internal_contract::make_staking_events;
 use cfx_storage::{
     state_manager::StateIndex, utils::guarded_value::*, StorageManager,
     StorageManagerTrait,
@@ -39,10 +39,12 @@ use crate::{
         db_manager::DBManager, tx_data_manager::TransactionDataManager,
     },
     consensus::pos_handler::PosVerifier,
+};
+pub use block_data_types::*;
+use cfx_executor::{
     executive::internal_contract::build_bloom_and_recover_phantom,
     observer::trace::{BlockExecTraces, TransactionExecTraces},
 };
-pub use block_data_types::*;
 use cfx_internal_common::{
     EpochExecutionCommitment, StateAvailabilityBoundary, StateRootWithAuxInfo,
 };

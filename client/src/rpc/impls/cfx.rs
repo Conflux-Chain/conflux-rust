@@ -8,6 +8,10 @@ use crate::rpc::types::{
     TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
+use cfx_executor::executive::{
+    internal_contract::storage_point_prop, ExecutionError, ExecutionOutcome,
+    TxDropError,
+};
 use cfx_statedb::{
     global_params::{
         AccumulateInterestRate, DistributablePoSInterest, InterestRate,
@@ -21,10 +25,6 @@ use cfx_types::{
 };
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
-    executive::{
-        internal_contract::storage_point_prop, ExecutionError,
-        ExecutionOutcome, TxDropError,
-    },
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
@@ -82,19 +82,18 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_executor::{executive::EstimateRequest, state::State};
 use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
+    genesis::{
+        genesis_contract_address_four_year, genesis_contract_address_two_year,
+    },
     staking::{BLOCKS_PER_YEAR, DRIPS_PER_STORAGE_COLLATERAL_UNIT},
 };
 use cfx_storage::state::StateDbGetOriginalMethods;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
-    executive::EstimateRequest,
-    spec::genesis::{
-        genesis_contract_address_four_year, genesis_contract_address_two_year,
-    },
-    state::State,
 };
 use diem_types::account_address::AccountAddress;
 use serde::Serialize;

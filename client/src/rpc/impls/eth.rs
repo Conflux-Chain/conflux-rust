@@ -18,6 +18,10 @@ use crate::rpc::{
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
 };
+use cfx_executor::executive::{
+    revert_reason_decode, EstimateRequest, ExecutionError, ExecutionOutcome,
+    TxDropError,
+};
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_statedb::StateDbExt;
 use cfx_types::{
@@ -26,10 +30,6 @@ use cfx_types::{
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     consensus::PhantomBlock,
-    executive::{
-        revert_reason_decode, EstimateRequest, ExecutionError,
-        ExecutionOutcome, TxDropError,
-    },
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },

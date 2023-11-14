@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 cfx-internal-common = { path = "../internal_common" }
 cfx-parameters = { path = "../parameters" }
+cfx-db-errors = { path = "../db-errors"}
 cfx-storage = { path = "../storage" }
 cfx-types = { path = "../../cfx_types" }
 error-chain = { version = "0.12", default-features = false }

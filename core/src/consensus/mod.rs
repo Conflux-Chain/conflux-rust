@@ -28,6 +28,14 @@ use crate::{
         },
         pos_handler::PosVerifier,
     },
+    pow::{PowComputer, ProofOfWorkConfig},
+    rpc_errors::{invalid_params, invalid_params_check, Result as RpcResult},
+    statistics::SharedStatistics,
+    transaction_pool::SharedTransactionPool,
+    verification::VerificationConfig,
+    NodeType, Notifications,
+};
+use cfx_executor::{
     executive::{
         internal_contract::build_bloom_and_recover_phantom, EstimateRequest,
         ExecutionOutcome,
@@ -39,13 +47,7 @@ use crate::{
         },
         trace_filter::TraceFilter,
     },
-    pow::{PowComputer, ProofOfWorkConfig},
-    rpc_errors::{invalid_params, invalid_params_check, Result as RpcResult},
     state::State,
-    statistics::SharedStatistics,
-    transaction_pool::SharedTransactionPool,
-    verification::VerificationConfig,
-    NodeType, Notifications,
 };
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{

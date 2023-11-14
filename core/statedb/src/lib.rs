@@ -7,9 +7,10 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
-mod error;
 pub mod global_params;
 mod statedb_ext;
+
+use cfx_db_errors::statedb as error;
 
 #[cfg(test)]
 mod tests;

@@ -20,12 +20,11 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_executor::observer::trace_filter::TraceFilter as PrimitiveTraceFilter;
 use cfx_types::{Space, H256};
 use cfxcore::{
-    block_data_manager::DataVersionTuple,
-    observer::trace_filter::TraceFilter as PrimitiveTraceFilter,
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
-    SharedConsensusGraph,
+    block_data_manager::DataVersionTuple, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, SharedConsensusGraph,
 };
 use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
 use primitives::EpochNumber;
