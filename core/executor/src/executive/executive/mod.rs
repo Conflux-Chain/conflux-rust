@@ -7,7 +7,10 @@ pub mod execution_outcome;
 mod fresh_executive;
 mod pre_checked_executive;
 
-use cfx_types::{AddressWithSpace, U256, H256, Space, address_util::AddressUtil, AddressSpaceUtil};
+use cfx_types::{
+    address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space, H256,
+    U256,
+};
 use estimation::TransactOptions;
 use executed::Executed;
 use execution_outcome::ExecutionError;
@@ -19,7 +22,7 @@ pub use execution_outcome::ExecutionOutcome;
 use crate::{machine::Machine, state::State};
 
 use cfx_statedb::Result as DbResult;
-use cfx_vm_types::{Env, Spec, CreateContractAddress};
+use cfx_vm_types::{CreateContractAddress, Env, Spec};
 
 use primitives::SignedTransaction;
 
@@ -75,12 +78,21 @@ pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
     )
 }
 
-pub fn contract_address( address_scheme: CreateContractAddress, block_number: u64,
-    sender: &AddressWithSpace, nonce: &U256, code: &[u8]) -> (AddressWithSpace, Option<H256>) {
-    let (mut address, code_hash) = cfx_vm_types::contract_address(address_scheme, block_number, &sender.address, nonce, code);
-        if sender.space == Space::Native {
-            address.set_contract_type_bits();
-        }
+pub fn contract_address(
+    address_scheme: CreateContractAddress, block_number: u64,
+    sender: &AddressWithSpace, nonce: &U256, code: &[u8],
+) -> (AddressWithSpace, Option<H256>)
+{
+    let (mut address, code_hash) = cfx_vm_types::contract_address(
+        address_scheme,
+        block_number,
+        &sender.address,
+        nonce,
+        code,
+    );
+    if sender.space == Space::Native {
+        address.set_contract_type_bits();
+    }
     (address.with_space(sender.space), code_hash)
 }
 

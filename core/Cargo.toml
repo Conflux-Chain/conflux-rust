@@ -17,7 +17,6 @@ cfx-math = { path = "../cfx_math"}
 cfx-internal-common = { path = "internal_common" }
 cfx-parameters = { path = "parameters" }
 cfx-statedb = { path = "statedb" }
-cfx-state = { path = "state" }
 cfx-storage = { path = "storage", optional = true }
 cfx-vm-tracer-derive = {path="../util/cfx-vm-tracer-derive"}
 cfx-types = { path = "../cfx_types" }

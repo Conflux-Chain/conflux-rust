@@ -3,10 +3,10 @@ use super::{
         accrue_substate, exec_main_frame, FrameResult, FrameReturn, FreshFrame,
         RuntimeRes,
     },
+    contract_address,
     estimation::{ChargeCollateral, TransactSettings},
     fresh_executive::CostInfo,
     Executed, ExecutionError, ExecutiveContext,
-    contract_address,
 };
 
 use crate::{
@@ -17,14 +17,11 @@ use crate::{
 use cfx_parameters::staking::code_collateral_units;
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, CreateContractAddress,
-    CreateType
+    CreateType,
 };
 
 use cfx_statedb::Result as DbResult;
-use cfx_types::{
-    Address, AddressSpaceUtil,
-    Space, U256, U512,
-};
+use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
 use std::{convert::TryInto, sync::Arc};
 

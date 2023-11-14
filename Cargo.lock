@@ -768,11 +768,9 @@ dependencies = [
  "parking_lot 0.11.2",
  "pow-types",
  "primitives",
- "rand 0.8.5",
  "rlp",
  "rlp_derive",
  "rustc-hex",
- "secret-store",
  "serde",
  "serde_derive",
  "serde_json",
@@ -783,7 +781,6 @@ dependencies = [
  "strum_macros 0.20.1",
  "substrate-bn",
  "tiny-keccak 2.0.2",
- "toml",
 ]
 
 [[package]]
@@ -826,21 +823,6 @@ dependencies = [
  "hex-literal",
  "lazy_static",
  "rustc-hex",
-]
-
-[[package]]
-name = "cfx-state"
-version = "1.0.0"
-dependencies = [
- "cfx-internal-common",
- "cfx-parameters",
- "cfx-statedb",
- "cfx-storage",
- "cfx-types",
- "keccak-hash",
- "parking_lot 0.11.2",
- "primitives",
- "rlp",
 ]
 
 [[package]]
@@ -1001,7 +983,6 @@ dependencies = [
  "cfx-internal-common",
  "cfx-math",
  "cfx-parameters",
- "cfx-state",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
@@ -1273,7 +1254,6 @@ dependencies = [
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
- "cfx-state",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",

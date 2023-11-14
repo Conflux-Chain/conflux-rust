@@ -1,9 +1,9 @@
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
 use cfx_statedb::{
+    access_mode,
     global_params::{ConvertedStoragePoints, TotalIssued},
     Result as DbResult,
 };
-use cfx_storage::utils::access_mode;
 use cfx_types::{maybe_address, Address, U256};
 use primitives::{SponsorInfo, StorageKey};
 

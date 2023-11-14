@@ -2,8 +2,7 @@ use super::State;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
-use cfx_statedb::Result as DbResult;
-use cfx_storage::utils::access_mode;
+use cfx_statedb::{access_mode, Result as DbResult};
 use cfx_types::AddressWithSpace;
 use primitives::{Account, EpochId, StorageKey};
 

@@ -20,6 +20,7 @@ pub use self::{
     impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
     statedb_ext::StateDbExt,
 };
+pub use cfx_storage::utils::access_mode;
 pub type StateDb = StateDbGeneric;
 
 // Put StateDb in mod to make sure that methods from statedb_ext don't access

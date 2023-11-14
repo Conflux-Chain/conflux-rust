@@ -7,7 +7,7 @@ use super::{
     Executed, ExecutionError,
 };
 use crate::{
-    executive::{ExecutionOutcome, contract_address},
+    executive::{contract_address, ExecutionOutcome},
     machine::Machine,
     state::{CleanupMode, State, Substate},
     test_helpers::get_state_for_genesis_write,
