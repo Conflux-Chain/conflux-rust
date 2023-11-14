@@ -50,6 +50,7 @@ pub fn exec_main_frame<'a>(
     loop {
         last_result = match last_result {
             FrameStackAction::Return(result) => {
+                dbg!(&result);
                 let frame = unwrap_or_return!(frame_stack.pop(), Ok(result));
                 frame.resume(result, &mut resources)?
             }

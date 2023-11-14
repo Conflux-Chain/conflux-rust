@@ -359,7 +359,7 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn ret(
-        self, gas: &U256, data: &ReturnData, apply_state: bool,
+        mut self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
     where Self: Sized {
         let caller = self.origin.address.with_space(self.space);
@@ -368,9 +368,7 @@ impl<'a> ContextTrait for Context<'a> {
             return Ok(*gas);
         }
 
-        self.substate
-            .contracts_created
-            .push(self.create_address.unwrap().with_space(self.space));
+        self.insert_create_address_to_substate();
 
         let create_data_gas = self.spec.create_data_gas
             * match self.space {
@@ -471,6 +469,14 @@ impl<'a> Context<'a> {
             static_flag: self.static_flag,
             depth: self.depth,
             tracer: self.tracer,
+        }
+    }
+
+    pub fn insert_create_address_to_substate(&mut self) {
+        if let Some(create_address) = self.create_address {
+            self.substate
+                .contracts_created
+                .push(create_address.with_space(self.space));
         }
     }
 }

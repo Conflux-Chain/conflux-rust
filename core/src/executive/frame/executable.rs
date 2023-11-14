@@ -4,7 +4,7 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     executive::{context::Context, internal_contract::InternalContractExec},
     vm::{
-        self, separate_out_db_error, ActionParams, Exec,
+        self, separate_out_db_error, ActionParams, Exec, GasLeft,
         ReturnData, TrapError, TrapResult,
     },
 };
@@ -88,6 +88,13 @@ impl Executable for Box<dyn Exec> {
         Ok(match self.exec(&mut context) {
             TrapResult::Return(result) => {
                 let result = separate_out_db_error(result)?;
+                // Backward compatible for a strange behaviour. If the contract
+                // creation process do not generate any code and the contract is
+                // not inited, it should also be put in the contract creation
+                // receipt.
+                if matches!(result, Ok(GasLeft::Known(_))) {
+                    context.insert_create_address_to_substate();
+                }
                 Return(result.finalize(context))
             }
             TrapResult::SubCallCreate(TrapError::Call(params, resume)) => {
@@ -105,9 +112,7 @@ pub struct NoopExec {
 }
 
 impl Executable for NoopExec {
-    fn execute(
-        self: Box<Self>, _: Context,
-    ) -> DbResult<ExecutableOutcome> {
+    fn execute(self: Box<Self>, _: Context) -> DbResult<ExecutableOutcome> {
         let result = FinalizationResult {
             gas_left: self.gas,
             apply_state: true,
