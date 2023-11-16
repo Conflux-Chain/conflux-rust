@@ -1,8 +1,11 @@
-use super::{Executed, ExecutionError, ExecutiveContext};
+use super::{revert_reason_decode, Executed, ExecutionError, ExecutiveContext};
 use crate::{
     executive::ExecutionOutcome,
     machine::Machine,
-    observer::Observer,
+    observer::{
+        tracer::TransactionTrace, ErrorUnwind, ExecutiveObserver,
+        GasLimitEstimation, Observer,
+    },
     state::{CleanupMode, State},
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
@@ -16,12 +19,19 @@ use primitives::{
 };
 use std::{
     cmp::{max, min},
+    fmt::Display,
     ops::{Mul, Shl},
 };
 
 enum SponsoredType {
     Gas,
     Collateral,
+}
+
+#[derive(Default, Debug)]
+pub struct EstimateExt {
+    pub estimated_gas_limit: U256,
+    pub estimated_storage_limit: u64,
 }
 
 pub struct EstimationContext<'a> {
@@ -122,17 +132,37 @@ impl<'a> EstimationContext<'a> {
 
     pub fn transact_virtual(
         &mut self, mut tx: SignedTransaction, request: EstimateRequest,
-    ) -> DbResult<ExecutionOutcome> {
+    ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         self.process_estimate_request(&mut tx, &request)?;
 
-        let executed = match self.two_pass_estimation(&tx, request)? {
-            Ok(executed) => executed,
+        let (executed, overwrite_storage_limit) = match self
+            .two_pass_estimation(&tx, request)?
+        {
+            Ok(x) => x,
             Err(execution) => {
-                return Ok(execution);
+                let estimate_ext = match &execution {
+                    ExecutionOutcome::NotExecutedDrop(_)
+                    | ExecutionOutcome::NotExecutedToReconsiderPacking(_) => {
+                        EstimateExt::default()
+                    }
+                    ExecutionOutcome::ExecutionErrorBumpNonce(_, executed) => {
+                        EstimateExt {
+                            estimated_gas_limit: estimated_gas_limit(executed),
+                            estimated_storage_limit: storage_limit(executed),
+                        }
+                    }
+                    ExecutionOutcome::Finished(_) => unreachable!(),
+                };
+                return Ok((execution, estimate_ext));
             }
         };
 
-        self.enact_executed_by_estimation_request(tx, executed, &request)
+        self.enact_executed_by_estimation_request(
+            tx,
+            executed,
+            overwrite_storage_limit,
+            &request,
+        )
     }
 
     // For the same transaction, the storage limit paid by user and the
@@ -150,10 +180,10 @@ impl<'a> EstimationContext<'a> {
     // the storage limit.
     fn two_pass_estimation(
         &mut self, tx: &SignedTransaction, request: EstimateRequest,
-    ) -> DbResult<Result<Executed, ExecutionOutcome>> {
+    ) -> DbResult<Result<(Executed, Option<u64>), ExecutionOutcome>> {
         // First pass
         self.state.checkpoint();
-        let mut sender_pay_executed = match self
+        let sender_pay_executed = match self
             .as_executive()
             .transact(&tx, TransactOptions::estimate_first_pass(request))?
         {
@@ -199,7 +229,7 @@ impl<'a> EstimationContext<'a> {
                 );
                 contract_pay_executed
             } else {
-                return Ok(Ok(sender_pay_executed));
+                return Ok(Ok((sender_pay_executed, None)));
             };
 
         let contract_address =
@@ -214,35 +244,40 @@ impl<'a> EstimationContext<'a> {
         let max_sponsor_storage_limit = (sponsor_balance_for_collateral
             / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
             .as_u64();
-        let mut overwrite_storage_limit = || {
-            debug!("Transaction estimate overwrite the storage limit to overcome sponsor_balance_for_collateral.");
-            sender_pay_executed.estimated_storage_limit = max(
-                sender_pay_executed.estimated_storage_limit,
-                max_sponsor_storage_limit + 64,
-            );
-        };
+        // In some cases we need to overwrite the storage limit to overcome
+        // sponsor_balance_for_collateral.
+        let overwrite_storage_limit = max(
+            storage_limit(&sender_pay_executed),
+            max_sponsor_storage_limit + 64,
+        );
         Ok(Ok(
             if let Some(contract_pay_executed) = contract_pay_executed {
                 if max_sponsor_storage_limit
-                    >= contract_pay_executed.estimated_storage_limit
+                    >= storage_limit(&contract_pay_executed)
                 {
-                    contract_pay_executed
+                    (contract_pay_executed, None)
                 } else {
-                    overwrite_storage_limit();
-                    sender_pay_executed
+                    (sender_pay_executed, Some(overwrite_storage_limit))
                 }
             } else {
-                overwrite_storage_limit();
-                sender_pay_executed
+                (sender_pay_executed, Some(overwrite_storage_limit))
             },
         ))
     }
 
     fn enact_executed_by_estimation_request(
         &self, tx: SignedTransaction, mut executed: Executed,
-        request: &EstimateRequest,
-    ) -> DbResult<ExecutionOutcome>
+        overwrite_storage_limit: Option<u64>, request: &EstimateRequest,
+    ) -> DbResult<(ExecutionOutcome, EstimateExt)>
     {
+        let estimated_storage_limit =
+            overwrite_storage_limit.unwrap_or(storage_limit(&executed));
+        let estimated_gas_limit = estimated_gas_limit(&executed);
+        let estimation = EstimateExt {
+            estimated_storage_limit,
+            estimated_gas_limit,
+        };
+
         let gas_sponsored_contract_if_eligible_sender = self
             .sponsored_contract_if_eligible_sender(&tx, SponsoredType::Gas)?;
 
@@ -254,10 +289,9 @@ impl<'a> EstimationContext<'a> {
         }
 
         if !request.has_gas_limit {
-            let estimate_gas_limit = executed.estimated_gas_limit.unwrap();
-            executed.gas_used = estimate_gas_limit;
-            executed.gas_charged = estimate_gas_limit;
-            executed.fee = estimate_gas_limit.mul(tx.gas_price());
+            executed.gas_used = estimated_gas_limit;
+            executed.gas_charged = estimated_gas_limit;
+            executed.fee = estimated_gas_limit.mul(tx.gas_price());
         }
 
         // If we don't charge gas, recheck the current gas_fee is ok for
@@ -283,15 +317,12 @@ impl<'a> EstimationContext<'a> {
             // `Some(_)`.
             let gas_fee =
                 if request.recheck_gas_fee() && !executed.gas_sponsor_paid {
-                    executed
-                        .estimated_gas_limit
-                        .unwrap()
-                        .saturating_mul(*tx.gas_price())
+                    estimated_gas_limit.saturating_mul(*tx.gas_price())
                 } else {
                     0.into()
                 };
             let storage_collateral = if !executed.storage_sponsor_paid {
-                U256::from(executed.estimated_storage_limit)
+                U256::from(estimated_storage_limit)
                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
             } else {
                 0.into()
@@ -302,24 +333,30 @@ impl<'a> EstimationContext<'a> {
                 .saturating_add(storage_collateral);
             let balance = self.state.balance(&tx.sender())?;
             if balance < value_and_fee {
-                return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
-                    ExecutionError::NotEnoughCash {
-                        required: value_and_fee.into(),
-                        got: balance.into(),
-                        actual_gas_cost: min(balance, gas_fee),
-                        max_storage_limit_cost: storage_collateral,
-                    },
-                    executed,
+                return Ok((
+                    ExecutionOutcome::ExecutionErrorBumpNonce(
+                        ExecutionError::NotEnoughCash {
+                            required: value_and_fee.into(),
+                            got: balance.into(),
+                            actual_gas_cost: min(balance, gas_fee),
+                            max_storage_limit_cost: storage_collateral,
+                        },
+                        executed,
+                    ),
+                    estimation,
                 ));
             }
         }
 
         if request.has_storage_limit {
             let storage_limit = tx.storage_limit().unwrap();
-            if storage_limit < executed.estimated_storage_limit {
-                return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
-                    ExecutionError::VmError(vm::Error::ExceedStorageLimit),
-                    executed,
+            if storage_limit < estimated_storage_limit {
+                return Ok((
+                    ExecutionOutcome::ExecutionErrorBumpNonce(
+                        ExecutionError::VmError(vm::Error::ExceedStorageLimit),
+                        executed,
+                    ),
+                    estimation,
                 ));
             }
         }
@@ -327,7 +364,6 @@ impl<'a> EstimationContext<'a> {
         // Revise the gas used in result, if we estimate the transaction with a
         // default large enough gas.
         if !request.has_gas_limit {
-            let estimated_gas_limit = executed.estimated_gas_limit.unwrap();
             executed.gas_charged = max(
                 estimated_gas_limit - estimated_gas_limit / 4,
                 executed.gas_used,
@@ -335,17 +371,64 @@ impl<'a> EstimationContext<'a> {
             executed.fee = executed.gas_charged.saturating_mul(*tx.gas_price());
         }
 
-        return Ok(ExecutionOutcome::Finished(executed));
+        return Ok((ExecutionOutcome::Finished(executed), estimation));
     }
 }
 
+fn estimated_gas_limit(executed: &Executed) -> U256 {
+    executed.ext_result.get::<GasLimitEstimation>().unwrap() * 7 / 6
+        + executed.base_gas
+}
+
+fn storage_limit(executed: &Executed) -> u64 {
+    executed
+        .storage_collateralized
+        .first()
+        .map_or(0, |x| x.collaterals.as_u64())
+}
+
+pub fn decode_error<F, Addr: Display>(
+    executed: &Executed, format_address: F,
+) -> (String, String, Vec<String>)
+where F: Fn(&Address) -> Addr {
+    // When a revert exception happens, there is usually an error in
+    // the sub-calls. So we return the trace
+    // information for debugging contract.
+    let errors = ErrorUnwind::from_traces(
+        &executed
+            .ext_result
+            .get::<TransactionTrace>()
+            .map_or(&vec![], |x| x.as_ref()),
+    )
+    .errors
+    .iter()
+    .map(|(addr, error)| format!("{}: {}", format_address(addr), error))
+    .collect::<Vec<String>>();
+
+    // Decode revert error
+    let revert_error = revert_reason_decode(&executed.output);
+    let revert_error = if !revert_error.is_empty() {
+        format!(": {}.", revert_error)
+    } else {
+        format!(".")
+    };
+
+    // Try to fetch the innermost error.
+    let innermost_error = if errors.len() > 0 {
+        format!(" Innermost error is at {}.", errors[0])
+    } else {
+        String::default()
+    };
+    (revert_error, innermost_error, errors)
+}
+
 /// Transaction execution options.
-pub struct TransactOptions {
-    pub observer: Observer,
+pub struct TransactOptions<O: ExecutiveObserver> {
+    pub observer: O,
     pub settings: TransactSettings,
 }
 
-impl TransactOptions {
+impl TransactOptions<Observer> {
     pub fn exec_with_tracing() -> Self {
         Self {
             observer: Observer::with_tracing(),

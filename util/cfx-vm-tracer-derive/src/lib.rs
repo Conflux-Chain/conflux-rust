@@ -15,7 +15,7 @@ macro_rules! unwrap_or_compile_error {
 }
 
 #[proc_macro_derive(AsTracer, attributes(skip_tracer))]
-pub fn generate_function(input: TokenStream) -> TokenStream {
+pub fn generate_as_tracer_function(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
@@ -62,6 +62,29 @@ pub fn generate_function(input: TokenStream) -> TokenStream {
                 match self {
                     #(#match_arms,)*
                 }
+            }
+        }
+    };
+
+    expanded.into()
+}
+
+#[proc_macro_derive(DrainTrace)]
+pub fn generate_drain_trace_function(input: TokenStream) -> TokenStream {
+    let input = syn::parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let data = unwrap_or_compile_error!(get_struct_data(&input));
+    let field_names = unwrap_or_compile_error!(get_field_names(data, name));
+
+    let drain_statements = field_names.iter().map(|field| {
+        quote! { self.#field.drain_trace(map); }
+    });
+
+    let expanded = quote! {
+        impl DrainTrace for #name {
+            fn drain_trace(self, map: &mut typemap::ShareDebugMap) {
+                #(#drain_statements)*
             }
         }
     };

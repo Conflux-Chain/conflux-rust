@@ -2,26 +2,22 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::fmt::Display;
-
-use crate::{
-    observer::{ErrorUnwind, Observer},
-    state::Substate,
-};
+use crate::{observer::ExecutiveObserver, state::Substate};
 use cfx_bytes::Bytes;
-use cfx_types::{Address, AddressWithSpace, U256};
+use cfx_types::{AddressWithSpace, U256};
 use primitives::{
     receipt::{SortedStorageChanges, StorageChange},
     LogEntry, TransactionWithSignature,
 };
 use solidity_abi::{ABIDecodable, ABIDecodeError};
+use typemap::ShareDebugMap;
 
 use super::{
     fresh_executive::CostInfo,
     pre_checked_executive::{ExecutiveReturn, RefundInfo},
 };
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug)]
 pub struct Executed {
     /// Gas used during execution of transaction.
     pub gas_used: U256,
@@ -56,19 +52,17 @@ pub struct Executed {
     pub contracts_created: Vec<AddressWithSpace>,
     /// Transaction output.
     pub output: Bytes,
+    pub base_gas: u64,
     /// The trace of this transaction.
-    pub trace: Vec<ExecTrace>,
-    /// Only for the virtual call, an accurate gas estimation for gas usage,
-    pub estimated_gas_limit: Option<U256>,
-    /// Only for the virtual call, the minimum storage limit should returned in
-    /// estimate gas and collateral.
-    pub estimated_storage_limit: u64,
+    pub ext_result: ShareDebugMap,
 }
 
+pub type ExecutedExt = ShareDebugMap;
+
 impl Executed {
-    pub fn not_enough_balance_fee_charged(
-        tx: &TransactionWithSignature, fee: &U256, mut gas_sponsor_paid: bool,
-        mut storage_sponsor_paid: bool, trace: Vec<ExecTrace>, spec: &Spec,
+    pub(super) fn not_enough_balance_fee_charged(
+        tx: &TransactionWithSignature, fee: &U256, cost: CostInfo,
+        ext_result: ExecutedExt, spec: &Spec,
     ) -> Self
     {
         let gas_charged = if *tx.gas_price() == U256::zero() {
@@ -76,6 +70,8 @@ impl Executed {
         } else {
             fee / tx.gas_price()
         };
+        let mut gas_sponsor_paid = cost.gas_sponsored;
+        let mut storage_sponsor_paid = cost.storage_sponsored;
         if !spec.cip78b {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
@@ -91,21 +87,18 @@ impl Executed {
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
-            trace,
-            estimated_gas_limit: None,
-            estimated_storage_limit: 0,
+            base_gas: cost.base_gas,
+            ext_result,
         }
     }
 
     pub(super) fn execution_error_fully_charged(
-        tx: &TransactionWithSignature, cost: CostInfo, observer: Observer,
+        tx: &TransactionWithSignature, cost: CostInfo, ext_result: ExecutedExt,
         spec: &Spec,
     ) -> Self
     {
         let mut storage_sponsor_paid = cost.storage_sponsored;
         let mut gas_sponsor_paid = cost.gas_sponsored;
-
-        let trace = observer.tracer.map_or(Default::default(), |t| t.drain());
 
         if !spec.cip78b {
             gas_sponsor_paid = false;
@@ -122,16 +115,14 @@ impl Executed {
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
-            trace,
-            estimated_gas_limit: None,
-            estimated_storage_limit: 0,
+            base_gas: cost.base_gas,
+            ext_result,
         }
     }
 
     pub(super) fn from_executive_return(
         r: &ExecutiveReturn, refund_info: RefundInfo, cost: CostInfo,
-        substate: Substate, observer: Observer, base_gas_required: u64,
-        spec: &Spec,
+        substate: Substate, ext_result: ExecutedExt, spec: &Spec,
     ) -> Self
     {
         let output = r.return_data.to_vec();
@@ -159,20 +150,6 @@ impl Executed {
 
         let gas_sponsor_paid = cost.gas_sponsored;
 
-        let trace = observer.tracer.map_or(Default::default(), |t| t.drain());
-
-        let estimated_gas_limit = observer
-            .gas_man
-            .as_ref()
-            .map(|g| g.gas_required() * 7 / 6 + base_gas_required);
-
-        let estimated_storage_limit =
-            if let Some(x) = storage_collateralized.first() {
-                x.collaterals.as_u64()
-            } else {
-                0
-            };
-
         Executed {
             gas_used,
             gas_charged,
@@ -184,41 +161,16 @@ impl Executed {
             storage_collateralized,
             storage_released,
             output,
-            trace,
-            estimated_gas_limit,
-            estimated_storage_limit,
+            base_gas: cost.base_gas,
+            ext_result,
         }
     }
+}
 
-    pub fn decode_error<F, Addr: Display>(
-        &self, format_address: F,
-    ) -> (String, String, Vec<String>)
-    where F: Fn(&Address) -> Addr {
-        // When a revert exception happens, there is usually an error in
-        // the sub-calls. So we return the trace
-        // information for debugging contract.
-        let errors = ErrorUnwind::from_traces(&self.trace)
-            .errors
-            .iter()
-            .map(|(addr, error)| format!("{}: {}", format_address(addr), error))
-            .collect::<Vec<String>>();
-
-        // Decode revert error
-        let revert_error = revert_reason_decode(&self.output);
-        let revert_error = if !revert_error.is_empty() {
-            format!(": {}.", revert_error)
-        } else {
-            format!(".")
-        };
-
-        // Try to fetch the innermost error.
-        let innermost_error = if errors.len() > 0 {
-            format!(" Innermost error is at {}.", errors[0])
-        } else {
-            String::default()
-        };
-        (revert_error, innermost_error, errors)
-    }
+pub fn make_ext_result<O: ExecutiveObserver>(observer: O) -> ShareDebugMap {
+    let mut ext_result = ShareDebugMap::custom();
+    observer.drain_trace(&mut ext_result);
+    ext_result
 }
 
 pub fn revert_reason_decode(output: &Bytes) -> String {
@@ -245,7 +197,6 @@ pub fn revert_reason_decode(output: &Bytes) -> String {
     }
 }
 
-use crate::observer::trace::ExecTrace;
 use cfx_vm_types::Spec;
 
 #[cfg(test)]

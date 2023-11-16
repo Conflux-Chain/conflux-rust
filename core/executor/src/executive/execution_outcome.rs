@@ -3,7 +3,7 @@ use crate::{
     internal_contract::{
         make_staking_events, recover_phantom, PhantomTransaction,
     },
-    observer::trace::ExecTrace,
+    observer::{trace::ExecTrace, tracer::TransactionTrace},
     unwrap_or_return_default,
 };
 use cfx_types::{Address, H256, U256, U512};
@@ -188,7 +188,11 @@ impl ExecutionOutcome {
     #[inline]
     pub fn tx_traces(&self) -> Vec<ExecTrace> {
         let executed = unwrap_or_return_default!(self.try_as_executed());
-        executed.trace.clone()
+        executed
+            .ext_result
+            .get::<TransactionTrace>()
+            .cloned()
+            .unwrap_or_default()
     }
 
     #[inline]

@@ -9,7 +9,10 @@ use crate::rpc::types::{
 };
 use blockgen::BlockGenerator;
 use cfx_executor::{
-    executive::{ExecutionError, ExecutionOutcome, TxDropError},
+    executive::{
+        estimation::{decode_error, EstimateExt},
+        ExecutionError, ExecutionOutcome, TxDropError,
+    },
     internal_contract::storage_point_prop,
 };
 use cfx_statedb::{
@@ -1214,7 +1217,9 @@ impl RpcImpl {
         let epoch = Some(
             self.get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?,
         );
-        match self.exec_transaction(request, epoch)? {
+        let (execution_outcome, _estimation) =
+            self.exec_transaction(request, epoch)?;
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -1257,7 +1262,9 @@ impl RpcImpl {
         info!(
             "RPC Request: cfx_estimateGasAndCollateral request={:?}, epoch={:?}",request,epoch
         );
-        let executed = match self.exec_transaction(request, epoch)? {
+        let (execution_outcome, estimation) =
+            self.exec_transaction(request, epoch)?;
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -1282,8 +1289,8 @@ impl RpcImpl {
                 executed,
             ) => {
                 let network_type = *self.sync.network.get_network_type();
-                let (revert_error, innermost_error, errors) = executed
-                    .decode_error(|addr| {
+                let (revert_error, innermost_error, errors) =
+                    decode_error(&executed, |addr| {
                         RpcAddress::try_from_h160(addr.clone(), network_type)
                             .unwrap()
                             .base32_address
@@ -1306,9 +1313,8 @@ impl RpcImpl {
             ExecutionOutcome::Finished(executed) => executed,
         };
         let storage_collateralized =
-            U64::from(executed.estimated_storage_limit);
-        let estimated_gas_limit =
-            executed.estimated_gas_limit.unwrap_or(U256::zero());
+            U64::from(estimation.estimated_storage_limit);
+        let estimated_gas_limit = estimation.estimated_gas_limit;
         let response = EstimateGasAndCollateralResponse {
             // We multiply the gas_used for 2 reasons:
             // 1. In each EVM call, the gas passed is at most 63/64 of the
@@ -1318,7 +1324,7 @@ impl RpcImpl {
             // 2. In Conflux, we recommend setting the gas_limit to (gas_used *
             // 4) / 3, because the extra gas will be refunded up to
             // 1/4 of the gas limit.
-            gas_limit: executed.estimated_gas_limit.unwrap(),
+            gas_limit: estimation.estimated_gas_limit,
             gas_used: estimated_gas_limit,
             storage_collateralized,
         };
@@ -1373,7 +1379,7 @@ impl RpcImpl {
 
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<ExecutionOutcome> {
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
         let rpc_request_network = invalid_params_check(
             "request",
             rpc_call_request_network(
