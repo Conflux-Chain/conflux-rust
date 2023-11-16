@@ -1,3 +1,4 @@
+#[cfg(test)]
 #[macro_export]
 macro_rules! check_func_signature {
     ($interface:ident, $signature:expr) => {
@@ -10,6 +11,7 @@ macro_rules! check_func_signature {
     };
 }
 
+#[cfg(test)]
 #[macro_export]
 macro_rules! check_event_signature {
     ($interface:ident, $signature:expr) => {

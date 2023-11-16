@@ -8,9 +8,9 @@ use crate::rpc::types::{
     TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
-use cfx_executor::executive::{
-    internal_contract::storage_point_prop, ExecutionError, ExecutionOutcome,
-    TxDropError,
+use cfx_executor::{
+    executive::{ExecutionError, ExecutionOutcome, TxDropError},
+    internal_contract::storage_point_prop,
 };
 use cfx_statedb::{
     global_params::{

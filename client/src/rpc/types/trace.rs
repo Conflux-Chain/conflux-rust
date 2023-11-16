@@ -6,7 +6,7 @@ use super::{eth::LocalizedTrace as EthLocalizedTrace, RpcAddress};
 use crate::rpc::types::Bytes;
 use cfx_addr::Network;
 use cfx_executor::{
-    executive::internal_contract::evm_map,
+    internal_contract::evm_map,
     observer::trace::{
         Action as VmAction, ActionType as VmActionType, BlockExecTraces,
         Call as VmCall, CallResult as VmCallResult, Create as VmCreate,

@@ -64,11 +64,11 @@ use crate::{
 };
 use cfx_executor::{
     executive::{
-        internal_contract::{
-            initialize_internal_contract_accounts, storage_point_prop,
-        },
         EstimateRequest, EstimationContext, ExecutionOutcome, ExecutiveContext,
         TransactOptions,
+    },
+    internal_contract::{
+        initialize_internal_contract_accounts, storage_point_prop,
     },
     machine::Machine,
     observer::trace::TransactionExecTraces,

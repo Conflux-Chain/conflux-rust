@@ -3,12 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 // Transaction execution environment.
-use super::{
+use crate::{
     executive::contract_address,
     frame::{FrameLocal, RuntimeRes},
     internal_contract::{suicide as suicide_impl, InternalRefContext},
-};
-use crate::{
     machine::Machine,
     observer::TracerTrait,
     state::{CallStackInfo, State, Substate},
@@ -487,7 +485,7 @@ impl<'a> Context<'a> {
 mod tests {
     use super::{FrameLocal, OriginInfo};
     use crate::{
-        executive::frame::OwnedRuntimeRes,
+        frame::OwnedRuntimeRes,
         machine::{new_machine_with_builtin, Machine},
         state::{CallStackInfo, State, Substate},
         test_helpers::get_state_for_genesis_write,

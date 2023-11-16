@@ -7,7 +7,8 @@ use cfx_statedb::{
 use cfx_types::{maybe_address, Address, U256};
 use primitives::{SponsorInfo, StorageKey};
 
-use super::{internal_contract::storage_point_prop, substate::Substate, State};
+use super::{substate::Substate, State};
+use crate::internal_contract::storage_point_prop;
 
 impl State {
     pub fn sponsor_info(

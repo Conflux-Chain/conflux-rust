@@ -6,10 +6,7 @@ use cfx_vm_types::{
 };
 use InternalTrapResult::*;
 
-use super::super::super::{
-    context::Context,
-    frame::{Executable, ExecutableOutcome},
-};
+use crate::frame::{Context, Executable, ExecutableOutcome};
 
 pub struct InternalContractExec<'a> {
     pub internal: &'a Box<dyn InternalContractTrait>,

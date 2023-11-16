@@ -1,6 +1,6 @@
 use super::{substate::Substate, State};
 use crate::{
-    executive::internal_contract::storage_point_prop,
+    internal_contract::storage_point_prop,
     observer::TracerTrait,
     state::trace::{
         trace_convert_stroage_points, trace_occupy_collateral,

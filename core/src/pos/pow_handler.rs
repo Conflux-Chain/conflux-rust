@@ -5,7 +5,7 @@
 use crate::{pos::consensus::ConsensusDB, ConsensusGraph};
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cfx_executor::executive::internal_contract::decode_register_info;
+use cfx_executor::internal_contract::decode_register_info;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_types::H256;
 use diem_types::block_info::PivotBlockDecision;

@@ -4,7 +4,10 @@ use cfx_statedb::Result as DbResult;
 use cfx_vm_interpreter::Finalize;
 use cfx_vm_types::{ActionParams, Error as VmError, GasLeft, ReturnData};
 
-use crate::executive::{Context, Executable, ExecutableOutcome};
+use crate::{
+    context::Context,
+    frame::{Executable, ExecutableOutcome},
+};
 
 pub struct BuiltinExec<'a> {
     pub builtin: &'a Builtin,

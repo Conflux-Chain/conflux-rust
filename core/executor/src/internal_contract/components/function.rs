@@ -189,9 +189,8 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 /// get_whitelist(address user, address contract) public returns bool, you
 /// should use
 /// ```
-/// use cfx_executor::make_solidity_function;
+/// use cfx_executor::{make_solidity_function, internal_contract::InterfaceTrait};
 /// use cfx_types::{Address,U256};
-/// use cfx_executor::executive::internal_contract::InterfaceTrait;
 /// use sha3_macro::keccak;
 ///
 /// make_solidity_function!{

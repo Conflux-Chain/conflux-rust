@@ -1,11 +1,8 @@
 use crate::{
-    executive::{
-        context::Context,
-        contract_address,
-        executive::gas_required_for,
-        frame::{
-            Executable, ExecutableOutcome, FrameResult, FrameReturn, Resumable,
-        },
+    executive::{contract_address, gas_required_for},
+    frame::{
+        Context, Executable, ExecutableOutcome, FrameResult, FrameReturn,
+        Resumable,
     },
     internal_bail,
     observer::AddressPocket,

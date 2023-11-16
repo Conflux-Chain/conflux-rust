@@ -1,9 +1,7 @@
-use super::{
-    internal_contract::{
-        get_settled_param_vote_count, get_settled_pos_staking_for_votes,
-        settle_current_votes, storage_point_prop,
-    },
-    AccountEntryProtectedMethods, RequireCache, State,
+use super::{AccountEntryProtectedMethods, RequireCache, State};
+use crate::internal_contract::{
+    get_settled_param_vote_count, get_settled_pos_staking_for_votes,
+    settle_current_votes, storage_point_prop,
 };
 use cfx_parameters::{
     consensus::ONE_UCFX_IN_DRIP,

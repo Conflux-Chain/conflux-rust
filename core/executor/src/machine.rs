@@ -8,7 +8,7 @@ use crate::{
         builtin_factory, AltBn128PairingPricer, Blake2FPricer, Linear,
         ModexpPricer,
     },
-    executive::InternalContractMap,
+    internal_contract::InternalContractMap,
     spec::CommonParams,
     vm_factory::VmFactory,
 };

@@ -13,7 +13,7 @@ use rustc_hex::FromHex;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
-use cfx_executor::executive::internal_contract::initialize_internal_contract_accounts;
+use cfx_executor::internal_contract::initialize_internal_contract_accounts;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
     consensus::{GENESIS_GAS_LIMIT, ONE_CFX_IN_DRIP},

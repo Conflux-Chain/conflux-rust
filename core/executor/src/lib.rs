@@ -8,12 +8,17 @@ extern crate error_chain;
 extern crate sha3_macro;
 
 mod builtin;
+pub mod context;
 pub mod executive;
+mod frame;
+pub mod internal_contract;
 pub mod machine;
 pub mod observer;
 pub mod spec;
 pub mod state;
 pub mod vm_factory;
+
+pub use internal_contract::{InternalContractMap, InternalContractTrait};
 
 #[cfg(test)]
 pub mod test_helpers;

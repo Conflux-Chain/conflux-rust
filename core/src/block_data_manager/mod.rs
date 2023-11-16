@@ -9,7 +9,7 @@ use crate::{
     ext_db::SystemDB,
     pow::{PowComputer, TargetDifficultyManager},
 };
-use cfx_executor::executive::internal_contract::make_staking_events;
+use cfx_executor::internal_contract::make_staking_events;
 use cfx_storage::{
     state_manager::StateIndex, utils::guarded_value::*, StorageManager,
     StorageManagerTrait,
@@ -42,7 +42,7 @@ use crate::{
 };
 pub use block_data_types::*;
 use cfx_executor::{
-    executive::internal_contract::build_bloom_and_recover_phantom,
+    internal_contract::build_bloom_and_recover_phantom,
     observer::trace::{BlockExecTraces, TransactionExecTraces},
 };
 use cfx_internal_common::{

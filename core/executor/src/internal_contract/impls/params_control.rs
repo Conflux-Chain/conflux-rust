@@ -4,16 +4,6 @@
 
 use std::convert::TryInto;
 
-use crate::{
-    executive::internal_contract::{
-        components::SolidityEventTrait,
-        impls::params_control::system_storage_key::{
-            current_pos_staking_for_votes, settled_pos_staking_for_votes,
-        },
-    },
-    internal_bail,
-    state::State,
-};
 use cfx_math::power_two_fractional;
 use cfx_parameters::consensus_internal::DAO_MIN_VOTE_PERCENTAGE;
 use cfx_statedb::Result as DbResult;
@@ -22,8 +12,14 @@ use cfx_vm_types::{self as vm, ActionParams, Spec};
 use lazy_static::lazy_static;
 
 use super::super::{
-    components::InternalRefContext, contracts::params_control::*,
+    components::{InternalRefContext, SolidityEventTrait},
+    contracts::params_control::*,
     impls::staking::get_vote_power,
+};
+use crate::{internal_bail, state::State};
+
+use self::system_storage_key::{
+    current_pos_staking_for_votes, settled_pos_staking_for_votes,
 };
 pub use system_storage_key::storage_point_prop;
 

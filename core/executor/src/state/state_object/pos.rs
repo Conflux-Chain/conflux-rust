@@ -4,7 +4,7 @@
 
 use super::State;
 use crate::{
-    executive::internal_contract::{pos_internal_entries, IndexStatus},
+    internal_contract::{pos_internal_entries, IndexStatus},
     state::CleanupMode,
 };
 use cfx_math::sqrt_u256;

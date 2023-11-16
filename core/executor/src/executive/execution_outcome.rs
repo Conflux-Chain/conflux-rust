@@ -1,6 +1,6 @@
 use super::executed::{revert_reason_decode, Executed};
 use crate::{
-    executive::internal_contract::{
+    internal_contract::{
         make_staking_events, recover_phantom, PhantomTransaction,
     },
     observer::trace::ExecTrace,

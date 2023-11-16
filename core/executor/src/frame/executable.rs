@@ -1,7 +1,7 @@
 use super::{FrameLocal, Resumable};
 use crate::{
-    builtin::BuiltinExec,
-    executive::{context::Context, internal_contract::InternalContractExec},
+    builtin::BuiltinExec, context::Context,
+    internal_contract::InternalContractExec,
 };
 use cfx_statedb::Result as DbResult;
 use cfx_types::{AddressSpaceUtil, U256};

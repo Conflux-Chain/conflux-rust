@@ -6,6 +6,7 @@ mod frame_start;
 mod resources;
 mod resumable;
 
+pub use crate::context::Context;
 pub use executable::{Executable, ExecutableOutcome};
 pub use frame_local::FrameLocal;
 pub use frame_return::{FrameResult, FrameReturn};

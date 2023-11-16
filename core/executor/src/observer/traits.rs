@@ -1,5 +1,5 @@
 pub use super::internal_transfer::AddressPocket;
-use crate::executive::FrameResult;
+use crate::frame::FrameResult;
 use cfx_vm_types::ActionParams;
 
 use impl_tools::autoimpl;

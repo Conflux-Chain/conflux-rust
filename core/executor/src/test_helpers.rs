@@ -1,7 +1,6 @@
 use crate::{
-    executive::{
-        internal_contract::initialize_internal_contract_accounts,
-        InternalContractMap,
+    internal_contract::{
+        initialize_internal_contract_accounts, InternalContractMap,
     },
     state::State,
 };

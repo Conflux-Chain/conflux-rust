@@ -1,5 +1,5 @@
 use super::*;
-use crate::executive::FrameResult;
+use crate::frame::FrameResult;
 use cfx_parameters::{
     block::CROSS_SPACE_GAS_RATIO,
     internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS,

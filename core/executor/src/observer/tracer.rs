@@ -3,7 +3,7 @@ use super::{
     InternalTransferTracer,
 };
 use crate::{
-    executive::{FrameResult, FrameReturn},
+    frame::{FrameResult, FrameReturn},
     observer::trace::{
         Action, Call, CallResult, Create, CreateResult, ExecTrace,
         InternalTransferAction,

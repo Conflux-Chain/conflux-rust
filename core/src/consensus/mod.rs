@@ -36,10 +36,8 @@ use crate::{
     NodeType, Notifications,
 };
 use cfx_executor::{
-    executive::{
-        internal_contract::build_bloom_and_recover_phantom, EstimateRequest,
-        ExecutionOutcome,
-    },
+    executive::{EstimateRequest, ExecutionOutcome},
+    internal_contract::build_bloom_and_recover_phantom,
     observer::{
         trace::{
             recover_phantom_traces, ActionType, BlockExecTraces,

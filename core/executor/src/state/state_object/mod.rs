@@ -65,7 +65,7 @@ use super::{
     account_entry::AccountEntry, global_stat::GlobalStat,
     overlay_account::OverlayAccount, substate, AccountEntryProtectedMethods,
 };
-use crate::executive::internal_contract;
+// use crate::internal_contract;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
 use cfx_types::AddressWithSpace;
 use parking_lot::RwLock;
