@@ -45,11 +45,7 @@ pub struct StoreAccountRef {
 
 impl PartialOrd for StoreAccountRef {
     fn partial_cmp(&self, other: &StoreAccountRef) -> Option<Ordering> {
-        Some(
-            self.address
-                .cmp(&other.address)
-                .then_with(|| self.vault.cmp(&other.vault)),
-        )
+        Some(self.cmp(other))
     }
 }
 
@@ -59,7 +55,11 @@ impl PartialEq for StoreAccountRef {
 impl Eq for StoreAccountRef {}
 
 impl Ord for StoreAccountRef {
-    fn cmp(&self, other: &Self) -> Ordering { self.address.cmp(&other.address) }
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.address
+            .cmp(&other.address)
+            .then_with(|| self.vault.cmp(&other.vault))
+    }
 }
 
 impl Hash for StoreAccountRef {

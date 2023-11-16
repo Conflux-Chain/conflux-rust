@@ -213,7 +213,7 @@ impl SnapshotChunkSync {
         request: &SnapshotManifestRequest,
     ) -> Result<(), Error>
     {
-        let mut inner = &mut *self.inner.write();
+        let inner = &mut *self.inner.write();
 
         // status mismatch
         if !matches!(inner.status, Status::DownloadingManifest(_)) {

@@ -30,7 +30,7 @@ impl<K, V: PartialEq + Eq + Ord> Eq for Node<K, V> {}
 
 impl<K, V: PartialEq + Eq + Ord> PartialOrd for Node<K, V> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.value.partial_cmp(&other.value)
+        Some(self.cmp(other))
     }
 }
 
