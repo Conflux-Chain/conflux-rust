@@ -91,7 +91,7 @@ fn txexe_benchmark(c: &mut Criterion) {
                 state.clear();
                 let ex =
                     ExecutiveContext::new(&mut state, &env, &machine, &spec);
-                let options = TransactOptions::exec_with_no_tracing();
+                let options = TransactOptions::default();
                 ex.transact(&tx, options).unwrap();
             })
         })

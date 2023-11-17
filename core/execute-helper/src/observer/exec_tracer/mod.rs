@@ -1,13 +1,34 @@
-use super::{
-    internal_transfer::AddressPocket, CallTracer, CheckpointTracer, DrainTrace,
-    InternalTransferTracer,
+mod action_types;
+mod error_unwind;
+mod filter;
+mod phantom_traces;
+mod trace_types;
+
+#[cfg(test)]
+mod tests;
+
+pub use action_types::{
+    Action, ActionType, Call, CallResult, Create, CreateResult,
+    InternalTransferAction, Outcome,
 };
-use crate::{
-    frame::{FrameResult, FrameReturn},
-    observer::trace::{
-        Action, Call, CallResult, Create, CreateResult, ExecTrace,
-        InternalTransferAction,
+pub use error_unwind::ErrorUnwind;
+pub use filter::TraceFilter;
+pub use phantom_traces::{
+    recover_phantom_trace_for_call, recover_phantom_trace_for_withdraw,
+    recover_phantom_traces,
+};
+pub use trace_types::{
+    BlockExecTraces, ExecTrace, LocalizedTrace, TransactionExecTraces,
+};
+
+use super::utils::CheckpointLog;
+
+use cfx_executor::{
+    executive_observe::{
+        AddressPocket, CallTracer, CheckpointTracer, DrainTrace,
+        InternalTransferTracer,
     },
+    frame::{FrameResult, FrameReturn},
 };
 use cfx_types::U256;
 use cfx_vm_types::ActionParams;
@@ -15,23 +36,23 @@ use typemap::ShareDebugMap;
 
 /// Simple executive tracer. Traces all calls and creates.
 #[derive(Default)]
-pub struct ExecutiveTracer {
+pub struct ExecTracer {
     traces: Vec<Action>,
     valid_indices: CheckpointLog<usize>,
 }
 
-impl DrainTrace for ExecutiveTracer {
+impl DrainTrace for ExecTracer {
     fn drain_trace(self, map: &mut ShareDebugMap) {
-        map.insert::<TransactionTrace>(self.drain());
+        map.insert::<ExecTraceKey>(self.drain());
     }
 }
 
-pub struct TransactionTrace;
-impl typemap::Key for TransactionTrace {
+pub struct ExecTraceKey;
+impl typemap::Key for ExecTraceKey {
     type Value = Vec<ExecTrace>;
 }
 
-impl InternalTransferTracer for ExecutiveTracer {
+impl InternalTransferTracer for ExecTracer {
     fn trace_internal_transfer(
         &mut self, from: AddressPocket, to: AddressPocket, value: U256,
     ) {
@@ -46,7 +67,7 @@ impl InternalTransferTracer for ExecutiveTracer {
     }
 }
 
-impl CheckpointTracer for ExecutiveTracer {
+impl CheckpointTracer for ExecTracer {
     fn trace_checkpoint(&mut self) { self.valid_indices.checkpoint(); }
 
     fn trace_checkpoint_discard(&mut self) {
@@ -58,7 +79,7 @@ impl CheckpointTracer for ExecutiveTracer {
     }
 }
 
-impl CallTracer for ExecutiveTracer {
+impl CallTracer for ExecTracer {
     fn record_call(&mut self, params: &ActionParams) {
         let action = Action::Call(Call::from(params.clone()));
 
@@ -113,7 +134,7 @@ impl CallTracer for ExecutiveTracer {
     }
 }
 
-impl ExecutiveTracer {
+impl ExecTracer {
     pub fn drain(self) -> Vec<ExecTrace> {
         let mut validity: Vec<bool> = vec![false; self.traces.len()];
         for index in self.valid_indices.drain() {
@@ -125,25 +146,4 @@ impl ExecutiveTracer {
             .map(|(action, valid)| ExecTrace { action, valid })
             .collect()
     }
-}
-
-#[derive(Default)]
-struct CheckpointLog<T> {
-    data: Vec<T>,
-    checkpoints: Vec<usize>,
-}
-
-impl<T> CheckpointLog<T> {
-    fn push(&mut self, item: T) { self.data.push(item); }
-
-    fn checkpoint(&mut self) { self.checkpoints.push(self.data.len()); }
-
-    fn revert_checkpoint(&mut self) {
-        let start = self.checkpoints.pop().unwrap();
-        self.data.truncate(start);
-    }
-
-    fn discard_checkpoint(&mut self) { self.checkpoints.pop().unwrap(); }
-
-    fn drain(self) -> Vec<T> { self.data }
 }

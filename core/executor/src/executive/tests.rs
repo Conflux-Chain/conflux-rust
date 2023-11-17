@@ -564,7 +564,7 @@ fn test_not_enough_cash() {
 
     let res = {
         let ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
-        let options = TransactOptions::exec_with_no_tracing();
+        let options = TransactOptions::default();
         ex.transact(&t, options).unwrap()
     };
 
@@ -1203,7 +1203,7 @@ fn test_commission_privilege() {
     })
     .sign(sender_key.secret());
     assert_eq!(tx.sender().address, sender);
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1303,7 +1303,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1347,7 +1347,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1391,7 +1391,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1449,7 +1449,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(25_000)
     );
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1505,7 +1505,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(41_970)
     );
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1599,7 +1599,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(sender.secret());
     assert_eq!(tx.sender().address, sender.address());
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed {
         gas_used,
         storage_collateralized,
@@ -1758,7 +1758,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed {
         gas_used,
         storage_collateralized,
@@ -1842,7 +1842,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed {
         gas_used,
         storage_collateralized,
@@ -1947,7 +1947,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed {
         gas_used,
         storage_collateralized,
@@ -2086,7 +2086,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let Executed {
         gas_used,
         storage_collateralized,

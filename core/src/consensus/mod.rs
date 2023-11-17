@@ -35,18 +35,16 @@ use crate::{
     verification::VerificationConfig,
     NodeType, Notifications,
 };
-use cfx_executor::{
-    executive::{estimation::EstimateExt, EstimateRequest, ExecutionOutcome},
-    internal_contract::build_bloom_and_recover_phantom,
-    observer::{
-        trace::{
-            recover_phantom_traces, ActionType, BlockExecTraces,
-            LocalizedTrace, TransactionExecTraces,
-        },
-        trace_filter::TraceFilter,
+use cfx_execute_helper::{
+    estimation::{EstimateExt, EstimateRequest},
+    exec_tracer::{
+        recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
+        TraceFilter, TransactionExecTraces,
     },
-    state::State,
+    phantom_tx::build_bloom_and_recover_phantom,
 };
+use cfx_executor::{executive::ExecutionOutcome, state::State};
+
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
@@ -78,7 +76,7 @@ use primitives::{
     pos::PosBlockId,
     receipt::Receipt,
     BlockHeader, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-    TransactionOutcome,
+    TransactionStatus,
 };
 use rayon::prelude::*;
 use std::{
@@ -1768,8 +1766,8 @@ impl ConsensusGraph {
                 {
                     continue;
                 }
-                for trace in tx_trace
-                    .filter_traces(&filter)
+                for trace in filter
+                    .filter_traces(tx_trace)
                     .map_err(|e| FilterError::Custom(e))?
                 {
                     if !filter
@@ -1831,7 +1829,7 @@ impl ConsensusGraph {
             };
 
             for receipt in exec_info.block_receipts.receipts.iter() {
-                if receipt.outcome_status == TransactionOutcome::Skipped {
+                if receipt.outcome_status == TransactionStatus::Skipped {
                     continue;
                 }
 
@@ -1958,7 +1956,7 @@ impl ConsensusGraph {
                         let receipt = &block_receipts[id];
 
                         // we do not return non-executed transaction
-                        if receipt.outcome_status == TransactionOutcome::Skipped
+                        if receipt.outcome_status == TransactionStatus::Skipped
                         {
                             continue;
                         }
@@ -1990,7 +1988,7 @@ impl ConsensusGraph {
                         // note: failing transactions will not produce any
                         // phantom txs or traces
                         if block_receipts[id].outcome_status
-                            != TransactionOutcome::Success
+                            != TransactionStatus::Success
                         {
                             continue;
                         }
@@ -2232,8 +2230,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let inner = self.inner.read();
         if let Some(tx_info) = inner.get_transaction_info(hash) {
             if let Some(executed) = &tx_info.maybe_executed_extra_info {
-                if executed.receipt.outcome_status
-                    == TransactionOutcome::Skipped
+                if executed.receipt.outcome_status == TransactionStatus::Skipped
                 {
                     // A skipped transaction is not visible to clients if
                     // accessed by its hash.

@@ -73,7 +73,7 @@ use primitives::Account;
 use std::collections::HashMap;
 
 pub use self::{
-    collateral::settle_collateral_for_all,
+    collateral::{initialize_cip107, settle_collateral_for_all},
     pos::{distribute_pos_interest, update_pos_status},
     staking::initialize_or_update_dao_voted_params,
 };

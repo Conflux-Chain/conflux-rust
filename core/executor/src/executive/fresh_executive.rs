@@ -1,9 +1,10 @@
 use super::{
-    estimation::{ChargeCollateral, TransactOptions, TransactSettings},
     execution_outcome::{ExecutionOutcome, ToRepackError, TxDropError},
-    gas_required_for, ExecutiveContext, PreCheckedExecutive,
+    gas_required_for,
+    transact_options::{ChargeCollateral, TransactOptions, TransactSettings},
+    ExecutiveContext, PreCheckedExecutive,
 };
-use crate::{observer::ExecutiveObserver, state::Substate};
+use crate::{executive_observe::ExecutiveObserve, state::Substate};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 
 use cfx_statedb::Result as DbResult;
@@ -21,7 +22,7 @@ macro_rules! early_return_on_err {
     };
 }
 
-pub struct FreshExecutive<'a, O: ExecutiveObserver> {
+pub struct FreshExecutive<'a, O: ExecutiveObserve> {
     context: ExecutiveContext<'a>,
     tx: &'a SignedTransaction,
     observer: O,
@@ -43,7 +44,7 @@ pub(super) struct CostInfo {
     pub storage_sponsor_eligible: bool,
 }
 
-impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
+impl<'a, O: ExecutiveObserve> FreshExecutive<'a, O> {
     pub fn new(
         context: ExecutiveContext<'a>, tx: &'a SignedTransaction,
         options: TransactOptions<O>,
@@ -90,12 +91,11 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
             settings: self.settings,
             cost,
             substate: Substate::new(),
-            base_gas: self.base_gas,
         }
     }
 }
 
-impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
+impl<'a, O: ExecutiveObserve> FreshExecutive<'a, O> {
     fn check_nonce(&self) -> DbResult<Result<(), ExecutionOutcome>> {
         let tx = self.tx;
         let nonce = self.context.state.nonce(&tx.sender())?;

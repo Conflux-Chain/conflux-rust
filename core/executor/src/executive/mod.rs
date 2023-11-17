@@ -1,13 +1,13 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-pub mod estimation;
 pub mod executed;
 pub mod execution_outcome;
 mod fresh_executive;
 mod pre_checked_executive;
 #[cfg(test)]
 mod tests;
+pub mod transact_options;
 
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
@@ -17,15 +17,18 @@ use cfx_types::{
 use cfx_vm_types::{CreateContractAddress, Env, Spec};
 use primitives::SignedTransaction;
 
-use executed::Executed;
 use fresh_executive::FreshExecutive;
 use pre_checked_executive::PreCheckedExecutive;
 
-pub use estimation::{EstimateRequest, EstimationContext, TransactOptions};
-pub use executed::revert_reason_decode;
+pub use executed::{revert_reason_decode, Executed};
 pub use execution_outcome::{ExecutionError, ExecutionOutcome, TxDropError};
+pub use transact_options::{
+    ChargeCollateral, TransactOptions, TransactSettings,
+};
 
-use crate::{machine::Machine, observer::ExecutiveObserver, state::State};
+use crate::{
+    executive_observe::ExecutiveObserve, machine::Machine, state::State,
+};
 
 /// Transaction executor.
 pub struct ExecutiveContext<'a> {
@@ -49,7 +52,7 @@ impl<'a> ExecutiveContext<'a> {
         }
     }
 
-    pub fn transact<O: ExecutiveObserver>(
+    pub fn transact<O: ExecutiveObserve>(
         self, tx: &SignedTransaction, options: TransactOptions<O>,
     ) -> DbResult<ExecutionOutcome> {
         let fresh_exec = FreshExecutive::new(self, tx, options);
@@ -100,7 +103,7 @@ pub fn contract_address(
 #[cfg(test)]
 pub mod test_util {
     use crate::{
-        frame::accrue_substate, observer::TracerTrait, state::Substate,
+        executive_observe::TracerTrait, frame::accrue_substate, state::Substate,
     };
     use cfx_statedb::Result as DbResult;
     use cfx_vm_interpreter::FinalizationResult;

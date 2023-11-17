@@ -1,13 +1,11 @@
 use super::{substate::Substate, State};
 use crate::{
-    internal_contract::storage_point_prop,
-    observer::TracerTrait,
-    state::trace::{
-        trace_convert_stroage_points, trace_occupy_collateral,
-        trace_refund_collateral,
-    },
+    executive_observe::TracerTrait, internal_contract::storage_point_prop,
 };
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_parameters::{
+    consensus_internal::CIP107_STORAGE_POINT_PROP_INIT,
+    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
 use cfx_statedb::{global_params::*, Result as DbResult};
 use cfx_types::{address_util::AddressUtil, Address, AddressSpaceUtil, U256};
 use cfx_vm_types::{self as vm, Spec};
@@ -89,6 +87,10 @@ impl State {
         })
     }
 
+    pub fn storage_point_prop(&self) -> DbResult<U256> {
+        self.get_system_storage(&storage_point_prop())
+    }
+
     // TODO: This function can only be called after VM execution. There are some
     // test cases breaks this assumption, which will be fixed in a separated PR.
     #[cfg(test)]
@@ -136,7 +138,7 @@ impl State {
     ) -> DbResult<(U256, U256)> {
         debug!("Check initialize CIP-107");
 
-        let prop: U256 = self.get_system_storage(&storage_point_prop())?;
+        let prop: U256 = self.storage_point_prop()?;
         let mut account =
             self.write_account_or_new_lock(&address.with_native_space())?;
         noop_if!(account.is_cip_107_initialized());
@@ -171,8 +173,7 @@ fn settle_collateral_for_address(
         && (!sub.is_zero() || !inc.is_zero())
     {
         let (from_balance, from_collateral) = state.initialize_cip107(addr)?;
-        trace_convert_stroage_points(
-            tracer,
+        tracer.trace_convert_stroage_points(
             *addr,
             from_balance,
             from_collateral,
@@ -182,7 +183,7 @@ fn settle_collateral_for_address(
     if !sub.is_zero() {
         let storage_points_refund =
             state.sub_collateral_for_storage(addr, &sub)?;
-        trace_refund_collateral(tracer, *addr, sub - storage_points_refund);
+        tracer.trace_refund_collateral(*addr, sub - storage_points_refund);
     }
     if !inc.is_zero() && !dry_run {
         let balance = if is_contract {
@@ -201,7 +202,7 @@ fn settle_collateral_for_address(
 
         let storage_points_used =
             state.add_collateral_for_storage(addr, &inc)?;
-        trace_occupy_collateral(tracer, *addr, inc - storage_points_used);
+        tracer.trace_occupy_collateral(*addr, inc - storage_points_used);
     }
     Ok(Ok(()))
 }
@@ -224,6 +225,17 @@ pub fn settle_collateral_for_all(
         }
     }
     Ok(Ok(()))
+}
+
+pub fn initialize_cip107(state: &mut State) -> DbResult<()> {
+    debug!(
+        "set storage_point_prop to {}",
+        CIP107_STORAGE_POINT_PROP_INIT
+    );
+    state.set_system_storage(
+        storage_point_prop().to_vec(),
+        CIP107_STORAGE_POINT_PROP_INIT.into(),
+    )
 }
 
 pub type CollateralCheckResult = std::result::Result<(), CollateralCheckError>;

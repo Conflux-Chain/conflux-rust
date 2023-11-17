@@ -22,9 +22,7 @@ use rustc_hex::ToHex;
 use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
-use cfx_parameters::{
-    consensus::*, consensus_internal::CIP107_STORAGE_POINT_PROP_INIT,
-};
+use cfx_parameters::consensus::*;
 use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
@@ -59,24 +57,27 @@ use crate::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
     },
-    vm::{Env, Spec},
     SharedTransactionPool,
+};
+use cfx_execute_helper::{
+    estimation::{EstimateExt, EstimateRequest, EstimationContext},
+    exec_tracer::TransactionExecTraces,
+    observer::Observer,
+    tx_outcome::make_process_tx_outcome,
 };
 use cfx_executor::{
     executive::{
-        estimation::EstimateExt, EstimateRequest, EstimationContext,
-        ExecutionOutcome, ExecutiveContext, TransactOptions,
+        ExecutionOutcome, ExecutiveContext, TransactOptions, TransactSettings,
     },
-    internal_contract::{
-        initialize_internal_contract_accounts, storage_point_prop,
-    },
+    internal_contract::initialize_internal_contract_accounts,
     machine::Machine,
-    observer::trace::TransactionExecTraces,
     state::{
-        distribute_pos_interest, initialize_or_update_dao_voted_params,
-        update_pos_status, CleanupMode, State,
+        distribute_pos_interest, initialize_cip107,
+        initialize_or_update_dao_voted_params, update_pos_status, CleanupMode,
+        State,
     },
 };
+use cfx_vm_types::{Env, Spec};
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
@@ -1308,16 +1309,21 @@ impl ConsensusExecutionHandler {
             let mut block_traces: Vec<TransactionExecTraces> =
                 Default::default();
             for (idx, transaction) in block.transactions.iter().enumerate() {
-                let options = if self.config.executive_trace {
-                    TransactOptions::exec_with_tracing()
+                let observer = if self.config.executive_trace {
+                    Observer::with_tracing()
                 } else {
-                    TransactOptions::exec_with_no_tracing()
+                    Observer::with_no_tracing()
+                };
+                let options = TransactOptions {
+                    observer,
+                    settings: TransactSettings::all_checks(),
                 };
                 let execution_outcome =
                     ExecutiveContext::new(state, &env, machine, &spec)
                         .transact(transaction, options)?;
                 execution_outcome.log(transaction, &block.hash());
-                let r = execution_outcome.make_process_tx_outcome(
+                let r = make_process_tx_outcome(
+                    execution_outcome,
                     &mut env.accumulated_gas_used,
                     transaction.hash,
                 );
@@ -1928,14 +1934,7 @@ impl ConsensusExecutionHandler {
         // that function will update the value after cip107 is enabled
         // here.
         if block_number == self.machine.params().transition_numbers.cip107 {
-            debug!(
-                "set storage_point_prop to {}",
-                CIP107_STORAGE_POINT_PROP_INIT
-            );
-            state.set_system_storage(
-                storage_point_prop().to_vec(),
-                CIP107_STORAGE_POINT_PROP_INIT.into(),
-            )?;
+            initialize_cip107(state)?;
         }
         Ok(())
     }

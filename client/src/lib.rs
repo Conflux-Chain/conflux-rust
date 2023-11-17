@@ -11,7 +11,6 @@ extern crate error_chain;
 extern crate log;
 #[macro_use]
 extern crate serde_derive;
-extern crate cfx_vm_types as vm;
 extern crate cfxkey as keylib;
 extern crate tempdir;
 

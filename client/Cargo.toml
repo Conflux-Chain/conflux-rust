@@ -20,6 +20,7 @@ cfxcore-accounts = { path = "../accounts" }
 cfxstore = { path = "../accounts/cfxstore" }
 cfx-internal-common = { path = "../core/internal_common" }
 cfx-executor = { path = "../core/executor" }
+cfx-execute-helper = { path = "../core/execute-helper" }
 cfx-statedb = { path = "../core/statedb" }
 cfx-storage = { path = "../core/storage" }
 cfx-vm-types = { path = "../core/vm-types" }

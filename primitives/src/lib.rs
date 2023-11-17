@@ -41,7 +41,7 @@ pub use crate::{
     block_number::compute_block_number,
     epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},
     log_entry::LogEntry,
-    receipt::{BlockReceipts, Receipt, TransactionOutcome},
+    receipt::{BlockReceipts, Receipt, TransactionStatus},
     state_root::*,
     static_bool::StaticBool,
     storage::{
