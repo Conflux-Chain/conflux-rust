@@ -4,8 +4,8 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     executive::{context::Context, internal_contract::InternalContractExec},
     vm::{
-        self, separate_out_db_error, ActionParams, Exec, GasLeft,
-        ReturnData, TrapError, TrapResult,
+        self, separate_out_db_error, ActionParams, Exec, GasLeft, ReturnData,
+        TrapError, TrapResult,
     },
 };
 use cfx_statedb::Result as DbResult;

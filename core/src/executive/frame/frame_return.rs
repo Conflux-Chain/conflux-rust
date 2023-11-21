@@ -79,8 +79,8 @@ impl FrameReturn {
         let substate;
         let create_address;
         if result.apply_state {
-            substate = Some(dbg!(frame_local.substate));
-            create_address = dbg!(frame_local.create_address);
+            substate = Some(frame_local.substate);
+            create_address = frame_local.create_address;
         } else {
             substate = None;
             create_address = None;
