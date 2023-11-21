@@ -29,7 +29,6 @@ use cfxcore::{
         revert_reason_decode, EstimateRequest, ExecutionError,
         ExecutionOutcome, TxDropError,
     },
-    observer::ErrorUnwind,
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
@@ -766,29 +765,8 @@ impl Eth for EthHandler {
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => {
-                // When a revert exception happens, there is usually an error in
-                // the sub-calls. So we return the trace
-                // information for debugging contract.
-                let errors = ErrorUnwind::from_traces(executed.trace)
-                    .errors
-                    .iter()
-                    .map(|(addr, error)| format!("{}: {}", addr, error))
-                    .collect::<Vec<String>>();
-
-                // Decode revert error
-                let revert_error = revert_reason_decode(&executed.output);
-                let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.", revert_error)
-                } else {
-                    format!(".")
-                };
-
-                // Try to fetch the innermost error.
-                let innermost_error = if errors.len() > 0 {
-                    format!(" Innermost error is at {}.", errors[0])
-                } else {
-                    String::default()
-                };
+                let (revert_error, innermost_error, errors) =
+                    executed.decode_error(|addr| *addr);
 
                 bail!(call_execution_error(
                     format!(

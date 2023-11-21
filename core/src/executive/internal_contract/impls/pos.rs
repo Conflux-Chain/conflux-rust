@@ -298,6 +298,10 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
     }
 }
 
+pub fn make_staking_events(logs: &[LogEntry]) -> Vec<StakingEvent> {
+    logs.iter().filter_map(decode_register_info).collect()
+}
+
 pub mod entries {
     use super::*;
 

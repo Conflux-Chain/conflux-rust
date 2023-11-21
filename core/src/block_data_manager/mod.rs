@@ -6,6 +6,7 @@ use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
     consensus::consensus_inner::consensus_executor::RewardExecutionInfo,
+    executive::internal_contract::make_staking_events,
     ext_db::SystemDB,
     pow::{PowComputer, TargetDifficultyManager},
 };
@@ -38,9 +39,7 @@ use crate::{
         db_manager::DBManager, tx_data_manager::TransactionDataManager,
     },
     consensus::pos_handler::PosVerifier,
-    executive::internal_contract::{
-        build_bloom_and_recover_phantom, decode_register_info,
-    },
+    executive::internal_contract::build_bloom_and_recover_phantom,
     observer::trace::{BlockExecTraces, TransactionExecTraces},
 };
 pub use block_data_types::*;
@@ -1332,11 +1331,8 @@ impl BlockDataManager {
                                 evm_tx_index += 1;
                             }
 
-                            for log in logs {
-                                if let Some(event) = decode_register_info(log) {
-                                    epoch_staking_events.push(event);
-                                }
-                            }
+                            epoch_staking_events
+                                .extend(make_staking_events(logs));
                         }
                         _ => {}
                     }

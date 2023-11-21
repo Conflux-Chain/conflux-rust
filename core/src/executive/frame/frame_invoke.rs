@@ -26,8 +26,6 @@ enum FrameResumer {
     ResumeFromCreate(Box<dyn ResumeCreate>),
 }
 
-/// If the executive triggers a sub-call during execution, this function
-/// outputs a trap error with sub-call parameters and return point.
 pub(super) fn process_invoke<'a>(
     context: FrameContext<'a>, trap_err: ExecTrapError,
 ) -> InvokeInfo<'a> {

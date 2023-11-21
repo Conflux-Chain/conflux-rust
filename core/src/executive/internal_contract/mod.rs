@@ -16,7 +16,8 @@ pub use self::{
     impls::{
         admin::suicide,
         cross_space::{
-            build_bloom_and_recover_phantom, evm_map, PhantomTransaction,
+            build_bloom_and_recover_phantom, evm_map, recover_phantom,
+            PhantomTransaction,
         },
         params_control::{
             get_settled_param_vote_count, get_settled_pos_staking_for_votes,
@@ -24,7 +25,8 @@ pub use self::{
             ParamVoteCount,
         },
         pos::{
-            decode_register_info, entries as pos_internal_entries, IndexStatus,
+            decode_register_info, entries as pos_internal_entries,
+            make_staking_events, IndexStatus,
         },
     },
 };

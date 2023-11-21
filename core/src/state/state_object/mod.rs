@@ -36,6 +36,16 @@ macro_rules! unwrap_or_return {
     };
 }
 
+#[macro_export]
+macro_rules! unwrap_or_return_default {
+    ($option:expr) => {
+        match $option {
+            Some(val) => val,
+            None => return Default::default(),
+        }
+    };
+}
+
 mod account_controller;
 mod basic_fields;
 mod cache_layer;

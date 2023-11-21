@@ -2,10 +2,24 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{bytes::Bytes, vm};
-use cfx_types::{Address, AddressWithSpace, U256, U512};
-use primitives::{receipt::StorageChange, LogEntry, TransactionWithSignature};
+use std::fmt::Display;
+
+use crate::{
+    bytes::Bytes,
+    observer::{ErrorUnwind, Observer},
+    state::Substate,
+};
+use cfx_types::{Address, AddressWithSpace, U256};
+use primitives::{
+    receipt::{SortedStorageChanges, StorageChange},
+    LogEntry, TransactionWithSignature,
+};
 use solidity_abi::{ABIDecodable, ABIDecodeError};
+
+use super::{
+    fresh_executive::CostInfo,
+    pre_checked_executive::{ExecutiveReturn, RefundInfo},
+};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Executed {
@@ -51,87 +65,6 @@ pub struct Executed {
     pub estimated_storage_limit: u64,
 }
 
-#[derive(Debug)]
-pub enum ToRepackError {
-    /// Returned when transaction nonce does not match state nonce.
-    InvalidNonce {
-        /// Nonce expected.
-        expected: U256,
-        /// Nonce found.
-        got: U256,
-    },
-
-    /// Epoch height out of bound.
-    /// The transaction was correct in the block where it's packed, but
-    /// falls into the error when in the epoch to execute.
-    EpochHeightOutOfBound {
-        block_height: u64,
-        set: u64,
-        transaction_epoch_bound: u64,
-    },
-
-    /// Returned when cost of transaction (value + gas_price * gas) exceeds
-    /// current sponsor balance.
-    NotEnoughCashFromSponsor {
-        /// Minimum required gas cost.
-        required_gas_cost: U512,
-        /// Actual balance of gas sponsor.
-        gas_sponsor_balance: U512,
-        /// Minimum required storage collateral cost.
-        required_storage_cost: U256,
-        /// Actual balance of storage sponsor.
-        storage_sponsor_balance: U256,
-    },
-
-    /// Returned when a non-sponsored transaction's sender does not exist yet.
-    SenderDoesNotExist,
-}
-
-#[derive(Debug)]
-pub enum TxDropError {
-    /// The account nonce in world-state is larger than tx nonce
-    OldNonce(U256, U256),
-
-    /// The recipient of current tx is in invalid address field.
-    /// Although it can be verified in tx packing,
-    /// by spec doc, it is checked in execution.
-    InvalidRecipientAddress(Address),
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ExecutionError {
-    /// Returned when cost of transaction (value + gas_price * gas) exceeds
-    /// current sender balance.
-    NotEnoughCash {
-        /// Minimum required balance.
-        required: U512,
-        /// Actual balance.
-        got: U512,
-        /// Actual gas cost. This should be min(gas_fee, balance).
-        actual_gas_cost: U256,
-        /// Maximum storage limit cost.
-        max_storage_limit_cost: U256,
-    },
-    VmError(vm::Error),
-}
-
-#[derive(Debug)]
-pub enum ExecutionOutcome {
-    NotExecutedDrop(TxDropError),
-    NotExecutedToReconsiderPacking(ToRepackError),
-    ExecutionErrorBumpNonce(ExecutionError, Executed),
-    Finished(Executed),
-}
-
-impl ExecutionOutcome {
-    pub fn successfully_executed(self) -> Option<Executed> {
-        match self {
-            ExecutionOutcome::Finished(executed) => Some(executed),
-            _ => None,
-        }
-    }
-}
-
 impl Executed {
     pub fn not_enough_balance_fee_charged(
         tx: &TransactionWithSignature, fee: &U256, mut gas_sponsor_paid: bool,
@@ -164,11 +97,16 @@ impl Executed {
         }
     }
 
-    pub fn execution_error_fully_charged(
-        tx: &TransactionWithSignature, mut gas_sponsor_paid: bool,
-        mut storage_sponsor_paid: bool, trace: Vec<ExecTrace>, spec: &Spec,
+    pub(super) fn execution_error_fully_charged(
+        tx: &TransactionWithSignature, cost: CostInfo, observer: Observer,
+        spec: &Spec,
     ) -> Self
     {
+        let mut storage_sponsor_paid = cost.storage_sponsored;
+        let mut gas_sponsor_paid = cost.gas_sponsored;
+
+        let trace = observer.tracer.map_or(Default::default(), |t| t.drain());
+
         if !spec.cip78b {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
@@ -188,6 +126,98 @@ impl Executed {
             estimated_gas_limit: None,
             estimated_storage_limit: 0,
         }
+    }
+
+    pub(super) fn from_executive_return(
+        r: &ExecutiveReturn, refund_info: RefundInfo, cost: CostInfo,
+        substate: Substate, observer: Observer, base_gas_required: u64,
+        spec: &Spec,
+    ) -> Self
+    {
+        let output = r.return_data.to_vec();
+
+        let SortedStorageChanges {
+            storage_collateralized,
+            storage_released,
+        } = if r.apply_state {
+            substate.compute_storage_changes()
+        } else {
+            Default::default()
+        };
+
+        let RefundInfo {
+            gas_used,
+            gas_charged,
+            fees_value: fee,
+            ..
+        } = refund_info;
+        let storage_sponsor_paid = if spec.cip78a {
+            cost.storage_sponsored
+        } else {
+            cost.storage_sponsor_eligible
+        };
+
+        let gas_sponsor_paid = cost.gas_sponsored;
+
+        let trace = observer.tracer.map_or(Default::default(), |t| t.drain());
+
+        let estimated_gas_limit = observer
+            .gas_man
+            .as_ref()
+            .map(|g| g.gas_required() * 7 / 6 + base_gas_required);
+
+        let estimated_storage_limit =
+            if let Some(x) = storage_collateralized.first() {
+                x.collaterals.as_u64()
+            } else {
+                0
+            };
+
+        Executed {
+            gas_used,
+            gas_charged,
+            fee,
+            gas_sponsor_paid,
+            logs: substate.logs.to_vec(),
+            contracts_created: substate.contracts_created.to_vec(),
+            storage_sponsor_paid,
+            storage_collateralized,
+            storage_released,
+            output,
+            trace,
+            estimated_gas_limit,
+            estimated_storage_limit,
+        }
+    }
+
+    pub fn decode_error<F, Addr: Display>(
+        &self, format_address: F,
+    ) -> (String, String, Vec<String>)
+    where F: Fn(&Address) -> Addr {
+        // When a revert exception happens, there is usually an error in
+        // the sub-calls. So we return the trace
+        // information for debugging contract.
+        let errors = ErrorUnwind::from_traces(&self.trace)
+            .errors
+            .iter()
+            .map(|(addr, error)| format!("{}: {}", format_address(addr), error))
+            .collect::<Vec<String>>();
+
+        // Decode revert error
+        let revert_error = revert_reason_decode(&self.output);
+        let revert_error = if !revert_error.is_empty() {
+            format!(": {}.", revert_error)
+        } else {
+            format!(".")
+        };
+
+        // Try to fetch the innermost error.
+        let innermost_error = if errors.len() > 0 {
+            format!(" Innermost error is at {}.", errors[0])
+        } else {
+            String::default()
+        };
+        (revert_error, innermost_error, errors)
     }
 }
 

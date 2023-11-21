@@ -2,12 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{estimation::*, executive::*, Executed, ExecutionError};
+use super::{
+    executive::{estimation::*, *},
+    Executed, ExecutionError,
+};
 use crate::{
     evm::{FinalizationResult, GasPriceTier},
     executive::ExecutionOutcome,
     machine::Machine,
-    state::{State, Substate},
+    state::{CleanupMode, State, Substate},
     test_helpers::get_state_for_genesis_write,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
@@ -20,7 +23,6 @@ use cfx_parameters::{
     internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     staking::*,
 };
-use cfx_state::CleanupMode;
 use cfx_statedb::StateDb;
 use cfx_storage::{
     state_manager::StateManagerTrait, tests::new_state_manager_for_unit_test,
@@ -123,7 +125,7 @@ fn test_sender_balance() {
 
     let FinalizationResult { gas_left, .. } = {
         state.checkpoint();
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
         let res = ex
             .call_for_test(params.clone(), &mut substate, &mut tracer)
@@ -224,7 +226,7 @@ fn test_create_contract_out_of_depth() {
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
         ex.call_for_test(params, &mut substate, &mut tracer)
             .expect("no db error")
@@ -282,7 +284,7 @@ fn test_suicide_when_creation() {
         .unwrap();
     let mut substate = Substate::new();
 
-    let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+    let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
     let mut tracer = ();
     let FinalizationResult {
         gas_left,
@@ -383,7 +385,7 @@ fn test_call_to_create() {
 
     let FinalizationResult { gas_left, .. } = {
         state.checkpoint();
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
         let res = ex
             .call_for_test(params.clone(), &mut substate, &mut tracer)
@@ -460,7 +462,7 @@ fn test_revert() {
         return_data,
         ..
     } = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
         ex.call_for_test(params, &mut substate, &mut tracer)
             .expect("no db error")
@@ -523,7 +525,7 @@ fn test_keccak() {
 
     let mut tracer = ();
     let result = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         ex.call_for_test(params, &mut substate, &mut tracer)
             .expect("no db error")
     };
@@ -564,7 +566,7 @@ fn test_not_enough_cash() {
     let correct_cost = min(t.gas_price() * t.gas(), 100_017.into());
 
     let res = {
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let options = TransactOptions::exec_with_no_tracing();
         ex.transact(&t, options).unwrap()
     };
@@ -631,7 +633,7 @@ fn test_deposit_withdraw_lock() {
 
     // wrong call type
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
@@ -654,7 +656,7 @@ fn test_deposit_withdraw_lock() {
     params.call_type = CallType::Call;
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a763ffff".from_hex().unwrap());
 
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
@@ -666,7 +668,7 @@ fn test_deposit_withdraw_lock() {
     // deposit 10^18, it should work fine
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a7640000".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
@@ -689,7 +691,7 @@ fn test_deposit_withdraw_lock() {
     // empty data
     params.data = None;
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
@@ -717,7 +719,7 @@ fn test_deposit_withdraw_lock() {
     // less data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
@@ -747,7 +749,7 @@ fn test_deposit_withdraw_lock() {
     // withdraw
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
@@ -769,7 +771,7 @@ fn test_deposit_withdraw_lock() {
     // withdraw more than staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
 
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
@@ -799,7 +801,7 @@ fn test_deposit_withdraw_lock() {
     // lock until block_number = 0
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
@@ -832,7 +834,7 @@ fn test_deposit_withdraw_lock() {
     // lock 1 until 106751991167301 blocks, should succeed
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
@@ -860,7 +862,7 @@ fn test_deposit_withdraw_lock() {
     // lock 2 until block_number=2
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
@@ -888,7 +890,7 @@ fn test_deposit_withdraw_lock() {
     // withdraw more than withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bff".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
@@ -924,7 +926,7 @@ fn test_deposit_withdraw_lock() {
     // withdraw exact withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bfe".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec)
+    let result = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
@@ -1206,10 +1208,10 @@ fn test_commission_privilege() {
     assert_eq!(tx.sender().address, sender);
     let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
-        Executive::new(&mut state, &env, &machine, &spec)
+        ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
             .unwrap()
-            .successfully_executed()
+            .into_success_executed()
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
@@ -1306,10 +1308,10 @@ fn test_commission_privilege() {
     );
     let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
-        Executive::new(&mut state, &env, &machine, &spec)
+        ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
             .unwrap()
-            .successfully_executed()
+            .into_success_executed()
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
@@ -1350,10 +1352,10 @@ fn test_commission_privilege() {
     );
     let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
-        Executive::new(&mut state, &env, &machine, &spec)
+        ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
             .unwrap()
-            .successfully_executed()
+            .into_success_executed()
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
@@ -1394,10 +1396,10 @@ fn test_commission_privilege() {
     );
     let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
-        Executive::new(&mut state, &env, &machine, &spec)
+        ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
             .unwrap()
-            .successfully_executed()
+            .into_success_executed()
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
@@ -1452,10 +1454,10 @@ fn test_commission_privilege() {
     );
     let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
-        Executive::new(&mut state, &env, &machine, &spec)
+        ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
             .unwrap()
-            .successfully_executed()
+            .into_success_executed()
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
@@ -1508,10 +1510,10 @@ fn test_commission_privilege() {
     );
     let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
-        Executive::new(&mut state, &env, &machine, &spec)
+        ExecutiveContext::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
             .unwrap()
-            .successfully_executed()
+            .into_success_executed()
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
@@ -1606,10 +1608,10 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(&mut state, &env, &machine, &spec)
+    } = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .transact(&tx, options)
         .unwrap()
-        .successfully_executed()
+        .into_success_executed()
         .unwrap();
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, sender.address());
@@ -1765,10 +1767,10 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(&mut state, &env, &machine, &spec)
+    } = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .transact(&tx, options)
         .unwrap()
-        .successfully_executed()
+        .into_success_executed()
         .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
@@ -1849,10 +1851,10 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(&mut state, &env, &machine, &spec)
+    } = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .transact(&tx, options)
         .unwrap()
-        .successfully_executed()
+        .into_success_executed()
         .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
@@ -1954,10 +1956,10 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(&mut state, &env, &machine, &spec)
+    } = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .transact(&tx, options)
         .unwrap()
-        .successfully_executed()
+        .into_success_executed()
         .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
@@ -2093,10 +2095,10 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(&mut state, &env, &machine, &spec)
+    } = ExecutiveContext::new(&mut state, &env, &machine, &spec)
         .transact(&tx, options)
         .unwrap()
-        .successfully_executed()
+        .into_success_executed()
         .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
@@ -2195,7 +2197,7 @@ fn test_push0() {
         let mut params = params.clone();
         params.code = Some(Arc::new([0x5f].to_vec()));
 
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let FinalizationResult {
             gas_left,
             apply_state,
@@ -2222,7 +2224,7 @@ fn test_push0() {
         let mut params = params.clone();
         params.code = Some(Arc::new([0x5f; 1024].to_vec()));
 
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let FinalizationResult {
             gas_left,
             apply_state,
@@ -2249,7 +2251,7 @@ fn test_push0() {
         let mut params = params.clone();
         params.code = Some(Arc::new([0x5f; 1025].to_vec()));
 
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let error = ex
             .call_for_test(params, &mut Substate::new(), &mut ())
             .expect("no db error")
@@ -2269,7 +2271,7 @@ fn test_push0() {
         let mut params = params.clone();
         params.code = Some(Arc::new([0x5f; 1025].to_vec()));
 
-        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
         let error = ex
             .call_for_test(params, &mut Substate::new(), &mut ())
             .expect("no db error")

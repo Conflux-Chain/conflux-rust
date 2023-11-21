@@ -1,14 +1,12 @@
 use super::{substate::Substate, Spec, State};
 use crate::{
-    executive::{
-        internal_contract::storage_point_prop, CollateralCheckError,
-        CollateralCheckResult,
-    },
+    executive::internal_contract::storage_point_prop,
     observer::TracerTrait,
     state::trace::{
         trace_convert_stroage_points, trace_occupy_collateral,
         trace_refund_collateral,
     },
+    vm,
 };
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::{global_params::*, Result as DbResult};
@@ -226,4 +224,25 @@ pub fn settle_collateral_for_all(
         }
     }
     Ok(Ok(()))
+}
+
+pub type CollateralCheckResult = std::result::Result<(), CollateralCheckError>;
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum CollateralCheckError {
+    ExceedStorageLimit { limit: U256, required: U256 },
+    NotEnoughBalance { required: U256, got: U256 },
+}
+
+impl CollateralCheckError {
+    pub fn into_vm_error(self) -> vm::Error {
+        match self {
+            CollateralCheckError::ExceedStorageLimit { .. } => {
+                vm::Error::ExceedStorageLimit
+            }
+            CollateralCheckError::NotEnoughBalance { required, got } => {
+                vm::Error::NotEnoughBalanceForStorage { required, got }
+            }
+        }
+    }
 }

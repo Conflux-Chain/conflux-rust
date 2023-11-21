@@ -89,7 +89,7 @@ class EstimationTest(ConfluxTestFramework):
 
         # Same task as above, but with a poor user.
         print(client.get_balance(user))
-        error = estimate_error(to=contract_base32_address, data=data, **from_user)
+        error = estimate_error(to=contract_base32_address, data=data, gasPrice="0x1", **from_user)
         (_, _, _, storage_limit) = parse_not_enough_cash(error.message)
         assert_equal(storage_limit, 128 * BYTE_COLLATERAL)
         send_tx(client.new_contract_tx(user, value=128 * BYTE_COLLATERAL))

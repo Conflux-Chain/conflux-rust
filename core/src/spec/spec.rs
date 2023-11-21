@@ -173,4 +173,11 @@ impl CommonParams {
     pub fn can_pack_evm_transaction(&self, height: BlockHeight) -> bool {
         height % self.evm_transaction_block_ratio == 0
     }
+
+    pub fn evm_chain_id(&self, epoch_height: u64) -> u32 {
+        self.chain_id
+            .read()
+            .get_chain_id(epoch_height)
+            .in_evm_space()
+    }
 }

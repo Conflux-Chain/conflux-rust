@@ -4,11 +4,10 @@
 
 use super::{substate::Substate, State};
 use crate::{
-    spec::genesis::DEV_GENESIS_KEY_PAIR,
+    spec::genesis::DEV_GENESIS_KEY_PAIR, state::CleanupMode,
     test_helpers::get_state_for_genesis_write,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
-use cfx_state::CleanupMode;
 use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StateIndex, StorageManager,

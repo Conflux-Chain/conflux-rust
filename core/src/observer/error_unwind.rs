@@ -19,7 +19,7 @@ pub struct ErrorUnwind {
 }
 
 impl ErrorUnwind {
-    pub fn from_traces(traces: Vec<ExecTrace>) -> Self {
+    pub fn from_traces(traces: &Vec<ExecTrace>) -> Self {
         let mut errors = ErrorUnwind::default();
         for trace in traces.iter() {
             match &trace.action {

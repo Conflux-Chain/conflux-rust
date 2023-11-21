@@ -84,6 +84,12 @@ pub struct StorageChange {
     pub collaterals: U64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SortedStorageChanges {
+    pub storage_collateralized: Vec<StorageChange>,
+    pub storage_released: Vec<StorageChange>,
+}
+
 /// Information describing execution of a transaction.
 #[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
 pub struct Receipt {
@@ -126,6 +132,18 @@ impl Receipt {
             storage_released,
         }
     }
+
+    pub fn tx_skipped(&self) -> bool {
+        self.outcome_status == TransactionOutcome::Skipped
+    }
+
+    pub fn tx_success(&self) -> bool {
+        self.outcome_status == TransactionOutcome::Success
+    }
+
+    pub fn accumulated_gas_used(&self) -> U256 { self.accumulated_gas_used }
+
+    pub fn logs(&self) -> &[LogEntry] { &self.logs }
 }
 
 impl MallocSizeOf for StorageChange {

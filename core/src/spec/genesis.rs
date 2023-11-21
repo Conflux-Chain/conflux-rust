@@ -22,7 +22,6 @@ use cfx_parameters::{
     },
     staking::POS_VOTE_PRICE,
 };
-use cfx_state::CleanupMode;
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
@@ -42,10 +41,10 @@ use secret_store::SecretStore;
 
 use crate::{
     executive::{
-        contract_address, ExecutionOutcome, Executive, TransactOptions,
+        contract_address, ExecutionOutcome, ExecutiveContext, TransactOptions,
     },
     machine::Machine,
-    state::State,
+    state::{CleanupMode, State},
     verification::{compute_receipts_root, compute_transaction_root},
     vm::{CreateContractAddress, Env},
 };
@@ -557,9 +556,14 @@ fn execute_genesis_transaction(
 
     let options = TransactOptions::exec_with_no_tracing();
     let r = {
-        Executive::new(state, &env, machine.as_ref(), &machine.spec(env.number))
-            .transact(transaction, options)
-            .unwrap()
+        ExecutiveContext::new(
+            state,
+            &env,
+            machine.as_ref(),
+            &machine.spec(env.number),
+        )
+        .transact(transaction, options)
+        .unwrap()
     };
 
     match &r {
