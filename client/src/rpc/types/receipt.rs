@@ -4,8 +4,8 @@
 
 use crate::rpc::types::{Log, RpcAddress};
 use cfx_addr::Network;
-use cfx_types::{AddressSpaceUtil, Bloom, Space, H256, U256, U64};
-use cfxcore::{executive::contract_address, vm::CreateContractAddress};
+use cfx_types::{address_util::AddressUtil, Bloom, Space, H256, U256, U64};
+use cfx_vm_types::{contract_address, CreateContractAddress};
 use primitives::{
     receipt::{
         Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
@@ -111,15 +111,16 @@ impl Receipt {
                 if Action::Create == unsigned.action
                     && outcome_status == TransactionOutcome::Success
                 {
-                    let (created_address, _) = contract_address(
+                    let (mut created_address, _) = contract_address(
                         CreateContractAddress::FromSenderNonceAndCodeHash,
                         block_number.into(),
-                        &transaction.sender.with_native_space(),
+                        &transaction.sender,
                         &unsigned.nonce,
                         &unsigned.data,
                     );
+                    created_address.set_contract_type_bits();
                     let address = Some(RpcAddress::try_from_h160(
-                        created_address.address,
+                        created_address,
                         network,
                     )?);
                     (address, unsigned.action.clone(), Space::Native)
@@ -134,13 +135,13 @@ impl Receipt {
                     {
                         let (created_address, _) = contract_address(
                             CreateContractAddress::FromSenderNonce,
-                            0.into(),
-                            &transaction.sender.with_evm_space(),
+                            0,
+                            &transaction.sender,
                             &unsigned.nonce,
                             &unsigned.data,
                         );
                         let address = Some(RpcAddress::try_from_h160(
-                            created_address.address,
+                            created_address,
                             network,
                         )?);
                         (address, unsigned.action.clone(), Space::Ethereum)

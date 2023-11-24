@@ -16,19 +16,18 @@ extern crate rand;
 
 pub use self::{impls::TreapMap, transaction_pool_inner::TransactionStatus};
 use crate::{
-    block_data_manager::BlockDataManager, consensus::BestInformation,
-    machine::Machine, state::State, verification::VerificationConfig,
-};
-
-use crate::{
-    spec::TransitionsEpochHeight,
+    block_data_manager::BlockDataManager,
+    consensus::BestInformation,
     transaction_pool::{
         nonce_pool::TxWithReadyInfo, transaction_pool_inner::PendingReason,
     },
-    verification::{VerifyTxLocalMode, VerifyTxMode},
+    verification::{VerificationConfig, VerifyTxLocalMode, VerifyTxMode},
     vm::Spec,
 };
 use account_cache::AccountCache;
+use cfx_executor::{
+    machine::Machine, spec::TransitionsEpochHeight, state::State,
+};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};

@@ -17,11 +17,13 @@ cfx-math = { path = "../cfx_math"}
 cfx-internal-common = { path = "internal_common" }
 cfx-parameters = { path = "parameters" }
 cfx-statedb = { path = "statedb" }
-cfx-state = { path = "state" }
 cfx-storage = { path = "storage", optional = true }
 cfx-vm-tracer-derive = {path="../util/cfx-vm-tracer-derive"}
 cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }
+cfx-vm-types = { path = "vm-types" }
+cfx-vm-interpreter = { path = "vm-interpreter" }
+cfx-executor = { path = "executor" }
 channel = { path = "./src/pos/common/channel"}
 clap = "2"
 dag = {path = "../util/dag"}
@@ -139,6 +141,7 @@ impl-tools = "^0.10"
 [dev-dependencies]
 criterion = "0.3"
 cfx-storage = { path = "storage", features = ["testonly_code"] }
+cfx-vm-types = { path = "vm-types", features = ["testonly_code"] }
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 consensus-types = { path = "./src/pos/consensus/consensus-types", features = ["fuzzing"] }

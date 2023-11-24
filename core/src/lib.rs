@@ -19,6 +19,8 @@ extern crate db as ext_db;
 extern crate lazy_static;
 #[macro_use]
 extern crate static_assertions;
+extern crate cfx_vm_interpreter as evm;
+extern crate cfx_vm_types as vm;
 extern crate sha3_macro;
 extern crate substrate_bn as bn;
 
@@ -26,7 +28,6 @@ extern crate substrate_bn as bn;
 pub mod message;
 
 pub mod block_data_manager;
-mod builtin;
 pub mod cache_config;
 pub mod cache_manager;
 pub mod channel;
@@ -34,28 +35,19 @@ pub mod client;
 pub mod consensus;
 pub mod db;
 pub mod error;
-mod evm;
-pub mod executive;
+pub mod genesis_block;
 pub mod light_protocol;
-pub mod machine;
 pub mod node_type;
-pub mod observer;
 pub mod pos;
 pub mod pow;
 pub mod rpc_errors;
-pub mod spec;
-pub mod state;
 pub mod state_exposer;
+mod state_prefetcher;
 pub mod statistics;
 pub mod sync;
 pub mod transaction_pool;
 pub mod unique_id;
 pub mod verification;
-pub mod vm;
-pub mod vm_factory;
-
-#[cfg(test)]
-pub mod test_helpers;
 
 pub use crate::{
     block_data_manager::BlockDataManager,

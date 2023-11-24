@@ -51,28 +51,31 @@ use crate::{
         pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
-    evm::Spec,
-    executive::{
-        internal_contract::storage_point_prop, EstimateRequest,
-        EstimationContext, ExecutionOutcome, ExecutiveContext, TransactOptions,
-    },
-    machine::Machine,
-    observer::trace::TransactionExecTraces,
     rpc_errors::{invalid_params_check, Result as RpcResult},
-    spec::genesis::initialize_internal_contract_accounts,
-    state::{
-        distribute_pos_interest, initialize_or_update_dao_voted_params,
-        prefetcher::{
-            prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
-        },
-        update_pos_status, CleanupMode, State,
+    state_prefetcher::{
+        prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
     },
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
     },
-    vm::Env,
+    vm::{Env, Spec},
     SharedTransactionPool,
+};
+use cfx_executor::{
+    executive::{
+        EstimateRequest, EstimationContext, ExecutionOutcome, ExecutiveContext,
+        TransactOptions,
+    },
+    internal_contract::{
+        initialize_internal_contract_accounts, storage_point_prop,
+    },
+    machine::Machine,
+    observer::trace::TransactionExecTraces,
+    state::{
+        distribute_pos_interest, initialize_or_update_dao_voted_params,
+        update_pos_status, CleanupMode, State,
+    },
 };
 
 lazy_static! {

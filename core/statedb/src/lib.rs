@@ -7,9 +7,10 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
-mod error;
 pub mod global_params;
 mod statedb_ext;
+
+use cfx_db_errors::statedb as error;
 
 #[cfg(test)]
 mod tests;
@@ -19,6 +20,7 @@ pub use self::{
     impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
     statedb_ext::StateDbExt,
 };
+pub use cfx_storage::utils::access_mode;
 pub type StateDb = StateDbGeneric;
 
 // Put StateDb in mod to make sure that methods from statedb_ext don't access

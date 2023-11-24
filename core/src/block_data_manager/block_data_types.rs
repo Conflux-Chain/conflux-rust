@@ -1,4 +1,4 @@
-use crate::observer::trace::BlockExecTraces;
+use cfx_executor::observer::trace::BlockExecTraces;
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Address, Bloom, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};

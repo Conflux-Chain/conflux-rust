@@ -5,12 +5,12 @@
 use crate::{
     consensus::pos_handler::PosVerifier,
     error::{BlockError, Error},
-    executive::gas_required_for,
-    machine::Machine,
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
-    spec::TransitionsEpochHeight,
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm::Spec,
+};
+use cfx_executor::{
+    executive::gas_required_for, machine::Machine, spec::TransitionsEpochHeight,
 };
 use cfx_parameters::block::*;
 use cfx_storage::{

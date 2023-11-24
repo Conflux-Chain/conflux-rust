@@ -4,8 +4,8 @@
 
 use super::{trace::ActionType, EpochNumber};
 use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
+use cfx_executor::observer::trace_filter::TraceFilter as PrimitiveTraceFilter;
 use cfx_types::{Address, Space, H256, U64};
-use cfxcore::observer::trace_filter::TraceFilter as PrimitiveTraceFilter;
 use jsonrpc_core::Error as RpcError;
 use serde::{Deserialize, Serialize};
 
@@ -98,11 +98,11 @@ mod tests {
     use super::{
         super::trace::ActionType, EpochNumber, TraceFilter, VariadicValue,
     };
-    use cfx_types::{Address, Space, H256, U64};
-    use cfxcore::observer::{
+    use cfx_executor::observer::{
         trace::ActionType as PrimitiveActionType,
         trace_filter::TraceFilter as PrimitiveTraceFilter,
     };
+    use cfx_types::{Address, Space, H256, U64};
     use primitives::epoch::EpochNumber as PrimitiveEpochNumber;
     use serde_json;
     use std::str::FromStr;

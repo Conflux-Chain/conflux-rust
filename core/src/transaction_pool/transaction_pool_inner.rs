@@ -4,10 +4,8 @@ use super::{
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
-use crate::{
-    machine::Machine,
-    verification::{PackingCheckResult, VerificationConfig},
-};
+use crate::verification::{PackingCheckResult, VerificationConfig};
+use cfx_executor::machine::Machine;
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{

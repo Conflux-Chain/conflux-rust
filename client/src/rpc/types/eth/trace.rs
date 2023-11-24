@@ -1,11 +1,9 @@
 use crate::rpc::types::{
     Action as RpcCfxAction, Bytes, LocalizedTrace as RpcCfxLocalizedTrace,
 };
+use cfx_executor::observer::trace::Outcome;
 use cfx_types::{H160, H256, U256};
-use cfxcore::{
-    observer::trace::Outcome,
-    vm::{CallType as CfxCallType, CreateType as CfxCreateType},
-};
+use cfx_vm_types::{CallType as CfxCallType, CreateType as CfxCreateType};
 use jsonrpc_core::Error as JsonRpcError;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::{

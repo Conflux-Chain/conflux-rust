@@ -7,6 +7,7 @@ extern crate lazy_static;
 
 use cfx_types::U256;
 
+pub mod genesis;
 pub mod internal_contract_addresses;
 
 pub mod consensus {

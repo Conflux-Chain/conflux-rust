@@ -16,10 +16,11 @@ extern crate secret_store;
 
 use crate::bytes::Bytes;
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, H256, H512, U256, U512,
+    address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, H256,
+    H512, U256, U512,
 };
+use cfx_vm_types::{contract_address, CreateContractAddress};
 use cfxcore::{
-    executive::contract_address, vm::CreateContractAddress,
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
 use keylib::{public_to_address, Generator, KeyPair, Random, Secret};
@@ -311,17 +312,18 @@ impl DirectTransactionGenerator {
         accounts.insert(start_address.clone(), info);
         let address_by_index = vec![start_address.clone()];
 
-        let erc20_address = contract_address(
+        let mut erc20_address = contract_address(
             CreateContractAddress::FromSenderNonceAndCodeHash,
             // A fake block_number. There field is unnecessary in Ethereum
             // replay test.
-            0.into(),
-            &contract_creator.with_native_space(),
+            0,
+            &contract_creator,
             &0.into(),
             // A fake code. There field is unnecessary in Ethereum replay test.
             &[],
         )
         .0;
+        erc20_address.set_contract_type_bits();
 
         debug!(
             "Special Transaction Generator: erc20 contract address: {:?}",
@@ -331,7 +333,7 @@ impl DirectTransactionGenerator {
         DirectTransactionGenerator {
             accounts,
             address_by_index,
-            erc20_address: erc20_address.address,
+            erc20_address,
         }
     }
 
