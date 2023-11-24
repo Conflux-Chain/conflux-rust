@@ -9,6 +9,9 @@ PORT_MIN = 11000
 PORT_MAX = 65535
 PORT_RANGE = 100
 
+# 64 to 113 is recommanded for user defined error code (https://tldp.org/LDP/abs/html/exitcodes.html). 
+# 64 to 77 has been reserved in /usr/include/sysexits.h (https://stackoverflow.com/questions/1101957/are-there-any-standard-exit-status-codes-in-linux)
+TEST_FAILURE_ERROR_CODE = 80
 
 def run_single_test(py, script, test_dir, index, port_min, port_max):
     try:
@@ -66,8 +69,41 @@ def run():
         default=PORT_MIN,
         type=int,
     )
+    parser.add_argument(
+        "--max-retries",
+        dest="max_retries",
+        default=1,
+        type=int,
+    )
     options = parser.parse_args()
 
+    all_failed = set()
+
+    # Retry the tests in multiple times to eliminate random fails
+    for _ in range(options.max_retries):
+        failed = run_single_round(options)
+
+        # If all test success, return the test
+        if len(failed) == 0:
+            return
+        
+        # If too many error happens, stop the test
+        if len(failed) > 5:
+            break
+        
+        # If some test failed in twice, stop the test
+        failed_twice = [c for c in failed if c in all_failed]
+        if len(failed_twice) == 0:
+            break
+
+        all_failed.update(failed)
+
+    print("The following test fails: ")
+    for c in all_failed:
+        print(c)
+    sys.exit(TEST_FAILURE_ERROR_CODE)
+
+def run_single_round(options):
     TEST_SCRIPTS = []
 
     test_dir = os.path.dirname(os.path.realpath(__file__))
@@ -116,12 +152,7 @@ def run():
             f.result()
         except subprocess.CalledProcessError as err:
             failed.add(script)
-
-    if len(failed) > 0:
-        print("The following test fails: ")
-        for c in failed:
-            print(c)
-        sys.exit(1)
+    return failed
 
 
 if __name__ == '__main__':
