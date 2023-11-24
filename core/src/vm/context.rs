@@ -28,9 +28,8 @@ use super::{
     spec::Spec,
     Error,
 };
-use crate::executive::internal_contract::InternalRefContext;
 use cfx_bytes::Bytes;
-use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
+use cfx_types::{Address, Space, H256, U256};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -38,7 +37,7 @@ use std::sync::Arc;
 pub enum ContractCreateResult {
     /// Returned when creation was successful.
     /// Contains an address of newly created contract and gas left.
-    Created(AddressWithSpace, U256),
+    Created(Address, U256),
     /// Returned when contract creation failed.
     /// Returns the reason so block trace can record it.
     Failed(Error),
@@ -191,7 +190,4 @@ pub trait Context {
 
     /// Check if running in static context or reentrancy context
     fn is_static_or_reentrancy(&self) -> bool;
-
-    // TODO: Separate this interface to another trait maybe.
-    fn internal_ref(&mut self) -> InternalRefContext;
 }

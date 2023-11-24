@@ -23,7 +23,6 @@ use super::{
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
     ReturnData, Spec,
 };
-use crate::executive::internal_contract::InternalRefContext;
 use cfx_bytes::Bytes;
 use cfx_types::{address_util::AddressUtil, Address, Space, H256, U256};
 use hash::keccak;
@@ -240,8 +239,6 @@ impl Context for MockContext {
     ) -> bool {
         self.tracing
     }
-
-    fn internal_ref(&mut self) -> InternalRefContext { unimplemented!() }
 
     fn space(&self) -> Space { Space::Native }
 }

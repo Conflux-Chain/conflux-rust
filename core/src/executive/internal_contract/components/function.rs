@@ -8,20 +8,18 @@ use solidity_abi::{ABIDecodable, ABIEncodable};
 
 use crate::{
     state::CallStackInfo,
-    vm::{
-        self, ActionParams, CallType, ExecTrapResult, GasLeft, ReturnData,
-        Spec, TrapResult,
-    },
+    vm::{self, ActionParams, CallType, GasLeft, Spec},
 };
 
-use super::{InternalRefContext, IsActive};
+use super::{InternalRefContext, InternalTrapResult, IsActive};
+use InternalTrapResult::*;
 
 /// Native implementation of a solidity-interface function.
 pub trait SolidityFunctionTrait: Send + Sync + IsActive {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> ExecTrapResult<GasLeft>;
+    ) -> InternalTrapResult<GasLeft>;
 
     /// The string for function sig
     fn name(&self) -> &'static str;
@@ -57,48 +55,33 @@ impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
     fn execute(
         &self, input: &[u8], params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> ExecTrapResult<GasLeft>
+    ) -> InternalTrapResult<GasLeft>
     {
         let (solidity_params, cost) =
             match preprocessing(self, input, params, context) {
                 Ok(res) => res,
                 Err(err) => {
-                    return TrapResult::Return(Err(err));
+                    return Return(Err(err));
                 }
             };
 
         let gas_left = params.gas - cost;
 
-        match ExecutionTrait::execute_inner(
+        ExecutionTrait::execute_inner(
             self,
             solidity_params,
             params,
             gas_left,
             context,
-        ) {
-            TrapResult::Return(output) => {
-                let vm_result = output.and_then(|output| {
-                    let output = output.abi_encode();
-                    let length = output.len();
-                    let return_cost = U256::from(
-                        (length + 31) / 32 * context.spec.memory_gas,
-                    );
-                    if gas_left < return_cost {
-                        Err(vm::Error::OutOfGas)
-                    } else {
-                        Ok(GasLeft::NeedsReturn {
-                            gas_left: gas_left - return_cost,
-                            data: ReturnData::new(output, 0, length),
-                            apply_state: true,
-                        })
-                    }
-                });
-                TrapResult::Return(vm_result)
+        )
+        .map_return(|output| {
+            GasLeft::NeedsReturn {
+                gas_left,
+                data: output.abi_encode().into(),
+                apply_state: true,
             }
-            TrapResult::SubCallCreate(trap_error) => {
-                TrapResult::SubCallCreate(trap_error)
-            }
-        }
+            .charge_return_data_gas(context.spec)
+        })
     }
 
     fn name(&self) -> &'static str { return Self::NAME_AND_PARAMS; }
@@ -138,7 +121,7 @@ pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, gas_left: U256,
         context: &mut InternalRefContext,
-    ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>;
+    ) -> InternalTrapResult<<Self as InterfaceTrait>::Output>;
 }
 
 /// The Execution trait without sub-call and sub-create.
@@ -155,11 +138,11 @@ where T: SimpleExecutionTrait
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, _gas_left: U256,
         context: &mut InternalRefContext,
-    ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>
+    ) -> InternalTrapResult<<Self as InterfaceTrait>::Output>
     {
-        let result =
-            SimpleExecutionTrait::execute_inner(self, input, params, context);
-        TrapResult::Return(result)
+        Return(SimpleExecutionTrait::execute_inner(
+            self, input, params, context,
+        ))
     }
 }
 

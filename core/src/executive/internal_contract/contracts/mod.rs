@@ -42,6 +42,7 @@ mod preludes {
             ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
             SimpleExecutionTrait, SolidityFunctionTrait, UpfrontPaymentTrait,
         },
+        trap_result::InternalTrapResult,
     };
 }
 

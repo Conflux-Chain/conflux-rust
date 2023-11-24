@@ -24,13 +24,17 @@
 
 //! Environment information for transaction execution.
 
-use cfx_types::{Address, H256, U256};
+use std::collections::BTreeMap;
+
+use cfx_types::{Address, Space, H256, U256};
 use primitives::BlockNumber;
 
 /// Information concerning the execution environment for a
 /// message-call/contract-creation.
 #[derive(Debug, Clone, Default)]
 pub struct Env {
+    /// Chain ID
+    pub chain_id: BTreeMap<Space, u32>,
     /// The block number.
     pub number: BlockNumber,
     /// The block author.

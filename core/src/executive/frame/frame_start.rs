@@ -1,27 +1,29 @@
-use super::super::{
-    context::OriginInfo,
-    vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
-};
+use super::super::context::OriginInfo;
 use crate::{
     machine::Machine,
     state::{cleanup_mode, State, Substate},
-    vm::{
-        self, ActionParams, ActionValue, CallType, CreateType, Env, Exec, Spec,
-    },
+    vm::{ActionParams, ActionValue, CallType, CreateType, Env, Spec},
 };
 
-use super::{ExecResult, FrameContext, RuntimeRes};
+use super::{
+    executable::make_executable, run_executable, FrameLocal, FrameStackAction,
+    RuntimeRes,
+};
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
+use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space};
 use primitives::{storage::STORAGE_LAYOUT_REGULAR_V0, StorageLayout};
 
+/// A frame has not yet been executed, with all the necessary information to
+/// initiate and carry out the execution of the frame.
 pub struct FreshFrame<'a> {
+    /// The input parameters for the frame.
     params: ActionParams,
-    context: FrameContext<'a>,
+
+    /// The local data associated with this frame.
+    frame_local: FrameLocal<'a>,
 }
 
 impl<'a> FreshFrame<'a> {
-    /// Create a new call executive using raw data.
     pub fn new(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, depth: usize, parent_static_flag: bool,
@@ -41,10 +43,9 @@ impl<'a> FreshFrame<'a> {
             parent_static_flag || params.call_type == CallType::StaticCall;
 
         let substate = Substate::new();
-        // This logic is moved from function exec.
         let origin = OriginInfo::from(&params);
 
-        let context = FrameContext::new(
+        let frame_local = FrameLocal::new(
             params.space,
             env,
             machine,
@@ -55,27 +56,23 @@ impl<'a> FreshFrame<'a> {
             create_address,
             static_flag,
         );
-        FreshFrame { context, params }
+        FreshFrame {
+            frame_local,
+            params,
+        }
     }
 
-    /// Execute the executive. If a sub-call/create action is required, a
-    /// resume trap error is returned. The caller is then expected to call
-    /// `resume` to continue the execution.
+    /// Initializes and executes a frame, along with runtime resources shared
+    /// across all frames.
     pub(super) fn init_and_exec(
         self, resources: &mut RuntimeRes<'a>,
-    ) -> DbResult<ExecResult<'a>> {
+    ) -> DbResult<FrameStackAction<'a>> {
         let FreshFrame {
-            mut context,
+            mut frame_local,
             params,
         } = self;
-        let is_create = context.create_address.is_some();
+        let is_create = frame_local.create_address.is_some();
 
-        // By technical specification and current implementation, the EVM should
-        // guarantee the current executive satisfies static_flag.
-        check_static_flag(&params, context.static_flag, is_create)
-            .expect("check_static_flag should always success because EVM has checked it.");
-
-        // Trace task
         if is_create {
             debug!(
                 "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
@@ -90,100 +87,37 @@ impl<'a> FreshFrame<'a> {
         // with checkpoint.
         resources.state.checkpoint();
 
-        let contract_address = context.origin.recipient().clone();
+        let contract_address = frame_local.origin.recipient().clone();
         resources
             .callstack
-            .push(contract_address.with_space(context.space), is_create);
+            .push(contract_address.with_space(frame_local.space), is_create);
 
         // Pre execution: transfer value and init contract.
-        let spec = &context.spec;
+        let spec = &frame_local.spec;
         if is_create {
             transfer_exec_balance_and_init_contract(
                 &params,
                 spec,
                 resources.state,
                 // It is a bug in the Parity version.
-                &mut context.substate,
+                &mut frame_local.substate,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
             )?
         } else {
-            transfer_exec_balance(
+            transfer_balance(
                 &params,
                 spec,
                 resources.state,
-                &mut context.substate,
+                &mut frame_local.substate,
             )?
         };
 
-        let exec = make_executable(&context, params);
-        context.run(exec, resources)
+        let executable = make_executable(&frame_local, params);
+        run_executable(executable, frame_local, resources)
     }
 }
 
-fn make_executable<'a>(
-    context: &FrameContext<'a>, params: ActionParams,
-) -> Box<dyn 'a + Exec> {
-    let is_create = context.create_address.is_some();
-    let code_address = params.code_address.with_space(params.space);
-    let internal_contract_map = context.machine.internal_contracts();
-
-    // Builtin is located for both Conflux Space and EVM Space.
-    if let Some(builtin) =
-        context.machine.builtin(&code_address, context.env.number)
-    {
-        trace!("CallBuiltin");
-        return Box::new(BuiltinExec { builtin, params });
-    }
-
-    if let Some(internal) =
-        internal_contract_map.contract(&code_address, &context.spec)
-    {
-        trace!(
-            "CallInternalContract: address={:?} data={:?}",
-            code_address,
-            params.data
-        );
-        return Box::new(InternalContractExec { internal, params });
-    }
-
-    if is_create || params.code.is_some() {
-        trace!("CallCreate");
-        let factory = context.machine.vm_factory_ref();
-        factory.create(params, context.spec, context.depth)
-    } else {
-        trace!("Transfer");
-        Box::new(NoopExec { gas: params.gas })
-    }
-}
-
-fn check_static_flag(
-    params: &ActionParams, static_flag: bool, is_create: bool,
-) -> vm::Result<()> {
-    // This is the function check whether contract creation or value
-    // transferring happens in static context at callee executive. However,
-    // it is meaningless because the caller has checked this constraint
-    // before message call. Currently, if we panic when this
-    // function returns error, all the tests can still pass.
-    // So we no longer check the logic for reentrancy here,
-    // TODO: and later we will check if we can safely remove this function.
-    if is_create {
-        if static_flag {
-            return Err(vm::Error::MutableCallInStaticContext);
-        }
-    } else {
-        if static_flag
-            && (params.call_type == CallType::StaticCall
-                || params.call_type == CallType::Call)
-            && params.value.value() > U256::zero()
-        {
-            return Err(vm::Error::MutableCallInStaticContext);
-        }
-    }
-
-    Ok(())
-}
-
-fn transfer_exec_balance(
+fn transfer_balance(
     params: &ActionParams, spec: &Spec, state: &mut State,
     substate: &mut Substate,
 ) -> DbResult<()>

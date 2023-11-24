@@ -3,9 +3,18 @@ use crate::{
     state::{CallStackInfo, State},
 };
 
+/// The global resources and utilities shared across all frames.
 pub struct RuntimeRes<'a> {
+    /// The ledger state including information such as the balance of each
+    /// account.
     pub state: &'a mut State,
+
+    /// Metadata about the frame call stack.
     pub callstack: &'a mut CallStackInfo,
+
+    /// A tool for recording information about the execution as it proceeds.
+    /// The data captured by the tracer is not used for consensus-critical
+    /// operations.
     pub tracer: &'a mut dyn TracerTrait,
 }
 

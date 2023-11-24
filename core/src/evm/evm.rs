@@ -20,15 +20,13 @@
 
 //! Evm interface.
 use crate::vm::{Context, Error, GasLeft, Result, ReturnData};
-use cfx_types::{Space, U128, U256, U512};
+use cfx_types::{U128, U256, U512};
 use std::{cmp, fmt, ops};
 
 /// Finalization result. Gas Left: either it is a known value, or it needs to
 /// be computed by processing a return instruction.
 #[derive(Debug)]
 pub struct FinalizationResult {
-    /// Space
-    pub space: Space,
     /// Final amount of gas left.
     pub gas_left: U256,
     /// Apply execution state changes or revert them.
@@ -49,10 +47,8 @@ pub trait Finalize {
 
 impl Finalize for Result<GasLeft> {
     fn finalize<C: Context>(self, context: C) -> Result<FinalizationResult> {
-        let space = context.space();
         match self {
             Ok(GasLeft::Known(gas_left)) => Ok(FinalizationResult {
-                space,
                 gas_left,
                 apply_state: true,
                 return_data: ReturnData::empty(),
@@ -63,7 +59,6 @@ impl Finalize for Result<GasLeft> {
                 apply_state,
             }) => context.ret(&gas_left, &data, apply_state).map(|gas_left| {
                 FinalizationResult {
-                    space,
                     gas_left,
                     apply_state,
                     return_data: data,

@@ -21,6 +21,9 @@
 //! Standard built-in contracts.
 
 mod blake2f;
+mod executable;
+
+pub use executable::BuiltinExec;
 
 use std::{
     cmp::{max, min},

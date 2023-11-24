@@ -5,7 +5,7 @@
 // Transaction execution environment.
 use super::{
     executive::contract_address,
-    frame::{FrameContext, RuntimeRes},
+    frame::{FrameLocal, RuntimeRes},
     internal_contract::{suicide as suicide_impl, InternalRefContext},
 };
 use crate::{
@@ -76,19 +76,19 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     pub fn new<'b, 'c>(
-        frame_context: &'a mut FrameContext<'b>,
+        frame_local: &'a mut FrameLocal<'b>,
         runtime_resources: &'a mut RuntimeRes<'c>,
     ) -> Self
     {
-        let space = frame_context.space;
-        let env = &frame_context.env;
-        let depth = frame_context.depth;
-        let create_address = &frame_context.create_address;
-        let origin = &frame_context.origin;
-        let substate = &mut frame_context.substate;
-        let machine = frame_context.machine;
-        let spec = frame_context.spec;
-        let static_flag = frame_context.static_flag;
+        let space = frame_local.space;
+        let env = &frame_local.env;
+        let depth = frame_local.depth;
+        let create_address = &frame_local.create_address;
+        let origin = &frame_local.origin;
+        let substate = &mut frame_local.substate;
+        let machine = frame_local.machine;
+        let spec = frame_local.spec;
+        let static_flag = frame_local.static_flag;
 
         let state = &mut *runtime_resources.state;
         let callstack = &mut *runtime_resources.callstack;
@@ -359,57 +359,49 @@ impl<'a> ContextTrait for Context<'a> {
     }
 
     fn ret(
-        self, gas: &U256, data: &ReturnData, apply_state: bool,
+        mut self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
     where Self: Sized {
         let caller = self.origin.address.with_space(self.space);
 
-        match self.create_address.is_some() {
-            false => Ok(*gas),
-            true if apply_state => {
-                let create_data_gas = self.spec.create_data_gas
-                    * match self.space {
-                        Space::Native => 1,
-                        Space::Ethereum => self.spec.evm_gas_ratio,
-                    };
-                let return_cost = U256::from(data.len()) * create_data_gas;
-                if return_cost > *gas
-                    || data.len() > self.spec.create_data_limit
-                {
-                    return match self.spec.exceptional_failed_code_deposit {
-                        true => Err(vm::Error::OutOfGas),
-                        false => Ok(*gas),
-                    };
-                }
-
-                if self.space == Space::Native {
-                    let collateral_units_for_code =
-                        code_collateral_units(data.len());
-                    let collateral_in_drips =
-                        U256::from(collateral_units_for_code)
-                            * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                    debug!(
-                        "ret()  collateral_for_code={:?}",
-                        collateral_in_drips
-                    );
-                    self.substate.record_storage_occupy(
-                        &self.origin.storage_owner,
-                        collateral_units_for_code,
-                    );
-                }
-
-                let owner = if self.space == Space::Native {
-                    self.origin.storage_owner
-                } else {
-                    Address::zero()
-                };
-
-                self.state.init_code(&caller, data.to_vec(), owner)?;
-
-                Ok(*gas - return_cost)
-            }
-            true => Ok(*gas),
+        if self.create_address.is_none() || !apply_state {
+            return Ok(*gas);
         }
+
+        self.insert_create_address_to_substate();
+
+        let create_data_gas = self.spec.create_data_gas
+            * match self.space {
+                Space::Native => 1,
+                Space::Ethereum => self.spec.evm_gas_ratio,
+            };
+        let return_cost = U256::from(data.len()) * create_data_gas;
+        if return_cost > *gas || data.len() > self.spec.create_data_limit {
+            return match self.spec.exceptional_failed_code_deposit {
+                true => Err(vm::Error::OutOfGas),
+                false => Ok(*gas),
+            };
+        }
+
+        if self.space == Space::Native {
+            let collateral_units_for_code = code_collateral_units(data.len());
+            let collateral_in_drips = U256::from(collateral_units_for_code)
+                * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+            debug!("ret()  collateral_for_code={:?}", collateral_in_drips);
+            self.substate.record_storage_occupy(
+                &self.origin.storage_owner,
+                collateral_units_for_code,
+            );
+        }
+
+        let owner = if self.space == Space::Native {
+            self.origin.storage_owner
+        } else {
+            Address::zero()
+        };
+
+        self.state.init_code(&caller, data.to_vec(), owner)?;
+        Ok(*gas - return_cost)
     }
 
     fn suicide(&mut self, refund_address: &Address) -> vm::Result<()> {
@@ -433,15 +425,7 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn space(&self) -> Space { self.space }
 
-    fn chain_id(&self) -> u64 {
-        let space = self.space;
-        self.machine
-            .params()
-            .chain_id
-            .read()
-            .get_chain_id(self.env.epoch_height)
-            .in_space(space) as u64
-    }
+    fn chain_id(&self) -> u64 { self.env.chain_id[&self.space] as u64 }
 
     fn depth(&self) -> usize { self.depth }
 
@@ -472,8 +456,10 @@ impl<'a> ContextTrait for Context<'a> {
     fn is_static_or_reentrancy(&self) -> bool {
         self.static_flag || self.callstack.in_reentrancy(self.spec)
     }
+}
 
-    fn internal_ref(&mut self) -> InternalRefContext {
+impl<'a> Context<'a> {
+    pub fn internal_ref(&mut self) -> InternalRefContext {
         InternalRefContext {
             env: self.env,
             spec: self.spec,
@@ -485,13 +471,21 @@ impl<'a> ContextTrait for Context<'a> {
             tracer: self.tracer,
         }
     }
+
+    pub fn insert_create_address_to_substate(&mut self) {
+        if let Some(create_address) = self.create_address {
+            self.substate
+                .contracts_created
+                .push(create_address.with_space(self.space));
+        }
+    }
 }
 
 /// TODO: Move this code to a seperated file. So we can distinguish function
 /// calls from test.
 #[cfg(test)]
 mod tests {
-    use super::{FrameContext, OriginInfo};
+    use super::{FrameLocal, OriginInfo};
     use crate::{
         executive::frame::OwnedRuntimeRes,
         machine::{new_machine_with_builtin, Machine},
@@ -506,7 +500,7 @@ mod tests {
     use cfx_types::{
         address_util::AddressUtil, Address, AddressSpaceUtil, Space, H256, U256,
     };
-    use std::str::FromStr;
+    use std::{collections::BTreeMap, str::FromStr};
 
     fn get_test_origin() -> OriginInfo {
         let mut sender = Address::zero();
@@ -522,6 +516,10 @@ mod tests {
 
     fn get_test_env() -> Env {
         Env {
+            chain_id: BTreeMap::from([
+                (Space::Native, 0),
+                (Space::Ethereum, 0),
+            ]),
             number: 100,
             author: Address::from_low_u64_be(0),
             timestamp: 0,
@@ -589,7 +587,7 @@ mod tests {
         let state = &mut setup.state;
         let origin = get_test_origin();
 
-        let mut lctx = FrameContext::new(
+        let mut lctx = FrameLocal::new(
             Space::Native,
             &setup.env,
             &setup.machine,
@@ -613,7 +611,7 @@ mod tests {
         let state = &mut setup.state;
         let origin = get_test_origin();
 
-        let mut lctx = FrameContext::new(
+        let mut lctx = FrameLocal::new(
             Space::Native,
             &setup.env,
             &setup.machine,
@@ -735,7 +733,7 @@ mod tests {
         let origin = get_test_origin();
 
         {
-            let mut lctx = FrameContext::new(
+            let mut lctx = FrameLocal::new(
                 Space::Native,
                 &setup.env,
                 &setup.machine,
@@ -786,7 +784,7 @@ mod tests {
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
 
         {
-            let mut lctx = FrameContext::new(
+            let mut lctx = FrameLocal::new(
                 Space::Native,
                 &setup.env,
                 &setup.machine,

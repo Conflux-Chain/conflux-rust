@@ -1,16 +1,17 @@
 use crate::{
-    evm::{
-        ActionParams, CallType, Context, ContractCreateResult,
-        CreateContractAddress, GasLeft, MessageCallResult, ReturnData,
+    evm::{ActionParams, CallType, CreateContractAddress, Finalize, GasLeft},
+    executive::{
+        context::Context,
+        contract_address,
+        executive::gas_required_for,
+        frame::{
+            Executable, ExecutableOutcome, FrameResult, FrameReturn, Resumable,
+        },
     },
-    executive::{contract_address, executive::gas_required_for},
     internal_bail,
     observer::AddressPocket,
     state::cleanup_mode,
-    vm::{
-        self, ActionValue, CreateType, Exec, ExecTrapError as ExecTrap,
-        ExecTrapResult, ParamsType, ResumeCall, ResumeCreate, Spec, TrapResult,
-    },
+    vm::{self, ActionValue, Context as _, CreateType, ParamsType, Spec},
 };
 
 use cfx_parameters::{
@@ -30,7 +31,7 @@ use solidity_abi::{ABIDecodable, ABIEncodable};
 use std::{marker::PhantomData, sync::Arc};
 
 use super::super::{
-    components::{InternalRefContext, SolidityEventTrait},
+    components::{InternalRefContext, InternalTrapResult, SolidityEventTrait},
     contracts::cross_space::{
         CallEvent, CreateEvent, ReturnEvent, WithdrawEvent,
     },
@@ -146,120 +147,78 @@ pub struct Resume {
     pub gas_retained: U256,
 }
 
-impl ResumeCreate for Resume {
-    fn resume_create(
-        self: Box<Self>, result: ContractCreateResult,
-    ) -> Box<dyn Exec> {
-        let pass_result = match result {
-            ContractCreateResult::Created(address, gas_left) => {
-                let encoded_output = address.address.0.abi_encode();
-                let length = encoded_output.len();
-                let return_data = ReturnData::new(encoded_output, 0, length);
-                PassResult {
-                    resume: *self,
-                    gas_left,
-                    return_data: Ok(return_data),
-                    apply_state: true,
-                }
+impl Resumable for Resume {
+    fn resume(self: Box<Self>, result: FrameResult) -> Box<dyn Executable> {
+        let frame_return = match result {
+            Ok(r) => r,
+            Err(e) => {
+                return Box::new(PassResult {
+                    params: self.params,
+                    result: Err(e),
+                    apply_state: false,
+                });
             }
-            ContractCreateResult::Failed(err) => PassResult {
-                resume: *self,
-                gas_left: U256::zero(),
-                return_data: Err(err),
-                apply_state: false,
-            },
-            ContractCreateResult::Reverted(gas_left, data) => PassResult {
-                resume: *self,
-                gas_left,
-                return_data: Ok(data),
-                apply_state: false,
-            },
         };
-        Box::new(pass_result)
-    }
-}
 
-impl ResumeCall for Resume {
-    fn resume_call(
-        self: Box<Self>, result: MessageCallResult,
-    ) -> Box<dyn Exec> {
-        let pass_result = match result {
-            MessageCallResult::Success(gas_left, data) => {
-                let encoded_output = data.to_vec().abi_encode();
-                let length = encoded_output.len();
-                let return_data = ReturnData::new(encoded_output, 0, length);
-                PassResult {
-                    resume: *self,
-                    gas_left,
-                    return_data: Ok(return_data),
-                    apply_state: true,
-                }
-            }
-            MessageCallResult::Failed(err) => PassResult {
-                resume: *self,
-                gas_left: U256::zero(),
-                return_data: Err(err),
+        let gas_left = self.gas_retained + frame_return.gas_left;
+        let apply_state = frame_return.apply_state;
+
+        let data = match frame_return {
+            FrameReturn {
+                apply_state: true,
+                create_address: Some(create_address),
+                ..
+            } => create_address.0.abi_encode().into(),
+            FrameReturn {
+                apply_state: true,
+                return_data,
+                create_address: None,
+                ..
+            } => return_data.to_vec().abi_encode().into(),
+            FrameReturn {
                 apply_state: false,
-            },
-            MessageCallResult::Reverted(gas_left, data) => PassResult {
-                resume: *self,
-                gas_left,
-                return_data: Ok(data),
-                apply_state: false,
-            },
+                return_data,
+                ..
+            } => return_data,
         };
-        Box::new(pass_result)
+
+        Box::new(PassResult {
+            params: self.params,
+            apply_state,
+            result: Ok(GasLeft::NeedsReturn {
+                gas_left,
+                data,
+                apply_state,
+            }),
+        })
     }
 }
 
 pub struct PassResult {
-    resume: Resume,
-    gas_left: U256,
-    return_data: Result<ReturnData, vm::Error>,
+    params: ActionParams,
+    result: vm::Result<GasLeft>,
     apply_state: bool,
 }
 
-impl Exec for PassResult {
-    fn exec(
-        mut self: Box<Self>, context: &mut dyn Context,
-    ) -> ExecTrapResult<GasLeft> {
-        let context = &mut context.internal_ref();
-        let static_flag = context.static_flag;
-
-        if !static_flag {
+impl Executable for PassResult {
+    fn execute(
+        self: Box<Self>, mut context: Context,
+    ) -> DbResult<ExecutableOutcome> {
+        if !context.is_static() {
             ReturnEvent::log(
                 &(),
                 &self.apply_state,
-                &self.resume.params,
-                context,
+                &self.params,
+                &mut context.internal_ref(),
             )
             .expect("Must have no static flag");
         }
 
-        let mut gas_returned = U256::zero();
-        if let Ok(ref data) = self.return_data {
-            let length = data.len();
-            let return_cost =
-                U256::from((length + 31) / 32 * context.spec.memory_gas);
-            let gas_left = self.gas_left + self.resume.gas_retained;
-            if gas_left < return_cost {
-                gas_returned = U256::zero();
-                self.return_data = Err(vm::Error::OutOfGas);
-                self.apply_state = false;
-            } else {
-                gas_returned = gas_left - return_cost;
-            }
-        }
-
-        let result = match self.return_data {
-            Ok(data) => Ok(GasLeft::NeedsReturn {
-                gas_left: gas_returned,
-                data,
-                apply_state: self.apply_state,
-            }),
-            Err(err) => Err(err),
-        };
-        TrapResult::Return(result)
+        let result = self
+            .result
+            .and_then(|r| r.charge_return_data_gas(context.spec()))
+            .finalize(context);
+        Ok(ExecutableOutcome::Return(result))
     }
 }
 
@@ -268,18 +227,20 @@ pub fn evm_map(address: Address) -> AddressWithSpace {
 }
 
 pub fn process_trap<T>(
-    result: Result<ExecTrap, vm::Error>, _phantom: PhantomData<T>,
-) -> ExecTrapResult<T> {
+    result: vm::Result<(ActionParams, Box<dyn Resumable>)>,
+    _phantom: PhantomData<T>,
+) -> InternalTrapResult<T>
+{
     match result {
-        Ok(trap) => TrapResult::SubCallCreate(trap),
-        Err(err) => TrapResult::Return(Err(err)),
+        Ok((p, r)) => InternalTrapResult::Invoke(p, r),
+        Err(err) => InternalTrapResult::Return(Err(err)),
     }
 }
 
 pub fn call_to_evmcore(
     receiver: Address, data: Vec<u8>, call_type: CallType,
     params: &ActionParams, gas_left: U256, context: &mut InternalRefContext,
-) -> Result<ExecTrap, vm::Error>
+) -> vm::Result<(ActionParams, Box<dyn Resumable>)>
 {
     if context.depth >= context.spec.max_depth {
         internal_bail!("Exceed Depth");
@@ -345,19 +306,19 @@ pub fn call_to_evmcore(
         )?;
     }
 
-    return Ok(ExecTrap::Call(
+    Ok((
         next_params,
         Box::new(Resume {
             params: params.clone(),
             gas_retained: reserved_gas,
         }),
-    ));
+    ))
 }
 
 pub fn create_to_evmcore(
     init: Vec<u8>, salt: Option<H256>, params: &ActionParams, gas_left: U256,
     context: &mut InternalRefContext,
-) -> Result<ExecTrap, vm::Error>
+) -> vm::Result<(ActionParams, Box<dyn Resumable>)>
 {
     if context.depth >= context.spec.max_depth {
         internal_bail!("Exceed Depth");
@@ -431,13 +392,13 @@ pub fn create_to_evmcore(
         context,
     )?;
 
-    return Ok(ExecTrap::Create(
+    Ok((
         next_params,
         Box::new(Resume {
             params: params.clone(),
             gas_retained: reserved_gas,
         }),
-    ));
+    ))
 }
 
 pub fn withdraw_from_evmcore(

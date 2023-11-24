@@ -90,6 +90,7 @@ fn test_sender_balance() {
     .0;
     let mut params = ActionParams::default();
     params.address = address.address;
+    params.code_address = address.address;
     params.sender = sender;
     params.original_sender = sender;
     params.storage_owner = sender;

@@ -1,82 +1,72 @@
-use super::{FrameContext, RuntimeRes};
+use super::{FrameLocal, RuntimeRes};
 use crate::{
-    evm::{FinalizationResult, Finalize},
+    evm::FinalizationResult,
     state::Substate,
-    vm::{self, GasLeft, ReturnData},
+    vm::{self, ReturnData},
 };
 
-use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, AddressSpaceUtil, Space, U256};
+use cfx_types::{Address, Space, U256};
 
-/// When the executive (the inner EVM) returns, this function will process
-/// the rest tasks: If the execution successes, this function collects
-/// storage collateral change from the cache to substate, merge substate to
-/// its parent and settles down bytecode for newly created contract. If the
-/// execution fails, this function reverts state and drops substate.
+/// Processes the result of a frame's execution and updates the state and
+/// resources accordingly.
 pub(super) fn process_return<'a>(
-    mut context: FrameContext<'a>, result: vm::Result<GasLeft>,
+    frame_local: FrameLocal<'a>, result: vm::Result<FinalizationResult>,
     resources: &mut RuntimeRes<'a>,
-) -> DbResult<FrameResult>
+) -> FrameResult
 {
-    let vm_context = context.make_vm_context(resources);
-    // The post execution task in spec is completed here.
-    let finalized_result = result.finalize(vm_context);
-    let finalized_result = vm::separate_out_db_error(finalized_result)?;
+    let is_create = frame_local.create_address.is_some();
+    let frame_result =
+        result.map(|result| FrameReturn::new(frame_local, result));
 
-    let apply_state =
-        finalized_result.as_ref().map_or(false, |r| r.apply_state);
-    let maybe_substate;
+    let apply_state = frame_result.as_ref().map_or(false, |r| r.apply_state);
+
     if apply_state {
-        let mut substate = context.substate;
-        if let Some(create_address) = context.create_address {
-            substate
-                .contracts_created
-                .push(create_address.with_space(context.space));
-        }
-        maybe_substate = Some(substate);
         resources.state.discard_checkpoint();
     } else {
-        maybe_substate = None;
         resources.state.revert_to_checkpoint();
     }
 
-    let create_address = context.create_address;
-    let executive_result = finalized_result
-        .map(|result| FrameReturn::new(result, create_address, maybe_substate));
-    if context.create_address.is_some() {
-        resources.tracer.record_create_result(&executive_result);
+    if is_create {
+        resources.tracer.record_create_result(&frame_result);
     } else {
-        resources.tracer.record_call_result(&executive_result);
+        resources.tracer.record_call_result(&frame_result);
     }
 
     resources.callstack.pop();
 
-    Ok(executive_result)
+    frame_result
 }
 
+/// The result of executing a frame
 pub type FrameResult = vm::Result<FrameReturn>;
 
-/// The result contains more data than finalization result.
+/// The result of executing a frame on a successful complete or an expected
+/// revert.
 #[derive(Debug)]
 pub struct FrameReturn {
-    /// Space
+    /// The space the current frame belongs.
     pub space: Space,
+
     /// Final amount of gas left.
     pub gas_left: U256,
+
     /// Apply execution state changes or revert them.
     pub apply_state: bool,
+
     /// Return data buffer.
     pub return_data: ReturnData,
-    /// Create address.
+
+    /// The address of a newly created contract, if applicable.
     pub create_address: Option<Address>,
-    /// Substate.
+
+    /// Changes produced during execution for post-execution logic, if
+    /// `apply_state` is true.
     pub substate: Option<Substate>,
 }
 
 impl Into<FinalizationResult> for FrameReturn {
     fn into(self) -> FinalizationResult {
         FinalizationResult {
-            space: self.space,
             gas_left: self.gas_left,
             apply_state: self.apply_state,
             return_data: self.return_data,
@@ -85,13 +75,18 @@ impl Into<FinalizationResult> for FrameReturn {
 }
 
 impl FrameReturn {
-    fn new(
-        result: FinalizationResult, create_address: Option<Address>,
-        substate: Option<Substate>,
-    ) -> Self
-    {
+    fn new(frame_local: FrameLocal, result: FinalizationResult) -> Self {
+        let substate;
+        let create_address;
+        if result.apply_state {
+            substate = Some(frame_local.substate);
+            create_address = frame_local.create_address;
+        } else {
+            substate = None;
+            create_address = None;
+        };
         FrameReturn {
-            space: result.space,
+            space: frame_local.space,
             gas_left: result.gas_left,
             apply_state: result.apply_state,
             return_data: result.return_data,

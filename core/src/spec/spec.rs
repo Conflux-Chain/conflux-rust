@@ -16,7 +16,7 @@ use cfx_parameters::{
         INITIAL_BASE_MINING_REWARD_IN_UCFX,
     },
 };
-use cfx_types::{AllChainID, U256, U512};
+use cfx_types::{AllChainID, Space, U256, U512};
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
 
@@ -174,10 +174,20 @@ impl CommonParams {
         height % self.evm_transaction_block_ratio == 0
     }
 
-    pub fn evm_chain_id(&self, epoch_height: u64) -> u32 {
+    pub fn chain_id(&self, epoch_height: u64, space: Space) -> u32 {
         self.chain_id
             .read()
             .get_chain_id(epoch_height)
-            .in_evm_space()
+            .in_space(space)
+    }
+
+    pub fn chain_id_map(&self, epoch_height: u64) -> BTreeMap<Space, u32> {
+        BTreeMap::from([
+            (Space::Native, self.chain_id(epoch_height, Space::Native)),
+            (
+                Space::Ethereum,
+                self.chain_id(epoch_height, Space::Ethereum),
+            ),
+        ])
     }
 }

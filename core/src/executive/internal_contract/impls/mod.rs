@@ -8,5 +8,3 @@ pub(super) mod params_control;
 pub(super) mod pos;
 pub(super) mod sponsor;
 pub(super) mod staking;
-
-pub use self::admin::suicide;

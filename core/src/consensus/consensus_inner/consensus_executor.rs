@@ -1269,7 +1269,10 @@ impl ConsensusExecutionHandler {
                 .and_then(|hash| self.data_man.block_header_by_hash(&hash))
                 .map(|header| header.height());
 
+            let epoch_height = pivot_block.block_header.height();
+            let chain_id = self.machine.params().chain_id_map(epoch_height);
             let mut env = Env {
+                chain_id,
                 number: block_number,
                 author: block.block_header.author().clone(),
                 timestamp: pivot_block.block_header.timestamp(),
@@ -1277,7 +1280,7 @@ impl ConsensusExecutionHandler {
                 accumulated_gas_used: U256::zero(),
                 last_hash: last_block_hash,
                 gas_limit: U256::from(block.block_header.gas_limit()),
-                epoch_height: pivot_block.block_header.height(),
+                epoch_height,
                 pos_view: pos_view_number,
                 finalized_epoch: pivot_decision_epoch,
                 transaction_epoch_bound: self
@@ -1360,8 +1363,7 @@ impl ConsensusExecutionHandler {
                         },
                     );
 
-                    let evm_chain_id =
-                        machine.params().evm_chain_id(env.epoch_height);
+                    let evm_chain_id = env.chain_id[&Space::Ethereum];
 
                     // persist tx index for phantom transactions.
                     // note: in some cases, pivot chain reorgs will result in
@@ -1875,6 +1877,7 @@ impl ConsensusExecutionHandler {
         };
 
         let env = Env {
+            chain_id: self.machine.params().chain_id_map(block_height),
             number: start_block_number,
             author: miner,
             timestamp: time_stamp,

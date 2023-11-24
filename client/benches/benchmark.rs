@@ -49,6 +49,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     let machine =
         new_machine_with_builtin(Default::default(), VmFactory::new(1024 * 32));
     let env = Env {
+        chain_id: machine.params().chain_id_map(0),
         number: 0,
         author: Default::default(),
         timestamp: Default::default(),
