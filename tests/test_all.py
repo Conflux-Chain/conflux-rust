@@ -83,6 +83,10 @@ def run():
     for _ in range(options.max_retries):
         failed = run_single_round(options)
 
+        failed_twice = [c for c in failed if c in all_failed]
+
+        all_failed.update(failed)
+
         # If all test success, return the test
         if len(failed) == 0:
             return
@@ -92,11 +96,9 @@ def run():
             break
         
         # If some test failed in twice, stop the test
-        failed_twice = [c for c in failed if c in all_failed]
         if len(failed_twice) == 0:
             break
 
-        all_failed.update(failed)
 
     print("The following test fails: ")
     for c in all_failed:
