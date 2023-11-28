@@ -1,5 +1,5 @@
 use super::{
-    internal_transfer::AddressPocket, CallTracer, CheckpointTracer,
+    internal_transfer::AddressPocket, CallTracer, CheckpointTracer, DrainTrace,
     InternalTransferTracer,
 };
 use crate::{
@@ -11,12 +11,24 @@ use crate::{
 };
 use cfx_types::U256;
 use cfx_vm_types::ActionParams;
+use typemap::ShareDebugMap;
 
 /// Simple executive tracer. Traces all calls and creates.
 #[derive(Default)]
 pub struct ExecutiveTracer {
     traces: Vec<Action>,
     valid_indices: CheckpointLog<usize>,
+}
+
+impl DrainTrace for ExecutiveTracer {
+    fn drain_trace(self, map: &mut ShareDebugMap) {
+        map.insert::<TransactionTrace>(self.drain());
+    }
+}
+
+pub struct TransactionTrace;
+impl typemap::Key for TransactionTrace {
+    type Value = Vec<ExecTrace>;
 }
 
 impl InternalTransferTracer for ExecutiveTracer {

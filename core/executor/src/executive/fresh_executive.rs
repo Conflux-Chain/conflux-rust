@@ -3,7 +3,7 @@ use super::{
     execution_outcome::{ExecutionOutcome, ToRepackError, TxDropError},
     gas_required_for, ExecutiveContext, PreCheckedExecutive,
 };
-use crate::{observer::Observer, state::Substate};
+use crate::{observer::ExecutiveObserver, state::Substate};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 
 use cfx_statedb::Result as DbResult;
@@ -21,16 +21,17 @@ macro_rules! early_return_on_err {
     };
 }
 
-pub struct FreshExecutive<'a> {
+pub struct FreshExecutive<'a, O: ExecutiveObserver> {
     context: ExecutiveContext<'a>,
     tx: &'a SignedTransaction,
-    observer: Observer,
+    observer: O,
     settings: TransactSettings,
     base_gas: u64,
 }
 
 pub(super) struct CostInfo {
     pub sender_balance: U512,
+    pub base_gas: u64,
 
     pub total_cost: U512,
     pub gas_cost: U512,
@@ -42,10 +43,10 @@ pub(super) struct CostInfo {
     pub storage_sponsor_eligible: bool,
 }
 
-impl<'a> FreshExecutive<'a> {
+impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
     pub fn new(
         context: ExecutiveContext<'a>, tx: &'a SignedTransaction,
-        options: TransactOptions,
+        options: TransactOptions<O>,
     ) -> Self
     {
         let TransactOptions { observer, settings } = options;
@@ -65,7 +66,7 @@ impl<'a> FreshExecutive<'a> {
 
     pub(super) fn check_all(
         self,
-    ) -> DbResult<Result<PreCheckedExecutive<'a>, ExecutionOutcome>> {
+    ) -> DbResult<Result<PreCheckedExecutive<'a, O>, ExecutionOutcome>> {
         // Validate transaction nonce
         early_return_on_err!(self.check_nonce()?);
 
@@ -81,7 +82,7 @@ impl<'a> FreshExecutive<'a> {
         Ok(Ok(self.into_pre_checked(cost)))
     }
 
-    fn into_pre_checked(self, cost: CostInfo) -> PreCheckedExecutive<'a> {
+    fn into_pre_checked(self, cost: CostInfo) -> PreCheckedExecutive<'a, O> {
         PreCheckedExecutive {
             context: self.context,
             tx: self.tx,
@@ -94,7 +95,7 @@ impl<'a> FreshExecutive<'a> {
     }
 }
 
-impl<'a> FreshExecutive<'a> {
+impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
     fn check_nonce(&self) -> DbResult<Result<(), ExecutionOutcome>> {
         let tx = self.tx;
         let nonce = self.context.state.nonce(&tx.sender())?;
@@ -188,6 +189,7 @@ impl<'a> FreshExecutive<'a> {
             let sender_cost = U512::from(tx.value()) + gas_cost;
             return Ok(Ok(CostInfo {
                 sender_balance,
+                base_gas: self.base_gas,
                 gas_cost,
                 storage_cost,
                 sender_intended_cost: sender_cost,
@@ -298,6 +300,7 @@ impl<'a> FreshExecutive<'a> {
 
         return Ok(Ok(CostInfo {
             sender_intended_cost,
+            base_gas: self.base_gas,
             gas_cost,
             storage_cost,
             sender_balance,

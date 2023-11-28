@@ -36,7 +36,7 @@ use crate::{
     NodeType, Notifications,
 };
 use cfx_executor::{
-    executive::{EstimateRequest, ExecutionOutcome},
+    executive::{estimation::EstimateExt, EstimateRequest, ExecutionOutcome},
     internal_contract::build_bloom_and_recover_phantom,
     observer::{
         trace::{
@@ -1456,7 +1456,7 @@ impl ConsensusGraph {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
         request: EstimateRequest,
-    ) -> RpcResult<ExecutionOutcome>
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)>
     {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;

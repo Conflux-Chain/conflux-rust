@@ -1,6 +1,7 @@
 use super::{
     contract_address,
     estimation::{ChargeCollateral, TransactSettings},
+    executed::make_ext_result,
     fresh_executive::CostInfo,
     Executed, ExecutionError, ExecutiveContext,
 };
@@ -11,7 +12,7 @@ use crate::{
         accrue_substate, exec_main_frame, FrameResult, FrameReturn, FreshFrame,
         RuntimeRes,
     },
-    observer::{AddressPocket, AsTracer, Observer, TracerTrait},
+    observer::{AddressPocket, ExecutiveObserver, TracerTrait},
     state::{cleanup_mode, settle_collateral_for_all, CallStackInfo, Substate},
 };
 use cfx_parameters::staking::code_collateral_units;
@@ -25,17 +26,17 @@ use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
 use std::{convert::TryInto, sync::Arc};
 
-pub(super) struct PreCheckedExecutive<'a> {
+pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
     pub context: ExecutiveContext<'a>,
     pub tx: &'a SignedTransaction,
-    pub observer: Observer,
+    pub observer: O,
     pub settings: TransactSettings,
     pub base_gas: u64,
     pub cost: CostInfo,
     pub substate: Substate,
 }
 
-impl<'a> PreCheckedExecutive<'a> {
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     pub(super) fn execute_transaction(mut self) -> DbResult<ExecutionOutcome> {
         self.inc_sender_nonce()?;
 
@@ -74,7 +75,7 @@ impl<'a> PreCheckedExecutive<'a> {
     }
 }
 
-impl<'a> PreCheckedExecutive<'a> {
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn inc_sender_nonce(&mut self) -> DbResult<()> {
         self.context.state.inc_nonce(&self.tx.sender())
     }
@@ -254,7 +255,7 @@ pub(super) fn exec_vm<'a>(
     exec_main_frame(main_frame, resources)
 }
 
-impl<'a> PreCheckedExecutive<'a> {
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn exec_vm(&mut self, params: ActionParams) -> DbResult<ExecutiveResult> {
         // No matter who pays the collateral, we only focuses on the storage
         // limit of sender.
@@ -532,34 +533,22 @@ impl<'a> PreCheckedExecutive<'a> {
     }
 }
 
-impl<'a> PreCheckedExecutive<'a> {
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn finalize_on_insufficient_balance(
         self, actual_gas_cost: U256,
     ) -> DbResult<ExecutionOutcome> {
-        let CostInfo {
-            sender_balance,
-            total_cost,
-            storage_cost,
-            gas_sponsored,
-            storage_sponsored,
-            ..
-        } = self.cost;
-
         return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
             ExecutionError::NotEnoughCash {
-                required: total_cost,
-                got: sender_balance,
+                required: self.cost.total_cost,
+                got: self.cost.sender_balance,
                 actual_gas_cost,
-                max_storage_limit_cost: storage_cost,
+                max_storage_limit_cost: self.cost.storage_cost,
             },
             Executed::not_enough_balance_fee_charged(
                 self.tx,
                 &actual_gas_cost,
-                gas_sponsored,
-                storage_sponsored,
-                self.observer
-                    .tracer
-                    .map_or(Default::default(), |t| t.drain()),
+                self.cost,
+                make_ext_result(self.observer),
                 &self.context.spec,
             ),
         ));
@@ -573,7 +562,7 @@ impl<'a> PreCheckedExecutive<'a> {
             Executed::execution_error_fully_charged(
                 self.tx,
                 self.cost,
-                self.observer,
+                make_ext_result(self.observer),
                 &self.context.spec,
             ),
         ));
@@ -584,7 +573,7 @@ impl<'a> PreCheckedExecutive<'a> {
     ) -> DbResult<ExecutionOutcome> {
         let tx = self.tx;
         let cost = self.cost;
-        let observer = self.observer;
+        let ext_result = make_ext_result(self.observer);
         let spec = self.context.spec;
         let tx_substate = self.substate;
 
@@ -593,7 +582,7 @@ impl<'a> PreCheckedExecutive<'a> {
             Err(exception) => Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(exception),
                 Executed::execution_error_fully_charged(
-                    tx, cost, observer, spec,
+                    tx, cost, ext_result, spec,
                 ),
             )),
             Ok(r) => {
@@ -602,8 +591,7 @@ impl<'a> PreCheckedExecutive<'a> {
                     refund_info,
                     cost,
                     tx_substate,
-                    observer,
-                    self.base_gas,
+                    ext_result,
                     spec,
                 );
 

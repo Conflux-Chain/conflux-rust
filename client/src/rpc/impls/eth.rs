@@ -19,6 +19,7 @@ use crate::rpc::{
     },
 };
 use cfx_executor::executive::{
+    estimation::{decode_error, EstimateExt},
     revert_reason_decode, EstimateRequest, ExecutionError, ExecutionOutcome,
     TxDropError,
 };
@@ -127,7 +128,7 @@ fn block_tx_by_index(
 impl EthHandler {
     fn exec_transaction(
         &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
-    ) -> CfxRpcResult<ExecutionOutcome> {
+    ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
 
         let epoch = match block_number_or_hash.unwrap_or_default() {
@@ -692,7 +693,9 @@ impl Eth for EthHandler {
         );
         // TODO: EVM core: Check the EVM error message. To make the
         // assert_error_eq test case in solidity project compatible.
-        match self.exec_transaction(request, block_number_or_hash)? {
+        let (execution_outcome, _estimation) =
+            self.exec_transaction(request, block_number_or_hash)?;
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -740,9 +743,9 @@ impl Eth for EthHandler {
             request, block_number_or_hash
         );
         // TODO: EVM core: same as call
-        let executed = match self
-            .exec_transaction(request, block_number_or_hash)?
-        {
+        let (execution_outcome, estimation) =
+            self.exec_transaction(request, block_number_or_hash)?;
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -767,7 +770,7 @@ impl Eth for EthHandler {
                 executed,
             ) => {
                 let (revert_error, innermost_error, errors) =
-                    executed.decode_error(|addr| *addr);
+                    decode_error(&executed, |addr| *addr);
 
                 bail!(call_execution_error(
                     format!(
@@ -788,9 +791,7 @@ impl Eth for EthHandler {
             ExecutionOutcome::Finished(executed) => executed,
         };
 
-        let estimated_gas_limit =
-            executed.estimated_gas_limit.unwrap_or(U256::zero());
-        Ok(estimated_gas_limit)
+        Ok(estimation.estimated_gas_limit)
     }
 
     fn transaction_by_hash(

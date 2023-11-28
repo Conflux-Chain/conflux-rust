@@ -10,13 +10,14 @@ pub mod trace_filter;
 pub mod tracer;
 mod traits;
 
-use cfx_vm_tracer_derive::AsTracer;
+use cfx_vm_tracer_derive::{AsTracer, DrainTrace};
 pub use error_unwind::ErrorUnwind;
-pub use gasman::GasMan;
+pub use gasman::{GasLimitEstimation, GasMan};
 pub use internal_transfer::AddressPocket;
 use internal_transfer::InternalTransferTracer;
 pub use tracer::ExecutiveTracer;
 use traits::{CallTracer, CheckpointTracer};
+use typemap::ShareDebugMap;
 
 pub trait TracerTrait:
     CheckpointTracer + CallTracer + InternalTransferTracer
@@ -32,7 +33,27 @@ pub trait AsTracer {
     fn as_tracer<'a>(&'a mut self) -> Box<dyn 'a + TracerTrait>;
 }
 
-#[derive(AsTracer)]
+pub trait DrainTrace {
+    fn drain_trace(self, map: &mut ShareDebugMap);
+}
+
+impl<T: DrainTrace> DrainTrace for Option<T> {
+    fn drain_trace(self, map: &mut ShareDebugMap) {
+        if let Some(x) = self {
+            x.drain_trace(map);
+        }
+    }
+}
+
+impl DrainTrace for () {
+    fn drain_trace(self, _map: &mut ShareDebugMap) {}
+}
+
+pub trait ExecutiveObserver: DrainTrace + AsTracer {}
+
+impl<T: DrainTrace + AsTracer> ExecutiveObserver for T {}
+
+#[derive(AsTracer, DrainTrace)]
 pub struct Observer {
     pub tracer: Option<ExecutiveTracer>,
     pub gas_man: Option<GasMan>,

@@ -64,8 +64,8 @@ use crate::{
 };
 use cfx_executor::{
     executive::{
-        EstimateRequest, EstimationContext, ExecutionOutcome, ExecutiveContext,
-        TransactOptions,
+        estimation::EstimateExt, EstimateRequest, EstimationContext,
+        ExecutionOutcome, ExecutiveContext, TransactOptions,
     },
     internal_contract::{
         initialize_internal_contract_accounts, storage_point_prop,
@@ -642,7 +642,7 @@ impl ConsensusExecutor {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
         request: EstimateRequest,
-    ) -> RpcResult<ExecutionOutcome>
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)>
     {
         self.handler.call_virtual(tx, epoch_id, epoch_size, request)
     }
@@ -1805,7 +1805,7 @@ impl ConsensusExecutionHandler {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
         request: EstimateRequest,
-    ) -> RpcResult<ExecutionOutcome>
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)>
     {
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {

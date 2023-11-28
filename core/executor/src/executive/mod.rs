@@ -25,7 +25,7 @@ pub use estimation::{EstimateRequest, EstimationContext, TransactOptions};
 pub use executed::revert_reason_decode;
 pub use execution_outcome::{ExecutionError, ExecutionOutcome, TxDropError};
 
-use crate::{machine::Machine, state::State};
+use crate::{machine::Machine, observer::ExecutiveObserver, state::State};
 
 /// Transaction executor.
 pub struct ExecutiveContext<'a> {
@@ -49,8 +49,8 @@ impl<'a> ExecutiveContext<'a> {
         }
     }
 
-    pub fn transact(
-        self, tx: &SignedTransaction, options: TransactOptions,
+    pub fn transact<O: ExecutiveObserver>(
+        self, tx: &SignedTransaction, options: TransactOptions<O>,
     ) -> DbResult<ExecutionOutcome> {
         let fresh_exec = FreshExecutive::new(self, tx, options);
 

@@ -45,6 +45,17 @@ pub struct GasMan {
     gas_record: Vec<FrameGasInfo>,
 }
 
+impl DrainTrace for GasMan {
+    fn drain_trace(self, map: &mut ShareDebugMap) {
+        map.insert::<GasLimitEstimation>(self.gas_required());
+    }
+}
+
+pub struct GasLimitEstimation;
+impl typemap::Key for GasLimitEstimation {
+    type Value = U256;
+}
+
 impl GasMan {
     pub fn gas_required(&self) -> U256 { self.gas_limit }
 
