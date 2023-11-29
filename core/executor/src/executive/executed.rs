@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{observer::ExecutiveObserver, state::Substate};
+use crate::{executive_observe::ExecutiveObserve, state::Substate};
 use cfx_bytes::Bytes;
 use cfx_types::{AddressWithSpace, U256};
 use primitives::{
@@ -19,6 +19,10 @@ use super::{
 
 #[derive(Debug)]
 pub struct Executed {
+    /// Transaction base gas: 21000 (for tx) or 53000 (for contract creation) +
+    /// calldata gas
+    pub base_gas: u64,
+
     /// Gas used during execution of transaction.
     pub gas_used: U256,
 
@@ -49,12 +53,18 @@ pub struct Executed {
     /// eg. sender creates contract A and A in constructor creates contract B
     ///
     /// B creation ends first, and it will be the first element of the vector.
+    ///
+    /// Note: if the contract init code return with empty output, the contract
+    /// address is still included here, even if it is not considered as a
+    /// contract. This is a strange behaviour from Parity's code and not become
+    /// a part of the protocol.
     pub contracts_created: Vec<AddressWithSpace>,
+
     /// Transaction output.
     pub output: Bytes,
-    pub base_gas: u64,
-    /// The trace of this transaction.
-    pub ext_result: ShareDebugMap,
+
+    /// Extension output of executed
+    pub ext_result: ExecutedExt,
 }
 
 pub type ExecutedExt = ShareDebugMap;
@@ -167,7 +177,7 @@ impl Executed {
     }
 }
 
-pub fn make_ext_result<O: ExecutiveObserver>(observer: O) -> ShareDebugMap {
+pub fn make_ext_result<O: ExecutiveObserve>(observer: O) -> ShareDebugMap {
     let mut ext_result = ShareDebugMap::custom();
     observer.drain_trace(&mut ext_result);
     ext_result

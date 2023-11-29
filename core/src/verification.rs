@@ -7,7 +7,6 @@ use crate::{
     error::{BlockError, Error},
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
-    vm::Spec,
 };
 use cfx_executor::{
     executive::gas_required_for, machine::Machine, spec::TransitionsEpochHeight,
@@ -20,6 +19,7 @@ use cfx_storage::{
 use cfx_types::{
     address_util::AddressUtil, AllChainID, BigEndianHash, Space, H256, U256,
 };
+use cfx_vm_types::Spec;
 use primitives::{
     block::BlockHeight,
     transaction::{NativeTransaction, TransactionError},

@@ -1,11 +1,17 @@
-use super::*;
-use crate::frame::FrameResult;
+use cfx_executor::{
+    executive_observe::{
+        CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
+    },
+    frame::FrameResult,
+};
 use cfx_parameters::{
     block::CROSS_SPACE_GAS_RATIO,
     internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS,
 };
 use cfx_types::U256;
 use cfx_vm_types::ActionParams;
+
+use typemap::ShareDebugMap;
 
 const EVM_RATIO: (u64, u64) = (64, 63);
 const CROSS_SPACE_RATIO: (u64, u64) = (CROSS_SPACE_GAS_RATIO, 1);

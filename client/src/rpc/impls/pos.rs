@@ -27,9 +27,8 @@ use crate::{
     },
 };
 use cfx_addr::Network;
-use cfx_executor::executive::{
-    estimation::EstimateExt, EstimateRequest, ExecutionOutcome,
-};
+use cfx_execute_helper::estimation::{EstimateExt, EstimateRequest};
+use cfx_executor::executive::ExecutionOutcome;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_types::{hexstr_to_h256, Address, H256, U64};
 use cfxcore::{

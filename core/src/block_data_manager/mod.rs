@@ -20,7 +20,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
-    receipt::{BlockReceipts, TransactionOutcome},
+    receipt::{BlockReceipts, TransactionStatus},
     Block, BlockHeader, EpochId, Receipt, SignedTransaction, TransactionIndex,
     TransactionWithSignature, NULL_EPOCH,
 };
@@ -41,9 +41,9 @@ use crate::{
     consensus::pos_handler::PosVerifier,
 };
 pub use block_data_types::*;
-use cfx_executor::{
-    internal_contract::build_bloom_and_recover_phantom,
-    observer::trace::{BlockExecTraces, TransactionExecTraces},
+use cfx_execute_helper::{
+    exec_tracer::{BlockExecTraces, TransactionExecTraces},
+    phantom_tx::build_bloom_and_recover_phantom,
 };
 use cfx_internal_common::{
     EpochExecutionCommitment, StateAvailabilityBoundary, StateRootWithAuxInfo,
@@ -1294,7 +1294,7 @@ impl BlockDataManager {
                         }
                         Space::Ethereum
                             if *outcome_status
-                                != TransactionOutcome::Skipped =>
+                                != TransactionStatus::Skipped =>
                         {
                             let rpc_index = evm_tx_index;
                             evm_tx_index += 1;
@@ -1307,8 +1307,8 @@ impl BlockDataManager {
                         build_bloom_and_recover_phantom(logs, tx.hash());
 
                     match outcome_status {
-                        TransactionOutcome::Success
-                        | TransactionOutcome::Failure => {
+                        TransactionStatus::Success
+                        | TransactionStatus::Failure => {
                             self.insert_transaction_index(
                                 &tx.hash,
                                 &TransactionIndex {

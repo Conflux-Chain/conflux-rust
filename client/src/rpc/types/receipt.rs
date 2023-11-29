@@ -12,7 +12,7 @@ use primitives::{
     },
     transaction::Action,
     SignedTransaction as PrimitiveTransaction, Transaction, TransactionIndex,
-    TransactionOutcome,
+    TransactionStatus,
 };
 use serde_derive::Serialize;
 
@@ -109,7 +109,7 @@ impl Receipt {
         let (address, action, space) = match transaction.unsigned {
             Transaction::Native(ref unsigned) => {
                 if Action::Create == unsigned.action
-                    && outcome_status == TransactionOutcome::Success
+                    && outcome_status == TransactionStatus::Success
                 {
                     let (mut created_address, _) = contract_address(
                         CreateContractAddress::FromSenderNonceAndCodeHash,
@@ -131,7 +131,7 @@ impl Receipt {
             Transaction::Ethereum(ref unsigned) => {
                 if include_eth_receipt {
                     if Action::Create == unsigned.action
-                        && outcome_status == TransactionOutcome::Success
+                        && outcome_status == TransactionStatus::Success
                     {
                         let (created_address, _) = contract_address(
                             CreateContractAddress::FromSenderNonce,

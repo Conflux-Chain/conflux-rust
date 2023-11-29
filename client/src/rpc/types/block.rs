@@ -13,7 +13,7 @@ use cfxcore::{
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
-    BlockHeaderBuilder, TransactionIndex, TransactionOutcome,
+    BlockHeaderBuilder, TransactionIndex, TransactionStatus,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -224,7 +224,7 @@ impl Block {
                                         execution_result.block_receipts.receipts[original_index - 1].accumulated_gas_used
                                     };
                                     match receipt.outcome_status {
-                                        TransactionOutcome::Success | TransactionOutcome::Failure => {
+                                        TransactionStatus::Success | TransactionStatus::Failure => {
                                             let tx_index = TransactionIndex {
                                                 block_hash: b.hash(),
                                                 real_index: original_index,
@@ -254,7 +254,7 @@ impl Block {
                                                 network,
                                             )
                                         }
-                                        TransactionOutcome::Skipped => {
+                                        TransactionStatus::Skipped => {
                                             Transaction::from_signed(tx, None, network)
                                         }
                                     }

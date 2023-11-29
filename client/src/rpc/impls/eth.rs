@@ -18,10 +18,11 @@ use crate::rpc::{
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
 };
+use cfx_execute_helper::estimation::{
+    decode_error, EstimateExt, EstimateRequest,
+};
 use cfx_executor::executive::{
-    estimation::{decode_error, EstimateExt},
-    revert_reason_decode, EstimateRequest, ExecutionError, ExecutionOutcome,
-    TxDropError,
+    revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_statedb::StateDbExt;
@@ -42,7 +43,7 @@ use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionOutcome, TransactionWithSignature,
+    StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
 };
 use rlp::Rlp;
 use rustc_hex::ToHex;
@@ -229,7 +230,7 @@ impl EthHandler {
         }
 
         let contract_address = match receipt.outcome_status {
-            TransactionOutcome::Success => {
+            TransactionStatus::Success => {
                 Transaction::deployed_contract_address(tx)
             }
             _ => None,
@@ -834,7 +835,7 @@ impl Eth for EthHandler {
                 if let Some(tx_ref) = &tx {
                     if tx_ref.status
                         == Some(
-                            TransactionOutcome::Skipped
+                            TransactionStatus::Skipped
                                 .in_space(Space::Ethereum)
                                 .into(),
                         )
@@ -945,7 +946,7 @@ impl Eth for EthHandler {
                 // A skipped transaction is not available to clients if accessed
                 // by its hash.
                 if receipt.status_code
-                    == TransactionOutcome::Skipped
+                    == TransactionStatus::Skipped
                         .in_space(Space::Ethereum)
                         .into()
                 {

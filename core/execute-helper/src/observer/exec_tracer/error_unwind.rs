@@ -1,9 +1,9 @@
-use crate::{
-    executive::revert_reason_decode,
-    observer::trace::{
-        Action, Call, CallResult, Create, CreateResult, ExecTrace, Outcome,
-    },
+use super::{
+    action_types::{Action, Call, CallResult, Create, CreateResult, Outcome},
+    trace_types::ExecTrace,
+    ExecTraceKey,
 };
+use cfx_executor::executive::{revert_reason_decode, Executed};
 use cfx_types::Address;
 
 /// An executive tracer only records errors during EVM unwind.
@@ -19,6 +19,12 @@ pub struct ErrorUnwind {
 }
 
 impl ErrorUnwind {
+    pub fn from_executed(executed: &Executed) -> Self {
+        Self::from_traces(
+            executed.ext_result.get::<ExecTraceKey>().unwrap_or(&vec![]),
+        )
+    }
+
     pub fn from_traces(traces: &[ExecTrace]) -> Self {
         let mut errors = ErrorUnwind::default();
         for trace in traces.iter() {

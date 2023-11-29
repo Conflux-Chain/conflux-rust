@@ -1,5 +1,5 @@
 use crate::{
-    observer::TracerTrait,
+    executive_observe::TracerTrait,
     state::{CallStackInfo, State, Substate},
 };
 use cfx_statedb::Result as DbResult;

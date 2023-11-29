@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    executive_observe::AddressPocket,
     internal_bail,
-    observer::AddressPocket,
     state::{cleanup_mode, State, Substate},
 };
 use cfx_types::{Address, AddressSpaceUtil, U256};

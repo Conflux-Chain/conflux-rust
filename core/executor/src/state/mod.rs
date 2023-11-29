@@ -8,7 +8,6 @@ mod overlay_account;
 mod global_stat;
 mod state_object;
 mod substate;
-mod trace;
 
 use cfx_bytes::Bytes;
 use cfx_types::{Address, AddressWithSpace};
@@ -17,8 +16,9 @@ use std::{collections::HashSet, sync::Arc};
 
 pub use overlay_account::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 pub use state_object::{
-    distribute_pos_interest, initialize_or_update_dao_voted_params,
-    settle_collateral_for_all, update_pos_status, State,
+    distribute_pos_interest, initialize_cip107,
+    initialize_or_update_dao_voted_params, settle_collateral_for_all,
+    update_pos_status, State,
 };
 pub use substate::{cleanup_mode, CallStackInfo, Substate};
 

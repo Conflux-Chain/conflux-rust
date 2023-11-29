@@ -1,12 +1,14 @@
-use super::{revert_reason_decode, Executed, ExecutionError, ExecutiveContext};
-use crate::{
-    executive::ExecutionOutcome,
-    machine::Machine,
-    observer::{
-        tracer::TransactionTrace, ErrorUnwind, ExecutiveObserver,
-        GasLimitEstimation, Observer,
+use cfx_executor::{
+    executive::{
+        revert_reason_decode, ChargeCollateral, Executed, ExecutionError,
+        ExecutionOutcome, ExecutiveContext, TransactOptions, TransactSettings,
     },
+    machine::Machine,
     state::{CleanupMode, State},
+};
+
+use super::observer::{
+    exec_tracer::ErrorUnwind, gasman::GasLimitEstimation, Observer,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_statedb::Result as DbResult;
@@ -185,7 +187,7 @@ impl<'a> EstimationContext<'a> {
         self.state.checkpoint();
         let sender_pay_executed = match self
             .as_executive()
-            .transact(&tx, TransactOptions::estimate_first_pass(request))?
+            .transact(&tx, request.first_pass_options())?
         {
             ExecutionOutcome::Finished(executed) => executed,
             res => {
@@ -209,10 +211,9 @@ impl<'a> EstimationContext<'a> {
         let contract_pay_executed =
             if collateral_sponsored_contract_if_eligible_sender.is_some() {
                 self.state.checkpoint();
-                let res = self.as_executive().transact(
-                    &tx,
-                    TransactOptions::estimate_second_pass(request),
-                )?;
+                let res = self
+                    .as_executive()
+                    .transact(&tx, request.second_pass_options())?;
                 self.state.revert_to_checkpoint();
 
                 contract_pay_executed = match res {
@@ -394,16 +395,11 @@ where F: Fn(&Address) -> Addr {
     // When a revert exception happens, there is usually an error in
     // the sub-calls. So we return the trace
     // information for debugging contract.
-    let errors = ErrorUnwind::from_traces(
-        &executed
-            .ext_result
-            .get::<TransactionTrace>()
-            .map_or(&vec![], |x| x.as_ref()),
-    )
-    .errors
-    .iter()
-    .map(|(addr, error)| format!("{}: {}", format_address(addr), error))
-    .collect::<Vec<String>>();
+    let errors = ErrorUnwind::from_executed(executed)
+        .errors
+        .iter()
+        .map(|(addr, error)| format!("{}: {}", format_address(addr), error))
+        .collect::<Vec<String>>();
 
     // Decode revert error
     let revert_error = revert_reason_decode(&executed.output);
@@ -422,55 +418,6 @@ where F: Fn(&Address) -> Addr {
     (revert_error, innermost_error, errors)
 }
 
-/// Transaction execution options.
-pub struct TransactOptions<O: ExecutiveObserver> {
-    pub observer: O,
-    pub settings: TransactSettings,
-}
-
-impl TransactOptions<Observer> {
-    pub fn exec_with_tracing() -> Self {
-        Self {
-            observer: Observer::with_tracing(),
-            settings: TransactSettings::all_checks(),
-        }
-    }
-
-    pub fn exec_with_no_tracing() -> Self {
-        Self {
-            observer: Observer::with_no_tracing(),
-            settings: TransactSettings::all_checks(),
-        }
-    }
-
-    pub fn estimate_first_pass(request: EstimateRequest) -> Self {
-        Self {
-            observer: Observer::virtual_call(),
-            settings: TransactSettings::from_estimate_request(
-                request,
-                ChargeCollateral::EstimateSender,
-            ),
-        }
-    }
-
-    pub fn estimate_second_pass(request: EstimateRequest) -> Self {
-        Self {
-            observer: Observer::virtual_call(),
-            settings: TransactSettings::from_estimate_request(
-                request,
-                ChargeCollateral::EstimateSponsor,
-            ),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ChargeCollateral {
-    Normal,
-    EstimateSender,
-    EstimateSponsor,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct EstimateRequest {
     pub has_sender: bool,
@@ -486,31 +433,28 @@ impl EstimateRequest {
     fn charge_gas(&self) -> bool {
         self.has_sender && self.has_gas_limit && self.has_gas_price
     }
-}
 
-#[derive(Debug, Clone, Copy)]
-pub struct TransactSettings {
-    pub charge_collateral: ChargeCollateral,
-    pub charge_gas: bool,
-    pub check_epoch_bound: bool,
-}
-
-impl TransactSettings {
-    fn all_checks() -> Self {
-        Self {
-            charge_collateral: ChargeCollateral::Normal,
-            charge_gas: true,
-            check_epoch_bound: true,
+    fn transact_settings(
+        self, charge_collateral: ChargeCollateral,
+    ) -> TransactSettings {
+        TransactSettings {
+            charge_collateral,
+            charge_gas: self.charge_gas(),
+            check_epoch_bound: false,
         }
     }
 
-    fn from_estimate_request(
-        request: EstimateRequest, charge_collateral: ChargeCollateral,
-    ) -> Self {
-        Self {
-            charge_collateral,
-            charge_gas: request.charge_gas(),
-            check_epoch_bound: false,
+    fn first_pass_options(self) -> TransactOptions<Observer> {
+        TransactOptions {
+            observer: Observer::virtual_call(),
+            settings: self.transact_settings(ChargeCollateral::EstimateSender),
+        }
+    }
+
+    pub fn second_pass_options(self) -> TransactOptions<Observer> {
+        TransactOptions {
+            observer: Observer::virtual_call(),
+            settings: self.transact_settings(ChargeCollateral::EstimateSponsor),
         }
     }
 }

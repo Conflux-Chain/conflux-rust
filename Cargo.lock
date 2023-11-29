@@ -737,6 +737,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-execute-helper"
+version = "2.0.2"
+dependencies = [
+ "cfx-bytes",
+ "cfx-executor",
+ "cfx-internal-common",
+ "cfx-parameters",
+ "cfx-statedb",
+ "cfx-types",
+ "cfx-vm-tracer-derive",
+ "cfx-vm-types",
+ "error-chain",
+ "log",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "pow-types",
+ "primitives",
+ "rlp",
+ "rlp_derive",
+ "serde",
+ "serde_derive",
+ "solidity-abi",
+ "strum_macros 0.20.1",
+ "typemap",
+]
+
+[[package]]
 name = "cfx-executor"
 version = "2.0.2"
 dependencies = [
@@ -980,6 +1007,7 @@ dependencies = [
  "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
+ "cfx-execute-helper",
  "cfx-executor",
  "cfx-internal-common",
  "cfx-math",
@@ -1252,6 +1280,7 @@ dependencies = [
  "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
+ "cfx-execute-helper",
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",

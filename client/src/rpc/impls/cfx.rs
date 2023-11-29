@@ -8,11 +8,9 @@ use crate::rpc::types::{
     TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
+use cfx_execute_helper::estimation::{decode_error, EstimateExt};
 use cfx_executor::{
-    executive::{
-        estimation::{decode_error, EstimateExt},
-        ExecutionError, ExecutionOutcome, TxDropError,
-    },
+    executive::{ExecutionError, ExecutionOutcome, TxDropError},
     internal_contract::storage_point_prop,
 };
 use cfx_statedb::{
@@ -46,7 +44,7 @@ use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block,
     BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
-    StorageValue, Transaction, TransactionIndex, TransactionOutcome,
+    StorageValue, Transaction, TransactionIndex, TransactionStatus,
     TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
@@ -85,7 +83,8 @@ use crate::{
     },
 };
 use cfx_addr::Network;
-use cfx_executor::{executive::EstimateRequest, state::State};
+use cfx_execute_helper::estimation::EstimateRequest;
+use cfx_executor::state::State;
 use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
     genesis::{
@@ -867,7 +866,7 @@ impl RpcImpl {
             // A skipped transaction is not available to clients if accessed by
             // its hash.
             if r.outcome_status
-                == TransactionOutcome::Skipped.in_space(Space::Native).into()
+                == TransactionStatus::Skipped.in_space(Space::Native).into()
             {
                 return Ok(None);
             }
@@ -1956,8 +1955,8 @@ impl RpcImpl {
                             };
 
                             match receipt.outcome_status {
-                                TransactionOutcome::Success
-                                | TransactionOutcome::Failure => {
+                                TransactionStatus::Success
+                                | TransactionStatus::Failure => {
                                     let tx_index = TransactionIndex {
                                         block_hash: b.hash(),
                                         real_index: id,
@@ -2004,7 +2003,7 @@ impl RpcImpl {
                                         ),
                                     );
                                 }
-                                TransactionOutcome::Skipped => {
+                                TransactionStatus::Skipped => {
                                     res.push(
                                         WrapTransaction::NativeTransaction(
                                             RpcTransaction::from_signed(

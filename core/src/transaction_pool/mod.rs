@@ -22,7 +22,6 @@ use crate::{
         nonce_pool::TxWithReadyInfo, transaction_pool_inner::PendingReason,
     },
     verification::{VerificationConfig, VerifyTxLocalMode, VerifyTxMode},
-    vm::Spec,
 };
 use account_cache::AccountCache;
 use cfx_executor::{
@@ -32,6 +31,7 @@ use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::{AddressWithSpace as Address, AllChainID, Space, H256, U256};
+use cfx_vm_types::Spec;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,

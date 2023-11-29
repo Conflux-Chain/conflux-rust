@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    executive_observe::{AddressPocket, TracerTrait},
     internal_bail,
-    observer::{AddressPocket, TracerTrait},
     state::State,
 };
 use cfx_parameters::{

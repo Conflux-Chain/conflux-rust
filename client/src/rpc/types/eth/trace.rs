@@ -1,7 +1,7 @@
 use crate::rpc::types::{
     Action as RpcCfxAction, Bytes, LocalizedTrace as RpcCfxLocalizedTrace,
 };
-use cfx_executor::observer::trace::Outcome;
+use cfx_execute_helper::exec_tracer::Outcome;
 use cfx_types::{H160, H256, U256};
 use cfx_vm_types::{CallType as CfxCallType, CreateType as CfxCreateType};
 use jsonrpc_core::Error as JsonRpcError;

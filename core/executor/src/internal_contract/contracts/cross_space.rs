@@ -60,6 +60,10 @@ make_solidity_event! {
     pub struct ReturnEvent("Outcome(bool)", indexed: (), non_indexed: bool);
 }
 
+pub mod events {
+    pub use super::{CallEvent, CreateEvent, ReturnEvent, WithdrawEvent};
+}
+
 make_solidity_function! {
     pub struct CreateToEVM(Bytes, "createEVM(bytes)", Bytes20);
 }

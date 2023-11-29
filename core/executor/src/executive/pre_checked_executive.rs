@@ -1,18 +1,18 @@
 use super::{
     contract_address,
-    estimation::{ChargeCollateral, TransactSettings},
     executed::make_ext_result,
     fresh_executive::CostInfo,
+    transact_options::{ChargeCollateral, TransactSettings},
     Executed, ExecutionError, ExecutiveContext,
 };
 
 use crate::{
     executive::ExecutionOutcome,
+    executive_observe::{AddressPocket, ExecutiveObserve, TracerTrait},
     frame::{
         accrue_substate, exec_main_frame, FrameResult, FrameReturn, FreshFrame,
         RuntimeRes,
     },
-    observer::{AddressPocket, ExecutiveObserver, TracerTrait},
     state::{cleanup_mode, settle_collateral_for_all, CallStackInfo, Substate},
 };
 use cfx_parameters::staking::code_collateral_units;
@@ -26,17 +26,16 @@ use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
 use std::{convert::TryInto, sync::Arc};
 
-pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
+pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserve> {
     pub context: ExecutiveContext<'a>,
     pub tx: &'a SignedTransaction,
     pub observer: O,
     pub settings: TransactSettings,
-    pub base_gas: u64,
     pub cost: CostInfo,
     pub substate: Substate,
 }
 
-impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
+impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
     pub(super) fn execute_transaction(mut self) -> DbResult<ExecutionOutcome> {
         self.inc_sender_nonce()?;
 
@@ -75,7 +74,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     }
 }
 
-impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
+impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
     fn inc_sender_nonce(&mut self) -> DbResult<()> {
         self.context.state.inc_nonce(&self.tx.sender())
     }
@@ -149,7 +148,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         let sender = tx.sender();
         let nonce = tx.nonce();
 
-        let init_gas = tx.gas() - self.base_gas;
+        let init_gas = tx.gas() - cost.base_gas;
 
         match tx.action() {
             Action::Create => {
@@ -255,7 +254,7 @@ pub(super) fn exec_vm<'a>(
     exec_main_frame(main_frame, resources)
 }
 
-impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
+impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
     fn exec_vm(&mut self, params: ActionParams) -> DbResult<ExecutiveResult> {
         // No matter who pays the collateral, we only focuses on the storage
         // limit of sender.
@@ -533,7 +532,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     }
 }
 
-impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
+impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
     fn finalize_on_insufficient_balance(
         self, actual_gas_cost: U256,
     ) -> DbResult<ExecutionOutcome> {

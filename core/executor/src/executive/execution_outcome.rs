@@ -1,17 +1,10 @@
 use super::executed::{revert_reason_decode, Executed};
-use crate::{
-    internal_contract::{
-        make_staking_events, recover_phantom, PhantomTransaction,
-    },
-    observer::{trace::ExecTrace, tracer::TransactionTrace},
-    unwrap_or_return_default,
-};
+use crate::unwrap_or_return_default;
 use cfx_types::{Address, H256, U256, U512};
 use cfx_vm_types as vm;
-use pow_types::StakingEvent;
 use primitives::{
     log_entry::build_bloom, receipt::StorageChange, LogEntry, Receipt,
-    SignedTransaction, TransactionOutcome,
+    SignedTransaction, TransactionStatus,
 };
 
 #[derive(Debug)]
@@ -22,15 +15,6 @@ pub enum ExecutionOutcome {
     Finished(Executed),
 }
 use ExecutionOutcome::*;
-
-pub struct ProcessTxOutcome {
-    pub receipt: Receipt,
-    pub phantom_txs: Vec<PhantomTransaction>,
-    pub tx_traces: Vec<ExecTrace>,
-    pub tx_staking_events: Vec<StakingEvent>,
-    pub tx_exec_error_msg: String,
-    pub consider_repacked: bool,
-}
 
 #[derive(Debug)]
 pub enum ToRepackError {
@@ -97,28 +81,6 @@ pub enum ExecutionError {
 }
 
 impl ExecutionOutcome {
-    pub fn make_process_tx_outcome(
-        self, accumulated_gas_used: &mut U256, tx_hash: H256,
-    ) -> ProcessTxOutcome {
-        let tx_traces = self.tx_traces();
-        let tx_exec_error_msg = self.error_message();
-        let consider_repacked = self.consider_repacked();
-        let receipt = self.make_receipt(accumulated_gas_used);
-
-        let tx_staking_events = make_staking_events(receipt.logs());
-
-        let phantom_txs = recover_phantom(&receipt.logs(), tx_hash);
-
-        ProcessTxOutcome {
-            receipt,
-            phantom_txs,
-            tx_traces,
-            tx_staking_events,
-            tx_exec_error_msg,
-            consider_repacked,
-        }
-    }
-
     #[inline]
     pub fn make_receipt(self, accumulated_gas_used: &mut U256) -> Receipt {
         *accumulated_gas_used += self.gas_used();
@@ -164,7 +126,7 @@ impl ExecutionOutcome {
     }
 
     #[inline]
-    fn try_as_executed(&self) -> Option<&Executed> {
+    pub fn try_as_executed(&self) -> Option<&Executed> {
         match self {
             NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => None,
             ExecutionErrorBumpNonce(_, executed) | Finished(executed) => {
@@ -183,16 +145,6 @@ impl ExecutionOutcome {
     pub fn gas_used(&self) -> U256 {
         let executed = unwrap_or_return_default!(self.try_as_executed());
         executed.gas_used
-    }
-
-    #[inline]
-    pub fn tx_traces(&self) -> Vec<ExecTrace> {
-        let executed = unwrap_or_return_default!(self.try_as_executed());
-        executed
-            .ext_result
-            .get::<TransactionTrace>()
-            .cloned()
-            .unwrap_or_default()
     }
 
     #[inline]
@@ -252,13 +204,13 @@ impl ExecutionOutcome {
     }
 
     #[inline]
-    pub fn outcome_status(&self) -> TransactionOutcome {
+    pub fn outcome_status(&self) -> TransactionStatus {
         match self {
             NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => {
-                TransactionOutcome::Skipped
+                TransactionStatus::Skipped
             }
-            ExecutionErrorBumpNonce(_, _) => TransactionOutcome::Failure,
-            Finished(_) => TransactionOutcome::Success,
+            ExecutionErrorBumpNonce(_, _) => TransactionStatus::Failure,
+            Finished(_) => TransactionStatus::Success,
         }
     }
 

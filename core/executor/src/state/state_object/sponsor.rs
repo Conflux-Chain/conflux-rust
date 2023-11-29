@@ -8,7 +8,6 @@ use cfx_types::{maybe_address, Address, U256};
 use primitives::{SponsorInfo, StorageKey};
 
 use super::{substate::Substate, State};
-use crate::internal_contract::storage_point_prop;
 
 impl State {
     pub fn sponsor_info(
@@ -98,7 +97,7 @@ impl State {
         noop_if!(sponsor_not_change && balance_not_change);
 
         let prop = if is_cip107 {
-            self.get_system_storage(&storage_point_prop())?
+            self.storage_point_prop()?
         } else {
             U256::zero()
         };

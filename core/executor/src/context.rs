@@ -5,10 +5,10 @@
 // Transaction execution environment.
 use crate::{
     executive::contract_address,
+    executive_observe::TracerTrait,
     frame::{FrameLocal, RuntimeRes},
     internal_contract::{suicide as suicide_impl, InternalRefContext},
     machine::Machine,
-    observer::TracerTrait,
     state::{CallStackInfo, State, Substate},
 };
 use cfx_bytes::Bytes;

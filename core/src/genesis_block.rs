@@ -478,7 +478,7 @@ fn execute_genesis_transaction(
 ) {
     let env = Env::default();
 
-    let options = TransactOptions::exec_with_no_tracing();
+    let options = TransactOptions::default();
     let r = {
         ExecutiveContext::new(
             state,
