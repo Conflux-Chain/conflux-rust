@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    executive_observe::{AddressPocket, TracerTrait},
+    executive_observer::{AddressPocket, TracerTrait},
     internal_bail,
     state::State,
 };

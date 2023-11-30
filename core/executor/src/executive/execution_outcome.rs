@@ -1,5 +1,5 @@
 use super::executed::{revert_reason_decode, Executed};
-use crate::unwrap_or_return_default;
+use crate::unwrap_or_return;
 use cfx_types::{Address, H256, U256, U512};
 use cfx_vm_types as vm;
 use primitives::{
@@ -137,46 +137,43 @@ impl ExecutionOutcome {
 
     #[inline]
     pub fn gas_fee(&self) -> U256 {
-        let executed = unwrap_or_return_default!(self.try_as_executed());
+        let executed = unwrap_or_return!(self.try_as_executed());
         executed.fee
     }
 
     #[inline]
     pub fn gas_used(&self) -> U256 {
-        let executed = unwrap_or_return_default!(self.try_as_executed());
+        let executed = unwrap_or_return!(self.try_as_executed());
         executed.gas_used
     }
 
     #[inline]
     pub fn gas_sponsor_paid(&self) -> bool {
-        let executed = unwrap_or_return_default!(self.try_as_executed());
+        let executed = unwrap_or_return!(self.try_as_executed());
         executed.gas_sponsor_paid
     }
 
     #[inline]
     pub fn storage_sponsor_paid(&self) -> bool {
-        let executed = unwrap_or_return_default!(self.try_as_executed());
+        let executed = unwrap_or_return!(self.try_as_executed());
         executed.storage_sponsor_paid
     }
 
     #[inline]
     pub fn transaction_logs(&self) -> Vec<LogEntry> {
-        let executed =
-            unwrap_or_return_default!(self.try_as_success_executed());
+        let executed = unwrap_or_return!(self.try_as_success_executed());
         executed.logs.clone()
     }
 
     #[inline]
     pub fn storage_collateralized(&self) -> Vec<StorageChange> {
-        let executed =
-            unwrap_or_return_default!(self.try_as_success_executed());
+        let executed = unwrap_or_return!(self.try_as_success_executed());
         executed.storage_collateralized.clone()
     }
 
     #[inline]
     pub fn storage_released(&self) -> Vec<StorageChange> {
-        let executed =
-            unwrap_or_return_default!(self.try_as_success_executed());
+        let executed = unwrap_or_return!(self.try_as_success_executed());
         executed.storage_released.clone()
     }
 

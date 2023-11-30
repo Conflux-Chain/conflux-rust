@@ -68,30 +68,22 @@ impl SharedCache {
 
     /// Get jump destinations bitmap for a contract.
     pub fn jump_and_sub_destinations(
-        &self, code_hash: &Option<H256>, code: &[u8],
+        &self, code_hash: &H256, code: &[u8],
     ) -> (Arc<BitSet>, Arc<BitSet>) {
-        if let Some(ref code_hash) = code_hash {
-            if code_hash == &KECCAK_EMPTY {
-                let cache_item = Self::find_jump_and_sub_destinations(code);
-                return (
-                    cache_item.jump_destination.0,
-                    cache_item.sub_entrypoint.0,
-                );
-            }
+        if code_hash == &KECCAK_EMPTY {
+            let cache_item = Self::find_jump_and_sub_destinations(code);
+            return (
+                cache_item.jump_destination.0,
+                cache_item.sub_entrypoint.0,
+            );
+        }
 
-            if let Some(d) = self.jump_destinations.lock().get_mut(code_hash) {
-                return (
-                    d.jump_destination.0.clone(),
-                    d.sub_entrypoint.0.clone(),
-                );
-            }
+        if let Some(d) = self.jump_destinations.lock().get_mut(code_hash) {
+            return (d.jump_destination.0.clone(), d.sub_entrypoint.0.clone());
         }
 
         let d = Self::find_jump_and_sub_destinations(code);
-
-        if let Some(ref code_hash) = code_hash {
-            self.jump_destinations.lock().insert(*code_hash, d.clone());
-        }
+        self.jump_destinations.lock().insert(*code_hash, d.clone());
 
         (d.jump_destination.0, d.sub_entrypoint.0)
     }

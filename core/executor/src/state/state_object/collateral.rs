@@ -1,6 +1,7 @@
-use super::{substate::Substate, State};
+use super::{State, Substate};
 use crate::{
-    executive_observe::TracerTrait, internal_contract::storage_point_prop,
+    executive_observer::TracerTrait, internal_contract::storage_point_prop,
+    return_if, try_loaded,
 };
 use cfx_parameters::{
     consensus_internal::CIP107_STORAGE_POINT_PROP_INIT,
@@ -40,7 +41,7 @@ impl State {
     pub fn add_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<U256> {
-        noop_if!(by.is_zero());
+        return_if!(by.is_zero());
 
         let storage_points_used = self
             .write_native_account_lock(&address)?
@@ -53,7 +54,7 @@ impl State {
     pub fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<U256> {
-        noop_if!(by.is_zero());
+        return_if!(by.is_zero());
 
         let collateral = self.token_collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
@@ -91,6 +92,25 @@ impl State {
         self.get_system_storage(&storage_point_prop())
     }
 
+    fn initialize_cip107(
+        &mut self, address: &Address,
+    ) -> DbResult<(U256, U256)> {
+        debug!("Check initialize CIP-107");
+
+        let prop: U256 = self.storage_point_prop()?;
+        let mut account =
+            self.write_account_or_new_lock(&address.with_native_space())?;
+        return_if!(account.is_cip_107_initialized());
+
+        let (from_balance, from_collateral) = account.initialize_cip107(prop);
+        std::mem::drop(account);
+
+        self.add_converted_storage_point(from_balance, from_collateral);
+        Ok((from_balance, from_collateral))
+    }
+}
+
+impl State {
     // TODO: This function can only be called after VM execution. There are some
     // test cases breaks this assumption, which will be fixed in a separated PR.
     #[cfg(test)]
@@ -131,23 +151,6 @@ impl State {
         }
 
         Ok(())
-    }
-
-    fn initialize_cip107(
-        &mut self, address: &Address,
-    ) -> DbResult<(U256, U256)> {
-        debug!("Check initialize CIP-107");
-
-        let prop: U256 = self.storage_point_prop()?;
-        let mut account =
-            self.write_account_or_new_lock(&address.with_native_space())?;
-        noop_if!(account.is_cip_107_initialized());
-
-        let (from_balance, from_collateral) = account.initialize_cip107(prop);
-        std::mem::drop(account);
-
-        self.add_converted_storage_point(from_balance, from_collateral);
-        Ok((from_balance, from_collateral))
     }
 }
 
@@ -227,6 +230,7 @@ pub fn settle_collateral_for_all(
     Ok(Ok(()))
 }
 
+/// Initialize CIP-107 for the whole system.
 pub fn initialize_cip107(state: &mut State) -> DbResult<()> {
     debug!(
         "set storage_point_prop to {}",

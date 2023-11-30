@@ -70,7 +70,7 @@ pub struct ActionParams {
     /// Address of currently executed code.
     pub code_address: Address,
     /// Hash of currently executed code.
-    pub code_hash: Option<H256>,
+    pub code_hash: H256,
     /// Receive address. Usually equal to code_address,
     /// except when called using CALLCODE.
     pub address: Address,
@@ -107,7 +107,7 @@ impl Default for ActionParams {
         ActionParams {
             space: Space::Native,
             code_address: Address::default(),
-            code_hash: Some(KECCAK_EMPTY),
+            code_hash: KECCAK_EMPTY,
             address: Address::default(),
             sender: Address::default(),
             original_sender: Address::default(),

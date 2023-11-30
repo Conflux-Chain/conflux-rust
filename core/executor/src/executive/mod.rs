@@ -27,7 +27,7 @@ pub use transact_options::{
 };
 
 use crate::{
-    executive_observe::ExecutiveObserve, machine::Machine, state::State,
+    executive_observer::ExecutiveObserver, machine::Machine, state::State,
 };
 
 /// Transaction executor.
@@ -52,7 +52,7 @@ impl<'a> ExecutiveContext<'a> {
         }
     }
 
-    pub fn transact<O: ExecutiveObserve>(
+    pub fn transact<O: ExecutiveObserver>(
         self, tx: &SignedTransaction, options: TransactOptions<O>,
     ) -> DbResult<ExecutionOutcome> {
         let fresh_exec = FreshExecutive::new(self, tx, options);
@@ -85,7 +85,7 @@ pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
 pub fn contract_address(
     address_scheme: CreateContractAddress, block_number: u64,
     sender: &AddressWithSpace, nonce: &U256, code: &[u8],
-) -> (AddressWithSpace, Option<H256>)
+) -> (AddressWithSpace, H256)
 {
     let (mut address, code_hash) = cfx_vm_types::contract_address(
         address_scheme,
@@ -103,7 +103,8 @@ pub fn contract_address(
 #[cfg(test)]
 pub mod test_util {
     use crate::{
-        executive_observe::TracerTrait, frame::accrue_substate, state::Substate,
+        executive_observer::TracerTrait, stack::accrue_substate,
+        substate::Substate,
     };
     use cfx_statedb::Result as DbResult;
     use cfx_vm_interpreter::FinalizationResult;

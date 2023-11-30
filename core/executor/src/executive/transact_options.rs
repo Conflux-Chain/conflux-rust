@@ -1,7 +1,7 @@
-use crate::executive_observe::ExecutiveObserve;
+use crate::executive_observer::ExecutiveObserver;
 
 /// Transaction execution options.
-pub struct TransactOptions<O: ExecutiveObserve> {
+pub struct TransactOptions<O: ExecutiveObserver> {
     pub observer: O,
     pub settings: TransactSettings,
 }

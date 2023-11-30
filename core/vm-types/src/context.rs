@@ -83,7 +83,7 @@ pub enum CreateContractAddress {
 pub fn contract_address(
     address_scheme: CreateContractAddress, _block_number: u64,
     sender: &Address, nonce: &U256, code: &[u8],
-) -> (Address, Option<H256>)
+) -> (Address, H256)
 {
     let code_hash = keccak(code);
     let (address, code_hash) = match address_scheme {
@@ -92,7 +92,7 @@ pub fn contract_address(
             rlp.append(sender);
             rlp.append(nonce);
             let h = Address::from(keccak(rlp.as_raw()));
-            (h, Some(code_hash))
+            (h, code_hash)
         }
         CreateContractAddress::FromBlockNumberSenderNonceAndCodeHash => {
             unreachable!("Inactive setting");
@@ -116,7 +116,7 @@ pub fn contract_address(
             // // set to 0x8.
             // let mut h = Address::from(keccak(&buffer[..]));
             // h.set_contract_type_bits();
-            // (h, Some(code_hash))
+            // (h, code_hash)
         }
         CreateContractAddress::FromSenderNonceAndCodeHash => {
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
@@ -131,7 +131,7 @@ pub fn contract_address(
             // the address. For contract address, the bits will be
             // set to 0x8.
             let h = Address::from(keccak(&buffer[..]));
-            (h, Some(code_hash))
+            (h, code_hash)
         }
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
@@ -142,7 +142,7 @@ pub fn contract_address(
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bits will be set to 0x8.
             let h = Address::from(keccak(&buffer[..]));
-            (h, Some(code_hash))
+            (h, code_hash)
         }
     };
     return (address, code_hash);
@@ -196,10 +196,10 @@ pub trait Context {
     fn extcode(&self, address: &Address) -> Result<Option<Arc<Bytes>>>;
 
     /// Returns code hash at given address
-    fn extcodehash(&self, address: &Address) -> Result<Option<H256>>;
+    fn extcodehash(&self, address: &Address) -> Result<H256>;
 
     /// Returns code size at given address
-    fn extcodesize(&self, address: &Address) -> Result<Option<usize>>;
+    fn extcodesize(&self, address: &Address) -> Result<usize>;
 
     /// Creates log entry with given topics and data
     fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> Result<()>;

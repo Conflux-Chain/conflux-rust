@@ -98,7 +98,7 @@ impl PrefetcherThreadWorker {
                 }
                 self.cancel_task_id.store(0, Ordering::Relaxed);
             }
-            state.try_load(&address.with_native_space())?;
+            state.prefetch_account(&address.with_native_space())?;
         }
 
         Ok(())

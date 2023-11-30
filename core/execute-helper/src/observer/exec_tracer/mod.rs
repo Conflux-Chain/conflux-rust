@@ -24,11 +24,11 @@ pub use trace_types::{
 use super::utils::CheckpointLog;
 
 use cfx_executor::{
-    executive_observe::{
+    executive_observer::{
         AddressPocket, CallTracer, CheckpointTracer, DrainTrace,
         InternalTransferTracer,
     },
-    frame::{FrameResult, FrameReturn},
+    stack::{FrameResult, FrameReturn},
 };
 use cfx_types::U256;
 use cfx_vm_types::ActionParams;

@@ -7,7 +7,8 @@ use cfx_statedb::{
 use cfx_types::{maybe_address, Address, U256};
 use primitives::{SponsorInfo, StorageKey};
 
-use super::{substate::Substate, State};
+use super::{State, Substate};
+use crate::{return_if, try_loaded};
 
 impl State {
     pub fn sponsor_info(
@@ -35,7 +36,7 @@ impl State {
             *sponsor == self.sponsor_for_gas(address)?.unwrap_or_default();
         let balance_not_change =
             *sponsor_balance == self.sponsor_balance_for_gas(address)?;
-        noop_if!(sponsor_not_change && balance_not_change);
+        return_if!(sponsor_not_change && balance_not_change);
 
         self.write_native_account_lock(&address)?
             .set_sponsor_for_gas(sponsor, sponsor_balance, upper_bound);
@@ -52,7 +53,7 @@ impl State {
     pub fn add_sponsor_balance_for_gas(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        noop_if!(by.is_zero());
+        return_if!(by.is_zero());
 
         self.write_native_account_lock(&address)?
             .add_sponsor_balance_for_gas(by);
@@ -62,7 +63,7 @@ impl State {
     pub fn sub_sponsor_balance_for_gas(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        noop_if!(by.is_zero());
+        return_if!(by.is_zero());
 
         self.write_native_account_lock(&address)?
             .sub_sponsor_balance_for_gas(by);
@@ -94,7 +95,7 @@ impl State {
             == self.sponsor_for_collateral(address)?.unwrap_or_default();
         let balance_not_change =
             *sponsor_balance == self.sponsor_balance_for_collateral(address)?;
-        noop_if!(sponsor_not_change && balance_not_change);
+        return_if!(sponsor_not_change && balance_not_change);
 
         let prop = if is_cip107 {
             self.storage_point_prop()?
@@ -124,7 +125,7 @@ impl State {
     pub fn add_sponsor_balance_for_collateral(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        noop_if!(by.is_zero());
+        return_if!(by.is_zero());
 
         self.write_native_account_lock(&address)?
             .add_sponsor_balance_for_collateral(by);
@@ -134,7 +135,7 @@ impl State {
     pub fn sub_sponsor_balance_for_collateral(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        noop_if!(by.is_zero());
+        return_if!(by.is_zero());
 
         self.write_native_account_lock(&address)?
             .sub_sponsor_balance_for_collateral(by);

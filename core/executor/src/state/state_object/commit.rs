@@ -6,38 +6,74 @@ use cfx_statedb::{access_mode, Result as DbResult};
 use cfx_types::AddressWithSpace;
 use primitives::{Account, EpochId, StorageKey};
 
+pub struct StateCommitResult {
+    pub state_root: StateRootWithAuxInfo,
+    pub accounts_for_txpool: Vec<Account>,
+}
+
 impl State {
-    // It's guaranteed that the second call of this method is a no-op.
-    pub fn compute_state_root(
+    /// Commit everything to the storage.
+    pub fn commit(
+        mut self, epoch_id: EpochId,
+        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<StateCommitResult>
+    {
+        debug!("Commit epoch[{}]", epoch_id);
+
+        let accounts_for_txpool =
+            self.apply_changes_to_statedb(debug_record.as_deref_mut())?;
+        let state_root = self.db.commit(epoch_id, debug_record)?;
+        Ok(StateCommitResult {
+            state_root,
+            accounts_for_txpool,
+        })
+    }
+
+    /// Commit to the statedb and compute state root. Only called in the genesis
+    pub fn compute_state_root_for_genesis(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<StateRootWithAuxInfo> {
-        debug!("state.compute_state_root");
+        self.apply_changes_to_statedb(debug_record.as_deref_mut())?;
+        self.db.compute_state_root(debug_record)
+    }
 
+    /// Apply changes for the accounts and global variables to the statedb.
+    fn apply_changes_to_statedb(
+        &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<Vec<Account>> {
+        debug!("state.commit_changes");
+
+        let accounts_for_txpool =
+            self.commit_dirty_accounts(debug_record.as_deref_mut())?;
+        self.global_stat.commit(&mut self.db, debug_record)?;
+        Ok(accounts_for_txpool)
+    }
+
+    fn commit_dirty_accounts(
+        &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<Vec<Account>> {
         assert!(self.checkpoints.get_mut().is_empty());
 
-        let mut sorted_dirty_accounts =
-            self.cache.get_mut().drain().collect::<Vec<_>>();
-        sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+        let cache_items = self.cache.get_mut().drain();
+        let mut sorted_dirty_accounts = cache_items
+            .filter_map(|(_, acc)| acc.try_into_dirty_account())
+            .collect::<Vec<_>>();
+        sorted_dirty_accounts.sort_by(|a, b| a.address().cmp(b.address()));
 
-        for (address, entry) in sorted_dirty_accounts.into_iter() {
-            let account = if let Some(account) = entry.into_account() {
-                account
-            } else {
-                continue;
-            };
+        let mut accounts_to_notify = vec![];
 
-            if account.invalidated_storage() {
+        for account in sorted_dirty_accounts.into_iter() {
+            let address = *account.address();
+
+            if account.pending_db_clear() {
                 self.recycle_storage(
                     vec![address],
                     debug_record.as_deref_mut(),
                 )?;
             }
 
-            if account.removed_without_update() {
-                // TODO: seems useless
-                self.accounts_to_notify.push(Err(address));
-            } else {
-                self.accounts_to_notify.push(Ok(account.as_account()));
+            if !account.removed_without_update() {
+                accounts_to_notify.push(account.as_account());
                 account.commit(
                     &mut self.db,
                     &address,
@@ -45,34 +81,9 @@ impl State {
                 )?;
             }
         }
-
-        self.global_stat
-            .commit(&mut self.db, debug_record.as_deref_mut())?;
-        self.db.compute_state_root(debug_record)
+        Ok(accounts_to_notify)
     }
 
-    pub fn commit(
-        &mut self, epoch_id: EpochId,
-        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<StateRootWithAuxInfo>
-    {
-        debug!("Commit epoch[{}]", epoch_id);
-        self.compute_state_root(debug_record.as_deref_mut())?;
-        Ok(self.db.commit(epoch_id, debug_record)?)
-    }
-
-    pub fn accounts_for_txpool(&self) -> Vec<Account> {
-        self.accounts_to_notify
-            .iter()
-            .filter_map(|x| match x {
-                Ok(account) => Some(account.clone()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// Assume that only contract with zero `collateral_for_storage` will be
-    /// killed.
     fn recycle_storage(
         &mut self, killed_addresses: Vec<AddressWithSpace>,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -106,6 +117,17 @@ impl State {
                 debug_record.as_deref_mut(),
             )?;
         }
+        Ok(())
+    }
+}
+
+impl State {
+    // Some test code will reuse state incorrectly, so we implement a version
+    // which does not take ownership when committing.
+    #[cfg(test)]
+    pub fn commit_for_test(&mut self, epoch_id: EpochId) -> DbResult<()> {
+        self.apply_changes_to_statedb(None)?;
+        self.db.commit(epoch_id, None)?;
         Ok(())
     }
 }

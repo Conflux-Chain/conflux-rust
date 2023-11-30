@@ -1,7 +1,10 @@
-use super::{AccountEntryProtectedMethods, RequireCache, State};
-use crate::internal_contract::{
-    get_settled_param_vote_count, get_settled_pos_staking_for_votes,
-    settle_current_votes, storage_point_prop,
+use super::{RequireFields, State};
+use crate::{
+    internal_contract::{
+        get_settled_param_vote_count, get_settled_pos_staking_for_votes,
+        settle_current_votes, storage_point_prop,
+    },
+    return_if, try_loaded,
 };
 use cfx_parameters::{
     consensus::ONE_UCFX_IN_DRIP,
@@ -28,7 +31,7 @@ impl State {
     ) -> DbResult<U256> {
         let acc = try_loaded!(self.read_account_ext_lock(
             &address.with_native_space(),
-            RequireCache::VoteStakeList,
+            RequireFields::VoteStakeList,
         ));
         Ok(acc.withdrawable_staking_balance(current_block_number))
     }
@@ -38,7 +41,7 @@ impl State {
     ) -> DbResult<U256> {
         let acc = try_loaded!(self.read_account_ext_lock(
             &address.with_native_space(),
-            RequireCache::VoteStakeList,
+            RequireFields::VoteStakeList,
         ));
         Ok(acc.staking_balance()
             - acc.withdrawable_staking_balance(block_number))
@@ -47,19 +50,19 @@ impl State {
     pub fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
         let acc = try_loaded!(self.read_account_ext_lock(
             &address.with_native_space(),
-            RequireCache::VoteStakeList
+            RequireFields::VoteStakeList
         ));
-        Ok(acc.vote_stake_list().map_or(0, |l| l.len()))
+        Ok(acc.vote_stake_list().len())
     }
 
     pub fn vote_lock(
         &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
     ) -> DbResult<()> {
-        noop_if!(amount.is_zero());
+        return_if!(amount.is_zero());
 
         self.write_account_ext_lock(
             &address.with_native_space(),
-            RequireCache::VoteStakeList,
+            RequireFields::VoteStakeList,
         )?
         .vote_lock(*amount, unlock_block_number);
         Ok(())
@@ -77,9 +80,9 @@ impl State {
     pub fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
         let acc = try_loaded!(self.read_account_ext_lock(
             &address.with_native_space(),
-            RequireCache::DepositList
+            RequireFields::DepositList
         ));
-        Ok(acc.deposit_list().map_or(0, |l| l.len()))
+        Ok(acc.deposit_list().len())
     }
 
     pub fn deposit(
@@ -87,13 +90,13 @@ impl State {
         cip_97: bool,
     ) -> DbResult<()>
     {
-        noop_if!(amount.is_zero());
+        return_if!(amount.is_zero());
 
         let acc_interest_rate =
             self.global_stat.get::<AccumulateInterestRate>();
         self.write_account_ext_lock(
             &address.with_native_space(),
-            RequireCache::DepositList,
+            RequireFields::DepositList,
         )?
         .deposit(
             *amount,
@@ -108,14 +111,14 @@ impl State {
     pub fn withdraw(
         &mut self, address: &Address, amount: &U256, cip_97: bool,
     ) -> DbResult<U256> {
-        noop_if!(amount.is_zero());
+        return_if!(amount.is_zero());
 
         let accumulated_interest_rate =
             self.global_stat.get::<AccumulateInterestRate>();
         let interest = self
             .write_account_ext_lock(
                 &address.with_native_space(),
-                RequireCache::DepositList,
+                RequireFields::DepositList,
             )?
             .withdraw(*amount, accumulated_interest_rate, cip_97);
 

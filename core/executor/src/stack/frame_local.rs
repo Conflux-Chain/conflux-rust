@@ -2,7 +2,7 @@ use super::{
     super::context::{Context, OriginInfo},
     RuntimeRes,
 };
-use crate::{machine::Machine, state::Substate};
+use crate::{machine::Machine, substate::Substate};
 
 use cfx_types::{Address, Space};
 use cfx_vm_types::{Env, Spec};

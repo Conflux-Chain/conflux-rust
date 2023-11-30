@@ -2,8 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{substate::Substate, State};
-use crate::{state::CleanupMode, test_helpers::get_state_for_genesis_write};
+use super::{State, Substate};
+use crate::{
+    internal_contract::{
+        initialize_internal_contract_accounts, InternalContractMap,
+    },
+    state::CleanupMode,
+};
 use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP, genesis::DEV_GENESIS_KEY_PAIR, staking::*,
 };
@@ -19,7 +24,6 @@ use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{EpochId, StorageKey, StorageLayout};
 use std::sync::Arc;
 
-#[cfg(test)]
 fn get_state(
     storage_manager: &Arc<StorageManager>, epoch_id: &EpochId,
 ) -> State {
@@ -29,6 +33,37 @@ fn get_state(
                 epoch_id,
             ))
             .unwrap()
+            .unwrap(),
+    ))
+    .expect("Failed to initialize state")
+}
+
+pub fn get_state_for_genesis_write(
+    storage_manager: &Arc<StorageManager>,
+) -> State {
+    let mut state =
+        State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
+            .expect("Failed to initialize state");
+
+    initialize_internal_contract_accounts(
+        &mut state,
+        InternalContractMap::initialize_for_test().as_slice(),
+    );
+    let genesis_epoch_id = EpochId::default();
+    state
+        .commit(genesis_epoch_id, /* debug_record = */ None)
+        .expect(
+            // This is a comment to let cargo format the rest in a single line.
+            &concat!(file!(), ":", line!(), ":", column!()),
+        );
+
+    State::new(StateDb::new(
+        storage_manager
+            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
+                &genesis_epoch_id,
+            ))
+            .expect(&concat!(file!(), ":", line!(), ":", column!()))
+            // Unwrap is safe because Genesis state exists.
             .unwrap(),
     ))
     .expect("Failed to initialize state")
@@ -493,7 +528,6 @@ fn checkpoint_get_storage_at() {
         .commit(BigEndianHash::from_uint(&U256::from(1u64)), None)
         .unwrap();
 
-    state.clear();
     substates.clear();
     substates.push(Substate::new());
 
@@ -853,16 +887,16 @@ fn check_result_of_simple_payment_to_killed_account() {
         .unwrap();
     let epoch_id = EpochId::from_uint(&U256::from(2));
     // Assert that the account has no storage and no code.
-    assert_eq!(state.code_hash(&a_s).unwrap(), Some(KECCAK_EMPTY));
+    assert_eq!(state.code_hash(&a_s).unwrap(), KECCAK_EMPTY);
     assert_eq!(state.code(&a_s).unwrap(), None);
     // assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     state.commit(epoch_id, /* debug_record = */ None).unwrap();
 
     // Commit the state and assert that the account has no storage and no code.
     let state = get_state(&storage_manager, &epoch_id);
-    assert_eq!(state.code_hash(&a_s).unwrap(), Some(KECCAK_EMPTY));
+    assert_eq!(state.code_hash(&a_s).unwrap(), KECCAK_EMPTY);
     assert_eq!(state.code(&a_s).unwrap(), None);
-    assert_eq!(state.db.get_raw(code_key).unwrap(), None);
+    assert_eq!(state.db.get_raw_test(code_key).unwrap(), None);
     // assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
 }
 
@@ -957,8 +991,9 @@ fn create_contract_fail_previous_storage() {
     );
     assert_eq!(state.balance(&a_s).unwrap(), U256::zero());
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1)), None)
+        .commit_for_test(BigEndianHash::from_uint(&U256::from(1)))
         .unwrap();
+
     state.clear();
     substates.clear();
     substates.push(Substate::new());

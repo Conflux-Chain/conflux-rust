@@ -16,6 +16,6 @@ pub use drain_trace::DrainTrace;
 pub use internal_transfer_tracer::{AddressPocket, InternalTransferTracer};
 pub use tracer_trait::TracerTrait;
 
-pub trait ExecutiveObserve: DrainTrace + AsTracer {}
+pub trait ExecutiveObserver: DrainTrace + AsTracer {}
 
-impl<T: DrainTrace + AsTracer> ExecutiveObserve for T {}
+impl<T: DrainTrace + AsTracer> ExecutiveObserver for T {}

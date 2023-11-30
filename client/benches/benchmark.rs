@@ -5,9 +5,8 @@
 use cfx_bytes::Bytes;
 use cfx_executor::{
     executive::{ExecutiveContext, TransactOptions},
-    machine::new_machine_with_builtin,
+    machine::{new_machine_with_builtin, VmFactory},
     state::State,
-    vm_factory::VmFactory,
 };
 use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
 use cfx_statedb::StateDb;

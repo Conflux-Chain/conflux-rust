@@ -44,7 +44,7 @@ impl OverlayAccount {
         });
     }
 
-    pub fn is_code_loaded(&self) -> bool {
+    pub(super) fn is_code_loaded(&self) -> bool {
         self.code.is_some() || self.code_hash == KECCAK_EMPTY
     }
 

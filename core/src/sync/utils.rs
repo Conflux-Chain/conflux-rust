@@ -41,7 +41,7 @@ use crate::{
     verification::VerificationConfig,
     ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
-use cfx_executor::{machine::new_machine_with_builtin, vm_factory::VmFactory};
+use cfx_executor::machine::{new_machine_with_builtin, VmFactory};
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,

@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use super::OverlayAccount;
-use crate::state::AccountEntryProtectedMethods;
 use cfx_parameters::staking::*;
 use cfx_statedb::StateDb;
 use cfx_storage::{
@@ -16,7 +15,7 @@ use primitives::{
     SponsorInfo, VoteStakeList,
 };
 
-use crate::test_helpers::get_state_for_genesis_write;
+use crate::state::get_state_for_genesis_write;
 use primitives::is_default::IsDefault;
 use std::str::FromStr;
 
@@ -27,8 +26,8 @@ fn test_account_is_default(account: &mut OverlayAccount) {
     assert!(account.as_account().is_default());
 
     account.cache_ext_fields(true, true, &state.db).unwrap();
-    assert!(account.vote_stake_list().unwrap().is_default());
-    assert!(account.deposit_list().unwrap().is_default());
+    assert!(account.vote_stake_list().is_default());
+    assert!(account.deposit_list().is_default());
 }
 
 #[test]
@@ -65,8 +64,8 @@ fn test_overlay_account_create() {
     // test new from account 1
     let overlay_account =
         OverlayAccount::from_loaded(&address_with_space, account);
-    assert!(overlay_account.deposit_list().is_none());
-    assert!(overlay_account.vote_stake_list().is_none());
+    assert!(overlay_account.deposit_list.is_none());
+    assert!(overlay_account.vote_stake_list.is_none());
     assert_eq!(overlay_account.address().address, address);
     assert_eq!(*overlay_account.balance(), 0.into());
     assert_eq!(*overlay_account.nonce(), 0.into());
@@ -110,8 +109,8 @@ fn test_overlay_account_create() {
     // test new from account 2
     let overlay_account =
         OverlayAccount::from_loaded(&contract_addr_with_space, account);
-    assert!(overlay_account.deposit_list().is_none());
-    assert!(overlay_account.vote_stake_list().is_none());
+    assert!(overlay_account.deposit_list.is_none());
+    assert!(overlay_account.vote_stake_list.is_none());
     assert_eq!(overlay_account.address().address, contract_addr);
     assert_eq!(*overlay_account.balance(), 101.into());
     assert_eq!(*overlay_account.nonce(), 55.into());
@@ -126,8 +125,8 @@ fn test_overlay_account_create() {
     // test new basic
     let overlay_account =
         OverlayAccount::new_basic(&user_addr_with_space, 1011.into());
-    assert!(overlay_account.deposit_list().is_none());
-    assert!(overlay_account.vote_stake_list().is_none());
+    assert!(overlay_account.deposit_list.is_none());
+    assert!(overlay_account.vote_stake_list.is_none());
     assert_eq!(overlay_account.address().address, user_addr);
     assert_eq!(*overlay_account.balance(), 1011.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());
@@ -147,8 +146,8 @@ fn test_overlay_account_create() {
         false,
         Some(STORAGE_LAYOUT_REGULAR_V0),
     );
-    assert!(overlay_account.deposit_list().is_none());
-    assert!(overlay_account.vote_stake_list().is_none());
+    assert!(overlay_account.deposit_list.is_none());
+    assert!(overlay_account.vote_stake_list.is_none());
     assert_eq!(overlay_account.address().address, contract_addr);
     assert_eq!(*overlay_account.balance(), 5678.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());
@@ -174,8 +173,8 @@ fn test_overlay_account_create() {
         Some(STORAGE_LAYOUT_REGULAR_V0),
         false,
     );
-    assert!(overlay_account.deposit_list().is_none());
-    assert!(overlay_account.vote_stake_list().is_none());
+    assert!(overlay_account.deposit_list.is_none());
+    assert!(overlay_account.vote_stake_list.is_none());
     assert_eq!(overlay_account.address().address, contract_addr);
     assert_eq!(*overlay_account.balance(), 5678.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());
@@ -222,8 +221,8 @@ fn test_deposit_and_withdraw() {
             &db,
         )
         .unwrap();
-    assert!(overlay_account.deposit_list().is_some());
-    assert!(overlay_account.vote_stake_list().is_some());
+    assert!(overlay_account.deposit_list.is_some());
+    assert!(overlay_account.vote_stake_list.is_some());
     // add balance 2 * 10^15
     overlay_account.add_balance(&2_000_000_000_000_000u64.into());
     assert_eq!(
@@ -362,7 +361,7 @@ fn test_deposit_and_withdraw() {
         overlay_account.withdrawable_staking_balance(8 /* timestamp */),
         U256::from(1_111_111_000_000_000u64)
     );
-    assert_eq!(overlay_account.deposit_list().unwrap().len(), 7);
+    assert_eq!(overlay_account.deposit_list().len(), 7);
 
     // add storage
     assert_eq!(overlay_account.collateral_for_storage(), U256::from(0));
@@ -418,9 +417,9 @@ fn test_deposit_and_withdraw() {
         overlay_account.withdrawable_staking_balance(8 /* timestamp */),
         U256::from(611_111_000_000_000u64)
     );
-    assert_eq!(overlay_account.deposit_list().unwrap().len(), 7);
+    assert_eq!(overlay_account.deposit_list().len(), 7);
     assert_eq!(
-        overlay_account.deposit_list().unwrap()[0].amount,
+        overlay_account.deposit_list()[0].amount,
         U256::from(500_000_000_000_000u64)
     );
 
@@ -447,9 +446,9 @@ fn test_deposit_and_withdraw() {
         overlay_account.withdrawable_staking_balance(8 /* timestamp */),
         U256::from(111_111_000_000_000u64)
     );
-    assert_eq!(overlay_account.deposit_list().unwrap().len(), 6);
+    assert_eq!(overlay_account.deposit_list().len(), 6);
     assert_eq!(
-        overlay_account.deposit_list().unwrap()[0].amount,
+        overlay_account.deposit_list()[0].amount,
         U256::from(100_000_000_000_000u64)
     );
 
@@ -478,9 +477,9 @@ fn test_deposit_and_withdraw() {
         overlay_account.withdrawable_staking_balance(8 /* timestamp */),
         U256::from(861_000_000_000u64)
     );
-    assert_eq!(overlay_account.deposit_list().unwrap().len(), 4);
+    assert_eq!(overlay_account.deposit_list().len(), 4);
     assert_eq!(
-        overlay_account.deposit_list().unwrap()[0].amount,
+        overlay_account.deposit_list()[0].amount,
         U256::from(750_000_000_000u64)
     );
 }
@@ -516,8 +515,8 @@ fn init_test_account() -> OverlayAccount {
             &db,
         )
         .unwrap();
-    assert!(overlay_account.deposit_list().is_some());
-    assert!(overlay_account.vote_stake_list().is_some());
+    assert!(overlay_account.deposit_list.is_some());
+    assert!(overlay_account.vote_stake_list.is_some());
     overlay_account.deposit(
         10000000.into(), /* amount */
         0.into(),        /* accumulated_interest_rate */
@@ -540,7 +539,7 @@ fn init_test_account() -> OverlayAccount {
         100.into(), /* amount */
         500,        /* unlock_block_number */
     );
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     overlay_account
 }
 
@@ -552,145 +551,145 @@ fn test_vote_lock() {
         U256::from(9900000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
+    assert_eq!(overlay_account.vote_stake_list().len(), 4);
     assert_eq!(
         overlay_account.withdrawable_staking_balance(10 /* block_number */),
         U256::from(9990000)
     );
     overlay_account.remove_expired_vote_stake_info(10 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 3);
+    assert_eq!(overlay_account.vote_stake_list().len(), 3);
     let mut overlay_account = init_test_account();
     assert_eq!(
         overlay_account.withdrawable_staking_balance(11 /* block_number */),
         U256::from(9990000)
     );
     overlay_account.remove_expired_vote_stake_info(11 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 3);
+    assert_eq!(overlay_account.vote_stake_list().len(), 3);
     let mut overlay_account = init_test_account();
     assert_eq!(
         overlay_account.withdrawable_staking_balance(30 /* block_number */),
         U256::from(9999000)
     );
     overlay_account.remove_expired_vote_stake_info(30 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 2);
+    assert_eq!(overlay_account.vote_stake_list().len(), 2);
     let mut overlay_account = init_test_account();
     assert_eq!(
         overlay_account.withdrawable_staking_balance(499 /* block_number */),
         U256::from(9999900)
     );
     overlay_account.remove_expired_vote_stake_info(499 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 1);
+    assert_eq!(overlay_account.vote_stake_list().len(), 1);
     let mut overlay_account = init_test_account();
     assert_eq!(
         overlay_account.withdrawable_staking_balance(500 /* block_number */),
         U256::from(10000000)
     );
     overlay_account.remove_expired_vote_stake_info(500 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 0);
+    assert_eq!(overlay_account.vote_stake_list().len(), 0);
 
     let mut overlay_account = init_test_account();
     overlay_account
         .vote_lock(U256::from(1000), 20 /* unlock_block_number */);
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     assert_eq!(
         overlay_account.withdrawable_staking_balance(0 /* block_number */),
         U256::from(9900000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
+    assert_eq!(overlay_account.vote_stake_list().len(), 4);
     overlay_account
         .vote_lock(U256::from(100000), 10 /* unlock_block_number */);
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     assert_eq!(
         overlay_account.withdrawable_staking_balance(0 /* block_number */),
         U256::from(9900000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
+    assert_eq!(overlay_account.vote_stake_list().len(), 4);
     overlay_account
         .vote_lock(U256::from(1000000), 11 /* unlock_block_number */);
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     assert_eq!(
         overlay_account.withdrawable_staking_balance(0 /* block_number */),
         U256::from(9000000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
+    assert_eq!(overlay_account.vote_stake_list().len(), 4);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
+        overlay_account.vote_stake_list()[0].unlock_block_number,
         U256::from(11)
     );
     overlay_account
         .vote_lock(U256::from(1000000), 13 /* unlock_block_number */);
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     assert_eq!(
         overlay_account.withdrawable_staking_balance(0 /* block_number */),
         U256::from(9000000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
+    assert_eq!(overlay_account.vote_stake_list().len(), 4);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
+        overlay_account.vote_stake_list()[0].unlock_block_number,
         U256::from(13)
     );
     overlay_account
         .vote_lock(U256::from(2000000), 40 /* unlock_block_number */);
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     assert_eq!(
         overlay_account.withdrawable_staking_balance(0 /* block_number */),
         U256::from(8000000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 3);
+    assert_eq!(overlay_account.vote_stake_list().len(), 3);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
+        overlay_account.vote_stake_list()[0].unlock_block_number,
         U256::from(40)
     );
     overlay_account
         .vote_lock(U256::from(10), 600 /* unlock_block_number */);
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     assert_eq!(
         overlay_account.withdrawable_staking_balance(0 /* block_number */),
         U256::from(8000000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
+    assert_eq!(overlay_account.vote_stake_list().len(), 4);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[3].unlock_block_number,
+        overlay_account.vote_stake_list()[3].unlock_block_number,
         U256::from(600)
     );
     overlay_account
         .vote_lock(U256::from(1000), 502 /* unlock_block_number */);
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     assert_eq!(
         overlay_account.withdrawable_staking_balance(0 /* block_number */),
         U256::from(8000000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 3);
+    assert_eq!(overlay_account.vote_stake_list().len(), 3);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
+        overlay_account.vote_stake_list()[0].unlock_block_number,
         U256::from(40)
     );
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[1].unlock_block_number,
+        overlay_account.vote_stake_list()[1].unlock_block_number,
         U256::from(502)
     );
     overlay_account
         .vote_lock(U256::from(3000000), 550 /* unlock_block_number */);
-    check_ordered_feature(overlay_account.vote_stake_list().unwrap());
+    check_ordered_feature(overlay_account.vote_stake_list());
     assert_eq!(
         overlay_account.withdrawable_staking_balance(0 /* block_number */),
         U256::from(7000000)
     );
     overlay_account.remove_expired_vote_stake_info(0 /* block_number */);
-    assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 2);
+    assert_eq!(overlay_account.vote_stake_list().len(), 2);
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
+        overlay_account.vote_stake_list()[0].unlock_block_number,
         U256::from(550)
     );
     assert_eq!(
-        overlay_account.vote_stake_list().unwrap()[1].unlock_block_number,
+        overlay_account.vote_stake_list()[1].unlock_block_number,
         U256::from(600)
     );
 }
@@ -756,10 +755,7 @@ fn test_clone_overwrite() {
     overlay_account1.set_storage_simple(vec![0; 32], U256::zero());
     assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(overlay_account1.storage_write_cache.len(), 1);
-    let overlay_account = overlay_account1.clone_basic();
-    assert_eq!(account1, overlay_account.as_account());
-    assert_eq!(overlay_account.storage_write_cache.len(), 0);
-    let overlay_account = overlay_account1.clone_dirty();
+    let overlay_account = overlay_account1.clone_account();
     assert_eq!(account1, overlay_account.as_account());
     assert_eq!(overlay_account.storage_write_cache.len(), 1);
 

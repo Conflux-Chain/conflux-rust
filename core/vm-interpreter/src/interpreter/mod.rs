@@ -119,7 +119,7 @@ struct InterpreterParams {
     /// Address of currently executed code.
     pub code_address: Address,
     /// Hash of currently executed code.
-    pub code_hash: Option<H256>,
+    pub code_hash: H256,
     /// Receive address. Usually equal to code_address,
     /// except when called using CALLCODE.
     pub address: Address,
@@ -1128,13 +1128,12 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::EXTCODESIZE => {
                 let address = u256_to_address(&self.stack.pop_back());
-                let len = context.extcodesize(&address)?.unwrap_or(0);
+                let len = context.extcodesize(&address)?;
                 self.stack.push(U256::from(len));
             }
             instructions::EXTCODEHASH => {
                 let address = u256_to_address(&self.stack.pop_back());
-                let hash =
-                    context.extcodehash(&address)?.unwrap_or_else(H256::zero);
+                let hash = context.extcodehash(&address)?;
                 self.stack.push(hash.into_uint());
             }
             instructions::CALLDATACOPY => {

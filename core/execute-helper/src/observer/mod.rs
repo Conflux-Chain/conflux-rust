@@ -5,7 +5,7 @@ mod utils;
 use exec_tracer::ExecTracer;
 use gasman::GasMan;
 
-use cfx_executor::executive_observe::{AsTracer, DrainTrace, TracerTrait};
+use cfx_executor::executive_observer::{AsTracer, DrainTrace, TracerTrait};
 use cfx_vm_tracer_derive::{AsTracer, DrainTrace};
 
 #[derive(AsTracer, DrainTrace)]

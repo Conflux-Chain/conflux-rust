@@ -7,7 +7,7 @@ use cfx_types::U256;
 use cfx_vm_types::{self as vm, ActionParams, CallType, GasLeft, Spec};
 use solidity_abi::{ABIDecodable, ABIEncodable};
 
-use crate::state::CallStackInfo;
+use crate::stack::CallStackInfo;
 
 use super::{InternalRefContext, InternalTrapResult, IsActive};
 use InternalTrapResult::*;

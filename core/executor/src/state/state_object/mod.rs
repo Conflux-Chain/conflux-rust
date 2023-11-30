@@ -1,98 +1,84 @@
-macro_rules! try_loaded {
-    ($expr:expr) => {
-        match $expr {
-            Err(e) => {
-                return Err(e);
-            }
-            Ok(None) => {
-                return Ok(Default::default());
-            }
-            Ok(Some(v)) => v,
-        }
-    };
-}
+//! A caching and checkpoint layer built upon semantically meaningful database
+//! interfaces, providing interfaces and logics for managing accounts and global
+//! statistics to the execution engine.
 
-macro_rules! noop_if {
-    ($expr:expr) => {
-        if $expr {
-            return Ok(Default::default());
-        }
-    };
-}
+/// Contract Manager: Responsible for creating and deleting contract objects.
+mod contract_manager;
 
-#[macro_export]
-macro_rules! unwrap_or_return {
-    ($option:expr) => {
-        match $option {
-            Some(val) => val,
-            None => return,
-        }
-    };
-    ($option:expr, $ret:expr) => {
-        match $option {
-            Some(val) => val,
-            None => return $ret,
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! unwrap_or_return_default {
-    ($option:expr) => {
-        match $option {
-            Some(val) => val,
-            None => return Default::default(),
-        }
-    };
-}
-
-mod account_controller;
+/// Implements access functions for the basic fields (e.g., balance, nonce) of
+/// `State`.
 mod basic_fields;
+
+/// Cache Layer: Implements a read-through write-back cache logic and provides
+/// interfaces for reading and writing account data. It also handles the logic
+/// for loading extension fields of an account.
 mod cache_layer;
+
+/// Checkpoints: Defines the account entry type within checkpoint layers and
+/// implements checkpoint maintenance logic.
 mod checkpoints;
+
+/// Implements functions for the storage collateral of `State`.
 mod collateral;
+
+/// Implements functions for committing `State` changes to db.
 mod commit;
+
+/// Implements access functions global statistic variables of `State`.
 mod global_statistics;
+
+/// Implements functions for the PoS rewarding of `State`.
 mod pos;
+
+/// Implements functions for the sponsorship mechanism of `State`.
 mod sponsor;
+
+/// Implements functions for the staking mechanism of `State`.
 mod staking;
+
+/// Implements access functions for the account storage entries of `State`.
 mod storage_entry;
+
 #[cfg(test)]
 mod tests;
-
-use self::{cache_layer::RequireCache, checkpoints::CheckpointLayer};
-use super::{
-    account_entry::AccountEntry, global_stat::GlobalStat,
-    overlay_account::OverlayAccount, substate, AccountEntryProtectedMethods,
-};
-// use crate::internal_contract;
-use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
-use cfx_types::AddressWithSpace;
-use parking_lot::RwLock;
-use primitives::Account;
-use std::collections::HashMap;
 
 pub use self::{
     collateral::{initialize_cip107, settle_collateral_for_all},
     pos::{distribute_pos_interest, update_pos_status},
     staking::initialize_or_update_dao_voted_params,
 };
+#[cfg(test)]
+pub use tests::get_state_for_genesis_write;
 
+use self::checkpoints::CheckpointLayer;
+use super::{
+    global_stat::GlobalStat,
+    overlay_account::{AccountEntry, OverlayAccount, RequireFields},
+};
+use crate::substate::Substate;
+use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
+use cfx_types::AddressWithSpace;
+use parking_lot::RwLock;
+use std::collections::HashMap;
+
+/// A caching and checkpoint layer built upon semantically meaningful database
+/// interfaces, providing interfaces and logics for managing accounts and global
+/// statistics to the execution engine.
 pub struct State {
+    /// The backend database
     pub(super) db: StateDb,
 
-    // Only created once for txpool notification.
-    // Each element is an Ok(Account) for updated account, or
-    // Err(AddressWithSpace) for deleted account.
-    accounts_to_notify: Vec<Result<Account, AddressWithSpace>>,
-
-    // Contains the changes to the states and some unchanged state entries.
-    // Don't remove cache entries outside state commit, unless you are familiar
-    // with checkpoint maintenance.
+    /// Caches for the account entries
+    ///
+    /// WARNING: Don't delete cache entries outside of `State::commit`, unless
+    /// you are familiar with checkpoint maintenance.
     cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
+
+    /// In-memory global statistic variables.
     // TODO: try not to make it special?
     global_stat: GlobalStat,
 
+    /// Checkpoint layers for the account entries
     checkpoints: RwLock<Vec<CheckpointLayer>>,
 }
 
@@ -112,7 +98,10 @@ impl State {
             cache: Default::default(),
             checkpoints: Default::default(),
             global_stat: world_stat,
-            accounts_to_notify: Default::default(),
         })
+    }
+
+    pub fn prefetch_account(&self, address: &AddressWithSpace) -> DbResult<()> {
+        self.prefetch(address, RequireFields::Code)
     }
 }

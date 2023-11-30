@@ -2,30 +2,59 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+//! Overlay Account: The access and manipulation object during execution, which
+//! includes both database-stored information and in-execution data of an
+//! account.
+
+/// Entry object in cache and checkpoint layers, adding additional markers
+/// like dirty bits to the `OverlayAccount` structure.
+pub mod account_entry;
+
+/// Implements access functions for the basic fields (e.g., balance, nonce) of
+/// an `OverlayAccount`.
+mod basic;
+
+/// Implements functions of an `OverlayAccount` related to the storage
+/// collateral.
+mod collateral;
+
+/// Implements functions of an `OverlayAccount` related to committing changes to
+/// the database.
+mod commit;
+
+/// Implements functions of an `OverlayAccount` related to loading and accessing
+/// logic for lazily loaded fields of an `OverlayAccount` object.
+mod ext_fields;
+
+/// Implements functions for constructing `OverlayAccount` objects, frequently
+/// utilized in checkpoint logic to create and manage account instances.
+mod factory;
+
+/// Implements functions of an `OverlayAccount` related to the sponsor
+/// mechanism.
+mod sponsor;
+
+/// Implements functions of an `OverlayAccount` related to the staking.
+mod staking;
+
+/// Each `OverlayAccount` maintains a 256-bit addressable storage space, managed
+/// directly by `OverlayAccount` rather than the state object. This module
+/// implements functions of an `OverlayAccount` related to the storage entry
+/// manipulation.
+mod storage;
+
 #[cfg(test)]
 mod tests;
 
-mod basic;
-mod collateral;
-mod commit;
-mod factory;
-mod sponsor;
-mod staking;
-mod storage;
+pub use account_entry::AccountEntry;
+pub use ext_fields::RequireFields;
+pub use sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 
-use super::{substate::Substate, AccountEntryProtectedMethods};
-
-use cfx_bytes::Bytes;
-use keccak_hash::KECCAK_EMPTY;
-
-use cfx_statedb::{
-    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt, StateDbGeneric,
-};
-#[cfg(test)]
-use cfx_types::AddressSpaceUtil;
+use crate::substate::Substate;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
 };
+use keccak_hash::KECCAK_EMPTY;
 use parking_lot::RwLock;
 use primitives::{
     is_default::IsDefault, CodeInfo, DepositList, SponsorInfo, StorageLayout,
@@ -33,76 +62,121 @@ use primitives::{
 };
 use std::{collections::HashMap, sync::Arc};
 
-pub use sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY;
+#[cfg(test)]
+use cfx_types::AddressSpaceUtil;
 
 #[derive(Debug)]
-/// Single account in the system.
-/// Keeps track of changes to the code and storage.
-/// The changes are applied in `commit_storage` and `commit_code`
+/// The access and manipulation object during execution, which includes both
+/// database-stored information and in-execution data of an account. It is a
+/// basic unit of state caching map and the checkpoint layers (more
+/// specifically, its extented struct `AccountEntry`).
+///
+/// In Conflux consensus executor, after the execution of one epoch, the
+/// `OverlayAccount` in cache will be commit to the database.
 pub struct OverlayAccount {
+    /* ----------------------------------------
+    - Database-stored fields for all accounts -
+    ---------------------------------------- */
+    /// Address of the account
     address: AddressWithSpace,
-
+    /// Balance (in Drip) of the account
     balance: U256,
-    // Nonce of the account,
+    /// Nonce of the account,
     nonce: U256,
-    // Administrator of the account
-    admin: Address,
-    // This is the number of tokens used in staking.
-    staking_balance: U256,
-    // This is the number of tokens used as collateral for storage, which will
-    // be returned to balance if the storage is released.
-    collateral_for_storage: U256,
-    // This is the accumulated interest return.
-    accumulated_interest_return: U256,
-    // This is the sponsor information of the contract.
-    sponsor_info: SponsorInfo,
-    // Code hash of the account.
+    /// Code hash of the account.
     code_hash: H256,
-    // Storage layout change.
-    storage_layout_change: Option<StorageLayout>,
+    /// Staking balance (in Drip) of the account
+    staking_balance: U256,
+    /// Collateral (in Drip) of the account
+    collateral_for_storage: U256,
+    /// Accumulated interest return (in Drip) of the account.
+    ///
+    /// Inactive after CIP-43.
+    accumulated_interest_return: U256,
 
-    storage_read_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
-    // This is a write cache for changing storage value in db. It will be
-    // written to db when committing overlay account.
-    storage_write_cache: Arc<HashMap<Vec<u8>, StorageValue>>,
+    /* ---------------------------------------------------
+    -  Database-stored fields for contract accounts only -
+    --------------------------------------------------- */
+    /// Administrator of the account (Only applicable for contract)
+    admin: Address,
+    /// Sponsor information of the account (Only applicable for contract)
+    sponsor_info: SponsorInfo,
 
-    // This is the list of deposit info, sorted in increasing order of
-    // `deposit_time`.
-    // If it is not `None`, which means it has been loaded from db.
+    /* ----------------------------------------------------------------
+    -  Lazily loaded database-stored fields, also called `ext_fields` -
+    ---------------------------------------------------------------- */
+    /// List of the deposit info of the account, sorted in increasing order of
+    /// `deposit_time`. (`None` indicates not loaded from db.)
+    ///
+    /// Cleared after CIP-97.
     deposit_list: Option<DepositList>,
-    // This is the list of vote info. The `unlock_block_number` sorted in
-    // increasing order and the `amount` is sorted in decreasing order. All
-    // the `unlock_block_number` and `amount` is unique in the list.
-    // If it is not `None`, which means it has been loaded from db.
+    /// List of the vote info of the account. (`None` indicates not loaded from
+    /// db.)
+    ///
+    /// The `unlock_block_number` sorted in increasing order and the `amount`
+    /// is sorted in decreasing order. All the `unlock_block_number` and
+    /// `amount` is unique in the list.
     vote_stake_list: Option<VoteStakeList>,
-    // When code_hash isn't KECCAK_EMPTY, the code has been initialized for
-    // the account. The code field can be None, which means that the code
-    // has not been loaded from storage. When code_hash is KECCAK_EMPTY, this
-    // field always None.
+    /// The code of the account.  (`None` indicates not loaded from db if
+    /// `code_hash` isn't `KECCAK_EMPTY`.)
     code: Option<CodeInfo>,
 
-    // This flag indicates whether it is a newly created contract. For such
-    // account, we will skip looking data from the disk. This flag will stay
-    // true until the contract being committed and cleared from the memory.
-    //
-    // If the contract account at the same address is killed, then the same
-    // account is re-created, this flag is also true, to indicate that any
-    // pending cleanups must be done. The re-creation of the account can
-    // also be caused by a simple payment transaction, which result into a new
-    // basic account at the same address.
+    /* -------------------
+    -  In-execution data -
+    ------------------- */
+    /// Storage layout change of the account
+    storage_layout_change: Option<StorageLayout>,
+
+    /// Read cache for the storage entries of this account for recording
+    /// unchanged values.
+    storage_read_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
+
+    /// Write cache for the storage entries of this account for recording
+    /// changed values.
+    storage_write_cache: Arc<HashMap<Vec<u8>, StorageValue>>,
+
+    /* ---------------
+    -  Special flags -
+    --------------- */
+    /// Indicates whether it is a newly created contract since last commit.
     is_newly_created_contract: bool,
-    invalidated_storage: bool,
+
+    /// Indicates whether all the storage entries and lazily loaded fields of
+    /// this account on the database should be regarded as deleted be and
+    /// cleared later. It will be set when such a contract has been killed
+    /// since last commit.
+    pending_db_clear: bool,
 }
 
 impl OverlayAccount {
+    /// Inditcates if this account can execute bytecode
     pub fn is_contract(&self) -> bool {
         self.code_hash != KECCAK_EMPTY || self.is_newly_created_contract
     }
 
+    /// Inditcates if this account has been killed and has not been re-created
+    /// (e.g. sending balance to killed address can recreate it) since last
+    /// commit.
     pub fn removed_without_update(&self) -> bool {
-        self.invalidated_storage && self.as_account().is_default()
+        self.pending_db_clear && self.as_account().is_default()
     }
 
+    /// Inditcates if this account's storage entries and lazily loaded fields on
+    /// db should be cleared. Upon committing the overlay account, if this flag
+    /// is set, db clearing for this account will be triggerred.
+    pub fn pending_db_clear(&self) -> bool { self.pending_db_clear }
+
+    /// Inditcates if this account's storage entries and lazily loaded fields on
+    /// db are marked invalid (so an entry is empty if not in cache).
+    pub fn fresh_storage(&self) -> bool {
+        let builtin_address = self.address.space == Space::Native
+            && self.address.address.is_builtin_address();
+        (self.is_newly_created_contract && !builtin_address)
+            || self.pending_db_clear
+    }
+}
+
+impl OverlayAccount {
     #[cfg(test)]
     pub fn is_newly_created_contract(&self) -> bool {
         self.is_newly_created_contract
@@ -110,100 +184,12 @@ impl OverlayAccount {
 
     #[cfg(test)]
     pub fn is_basic(&self) -> bool { self.code_hash == KECCAK_EMPTY }
-
-    pub fn cache_code(&mut self, db: &StateDbGeneric) -> DbResult<()> {
-        trace!(
-            "OverlayAccount::cache_code: ic={}; self.code_hash={:?}, self.code_cache={:?}",
-               self.is_code_loaded(), self.code_hash, self.code);
-
-        if self.is_code_loaded() {
-            return Ok(());
-        }
-
-        self.code = db.get_code(&self.address, &self.code_hash)?;
-        if self.code.is_none() {
-            warn!(
-                "Failed to get code {:?} for address {:?}",
-                self.code_hash, self.address
-            );
-
-            bail!(DbErrorKind::IncompleteDatabase(self.address.address));
-        }
-
-        Ok(())
-    }
-
-    pub fn fresh_storage(&self) -> bool {
-        let builtin_address = self.address.space == Space::Native
-            && self.address.address.is_builtin_address();
-        (self.is_newly_created_contract && !builtin_address)
-            || self.invalidated_storage
-    }
-
-    pub fn invalidated_storage(&self) -> bool { self.invalidated_storage }
-
-    pub fn cache_ext_fields(
-        &mut self, cache_deposit_list: bool, cache_vote_list: bool,
-        db: &StateDbGeneric,
-    ) -> DbResult<()>
-    {
-        self.address.assert_native();
-        if cache_deposit_list && self.deposit_list.is_none() {
-            let deposit_list_opt = if self.fresh_storage() {
-                None
-            } else {
-                db.get_deposit_list(&self.address)?
-            };
-            self.deposit_list = Some(deposit_list_opt.unwrap_or_default());
-        }
-        if cache_vote_list && self.vote_stake_list.is_none() {
-            let vote_list_opt = if self.fresh_storage() {
-                None
-            } else {
-                db.get_vote_list(&self.address)?
-            };
-            self.vote_stake_list = Some(vote_list_opt.unwrap_or_default());
-        }
-        Ok(())
-    }
-}
-
-impl AccountEntryProtectedMethods for OverlayAccount {
-    /// This method is intentionally kept private because the field may not have
-    /// been loaded from db.
-    fn deposit_list(&self) -> Option<&DepositList> {
-        self.deposit_list.as_ref()
-    }
-
-    /// This method is intentionally kept private because the field may not have
-    /// been loaded from db.
-    fn vote_stake_list(&self) -> Option<&VoteStakeList> {
-        self.vote_stake_list.as_ref()
-    }
-
-    /// This method is intentionally kept private because the field may not have
-    /// been loaded from db.
-    fn code_size(&self) -> Option<usize> {
-        self.code.as_ref().map(|c| c.code_size())
-    }
-
-    /// This method is intentionally kept private because the field may not have
-    /// been loaded from db.
-    fn code(&self) -> Option<Arc<Bytes>> {
-        self.code.as_ref().map(|c| c.code.clone())
-    }
-
-    /// This method is intentionally kept private because the field may not have
-    /// been loaded from db.
-    fn code_owner(&self) -> Option<Address> {
-        self.code.as_ref().map(|c| c.owner)
-    }
 }
 
 #[cfg(test)]
 mod tests_another {
     use super::*;
-    use crate::test_helpers::get_state_for_genesis_write;
+    use crate::state::get_state_for_genesis_write;
     use cfx_storage::tests::new_state_manager_for_unit_test;
     use primitives::is_default::IsDefault;
     use std::str::FromStr;
@@ -215,8 +201,8 @@ mod tests_another {
         assert!(account.as_account().is_default());
 
         account.cache_ext_fields(true, true, &state.db).unwrap();
-        assert!(account.vote_stake_list().unwrap().is_default());
-        assert!(account.deposit_list().unwrap().is_default());
+        assert!(account.vote_stake_list().is_default());
+        assert!(account.deposit_list().is_default());
     }
 
     #[test]

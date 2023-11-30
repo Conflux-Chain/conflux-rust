@@ -4,7 +4,7 @@
 
 use super::AddressPocket;
 use cfx_bytes::Bytes;
-use cfx_executor::frame::FrameReturn;
+use cfx_executor::stack::FrameReturn;
 
 use cfx_types::{Address, Bloom, BloomInput, Space, U256};
 use cfx_vm_types::{ActionParams, CallType, CreateType, Result as VmResult};

@@ -5,6 +5,7 @@
 use super::State;
 use crate::{
     internal_contract::{pos_internal_entries, IndexStatus},
+    return_if,
     state::CleanupMode,
 };
 use cfx_math::sqrt_u256;
@@ -31,8 +32,8 @@ impl State {
             self.global_stat.refr::<LastDistributeBlock>().as_u64()
                 + BLOCKS_PER_HOUR;
 
-        noop_if!(current_block_number > next_distribute_block);
-        noop_if!(self.global_stat.refr::<TotalPosStaking>().is_zero());
+        return_if!(current_block_number > next_distribute_block);
+        return_if!(self.global_stat.refr::<TotalPosStaking>().is_zero());
 
         let total_circulating_tokens = self.total_circulating_tokens()?;
         let total_pos_staking_tokens =

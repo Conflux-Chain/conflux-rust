@@ -50,6 +50,7 @@ impl-tools = "^0.10"
 typemap = "0.3"
 
 [dev-dependencies]
+cfx-statedb = { path = "../statedb", features = ["testonly_code"]}
 cfx-storage = { path = "../storage", features = ["testonly_code"]}
 cfx-vm-types = { path = "../vm-types", features = ["testonly_code"]}
 

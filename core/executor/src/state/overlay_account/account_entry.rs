@@ -2,9 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::overlay_account::OverlayAccount;
+use super::OverlayAccount;
 
-/// In-memory copy of the account data.
+/// Entry object in cache and checkpoint layers, adding additional markers
+/// like dirty bits to the `OverlayAccount` structure.
 #[derive(Debug)]
 pub enum AccountEntry {
     /// Represents an account that is confirmed to be absent from the database.
@@ -14,9 +15,25 @@ pub enum AccountEntry {
     Cached(OverlayAccount, bool),
 }
 
+use primitives::Account;
 use AccountEntry::*;
 
 impl AccountEntry {
+    pub fn new_dirty(account: OverlayAccount) -> AccountEntry {
+        Cached(account, true)
+    }
+
+    /// Contruct `AccountEntry` from account loaded from statedb.
+    pub fn new_loaded(account: Option<Account>) -> AccountEntry {
+        match account {
+            Some(acc) => Cached(
+                OverlayAccount::from_loaded(&acc.address().clone(), acc),
+                false,
+            ),
+            None => DbAbsent,
+        }
+    }
+
     pub fn is_dirty(&self) -> bool { matches!(self, Cached(_, true)) }
 
     pub fn is_db_absent(&self) -> bool { matches!(self, DbAbsent) }
@@ -35,30 +52,17 @@ impl AccountEntry {
         }
     }
 
-    pub fn into_account(self) -> Option<OverlayAccount> {
+    pub fn try_into_dirty_account(self) -> Option<OverlayAccount> {
         match self {
-            DbAbsent => None,
-            Cached(acc, _) => Some(acc),
+            Cached(acc, true) => Some(acc),
+            _ => None,
         }
     }
 
-    /// Clone dirty data into new `AccountEntry`. This includes
-    /// basic account data and modified storage keys.
-    pub fn clone_cache(&self) -> AccountEntry {
+    pub fn clone_cache_entry(&self) -> AccountEntry {
         match self {
             DbAbsent => DbAbsent,
-            Cached(acc, dirty_bit) => Cached(acc.clone_dirty(), *dirty_bit),
-        }
-    }
-
-    pub fn new_dirty(account: OverlayAccount) -> AccountEntry {
-        Cached(account, true)
-    }
-
-    pub fn new_loaded(account: Option<OverlayAccount>) -> AccountEntry {
-        match account {
-            Some(acc) => Cached(acc, false),
-            None => DbAbsent,
+            Cached(acc, dirty_bit) => Cached(acc.clone_account(), *dirty_bit),
         }
     }
 }

@@ -2,35 +2,33 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod account_entry;
+//! Ledger State: Acts as a caching and checkpoint layer built upon semantically
+//! meaningful database interfaces for the execution.
+
+/// Global Statistic Variables: Manages global variables with different
+/// checkpoint and caching mechanisms compared to other state variables, such
+/// as, `total_issued_tokens`.
+mod global_stat;
+
+/// Overlay Account: Defines the access and manipulation object during
+/// execution. Each `OverlayAccount` encompasses both the database-stored
+/// information of an account and its in-execution data.
 mod overlay_account;
 
-mod global_stat;
+/// State Object: Represents the core object of the state module.
 mod state_object;
-mod substate;
-
-use cfx_bytes::Bytes;
-use cfx_types::{Address, AddressWithSpace};
-use primitives::{DepositList, VoteStakeList};
-use std::{collections::HashSet, sync::Arc};
 
 pub use overlay_account::COMMISSION_PRIVILEGE_SPECIAL_KEY;
+#[cfg(test)]
+pub use state_object::get_state_for_genesis_write;
 pub use state_object::{
     distribute_pos_interest, initialize_cip107,
     initialize_or_update_dao_voted_params, settle_collateral_for_all,
     update_pos_status, State,
 };
-pub use substate::{cleanup_mode, CallStackInfo, Substate};
 
-/// Methods that are intentionally kept private because the fields may not have
-/// been loaded from db.
-trait AccountEntryProtectedMethods {
-    fn deposit_list(&self) -> Option<&DepositList>;
-    fn vote_stake_list(&self) -> Option<&VoteStakeList>;
-    fn code_size(&self) -> Option<usize>;
-    fn code(&self) -> Option<Arc<Bytes>>;
-    fn code_owner(&self) -> Option<Address>;
-}
+use cfx_types::AddressWithSpace;
+use std::collections::HashSet;
 
 /// Mode of dealing with null accounts.
 #[derive(PartialEq)]
