@@ -942,7 +942,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 None
             } else {
                 Some(self.open_mpt_snapshot_write(
-                    self.get_mpt_snapshot_db_path(&snapshot_epoch_id),
+                    self.get_latest_mpt_snapshot_db_path(),
                     true,
                     new_epoch_height,
                     &snapshot_epoch_id,
