@@ -143,7 +143,7 @@ impl OverlayAccount {
         if delete_all {
             write_cache.clear();
             self.storage_read_cache.write().clear();
-            self.invalidated_storage = true;
+            self.pending_db_clear = true;
         }
         Ok(())
     }

@@ -4,10 +4,9 @@
 
 use super::*;
 use crate::{
-    machine::Machine,
-    state::{CleanupMode, State, Substate},
-    test_helpers::get_state_for_genesis_write,
-    vm_factory::VmFactory,
+    machine::{Machine, VmFactory},
+    state::{get_state_for_genesis_write, CleanupMode, State},
+    substate::Substate,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -442,7 +441,7 @@ fn test_revert() {
         .new_contract_with_code(&contract_address_with_space, U256::zero())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1)), None)
+        .commit_for_test(BigEndianHash::from_uint(&U256::from(1)))
         .unwrap();
 
     let mut params = ActionParams::default();

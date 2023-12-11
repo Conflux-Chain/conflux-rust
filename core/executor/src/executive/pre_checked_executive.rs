@@ -8,12 +8,13 @@ use super::{
 
 use crate::{
     executive::ExecutionOutcome,
-    executive_observe::{AddressPocket, ExecutiveObserve, TracerTrait},
-    frame::{
-        accrue_substate, exec_main_frame, FrameResult, FrameReturn, FreshFrame,
-        RuntimeRes,
+    executive_observer::{AddressPocket, ExecutiveObserver, TracerTrait},
+    stack::{
+        accrue_substate, exec_main_frame, CallStackInfo, FrameResult,
+        FrameReturn, FreshFrame, RuntimeRes,
     },
-    state::{cleanup_mode, settle_collateral_for_all, CallStackInfo, Substate},
+    state::settle_collateral_for_all,
+    substate::{cleanup_mode, Substate},
 };
 use cfx_parameters::staking::code_collateral_units;
 use cfx_vm_types::{
@@ -26,7 +27,7 @@ use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
 use std::{convert::TryInto, sync::Arc};
 
-pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserve> {
+pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
     pub context: ExecutiveContext<'a>,
     pub tx: &'a SignedTransaction,
     pub observer: O,
@@ -35,7 +36,7 @@ pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserve> {
     pub substate: Substate,
 }
 
-impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     pub(super) fn execute_transaction(mut self) -> DbResult<ExecutionOutcome> {
         self.inc_sender_nonce()?;
 
@@ -74,7 +75,7 @@ impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
     }
 }
 
-impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn inc_sender_nonce(&mut self) -> DbResult<()> {
         self.context.state.inc_nonce(&self.tx.sender())
     }
@@ -158,7 +159,7 @@ impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
                     }
                     Space::Ethereum => CreateContractAddress::FromSenderNonce,
                 };
-                let (new_address, _code_hash) = contract_address(
+                let (new_address, code_hash) = contract_address(
                     address_scheme,
                     env.number.into(),
                     &sender,
@@ -169,7 +170,7 @@ impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
                 Ok(ActionParams {
                     space: sender.space,
                     code_address: new_address.address,
-                    code_hash: None,
+                    code_hash,
                     address: new_address.address,
                     sender: sender.address,
                     original_sender: sender.address,
@@ -254,7 +255,7 @@ pub(super) fn exec_vm<'a>(
     exec_main_frame(main_frame, resources)
 }
 
-impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn exec_vm(&mut self, params: ActionParams) -> DbResult<ExecutiveResult> {
         // No matter who pays the collateral, we only focuses on the storage
         // limit of sender.
@@ -347,13 +348,13 @@ impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
 
         let mut substate = Substate::new();
         for address in &parent_substate.suicides {
-            if let Some(code_size) = state.code_size(address)? {
+            let code_size = state.code_size(address)?;
+            if code_size > 0 {
                 // Only refund the code collateral when code exists.
                 // If a contract suicides during creation, the code will be
                 // empty.
                 if address.space == Space::Native {
-                    let code_owner =
-                        state.code_owner(address)?.expect("code owner exists");
+                    let code_owner = state.code_owner(address)?;
                     substate.record_storage_release(
                         &code_owner,
                         code_collateral_units(code_size),
@@ -532,7 +533,7 @@ impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
     }
 }
 
-impl<'a, O: ExecutiveObserve> PreCheckedExecutive<'a, O> {
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn finalize_on_insufficient_balance(
         self, actual_gas_cost: U256,
     ) -> DbResult<ExecutionOutcome> {

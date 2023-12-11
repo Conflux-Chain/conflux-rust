@@ -1,12 +1,19 @@
-use crate::state::Substate;
-
-use super::State;
+use super::{State, Substate};
+use crate::try_loaded;
 use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
 
-// System Storages
 impl State {
+    // System Storage shares the cache and checkpoint mechanisms with
+    // `OverlayAccount` storage entries. Similar to global statistic
+    // variables, it represents global variables of the blockchain system,
+    // operating without an owner during execution. As such, system storage
+    // doesn't generate collateral, nor is it recorded in receipts.
+
+    // While its access performance is slightly lower than global statistics due
+    // to the cache and checkpoint mechanism, it benefits code maintainability.
+    // New global variables are preferentially stored in system storage.
     pub fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
         self.storage_at(&SYSTEM_STORAGE_ADDRESS.with_native_space(), key)
     }
@@ -51,9 +58,9 @@ impl State {
     }
 }
 
+#[cfg(test)]
 impl State {
     /// Get the value of storage at a specific checkpoint.
-    #[cfg(test)]
     pub fn checkpoint_storage_at(
         &self, start_checkpoint_index: usize, address: &AddressWithSpace,
         key: &Vec<u8>,

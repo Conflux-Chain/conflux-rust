@@ -4,7 +4,8 @@ use super::{
 };
 use crate::{
     machine::Machine,
-    state::{cleanup_mode, State, Substate},
+    state::State,
+    substate::{cleanup_mode, Substate},
 };
 
 use cfx_statedb::Result as DbResult;

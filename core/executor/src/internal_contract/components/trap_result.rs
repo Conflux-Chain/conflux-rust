@@ -1,4 +1,4 @@
-use crate::frame::Resumable;
+use crate::stack::Resumable;
 
 use cfx_vm_types::{self as vm, ActionParams};
 

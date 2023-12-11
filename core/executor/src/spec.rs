@@ -21,6 +21,10 @@ use cfx_vm_types::Spec;
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
 
+// FIXME: This type is mainly used for execution layer parameters, but some
+// consensus layer parameters and functions are also inappropriately placed
+// here.
+
 #[derive(Debug)]
 pub struct CommonParams {
     /// Maximum size of extra data.
@@ -61,33 +65,34 @@ pub struct CommonParams {
 
 #[derive(Default, Debug, Clone)]
 pub struct TransitionsBlockNumber {
-    /// CIP43: Introduce Finality via Voting Among Staked
+    /// CIP-43: Introduce Finality Through Staking Vote
     pub cip43a: BlockNumber,
     pub cip43b: BlockNumber,
-    /// CIP62: Enable EC-related builtin contract
+    /// CIP-62: Enable EC-Related Builtin Contracts
     pub cip62: BlockNumber,
-    /// CIP64: Get current epoch number through internal contract
+    /// CIP-64: Get Current Epoch Number via Internal Contract
     pub cip64: BlockNumber,
-    /// CIP71: Configurable anti-reentrancy
+    /// CIP-71: Disable Anti-Reentrancy
     pub cip71: BlockNumber,
-    /// CIP78: Correct `is_sponsored` fields in receipt
+    /// CIP-78: Correct `is_sponsored` Fields in Receipt
     pub cip78a: BlockNumber,
-    /// CIP78: Correct `is_sponsored` fields in receipt
+    /// CIP-78: Correct `is_sponsored` Fields in Receipt
     pub cip78b: BlockNumber,
-    /// CIP90: Two Space for Transaction Execution
+    /// CIP-90: Introduce a Fully EVM-Compatible Space
     pub cip90b: BlockNumber,
-    /// CIP92: Enable Blake2F builtin function
+    /// CIP-92: Enable Blake2F Builtin Function
     pub cip92: BlockNumber,
-    /// CIP-94: On-chain Parameter DAO Vote
+    /// CIP-94: On-Chain DAO Vote for Chain Parameters
     pub cip94: BlockNumber,
-    /// CIP-97: Remove Staking List
+    /// CIP-97: Clear Staking Lists
     pub cip97: BlockNumber,
-    /// CIP-98: Fix BLOCKHASH in espace
+    /// CIP-98: Fix BLOCKHASH Opcode Bug in eSpace
     pub cip98: BlockNumber,
-    /// CIP-105: PoS staking based minimal votes.
+    /// CIP-105: Minimal DAO Vote Count Based on PoS Staking
     pub cip105: BlockNumber,
-    /// CIP-107: Reduce the refunded storage collateral.
+    /// CIP-107: DAO-Adjustable Burn of Storage Collateral
     pub cip107: BlockNumber,
+    /// A security fix without a publicly submitted CIP
     pub cip_sigma_fix: BlockNumber,
     /// CIP-118: Query Unused Storage Points in Internal Contract
     pub cip118: BlockNumber,
@@ -97,19 +102,17 @@ pub struct TransitionsBlockNumber {
 
 #[derive(Default, Debug, Clone)]
 pub struct TransitionsEpochHeight {
-    /// The height to change block base reward.
-    /// The block `custom` field of this height is required to be
-    /// `tanzanite_transition_header_custom`.
+    /// CIP-40: Reduce Block Base Reward to 2 CFX
     pub cip40: BlockHeight,
-    /// CIP76: Remove VM-related constraints in syncing blocks
+    /// CIP-76: Remove VM-Related Constraints in Syncing Blocks
     pub cip76: BlockHeight,
-    /// CIP86: Difficulty adjustment.
+    /// CIP-86: Update Difficulty Adjustment Algorithm
     pub cip86: BlockHeight,
-    /// CIP90: Two Space for Transaction Execution
+    /// CIP-90: Introduce a Fully EVM-Compatible Space
     pub cip90a: BlockHeight,
-    /// CIP94 Hardfork enable heights.
+    /// CIP-94: On-Chain DAO Vote for Chain Parameters
     pub cip94: BlockHeight,
-    /// CIP112 header custom encoding.
+    /// CIP-112: Fix Block Headers `custom` Field Serde
     pub cip112: BlockHeight,
 }
 

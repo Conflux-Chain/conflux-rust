@@ -1,8 +1,8 @@
 use cfx_executor::{
-    executive_observe::{
+    executive_observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
     },
-    frame::FrameResult,
+    stack::FrameResult,
 };
 use cfx_parameters::{
     block::CROSS_SPACE_GAS_RATIO,

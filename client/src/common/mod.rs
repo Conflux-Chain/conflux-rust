@@ -20,10 +20,7 @@ use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
 
 use blockgen::BlockGenerator;
-use cfx_executor::{
-    machine::{new_machine_with_builtin, Machine},
-    vm_factory::VmFactory,
-};
+use cfx_executor::machine::{new_machine_with_builtin, Machine, VmFactory};
 use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};

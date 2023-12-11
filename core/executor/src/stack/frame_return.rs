@@ -1,5 +1,5 @@
 use super::{FrameLocal, RuntimeRes};
-use crate::state::Substate;
+use crate::substate::Substate;
 
 use cfx_types::{Address, Space, U256};
 use cfx_vm_interpreter::FinalizationResult;

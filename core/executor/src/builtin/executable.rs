@@ -6,7 +6,7 @@ use cfx_vm_types::{ActionParams, Error as VmError, GasLeft, ReturnData};
 
 use crate::{
     context::Context,
-    frame::{Executable, ExecutableOutcome},
+    stack::{Executable, ExecutableOutcome},
 };
 
 pub struct BuiltinExec<'a> {

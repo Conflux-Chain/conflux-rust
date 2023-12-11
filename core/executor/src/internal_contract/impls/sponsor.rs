@@ -3,9 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    executive_observe::AddressPocket,
+    executive_observer::AddressPocket,
     internal_bail,
-    state::{cleanup_mode, State, Substate},
+    state::State,
+    substate::{cleanup_mode, Substate},
 };
 use cfx_types::{Address, AddressSpaceUtil, U256};
 use cfx_vm_types::{self as vm, ActionParams, Spec};

@@ -11,7 +11,7 @@ use super::{
 };
 
 use cfx_executor::{
-    executive_observe::AddressPocket,
+    executive_observer::AddressPocket,
     internal_contract::{is_call_create_sig, is_withdraw_sig},
 };
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;

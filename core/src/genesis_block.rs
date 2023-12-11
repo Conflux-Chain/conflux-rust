@@ -361,11 +361,13 @@ pub fn genesis_block(
     }
 
     state
-        .genesis_special_clean_account(&genesis_account_address.address)
+        .genesis_special_remove_account(&genesis_account_address.address)
         .expect("Clean account failed");
 
     let state_root = state
-        .compute_state_root(/* debug_record = */ debug_record.as_mut())
+        .compute_state_root_for_genesis(
+            /* debug_record = */ debug_record.as_mut(),
+        )
         .unwrap();
     let receipt_root = compute_receipts_root(&vec![Arc::new(BlockReceipts {
         receipts: vec![],

@@ -1,11 +1,11 @@
+//! Checkpoints: Defines the account entry type within checkpoint layers and
+//! implements checkpoint maintenance logic.
+
 use cfx_types::AddressWithSpace;
-
-use crate::state::{
-    account_entry::AccountEntry, overlay_account::OverlayAccount,
-};
-
-use super::{GlobalStat, State};
 use std::collections::{hash_map::Entry::*, HashMap};
+
+use super::{AccountEntry, GlobalStat, OverlayAccount, State};
+use crate::unwrap_or_return;
 
 /// An account entry in the checkpoint
 pub(super) enum CheckpointEntry {
@@ -26,8 +26,22 @@ impl CheckpointEntry {
     }
 }
 
+/// Represents a recoverable point within a checkpoint. including
+/// and. The addition of account entries to the checkpoint is lazy; they are
+/// only added when the account in the cache is modified, at which point the old
+/// version is incorporated into the checkpoint. Therefore, if an account does
+/// not exist in the checkpoint, it is implied to be the same as in the cache.
+/// This struct efficiently manages state changes and ensures data consistency
+/// across transactions.
+
 pub(super) struct CheckpointLayer {
+    /// Checkpoint for global statistic variables.
     global_stat: GlobalStat,
+    /// Checkpoint for  modified account entries.
+    ///
+    /// An account will only be added only if its cache version is modified. If
+    /// an account does not exist in the checkpoint, it is implied to be the
+    /// same as in the cache.
     entries: HashMap<AddressWithSpace, CheckpointEntry>,
 }
 
@@ -88,10 +102,10 @@ impl State {
                 e
             } else {
                 // All the entries in checkpoint must be copied from cache by
-                // the following function insert_to_cache and
-                // clone_to_checkpoint.
+                // the following function `insert_to_cache` and
+                // `clone_to_checkpoint`.
                 // A cache entries will never be removed, except it is revert to
-                // an Unchanged checkpoint. If this exceptional case happens,
+                // an `Unchanged` checkpoint. If this exceptional case happens,
                 // this entry has never be loaded or written during transaction
                 // execution (regardless the reverted operations), and thus
                 // cannot have keys in the checkpoint.
@@ -115,6 +129,8 @@ impl State {
         }
     }
 
+    /// Insert a new overlay account to cache and incoroprating the old version
+    /// to the checkpoint in needed.
     pub(super) fn insert_to_cache(&mut self, account: OverlayAccount) {
         let address = *account.address();
         let old_account_entry = self
@@ -130,8 +146,11 @@ impl State {
             .or_insert_with(|| CheckpointEntry::from_cache(old_account_entry));
     }
 
-    pub(super) fn clone_to_checkpoint(
-        &self, address: AddressWithSpace, account_entry: &AccountEntry,
+    /// The caller has changed (or will change) an account in cache and notify
+    /// this function to incoroprates the old version to the checkpoint in
+    /// needed.
+    pub(super) fn notify_checkpoint(
+        &self, address: AddressWithSpace, old_account_entry: &AccountEntry,
     ) {
         let mut checkpoints = self.checkpoints.write();
         let checkpoint = unwrap_or_return!(checkpoints.last_mut());
@@ -139,7 +158,7 @@ impl State {
         checkpoint
             .entries
             .entry(address)
-            .or_insert_with(|| Recorded(account_entry.clone_cache()));
+            .or_insert_with(|| Recorded(old_account_entry.clone_cache_entry()));
     }
 
     #[cfg(any(test, feature = "testonly_code"))]

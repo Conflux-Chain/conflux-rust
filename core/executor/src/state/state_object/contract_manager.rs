@@ -3,8 +3,6 @@ use cfx_statedb::Result as DbResult;
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
 };
-#[cfg(test)]
-use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{Account, StorageLayout};
 
 impl State {
@@ -16,14 +14,14 @@ impl State {
         assert!(contract.space == Space::Native || admin.is_zero());
         // Check if the new contract is deployed on a killed contract in the
         // same block.
-        let invalidated_storage = self
+        let pending_db_clear = self
             .read_account_lock(contract)?
-            .map_or(false, |overlay| overlay.invalidated_storage());
+            .map_or(false, |overlay| overlay.pending_db_clear());
         let account = OverlayAccount::new_contract_with_admin(
             contract,
             balance,
             admin,
-            invalidated_storage,
+            pending_db_clear,
             storage_layout,
             cip107,
         );
@@ -31,6 +29,7 @@ impl State {
         Ok(())
     }
 
+    /// Kill a contract
     pub fn remove_contract(
         &mut self, address: &AddressWithSpace,
     ) -> DbResult<()> {
@@ -39,9 +38,9 @@ impl State {
         Ok(())
     }
 
-    /// A special implementation to fix the bug in function
-    /// `clean_account` while not changing the genesis result.
-    pub fn genesis_special_clean_account(
+    /// A special implementation to achieve the backward compatible for the
+    /// genesis (incorrect) behaviour.
+    pub fn genesis_special_remove_account(
         &mut self, address: &Address,
     ) -> DbResult<()> {
         let address = address.with_native_space();
@@ -67,13 +66,15 @@ impl State {
     pub fn new_contract(
         &mut self, contract: &AddressWithSpace, balance: U256,
     ) -> DbResult<()> {
-        let invalidated_storage = self
+        use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
+
+        let pending_db_clear = self
             .read_account_lock(contract)?
-            .map_or(false, |acc| acc.invalidated_storage());
+            .map_or(false, |acc| acc.pending_db_clear());
         let account = OverlayAccount::new_contract(
             &contract.address,
             balance,
-            invalidated_storage,
+            pending_db_clear,
             Some(STORAGE_LAYOUT_REGULAR_V0),
         );
         self.insert_to_cache(account);

@@ -23,7 +23,7 @@ impl Default for OverlayAccount {
             code_hash: KECCAK_EMPTY,
             code: None,
             is_newly_created_contract: false,
-            invalidated_storage: false,
+            pending_db_clear: false,
         }
     }
 }
@@ -62,7 +62,7 @@ impl OverlayAccount {
     pub fn new_removed(address: &AddressWithSpace) -> Self {
         OverlayAccount {
             address: address.clone(),
-            invalidated_storage: true,
+            pending_db_clear: true,
             ..Default::default()
         }
     }
@@ -71,7 +71,7 @@ impl OverlayAccount {
     /// exist before.
     pub fn new_contract_with_admin(
         address: &AddressWithSpace, balance: U256, admin: &Address,
-        invalidated_storage: bool, storage_layout: Option<StorageLayout>,
+        pending_db_clear: bool, storage_layout: Option<StorageLayout>,
         cip107: bool,
     ) -> Self
     {
@@ -91,7 +91,7 @@ impl OverlayAccount {
             sponsor_info,
             storage_layout_change: storage_layout,
             is_newly_created_contract: true,
-            invalidated_storage,
+            pending_db_clear,
             ..Default::default()
         }
     }
@@ -100,7 +100,7 @@ impl OverlayAccount {
     /// exist before.
     #[cfg(test)]
     pub fn new_contract(
-        address: &Address, balance: U256, invalidated_storage: bool,
+        address: &Address, balance: U256, pending_db_clear: bool,
         storage_layout: Option<StorageLayout>,
     ) -> Self
     {
@@ -108,13 +108,26 @@ impl OverlayAccount {
             &address.with_native_space(),
             balance,
             &Address::zero(),
-            invalidated_storage,
+            pending_db_clear,
             storage_layout,
             false,
         )
     }
 
-    pub fn clone_basic(&self) -> Self {
+    /// This function replicates the behavior of the auto-derived `Clone`
+    /// implementation, but is manually implemented to explicitly invoke the
+    /// `clone` method.
+    ///
+    /// This approach is necessary because a casual clone could lead to
+    /// unintended panic: The `OverlayAccount`s in different checkpoint
+    /// layers for the same address shares an `Arc` pointer to the same storage
+    /// cache object. During commit, it's asserted that each storage cache
+    /// object has only one pointer, meaning each address can only have one
+    /// copy.
+    ///
+    /// Thus, this manual implementation ensures that the cloning of an account
+    /// is traceable and controlled。
+    pub fn clone_account(&self) -> Self {
         OverlayAccount {
             address: self.address,
             balance: self.balance,
@@ -129,17 +142,11 @@ impl OverlayAccount {
             code_hash: self.code_hash,
             code: self.code.clone(),
             is_newly_created_contract: self.is_newly_created_contract,
-            invalidated_storage: self.invalidated_storage,
-            ..Default::default()
+            pending_db_clear: self.pending_db_clear,
+            storage_write_cache: self.storage_write_cache.clone(),
+            storage_read_cache: self.storage_read_cache.clone(),
+            storage_layout_change: self.storage_layout_change.clone(),
         }
-    }
-
-    pub fn clone_dirty(&self) -> Self {
-        let mut account = self.clone_basic();
-        account.storage_write_cache = self.storage_write_cache.clone();
-        account.storage_read_cache = self.storage_read_cache.clone();
-        account.storage_layout_change = self.storage_layout_change.clone();
-        account
     }
 }
 

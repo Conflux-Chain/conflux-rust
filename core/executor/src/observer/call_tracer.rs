@@ -1,4 +1,4 @@
-use crate::frame::FrameResult;
+use crate::stack::FrameResult;
 use cfx_vm_types::ActionParams;
 
 use impl_tools::autoimpl;

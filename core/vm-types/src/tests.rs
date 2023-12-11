@@ -187,12 +187,17 @@ impl Context for MockContext {
         Ok(self.codes.get(address).cloned())
     }
 
-    fn extcodesize(&self, address: &Address) -> Result<Option<usize>> {
-        Ok(self.codes.get(address).map(|c| c.len()))
+    fn extcodesize(&self, address: &Address) -> Result<usize> {
+        Ok(self.codes.get(address).map_or(0, |c| c.len()))
     }
 
-    fn extcodehash(&self, address: &Address) -> Result<Option<H256>> {
-        Ok(self.codes.get(address).map(|c| keccak(c.as_ref())))
+    fn extcodehash(&self, address: &Address) -> Result<H256> {
+        // default value of code hash should be KECCAK_EMPTY, but MockContext
+        // has a wrong behaviour.
+        Ok(self
+            .codes
+            .get(address)
+            .map_or(H256::zero(), |c| keccak(c.as_ref())))
     }
 
     fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> Result<()> {

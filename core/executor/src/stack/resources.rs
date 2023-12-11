@@ -1,6 +1,5 @@
 use crate::{
-    executive_observe::TracerTrait,
-    state::{CallStackInfo, State},
+    executive_observer::TracerTrait, stack::CallStackInfo, state::State,
 };
 
 /// The global resources and utilities shared across all frames.
@@ -21,7 +20,7 @@ pub struct RuntimeRes<'a> {
 #[cfg(test)]
 pub mod runtime_res_test {
     use super::RuntimeRes;
-    use crate::state::CallStackInfo;
+    use crate::stack::CallStackInfo;
 
     use super::State;
 

@@ -5,6 +5,7 @@ mod frame_return;
 mod frame_start;
 mod resources;
 mod resumable;
+mod stack_info;
 
 pub use crate::context::Context;
 pub use executable::{Executable, ExecutableOutcome};
@@ -13,11 +14,12 @@ pub use frame_return::{FrameResult, FrameReturn};
 pub use frame_start::FreshFrame;
 pub use resources::RuntimeRes;
 pub use resumable::Resumable;
+pub use stack_info::CallStackInfo;
 
 #[cfg(test)]
 pub use resources::runtime_res_test::OwnedRuntimeRes;
 
-use crate::{state::Substate, unwrap_or_return};
+use crate::{substate::Substate, unwrap_or_return};
 use cfx_statedb::Result as DbResult;
 
 use frame_invoke::{InvokeInfo, SuspendedFrame};
@@ -87,6 +89,8 @@ fn run_executable<'a>(
     Ok(exec_result)
 }
 
+/// A helper function which extract substate from `FrameResult` if applicable
+/// and merges it to the parent function.
 pub fn accrue_substate(substate: &mut Substate, result: &mut FrameResult) {
     if let Ok(frame_return) = result {
         if let Some(child_substate) = std::mem::take(&mut frame_return.substate)

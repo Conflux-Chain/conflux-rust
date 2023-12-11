@@ -3,9 +3,7 @@ use cfx_statedb::{Result as DbResult, StateDbGeneric};
 use cfx_types::{Address, U256};
 use primitives::SponsorInfo;
 
-use crate::state::Substate;
-
-use super::OverlayAccount;
+use super::{OverlayAccount, Substate};
 
 lazy_static! {
     static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: U256 = U256::one();

@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    executive_observe::{AddressPocket, TracerTrait},
-    state::{cleanup_mode, State, Substate},
+    executive_observer::{AddressPocket, TracerTrait},
+    state::State,
+    substate::{cleanup_mode, Substate},
 };
 use cfx_vm_types::{self as vm, ActionParams, Spec};
 

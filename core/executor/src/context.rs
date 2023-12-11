@@ -5,11 +5,12 @@
 // Transaction execution environment.
 use crate::{
     executive::contract_address,
-    executive_observe::TracerTrait,
-    frame::{FrameLocal, RuntimeRes},
+    executive_observer::TracerTrait,
     internal_contract::{suicide as suicide_impl, InternalRefContext},
     machine::Machine,
-    state::{CallStackInfo, State, Substate},
+    stack::{CallStackInfo, FrameLocal, RuntimeRes},
+    state::State,
+    substate::Substate,
 };
 use cfx_bytes::Bytes;
 use cfx_parameters::staking::{
@@ -264,7 +265,7 @@ impl<'a> ContextTrait for Context<'a> {
             .internal_contracts()
             .contract(&code_address_with_space, self.spec)
         {
-            (Some(contract.code()), Some(contract.code_hash()))
+            (Some(contract.code()), contract.code_hash())
         } else {
             (
                 self.state.code(&code_address_with_space)?,
@@ -310,7 +311,7 @@ impl<'a> ContextTrait for Context<'a> {
         }
     }
 
-    fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
+    fn extcodehash(&self, address: &Address) -> vm::Result<H256> {
         let address = address.with_space(self.space);
 
         if let Some(contract) = self
@@ -318,13 +319,13 @@ impl<'a> ContextTrait for Context<'a> {
             .internal_contracts()
             .contract(&address, self.spec)
         {
-            Ok(Some(contract.code_hash()))
+            Ok(contract.code_hash())
         } else {
             Ok(self.state.code_hash(&address)?)
         }
     }
 
-    fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
+    fn extcodesize(&self, address: &Address) -> vm::Result<usize> {
         let address = address.with_space(self.space);
 
         if let Some(contract) = self
@@ -332,7 +333,7 @@ impl<'a> ContextTrait for Context<'a> {
             .internal_contracts()
             .contract(&address, self.spec)
         {
-            Ok(Some(contract.code_size()))
+            Ok(contract.code_size())
         } else {
             Ok(self.state.code_size(&address)?)
         }
@@ -485,10 +486,10 @@ impl<'a> Context<'a> {
 mod tests {
     use super::{FrameLocal, OriginInfo};
     use crate::{
-        frame::OwnedRuntimeRes,
         machine::{new_machine_with_builtin, Machine},
-        state::{CallStackInfo, State, Substate},
-        test_helpers::get_state_for_genesis_write,
+        stack::{CallStackInfo, OwnedRuntimeRes},
+        state::{get_state_for_genesis_write, State},
+        substate::Substate,
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
     use cfx_storage::{

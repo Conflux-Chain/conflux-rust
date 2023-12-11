@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod vm_factory;
+
 use super::builtin::Builtin;
 use crate::{
     builtin::{
@@ -10,13 +12,13 @@ use crate::{
     },
     internal_contract::InternalContractMap,
     spec::CommonParams,
-    vm_factory::VmFactory,
 };
 use cfx_types::{Address, AddressWithSpace, Space, H256};
 use cfx_vm_types::Spec;
 use primitives::BlockNumber;
 use std::{collections::BTreeMap, sync::Arc};
 
+pub use vm_factory::VmFactory;
 pub type SpecCreationRules = dyn Fn(&mut Spec, BlockNumber) + Sync + Send;
 
 pub struct Machine {

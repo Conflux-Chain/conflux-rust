@@ -1,5 +1,5 @@
-use super::{AccountEntryProtectedMethods, RequireCache, State};
-use crate::state::CleanupMode;
+use super::{RequireFields, State};
+use crate::{state::CleanupMode, try_loaded};
 use cfx_bytes::Bytes;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
@@ -108,28 +108,22 @@ impl State {
         Ok(acc.code_hash() != KECCAK_EMPTY)
     }
 
-    pub fn code_hash(
-        &self, address: &AddressWithSpace,
-    ) -> DbResult<Option<H256>> {
+    pub fn code_hash(&self, address: &AddressWithSpace) -> DbResult<H256> {
         let acc = try_loaded!(self.read_account_lock(address));
-        Ok(Some(acc.code_hash()))
+        Ok(acc.code_hash())
     }
 
-    pub fn code_size(
-        &self, address: &AddressWithSpace,
-    ) -> DbResult<Option<usize>> {
+    pub fn code_size(&self, address: &AddressWithSpace) -> DbResult<usize> {
         let acc = try_loaded!(
-            self.read_account_ext_lock(address, RequireCache::Code)
+            self.read_account_ext_lock(address, RequireFields::Code)
         );
         Ok(acc.code_size())
     }
 
-    pub fn code_owner(
-        &self, address: &AddressWithSpace,
-    ) -> DbResult<Option<Address>> {
+    pub fn code_owner(&self, address: &AddressWithSpace) -> DbResult<Address> {
         address.assert_native();
         let acc = try_loaded!(
-            self.read_account_ext_lock(address, RequireCache::Code)
+            self.read_account_ext_lock(address, RequireFields::Code)
         );
         Ok(acc.code_owner())
     }
@@ -138,7 +132,7 @@ impl State {
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Arc<Vec<u8>>>> {
         let acc = try_loaded!(
-            self.read_account_ext_lock(address, RequireCache::Code)
+            self.read_account_ext_lock(address, RequireFields::Code)
         );
         Ok(acc.code())
     }
@@ -161,15 +155,6 @@ impl State {
         self.write_native_account_lock(&contract_address)?
             .set_admin(admin);
         Ok(())
-    }
-
-    /// Return whether or not the address exists.
-    pub fn try_load(&self, address: &AddressWithSpace) -> DbResult<bool> {
-        let _ = try_loaded!(self.read_account_lock(address));
-        let _ = try_loaded!(
-            self.read_account_ext_lock(address, RequireCache::Code)
-        );
-        Ok(true)
     }
 
     #[cfg(test)]

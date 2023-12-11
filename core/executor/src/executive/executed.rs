@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{executive_observe::ExecutiveObserve, state::Substate};
+use crate::{executive_observer::ExecutiveObserver, substate::Substate};
 use cfx_bytes::Bytes;
 use cfx_types::{AddressWithSpace, U256};
 use primitives::{
@@ -177,7 +177,7 @@ impl Executed {
     }
 }
 
-pub fn make_ext_result<O: ExecutiveObserve>(observer: O) -> ShareDebugMap {
+pub fn make_ext_result<O: ExecutiveObserver>(observer: O) -> ShareDebugMap {
     let mut ext_result = ShareDebugMap::custom();
     observer.drain_trace(&mut ext_result);
     ext_result
