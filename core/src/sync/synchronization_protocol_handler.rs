@@ -268,7 +268,7 @@ impl FutureBlockContainer {
     }
 
     pub fn insert(&self, header: BlockHeader, peer: NodeId) {
-        let mut inner = &mut *self.inner.write();
+        let inner = &mut *self.inner.write();
         let header_hash = header.hash();
         if inner.hash_to_header_and_peer.contains_key(&header_hash) {
             return;

@@ -305,7 +305,7 @@ impl RawTransactionGen {
     pub fn materialize(
         self, sender_index: Index, universe: &mut AccountInfoUniverse,
     ) -> RawTransaction {
-        let mut sender_info = universe.get_account_info_mut(sender_index);
+        let sender_info = universe.get_account_info_mut(sender_index);
 
         sender_info.sequence_number += 1;
 

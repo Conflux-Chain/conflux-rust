@@ -11,8 +11,8 @@ use crate::{
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U128,
-    U256, U512,
+    address_util::AddressUtil, Address, AddressWithSpace, Space, SpaceMap,
+    H256, U128, U256, U512,
 };
 use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -218,7 +218,7 @@ impl Eq for PriceOrderedTransaction {}
 
 impl PartialOrd for PriceOrderedTransaction {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0.gas_price().partial_cmp(other.0.gas_price())
+        Some(self.cmp(other))
     }
 }
 
@@ -650,6 +650,49 @@ pub enum PendingReason {
     OutdatedStatus,
 }
 
+#[derive(Default, DeriveMallocSizeOf)]
+pub struct TransactionSet {
+    inner: HashMap<H256, Arc<SignedTransaction>>,
+    count: SpaceMap<usize>,
+}
+
+impl TransactionSet {
+    fn get(&self, tx_hash: &H256) -> Option<&Arc<SignedTransaction>> {
+        self.inner.get(tx_hash)
+    }
+
+    fn values(
+        &self,
+    ) -> std::collections::hash_map::Values<'_, H256, Arc<SignedTransaction>>
+    {
+        self.inner.values()
+    }
+
+    fn insert(
+        &mut self, tx_hash: H256, tx: Arc<SignedTransaction>,
+    ) -> Option<Arc<SignedTransaction>> {
+        *self.count.in_space_mut(tx.space()) += 1;
+        let res = self.inner.insert(tx_hash, tx);
+        if let Some(ref tx) = res {
+            *self.count.in_space_mut(tx.space()) -= 1;
+        }
+        res
+    }
+
+    fn remove(&mut self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
+        let res = self.inner.remove(tx_hash);
+        if let Some(ref tx) = res {
+            *self.count.in_space_mut(tx.space()) -= 1;
+        }
+        res
+    }
+
+    fn clear(&mut self) {
+        self.inner.clear();
+        self.count.apply_all(|x| *x = 0);
+    }
+}
+
 #[derive(DeriveMallocSizeOf)]
 pub struct TransactionPoolInner {
     capacity: usize,
@@ -667,10 +710,10 @@ pub struct TransactionPoolInner {
     /// (set_tx_packed), after epoch execution, or during transaction
     /// insertion.
     ready_nonces_and_balances: HashMap<AddressWithSpace, (U256, U256)>,
-    garbage_collector: GarbageCollector,
+    garbage_collector: SpaceMap<GarbageCollector>,
     /// Keeps all transactions in the transaction pool.
     /// It should contain the same transaction set as `deferred_pool`.
-    txs: HashMap<H256, Arc<SignedTransaction>>,
+    txs: TransactionSet,
     tx_sponsored_gas_map: HashMap<H256, (U256, u64)>,
 }
 
@@ -691,8 +734,8 @@ impl TransactionPoolInner {
                 total_gas_capacity,
             ),
             ready_nonces_and_balances: HashMap::new(),
-            garbage_collector: GarbageCollector::default(),
-            txs: HashMap::new(),
+            garbage_collector: SpaceMap::default(),
+            txs: TransactionSet::default(),
             tx_sponsored_gas_map: HashMap::new(),
         }
     }
@@ -701,14 +744,19 @@ impl TransactionPoolInner {
         self.deferred_pool.clear();
         self.ready_account_pool.clear();
         self.ready_nonces_and_balances.clear();
-        self.garbage_collector.clear();
+        self.garbage_collector.apply_all(|x| x.clear());
         self.txs.clear();
         self.tx_sponsored_gas_map.clear();
         self.total_received_count = 0;
         self.unpacked_transaction_count = 0;
     }
 
-    pub fn total_deferred(&self) -> usize { self.txs.len() }
+    pub fn total_deferred(&self, space: Option<Space>) -> usize {
+        match space {
+            Some(space) => *self.txs.count.in_space(space),
+            None => self.txs.count.map_sum(|x| *x),
+        }
+    }
 
     pub fn ready_transacton_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
         self.ready_account_pool.get_transaction_hashes_in_evm_pool()
@@ -738,8 +786,8 @@ impl TransactionPoolInner {
         bucket.get_tx_by_nonce(nonce).map(|tx| tx.transaction)
     }
 
-    pub fn is_full(&self) -> bool {
-        return self.total_deferred() >= self.capacity;
+    pub fn is_full(&self, space: Space) -> bool {
+        return self.total_deferred(Some(space)) >= self.capacity;
     }
 
     pub fn get_current_timestamp(&self) -> u64 {
@@ -759,16 +807,19 @@ impl TransactionPoolInner {
     /// garbage collectable. And if there is a tie, the one who has minimum
     /// timestamp will be picked.
     pub fn collect_garbage(&mut self, new_tx: &SignedTransaction) {
-        let count_before_gc = self.total_deferred();
+        let space = new_tx.space();
+        let count_before_gc = self.total_deferred(Some(space));
         let mut skipped_self_node = None;
-        while self.is_full() && !self.garbage_collector.is_empty() {
+        while self.is_full(space)
+            && !self.garbage_collector.in_space(space).is_empty()
+        {
             let current_timestamp = self.get_current_timestamp();
             let (victim_address, victim) =
-                self.garbage_collector.top().unwrap();
+                self.garbage_collector.in_space(space).top().unwrap();
             // Accounts which are not in `deferred_pool` may be inserted
             // into `garbage_collector`, we can just ignore them.
             if !self.deferred_pool.contain_address(victim_address) {
-                self.garbage_collector.pop();
+                self.garbage_collector.in_space_mut(space).pop();
                 continue;
             }
 
@@ -779,8 +830,11 @@ impl TransactionPoolInner {
                 if *victim_address == new_tx.sender() {
                     // We do not GC a not-executed transaction from the same
                     // sender, so save it and try another account.
-                    let (victim_address, victim) =
-                        self.garbage_collector.pop().unwrap();
+                    let (victim_address, victim) = self
+                        .garbage_collector
+                        .in_space_mut(space)
+                        .pop()
+                        .unwrap();
                     skipped_self_node = Some((victim_address, victim));
                     continue;
                 } else if victim.has_ready_tx
@@ -800,7 +854,7 @@ impl TransactionPoolInner {
 
             // victim is now chosen to be evicted.
             let (victim_address, victim) =
-                self.garbage_collector.pop().unwrap();
+                self.garbage_collector.in_space_mut(space).pop().unwrap();
 
             let (ready_nonce, _) = self
                 .get_local_nonce_and_balance(&victim_address)
@@ -863,7 +917,7 @@ impl TransactionPoolInner {
                 } else {
                     0
                 };
-                self.garbage_collector.insert(
+                self.garbage_collector.in_space_mut(space).insert(
                     &victim_address,
                     count,
                     current_timestamp,
@@ -880,7 +934,7 @@ impl TransactionPoolInner {
         // Insert back skipped nodes to keep `garbage_collector`
         // unchanged.
         if let Some((addr, node)) = skipped_self_node {
-            self.garbage_collector.insert(
+            self.garbage_collector.in_space_mut(space).insert(
                 &addr,
                 node.count,
                 node.timestamp,
@@ -888,14 +942,15 @@ impl TransactionPoolInner {
                 node.first_tx_gas_price,
             );
         }
-        GC_METER.mark(count_before_gc - self.total_deferred());
+        GC_METER.mark(count_before_gc - self.total_deferred(Some(space)));
     }
 
     /// Collect garbage and return the remaining quota of the pool to insert new
     /// transactions.
     pub fn remaining_quota(&self) -> usize {
-        let len = self.total_deferred();
-        self.capacity - len + self.garbage_collector.gc_size()
+        let len = self.total_deferred(None);
+        self.garbage_collector.size() * self.capacity - len
+            + self.garbage_collector.map_sum(|x| x.gc_size())
     }
 
     pub fn capacity(&self) -> usize { self.capacity }
@@ -915,7 +970,7 @@ impl TransactionPoolInner {
             &transaction.nonce(),
         ) {
             self.collect_garbage(transaction.as_ref());
-            if self.is_full() {
+            if self.is_full(transaction.space()) {
                 return InsertResult::Failed("Transaction Pool is full".into());
             }
         }
@@ -1136,6 +1191,7 @@ impl TransactionPoolInner {
     fn recalculate_readiness(
         &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) {
+        let space = addr.space;
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
@@ -1145,9 +1201,10 @@ impl TransactionPoolInner {
             let count = self.deferred_pool.count_less(addr, &nonce);
             let timestamp = self
                 .garbage_collector
+                .in_space(space)
                 .get_timestamp(addr)
                 .unwrap_or(self.get_current_timestamp());
-            self.garbage_collector.insert(
+            self.garbage_collector.in_space_mut(space).insert(
                 addr,
                 count,
                 timestamp,
