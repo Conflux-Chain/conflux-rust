@@ -137,7 +137,7 @@ pub struct Slab<T, E: EntryTrait<EntryType = T> = Entry<T>> {
     // when allocating space for new element. We would like to keep the size of
     // initialized entry in AllocRelatedFields#size_initialized instead of
     // vector.
-    entries: Vec<E>,
+    entries: Vec<UnsafeCell<E>>,
 
     /// Fields which are modified when allocate / delete an entry.
     alloc_fields: Mutex<AllocRelatedFields>,
@@ -352,7 +352,7 @@ impl<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> Drop
 
 /// A mutable iterator over the values stored in the `Slab`
 pub struct IterMut<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> {
-    entries: slice::IterMut<'a, E>,
+    entries: slice::IterMut<'a, UnsafeCell<E>>,
     curr: usize,
     value_type: PhantomData<T>,
 }
@@ -513,7 +513,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     // TODO(yz): resize_default is nightly only.
     fn resize_up(&mut self, capacity: usize, new_capacity: usize) {
         for _i in capacity..new_capacity {
-            self.entries.push(E::default());
+            self.entries.push(Default::default());
         }
     }
 
@@ -658,10 +658,10 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// assert_eq!(slab.get(123), None);
     pub fn get(&self, key: usize) -> Option<&T> {
         self.entries.get(key).and_then(|entry| {
-            if entry.is_vacant() {
+            if entry.get_ref().is_vacant() {
                 None
             } else {
-                Some(entry.get_occupied_ref())
+                Some(entry.get_ref().get_occupied_ref())
             }
         })
     }
@@ -687,10 +687,10 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     // the same time.
     pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
         self.entries.get_mut(key).and_then(|entry| {
-            if entry.is_vacant() {
+            if entry.get_ref().is_vacant() {
                 None
             } else {
-                Some(entry.get_occupied_mut())
+                Some(entry.get_mut().get_occupied_mut())
             }
         })
     }
@@ -710,7 +710,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     ///     assert_eq!(slab.get_unchecked(key), &2);
     /// }
     pub unsafe fn get_unchecked(&self, key: usize) -> &T {
-        self.entries.get_unchecked(key).get_occupied_ref()
+        self.entries.get_unchecked(key).get_ref().get_occupied_ref()
     }
 
     /// Return a mutable reference to the value associated with the given key
@@ -733,7 +733,10 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// assert_eq!(slab[key], 13);
     /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
-        self.entries.get_unchecked_mut(key).get_occupied_mut()
+        self.entries
+            .get_unchecked_mut(key)
+            .get_mut()
+            .get_occupied_mut()
     }
 
     /// Insert a value in the slab, returning key assigned to the value.
@@ -772,7 +775,8 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
                 alloc_fields.next = key + 1;
                 alloc_fields.size_initialized = alloc_fields.next;
             } else {
-                alloc_fields.next = self.entries[key].get_next_vacant_index();
+                alloc_fields.next =
+                    self.entries[key].get_ref().get_next_vacant_index();
             }
             Ok(key)
         }
@@ -781,9 +785,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// Cast an entry to ref mut when creating value into the slot or freeing
     /// value from the slot.
     fn cast_entry_ref_mut(&self, key: usize) -> &mut E {
-        unsafe {
-            &mut *((self.entries.get_unchecked(key) as *const E) as *mut E)
-        }
+        unsafe { self.entries.get_unchecked(key).get_as_mut() }
     }
 
     fn insert_at<U>(&self, key: usize, val: U) -> &mut T
@@ -912,7 +914,9 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
 impl<T, E: EntryTrait<EntryType = T>> ops::Index<usize> for Slab<T, E> {
     type Output = T;
 
-    fn index(&self, key: usize) -> &T { self.entries[key].get_occupied_ref() }
+    fn index(&self, key: usize) -> &T {
+        self.entries[key].get_ref().get_occupied_ref()
+    }
 }
 
 impl<'a, T, E: EntryTrait<EntryType = T>> IntoIterator for &'a mut Slab<T, E> {
@@ -1007,8 +1011,8 @@ impl<'a, T, E: EntryTrait<EntryType = T>> Iterator for IterMut<'a, T, E> {
             let curr = self.curr;
             self.curr += 1;
 
-            if !entry.is_vacant() {
-                return Some((curr, entry.get_occupied_mut()));
+            if !entry.get_ref().is_vacant() {
+                return Some((curr, entry.get_mut().get_occupied_mut()));
             }
         }
 

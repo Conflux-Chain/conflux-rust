@@ -1087,7 +1087,7 @@ impl Ord for TimedWaitingRequest {
 }
 impl PartialOrd for TimedWaitingRequest {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.time_to_send.partial_cmp(&self.time_to_send)
+        Some(self.cmp(other))
     }
 }
 impl Eq for TimedWaitingRequest {}

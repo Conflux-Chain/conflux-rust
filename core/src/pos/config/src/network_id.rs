@@ -90,39 +90,39 @@ pub enum NetworkId {
     Private(String),
 }
 
-impl Ord for NetworkId {
-    fn cmp(&self, other: &Self) -> Ordering { self.partial_cmp(other).unwrap() }
+impl PartialOrd for NetworkId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
-impl PartialOrd for NetworkId {
+impl Ord for NetworkId {
     /// Generalized ordering for determining which network is the most
     /// important. The lower the ordering, the higher the importance (i.e.,
     /// the validator network is less than all other networks because it has
     /// the highest priority).
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    fn cmp(&self, other: &Self) -> Ordering {
         // To simplify logic below, if it's the same it's equal
-        Some(
-            if self == other {
-                Ordering::Equal
-            } else {
-                // Everywhere below assumes that equal has already been covered
-                match self {
-                    NetworkId::Validator => Ordering::Less,
-                    NetworkId::Public => Ordering::Greater,
-                    NetworkId::Private(_) => match other {
-                        NetworkId::Validator => Ordering::Greater,
-                        NetworkId::Public => Ordering::Less,
-                        NetworkId::Private(_) => {
-                            if self.is_vfn_network() {
-                                Ordering::Less
-                            } else {
-                                Ordering::Greater
-                            }
+        if self == other {
+            Ordering::Equal
+        } else {
+            // Everywhere below assumes that equal has already been covered
+            match self {
+                NetworkId::Validator => Ordering::Less,
+                NetworkId::Public => Ordering::Greater,
+                NetworkId::Private(_) => match other {
+                    NetworkId::Validator => Ordering::Greater,
+                    NetworkId::Public => Ordering::Less,
+                    NetworkId::Private(_) => {
+                        if self.is_vfn_network() {
+                            Ordering::Less
+                        } else {
+                            Ordering::Greater
                         }
-                    },
-                }
-            },
-        )
+                    }
+                },
+            }
+        }
     }
 }
 

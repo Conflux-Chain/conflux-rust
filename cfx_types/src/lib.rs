@@ -118,6 +118,49 @@ impl AddressWithSpace {
     pub fn assert_native(&self) { assert_eq!(self.space, Space::Native) }
 }
 
+#[derive(Default, Clone)]
+pub struct SpaceMap<T> {
+    pub native: T,
+    pub evm: T,
+}
+
+impl<T> SpaceMap<T> {
+    #[inline]
+    pub fn in_space(&self, space: Space) -> &T {
+        match space {
+            Space::Native => &self.native,
+            Space::Ethereum => &self.evm,
+        }
+    }
+
+    #[inline]
+    pub fn in_space_mut(&mut self, space: Space) -> &mut T {
+        match space {
+            Space::Native => &mut self.native,
+            Space::Ethereum => &mut self.evm,
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        vec![&self.native, &self.evm].into_iter()
+    }
+
+    pub fn map_sum<F: Fn(&T) -> usize>(&self, f: F) -> usize {
+        f(&self.native) + f(&self.evm)
+    }
+
+    pub const fn size(&self) -> usize { 2 }
+
+    pub fn apply_all<U, F: FnMut(&mut T) -> U>(
+        &mut self, mut f: F,
+    ) -> SpaceMap<U> {
+        SpaceMap {
+            native: f(&mut self.native),
+            evm: f(&mut self.evm),
+        }
+    }
+}
+
 pub mod space_util {
     use super::{Address, AddressWithSpace, Space};
 

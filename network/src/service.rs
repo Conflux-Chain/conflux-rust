@@ -1913,7 +1913,7 @@ impl Ord for DelayMessageContext {
 
 impl PartialOrd for DelayMessageContext {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.ts.partial_cmp(&self.ts)
+        Some(self.cmp(other))
     }
 }
 

@@ -480,7 +480,7 @@ impl Ord for TimedSyncRequests {
 
 impl PartialOrd for TimedSyncRequests {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.timeout_time.partial_cmp(&self.timeout_time)
+        Some(self.cmp(other))
     }
 }
 
