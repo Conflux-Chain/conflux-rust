@@ -22,6 +22,7 @@ pub mod pubsub;
 mod receipt;
 mod reward_info;
 mod sponsor_info;
+mod stat_on_gas_load;
 mod status;
 mod storage_collateral_info;
 mod sync_graph_states;
@@ -52,6 +53,7 @@ pub use self::{
     receipt::Receipt,
     reward_info::RewardInfo,
     sponsor_info::SponsorInfo,
+    stat_on_gas_load::StatOnGasLoad,
     status::Status,
     storage_collateral_info::StorageCollateralInfo,
     sync_graph_states::SyncGraphStates,
