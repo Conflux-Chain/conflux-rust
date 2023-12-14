@@ -136,7 +136,7 @@ impl_hash!(H256, 32);
 // FIXME: find a better hash type.
 impl PartialOrd for H160 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0.partial_cmp(&other.0)
+        Some(self.cmp(other))
     }
 }
 

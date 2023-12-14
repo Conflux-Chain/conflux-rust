@@ -1,5 +1,9 @@
 # JSON-RPC CHANGELOG
 
+## v2.3.1
+
+- Return `storagePointProp` in cfx_getParamsFromVote, which is introduced by [CIP-107](https://github.com/Conflux-Chain/CIPs/blob/master/CIPs/cip-107.md#the-voting-of-proportion).
+
 ## v2.3.0
 
 - Add `cfx_getCollateralInfo` to return chain collateral info.

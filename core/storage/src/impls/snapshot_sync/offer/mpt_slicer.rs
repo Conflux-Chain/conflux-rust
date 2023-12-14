@@ -95,8 +95,6 @@ impl<'a> MptSlicer<'a> {
                 // Unwrap is fine because the child is guaranteed to exist.
                 .unwrap();
 
-                drop(current_node);
-
                 self.cursor.push_node(child_node);
                 return self.advance(rlp_size_limit);
             }

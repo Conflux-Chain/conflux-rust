@@ -1296,7 +1296,7 @@ impl Ord for NodeID {
 
 impl PartialOrd for NodeID {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.addr.partial_cmp(&other.addr)
+        Some(self.cmp(other))
     }
 }
 
