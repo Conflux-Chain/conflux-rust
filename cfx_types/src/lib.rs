@@ -120,8 +120,8 @@ impl AddressWithSpace {
 
 #[derive(Default, Clone)]
 pub struct SpaceMap<T> {
-    pub native: T,
-    pub evm: T,
+    native: T,
+    evm: T,
 }
 
 impl<T> SpaceMap<T> {
@@ -141,11 +141,7 @@ impl<T> SpaceMap<T> {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
-        vec![&self.native, &self.evm].into_iter()
-    }
-
-    pub fn map_sum<F: Fn(&T) -> usize>(&self, f: F) -> usize {
+    pub fn map_sum<F: FnMut(&T) -> usize>(&self, mut f: F) -> usize {
         f(&self.native) + f(&self.evm)
     }
 
