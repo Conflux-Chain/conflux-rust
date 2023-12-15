@@ -127,7 +127,7 @@ impl MallocSizeOf for String {
 
 impl<T: MallocSizeOf> MallocSizeOf for SpaceMap<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.native.size_of(ops) + self.evm.size_of(ops)
+        self.map_sum(|x| x.size_of(ops))
     }
 }
 
