@@ -4,10 +4,10 @@
 
 use super::node::Node;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use primitives::Zero;
 use rand::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::{
-    convert::From,
     fmt::Debug,
     ops::{Add, Sub},
 };
@@ -29,7 +29,7 @@ impl<K: MallocSizeOf, V: MallocSizeOf, W: MallocSizeOf> MallocSizeOf
 impl<
         K: Ord + Debug,
         V: Clone + Debug,
-        W: Add<Output = W> + Sub<Output = W> + Ord + Clone + From<u32> + Debug,
+        W: Add<Output = W> + Sub<Output = W> + Ord + Clone + Debug + Zero,
     > TreapMap<K, V, W>
 {
     pub fn new() -> TreapMap<K, V, W> {
@@ -55,7 +55,7 @@ impl<
     pub fn contains_key(&self, key: &K) -> bool { self.get(key).is_some() }
 
     pub fn insert(&mut self, key: K, value: V, weight: W) -> Option<V> {
-        assert!(weight != 0.into());
+        assert!(!weight.is_zero());
         let result = Node::insert(
             &mut self.root,
             Node::new(key, value, weight, self.rng.next_u64()),
@@ -81,7 +81,7 @@ impl<
     pub fn sum_weight(&self) -> W {
         match &self.root {
             Some(node) => node.sum_weight(),
-            None => 0.into(),
+            None => W::zero(),
         }
     }
 
@@ -108,7 +108,7 @@ pub struct Iter<'a, K: 'a, V: 'a, W: 'a> {
 }
 
 impl<'a, K, V, W> Iter<'a, K, V, W> {
-    pub fn extend_path(&mut self) {
+    fn extend_path(&mut self) {
         loop {
             let node = *self.nodes.last().unwrap();
             match node.left {

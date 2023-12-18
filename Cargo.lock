@@ -960,7 +960,6 @@ dependencies = [
  "proptest-derive",
  "rand 0.7.3",
  "rand 0.8.5",
- "rand_chacha 0.2.2",
  "rand_xorshift 0.2.0",
  "random-crash",
  "rayon",
@@ -999,6 +998,7 @@ dependencies = [
  "tokio-stream",
  "tokio-timer",
  "toml",
+ "treap-map",
  "unexpected",
 ]
 
@@ -6971,6 +6971,19 @@ name = "transient-hashmap"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aeb4b191d033a35edfce392a38cdcf9790b6cebcb30fa690c312c29da4dc433e"
+
+[[package]]
+name = "treap-map"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "cfxkey",
+ "malloc_size_of",
+ "primitives",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rand_xorshift 0.2.0",
+]
 
 [[package]]
 name = "try-lock"

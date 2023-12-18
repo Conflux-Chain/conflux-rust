@@ -2,7 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#![allow(dead_code, unused_variables)]
-pub mod map;
+mod map;
 mod node;
+
+#[cfg(test)]
+mod tests;
+
 pub use self::map::TreapMap;
