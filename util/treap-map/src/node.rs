@@ -3,11 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use std::{
-    cmp::Ordering,
-    mem,
-    ops::{Add, Sub},
-};
+use primitives::Zero;
+use std::{cmp::Ordering, mem, ops::Add};
 
 pub struct Node<K, V, W> {
     pub key: K,
@@ -32,8 +29,16 @@ impl<K: MallocSizeOf, V: MallocSizeOf, W: MallocSizeOf> MallocSizeOf
     }
 }
 
-impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
-    Node<K, V, W>
+pub enum SearchDirection<W> {
+    Left,
+    Stop,
+    Right(W),
+    LeftOrStop,
+    RightOrStop(W),
+}
+
+impl<K: Ord, V: Clone, W> Node<K, V, W>
+where W: Add<W, Output = W> + Clone + Zero
 {
     pub fn new(key: K, value: V, weight: W, priority: u64) -> Node<K, V, W> {
         Node {
@@ -136,21 +141,53 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
         result
     }
 
-    pub fn get_by_weight(&self, weight: W) -> Option<&V> {
-        let mut pre_weight = self.weight.clone();
-        if let Some(ref left) = self.left {
-            if &weight < &left.sum_weight {
-                return left.get_by_weight(weight);
+    pub fn get_by_weight(&self, weight: W) -> Option<&V>
+    where W: Ord {
+        self.prefix_sum_search(W::zero(), |base, mid| {
+            if &weight < base {
+                SearchDirection::Left
             } else {
-                pre_weight = pre_weight + left.sum_weight.clone();
+                let right_base = base.clone() + mid.clone();
+                if weight < right_base {
+                    SearchDirection::Stop
+                } else {
+                    SearchDirection::Right(right_base)
+                }
+            }
+        })
+        .map(|(_, _, v)| v)
+    }
+
+    fn prefix_sum_search<F: Fn(&W, &W) -> SearchDirection<W>>(
+        &self, base_weight: W, f: F,
+    ) -> Option<(W, &W, &V)> {
+        use SearchDirection::*;
+
+        let left_weight = if let Some(ref left) = self.left {
+            base_weight.clone() + left.sum_weight.clone()
+        } else {
+            base_weight.clone()
+        };
+        let search_dir = f(&left_weight, &self.weight);
+
+        match (search_dir, &self.left, &self.right) {
+            (Stop, _, _)
+            | (LeftOrStop, None, _)
+            | (RightOrStop(_), _, None) => {
+                Some((left_weight, &self.weight, &self.value))
+            }
+            (Left, None, _) | (Right(_), _, None) => None,
+            // FIXME: an elegant style is `(Left | LeftOrStop, Some(left), _)`,
+            // but it can not pass Conflux code formatter, which is in a
+            // very early version.
+            (Left, Some(left), _) | (LeftOrStop, Some(left), _) => {
+                left.prefix_sum_search(base_weight, f)
+            }
+            (Right(weight), _, Some(right))
+            | (RightOrStop(weight), _, Some(right)) => {
+                right.prefix_sum_search(weight, f)
             }
         }
-        if &weight < &pre_weight {
-            return Some(&self.value);
-        }
-        self.right
-            .as_ref()
-            .and_then(|x| x.get_by_weight(weight - pre_weight))
     }
 
     fn right_rotate(node: &mut Box<Node<K, V, W>>) {

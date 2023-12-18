@@ -4,7 +4,7 @@
 
 use super::TreapMap;
 use cfx_types::{Address, Public, H256, U256, U512};
-use keylib::Signature;
+use cfxkey::Signature;
 use primitives::{Action, NativeTransaction, SignedTransaction, Transaction};
 use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
