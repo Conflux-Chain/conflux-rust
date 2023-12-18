@@ -1,52 +1,50 @@
+#[cfg(test)]
+mod tests;
+
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, hash, ptr};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, hash};
 
 /// The `HeapMap` maintain a max heap along with a hash map to support
 /// additional `remove` and `update` operations.
 #[derive(DeriveMallocSizeOf)]
-pub struct HeapMap<
-    K: hash::Hash + Eq + Copy + Debug,
-    V: PartialEq + Eq + Ord + Clone,
-> {
+pub struct HeapMap<K: hash::Hash + Eq + Copy + Debug, V: Eq + Ord + Clone> {
     data: Vec<Node<K, V>>,
     mapping: HashMap<K, usize>,
 }
 
 #[derive(Clone, DeriveMallocSizeOf)]
-pub struct Node<K, V: PartialEq + Eq + Ord> {
+pub struct Node<K, V: Eq + Ord> {
     key: K,
     value: V,
 }
 
-impl<K, V: PartialEq + Eq + Ord> Node<K, V> {
+impl<K, V: Eq + Ord> Node<K, V> {
     pub fn new(key: K, value: V) -> Self { Node { key, value } }
 }
 
-impl<K, V: PartialEq + Eq + Ord> PartialEq for Node<K, V> {
+impl<K, V: Eq + Ord> PartialEq for Node<K, V> {
     fn eq(&self, other: &Self) -> bool { self.value.eq(&other.value) }
 }
 
-impl<K, V: PartialEq + Eq + Ord> Eq for Node<K, V> {}
+impl<K, V: Eq + Ord> Eq for Node<K, V> {}
 
-impl<K, V: PartialEq + Eq + Ord> PartialOrd for Node<K, V> {
+impl<K, V: Eq + Ord> PartialOrd for Node<K, V> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<K, V: PartialEq + Eq + Ord> Ord for Node<K, V> {
+impl<K, V: Eq + Ord> Ord for Node<K, V> {
     fn cmp(&self, other: &Self) -> Ordering { self.value.cmp(&other.value) }
 }
 
-impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone> Default
+impl<K: hash::Hash + Eq + Copy + Debug, V: Eq + Ord + Clone> Default
     for HeapMap<K, V>
 {
     fn default() -> Self { Self::new() }
 }
 
-impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
-    HeapMap<K, V>
-{
+impl<K: hash::Hash + Eq + Copy + Debug, V: Eq + Ord + Clone> HeapMap<K, V> {
     pub fn new() -> Self {
         Self {
             data: vec![],
@@ -136,7 +134,6 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
     pub fn is_empty(&self) -> bool { self.data.is_empty() }
 
     #[inline]
-    #[allow(dead_code)]
     pub fn len(&self) -> usize { self.data.len() }
 
     pub fn iter(&self) -> impl Iterator<Item = V> + '_ {
@@ -160,60 +157,41 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
         self.sift_up(self.data.len() - 1);
     }
 
-    #[inline]
-    unsafe fn get_unchecked(&self, index: usize) -> &Node<K, V> {
-        self.data.get_unchecked(index)
-    }
-
-    #[inline]
-    unsafe fn get_mut(&mut self, index: usize) -> &mut Node<K, V> {
-        self.data.get_unchecked_mut(index)
-    }
-
     fn sift_up(&mut self, index: usize) {
-        unsafe {
-            let val = self.data.get_unchecked(index).clone();
-            let mut pos = index;
-            while pos > 0 {
-                let parent = (pos - 1) / 2;
-                if *self.get_unchecked(parent) >= val {
-                    break;
-                }
-                let parent_ptr: *const _ = self.get_unchecked(parent);
-                let hole_ptr = self.get_mut(pos);
-                ptr::copy_nonoverlapping(parent_ptr, hole_ptr, 1);
-                self.mapping.insert(self.get_unchecked(pos).key, pos);
-                pos = parent;
+        let val = self.data[index].clone();
+        let mut pos = index;
+        while pos > 0 {
+            let parent = (pos - 1) / 2;
+            if self.data[parent] >= val {
+                break;
             }
-            ptr::copy_nonoverlapping(&val, self.get_mut(pos), 1);
-            self.mapping.insert(val.key, pos);
+            self.data[pos] = self.data[parent].clone();
+            self.mapping.insert(self.data[pos].key, pos);
+            pos = parent;
         }
+
+        self.mapping.insert(val.key, pos);
+        self.data[pos] = val;
     }
 
     fn sift_down(&mut self, index: usize) {
-        unsafe {
-            let val = self.data.get_unchecked(index).clone();
-            let mut pos = index;
-            let mut child = pos * 2 + 1;
-            while child < self.data.len() {
-                let right = child + 1;
-                if right < self.data.len()
-                    && self.get_unchecked(right) > self.get_unchecked(child)
-                {
-                    child = right;
-                }
-                if val >= *self.get_unchecked(child) {
-                    break;
-                }
-                let child_ptr: *const _ = self.get_unchecked(child);
-                let hole_ptr = self.get_mut(pos);
-                ptr::copy_nonoverlapping(child_ptr, hole_ptr, 1);
-                self.mapping.insert(self.get_unchecked(pos).key, pos);
-                pos = child;
-                child = pos * 2 + 1;
+        let val = self.data[index].clone();
+        let mut pos = index;
+        let mut child = pos * 2 + 1;
+        while child < self.data.len() {
+            let right = child + 1;
+            if right < self.data.len() && self.data[right] > self.data[child] {
+                child = right;
             }
-            ptr::copy_nonoverlapping(&val, self.get_mut(pos), 1);
-            self.mapping.insert(val.key, pos);
+            if val >= self.data[child] {
+                break;
+            }
+            self.data[pos] = self.data[child].clone();
+            self.mapping.insert(self.data[pos].key, pos);
+            pos = child;
+            child = pos * 2 + 1;
         }
+        self.mapping.insert(val.key, pos);
+        self.data[pos] = val;
     }
 }
