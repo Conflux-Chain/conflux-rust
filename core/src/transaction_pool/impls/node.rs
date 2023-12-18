@@ -58,106 +58,91 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
     pub fn insert(
         node: &mut Option<Box<Node<K, V, W>>>, new: Node<K, V, W>,
     ) -> Option<V> {
-        if node.is_none() {
+        let node = if let Some(node) = node {
+            node
+        } else {
             *node = Some(Box::new(new));
             return None;
-        }
-        match new.key.cmp(&node.as_ref().unwrap().key) {
+        };
+        match new.key.cmp(&node.key) {
             Ordering::Equal => {
-                let result = Some(node.as_ref().unwrap().value.clone());
-                node.as_mut().unwrap().value = new.value;
-                node.as_mut().unwrap().weight = new.weight;
-                node.as_mut().unwrap().update_weight();
+                let result = Some(node.value.clone());
+                node.value = new.value;
+                node.weight = new.weight;
+                node.update_weight();
                 result
             }
             Ordering::Less => {
-                let result =
-                    Node::insert(&mut node.as_mut().unwrap().left, new);
-                if node.as_ref().unwrap().priority
-                    < node.as_ref().unwrap().left.as_ref().unwrap().priority
-                {
+                let result = Node::insert(&mut node.left, new);
+                if node.priority < node.left.as_ref().unwrap().priority {
                     Node::right_rotate(node);
                 }
-                node.as_mut().unwrap().update_weight();
+                node.update_weight();
                 result
             }
             Ordering::Greater => {
-                let result =
-                    Node::insert(&mut node.as_mut().unwrap().right, new);
-                if node.as_ref().unwrap().priority
-                    < node.as_ref().unwrap().right.as_ref().unwrap().priority
-                {
+                let result = Node::insert(&mut node.right, new);
+                if node.priority < node.right.as_ref().unwrap().priority {
                     Node::left_rotate(node);
                 }
-                node.as_mut().unwrap().update_weight();
+                node.update_weight();
                 result
             }
         }
     }
 
-    pub fn remove(node: &mut Option<Box<Node<K, V, W>>>, key: &K) -> Option<V> {
-        if node.is_none() {
-            return None;
-        }
-        let result = match key.cmp(&node.as_ref().unwrap().key) {
+    pub fn remove(
+        maybe_node: &mut Option<Box<Node<K, V, W>>>, key: &K,
+    ) -> Option<V> {
+        let node = maybe_node.as_mut()?;
+        let result = match key.cmp(&node.key) {
             Ordering::Equal => {
-                if node.as_ref().unwrap().left.is_none()
-                    && node.as_ref().unwrap().right.is_none()
-                {
-                    return Some(mem::replace(node, None).unwrap().value);
+                let rot_left;
+                match (&node.left, &node.right) {
+                    (None, None) => {
+                        // Both is None, remove current node directly
+                        return Some(
+                            mem::replace(maybe_node, None).unwrap().value,
+                        );
+                    }
+                    (None, Some(_)) => {
+                        rot_left = true;
+                    }
+                    (Some(_), None) => {
+                        rot_left = false;
+                    }
+                    (Some(left), Some(right)) => {
+                        rot_left = left.priority < right.priority;
+                    }
                 }
-                match node.as_ref().unwrap().left.is_none()
-                    || node.as_ref().unwrap().left.is_some()
-                        && node.as_ref().unwrap().right.is_some()
-                        && &node
-                            .as_ref()
-                            .unwrap()
-                            .left
-                            .as_ref()
-                            .unwrap()
-                            .priority
-                            < &node
-                                .as_ref()
-                                .unwrap()
-                                .right
-                                .as_ref()
-                                .unwrap()
-                                .priority
-                {
+
+                match rot_left {
                     true => {
                         // rot left
                         Node::left_rotate(node);
-                        Node::remove(&mut node.as_mut().unwrap().left, key)
+                        Node::remove(&mut node.left, key)
                     }
                     false => {
                         // rot right
                         Node::right_rotate(node);
-                        Node::remove(&mut node.as_mut().unwrap().right, key)
+                        Node::remove(&mut node.right, key)
                     }
                 }
             }
-            Ordering::Less => {
-                Node::remove(&mut node.as_mut().unwrap().left, key)
-            }
-            Ordering::Greater => {
-                Node::remove(&mut node.as_mut().unwrap().right, key)
-            }
+            Ordering::Less => Node::remove(&mut node.left, key),
+            Ordering::Greater => Node::remove(&mut node.right, key),
         };
-        node.as_mut().unwrap().update_weight();
+        node.update_weight();
         result
     }
 
     pub fn get_by_weight(&self, weight: W) -> Option<&V> {
         let mut pre_weight = self.weight.clone();
-        if self.left.is_some() {
-            if &weight < &self.left.as_ref().unwrap().sum_weight {
-                return self
-                    .left
-                    .as_ref()
-                    .and_then(|x| x.get_by_weight(weight));
+        if let Some(ref left) = self.left {
+            if &weight < &left.sum_weight {
+                return left.get_by_weight(weight);
             } else {
-                pre_weight =
-                    pre_weight + self.left.as_ref().unwrap().sum_weight.clone();
+                pre_weight = pre_weight + left.sum_weight.clone();
             }
         }
         if &weight < &pre_weight {
@@ -168,43 +153,36 @@ impl<K: Ord, V: Clone, W: Add<Output = W> + Sub<Output = W> + Ord + Clone>
             .and_then(|x| x.get_by_weight(weight - pre_weight))
     }
 
-    fn right_rotate(node: &mut Option<Box<Node<K, V, W>>>) {
-        let mut new = mem::replace(&mut node.as_mut().unwrap().left, None);
-        if new.is_some() {
+    fn right_rotate(node: &mut Box<Node<K, V, W>>) {
+        let new = mem::replace(&mut node.left, None);
+        if let Some(mut new) = new {
             mem::swap(node, &mut new);
-            mem::swap(
-                &mut node.as_mut().unwrap().right,
-                &mut new.as_mut().unwrap().left,
-            );
-            new.as_mut().unwrap().update_weight();
-            node.as_mut().unwrap().right = new;
-            node.as_mut().unwrap().update_weight();
+            mem::swap(&mut node.right, &mut new.left);
+            new.update_weight();
+            node.right = Some(new);
+            node.update_weight();
         }
     }
 
-    fn left_rotate(node: &mut Option<Box<Node<K, V, W>>>) {
-        let mut new = mem::replace(&mut node.as_mut().unwrap().right, None);
-        if new.is_some() {
+    fn left_rotate(node: &mut Box<Node<K, V, W>>) {
+        let new = mem::replace(&mut node.right, None);
+        if let Some(mut new) = new {
             mem::swap(node, &mut new);
-            mem::swap(
-                &mut node.as_mut().unwrap().left,
-                &mut new.as_mut().unwrap().right,
-            );
-            new.as_mut().unwrap().update_weight();
-            node.as_mut().unwrap().left = new;
-            node.as_mut().unwrap().update_weight();
+            mem::swap(&mut node.left, &mut new.right);
+            new.update_weight();
+            node.left = Some(new);
+            node.update_weight();
         }
     }
 
     fn update_weight(&mut self) {
         self.sum_weight = self.weight.clone();
-        if self.left.is_some() {
-            self.sum_weight = self.sum_weight.clone()
-                + self.left.as_ref().unwrap().sum_weight.clone();
+        if let Some(left) = &self.left {
+            self.sum_weight = self.sum_weight.clone() + left.sum_weight.clone();
         }
-        if self.right.is_some() {
-            self.sum_weight = self.sum_weight.clone()
-                + self.right.as_ref().unwrap().sum_weight.clone();
+        if let Some(right) = &self.right {
+            self.sum_weight =
+                self.sum_weight.clone() + right.sum_weight.clone();
         }
     }
 
