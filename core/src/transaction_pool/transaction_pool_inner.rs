@@ -7,7 +7,10 @@ use crate::{
     machine::Machine,
     verification::{PackingCheckResult, VerificationConfig},
 };
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_parameters::{
+    block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
+    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressWithSpace, Space, SpaceMap,
@@ -508,7 +511,9 @@ impl ReadyAccountPool {
             evm_pool: SpacedReadyAccountPool::new(
                 tx_weight_scaling,
                 tx_weight_exp,
-                total_gas_capacity,
+                total_gas_capacity
+                    / EVM_TRANSACTION_BLOCK_RATIO
+                    / EVM_TRANSACTION_GAS_RATIO,
             ),
         }
     }
