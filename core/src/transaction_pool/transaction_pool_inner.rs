@@ -1,7 +1,6 @@
 use super::{
     account_cache::AccountCache,
     garbage_collector::GarbageCollector,
-    impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use crate::{
@@ -30,6 +29,7 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+use treap_map::TreapMap;
 
 type WeightType = u128;
 lazy_static! {
