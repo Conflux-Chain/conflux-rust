@@ -164,6 +164,7 @@ pub trait SnapshotDbManagerTrait {
             }
         }
 
+        info!("max epoch height: {}, temp snapshot db existing: {}, removed snapshots: {:?}, max snapshot epoch height has mpt: {:?}", max_epoch_height, temp_snapshot_db_existing, removed_snapshots, max_snapshot_epoch_height_has_mpt);
         Ok(SnapshotPersistState {
             missing_snapshots: missing_snapshots
                 .into_iter()

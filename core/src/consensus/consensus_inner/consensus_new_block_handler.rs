@@ -2220,10 +2220,11 @@ impl ConsensusNewBlockHandler {
             latest_snapshot_epoch_height + snapshot_epoch_count * 2;
         let index =
             inner.height_to_pivot_index(maximum_height_to_create_next_snapshot);
+        debug!("start_compute_epoch_pivot_index {}, latest snapshot epoch height {}, maximum index for next snapshot {}",
+            start_compute_epoch_pivot_index, latest_snapshot_epoch_height, index);
 
         *start_compute_epoch_pivot_index =
             min(*start_compute_epoch_pivot_index, index);
-        debug!("latest snapshot epoch height {}, maximum index for next snapshot {}", latest_snapshot_epoch_height, index);
 
         {
             // Find the closest ear prior to the start_compute_epoch_height
@@ -2269,6 +2270,11 @@ impl ConsensusNewBlockHandler {
                     / self.conf.inner_conf.era_epoch_count
                     * self.conf.inner_conf.era_epoch_count;
 
+                debug!(
+                    "start compute epoch height {}, era pivot epoch height {}",
+                    start_compute_epoch_height, era_pivot_epoch_height
+                );
+
                 if era_pivot_epoch_height < inner.cur_era_genesis_height {
                     panic!("unreachable, era_pivot_epoch_height is less than cur_era_genesis_height");
                 }
@@ -2288,6 +2294,10 @@ impl ConsensusNewBlockHandler {
                         era_pivot_epoch_height + snapshot_epoch_count * 2;
                     let new_index = inner.height_to_pivot_index(new_height);
 
+                    info!(
+                        "reset start_compute_epoch_pivot_index to {}",
+                        new_index
+                    );
                     *start_compute_epoch_pivot_index = new_index;
                 }
 
@@ -2300,8 +2310,6 @@ impl ConsensusNewBlockHandler {
                         )
                         .expect("pivot hash should be exist")
                 };
-
-                debug!("start_compute_epoch_index {}, start_compute_epoch_height {}, era_pivot_epoch_height {}",start_compute_epoch_pivot_index, start_compute_epoch_height, era_pivot_epoch_height);
 
                 let snapshot_db_manager = inner
                     .data_man
