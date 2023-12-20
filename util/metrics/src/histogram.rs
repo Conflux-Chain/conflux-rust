@@ -373,9 +373,12 @@ impl PartialOrd for ExpDecaySampleItem {
 impl Ord for ExpDecaySampleItem {
     // for k, the smaller, the bigger
     fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .k
-            .partial_cmp(&self.k)
-            .expect("k should be comparable")
+        other.k.partial_cmp(&self.k).expect(
+            format!(
+                "k should be comparable, other={} self={}",
+                other.k, self.k
+            )
+            .as_str(),
+        )
     }
 }

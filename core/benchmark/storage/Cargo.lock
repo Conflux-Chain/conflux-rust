@@ -1858,7 +1858,6 @@ dependencies = [
  "prometheus 0.7.0",
  "rand 0.7.3",
  "rand 0.8.5",
- "rand_chacha 0.2.2",
  "rand_xorshift 0.2.0",
  "random-crash",
  "rayon",
@@ -1897,6 +1896,7 @@ dependencies = [
  "tokio-stream",
  "tokio-timer",
  "toml",
+ "treap-map",
  "unexpected 0.1.0 (git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1)",
 ]
 
@@ -8771,6 +8771,16 @@ dependencies = [
  "log",
  "smallvec 0.6.14",
  "trace-time",
+]
+
+[[package]]
+name = "treap-map"
+version = "0.1.0"
+dependencies = [
+ "malloc_size_of",
+ "primitives",
+ "rand 0.7.3",
+ "rand_xorshift 0.2.0",
 ]
 
 [[package]]
