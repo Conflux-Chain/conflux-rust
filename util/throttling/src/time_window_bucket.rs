@@ -82,7 +82,7 @@ impl<T> Eq for Item<T> {}
 
 impl<T> PartialOrd for Item<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.time.partial_cmp(&self.time)
+        Some(self.cmp(other))
     }
 }
 

@@ -2,11 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod impls;
-
-#[cfg(test)]
-mod test_treap;
-
 mod account_cache;
 mod garbage_collector;
 mod nonce_pool;
@@ -14,7 +9,7 @@ mod transaction_pool_inner;
 
 extern crate rand;
 
-pub use self::{impls::TreapMap, transaction_pool_inner::TransactionStatus};
+pub use self::transaction_pool_inner::TransactionStatus;
 use crate::{
     block_data_manager::BlockDataManager, consensus::BestInformation,
     machine::Machine, state::State, verification::VerificationConfig,
@@ -469,7 +464,7 @@ impl TransactionPool {
             }
         }
 
-        TX_POOL_DEFERRED_GAUGE.update(self.total_deferred());
+        TX_POOL_DEFERRED_GAUGE.update(self.total_deferred(None));
         TX_POOL_UNPACKED_GAUGE.update(self.total_unpacked());
         TX_POOL_READY_GAUGE.update(self.total_ready_accounts());
 
@@ -580,7 +575,7 @@ impl TransactionPool {
             //RwLock is dropped here
         }
 
-        TX_POOL_DEFERRED_GAUGE.update(self.total_deferred());
+        TX_POOL_DEFERRED_GAUGE.update(self.total_deferred(None));
         TX_POOL_UNPACKED_GAUGE.update(self.total_unpacked());
         TX_POOL_READY_GAUGE.update(self.total_ready_accounts());
 
@@ -751,9 +746,9 @@ impl TransactionPool {
         inner.clear()
     }
 
-    pub fn total_deferred(&self) -> usize {
+    pub fn total_deferred(&self, space: Option<Space>) -> usize {
         let inner = self.inner.read();
-        inner.total_deferred()
+        inner.total_deferred(space)
     }
 
     pub fn total_ready_accounts(&self) -> usize {
@@ -776,7 +771,7 @@ impl TransactionPool {
         let inner = self.inner.read();
         (
             inner.total_ready_accounts(),
-            inner.total_deferred(),
+            inner.total_deferred(None),
             inner.total_received(),
             inner.total_unpacked(),
         )

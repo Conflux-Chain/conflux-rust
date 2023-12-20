@@ -286,7 +286,7 @@ impl ConfirmationMeter {
                 epoch_num += 1;
             }
 
-            let mut finality = &mut self.inner.write().finality_manager;
+            let finality = &mut self.inner.write().finality_manager;
             debug!("Confirmation Risk: {:?}", risks);
             finality.lowest_epoch_num = epoch_num;
             finality.risks_less_than = risks;

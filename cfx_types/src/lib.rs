@@ -14,6 +14,7 @@ pub use ethereum_types::{
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde::ser::SerializeMap;
 use serde_derive::{Deserialize, Serialize};
 
 pub use self::space_util::AddressSpaceUtil;
@@ -116,6 +117,55 @@ pub struct AddressWithSpace {
 impl AddressWithSpace {
     #[inline]
     pub fn assert_native(&self) { assert_eq!(self.space, Space::Native) }
+}
+
+#[derive(Default, Clone)]
+pub struct SpaceMap<T> {
+    native: T,
+    evm: T,
+}
+
+impl<T> SpaceMap<T> {
+    #[inline]
+    pub fn in_space(&self, space: Space) -> &T {
+        match space {
+            Space::Native => &self.native,
+            Space::Ethereum => &self.evm,
+        }
+    }
+
+    #[inline]
+    pub fn in_space_mut(&mut self, space: Space) -> &mut T {
+        match space {
+            Space::Native => &mut self.native,
+            Space::Ethereum => &mut self.evm,
+        }
+    }
+
+    pub fn map_sum<F: FnMut(&T) -> usize>(&self, mut f: F) -> usize {
+        f(&self.native) + f(&self.evm)
+    }
+
+    pub const fn size(&self) -> usize { 2 }
+
+    pub fn apply_all<U, F: FnMut(&mut T) -> U>(
+        &mut self, mut f: F,
+    ) -> SpaceMap<U> {
+        SpaceMap {
+            native: f(&mut self.native),
+            evm: f(&mut self.evm),
+        }
+    }
+}
+
+impl<T: serde::Serialize> serde::Serialize for SpaceMap<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        let mut map = serializer.serialize_map(Some(self.size()))?;
+        map.serialize_entry("core", &self.native)?;
+        map.serialize_entry("espace", &self.evm)?;
+        map.end()
+    }
 }
 
 pub mod space_util {
