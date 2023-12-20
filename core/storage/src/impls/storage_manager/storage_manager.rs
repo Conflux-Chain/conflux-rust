@@ -136,7 +136,7 @@ pub struct StorageManager {
     pub intermediate_trie_root_merkle: RwLock<Option<MerkleHash>>,
 
     pub persist_state_from_initialization:
-        RwLock<Option<(bool, HashSet<EpochId>, u64)>>,
+        RwLock<Option<(bool, HashSet<EpochId>, u64, Option<u64>)>>,
 }
 
 impl MallocSizeOf for StorageManager {
@@ -1356,6 +1356,7 @@ impl StorageManager {
             snapshot_persist_state.temp_snapshot_db_existing,
             snapshot_persist_state.removed_snapshots,
             snapshot_persist_state.max_epoch_height,
+            snapshot_persist_state.max_snapshot_epoch_height_has_mpt,
         ));
         self.snapshot_manager
             .get_snapshot_db_manager()

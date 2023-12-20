@@ -793,7 +793,7 @@ impl StateManagerTrait for StateManager {
         let mut parent_epoch = parent_epoch_id.epoch_id;
         let parent_height = parent_epoch_id.maybe_height;
         let state =
-            self.get_state_for_next_epoch_inner(parent_epoch_id, false)?;
+            self.get_state_for_next_epoch_inner(parent_epoch_id, true)?;
         if state.is_none() {
             return Ok(None);
         }

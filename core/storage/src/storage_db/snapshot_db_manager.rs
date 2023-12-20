@@ -9,6 +9,7 @@ pub struct SnapshotPersistState {
     pub max_epoch_height: u64,
     pub temp_snapshot_db_existing: bool,
     pub removed_snapshots: HashSet<EpochId>,
+    pub max_snapshot_epoch_height_has_mpt: Option<u64>,
 }
 
 pub trait SnapshotDbWriteableTrait: KeyValueDbTypes {
@@ -37,7 +38,7 @@ pub trait SnapshotDbManagerTrait {
     fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> PathBuf;
     fn get_mpt_snapshot_dir(&self) -> &Path;
     fn get_latest_mpt_snapshot_db_name(&self) -> String;
-    fn recovery_lastest_mpt_snapshot(
+    fn recovery_latest_mpt_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()>;
     fn get_epoch_id_from_snapshot_db_name(
@@ -77,6 +78,7 @@ pub trait SnapshotDbManagerTrait {
         let mut max_epoch_id = NULL_EPOCH;
         let mut temp_snapshot_db_existing = false;
         let mut removed_snapshots = HashSet::new();
+        let mut max_snapshot_epoch_height_has_mpt = None;
 
         for entry in fs::read_dir(self.get_snapshot_dir())? {
             let entry = entry?;
@@ -115,6 +117,21 @@ pub trait SnapshotDbManagerTrait {
                     if height > max_epoch_height {
                         max_epoch_height = height;
                         max_epoch_id = epoch;
+                    }
+
+                    if self
+                        .get_snapshot_by_epoch_id(&epoch, false, true)?
+                        .expect("should be open snapshot")
+                        .is_mpt_table_in_current_db()
+                    {
+                        if max_snapshot_epoch_height_has_mpt.is_none()
+                            || *max_snapshot_epoch_height_has_mpt
+                                .as_ref()
+                                .unwrap()
+                                < height
+                        {
+                            max_snapshot_epoch_height_has_mpt = Some(height);
+                        }
                     }
                 }
             }
@@ -156,6 +173,7 @@ pub trait SnapshotDbManagerTrait {
             max_epoch_height,
             temp_snapshot_db_existing,
             removed_snapshots,
+            max_snapshot_epoch_height_has_mpt,
         })
     }
 

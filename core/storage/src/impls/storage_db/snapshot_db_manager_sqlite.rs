@@ -183,11 +183,13 @@ impl SnapshotDbManagerSqlite {
                         {
                             self.get_latest_mpt_snapshot_db_path()
                         } else {
-                            bail!("MPT DB not exist, latest snapshot id {:?}, try to open {:?}.", self.latest_snapshot_id.read().0, snapshot_epoch_id);
+                            error!("MPT DB not exist, latest snapshot id {:?}, try to open {:?}.", self.latest_snapshot_id.read().0, snapshot_epoch_id);
+                            return Ok(None);
                         }
                     }
                 } else {
-                    bail!("MPT table should be in snapshot database.");
+                    error!("MPT table should be in snapshot database.");
+                    return Ok(None);
                 };
 
                 let mpt_snapshot_db = self.open_mpt_snapshot_readonly(
@@ -1149,7 +1151,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         };
 
         {
-            // destory MPT snapshot
+            // destroy MPT snapshot
             let mpt_snapshot_path =
                 self.get_mpt_snapshot_db_path(&snapshot_epoch_id);
 
@@ -1179,7 +1181,9 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
             match maybe_snapshot {
                 None => {
-                    if snapshot_epoch_id.ne(&NULL_EPOCH) {
+                    if snapshot_epoch_id.ne(&NULL_EPOCH)
+                        && mpt_snapshot_path.exists()
+                    {
                         debug!(
                             "destroy_mpt_snapshot remove mpt db {:?}",
                             mpt_snapshot_path
@@ -1277,27 +1281,30 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         Ok(locked)
     }
 
-    fn recovery_lastest_mpt_snapshot(
+    fn recovery_latest_mpt_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
+        info!("recovery latest mpt snapshot from {}", snapshot_epoch_id);
+
         // Replace the latest MPT snapshot with the MPT snapshot of the
         // specified snapshot_epoch_id
-        let latest_mpt_snapshot_path = self.get_latest_mpt_snapshot_db_path();
-        if latest_mpt_snapshot_path.exists() {
-            debug!("remvoe mpt snapshot {:?}", latest_mpt_snapshot_path);
-            if let Err(e) =
-                fs::remove_dir_all(&latest_mpt_snapshot_path.as_path())
-            {
-                error!(
-                    "remove mpt snapshot err: path={:?} err={:?}",
-                    latest_mpt_snapshot_path.as_path(),
-                    e
-                );
-            }
-        }
-
         let source = self.get_mpt_snapshot_db_path(snapshot_epoch_id);
         if source.exists() {
+            let latest_mpt_snapshot_path =
+                self.get_latest_mpt_snapshot_db_path();
+            if latest_mpt_snapshot_path.exists() {
+                debug!("remove mpt snapshot {:?}", latest_mpt_snapshot_path);
+                if let Err(e) =
+                    fs::remove_dir_all(&latest_mpt_snapshot_path.as_path())
+                {
+                    error!(
+                        "remove mpt snapshot err: path={:?} err={:?}",
+                        latest_mpt_snapshot_path.as_path(),
+                        e
+                    );
+                }
+            }
+
             debug!(
                 "Copy mpt db for latest from snapshot {:?}  ",
                 snapshot_epoch_id
@@ -1312,14 +1319,13 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             )?;
             Self::rename_snapshot_db(&temp_mpt_path, &latest_mpt_snapshot_path)
         } else {
-            debug!("mpt snapshot for epoch {} not exist", snapshot_epoch_id);
-            // recreate latest MPT database
-            SnapshotMptDbSqlite::create(
-                latest_mpt_snapshot_path.as_path(),
-                &Default::default(),
-                &Arc::new(Semaphore::new(self.max_open_snapshots as usize)),
-                None,
-            )?;
+            if *snapshot_epoch_id != NULL_EPOCH {
+                panic!(
+                    "mpt snapshot for epoch {} does not exist",
+                    snapshot_epoch_id
+                );
+            }
+
             Ok(())
         }
     }

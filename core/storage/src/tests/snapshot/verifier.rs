@@ -512,7 +512,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
 
     fn get_latest_mpt_snapshot_db_name(&self) -> String { unreachable!() }
 
-    fn recovery_lastest_mpt_snapshot(
+    fn recovery_latest_mpt_snapshot(
         &self, _snapshot_epoch_id: &EpochId,
     ) -> Result<()> {
         unreachable!()
