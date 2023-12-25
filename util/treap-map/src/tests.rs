@@ -304,3 +304,14 @@ fn test_iterator() {
     let vec: Vec<(&u32, &u32)> = treap_map.key_values().collect();
     assert_eq!(vec, vec![(&1, &0), (&2, &0), (&3, &0), (&4, &0), (&5, &0)]);
 }
+
+#[test]
+fn test_set_same_key() {
+    let mut treap_map: TreapMap<SimpleTreapMapConfig> = TreapMap::new();
+    assert_eq!(treap_map.insert(1, 1, 1), None);
+    assert_eq!(treap_map.insert(2, 2, 1), None);
+    assert_eq!(treap_map.insert(1, 3, 1), Some(1));
+    assert_eq!(treap_map.insert(2, 4, 1), Some(2));
+    assert_eq!(treap_map.remove(&1), Some(3));
+    assert_eq!(treap_map.remove(&2), Some(4));
+}

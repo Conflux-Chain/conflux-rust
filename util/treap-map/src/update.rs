@@ -57,7 +57,7 @@ impl<C: TreapMapConfig> TreapNodeUpdate<C> for InsertOp<C> {
         use UpdateResult::*;
 
         if let Some(node) = maybe_node {
-            let ret = Some(self.0.value.clone());
+            let ret = Some(node.value.clone());
             let update_weight = node.weight != self.0.weight;
 
             node.value = self.0.value;

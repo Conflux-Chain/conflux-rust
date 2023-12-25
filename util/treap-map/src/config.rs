@@ -4,9 +4,9 @@ use std::{cmp::Ordering, ops::Add};
 
 use crate::Direction;
 
-/// The weight type in a Treap. It can represent various data types and is used
-/// to perform operations like calculating sums or maximum values of a interval
-/// in logrithmic time.
+/// The weight type in a Treap. It is used to perform operations like
+/// calculating sums or maximum values of an interval in logrithmic time over
+/// treap.
 pub trait WeightConsolidate: Clone + Eq {
     /// Create a default or 'zero' value for the weight. Consolidating with this
     /// value should not change the other value.
@@ -30,7 +30,7 @@ impl<T: Add<Output = T> + Clone + Zero + Eq> WeightConsolidate for T {
     fn accure(&mut self, other: &Self) { *self = self.clone() + other.clone() }
 }
 
-/// `TreapMap` is a struct which imprements a treap which can be indexed by a
+/// `TreapMap` is a struct which implements a treap which can be indexed by a
 /// different key (type `SearchKey`). The associate type `SortKey` and
 /// `SearchKey` defines how to order node in treap collaborately.
 ///
