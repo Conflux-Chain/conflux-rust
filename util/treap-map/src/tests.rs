@@ -2,15 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::{node::Node, update::ApplyOpOutcome, KeyMngTrait, TreapMapConfig};
+
 use super::{SharedKeyTreapMapConfig, TreapMap};
 use cfx_types::{Address, Public, H256, U256, U512};
 use cfxkey::Signature;
 use primitives::{Action, NativeTransaction, SignedTransaction, Transaction};
-use rand::{Rng, RngCore, SeedableRng};
+use rand::{seq::SliceRandom, thread_rng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rand_xorshift::XorShiftRng;
 use std::{
-    collections::BTreeMap,
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
     ops::{Add, Sub},
 };
 
@@ -26,6 +29,47 @@ impl SharedKeyTreapMapConfig for SimpleTreapMapConfig {
     type Key = u32;
     type Value = u32;
     type Weight = u32;
+}
+
+struct ComplexTreapMapConfig;
+impl TreapMapConfig for ComplexTreapMapConfig {
+    type ExtMap = BTreeSet<u32>;
+    type SearchKey = u32;
+    type SortKey = u32;
+    type Value = u32;
+    type Weight = u32;
+
+    fn next_node_dir(
+        me: (&Self::SortKey, &Self::SearchKey),
+        other: (&Self::SortKey, &Self::SearchKey),
+    ) -> Option<crate::Direction>
+    {
+        match me.0.cmp(other.0) {
+            Ordering::Less => Some(crate::Direction::Left),
+            Ordering::Equal => None,
+            Ordering::Greater => Some(crate::Direction::Right),
+        }
+    }
+}
+
+impl KeyMngTrait<ComplexTreapMapConfig> for BTreeSet<u32> {
+    fn view_update(
+        &mut self, key: &u32, value: Option<&u32>, _old_value: Option<&u32>,
+    ) {
+        if value.is_some() {
+            self.insert(*key);
+        } else {
+            self.remove(key);
+        }
+    }
+
+    fn len(&self) -> usize { self.len() }
+
+    fn get_sort_key(&self, key: &u32) -> Option<u32> {
+        self.contains(key).then_some(*key)
+    }
+
+    fn make_sort_key(&self, key: &u32, _value: &u32) -> u32 { *key }
 }
 
 fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
@@ -314,4 +358,264 @@ fn test_set_same_key() {
     assert_eq!(treap_map.insert(2, 4, 1), Some(2));
     assert_eq!(treap_map.remove(&1), Some(3));
     assert_eq!(treap_map.remove(&2), Some(4));
+}
+
+#[test]
+fn test_change_weight() {
+    let mut treap_map: TreapMap<SimpleTreapMapConfig> = TreapMap::new();
+    for i in 0..5 {
+        treap_map.insert(i, i, i);
+        treap_map.assert_consistency();
+    }
+    // Reset weight again
+    for i in 0..5 {
+        treap_map.insert(i, i, i);
+        treap_map.assert_consistency();
+    }
+    // Change weight
+    for i in 0..5 {
+        treap_map.insert(i, i, 10 - i);
+        treap_map.assert_consistency();
+    }
+    assert_eq!(treap_map.root.unwrap().sum_weight(), 40);
+}
+
+#[test]
+fn test_apply_op_change_value() {
+    let mut treap_map: TreapMap<ComplexTreapMapConfig> = TreapMap::new();
+    for i in 0..10 {
+        treap_map.insert(i * 2, i * 2, i * 2);
+        treap_map.assert_consistency();
+    }
+    // Test update value
+    let mut indicies: Vec<_> = (0u32..20).collect();
+    indicies.shuffle(&mut thread_rng());
+    for i in indicies {
+        let should_fail = i % 3 == 0;
+        let update = |node: &mut Node<_>| {
+            if should_fail {
+                Err(())
+            } else {
+                node.value = 100 + i;
+                Ok(ApplyOpOutcome {
+                    out: (),
+                    update_weight: false,
+                    update_key: false,
+                })
+            }
+        };
+        let insert = |rng: &mut dyn RngCore| {
+            if should_fail {
+                Err(())
+            } else {
+                Ok((Node::new(i, 100 + i, i, 100 + i, rng.next_u64()), ()))
+            }
+        };
+        let res = treap_map.update(&i, update, insert);
+        assert_eq!(res.is_ok(), !should_fail);
+        assert_eq!(
+            treap_map.get(&i).cloned(),
+            if !should_fail {
+                Some(100 + i)
+            } else if i % 2 == 0 {
+                Some(i)
+            } else {
+                None
+            }
+        );
+        treap_map.assert_consistency();
+    }
+}
+
+#[test]
+fn test_apply_op_change_weight() {
+    let mut treap_map: TreapMap<ComplexTreapMapConfig> = TreapMap::new();
+    for i in 0..10 {
+        treap_map.insert(i * 2, i * 2, i * 2);
+        treap_map.assert_consistency();
+    }
+    // Test update value
+    let mut indicies: Vec<_> = (0u32..20).collect();
+    indicies.shuffle(&mut thread_rng());
+    for i in indicies {
+        let should_fail = i % 3 == 0;
+        let update = |node: &mut Node<_>| {
+            if should_fail {
+                Err(())
+            } else {
+                node.weight = 100 + i;
+                Ok(ApplyOpOutcome {
+                    out: (),
+                    update_weight: true,
+                    update_key: false,
+                })
+            }
+        };
+        let insert = |rng: &mut dyn RngCore| {
+            if should_fail {
+                Err(())
+            } else {
+                Ok((Node::new(i, 100 + i, i, 100 + i, rng.next_u64()), ()))
+            }
+        };
+        let res = treap_map.update(&i, update, insert);
+        assert_eq!(res.is_ok(), !should_fail);
+        treap_map.assert_consistency();
+    }
+    let target_weight: usize = (0..20)
+        .map(|i| {
+            if i % 3 != 0 {
+                i + 100
+            } else if i % 2 == 0 {
+                i
+            } else {
+                0
+            }
+        })
+        .sum();
+    assert_eq!(treap_map.root.unwrap().sum_weight(), target_weight as u32);
+}
+
+#[test]
+fn test_apply_op_change_key() {
+    let mut treap_map: TreapMap<ComplexTreapMapConfig> = TreapMap::new();
+    for i in 0..10 {
+        treap_map.insert(i * 2, i * 2, i * 2);
+        treap_map.assert_consistency();
+    }
+    // Test update value
+    let mut indicies: Vec<_> = (0u32..20).collect();
+    indicies.shuffle(&mut thread_rng());
+    for i in indicies {
+        let should_fail = i % 3 == 0;
+        let update = |node: &mut Node<_>| {
+            if should_fail {
+                Err(())
+            } else {
+                node.key = 100 + i;
+                node.sort_key = 100 + i;
+                node.weight = 100 + i;
+                node.value = 100 + i;
+                Ok(ApplyOpOutcome {
+                    out: (),
+                    update_weight: true,
+                    update_key: true,
+                })
+            }
+        };
+        let insert = |rng: &mut dyn RngCore| {
+            if should_fail {
+                Err(())
+            } else {
+                Ok((
+                    Node::new(i, 100 + i, 100 + i, 100 + i, rng.next_u64()),
+                    (),
+                ))
+            }
+        };
+        let res = treap_map.update(&i, update, insert);
+        assert_eq!(res.is_ok(), !should_fail);
+        treap_map.assert_consistency();
+
+        match (should_fail, i % 2 == 0) {
+            (true, true) => {
+                assert_eq!(treap_map.get(&i).cloned(), Some(i));
+                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+            }
+            (true, false) => {
+                assert_eq!(treap_map.get(&i).cloned(), None);
+                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+            }
+            (false, true) => {
+                assert_eq!(treap_map.get(&i).cloned(), None);
+                assert_eq!(treap_map.get(&(100 + i)).cloned(), Some(100 + i));
+            }
+            (false, false) => {
+                assert_eq!(treap_map.get(&i).cloned(), Some(i + 100));
+                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+            }
+        }
+    }
+    let target_weight: usize = (0..20)
+        .map(|i| {
+            if i % 3 != 0 {
+                i + 100
+            } else if i % 2 == 0 {
+                i
+            } else {
+                0
+            }
+        })
+        .sum();
+    assert_eq!(treap_map.root.unwrap().sum_weight(), target_weight as u32);
+}
+
+#[test]
+fn test_apply_op_change_key_for_shared_key() {
+    let mut treap_map: TreapMap<SimpleTreapMapConfig> = TreapMap::new();
+    for i in 0..10 {
+        treap_map.insert(i * 2, i * 2, i * 2);
+        treap_map.assert_consistency();
+    }
+    // Test update value
+    let mut indicies: Vec<_> = (0u32..20).collect();
+    indicies.shuffle(&mut thread_rng());
+    for i in indicies {
+        let should_fail = i % 3 == 0;
+        let update = |node: &mut Node<_>| {
+            if should_fail {
+                Err(())
+            } else {
+                node.key = 100 + i;
+                node.weight = 100 + i;
+                node.value = 100 + i;
+                Ok(ApplyOpOutcome {
+                    out: (),
+                    update_weight: true,
+                    update_key: true,
+                })
+            }
+        };
+        let insert = |rng: &mut dyn RngCore| {
+            if should_fail {
+                Err(())
+            } else {
+                Ok((Node::new(i, 100 + i, (), 100 + i, rng.next_u64()), ()))
+            }
+        };
+        let res = treap_map.update(&i, update, insert);
+        assert_eq!(res.is_ok(), !should_fail);
+        treap_map.assert_consistency();
+
+        match (should_fail, i % 2 == 0) {
+            (true, true) => {
+                assert_eq!(treap_map.get(&i).cloned(), Some(i));
+                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+            }
+            (true, false) => {
+                assert_eq!(treap_map.get(&i).cloned(), None);
+                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+            }
+            (false, true) => {
+                assert_eq!(treap_map.get(&i).cloned(), None);
+                assert_eq!(treap_map.get(&(100 + i)).cloned(), Some(100 + i));
+            }
+            (false, false) => {
+                assert_eq!(treap_map.get(&i).cloned(), Some(i + 100));
+                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+            }
+        }
+    }
+    let target_weight: usize = (0..20)
+        .map(|i| {
+            if i % 3 != 0 {
+                i + 100
+            } else if i % 2 == 0 {
+                i
+            } else {
+                0
+            }
+        })
+        .sum();
+    assert_eq!(treap_map.root.unwrap().sum_weight(), target_weight as u32);
 }
