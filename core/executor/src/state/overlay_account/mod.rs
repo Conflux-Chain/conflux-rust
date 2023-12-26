@@ -48,7 +48,6 @@ mod tests;
 
 pub use account_entry::AccountEntry;
 pub use ext_fields::RequireFields;
-pub use sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 
 use crate::substate::Substate;
 use cfx_types::{

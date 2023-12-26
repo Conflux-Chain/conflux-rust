@@ -45,6 +45,7 @@ mod tests;
 pub use self::{
     collateral::{initialize_cip107, settle_collateral_for_all},
     pos::{distribute_pos_interest, update_pos_status},
+    sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY,
     staking::initialize_or_update_dao_voted_params,
 };
 #[cfg(test)]

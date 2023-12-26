@@ -3,9 +3,7 @@ use super::Substate;
 #[cfg(test)]
 use super::StorageLayout;
 use cfx_parameters::{
-    internal_contract_addresses::{
-        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, SYSTEM_STORAGE_ADDRESS,
-    },
+    internal_contract_addresses::SYSTEM_STORAGE_ADDRESS,
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
@@ -20,16 +18,10 @@ use super::OverlayAccount;
 
 impl OverlayAccount {
     pub fn set_storage(
-        &mut self, db: &StateDbGeneric, key: Vec<u8>, value: U256,
+        &mut self, key: Vec<u8>, value: U256, old_value: StorageValue,
         owner: Address, substate: &mut Substate,
     ) -> DbResult<()>
     {
-        let old_value = self.storage_entry_at(db, &key)?;
-        // Noop if the value does not change.
-        if old_value.value == value && !self.force_reset_owner() {
-            return Ok(());
-        }
-
         // Refund the collateral of old value
         if let Some(old_owner) = old_value.owner {
             substate.record_storage_release(
@@ -57,16 +49,6 @@ impl OverlayAccount {
         Arc::make_mut(&mut self.storage_write_cache)
             .insert(key.clone(), new_entry);
         Ok(())
-    }
-
-    // In most cases, the ownership does not change if the set storage operation
-    // does not change the value. However, some implementations do not follow
-    // this rule. So we must deal with these special cases for backward
-    // compatible.
-    fn force_reset_owner(&self) -> bool {
-        self.address.space == Space::Native
-            && self.address.address
-                == SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS
     }
 
     #[cfg(test)]
