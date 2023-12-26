@@ -152,13 +152,17 @@ impl Executed {
             fees_value: fee,
             ..
         } = refund_info;
-        let storage_sponsor_paid = if spec.cip78a {
+        let mut storage_sponsor_paid = if spec.cip78a {
             cost.storage_sponsored
         } else {
             cost.storage_sponsor_eligible
         };
 
-        let gas_sponsor_paid = cost.gas_sponsored;
+        let mut gas_sponsor_paid = cost.gas_sponsored;
+        if !r.apply_state && !spec.cip78b {
+            gas_sponsor_paid = false;
+            storage_sponsor_paid = false;
+        }
 
         Executed {
             gas_used,
