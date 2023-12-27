@@ -18,13 +18,12 @@ mod overlay_account;
 /// State Object: Represents the core object of the state module.
 mod state_object;
 
-pub use overlay_account::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 #[cfg(test)]
 pub use state_object::get_state_for_genesis_write;
 pub use state_object::{
     distribute_pos_interest, initialize_cip107,
     initialize_or_update_dao_voted_params, settle_collateral_for_all,
-    update_pos_status, State,
+    update_pos_status, State, COMMISSION_PRIVILEGE_SPECIAL_KEY,
 };
 
 use cfx_types::AddressWithSpace;

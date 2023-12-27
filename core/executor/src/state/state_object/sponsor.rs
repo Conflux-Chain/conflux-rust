@@ -4,11 +4,19 @@ use cfx_statedb::{
     global_params::{ConvertedStoragePoints, TotalIssued},
     Result as DbResult,
 };
-use cfx_types::{maybe_address, Address, U256};
+use cfx_types::{
+    maybe_address, Address, AddressSpaceUtil, AddressWithSpace, U256,
+};
 use primitives::{SponsorInfo, StorageKey};
 
 use super::{State, Substate};
 use crate::{return_if, try_loaded};
+
+lazy_static! {
+    static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: U256 = U256::one();
+    /// If we set this key, it means every account has commission privilege.
+    pub static ref COMMISSION_PRIVILEGE_SPECIAL_KEY: Address = Address::zero();
+}
 
 impl State {
     pub fn sponsor_info(
@@ -148,10 +156,19 @@ impl State {
     pub fn check_contract_whitelist(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
-        let acc = try_loaded!(self.read_native_account_lock(
-            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS
-        ));
-        acc.check_contract_whitelist(&self.db, contract_address, user)
+        let special_value = self.storage_at(
+            &sponsor_address(),
+            &special_sponsor_key(&contract_address),
+        )?;
+        if !special_value.is_zero() {
+            Ok(true)
+        } else {
+            self.storage_at(
+                &sponsor_address(),
+                &sponsor_key(contract_address, user),
+            )
+            .map(|x| !x.is_zero())
+        }
     }
 
     pub fn add_to_contract_whitelist(
@@ -164,13 +181,10 @@ impl State {
             contract_address, user
         );
 
-        self.write_native_account_lock(
-            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-        )?
-        .add_to_contract_whitelist(
-            &self.db,
-            contract_address,
-            user,
+        self.set_storage(
+            &sponsor_address(),
+            sponsor_key(&contract_address, &user),
+            COMMISSION_PRIVILEGE_STORAGE_VALUE.clone(),
             storage_owner,
             substate,
         )?;
@@ -183,16 +197,14 @@ impl State {
         user: Address, substate: &mut Substate,
     ) -> DbResult<()>
     {
-        self.write_native_account_lock(
-            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-        )?
-        .remove_from_contract_whitelist(
-            &self.db,
-            contract_address,
-            user,
+        self.set_storage(
+            &sponsor_address(),
+            sponsor_key(&contract_address, &user),
+            U256::zero(),
             storage_owner,
             substate,
         )?;
+
         Ok(())
     }
 
@@ -221,6 +233,26 @@ impl State {
         )?;
         Ok(())
     }
+}
+
+#[inline]
+fn sponsor_address() -> AddressWithSpace {
+    SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.with_native_space()
+}
+
+#[inline]
+fn sponsor_key(contract: &Address, user: &Address) -> Vec<u8> {
+    let mut key = Vec::with_capacity(Address::len_bytes() * 2);
+    key.extend_from_slice(contract.as_bytes());
+    key.extend_from_slice(user.as_bytes());
+    key
+}
+
+fn special_sponsor_key(contract: &Address) -> Vec<u8> {
+    let mut key = Vec::with_capacity(Address::len_bytes() * 2);
+    key.extend_from_slice(contract.as_bytes());
+    key.extend_from_slice(COMMISSION_PRIVILEGE_SPECIAL_KEY.as_bytes());
+    key
 }
 
 fn storage_range_deletion_for_account(

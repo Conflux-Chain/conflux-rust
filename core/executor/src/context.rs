@@ -111,15 +111,15 @@ impl<'a> Context<'a> {
 
 impl<'a> ContextTrait for Context<'a> {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
-        let caller = AddressWithSpace {
+        let receiver = AddressWithSpace {
             address: self.origin.address,
             space: self.space,
         };
-        self.state.storage_at(&caller, key).map_err(Into::into)
+        self.state.storage_at(&receiver, key).map_err(Into::into)
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
-        let caller = AddressWithSpace {
+        let receiver = AddressWithSpace {
             address: self.origin.address,
             space: self.space,
         };
@@ -128,7 +128,7 @@ impl<'a> ContextTrait for Context<'a> {
         } else {
             self.state
                 .set_storage(
-                    &caller,
+                    &receiver,
                     key,
                     value,
                     self.origin.storage_owner,

@@ -1,8 +1,11 @@
 use super::{State, Substate};
-use crate::try_loaded;
-use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
+use crate::{return_if, try_loaded};
+use cfx_parameters::internal_contract_addresses::{
+    SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, SYSTEM_STORAGE_ADDRESS,
+};
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
+use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
+use primitives::StorageValue;
 
 impl State {
     // System Storage shares the cache and checkpoint mechanisms with
@@ -33,6 +36,7 @@ impl State {
         )
     }
 
+    #[inline]
     pub fn storage_at(
         &self, address: &AddressWithSpace, key: &[u8],
     ) -> DbResult<U256> {
@@ -40,13 +44,28 @@ impl State {
         acc.storage_at(&self.db, key)
     }
 
+    #[inline]
+    pub fn storage_entry_at(
+        &self, address: &AddressWithSpace, key: &[u8],
+    ) -> DbResult<StorageValue> {
+        let acc = try_loaded!(self.read_account_lock(address));
+        acc.storage_entry_at(&self.db, key)
+    }
+
+    #[inline]
     pub fn set_storage(
         &mut self, address: &AddressWithSpace, key: Vec<u8>, value: U256,
         owner: Address, substate: &mut Substate,
     ) -> DbResult<()>
     {
+        let old_value = self.storage_entry_at(address, &key)?;
+        return_if!(
+            old_value.value == value && !Self::force_reset_owner(address)
+        );
+
         self.write_account_lock(address)?
-            .set_storage(&self.db, key, value, owner, substate)?;
+            .set_storage(key, value, old_value, owner, substate)?;
+
         Ok(())
     }
 
@@ -55,6 +74,16 @@ impl State {
     ) -> DbResult<bool> {
         let acc = try_loaded!(self.read_account_lock(address));
         Ok(acc.fresh_storage())
+    }
+
+    // In most cases, the ownership does not change if the set storage operation
+    // does not change the value. However, some implementations do not follow
+    // this rule. So we must deal with these special cases for backward
+    // compatible.
+    #[inline]
+    fn force_reset_owner(address: &AddressWithSpace) -> bool {
+        address.space == Space::Native
+            && address.address == SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS
     }
 }
 
@@ -68,7 +97,7 @@ impl State {
     {
         use super::{checkpoints::CheckpointEntry::*, AccountEntry};
         use cfx_statedb::StateDbExt;
-        use primitives::{StorageKey, StorageValue};
+        use primitives::StorageKey;
 
         #[derive(Debug)]
         enum ReturnKind {
