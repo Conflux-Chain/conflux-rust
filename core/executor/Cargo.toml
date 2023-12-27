@@ -40,7 +40,7 @@ solidity-abi-derive = { path="../../util/solidity-abi-derive" }
 sha3-macro = {path="../../util/sha3-macro"}
 strum = "0.20"
 strum_macros = "0.20"
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "e7d9119eb285607d5134d40efd89555c41d73160", default-features = false, features = ["multicore"]}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
 tiny-keccak = {version = "2.0",  features = ["keccak"]}
 diem-crypto = { path = "../src/pos/crypto/crypto" }
 diem-types = { path = "../src/pos/types" }

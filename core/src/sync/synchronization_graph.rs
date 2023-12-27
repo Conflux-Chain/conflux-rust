@@ -1933,7 +1933,7 @@ impl SynchronizationGraph {
     /// in the new consensus graph already have bodies.
     pub fn complete_filling_block_bodies(&self) -> bool {
         {
-            let mut inner = &mut *self.inner.write();
+            let inner = &mut *self.inner.write();
 
             // Iterating over `hash_to_arena_indices` might be more efficient
             // than iterating over `arena`.

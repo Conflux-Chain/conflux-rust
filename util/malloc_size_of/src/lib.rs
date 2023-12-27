@@ -21,7 +21,7 @@ static GLOBAL: Jemalloc = Jemalloc;
 
 use cfg_if::cfg_if;
 use cfx_types::{
-    AddressWithSpace, AllChainID, Space, H160, H256, H512, U256, U512,
+    AddressWithSpace, AllChainID, Space, SpaceMap, H160, H256, H512, U256, U512,
 };
 use hashbrown::HashMap as FastHashMap;
 use parking_lot;
@@ -122,6 +122,12 @@ pub trait MallocShallowSizeOf {
 impl MallocSizeOf for String {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         unsafe { ops.malloc_size_of(self.as_ptr()) }
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for SpaceMap<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.map_sum(|x| x.size_of(ops))
     }
 }
 

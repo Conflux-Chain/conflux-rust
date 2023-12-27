@@ -111,7 +111,10 @@ pub fn check_balance_against_transaction(
 
     let balance_for_collateral: U512 = contract_account
         .as_ref()
-        .map(|a| a.sponsor_info.sponsor_balance_for_collateral)
+        .map(|a| {
+            a.sponsor_info.sponsor_balance_for_collateral
+                + a.sponsor_info.unused_storage_points()
+        })
         .unwrap_or_default()
         .into();
 

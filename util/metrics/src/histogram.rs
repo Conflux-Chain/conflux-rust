@@ -366,13 +366,16 @@ impl Eq for ExpDecaySampleItem {}
 
 impl PartialOrd for ExpDecaySampleItem {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        other.k.partial_cmp(&self.k)
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for ExpDecaySampleItem {
     // for k, the smaller, the bigger
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).expect("k should be comparable")
+        other
+            .k
+            .partial_cmp(&self.k)
+            .expect("k should be comparable")
     }
 }

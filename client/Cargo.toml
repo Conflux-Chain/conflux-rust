@@ -99,7 +99,7 @@ rpassword = "5.0.1"
 static_assertions = "1.1.0"
 parity-version = {path = "../util/version"}
 solidity-abi = {path="../util/solidity-abi"}
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "e7d9119eb285607d5134d40efd89555c41d73160", default-features = false, features = ["multicore"]} 
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
 
 [dev-dependencies]
 criterion = "0.3"
