@@ -5,7 +5,8 @@
 use crate::{
     config::{KeyMngTrait, WeightConsolidate},
     search::{prefix_sum_search, SearchDirection},
-    update::{InsertOp, RemoveOp},
+    update::{ApplyOp, ApplyOpOutcome, InsertOp, RemoveOp},
+    SearchResult,
 };
 
 use super::{config::TreapMapConfig, node::Node};
@@ -14,8 +15,10 @@ use rand::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
 pub struct TreapMap<C: TreapMapConfig> {
+    #[cfg(test)]
+    pub(crate) root: Option<Box<Node<C>>>,
+    #[cfg(not(test))]
     root: Option<Box<Node<C>>>,
-    size: usize,
     ext_map: C::ExtMap,
     rng: XorShiftRng,
 }
@@ -34,7 +37,6 @@ impl<C: TreapMapConfig> TreapMap<C> {
     pub fn new() -> TreapMap<C> {
         TreapMap {
             root: None,
-            size: 0,
             rng: XorShiftRng::from_entropy(),
             ext_map: Default::default(),
         }
@@ -43,15 +45,14 @@ impl<C: TreapMapConfig> TreapMap<C> {
     pub fn new_with_rng(rng: XorShiftRng) -> TreapMap<C> {
         TreapMap {
             root: None,
-            size: 0,
             rng,
             ext_map: Default::default(),
         }
     }
 
-    pub fn len(&self) -> usize { self.size }
+    pub fn len(&self) -> usize { self.ext_map.len() }
 
-    pub fn is_empty(&self) -> bool { self.size == 0 }
+    pub fn is_empty(&self) -> bool { self.ext_map.len() == 0 }
 
     pub fn contains_key(&self, key: &C::SearchKey) -> bool {
         self.get(key).is_some()
@@ -61,15 +62,16 @@ impl<C: TreapMapConfig> TreapMap<C> {
         &mut self, key: C::SearchKey, value: C::Value, weight: C::Weight,
     ) -> Option<C::Value> {
         let sort_key = self.ext_map.make_sort_key(&key, &value);
-        self.ext_map.view_insert(&key, &value);
 
         let node = Node::new(key, value, sort_key, weight, self.rng.next_u64());
 
-        let (result, _, _) = Node::update_inner(&mut self.root, InsertOp(node));
-
-        if result.is_none() {
-            self.size += 1;
-        }
+        let (result, _, _) = Node::update_inner(
+            &mut self.root,
+            InsertOp {
+                node: Box::new(node),
+                ext_map: &mut self.ext_map,
+            },
+        );
 
         result
     }
@@ -77,16 +79,50 @@ impl<C: TreapMapConfig> TreapMap<C> {
     pub fn remove(&mut self, key: &C::SearchKey) -> Option<C::Value> {
         let sort_key = self.ext_map.get_sort_key(&key)?;
 
-        let (result, _, _) =
-            Node::update_inner(&mut self.root, RemoveOp((&sort_key, key)));
-
-        self.ext_map.view_remove(key, result.as_ref());
-
-        if result.is_some() {
-            self.size -= 1;
-        }
+        let (result, _, _) = Node::update_inner(
+            &mut self.root,
+            RemoveOp {
+                key: (&sort_key, key),
+                ext_map: &mut self.ext_map,
+            },
+        );
 
         result
+    }
+
+    pub fn update<U, I, T, E>(
+        &mut self, key: &C::SearchKey, update: U, insert: I,
+    ) -> Result<T, E>
+    where
+        U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
+        I: FnOnce(&mut dyn RngCore) -> Result<(Node<C>, T), E>,
+    {
+        let sort_key = if let Some(sort_key) = self.ext_map.get_sort_key(key) {
+            sort_key
+        } else {
+            return match insert(&mut self.rng) {
+                Ok((node, ret)) => {
+                    self.insert(node.key, node.value, node.weight);
+                    Ok(ret)
+                }
+                Err(err) => Err(err),
+            };
+        };
+        let rng = &mut self.rng;
+        let (res, _, _) = Node::update_inner(
+            &mut self.root,
+            ApplyOp {
+                key: (&sort_key, key),
+                update,
+                insert: || insert(rng),
+                ext_map: &mut self.ext_map,
+            },
+        );
+        let (ret, maybe_node) = res?;
+        if let Some(node) = maybe_node {
+            self.insert(node.key, node.value, node.weight);
+        }
+        Ok(ret)
     }
 
     pub fn sum_weight(&self) -> C::Weight {
@@ -111,7 +147,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
                 if &weight < base {
                     Left
                 } else {
-                    let right_base = C::Weight::consolidate(base, mid);
+                    let right_base = C::Weight::consolidate(base, &mid.weight);
                     if weight < right_base {
                         Stop
                     } else {
@@ -123,7 +159,16 @@ impl<C: TreapMapConfig> TreapMap<C> {
         .maybe_value()
     }
 
-    fn iter(&self) -> Iter<C> {
+    pub fn search<F>(&self, f: F) -> Option<SearchResult<C>>
+    where F: FnMut(&C::Weight, &Node<C>) -> SearchDirection<C::Weight> {
+        Some(prefix_sum_search(
+            self.root.as_ref()?,
+            C::Weight::empty(),
+            f,
+        ))
+    }
+
+    pub fn iter(&self) -> Iter<C> {
         let mut iter = Iter { nodes: vec![] };
         if let Some(ref n) = self.root {
             iter.nodes.push(&**n);
@@ -153,6 +198,14 @@ impl<C: TreapMapConfig> TreapMap<C> {
 
 pub struct Iter<'a, C: TreapMapConfig> {
     nodes: Vec<&'a Node<C>>,
+}
+
+impl<'a, C: TreapMapConfig> Clone for Iter<'a, C> {
+    fn clone(&self) -> Self {
+        Self {
+            nodes: self.nodes.clone(),
+        }
+    }
 }
 
 impl<'a, C: TreapMapConfig> Iter<'a, C> {

@@ -2,6 +2,7 @@ use super::{
     config::{TreapMapConfig, WeightConsolidate},
     node::Node,
 };
+#[derive(Debug)]
 pub enum SearchDirection<W> {
     Left,
     Stop,
@@ -14,28 +15,36 @@ pub enum SearchResult<'a, C: TreapMapConfig> {
     LeftMost,
     Found {
         base_weight: C::Weight,
-        node_weight: &'a C::Weight,
-        value: &'a C::Value,
+        node: &'a Node<C>,
     },
     RightMost(C::Weight),
 }
 
 impl<'a, C: TreapMapConfig> SearchResult<'a, C> {
     pub fn maybe_value(&self) -> Option<&'a C::Value> {
-        if let SearchResult::Found { value, .. } = self {
-            Some(value)
+        if let SearchResult::Found { node, .. } = self {
+            Some(&node.value)
         } else {
             None
         }
     }
+
+    pub fn or(self, other: Self) -> Self {
+        if matches!(self, SearchResult::Found { .. }) {
+            self
+        } else {
+            other
+        }
+    }
 }
 
+#[inline]
 pub fn prefix_sum_search<C, F>(
-    node: &Node<C>, base_weight: C::Weight, f: F,
+    node: &Node<C>, base_weight: C::Weight, mut f: F,
 ) -> SearchResult<C>
 where
     C: TreapMapConfig,
-    F: Fn(&C::Weight, &C::Weight) -> SearchDirection<C::Weight>,
+    F: FnMut(&C::Weight, &Node<C>) -> SearchDirection<C::Weight>,
 {
     use SearchDirection::*;
 
@@ -44,27 +53,26 @@ where
     } else {
         base_weight.clone()
     };
-    let search_dir = f(&left_weight, &node.weight);
+    let search_dir = f(&left_weight, &node);
+
+    let found = SearchResult::Found {
+        base_weight: left_weight,
+        node: &node,
+    };
 
     match (search_dir, &node.left, &node.right) {
         (Stop, _, _) | (LeftOrStop, None, _) | (RightOrStop(_), _, None) => {
-            SearchResult::Found {
-                base_weight,
-                node_weight: &node.weight,
-                value: &node.value,
-            }
+            found
         }
         (Left, None, _) => SearchResult::LeftMost,
         (Right(weight), _, None) => SearchResult::RightMost(weight),
-        // FIXME: an elegant style is `(Left | LeftOrStop, Some(left), _)`, but
-        // it can not pass Conflux code formatter, which is in a very early
-        // version.
-        (Left, Some(left), _) | (LeftOrStop, Some(left), _) => {
-            prefix_sum_search(left, base_weight, f)
+        (Left, Some(left), _) => prefix_sum_search(left, base_weight, f),
+        (LeftOrStop, Some(left), _) => {
+            prefix_sum_search(left, base_weight, f).or(found)
         }
-        (Right(weight), _, Some(right))
-        | (RightOrStop(weight), _, Some(right)) => {
-            prefix_sum_search(right, weight, f)
+        (Right(weight), _, Some(right)) => prefix_sum_search(right, weight, f),
+        (RightOrStop(weight), _, Some(right)) => {
+            prefix_sum_search(right, weight, f).or(found)
         }
     }
 }

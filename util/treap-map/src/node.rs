@@ -4,17 +4,17 @@
 
 use super::{
     config::{TreapMapConfig, WeightConsolidate},
-    update::{TreapNodeUpdate, UpdateResult},
+    update::{OpResult, TreapNodeUpdate},
 };
 
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::mem;
 
 pub struct Node<C: TreapMapConfig> {
-    pub(crate) key: C::SearchKey,
-    pub(crate) value: C::Value,
-    pub(crate) sort_key: C::SortKey,
-    pub(crate) weight: C::Weight,
+    pub key: C::SearchKey,
+    pub value: C::Value,
+    pub sort_key: C::SortKey,
+    pub weight: C::Weight,
     pub(crate) sum_weight: C::Weight,
     priority: u64,
 
@@ -22,7 +22,7 @@ pub struct Node<C: TreapMapConfig> {
     pub(crate) right: Option<Box<Node<C>>>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Direction {
     Left,
     Right,
@@ -130,25 +130,28 @@ impl<C: TreapMapConfig> Node<C> {
     }
 
     fn process_update_result<U: TreapNodeUpdate<C>>(
-        maybe_node: &mut Option<Box<Node<C>>>, result: UpdateResult<C, U::Ret>,
-    ) -> (U::Ret, bool, bool) {
+        maybe_node: &mut Option<Box<Node<C>>>,
+        result: OpResult<C, U::Ret, U::DeleteRet>,
+    ) -> (U::Ret, bool, bool)
+    {
         match result {
-            UpdateResult::Updated { update_weight, ret } => {
+            OpResult::Noop(ret) => (ret, false, false),
+            OpResult::Updated { update_weight, ret } => {
                 (ret, update_weight, false)
             }
-            UpdateResult::InsertOnVacant { insert, ret } => {
+            OpResult::InsertOnVacant { insert, ret } => {
                 // `maybe_node` should be empty here. So we ignore the replaced
                 // value.
                 let _ = mem::replace(maybe_node, Some(insert));
                 (ret, true, true)
             }
-            UpdateResult::Delete => {
+            OpResult::Delete(delete_ret) => {
                 let deleted_node = if maybe_node.is_some() {
                     Some(Node::delete(maybe_node))
                 } else {
                     None
                 };
-                let ret = U::handle_delete(deleted_node);
+                let ret = U::handle_delete(deleted_node, delete_ret);
                 (ret, true, true)
             }
         }
@@ -306,11 +309,25 @@ impl<C: TreapMapConfig> Node<C> {
             weight.accure(&left.sum_weight);
             assert!(left.priority <= self.priority);
             left.assert_consistency();
+            assert_eq!(
+                C::next_node_dir(
+                    (&left.sort_key, &left.key),
+                    (&self.sort_key, &self.key)
+                ),
+                Some(Direction::Left)
+            );
         }
         if let Some(right) = self.right.as_ref() {
             weight.accure(&right.sum_weight);
             assert!(right.priority <= self.priority);
             right.assert_consistency();
+            assert_eq!(
+                C::next_node_dir(
+                    (&right.sort_key, &right.key),
+                    (&self.sort_key, &self.key)
+                ),
+                Some(Direction::Right)
+            );
         }
 
         assert_eq!(weight, self.sum_weight);

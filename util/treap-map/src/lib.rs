@@ -12,8 +12,11 @@ mod update;
 mod tests;
 
 pub use self::{
-    config::{KeyMngTrait, SharedKeyTreapMapConfig, TreapMapConfig},
-    map::TreapMap,
-    node::Direction,
+    config::{
+        KeyMngTrait, SharedKeyTreapMapConfig, TreapMapConfig, WeightConsolidate,
+    },
+    map::{Iter, TreapMap},
+    node::{Direction, Node},
     search::{SearchDirection, SearchResult},
+    update::ApplyOpOutcome,
 };

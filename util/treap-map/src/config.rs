@@ -69,10 +69,13 @@ pub trait TreapMapConfig: Sized {
 /// the sort key is not directly derivable from the search key or is not a null
 /// element.
 pub trait KeyMngTrait<C: TreapMapConfig>: Default {
-    /// Invoked when a new key-value pair is inserted into the Treap.
-    fn view_insert(&mut self, key: &C::SearchKey, value: &C::Value);
-    /// Invoked when a new key-value pair is removed from the Treap.
-    fn view_remove(&mut self, key: &C::SearchKey, old_value: Option<&C::Value>);
+    /// Invoked when a new key-value pair is changed in the Treap.
+    fn view_update(
+        &mut self, key: &C::SearchKey, value: Option<&C::Value>,
+        old_value: Option<&C::Value>,
+    );
+    /// Number of the keys
+    fn len(&self) -> usize;
     /// Retrieve the sort key for a given search key.
     /// Returns `None` if the search key is not in the treap.
     fn get_sort_key(&self, key: &C::SearchKey) -> Option<C::SortKey>;
@@ -93,7 +96,7 @@ pub trait SharedKeyTreapMapConfig {
 }
 
 impl<T: SharedKeyTreapMapConfig> TreapMapConfig for T {
-    type ExtMap = DummyMap;
+    type ExtMap = Counter;
     type SearchKey = T::Key;
     type SortKey = ();
     type Value = T::Value;
@@ -111,12 +114,24 @@ impl<T: SharedKeyTreapMapConfig> TreapMapConfig for T {
     }
 }
 #[derive(Default)]
-pub struct DummyMap;
+pub struct Counter(pub usize);
 
-impl<C: TreapMapConfig<SortKey = ()>> KeyMngTrait<C> for DummyMap {
-    fn view_insert(&mut self, _key: &C::SearchKey, _value: &C::Value) {}
+impl<C: TreapMapConfig<SortKey = ()>> KeyMngTrait<C> for Counter {
+    #[inline]
+    fn view_update(
+        &mut self, _key: &C::SearchKey, value: Option<&C::Value>,
+        old_value: Option<&C::Value>,
+    )
+    {
+        if value.is_some() {
+            self.0 += 1;
+        }
+        if old_value.is_some() {
+            self.0 -= 1
+        }
+    }
 
-    fn view_remove(&mut self, _key: &C::SearchKey, _value: Option<&C::Value>) {}
+    fn len(&self) -> usize { self.0 }
 
     fn get_sort_key(&self, _key: &C::SearchKey) -> Option<()> { Some(()) }
 
@@ -127,6 +142,8 @@ impl<C: TreapMapConfig<SortKey = ()>> KeyMngTrait<C> for DummyMap {
     }
 }
 
-impl MallocSizeOf for DummyMap {
-    fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
+impl MallocSizeOf for Counter {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.0.size_of(ops)
+    }
 }

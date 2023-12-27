@@ -1,3 +1,5 @@
+use crate::KeyMngTrait;
+
 use super::{config::TreapMapConfig, node::Node};
 
 ///  The interface for insert/update/delete a node in a `Treap` by key by custom
@@ -5,6 +7,8 @@ use super::{config::TreapMapConfig, node::Node};
 pub trait TreapNodeUpdate<C: TreapMapConfig> {
     /// The return value
     type Ret;
+    /// The return value if delete is required.
+    type DeleteRet;
 
     /// Retrieve the key of the node to be updated.
     fn treap_key(&self) -> (&C::SortKey, &C::SearchKey);
@@ -18,15 +22,17 @@ pub trait TreapNodeUpdate<C: TreapMapConfig> {
     /// the `UpdateResult`.
     fn update_node(
         self, maybe_node: Option<&mut Box<Node<C>>>,
-    ) -> UpdateResult<C, Self::Ret>;
+    ) -> OpResult<C, Self::Ret, Self::DeleteRet>;
 
     /// When a node needs to be deleted during an update, the deleted node will
     /// be fed to this method. The deletion logic itself is managed by
     /// `update_inner`.
-    fn handle_delete(deleted_node: Option<Box<Node<C>>>) -> Self::Ret;
+    fn handle_delete(
+        deleted_node: Option<Box<Node<C>>>, delete_ret: Self::DeleteRet,
+    ) -> Self::Ret;
 }
 
-pub enum UpdateResult<C: TreapMapConfig, R> {
+pub enum OpResult<C: TreapMapConfig, R, DR> {
     /// Used when the targeted slot in the Treap is vacant and a new node
     /// should be inserted at this position.
     InsertOnVacant { insert: Box<Node<C>>, ret: R },
@@ -38,63 +44,182 @@ pub enum UpdateResult<C: TreapMapConfig, R> {
     /// ⚠️ WARNING: The update operation must not change the sort key of the
     /// node.
     Updated { update_weight: bool, ret: R },
+    /// Used when the targeted node is not changed. Equivalent to `Updated`
+    /// with `update_weight = false`
+    Noop(R),
     /// Used when the targeted node should be deleted.
-    Delete,
+    Delete(DR),
 }
 
-pub(crate) struct InsertOp<C: TreapMapConfig>(pub Node<C>);
+pub(crate) struct InsertOp<'a, C: TreapMapConfig> {
+    pub node: Box<Node<C>>,
+    pub ext_map: &'a mut C::ExtMap,
+}
 
-impl<C: TreapMapConfig> TreapNodeUpdate<C> for InsertOp<C> {
+impl<'a, C: TreapMapConfig> TreapNodeUpdate<C> for InsertOp<'a, C> {
+    type DeleteRet = ();
     type Ret = Option<C::Value>;
 
     fn treap_key(&self) -> (&C::SortKey, &C::SearchKey) {
-        (&self.0.sort_key, &self.0.key)
+        (&self.node.sort_key, &self.node.key)
     }
 
     fn update_node(
         self, maybe_node: Option<&mut Box<Node<C>>>,
-    ) -> UpdateResult<C, Self::Ret> {
-        use UpdateResult::*;
+    ) -> OpResult<C, Self::Ret, Self::DeleteRet> {
+        use OpResult::*;
 
         if let Some(node) = maybe_node {
             let ret = Some(node.value.clone());
-            let update_weight = node.weight != self.0.weight;
+            let update_weight = node.weight != self.node.weight;
 
-            node.value = self.0.value;
-            node.weight = self.0.weight;
+            self.ext_map.view_update(
+                &self.node.key,
+                Some(&self.node.value),
+                Some(&node.value),
+            );
+
+            node.value = self.node.value;
+            node.weight = self.node.weight;
 
             Updated { ret, update_weight }
         } else {
+            self.ext_map.view_update(
+                &self.node.key,
+                Some(&self.node.value),
+                None,
+            );
             InsertOnVacant {
-                insert: Box::new(self.0),
+                insert: self.node,
                 ret: None,
             }
         }
     }
 
-    fn handle_delete(_deleted_node: Option<Box<Node<C>>>) -> Self::Ret {
+    fn handle_delete(
+        _deleted_node: Option<Box<Node<C>>>, _delete_ret: (),
+    ) -> Self::Ret {
         // update_node never returns deletion
         unreachable!()
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct RemoveOp<'a, C: TreapMapConfig>(
-    pub (&'a C::SortKey, &'a C::SearchKey),
-);
+pub(crate) struct RemoveOp<'a, C: TreapMapConfig> {
+    pub key: (&'a C::SortKey, &'a C::SearchKey),
+    pub ext_map: &'a mut C::ExtMap,
+}
 
 impl<'a, C: TreapMapConfig> TreapNodeUpdate<C> for RemoveOp<'a, C> {
+    type DeleteRet = ();
     type Ret = Option<C::Value>;
 
-    fn treap_key(&self) -> (&C::SortKey, &C::SearchKey) { self.0 }
+    fn treap_key(&self) -> (&C::SortKey, &C::SearchKey) { self.key }
 
     fn update_node(
-        self, _maybe_node: Option<&mut Box<Node<C>>>,
-    ) -> UpdateResult<C, Self::Ret> {
-        UpdateResult::Delete
+        self, maybe_node: Option<&mut Box<Node<C>>>,
+    ) -> OpResult<C, Self::Ret, Self::DeleteRet> {
+        self.ext_map.view_update(
+            self.key.1,
+            None,
+            maybe_node.map(|x| &x.value),
+        );
+        OpResult::Delete(())
     }
 
-    fn handle_delete(deleted_node: Option<Box<Node<C>>>) -> Self::Ret {
+    fn handle_delete(
+        deleted_node: Option<Box<Node<C>>>, _delete_ret: (),
+    ) -> Self::Ret {
         deleted_node.map(|x| x.value)
+    }
+}
+
+pub struct ApplyOpOutcome<T> {
+    pub out: T,
+    pub update_weight: bool,
+    pub update_key: bool,
+}
+
+pub(crate) struct ApplyOp<'a, C, U, I, T, E>
+where
+    C: TreapMapConfig,
+    U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
+    I: FnOnce() -> Result<(Node<C>, T), E>,
+{
+    pub key: (&'a C::SortKey, &'a C::SearchKey),
+    pub ext_map: &'a mut C::ExtMap,
+    pub update: U,
+    pub insert: I,
+}
+
+impl<'a, 'b, C, U, I, T, E> TreapNodeUpdate<C> for ApplyOp<'a, C, U, I, T, E>
+where
+    C: TreapMapConfig,
+    U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
+    I: FnOnce() -> Result<(Node<C>, T), E>,
+{
+    type DeleteRet = T;
+    type Ret = Result<(T, Option<Box<Node<C>>>), E>;
+
+    fn treap_key(&self) -> (&'a C::SortKey, &'a C::SearchKey) { self.key }
+
+    fn update_node(
+        self, maybe_node: Option<&mut Box<Node<C>>>,
+    ) -> OpResult<C, Self::Ret, Self::DeleteRet> {
+        use OpResult::*;
+        match maybe_node {
+            None => {
+                let (node, ret) = match (self.insert)() {
+                    Ok(x) => x,
+                    Err(err) => {
+                        return Noop(Err(err));
+                    }
+                };
+
+                self.ext_map
+                    .view_update(&*self.key.1, Some(&node.value), None);
+                assert!(
+                    C::next_node_dir(self.key, (&node.sort_key, &node.key))
+                        .is_none(),
+                    "Inserted node has incosistent key"
+                );
+                InsertOnVacant {
+                    insert: Box::new(node),
+                    ret: Ok((ret, None)),
+                }
+            }
+            Some(node) => {
+                let old_value = node.value.clone();
+                let ApplyOpOutcome {
+                    out,
+                    update_weight,
+                    update_key,
+                } = match (self.update)(node) {
+                    Ok(x) => x,
+                    Err(err) => {
+                        return Noop(Err(err));
+                    }
+                };
+                self.ext_map.view_update(
+                    &*self.key.1,
+                    Some(&node.value),
+                    Some(&old_value),
+                );
+
+                if update_key {
+                    Delete(out)
+                } else {
+                    Updated {
+                        update_weight,
+                        ret: Ok((out, None)),
+                    }
+                }
+            }
+        }
+    }
+
+    fn handle_delete(
+        deleted_node: Option<Box<Node<C>>>, delete_ret: T,
+    ) -> Self::Ret {
+        Ok((delete_ret, Some(deleted_node.unwrap())))
     }
 }
