@@ -609,7 +609,7 @@ impl StateManager {
     pub fn check_make_snapshot(
         &self, maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         intermediate_trie_root: Option<NodeRefDeltaMpt>,
-        intermediate_epoch_id: &EpochId, new_height: u64,
+        intermediate_epoch_id: &EpochId, new_height: u64, recovery: bool,
     ) -> Result<()>
     {
         StorageManager::check_make_register_snapshot_background(
@@ -620,6 +620,7 @@ impl StateManager {
                 mpt: intermediate_trie,
                 maybe_root_node: intermediate_trie_root,
             }),
+            recovery,
         )
     }
 

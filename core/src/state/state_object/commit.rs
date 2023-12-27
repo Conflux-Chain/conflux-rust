@@ -55,12 +55,12 @@ impl State {
 
     pub fn commit(
         &mut self, epoch_id: EpochId,
-        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+        mut debug_record: Option<&mut ComputeEpochDebugRecord>, recovery: bool,
     ) -> DbResult<StateRootWithAuxInfo>
     {
         debug!("Commit epoch[{}]", epoch_id);
         self.compute_state_root(debug_record.as_deref_mut())?;
-        Ok(self.db.commit(epoch_id, debug_record)?)
+        Ok(self.db.commit(epoch_id, debug_record, recovery)?)
     }
 
     pub fn accounts_for_txpool(&self) -> Vec<Account> {

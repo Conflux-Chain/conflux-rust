@@ -21,7 +21,7 @@ pub fn get_state_for_genesis_write(
     );
     let genesis_epoch_id = EpochId::default();
     state
-        .commit(genesis_epoch_id, /* debug_record = */ None)
+        .commit(genesis_epoch_id, /* debug_record = */ None, false)
         .expect(
             // This is a comment to let cargo format the rest in a single line.
             &concat!(file!(), ":", line!(), ":", column!()),

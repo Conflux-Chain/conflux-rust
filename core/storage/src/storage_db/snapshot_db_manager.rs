@@ -41,10 +41,18 @@ pub trait SnapshotDbManagerTrait {
     fn recovery_latest_mpt_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()>;
+    fn create_mpt_snapshot_from_latest(
+        &self, new_snapshot_epoch_id: &EpochId,
+    ) -> Result<()>;
     fn get_epoch_id_from_snapshot_db_name(
         &self, snapshot_db_name: &str,
     ) -> Result<EpochId>;
-    fn is_temp_snapshot_db_path(&self, dir_name: &str) -> bool;
+    fn try_get_new_snapshot_epoch_from_temp_path(
+        &self, dir_name: &str,
+    ) -> Option<EpochId>;
+    fn try_get_new_snapshot_epoch_from_mpt_temp_path(
+        &self, dir_name: &str,
+    ) -> Option<EpochId>;
 
     // Scan snapshot dir, remove extra files and return the list of missing
     // snapshots.
@@ -99,13 +107,17 @@ pub trait SnapshotDbManagerTrait {
                     entry.path().display()
                 );
 
-                if self.is_temp_snapshot_db_path(dir_name) {
-                    temp_snapshot_db_existing = true;
-                } else {
-                    if let Ok(epoch_id) =
-                        self.get_epoch_id_from_snapshot_db_name(dir_name)
-                    {
-                        removed_snapshots.insert(epoch_id);
+                match self.try_get_new_snapshot_epoch_from_temp_path(dir_name) {
+                    Some(e) => {
+                        info!("remove temp kv snapshot {}", e);
+                        temp_snapshot_db_existing = true;
+                    }
+                    None => {
+                        if let Ok(epoch_id) =
+                            self.get_epoch_id_from_snapshot_db_name(dir_name)
+                        {
+                            removed_snapshots.insert(epoch_id);
+                        }
                     }
                 }
 
@@ -161,6 +173,14 @@ pub trait SnapshotDbManagerTrait {
                     entry.path().display()
                 );
                 fs::remove_dir_all(entry.path())?;
+
+                if let Some(snapshot_id) =
+                    self.try_get_new_snapshot_epoch_from_mpt_temp_path(dir_name)
+                {
+                    if snapshot_id == max_epoch_id {
+                        self.create_mpt_snapshot_from_latest(&snapshot_id)?;
+                    }
+                }
             }
         }
 
@@ -182,7 +202,7 @@ pub trait SnapshotDbManagerTrait {
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
         delta_mpt: DeltaMptIterator, in_progress_snapshot_info: SnapshotInfo,
         snapshot_info_map: &'m RwLock<PersistedSnapshotInfoMap>,
-        new_epoch_height: u64,
+        new_epoch_height: u64, recovery_existing_kv_snapshot: bool,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId, try_open: bool, open_mpt_snapshot: bool,

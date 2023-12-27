@@ -44,7 +44,9 @@ pub trait StateTrait: Sync + Send {
     /// state root once before committing.
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
-    fn commit(&mut self, epoch: EpochId) -> Result<StateRootWithAuxInfo>;
+    fn commit(
+        &mut self, epoch: EpochId, recovery: bool,
+    ) -> Result<StateRootWithAuxInfo>;
 }
 
 pub trait StateTraitExt {

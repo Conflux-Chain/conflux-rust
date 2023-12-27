@@ -542,7 +542,7 @@ impl StorageManager {
 
     pub fn check_make_register_snapshot_background(
         this: Arc<Self>, snapshot_epoch_id: EpochId, height: u64,
-        maybe_delta_db: Option<DeltaMptIterator>,
+        maybe_delta_db: Option<DeltaMptIterator>, recovery: bool,
     ) -> Result<()>
     {
         let this_cloned = this.clone();
@@ -555,14 +555,36 @@ impl StorageManager {
                 .read()
                 .get(&snapshot_epoch_id)
                 .map_or(true, |info| {
-                    info.snapshot_info_kept_to_provide_sync
+                    if info.snapshot_info_kept_to_provide_sync
                         == SnapshotKeptToProvideSyncStatus::InfoOnly
+                    {
+                        true
+                    } else {
+                        recovery
+                    }
                 })
         {
             debug!(
                 "start check_make_register_snapshot_background: epoch={:?} height={:?}",
                 snapshot_epoch_id, height
             );
+
+            let recovery_existing_kv_snapshot = match this
+                .snapshot_info_map_by_epoch
+                .read()
+                .get(&snapshot_epoch_id)
+            {
+                Some(v) => {
+                    if v.snapshot_info_kept_to_provide_sync
+                        != SnapshotKeptToProvideSyncStatus::InfoOnly
+                    {
+                        recovery
+                    } else {
+                        false
+                    }
+                }
+                None => false,
+            };
 
             let mut pivot_chain_parts = vec![
                 Default::default();
@@ -647,7 +669,7 @@ impl StorageManager {
                                     snapshot_epoch_id.clone(), delta_db,
                                     in_progress_snapshot_info_cloned,
                                     &this.snapshot_info_map_by_epoch,
-                                    height,)?
+                                    height,recovery_existing_kv_snapshot)?
                         }
                     };
                     if let Err(e) = this.register_new_snapshot(new_snapshot_info.clone(), &mut snapshot_info_map_locked) {

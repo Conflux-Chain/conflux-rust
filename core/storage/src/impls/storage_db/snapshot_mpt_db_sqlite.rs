@@ -177,6 +177,7 @@ impl SnapshotDbTrait for SnapshotMptDbSqlite {
     fn direct_merge(
         &mut self, _old_snapshot_db: Option<&Arc<SnapshotMptDbSqlite>>,
         _mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
+        _recovery_existing_kv_snapshot: bool,
     ) -> Result<MerkleHash>
     {
         unreachable!()
