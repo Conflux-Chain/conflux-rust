@@ -6,7 +6,7 @@ use cfx_util_macros::bail;
 use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
     time::Duration,
 };
 
@@ -44,9 +44,14 @@ use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, errors::Error as CoreError,
-    genesis_block::register_transaction, BlockDataManager, ConsensusGraph,
-    PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    consensus::{
+        consensus_inner::{EARLY_STOP, LATEST_EXECUTED},
+        pos_handler::PosVerifier,
+    },
+    errors::Error as CoreError,
+    genesis_block::register_transaction,
+    BlockDataManager, ConsensusGraph, PeerInfo, SharedConsensusGraph,
+    SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -791,6 +796,14 @@ impl RpcImpl {
         } else {
             Ok("-1".to_string())
         }
+    }
+
+    pub fn get_executed(&self) -> JsonRpcResult<u64> {
+        Ok(LATEST_EXECUTED.load(Ordering::SeqCst))
+    }
+
+    pub fn early_stop(&self) -> JsonRpcResult<bool> {
+        Ok(EARLY_STOP.load(Ordering::SeqCst))
     }
 
     pub fn get_nodeid(&self, challenge: Vec<u8>) -> JsonRpcResult<Vec<u8>> {

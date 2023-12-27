@@ -46,6 +46,6 @@ loggers:
     client:
         level: info
     cfx_storage:
-        level: info
+        level: error
     cfx_statedb:
         level: info

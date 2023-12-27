@@ -59,12 +59,26 @@ impl<'a> ExecutiveContext<'a> {
         // Transaction should execute on an empty cache
         assert!(self.state.cache.get_mut().is_empty());
 
+        info!(
+            "Execute_transaction {:?} (height {})",
+            tx.hash, self.env.epoch_height
+        );
         let fresh_exec = FreshExecutive::new(self, tx, options);
 
-        Ok(match fresh_exec.check_all()? {
-            Ok(executive) => executive.execute_transaction()?,
-            Err(execution_outcome) => execution_outcome,
-        })
+        let pre_checked_exec = match fresh_exec.check_all()? {
+            Ok(executive) => executive,
+            Err(execution_outcome) => {
+                info!("Execute_transaction Not Execute.");
+                return Ok(execution_outcome);
+            }
+        };
+
+        let ans = pre_checked_exec.execute_transaction()?;
+        info!("Execute_transaction Done.");
+        if let Some(_executed) = ans.try_as_executed() {
+            // info!("{:?}", executed);
+        }
+        Ok(ans)
     }
 
     pub fn apply_env_overrides(

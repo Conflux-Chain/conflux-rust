@@ -106,7 +106,7 @@ pub(crate) fn invalid_params<T: Debug>(param: &str, details: T) -> Error {
     .into()
 }
 
-pub(crate) fn invalid_params_check<T, E: Display>(
+pub fn invalid_params_check<T, E: Display>(
     param: &str, r: std::result::Result<T, E>,
 ) -> Result<T> {
     match r {

@@ -10,7 +10,10 @@ use std::{
     convert::From,
     fmt::{Debug, Formatter},
     sync::{
-        atomic::{AtomicBool, Ordering::Relaxed},
+        atomic::{
+            AtomicBool,
+            Ordering::{Relaxed, SeqCst},
+        },
         mpsc::{channel, RecvError, Sender, TryRecvError},
         Arc,
     },
@@ -46,7 +49,7 @@ use crate::{
     consensus::{
         consensus_inner::{
             consensus_new_block_handler::ConsensusNewBlockHandler,
-            StateBlameInfo,
+            StateBlameInfo, EARLY_STOP,
         },
         pos_handler::PosVerifier,
         ConsensusGraphInner,
@@ -319,7 +322,17 @@ impl ConsensusExecutor {
                     sender,
                 }))
                 .expect("Cannot fail");
-            receiver.recv().map_err(|e| e.to_string())?.ok_or(
+
+            {
+                match receiver.recv() {
+                    Ok(x) => x,
+                    Err(e) => {
+                        EARLY_STOP.store(true, SeqCst);
+                        panic!("{:?}", e);
+                    }
+                }
+            }
+            .ok_or(
                 "Waiting for an execution result that is not enqueued!"
                     .to_string(),
             )
@@ -871,7 +884,13 @@ impl ConsensusExecutionHandler {
         debug!("Receive execution task: {:?}", task);
         match task {
             ExecutionTask::ExecuteEpoch(task) => {
-                self.handle_epoch_execution(task, None, false)
+                let mut debug_record = ComputeEpochDebugRecord::default();
+                self.handle_epoch_execution(
+                    task,
+                    Some(&mut debug_record),
+                    false,
+                );
+                // info!("Debug record {:?}", debug_record);
             }
             ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
             ExecutionTask::Stop => return false,

@@ -2363,6 +2363,8 @@ impl TestRpc for TestRpcImpl {
             fn drop_peer(&self, node_id: NodeId, address: SocketAddr) -> JsonRpcResult<()>;
             fn get_block_count(&self) -> JsonRpcResult<u64>;
             fn get_goodput(&self) -> JsonRpcResult<String>;
+            fn get_executed(&self) -> JsonRpcResult<u64>;
+            fn early_stop(&self) -> JsonRpcResult<bool>;
             fn get_nodeid(&self, challenge: Vec<u8>) -> JsonRpcResult<Vec<u8>>;
             fn get_peer_info(&self) -> JsonRpcResult<Vec<PeerInfo>>;
             fn say_hello(&self) -> JsonRpcResult<String>;

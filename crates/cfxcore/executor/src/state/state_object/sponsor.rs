@@ -173,7 +173,7 @@ impl State {
         &mut self, contract_address: Address, storage_owner: Address,
         user: Address, substate: &mut Substate,
     ) -> DbResult<()> {
-        info!(
+        debug!(
             "add_commission_privilege contract_address: {:?}, user: {:?}",
             contract_address, user
         );

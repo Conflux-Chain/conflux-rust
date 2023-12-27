@@ -46,7 +46,10 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
     mem,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        Arc,
+    },
 };
 lazy_static! {
     static ref INVALID_BLAME_OR_STATE_ROOT_COUNTER: Arc<dyn Counter<usize>> =
@@ -55,6 +58,9 @@ lazy_static! {
             "invalid_blame_or_state_root_count"
         );
 }
+
+pub static LATEST_EXECUTED: AtomicU64 = AtomicU64::new(0);
+pub static EARLY_STOP: AtomicBool = AtomicBool::new(false);
 
 #[derive(Clone)]
 pub struct ConsensusInnerConfig {
@@ -2667,18 +2673,20 @@ impl ConsensusGraphInner {
                 == state_blame_info.logs_bloom_vec_root;
 
         let mut debug_recompute = false;
+        let mut early_stop = false;
         if state_valid {
-            debug!(
-                "compute_state_valid_for_block(): Block {} state/blame is valid.",
-                block_hash,
+            info!(
+                "compute_state_valid_for_block(): Block {} (height {}) state/blame is valid.",
+                block_hash, block_header.height()
             );
+            LATEST_EXECUTED.fetch_max(block_header.height(), Ordering::SeqCst);
         } else {
             warn!(
-                "compute_state_valid_for_block(): Block {:?} state/blame is invalid! \
+                "compute_state_valid_for_block(): Block {:?} (height {}) state/blame is invalid! \
                 header blame {:?}, our blame {:?}, header state_root {:?}, \
                 our state root {:?}, header receipt_root {:?}, our receipt root {:?}, \
                 header logs_bloom_hash {:?}, our logs_bloom_hash {:?}.",
-                block_hash, block_header.blame(), state_blame_info.blame,
+                block_hash, block_header.height(), block_header.blame(), state_blame_info.blame,
                 block_header.deferred_state_root(), state_blame_info.state_vec_root,
                 block_header.deferred_receipts_root(), state_blame_info.receipts_vec_root,
                 block_header.deferred_logs_bloom_hash(), state_blame_info.logs_bloom_vec_root,
@@ -2687,6 +2695,22 @@ impl ConsensusGraphInner {
 
             if self.inner_conf.debug_dump_dir_invalid_state_root.is_some() {
                 debug_recompute = true;
+            }
+
+            if block_header.blame() >= 100 {
+                debug_recompute = false;
+            }
+
+            let execution_consistent = *block_header.deferred_state_root()
+                == state_blame_info.state_vec_root
+                && *block_header.deferred_receipts_root()
+                    == state_blame_info.receipts_vec_root
+                && *block_header.deferred_logs_bloom_hash()
+                    == state_blame_info.logs_bloom_vec_root;
+
+            if !execution_consistent && state_blame_info.blame >= 20 {
+                early_stop = true;
+                EARLY_STOP.store(true, Ordering::SeqCst);
             }
         }
         if let Some(debug_epoch) =
@@ -2769,6 +2793,11 @@ impl ConsensusGraphInner {
                     }
                 }
             }
+        }
+
+        if early_stop {
+            error!("Early stop for invalid state root");
+            panic!("Early stop for invalid state root");
         }
 
         self.arena[me].data.state_valid = Some(state_valid);
