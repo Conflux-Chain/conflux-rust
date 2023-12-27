@@ -401,6 +401,7 @@ fn test_apply_op_change_value() {
                     out: (),
                     update_weight: false,
                     update_key: false,
+                    delete_item: false,
                 })
             }
         };
@@ -448,6 +449,7 @@ fn test_apply_op_change_weight() {
                     out: (),
                     update_weight: true,
                     update_key: false,
+                    delete_item: false,
                 })
             }
         };
@@ -500,6 +502,7 @@ fn test_apply_op_change_key() {
                     out: (),
                     update_weight: true,
                     update_key: true,
+                    delete_item: true,
                 })
             }
         };
@@ -573,6 +576,7 @@ fn test_apply_op_change_key_for_shared_key() {
                     out: (),
                     update_weight: true,
                     update_key: true,
+                    delete_item: false,
                 })
             }
         };

@@ -760,6 +760,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-packing-pool"
+version = "0.1.0"
+dependencies = [
+ "cfx-math",
+ "cfx-types",
+ "heap-map",
+ "primitives",
+ "rand 0.7.3",
+ "treap-map",
+ "typenum",
+]
+
+[[package]]
 name = "cfx-parameters"
 version = "1.0.0"
 dependencies = [
@@ -894,6 +907,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-math",
+ "cfx-packing-pool",
  "cfx-parameters",
  "cfx-state",
  "cfx-statedb",

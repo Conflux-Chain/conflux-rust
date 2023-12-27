@@ -137,6 +137,7 @@ pub struct ApplyOpOutcome<T> {
     pub out: T,
     pub update_weight: bool,
     pub update_key: bool,
+    pub delete_item: bool, 
 }
 
 pub(crate) struct ApplyOp<'a, C, U, I, T, E>
@@ -157,7 +158,7 @@ where
     U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
     I: FnOnce() -> Result<(Node<C>, T), E>,
 {
-    type DeleteRet = T;
+    type DeleteRet = (T, bool);
     type Ret = Result<(T, Option<Box<Node<C>>>), E>;
 
     fn treap_key(&self) -> (&'a C::SortKey, &'a C::SearchKey) { self.key }
@@ -193,20 +194,26 @@ where
                     out,
                     update_weight,
                     update_key,
+                    delete_item,
                 } = match (self.update)(node) {
                     Ok(x) => x,
                     Err(err) => {
                         return Noop(Err(err));
                     }
                 };
+                let new_value = if delete_item {
+                    None 
+                }else{
+                    Some(&node.value)
+                };
                 self.ext_map.view_update(
                     &*self.key.1,
-                    Some(&node.value),
+                    new_value,
                     Some(&old_value),
                 );
 
-                if update_key {
-                    Delete(out)
+                if update_key || delete_item {
+                    Delete((out, delete_item))
                 } else {
                     Updated {
                         update_weight,
@@ -218,8 +225,9 @@ where
     }
 
     fn handle_delete(
-        deleted_node: Option<Box<Node<C>>>, delete_ret: T,
+        deleted_node: Option<Box<Node<C>>>, (ret, delete_item): (T, bool),
     ) -> Self::Ret {
-        Ok((delete_ret, Some(deleted_node.unwrap())))
+        let to_reinsert_node = if !delete_item { Some(deleted_node.unwrap()) } else {None};
+        Ok((ret, to_reinsert_node))
     }
 }
