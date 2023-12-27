@@ -142,20 +142,20 @@ pub struct ApplyOpOutcome<T> {
 pub(crate) struct ApplyOp<'a, C, U, I, T, E>
 where
     C: TreapMapConfig,
-    U: Fn(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
-    I: FnMut() -> Result<(Node<C>, T), E>,
+    U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
+    I: FnOnce() -> Result<(Node<C>, T), E>,
 {
     pub key: (&'a C::SortKey, &'a C::SearchKey),
     pub ext_map: &'a mut C::ExtMap,
-    pub update: &'a U,
+    pub update: U,
     pub insert: I,
 }
 
 impl<'a, 'b, C, U, I, T, E> TreapNodeUpdate<C> for ApplyOp<'a, C, U, I, T, E>
 where
     C: TreapMapConfig,
-    U: Fn(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
-    I: FnMut() -> Result<(Node<C>, T), E>,
+    U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
+    I: FnOnce() -> Result<(Node<C>, T), E>,
 {
     type DeleteRet = T;
     type Ret = Result<(T, Option<Box<Node<C>>>), E>;
@@ -163,7 +163,7 @@ where
     fn treap_key(&self) -> (&'a C::SortKey, &'a C::SearchKey) { self.key }
 
     fn update_node(
-        mut self, maybe_node: Option<&mut Box<Node<C>>>,
+        self, maybe_node: Option<&mut Box<Node<C>>>,
     ) -> OpResult<C, Self::Ret, Self::DeleteRet> {
         use OpResult::*;
         match maybe_node {

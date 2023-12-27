@@ -31,11 +31,11 @@ impl<'a, C: TreapMapConfig> SearchResult<'a, C> {
 }
 
 pub fn prefix_sum_search<C, F>(
-    node: &Node<C>, base_weight: C::Weight, f: F,
+    node: &Node<C>, base_weight: C::Weight, mut f: F,
 ) -> SearchResult<C>
 where
     C: TreapMapConfig,
-    F: Fn(&C::Weight, &C::Weight) -> SearchDirection<C::Weight>,
+    F: FnMut(&C::Weight, &C::Weight) -> SearchDirection<C::Weight>,
 {
     use SearchDirection::*;
 

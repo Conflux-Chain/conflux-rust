@@ -6,6 +6,7 @@ use crate::{
     config::{KeyMngTrait, WeightConsolidate},
     search::{prefix_sum_search, SearchDirection},
     update::{ApplyOp, ApplyOpOutcome, InsertOp, RemoveOp},
+    SearchResult,
 };
 
 use super::{config::TreapMapConfig, node::Node};
@@ -93,8 +94,8 @@ impl<C: TreapMapConfig> TreapMap<C> {
         &mut self, key: &C::SearchKey, update: U, insert: I,
     ) -> Result<T, E>
     where
-        U: Fn(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
-        I: Fn(&mut dyn RngCore) -> Result<(Node<C>, T), E>,
+        U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
+        I: FnOnce(&mut dyn RngCore) -> Result<(Node<C>, T), E>,
     {
         let sort_key = if let Some(sort_key) = self.ext_map.get_sort_key(key) {
             sort_key
@@ -112,7 +113,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
             &mut self.root,
             ApplyOp {
                 key: (&sort_key, key),
-                update: &update,
+                update,
                 insert: || insert(rng),
                 ext_map: &mut self.ext_map,
             },
@@ -158,7 +159,16 @@ impl<C: TreapMapConfig> TreapMap<C> {
         .maybe_value()
     }
 
-    fn iter(&self) -> Iter<C> {
+    pub fn search<F>(&self, f: F) -> Option<SearchResult<C>>
+    where F: FnMut(&C::Weight, &C::Weight) -> SearchDirection<C::Weight> {
+        Some(prefix_sum_search(
+            self.root.as_ref()?,
+            C::Weight::empty(),
+            f,
+        ))
+    }
+
+    pub fn iter(&self) -> Iter<C> {
         let mut iter = Iter { nodes: vec![] };
         if let Some(ref n) = self.root {
             iter.nodes.push(&**n);
@@ -188,6 +198,14 @@ impl<C: TreapMapConfig> TreapMap<C> {
 
 pub struct Iter<'a, C: TreapMapConfig> {
     nodes: Vec<&'a Node<C>>,
+}
+
+impl<'a, C: TreapMapConfig> Clone for Iter<'a, C> {
+    fn clone(&self) -> Self {
+        Self {
+            nodes: self.nodes.clone(),
+        }
+    }
 }
 
 impl<'a, C: TreapMapConfig> Iter<'a, C> {

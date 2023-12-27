@@ -15,7 +15,8 @@ pub use self::{
     config::{
         KeyMngTrait, SharedKeyTreapMapConfig, TreapMapConfig, WeightConsolidate,
     },
-    map::TreapMap,
+    map::{Iter, TreapMap},
     node::{Direction, Node},
     search::{SearchDirection, SearchResult},
+    update::ApplyOpOutcome,
 };
