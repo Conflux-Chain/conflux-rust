@@ -32,7 +32,7 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
-use treap_map::TreapMap;
+use treap_map::{SharedKeyTreapMapConfig, TreapMap};
 
 type WeightType = u128;
 lazy_static! {
@@ -353,11 +353,18 @@ impl SpacedReadyAccountPool {
     fn top(&self) -> Option<Arc<SignedTransaction>> { self.packing_pool.top() }
 }
 
+struct PackPoolTreapMapConfig;
+impl SharedKeyTreapMapConfig for PackPoolTreapMapConfig {
+    type Key = Address;
+    type Value = Arc<SignedTransaction>;
+    type Weight = WeightType;
+}
+
 #[derive(DeriveMallocSizeOf)]
 struct PackingPool {
     /// A balance tree used to randomly sample transactions with `gas_price` as
     /// a sampling weight.
-    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
+    treap: TreapMap<PackPoolTreapMapConfig>,
     /// A priority queue to order transactions based on their gas_price.
     heap_map: HeapMap<Address, Reverse<PriceOrderedTransaction>>,
     tx_weight_scaling: u64,
@@ -395,7 +402,7 @@ impl PackingPool {
     fn len(&self) -> usize { self.treap.len() }
 
     fn get_all_transaction_hashes(&self) -> BTreeSet<H256> {
-        self.treap.iter().map(|v| v.1.hash()).collect()
+        self.treap.values().map(|tx| tx.hash()).collect()
     }
 
     fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
@@ -1392,24 +1399,22 @@ impl TransactionPoolInner {
                     Space::Native => &self.ready_account_pool.native_pool,
                     Space::Ethereum => &self.ready_account_pool.evm_pool,
                 };
-                spaced_pool
-                    .packing_pool
-                    .treap
-                    .iter()
-                    .filter(|address_tx| addr.address == *address_tx.0)
-                    .map(|(_, tx)| tx.clone())
-                    .collect()
+                spaced_pool.packing_pool.treap.values().cloned().collect()
             }
             None => self
                 .ready_account_pool
                 .native_pool
                 .packing_pool
                 .treap
-                .iter()
+                .values()
                 .chain(
-                    self.ready_account_pool.evm_pool.packing_pool.treap.iter(),
+                    self.ready_account_pool
+                        .evm_pool
+                        .packing_pool
+                        .treap
+                        .values(),
                 )
-                .map(|(_, tx)| tx.clone())
+                .cloned()
                 .collect(),
         };
 

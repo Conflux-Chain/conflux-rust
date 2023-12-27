@@ -6980,6 +6980,7 @@ version = "0.1.0"
 dependencies = [
  "cfx-types",
  "cfxkey",
+ "criterion",
  "malloc_size_of",
  "primitives",
  "rand 0.7.3",

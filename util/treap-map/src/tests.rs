@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::TreapMap;
+use super::{SharedKeyTreapMapConfig, TreapMap};
 use cfx_types::{Address, Public, H256, U256, U512};
 use cfxkey::Signature;
 use primitives::{Action, NativeTransaction, SignedTransaction, Transaction};
@@ -13,6 +13,20 @@ use std::{
     collections::BTreeMap,
     ops::{Add, Sub},
 };
+
+struct TestTreapMapConfig;
+impl SharedKeyTreapMapConfig for TestTreapMapConfig {
+    type Key = H256;
+    type Value = SignedTransaction;
+    type Weight = U512;
+}
+
+struct SimpleTreapMapConfig;
+impl SharedKeyTreapMapConfig for SimpleTreapMapConfig {
+    type Key = u32;
+    type Value = u32;
+    type Weight = u32;
+}
 
 fn get_rng_for_test() -> ChaChaRng { ChaChaRng::from_seed([123; 32]) }
 
@@ -79,6 +93,7 @@ enum Operation {
     Remove,
     _SumWeight,
     GetByWeight,
+    ConsistencyCheck,
 }
 
 fn next_u512(rng: &mut ChaChaRng) -> U512 {
@@ -125,7 +140,7 @@ fn test_randomly_generated_signed_transaction() {
 
 #[test]
 fn test_insert_query_random() {
-    let mut treap_map: TreapMap<H256, SignedTransaction, U512> =
+    let mut treap_map: TreapMap<TestTreapMapConfig> =
         TreapMap::new_with_rng(XorShiftRng::from_seed([123; 16]));
     let mut mock_treap_map: MockTreapMap<H256, SignedTransaction, U512> =
         MockTreapMap::new();
@@ -142,6 +157,7 @@ fn test_insert_query_random() {
             1 => Operation::ContainsKey,
             2 => Operation::Insert,
             3 => Operation::GetByWeight,
+            4 => Operation::ConsistencyCheck,
             _ => panic!(),
         };
 
@@ -193,7 +209,7 @@ fn test_insert_query_random() {
 
 #[test]
 fn test_insert_remove_query_random() {
-    let mut treap_map: TreapMap<H256, SignedTransaction, U512> =
+    let mut treap_map: TreapMap<TestTreapMapConfig> =
         TreapMap::new_with_rng(XorShiftRng::from_seed([123; 16]));
     let mut mock_treap_map: MockTreapMap<H256, SignedTransaction, U512> =
         MockTreapMap::new();
@@ -205,12 +221,13 @@ fn test_insert_remove_query_random() {
     let mut tx_vec: Vec<SignedTransaction> = vec![];
 
     for _ in 0..operation_num {
-        let operation = match operation_rng.gen::<u32>() % 6 {
+        let operation = match operation_rng.gen::<u32>() % 7 {
             0 => Operation::Len,
             1 => Operation::ContainsKey,
             2..=3 => Operation::Insert,
             4 => Operation::GetByWeight,
             5 => Operation::Remove,
+            6 => Operation::ConsistencyCheck,
             _ => panic!(),
         };
 
@@ -267,6 +284,9 @@ fn test_insert_remove_query_random() {
                     mock_treap_map.remove(&tx.hash())
                 );
             }
+            Operation::ConsistencyCheck => {
+                treap_map.assert_consistency();
+            }
             _ => {}
         }
     }
@@ -274,13 +294,24 @@ fn test_insert_remove_query_random() {
 
 #[test]
 fn test_iterator() {
-    let mut treap_map: TreapMap<u32, u32, u32> = TreapMap::new();
+    let mut treap_map: TreapMap<SimpleTreapMapConfig> = TreapMap::new();
     assert_eq!(treap_map.insert(5, 0, 1), None);
     assert_eq!(treap_map.insert(4, 0, 1), None);
     assert_eq!(treap_map.insert(1, 0, 1), None);
     assert_eq!(treap_map.insert(3, 0, 1), None);
     assert_eq!(treap_map.insert(2, 0, 1), None);
 
-    let vec: Vec<(&u32, &u32)> = treap_map.iter().collect();
+    let vec: Vec<(&u32, &u32)> = treap_map.key_values().collect();
     assert_eq!(vec, vec![(&1, &0), (&2, &0), (&3, &0), (&4, &0), (&5, &0)]);
+}
+
+#[test]
+fn test_set_same_key() {
+    let mut treap_map: TreapMap<SimpleTreapMapConfig> = TreapMap::new();
+    assert_eq!(treap_map.insert(1, 1, 1), None);
+    assert_eq!(treap_map.insert(2, 2, 1), None);
+    assert_eq!(treap_map.insert(1, 3, 1), Some(1));
+    assert_eq!(treap_map.insert(2, 4, 1), Some(2));
+    assert_eq!(treap_map.remove(&1), Some(3));
+    assert_eq!(treap_map.remove(&2), Some(4));
 }
