@@ -147,7 +147,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
                 if &weight < base {
                     Left
                 } else {
-                    let right_base = C::Weight::consolidate(base, mid);
+                    let right_base = C::Weight::consolidate(base, &mid.weight);
                     if weight < right_base {
                         Stop
                     } else {
@@ -160,7 +160,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
     }
 
     pub fn search<F>(&self, f: F) -> Option<SearchResult<C>>
-    where F: FnMut(&C::Weight, &C::Weight) -> SearchDirection<C::Weight> {
+    where F: FnMut(&C::Weight, &Node<C>) -> SearchDirection<C::Weight> {
         Some(prefix_sum_search(
             self.root.as_ref()?,
             C::Weight::empty(),
