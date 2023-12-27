@@ -161,6 +161,22 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
     }
 }
 
+pub fn invalid_params_msg(param: &str) -> Error {
+    Error {
+        code: ErrorCode::InvalidParams,
+        message: format!("Invalid parameters: {}", param),
+        data: None,
+    }
+}
+
+pub fn internal_error_msg(param: &str) -> Error {
+    Error {
+        code: ErrorCode::InternalError,
+        message: format!("Internal error: {}", param),
+        data: None,
+    }
+}
+
 pub fn unknown_block() -> Error {
     Error {
         code: ErrorCode::InvalidParams,

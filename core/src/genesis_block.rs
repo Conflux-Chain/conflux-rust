@@ -421,16 +421,13 @@ pub fn register_transaction(
         Serialize,
     };
     use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
-    use rand_08::{rngs::StdRng, SeedableRng};
+    use rand_08::rngs::OsRng;
     use solidity_abi::ABIEncodable;
     use tiny_keccak::{Hasher, Keccak};
 
     let bls_pub_key = bls_priv_key.public_key();
-    let (commit, answer) = sigma_protocol::prove(
-        bls_priv_key.raw_key(),
-        &mut StdRng::seed_from_u64(0),
-        legacy,
-    );
+    let (commit, answer) =
+        sigma_protocol::prove(bls_priv_key.raw_key(), &mut OsRng, legacy);
 
     let mut encoded_commit = Vec::<u8>::new();
     BlsPubKey::from(commit)

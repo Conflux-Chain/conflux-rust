@@ -44,9 +44,10 @@ use crate::{
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-            RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
-            StorageCollateralInfo, SyncGraphStates, TokenSupplyInfo,
-            Transaction as RpcTransaction, VoteParamsInfo, WrapTransaction,
+            RpcAddress, SendTxRequest, SponsorInfo, StatOnGasLoad,
+            Status as RpcStatus, StorageCollateralInfo, SyncGraphStates,
+            TokenSupplyInfo, Transaction as RpcTransaction, VoteParamsInfo,
+            WrapTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1256,6 +1257,7 @@ impl LocalRpc for DebugRpcImpl {
         fn current_sync_phase(&self) -> JsonRpcResult<String>;
         fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
         fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<EpochReceiptProof>>;
+        fn stat_on_gas_load(&self, epoch: EpochNumber, time_window: U64) -> JsonRpcResult<Option<StatOnGasLoad>>;
         fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
         fn transactions_by_epoch(&self, epoch_number: U64) -> JsonRpcResult<Vec<WrapTransaction>>;

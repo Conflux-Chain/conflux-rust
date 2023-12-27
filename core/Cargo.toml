@@ -97,9 +97,7 @@ unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git",
 strum = "0.20"
 strum_macros = "0.20"
 smart-default = "0.6.0"
-#bls-signatures = {path = "/Users/lipeilun/conflux/bls-signatures"}
-#bls-signatures = {path = "/Users/lipeilun/conflux/bls-signatures",default-features = false, features = ["blst", "multicore"]}
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "e7d9119eb285607d5134d40efd89555c41d73160", default-features = false, features = ["multicore"]}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
 tiny-keccak = {version = "2.0",  features = ["keccak"]}
 bcs = "0.1.2"
 async-trait = "0.1"

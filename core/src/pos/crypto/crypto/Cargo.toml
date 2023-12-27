@@ -36,9 +36,7 @@ diem-crypto-derive = { path = "../crypto-derive", version = "0.1.0" }
 bcs = "0.1.2"
 cfxkey = { path = "../../../../../accounts/cfxkey" }
 cfx-types = { path = "../../../../../cfx_types" }
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "e7d9119eb285607d5134d40efd89555c41d73160", default-features = false, features = ["multicore"]}
-#bls-signatures = {path = "/Users/lipeilun/conflux/bls-signatures",default-features = false, features = ["blst", "multicore"]}
-#bls-signatures = {path = "/Users/lipeilun/conflux/bls-signatures"}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
 vrf = "0.2.2"
 lazy_static = "1.4"
 parking_lot = "0.11"
@@ -48,7 +46,7 @@ pkcs8 = {version = "0.7.5", features = ["encryption", "std"]}
 
 
 [dev-dependencies]
-bitvec = "0.22"
+bitvec = "1.0.1"
 byteorder = "1.4.3"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"

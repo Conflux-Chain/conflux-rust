@@ -4,8 +4,9 @@
 
 use crate::rpc::types::{
     BlockHashOrEpochNumber, Bytes as RpcBytes, ConsensusGraphStates,
-    Receipt as RpcReceipt, RpcAddress, SendTxRequest, SyncGraphStates,
-    Transaction as RpcTransaction, WrapTransaction,
+    EpochNumber, Receipt as RpcReceipt, RpcAddress, SendTxRequest,
+    StatOnGasLoad, SyncGraphStates, Transaction as RpcTransaction,
+    WrapTransaction,
 };
 use cfx_types::{H256, H520, U128, U64};
 use cfxcore::verification::EpochReceiptProof;
@@ -111,6 +112,11 @@ pub trait LocalRpc {
         &self, epoch: BlockHashOrEpochNumber,
         include_eth_recepits: Option<bool>,
     ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+
+    #[rpc(name = "debug_statOnGasLoad")]
+    fn stat_on_gas_load(
+        &self, last_epoch: EpochNumber, time_window: U64,
+    ) -> JsonRpcResult<Option<StatOnGasLoad>>;
 
     #[rpc(name = "debug_getEpochReceiptProofByTransaction")]
     fn epoch_receipt_proof_by_transaction(

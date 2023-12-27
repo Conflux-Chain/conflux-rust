@@ -140,7 +140,6 @@ impl TrieProof {
             *proof_node_mut = maybe_node.clone();
             true
         });
-        drop(proof_node_mut);
         (proves, proof_node)
     }
 
@@ -155,8 +154,6 @@ impl TrieProof {
             *proof_node_mut = maybe_node.clone();
             true
         });
-
-        drop(proof_node_mut);
 
         (
             proves,

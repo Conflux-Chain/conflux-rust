@@ -2,10 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{
-    call_request::rpc_call_request_network, errors::check_rpc_address_network,
-    pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo,
-    TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
+use crate::rpc::{
+    error_codes::{internal_error_msg, invalid_params_msg},
+    types::{
+        call_request::rpc_call_request_network,
+        errors::check_rpc_address_network, pos::PoSEpochReward, PoSEconomics,
+        RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
+        VoteParamsInfo, WrapTransaction,
+    },
 };
 use blockgen::BlockGenerator;
 use cfx_execute_helper::estimation::{decode_error, EstimateExt};
@@ -1767,6 +1771,140 @@ impl RpcImpl {
         Ok(Some(epoch_receipt_proof))
     }
 
+    fn stat_on_gas_load(
+        &self, last_epoch: EpochNumber, time_window: U64,
+    ) -> RpcResult<Option<StatOnGasLoad>> {
+        let mut stat = StatOnGasLoad::default();
+        stat.time_elapsed = time_window;
+
+        let block_not_found_error = || {
+            internal_error_msg(
+                "Cannot find the block by a ConsensusGraph provided hash",
+            )
+        };
+
+        let machine = self.tx_pool.machine();
+        let consensus = self.consensus_graph();
+
+        let mut epoch_number = match last_epoch {
+            EpochNumber::Earliest => {
+                bail!(invalid_params_msg("Cannot stat genesis"))
+            }
+            EpochNumber::Num(num) if num.is_zero() => {
+                bail!(invalid_params_msg("Cannot stat genesis"))
+            }
+            EpochNumber::LatestMined => bail!(invalid_params_msg(
+                "Epoch number is earilier than 'latest_state'"
+            )),
+            EpochNumber::Num(num) => {
+                let pivot_hash = consensus.get_hash_from_epoch_number(
+                    primitives::EpochNumber::LatestState,
+                )?;
+                let epoch_number = consensus
+                    .get_block_epoch_number(&pivot_hash)
+                    .ok_or_else(block_not_found_error)?;
+                if epoch_number < num.as_u64() {
+                    bail!(invalid_params_msg(
+                        "Epoch number is earilier than 'latest_state'"
+                    ))
+                }
+                num.as_u64()
+            }
+            EpochNumber::LatestCheckpoint
+            | EpochNumber::LatestFinalized
+            | EpochNumber::LatestConfirmed
+            | EpochNumber::LatestState => {
+                let pivot_hash =
+                    consensus.get_hash_from_epoch_number(last_epoch.into())?;
+                consensus
+                    .get_block_epoch_number(&pivot_hash)
+                    .ok_or_else(block_not_found_error)?
+            }
+        };
+
+        let mut last_timestamp: Option<u64> = None;
+
+        loop {
+            // Step 1: fetch block data
+            let block_hashes = consensus.get_block_hashes_by_epoch(
+                primitives::EpochNumber::Number(epoch_number),
+            )?;
+            let blocks = consensus
+                .get_data_manager()
+                .blocks_by_hash_list(&block_hashes, false)
+                .ok_or_else(block_not_found_error)?;
+            let pivot_block = blocks
+                .last()
+                .ok_or(internal_error_msg("Epoch without block"))?;
+
+            // Step 2: update timestamp
+            let timestamp = pivot_block.block_header.timestamp();
+            if last_timestamp.is_none() {
+                last_timestamp = Some(timestamp)
+            }
+            // Stop if the epoch does not in the query window.
+            if last_timestamp.unwrap().saturating_sub(time_window.as_u64())
+                > timestamp
+            {
+                break;
+            }
+
+            // Step 3: Stat blocks
+            let params = machine.params();
+            stat.epoch_num += 1.into();
+            for b in &blocks {
+                stat.total_block_num += 1.into();
+                stat.total_gas_limit += *b.block_header.gas_limit();
+                if params.can_pack_evm_transaction(b.block_header.height()) {
+                    stat.espace_block_num += 1.into();
+                    stat.espace_gas_limit += *b.block_header.gas_limit()
+                        / params.evm_transaction_gas_ratio;
+                }
+            }
+
+            // Step 4: Stat transactions
+            for b in &blocks {
+                // Fetch execution info or return not found.
+                let exec_info =
+                    match consensus.get_block_execution_info(&b.hash()) {
+                        None => bail!(internal_error_msg(
+                        "Cannot fetch block receipt with checked input params"
+                    )),
+                        Some((res, _)) => res.1,
+                    };
+
+                for (receipt, tx) in exec_info
+                    .block_receipts
+                    .receipts
+                    .iter()
+                    .zip(&b.transactions)
+                {
+                    let space = tx.space();
+                    if receipt.outcome_status == TransactionStatus::Skipped {
+                        *stat.skipped_tx_count.in_space_mut(space) += 1.into();
+                        *stat.skipped_tx_gas_limit.in_space_mut(space) +=
+                            *tx.gas_limit();
+                    } else {
+                        *stat.confirmed_tx_count.in_space_mut(space) +=
+                            1.into();
+                        *stat.confirmed_tx_gas_limit.in_space_mut(space) +=
+                            *tx.gas_limit();
+                        *stat.tx_gas_charged.in_space_mut(space) +=
+                            receipt.gas_fee / tx.gas_price();
+                    }
+                }
+            }
+
+            // Goto Next Epoch
+            if epoch_number > 0 {
+                epoch_number -= 1;
+            } else {
+                break;
+            }
+        }
+        Ok(Some(stat))
+    }
+
     fn transactions_by_epoch(
         &self, epoch_number: U64,
     ) -> JsonRpcResult<Vec<WrapTransaction>> {
@@ -2243,6 +2381,7 @@ impl LocalRpc for LocalRpcImpl {
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
             fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>,) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
             fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<EpochReceiptProof>>;
+            fn stat_on_gas_load(&self, last_epoch: EpochNumber, time_window: U64) -> JsonRpcResult<Option<StatOnGasLoad>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
