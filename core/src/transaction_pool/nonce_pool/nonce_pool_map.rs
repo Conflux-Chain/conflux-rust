@@ -69,6 +69,28 @@ impl NoncePoolMap {
         }).unwrap()
     }
 
+    /// mark packed of given nonce, return false if nothing changes
+    pub fn mark_packed(&mut self, nonce: &U256, packed: bool) -> bool {
+        self.0
+            .update(
+                nonce,
+                |node| {
+                    if node.value.packed == packed {
+                        return Err(());
+                    }
+                    node.value.packed = packed;
+                    node.weight = NoncePoolWeight::from_tx_info(&node.value);
+                    Ok(ApplyOpOutcome {
+                        out: (),
+                        update_weight: true,
+                        update_key: false,
+                    })
+                },
+                |_| Err(()),
+            )
+            .is_ok()
+    }
+
     /// find an unpacked transaction `tx` where `tx.nonce() >= nonce`
     /// and `tx.nonce()` is minimum
     pub fn query(&self, nonce: &U256) -> Option<Arc<SignedTransaction>> {

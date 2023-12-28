@@ -141,6 +141,10 @@ impl NoncePool {
         self.map.insert(tx, force)
     }
 
+    pub fn mark_packed(&mut self, nonce: &U256, packed: bool) -> bool {
+        self.map.mark_packed(nonce, packed)
+    }
+
     #[inline]
     pub fn get_tx_by_nonce(&self, nonce: U256) -> Option<TxWithReadyInfo> {
         self.map.get(&nonce).cloned()
@@ -685,6 +689,24 @@ mod nonce_pool_test {
                 );
                 mock_nonce_pool.insert(nonce.into(), tx[nonce].clone());
             }
+        }
+
+        // random change packed
+        for _ in 0..count {
+            let nonce: usize = rng.next_u64() as usize % count;
+            let packed = rng.next_u64() % 2 == 1;
+            let current_packed =
+                if let Some(x) = mock_nonce_pool.get_mut(&nonce.into()) {
+                    let current_packed = x.packed;
+                    x.packed = packed;
+                    Some(current_packed)
+                } else {
+                    None
+                };
+            let should_change = current_packed.map_or(false, |p| p != packed);
+            let changed = nonce_pool.mark_packed(&nonce.into(), packed);
+            assert_eq!(should_change, changed);
+            tx[nonce].packed = packed;
         }
 
         for i in 0..count * 2 {
