@@ -3,7 +3,9 @@ use cfx_types::U256;
 use typenum::{U12, U15, U2, U3, U4, U5};
 
 use crate::transaction::PackingPoolTransaction;
+use malloc_size_of_derive::MallocSizeOf;
 
+#[derive(Default, MallocSizeOf, Clone, Copy)]
 pub struct PackingPoolConfig {
     pub(crate) address_gas_limit: U256,
     pub(crate) address_tx_count: usize,
@@ -28,7 +30,7 @@ impl PackingPoolConfig {
     }
 
     #[inline]
-    pub(crate) fn next_gas_price(&self, gas_price: U256) -> U256 {
+    pub fn next_gas_price(&self, gas_price: U256) -> U256 {
         if gas_price < U256::from(100) {
             gas_price + 1
         } else {

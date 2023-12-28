@@ -39,14 +39,14 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> Iterator
             if let Some(node) = self.iter.next() {
                 if self.loss_base.is_zero() {
                     // Packing pool is not full
-                    return Some((node.key, &node.value));
+                    return Some((node.key, &node.value.txs));
                 }
                 let loss_threshold =
                     ((self.loss_base * node.weight.max_loss_ratio) >> 192)
                         .as_u64();
                 let sampled = self.rng.next_u64();
                 if sampled >= loss_threshold {
-                    return Some((node.key, &node.value));
+                    return Some((node.key, &node.value.txs));
                 } else {
                     self.alter_address.insert(
                         &node.key,
@@ -57,8 +57,9 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> Iterator
                         },
                     );
                 }
-            } else if let Some((address, node)) = self.alter_address.pop() {
-                return Some((address, &node.node.value));
+            } else if let Some((address, candidate)) = self.alter_address.pop()
+            {
+                return Some((address, &candidate.node.value.txs));
             } else {
                 return None;
             }

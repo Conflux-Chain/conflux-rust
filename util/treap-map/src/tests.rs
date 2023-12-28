@@ -502,7 +502,7 @@ fn test_apply_op_change_key() {
                     out: (),
                     update_weight: true,
                     update_key: true,
-                    delete_item: true,
+                    delete_item: false,
                 })
             }
         };

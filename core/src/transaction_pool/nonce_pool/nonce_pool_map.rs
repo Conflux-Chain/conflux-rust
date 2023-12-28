@@ -1,8 +1,7 @@
-use std::{convert::Infallible, sync::Arc};
+use std::convert::Infallible;
 
 use cfx_types::U256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use primitives::SignedTransaction;
 use treap_map::{
     ApplyOpOutcome, Node, SearchDirection, SearchResult,
     SharedKeyTreapMapConfig, TreapMap, WeightConsolidate,
@@ -52,7 +51,8 @@ impl NoncePoolMap {
                 Ok(ApplyOpOutcome {
                     out: InsertResult::Updated(old_value),
                     update_weight: true,
-                    update_key:false
+                    update_key:false,
+                    delete_item: false,
                 })
             } else {
                 let err_msg = format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &node.value.transaction.gas_price());
@@ -60,6 +60,7 @@ impl NoncePoolMap {
                     out: InsertResult::Failed(err_msg),
                     update_weight: false,
                     update_key: false,
+                    delete_item: false,
                 })
             }
         }, |rng| {
@@ -70,30 +71,38 @@ impl NoncePoolMap {
     }
 
     /// mark packed of given nonce, return false if nothing changes
-    pub fn mark_packed(&mut self, nonce: &U256, packed: bool) -> bool {
-        self.0
-            .update(
-                nonce,
-                |node| {
-                    if node.value.packed == packed {
-                        return Err(());
-                    }
-                    node.value.packed = packed;
-                    node.weight = NoncePoolWeight::from_tx_info(&node.value);
-                    Ok(ApplyOpOutcome {
-                        out: (),
-                        update_weight: true,
-                        update_key: false,
-                    })
-                },
-                |_| Err(()),
-            )
-            .is_ok()
+    pub fn mark_packed_and_sample_pool(
+        &mut self, nonce: &U256, packed: Option<bool>,
+        in_sample_pool: Option<bool>,
+    ) -> bool
+    {
+        let update = |node: &mut Node<NoncePoolConfig>| {
+            let no_change = packed.map_or(true, |x| x == node.value.packed)
+                && in_sample_pool
+                    .map_or(true, |x| x == node.value.in_sample_pool);
+            if no_change {
+                return Err(());
+            }
+            if let Some(x) = packed {
+                node.value.packed = x;
+            }
+            if let Some(x) = in_sample_pool {
+                node.value.in_sample_pool = x;
+            }
+            node.weight = NoncePoolWeight::from_tx_info(&node.value);
+            Ok(ApplyOpOutcome {
+                out: (),
+                update_weight: true,
+                update_key: false,
+                delete_item: false,
+            })
+        };
+        self.0.update(nonce, update, |_| Err(())).is_ok()
     }
 
     /// find an unpacked transaction `tx` where `tx.nonce() >= nonce`
     /// and `tx.nonce()` is minimum
-    pub fn query(&self, nonce: &U256) -> Option<Arc<SignedTransaction>> {
+    pub fn query(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
         let ret = self.0.search(|left_weight, node| {
             if left_weight.max_unpackd_nonce.map_or(false, |x| x >= *nonce) {
                 SearchDirection::Left
@@ -111,7 +120,7 @@ impl NoncePoolMap {
             }
         });
         if let Some(SearchResult::Found { node, .. }) = ret {
-            Some(node.value.transaction.clone())
+            Some(&node.value)
         } else {
             None
         }

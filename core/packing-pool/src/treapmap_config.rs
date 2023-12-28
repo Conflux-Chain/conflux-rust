@@ -3,6 +3,8 @@ use std::{cmp::Ordering, marker::PhantomData};
 use cfx_types::U256;
 use treap_map::{Direction, TreapMapConfig};
 
+use crate::packing_batch::PackingBatch;
+
 use super::{
     key_mng::PackingPoolExtMap, transaction::PackingPoolTransaction,
     weight::PackingPoolWeight,
@@ -14,7 +16,7 @@ impl<TX: PackingPoolTransaction> TreapMapConfig for PackingPoolMap<TX> {
     type ExtMap = PackingPoolExtMap<TX::Sender>;
     type SearchKey = TX::Sender;
     type SortKey = U256;
-    type Value = Vec<TX>;
+    type Value = PackingBatch<TX>;
     type Weight = PackingPoolWeight;
 
     #[inline]

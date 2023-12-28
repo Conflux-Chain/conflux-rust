@@ -137,7 +137,7 @@ pub struct ApplyOpOutcome<T> {
     pub out: T,
     pub update_weight: bool,
     pub update_key: bool,
-    pub delete_item: bool, 
+    pub delete_item: bool,
 }
 
 pub(crate) struct ApplyOp<'a, C, U, I, T, E>
@@ -201,11 +201,8 @@ where
                         return Noop(Err(err));
                     }
                 };
-                let new_value = if delete_item {
-                    None 
-                }else{
-                    Some(&node.value)
-                };
+                let new_value =
+                    if delete_item { None } else { Some(&node.value) };
                 self.ext_map.view_update(
                     &*self.key.1,
                     new_value,
@@ -227,7 +224,11 @@ where
     fn handle_delete(
         deleted_node: Option<Box<Node<C>>>, (ret, delete_item): (T, bool),
     ) -> Self::Ret {
-        let to_reinsert_node = if !delete_item { Some(deleted_node.unwrap()) } else {None};
+        let to_reinsert_node = if !delete_item {
+            Some(deleted_node.unwrap())
+        } else {
+            None
+        };
         Ok((ret, to_reinsert_node))
     }
 }

@@ -6,11 +6,15 @@ use cfx_parameters::{
     consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_types::{U128, U256, U512};
+use cfx_types::{AddressWithSpace, U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{SignedTransaction, Transaction};
-use std::{ops::Deref, sync::Arc};
+use std::{
+    collections::{btree_map::Entry::*, BTreeMap},
+    ops::Deref,
+    sync::Arc,
+};
 
 use self::nonce_pool_map::NoncePoolMap;
 
@@ -18,6 +22,7 @@ use self::nonce_pool_map::NoncePoolMap;
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
     pub packed: bool,
+    pub in_sample_pool: bool,
     pub sponsored_gas: U256,
     pub sponsored_storage: u64,
 }
@@ -142,7 +147,55 @@ impl NoncePool {
     }
 
     pub fn mark_packed(&mut self, nonce: &U256, packed: bool) -> bool {
-        self.map.mark_packed(nonce, packed)
+        self.map
+            .mark_packed_and_sample_pool(nonce, Some(packed), None)
+    }
+
+    #[inline]
+    pub fn mark_sample_pool(
+        &mut self, nonce: &U256, in_sample_pool: bool,
+    ) -> bool {
+        self.map
+            .mark_packed_and_sample_pool(nonce, None, Some(in_sample_pool))
+    }
+
+    // This approach seem inefficient, because the underlying binary balanced
+    // tree does not support direct range deletion. ortunately, CPU branch
+    // prediction can mitigate the time issue
+    #[inline]
+    pub fn mark_sample_pool_removed(
+        &mut self, txs: &[Arc<SignedTransaction>], sender: AddressWithSpace,
+    ) {
+        for removed_tx in txs {
+            assert_eq!(removed_tx.sender(), sender);
+            self.mark_sample_pool(removed_tx.nonce(), false);
+        }
+    }
+
+    #[inline]
+    pub fn mark_sample_pool_batch(
+        &mut self, removed_nonces: impl Iterator<Item = U256>,
+        inserted_nonces: impl Iterator<Item = U256>,
+    )
+    {
+        let mut change_set = BTreeMap::<U256, bool>::new();
+        for r in removed_nonces {
+            change_set.insert(r, false);
+        }
+        for i in inserted_nonces {
+            match change_set.entry(i) {
+                Vacant(e) => {
+                    e.insert(true);
+                }
+                Occupied(e) => {
+                    e.remove();
+                }
+            }
+        }
+
+        for (nonce, mark) in change_set.into_iter() {
+            self.mark_sample_pool(&nonce, mark);
+        }
     }
 
     #[inline]
@@ -202,7 +255,7 @@ impl NoncePool {
     ///   2. tx.packed is false and tx.nonce() is minimum
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
-    ) -> Option<Arc<SignedTransaction>> {
+    ) -> Option<(&TxWithReadyInfo, U256)> {
         let tx = self.map.query(&nonce)?;
 
         let a = if nonce == U256::from(0) {
@@ -218,7 +271,15 @@ impl NoncePool {
         // number of transactions in `[nonce, tx.nonce()]`
         (U256::from(b.0 - a.0 - 1) == tx.nonce() - nonce
             && b.1 - a.1 <= balance)
-            .then_some(tx)
+            .then_some((tx, balance - (b.1 - a.1)))
+    }
+
+    #[cfg(test)]
+    pub fn recalculate_readiness_with_local_info_test(
+        &self, nonce: U256, balance: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        self.recalculate_readiness_with_local_info(nonce, balance)
+            .map(|x| x.0.transaction.clone())
     }
 
     pub fn check_pending_reason_with_local_info(
@@ -318,6 +379,7 @@ mod nonce_pool_test {
         TxWithReadyInfo {
             transaction,
             packed,
+            in_sample_pool: false,
             sponsored_gas: gas / U256::from(2),
             sponsored_storage: storage_limit / 2,
         }
@@ -569,18 +631,24 @@ mod nonce_pool_test {
 
         assert_eq!(nonce_pool.get_tx_by_nonce(7.into()), None);
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(4.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                4.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(5.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                5.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(7.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                7.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
@@ -588,37 +656,49 @@ mod nonce_pool_test {
             InsertResult::NewAdded
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(4.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                4.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(5.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                5.into(),
+                exact_cost
+            ),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(7.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                7.into(),
+                exact_cost
+            ),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(8.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                8.into(),
+                exact_cost
+            ),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(9.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                9.into(),
+                exact_cost
+            ),
             Some(tx[4].transaction.clone())
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(10.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                10.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
+            nonce_pool.recalculate_readiness_with_local_info_test(
                 5.into(),
                 exact_cost - U256::from(1),
             ),
@@ -723,7 +803,7 @@ mod nonce_pool_test {
             );
             assert_eq!(
                 expected,
-                nonce_pool.recalculate_readiness_with_local_info(
+                nonce_pool.recalculate_readiness_with_local_info_test(
                     nonce.into(),
                     balance.into(),
                 )
@@ -770,7 +850,7 @@ mod nonce_pool_test {
             );
             assert_eq!(
                 expected,
-                nonce_pool.recalculate_readiness_with_local_info(
+                nonce_pool.recalculate_readiness_with_local_info_test(
                     nonce.into(),
                     balance,
                 )

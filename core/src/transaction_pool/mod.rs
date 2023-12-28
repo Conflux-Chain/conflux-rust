@@ -294,6 +294,7 @@ impl TransactionPool {
                         let tx_info = TxWithReadyInfo {
                             transaction: first_tx.clone(),
                             packed: false,
+                            in_sample_pool: false,
                             sponsored_gas,
                             sponsored_storage,
                         };

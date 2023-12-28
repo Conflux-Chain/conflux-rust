@@ -7,6 +7,9 @@ use crate::{
     machine::Machine,
     verification::{PackingCheckResult, VerificationConfig},
 };
+use cfx_packing_pool::{
+    PackingBatch, PackingPool as SamplingPool, PackingPoolConfig,
+};
 use cfx_parameters::{
     block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
@@ -66,23 +69,48 @@ lazy_static! {
 #[derive(DeriveMallocSizeOf)]
 struct DeferredPool {
     buckets: HashMap<AddressWithSpace, NoncePool>,
+    packing_pool: SpaceMap<SamplingPool<Arc<SignedTransaction>>>,
 }
 
 impl DeferredPool {
     fn new() -> Self {
+        let config = PackingPoolConfig::default();
         DeferredPool {
             buckets: Default::default(),
+            packing_pool: SpaceMap::new(
+                SamplingPool::new(config),
+                SamplingPool::new(config),
+            ),
         }
     }
 
-    fn clear(&mut self) { self.buckets.clear() }
+    fn clear(&mut self) {
+        self.buckets.clear();
+        self.packing_pool.apply_all(|x| x.clear());
+    }
 
     fn insert(&mut self, tx: TxWithReadyInfo, force: bool) -> InsertResult {
-        // It's safe to create a new bucket, cause inserting to a empty bucket
-        // will always be success
-        let bucket =
-            self.buckets.entry(tx.sender()).or_insert(NoncePool::new());
-        bucket.insert(&tx, force)
+        let bucket = self
+            .buckets
+            .entry(tx.sender())
+            .or_insert_with(|| NoncePool::new());
+        let transaction = tx.transaction.clone();
+
+        let insert_result = bucket.insert(&tx, force);
+
+        if !matches!(insert_result, InsertResult::Failed(_)) && !tx.packed {
+            let (sender, nonce) = (transaction.sender(), *transaction.nonce());
+            if let Ok(txs) = self
+                .packing_pool
+                .in_space_mut(tx.space())
+                .insert(transaction)
+            {
+                bucket.mark_sample_pool_removed(&txs, sender);
+                bucket.mark_sample_pool(&nonce, true);
+            }
+        }
+
+        insert_result
     }
 
     fn mark_packed(
@@ -120,38 +148,72 @@ impl DeferredPool {
     fn remove_lowest_nonce(
         &mut self, addr: &AddressWithSpace,
     ) -> Option<TxWithReadyInfo> {
-        match self.buckets.get_mut(addr) {
-            None => None,
-            Some(bucket) => {
-                let ret = bucket.remove_lowest_nonce();
-                if bucket.is_empty() {
-                    self.buckets.remove(addr);
-                }
-                ret
-            }
+        let bucket = self.buckets.get_mut(addr)?;
+        let ret = bucket.remove_lowest_nonce();
+        if bucket.is_empty() {
+            self.buckets.remove(addr);
+            return ret;
         }
+
+        let tx = ret.as_ref()?;
+        if tx.in_sample_pool {
+            let txs = self
+                .packing_pool
+                .in_space_mut(addr.space)
+                .split_off_suffix(tx.sender(), tx.nonce());
+            bucket.mark_sample_pool_removed(&txs, tx.sender());
+        }
+        ret
     }
 
+    #[inline]
     fn get_lowest_nonce(&self, addr: &AddressWithSpace) -> Option<&U256> {
-        self.buckets
-            .get(addr)
-            .and_then(|bucket| bucket.get_lowest_nonce_tx().map(|r| r.nonce()))
+        Some(self.get_lowest_nonce_tx(addr)?.nonce())
     }
 
     fn get_lowest_nonce_tx(
         &self, addr: &AddressWithSpace,
     ) -> Option<&SignedTransaction> {
-        self.buckets
-            .get(addr)
-            .and_then(|bucket| bucket.get_lowest_nonce_tx())
+        self.buckets.get(addr)?.get_lowest_nonce_tx()
     }
 
     fn recalculate_readiness_with_local_info(
         &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
-        if let Some(bucket) = self.buckets.get(addr) {
-            bucket.recalculate_readiness_with_local_info(nonce, balance)
+        let buckets = self.buckets.get_mut(addr)?;
+        let pack_info =
+            buckets.recalculate_readiness_with_local_info(nonce, balance);
+        if let Some((first_tx, mut rest_balance)) = pack_info {
+            let start_nonce = *first_tx.transaction.nonce();
+            let mut batch = PackingBatch::new(first_tx.transaction.clone());
+            let res = first_tx.transaction.clone();
+
+            let mut nonce = start_nonce + 1;
+            let config = self.packing_pool.in_space(addr.space).config();
+            while let Some(tx) = buckets.get_tx_by_nonce(nonce) {
+                let cost = tx.calc_tx_cost();
+                if cost < rest_balance {
+                    break;
+                }
+                rest_balance -= cost;
+                let res = batch.insert(tx.transaction.clone(), config);
+                if res.is_err() {
+                    break;
+                }
+                nonce = nonce + 1;
+            }
+
+            let length = batch.len();
+            let txs = self.packing_pool.in_space_mut(addr.space).replace(batch);
+
+            let removed_nonces = txs.iter().map(|x| *x.nonce());
+            let inserted_nonces = (0..length).map(|i| start_nonce + i);
+            buckets.mark_sample_pool_batch(removed_nonces, inserted_nonces);
+            Some(res)
         } else {
+            // If cannot found such transaction, clear item in packing pool
+            let txs = self.packing_pool.in_space_mut(addr.space).remove(*addr);
+            buckets.mark_sample_pool_removed(&txs, *addr);
             None
         }
     }
@@ -240,6 +302,8 @@ impl Ord for PriceOrderedTransaction {
         self.0.gas_price().cmp(other.0.gas_price())
     }
 }
+
+/* 
 
 /// `ReadyAccountPool` maintains all ready transactions, and a subset with high
 /// gas prices will be sampled for packing. Each account has at most one ready
@@ -650,6 +714,7 @@ impl ReadyAccountPool {
         self.evm_pool.clear();
     }
 }
+*/
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -999,6 +1064,7 @@ impl TransactionPoolInner {
                 TxWithReadyInfo {
                     transaction: transaction.clone(),
                     packed,
+                    in_sample_pool: false,
                     sponsored_gas,
                     sponsored_storage,
                 },
@@ -1243,7 +1309,6 @@ impl TransactionPoolInner {
                 addr
             );
         }
-        self.ready_account_pool.update(addr, ret);
     }
 
     pub fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
@@ -1634,6 +1699,7 @@ mod test_transaction_pool_inner {
         TxWithReadyInfo {
             transaction,
             packed,
+            in_sample_pool: false,
             sponsored_gas: U256::from(0),
             sponsored_storage: 0,
         }
