@@ -2087,6 +2087,14 @@ impl ConsensusNewBlockHandler {
                 }
             }
         }
+
+        inner
+            .data_man
+            .storage_manager
+            .get_storage_manager()
+            .get_snapshot_manager()
+            .get_snapshot_db_manager()
+            .clean_snapshot_epoch_id_before_recovered();
     }
 
     fn get_force_compute_index(
@@ -2280,6 +2288,7 @@ impl ConsensusNewBlockHandler {
                     }
                 }
 
+                // snapshots after latest_snapshot_epoch_height is removed
                 latest_snapshot_epoch_height < max_epoch_height
             };
 
@@ -2328,6 +2337,18 @@ impl ConsensusNewBlockHandler {
                     .expect("pivot hash should be exist")
             };
 
+            let pivot_hash_before_era = if era_pivot_epoch_height == 0
+                || era_pivot_epoch_height == snapshot_epoch_count
+            {
+                NULL_EPOCH
+            } else {
+                inner
+                    .get_pivot_hash_from_epoch_number(
+                        era_pivot_epoch_height - snapshot_epoch_count,
+                    )
+                    .expect("pivot hash should be exist")
+            };
+
             let snapshot_db_manager = inner
                 .data_man
                 .storage_manager
@@ -2342,7 +2363,10 @@ impl ConsensusNewBlockHandler {
 
             // use ear snapshot replace latest
             snapshot_db_manager
-                .recovery_latest_mpt_snapshot(&era_pivot_hash)
+                .recovery_latest_mpt_snapshot(
+                    &era_pivot_hash,
+                    Some(pivot_hash_before_era),
+                )
                 .unwrap();
         } else {
             debug!("the latest MPT snapshot is valid");

@@ -22,6 +22,7 @@ pub struct SnapshotDbManagerSqlite {
     latest_mpt_snapshot_semaphore: Arc<Semaphore>,
     latest_snapshot_id: RwLock<(EpochId, u64)>,
     copying_mpt_snapshot: Arc<Mutex<()>>,
+    snapshot_epoch_id_before_recovered: RwLock<Option<EpochId>>,
 }
 
 #[derive(Debug)]
@@ -147,6 +148,7 @@ impl SnapshotDbManagerSqlite {
             latest_mpt_snapshot_semaphore: Arc::new(Semaphore::new(1)),
             latest_snapshot_id: RwLock::new((NULL_EPOCH, 0)),
             copying_mpt_snapshot: Arc::new(Default::default()),
+            snapshot_epoch_id_before_recovered: RwLock::new(None),
         })
     }
 
@@ -154,11 +156,24 @@ impl SnapshotDbManagerSqlite {
         *self.latest_snapshot_id.write() = (snapshot_id, height);
     }
 
+    pub fn clean_snapshot_epoch_id_before_recovered(&self) {
+        *self.snapshot_epoch_id_before_recovered.write() = None;
+    }
+
     fn open_snapshot_readonly(
         &self, snapshot_path: PathBuf, try_open: bool,
         snapshot_epoch_id: &EpochId, read_mpt_snapshot: bool,
     ) -> Result<Option<SnapshotDbSqlite>>
     {
+        // indicate under recovery
+        if self
+            .snapshot_epoch_id_before_recovered
+            .read()
+            .is_some_and(|e| &e == snapshot_epoch_id)
+        {
+            return Ok(None);
+        }
+
         // To serialize simultaneous opens.
         let _open_lock = self.open_create_delete_lock.lock();
 
@@ -986,7 +1001,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         delta_mpt: DeltaMptIterator,
         mut in_progress_snapshot_info: SnapshotInfo,
         snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
-        new_epoch_height: u64, recovery_existing_kv_snapshot: bool,
+        new_epoch_height: u64, recover_mpt_with_kv_snapshot_exist: bool,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>
     {
         debug!(
@@ -1018,7 +1033,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     &snapshot_epoch_id,
                 )?)
             };
-            snapshot_kv_db = if recovery_existing_kv_snapshot {
+            snapshot_kv_db = if recover_mpt_with_kv_snapshot_exist {
                 let mut kv_db = self.open_kv_snapshot_write(
                     new_snapshot_db_path.clone(),
                     false,
@@ -1041,10 +1056,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             snapshot_kv_db.direct_merge(
                 None,
                 &mut snapshot_mpt_db,
-                recovery_existing_kv_snapshot,
+                recover_mpt_with_kv_snapshot_exist,
             )?
         } else {
-            let (db_path, copied) = if recovery_existing_kv_snapshot {
+            let (db_path, copied) = if recover_mpt_with_kv_snapshot_exist {
                 (new_snapshot_db_path.clone(), false)
             } else {
                 let copied = if let Ok(copy_type) = Self::try_copy_snapshot(
@@ -1064,7 +1079,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 (temp_db_path.clone(), copied)
             };
 
-            if recovery_existing_kv_snapshot || copied {
+            if recover_mpt_with_kv_snapshot_exist || copied {
                 // Open the copied database.
                 (snapshot_kv_db, snapshot_mpt_db) = self.open_snapshot_write(
                     db_path,
@@ -1108,7 +1123,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 snapshot_kv_db.direct_merge(
                     old_snapshot_db,
                     &mut snapshot_mpt_db,
-                    recovery_existing_kv_snapshot,
+                    recover_mpt_with_kv_snapshot_exist,
                 )?
             } else {
                 (snapshot_kv_db, snapshot_mpt_db) = self.open_snapshot_write(
@@ -1140,7 +1155,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         drop(snapshot_mpt_db);
         let locked = snapshot_info_map_rwlock.write();
 
-        if !recovery_existing_kv_snapshot {
+        if !recover_mpt_with_kv_snapshot_exist {
             Self::rename_snapshot_db(&temp_db_path, &new_snapshot_db_path)?;
         }
 
@@ -1348,8 +1363,12 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
     fn recovery_latest_mpt_snapshot(
         &self, snapshot_epoch_id: &EpochId,
-    ) -> Result<()> {
+        snapshot_epoch_id_before_recovered: Option<EpochId>,
+    ) -> Result<()>
+    {
         info!("recovery latest mpt snapshot from {}", snapshot_epoch_id);
+        *self.snapshot_epoch_id_before_recovered.write() =
+            snapshot_epoch_id_before_recovered;
 
         // Replace the latest MPT snapshot with the MPT snapshot of the
         // specified snapshot_epoch_id

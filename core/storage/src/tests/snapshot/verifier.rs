@@ -458,7 +458,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn direct_merge(
         &mut self, _old_snapshot_db: Option<&Arc<Self>>,
         _mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
-        _recovery_existing_kv_snapshot: bool,
+        _recover_mpt_with_kv_snapshot_exist: bool,
     ) -> Result<MerkleHash>
     {
         unreachable!()
@@ -515,7 +515,9 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
 
     fn recovery_latest_mpt_snapshot(
         &self, _snapshot_epoch_id: &EpochId,
-    ) -> Result<()> {
+        _snapshot_epoch_id_before_recovered: Option<EpochId>,
+    ) -> Result<()>
+    {
         unreachable!()
     }
 
@@ -553,7 +555,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         &self, _old_snapshot_epoch_id: &EpochId, _snapshot_epoch_id: EpochId,
         _delta_mpt: DeltaMptIterator, _in_progress_snapshot_info: SnapshotInfo,
         _snapshot_info_map: &'m RwLock<PersistedSnapshotInfoMap>,
-        _new_epoch_height: u64, _recovery_existing_kv_snapshot: bool,
+        _new_epoch_height: u64, _recover_mpt_with_kv_snapshot_exist: bool,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>
     {
         unreachable!()

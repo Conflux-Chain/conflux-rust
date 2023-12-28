@@ -40,6 +40,7 @@ pub trait SnapshotDbManagerTrait {
     fn get_latest_mpt_snapshot_db_name(&self) -> String;
     fn recovery_latest_mpt_snapshot(
         &self, snapshot_epoch_id: &EpochId,
+        before_era_pivot_hash: Option<EpochId>,
     ) -> Result<()>;
     fn create_mpt_snapshot_from_latest(
         &self, new_snapshot_epoch_id: &EpochId,
@@ -132,7 +133,7 @@ pub trait SnapshotDbManagerTrait {
                     }
 
                     if self
-                        .get_snapshot_by_epoch_id(&epoch, false, true)?
+                        .get_snapshot_by_epoch_id(&epoch, false, false)?
                         .expect("should be open snapshot")
                         .is_mpt_table_in_current_db()
                     {
@@ -202,7 +203,7 @@ pub trait SnapshotDbManagerTrait {
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
         delta_mpt: DeltaMptIterator, in_progress_snapshot_info: SnapshotInfo,
         snapshot_info_map: &'m RwLock<PersistedSnapshotInfoMap>,
-        new_epoch_height: u64, recovery_existing_kv_snapshot: bool,
+        new_epoch_height: u64, recover_mpt_with_kv_snapshot_exist: bool,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId, try_open: bool, open_mpt_snapshot: bool,

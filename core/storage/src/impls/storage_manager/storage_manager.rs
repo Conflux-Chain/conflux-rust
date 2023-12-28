@@ -569,7 +569,7 @@ impl StorageManager {
                 snapshot_epoch_id, height
             );
 
-            let recovery_existing_kv_snapshot = match this
+            let recover_mpt_with_kv_snapshot_exist = match this
                 .snapshot_info_map_by_epoch
                 .read()
                 .get(&snapshot_epoch_id)
@@ -669,7 +669,7 @@ impl StorageManager {
                                     snapshot_epoch_id.clone(), delta_db,
                                     in_progress_snapshot_info_cloned,
                                     &this.snapshot_info_map_by_epoch,
-                                    height,recovery_existing_kv_snapshot)?
+                                    height,recover_mpt_with_kv_snapshot_exist)?
                         }
                     };
                     if let Err(e) = this.register_new_snapshot(new_snapshot_info.clone(), &mut snapshot_info_map_locked) {

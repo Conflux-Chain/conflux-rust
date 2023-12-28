@@ -342,12 +342,12 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
     fn direct_merge(
         &mut self, old_snapshot_db: Option<&Arc<SnapshotKvDbSqlite>>,
         mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
-        recovery_existing_kv_snapshot: bool,
+        recover_mpt_with_kv_snapshot_exist: bool,
     ) -> Result<MerkleHash>
     {
         debug!("direct_merge begins.");
 
-        if !recovery_existing_kv_snapshot {
+        if !recover_mpt_with_kv_snapshot_exist {
             self.apply_update_to_kvdb()?;
         }
 
