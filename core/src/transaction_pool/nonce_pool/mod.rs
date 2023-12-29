@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod nonce_pool_map;
 mod weight;
 
@@ -232,20 +234,19 @@ impl NoncePool {
     }
 
     /// Return unpacked transactions from `nonce`.
-    pub fn get_pending_transactions(
-        &self, nonce: &U256,
-    ) -> Vec<Arc<SignedTransaction>> {
+    pub fn get_pending_transactions<'a>(
+        &'a self, nonce: &U256,
+    ) -> Vec<&'a TxWithReadyInfo> {
         let mut pending_txs = Vec::new();
-        let mut maybe_tx_info = self.map.succ(nonce).cloned();
+        let mut maybe_tx_info = self.map.succ(nonce);
         // TODO: More efficient traversal of Treap.
         while let Some(tx_info) = maybe_tx_info {
             if !tx_info.packed {
-                pending_txs.push(tx_info.transaction.clone());
+                pending_txs.push(tx_info);
             } else {
                 debug!("packed pending tx: tx_info={:?}", tx_info);
             }
-            maybe_tx_info =
-                self.map.succ(&(tx_info.transaction.nonce() + 1)).cloned();
+            maybe_tx_info = self.map.succ(&(tx_info.transaction.nonce() + 1));
         }
         pending_txs
     }

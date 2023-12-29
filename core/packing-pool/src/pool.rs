@@ -33,6 +33,20 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 
     pub fn config(&self) -> &PackingPoolConfig { &self.config }
 
+    pub fn len(&self) -> usize { self.treap_map.len() }
+
+    pub fn iter(&self) -> impl Iterator<Item = &[TX]> + '_ {
+        self.treap_map.values().map(|x| &x.txs[..])
+    }
+
+    pub fn contains(&self, addr: &TX::Sender) -> bool {
+        self.treap_map.contains_key(addr)
+    }
+
+    pub fn get_transactions(&self, addr: &TX::Sender) -> Option<&[TX]> {
+        Some(&self.treap_map.get(addr)?.txs)
+    }
+
     pub fn clear(&mut self) { self.treap_map = TreapMap::new(); }
 
     pub fn insert(&mut self, tx: TX) -> Result<Vec<TX>, ()> {
