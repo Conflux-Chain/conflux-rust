@@ -49,29 +49,14 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 
     pub fn clear(&mut self) { self.treap_map = TreapMap::new(); }
 
-    pub fn insert(&mut self, tx: TX) -> Result<Vec<TX>, ()> {
+    pub fn insert(&mut self, tx: TX) -> (Vec<TX>, Result<(), InsertError>) {
         let config = &self.config;
         let tx_clone = tx.clone();
         let sender = tx.sender();
 
-        let update = move |node: &mut Node<PackingPoolMap<TX>>| {
+        let update = move |node: &mut Node<PackingPoolMap<TX>>| -> Result<_, Infallible> {
             let old_info = node.value.pack_info();
-
-            let out = match node.value.insert(tx, config) {
-                Ok(out) => out,
-                Err(InsertError::Replace(_, index)) => {
-                    match node.value.split_off_suffix(index) {
-                        Ok(out) => out,
-                        Err(RemoveError::ShouldDelete) => {
-                            return Ok(node.value.make_outcome_on_delete());
-                        }
-                    }
-                }
-                _ => {
-                    return Err(());
-                }
-            };
-
+            let out = node.value.insert(tx, config);
             let new_info = node.value.pack_info();
 
             Ok(make_apply_outcome(old_info, new_info, node, config, out))
@@ -79,10 +64,10 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 
         let insert = move |rng: &mut dyn RngCore| {
             let node = PackingBatch::new(tx_clone).make_node(config, rng);
-            Ok((node, vec![]))
+            Ok((node, (vec![], Ok(()))))
         };
 
-        self.treap_map.update(&sender, update, insert)
+        self.treap_map.update(&sender, update, insert).unwrap()
     }
 
     pub fn replace(&mut self, mut packing_batch: PackingBatch<TX>) -> Vec<TX> {
@@ -189,11 +174,10 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
     }
 }
 
-fn make_apply_outcome<TX: PackingPoolTransaction>(
+fn make_apply_outcome<TX: PackingPoolTransaction, T>(
     old_info: PackInfo, new_info: PackInfo,
-    node: &mut Node<PackingPoolMap<TX>>, config: &PackingPoolConfig,
-    out: Vec<TX>,
-) -> ApplyOpOutcome<Vec<TX>>
+    node: &mut Node<PackingPoolMap<TX>>, config: &PackingPoolConfig, out: T,
+) -> ApplyOpOutcome<T>
 {
     let change_gas_price = old_info.first_gas_price != new_info.first_gas_price;
     let change_gas_limit = old_info.total_gas_limit != new_info.total_gas_limit;

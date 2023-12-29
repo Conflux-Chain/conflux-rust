@@ -1,11 +1,10 @@
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
-use cfx_types::{AddressWithSpace, Space, U256};
-use primitives::{SignedTransaction, Transaction};
+use cfx_types::{AddressWithSpace, U256};
+use primitives::SignedTransaction;
 
 pub trait PackingPoolTransaction: Clone {
     type Sender: Default + Ord + Hash + Copy + Debug;
-    type PackingPoolSpace;
     fn sender(&self) -> Self::Sender;
 
     fn nonce(&self) -> U256;
@@ -13,12 +12,9 @@ pub trait PackingPoolTransaction: Clone {
     fn gas_price(&self) -> U256;
 
     fn gas_limit(&self) -> U256;
-
-    fn space(&self) -> Self::PackingPoolSpace;
 }
 
 impl PackingPoolTransaction for Arc<SignedTransaction> {
-    type PackingPoolSpace = Space;
     type Sender = AddressWithSpace;
 
     #[inline]
@@ -32,6 +28,4 @@ impl PackingPoolTransaction for Arc<SignedTransaction> {
 
     #[inline]
     fn gas_limit(&self) -> U256 { *SignedTransaction::gas_limit(&self) }
-
-    fn space(&self) -> Space { Transaction::space(&self) }
 }

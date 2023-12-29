@@ -10,6 +10,8 @@ extern crate treap_map;
 extern crate typenum;
 
 mod key_mng;
+#[cfg(test)]
+mod mock_tx;
 mod packing_batch;
 mod pool;
 mod pool_config;

@@ -69,8 +69,19 @@ struct DeferredPool {
 }
 
 impl DeferredPool {
-    fn new() -> Self {
-        let config = PackingPoolConfig::default();
+    fn new(config: PackingPoolConfig) -> Self {
+        DeferredPool {
+            buckets: Default::default(),
+            packing_pool: SpaceMap::new(
+                SamplingPool::new(config),
+                SamplingPool::new(config),
+            ),
+        }
+    }
+
+    #[cfg(test)]
+    fn new_for_test() -> Self {
+        let config = PackingPoolConfig::new(3_000_000.into(), 20, 4);
         DeferredPool {
             buckets: Default::default(),
             packing_pool: SpaceMap::new(
@@ -183,12 +194,12 @@ impl DeferredPool {
 
         if !matches!(insert_result, InsertResult::Failed(_)) && !tx.packed {
             let (sender, nonce) = (transaction.sender(), *transaction.nonce());
-            if let Ok(txs) = self
+            let (txs, success) = self
                 .packing_pool
                 .in_space_mut(tx.space())
-                .insert(transaction)
-            {
-                bucket.mark_sample_pool_removed(&txs, sender);
+                .insert(transaction);
+            bucket.mark_sample_pool_removed(&txs, sender);
+            if success.is_ok() {
                 bucket.mark_sample_pool(&nonce, true);
             }
         }
@@ -279,12 +290,12 @@ impl DeferredPool {
             let config = self.packing_pool.in_space(addr.space).config();
             while let Some(tx) = buckets.get_tx_by_nonce(nonce) {
                 let cost = tx.calc_tx_cost();
-                if cost < rest_balance {
+                if cost > rest_balance {
                     break;
                 }
                 rest_balance -= cost;
                 let res = batch.insert(tx.transaction.clone(), config);
-                if res.is_err() {
+                if res.1.is_err() {
                     break;
                 }
                 nonce = nonce + 1;
@@ -514,15 +525,20 @@ pub struct TransactionPoolInner {
 
 impl TransactionPoolInner {
     pub fn new(
-        capacity: usize, _tx_weight_scaling: u64, _tx_weight_exp: u8,
-        _total_gas_capacity: U256,
+        capacity: usize, max_packing_batch_gas_limit: usize,
+        max_packing_batch_count: usize, packing_pool_degree: u8,
     ) -> Self
     {
+        let config = PackingPoolConfig::new(
+            max_packing_batch_gas_limit.into(),
+            max_packing_batch_count,
+            packing_pool_degree,
+        );
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
             unpacked_transaction_count: 0,
-            deferred_pool: DeferredPool::new(),
+            deferred_pool: DeferredPool::new(config),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: SpaceMap::default(),
             txs: TransactionSet::default(),
@@ -1318,7 +1334,7 @@ mod test_transaction_pool_inner {
 
     #[test]
     fn test_deferred_pool_insert_and_remove() {
-        let mut deferred_pool = DeferredPool::new();
+        let mut deferred_pool = DeferredPool::new_for_test();
 
         // insert txs of same sender
         let alice = Random.generate().unwrap();
@@ -1415,7 +1431,7 @@ mod test_transaction_pool_inner {
 
     #[test]
     fn test_deferred_pool_recalculate_readiness() {
-        let mut deferred_pool = super::DeferredPool::new();
+        let mut deferred_pool = super::DeferredPool::new_for_test();
 
         let alice = Random.generate().unwrap();
         let alice_addr_s = alice.address().with_native_space();

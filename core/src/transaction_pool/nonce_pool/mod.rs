@@ -20,13 +20,24 @@ use std::{
 
 use self::nonce_pool_map::NoncePoolMap;
 
-#[derive(Clone, Debug, PartialEq, DeriveMallocSizeOf)]
+#[derive(Clone, Debug, DeriveMallocSizeOf)]
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
     pub packed: bool,
     pub in_sample_pool: bool,
     pub sponsored_gas: U256,
     pub sponsored_storage: u64,
+}
+
+#[cfg(test)]
+impl PartialEq for TxWithReadyInfo {
+    fn eq(&self, other: &Self) -> bool {
+        // We don't compare `in_sample_pool` in test
+        self.transaction == other.transaction
+            && self.packed == other.packed
+            && self.sponsored_gas == other.sponsored_gas
+            && self.sponsored_storage == other.sponsored_storage
+    }
 }
 
 impl TxWithReadyInfo {
@@ -111,7 +122,8 @@ impl Deref for TxWithReadyInfo {
     fn deref(&self) -> &Self::Target { &self.transaction }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum InsertResult {
     /// new item added
     NewAdded,
@@ -272,7 +284,7 @@ impl NoncePool {
         // number of transactions in `[nonce, tx.nonce()]`
         (U256::from(b.0 - a.0 - 1) == tx.nonce() - nonce
             && b.1 - a.1 <= balance)
-            .then_some((tx, balance - (b.1 - a.1)))
+            .then(|| (tx, balance - (b.1 - a.1)))
     }
 
     #[cfg(test)]

@@ -10,47 +10,38 @@ pub struct PackingPoolConfig {
     pub(crate) address_gas_limit: U256,
     pub(crate) address_tx_count: usize,
 
-    pub(crate) gas_increase_percentage: u8,
     pub(crate) loss_ratio_degree: u8,
 }
 
 impl PackingPoolConfig {
     pub fn new(
-        address_gas_limit: U256, address_tx_count: usize,
-        gas_increase_percentage: u8, loss_ratio_degree: u8,
-    ) -> Self
-    {
+        address_gas_limit: U256, address_tx_count: usize, loss_ratio_degree: u8,
+    ) -> Self {
         assert!(loss_ratio_degree > 0 && loss_ratio_degree <= 5);
         Self {
             address_gas_limit,
             address_tx_count,
-            gas_increase_percentage,
             loss_ratio_degree,
         }
     }
 
-    #[inline]
-    pub fn next_gas_price(&self, gas_price: U256) -> U256 {
-        if gas_price < U256::from(100) {
-            gas_price + 1
-        } else {
-            gas_price.saturating_add(
-                (gas_price / 100) * self.gas_increase_percentage,
-            )
-        }
-    }
+    #[cfg(test)]
+    pub fn new_for_test() -> Self { Self::new(3_000_000.into(), 20, 4) }
 
     #[inline]
-    pub(crate) fn check_address_gas_limit<TX: PackingPoolTransaction>(
-        &self, txs: &Vec<TX>, replaced_tx: &TX, replaced_idx: usize,
+    pub(crate) fn check_acceptable_batch<TX: PackingPoolTransaction>(
+        &self, txs: &Vec<TX>, replaced: Option<(&TX, usize)>,
     ) -> (usize, U256) {
         let mut total_gas_limit = U256::zero();
-        for (idx, txs) in txs.iter().enumerate() {
-            let tx_gas = if idx == replaced_idx {
-                replaced_tx.gas_limit()
-            } else {
-                txs.gas_limit()
-            };
+        for (idx, tx) in txs.iter().enumerate() {
+            if idx >= self.address_tx_count {
+                return (idx, total_gas_limit);
+            }
+
+            let tx_gas = replaced
+                .filter(|(_, i)| idx == *i)
+                .map_or(tx.gas_limit(), |(r, _)| r.gas_limit());
+
             if total_gas_limit + tx_gas > self.address_gas_limit {
                 if idx == 0 {
                     // If there is only one tx, it can exceed address_gas_limit
