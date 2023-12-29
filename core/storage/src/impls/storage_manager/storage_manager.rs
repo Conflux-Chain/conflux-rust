@@ -549,6 +549,7 @@ impl StorageManager {
         let mut in_progress_snapshotting_tasks =
             this_cloned.in_progress_snapshotting_tasks.write();
 
+        let mut recover_mpt_with_kv_snapshot_exist = false;
         if !in_progress_snapshotting_tasks.contains_key(&snapshot_epoch_id)
             && this
                 .snapshot_info_map_by_epoch
@@ -560,6 +561,7 @@ impl StorageManager {
                     {
                         true
                     } else {
+                        recover_mpt_with_kv_snapshot_exist = recovery;
                         recovery
                     }
                 })
@@ -568,23 +570,6 @@ impl StorageManager {
                 "start check_make_register_snapshot_background: epoch={:?} height={:?}",
                 snapshot_epoch_id, height
             );
-
-            let recover_mpt_with_kv_snapshot_exist = match this
-                .snapshot_info_map_by_epoch
-                .read()
-                .get(&snapshot_epoch_id)
-            {
-                Some(v) => {
-                    if v.snapshot_info_kept_to_provide_sync
-                        != SnapshotKeptToProvideSyncStatus::InfoOnly
-                    {
-                        recovery
-                    } else {
-                        false
-                    }
-                }
-                None => false,
-            };
 
             let mut pivot_chain_parts = vec![
                 Default::default();
