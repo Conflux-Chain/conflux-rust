@@ -38,7 +38,7 @@ pub trait SnapshotDbManagerTrait {
     fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> PathBuf;
     fn get_mpt_snapshot_dir(&self) -> &Path;
     fn get_latest_mpt_snapshot_db_name(&self) -> String;
-    fn recovery_latest_mpt_snapshot(
+    fn recovery_latest_mpt_snapshot_from_checkpoint(
         &self, snapshot_epoch_id: &EpochId,
         before_era_pivot_hash: Option<EpochId>,
     ) -> Result<()>;

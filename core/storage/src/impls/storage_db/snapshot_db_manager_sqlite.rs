@@ -19,6 +19,7 @@ pub struct SnapshotDbManagerSqlite {
     mpt_already_open_snapshots: AlreadyOpenSnapshots<SnapshotMptDbSqlite>,
     mpt_open_snapshot_semaphore: Arc<Semaphore>,
     era_epoch_count: u64,
+    max_open_snapshots: u16,
     latest_mpt_snapshot_semaphore: Arc<Semaphore>,
     latest_snapshot_id: RwLock<(EpochId, u64)>,
     copying_mpt_snapshot: Arc<Mutex<()>>,
@@ -145,6 +146,7 @@ impl SnapshotDbManagerSqlite {
                 max_open_snapshots as usize,
             )),
             era_epoch_count,
+            max_open_snapshots,
             latest_mpt_snapshot_semaphore: Arc::new(Semaphore::new(1)),
             latest_snapshot_id: RwLock::new((NULL_EPOCH, 0)),
             copying_mpt_snapshot: Arc::new(Default::default()),
@@ -158,6 +160,33 @@ impl SnapshotDbManagerSqlite {
 
     pub fn clean_snapshot_epoch_id_before_recovered(&self) {
         *self.snapshot_epoch_id_before_recovered.write() = None;
+    }
+
+    pub fn recreate_latest_mpt_snapshot(&self) -> Result<()> {
+        info!("recreate latest mpt snapshot");
+        let latest_mpt_snapshot_path = self.get_latest_mpt_snapshot_db_path();
+        if latest_mpt_snapshot_path.exists() {
+            debug!("remove mpt snapshot {:?}", latest_mpt_snapshot_path);
+            if let Err(e) =
+                fs::remove_dir_all(&latest_mpt_snapshot_path.as_path())
+            {
+                error!(
+                    "remove mpt snapshot err: path={:?} err={:?}",
+                    latest_mpt_snapshot_path.as_path(),
+                    e
+                );
+            }
+        }
+
+        // recreate latest MPT database
+        SnapshotMptDbSqlite::create(
+            latest_mpt_snapshot_path.as_path(),
+            &Default::default(),
+            &Arc::new(Semaphore::new(self.max_open_snapshots as usize)),
+            None,
+        )?;
+
+        Ok(())
     }
 
     fn open_snapshot_readonly(
@@ -1005,8 +1034,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>
     {
         debug!(
-            "new_snapshot_by_merging: old={:?} new={:?} new epoch height={}",
-            old_snapshot_epoch_id, snapshot_epoch_id, new_epoch_height,
+            "new_snapshot_by_merging: old={:?} new={:?} new epoch height={}, recovering mpt={}",
+            old_snapshot_epoch_id, snapshot_epoch_id, new_epoch_height, recover_mpt_with_kv_snapshot_exist
         );
         // FIXME: clean-up when error happens.
         let temp_db_path = self.get_merge_temp_snapshot_db_path(
@@ -1361,12 +1390,15 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         Ok(locked)
     }
 
-    fn recovery_latest_mpt_snapshot(
+    fn recovery_latest_mpt_snapshot_from_checkpoint(
         &self, snapshot_epoch_id: &EpochId,
         snapshot_epoch_id_before_recovered: Option<EpochId>,
     ) -> Result<()>
     {
-        info!("recovery latest mpt snapshot from {}", snapshot_epoch_id);
+        info!(
+            "recovery latest mpt snapshot from checkpoint {}",
+            snapshot_epoch_id
+        );
         *self.snapshot_epoch_id_before_recovered.write() =
             snapshot_epoch_id_before_recovered;
 
