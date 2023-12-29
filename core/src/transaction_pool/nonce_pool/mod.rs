@@ -1,3 +1,6 @@
+mod nonce_pool_map;
+mod weight;
+
 use crate::transaction_pool::transaction_pool_inner::PendingReason;
 use cfx_parameters::{
     consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
@@ -7,9 +10,9 @@ use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{SignedTransaction, Transaction};
-use rand::{RngCore, SeedableRng};
-use rand_xorshift::XorShiftRng;
-use std::{cmp::Ordering, mem, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
+
+use self::nonce_pool_map::NoncePoolMap;
 
 #[derive(Clone, Debug, PartialEq, DeriveMallocSizeOf)]
 pub struct TxWithReadyInfo {
@@ -111,332 +114,62 @@ pub enum InsertResult {
     Updated(TxWithReadyInfo),
 }
 
-#[derive(Debug, DeriveMallocSizeOf)]
-struct NoncePoolNode {
-    /// transaction in current node
-    tx: TxWithReadyInfo,
-    /// number of unpacked transactions in subtree
-    subtree_unpacked: u32,
-    /// sum of cost of transaction in subtree
-    subtree_cost: U256,
-    // number of transaction in subtree
-    subtree_size: u32,
-    /// priority of this node following the max binary heap invariant
-    priority: u64,
-    /// left/right child of this node
-    child: [Option<Box<NoncePoolNode>>; 2],
-}
-
-impl NoncePoolNode {
-    pub fn new(tx: &TxWithReadyInfo, priority: u64) -> Self {
-        NoncePoolNode {
-            tx: tx.clone(),
-            subtree_unpacked: 1 - tx.packed as u32,
-            subtree_cost: tx.calc_tx_cost(),
-            subtree_size: 1,
-            priority,
-            child: [None, None],
-        }
-    }
-
-    /// return the leftmost node
-    pub fn leftmost(&self) -> Option<&TxWithReadyInfo> {
-        if self.child[0].as_ref().is_some() {
-            self.child[0].as_ref().unwrap().leftmost()
-        } else {
-            Some(&self.tx)
-        }
-    }
-
-    pub fn get(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
-        match nonce.cmp(&self.tx.nonce()) {
-            Ordering::Less => self.child[0].as_ref().and_then(|x| x.get(nonce)),
-            Ordering::Equal => Some(&self.tx),
-            Ordering::Greater => {
-                self.child[1].as_ref().and_then(|x| x.get(nonce))
-            }
-        }
-    }
-
-    // return the next item with nonce >= given nonce
-    pub fn succ(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
-        match nonce.cmp(&self.tx.nonce()) {
-            Ordering::Less | Ordering::Equal => {
-                let ret = if self.child[0].as_ref().is_some() {
-                    self.child[0].as_ref().unwrap().succ(nonce)
-                } else {
-                    None
-                };
-                if ret.is_none() {
-                    Some(&self.tx)
-                } else {
-                    ret
-                }
-            }
-            Ordering::Greater => {
-                if self.child[1].as_ref().is_some() {
-                    self.child[1].as_ref().unwrap().succ(nonce)
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    /// insert a new TxWithReadyInfo. if the corresponding nonce already exists,
-    /// will replace with higher gas price transaction
-    pub fn insert(
-        node: &mut Option<Box<NoncePoolNode>>, tx: &TxWithReadyInfo,
-        priority: u64, force: bool,
-    ) -> InsertResult
-    {
-        if node.is_none() {
-            *node = Some(Box::new(NoncePoolNode::new(tx, priority)));
-            return InsertResult::NewAdded;
-        }
-        let cmp = tx.nonce().cmp(&node.as_ref().unwrap().tx.nonce());
-        if cmp == Ordering::Equal {
-            let result = {
-                if tx.should_replace(&node.as_ref().unwrap().tx, force) {
-                    InsertResult::Updated(mem::replace(
-                        &mut node.as_mut().unwrap().tx,
-                        tx.clone(),
-                    ))
-                } else {
-                    InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &node.as_ref().unwrap().tx.gas_price()))
-                }
-            };
-            node.as_mut().unwrap().update();
-            result
-        } else {
-            let d = (cmp == Ordering::Greater) as usize;
-            let result = NoncePoolNode::insert(
-                &mut node.as_mut().unwrap().child[d],
-                tx,
-                priority,
-                force,
-            );
-            if node.as_ref().unwrap().priority
-                < node.as_ref().unwrap().child[d].as_ref().unwrap().priority
-            {
-                NoncePoolNode::rotate(node, d);
-            }
-            node.as_mut().unwrap().update();
-            result
-        }
-    }
-
-    pub fn remove(
-        node: &mut Option<Box<NoncePoolNode>>, nonce: &U256,
-    ) -> Option<TxWithReadyInfo> {
-        if node.is_none() {
-            return None;
-        }
-        let result = match nonce.cmp(&node.as_ref().unwrap().tx.nonce()) {
-            Ordering::Less => NoncePoolNode::remove(
-                &mut node.as_mut().unwrap().child[0],
-                nonce,
-            ),
-            Ordering::Equal => {
-                // leaf node, remove directly
-                if node.as_ref().unwrap().child[0].is_none()
-                    && node.as_ref().unwrap().child[1].is_none()
-                {
-                    return Some(mem::replace(node, None).unwrap().tx);
-                }
-                // rotate the node the a leaf node according to child's priority
-                // rotate left if left.priority < right.priority, or rotate
-                // right otherwise
-                if node.as_ref().unwrap().child[0].is_none()
-                    || node.as_ref().unwrap().child[1].is_some()
-                        && node.as_ref().unwrap().child[0]
-                            .as_ref()
-                            .unwrap()
-                            .priority
-                            < node.as_ref().unwrap().child[1]
-                                .as_ref()
-                                .unwrap()
-                                .priority
-                {
-                    NoncePoolNode::rotate(node, 1);
-                    NoncePoolNode::remove(
-                        &mut node.as_mut().unwrap().child[0],
-                        nonce,
-                    )
-                } else {
-                    NoncePoolNode::rotate(node, 0);
-                    NoncePoolNode::remove(
-                        &mut node.as_mut().unwrap().child[1],
-                        nonce,
-                    )
-                }
-            }
-            Ordering::Greater => NoncePoolNode::remove(
-                &mut node.as_mut().unwrap().child[1],
-                nonce,
-            ),
-        };
-        node.as_mut().unwrap().update();
-        result
-    }
-
-    /// find number of transactions and sum of cost whose nonce <= `nonce`
-    pub fn rank(
-        node: &Option<Box<NoncePoolNode>>, nonce: &U256,
-    ) -> (u32, U256) {
-        match node.as_ref() {
-            Some(node) => {
-                let cmp = nonce.cmp(&node.tx.nonce());
-                if cmp == Ordering::Less {
-                    NoncePoolNode::rank(&node.child[0], nonce)
-                } else {
-                    let mut ret = NoncePoolNode::size(&node.child[0]);
-                    ret.0 += 1;
-                    ret.1 += node.tx.calc_tx_cost();
-                    if cmp == Ordering::Greater {
-                        let tmp = NoncePoolNode::rank(&node.child[1], nonce);
-                        ret.0 += tmp.0;
-                        ret.1 += tmp.1;
-                    }
-                    ret
-                }
-            }
-            None => (0, 0.into()),
-        }
-    }
-
-    /// find an unpacked transaction `tx` where `tx.nonce() >= nonce`
-    /// and `tx.nonce()` is minimum
-    pub fn query(
-        node: &Option<Box<NoncePoolNode>>, nonce: &U256,
-    ) -> Option<Arc<SignedTransaction>> {
-        node.as_ref().and_then(|node| {
-            if node.subtree_unpacked == 0 {
-                return None;
-            }
-            match nonce.cmp(&node.tx.nonce()) {
-                Ordering::Less => NoncePoolNode::query(&node.child[0], nonce)
-                    .or_else(|| {
-                        if !node.tx.packed {
-                            Some(node.tx.transaction.clone())
-                        } else {
-                            NoncePoolNode::query(&node.child[1], nonce)
-                        }
-                    }),
-                Ordering::Equal => {
-                    if !node.tx.packed {
-                        Some(node.tx.transaction.clone())
-                    } else {
-                        NoncePoolNode::query(&node.child[1], nonce)
-                    }
-                }
-                Ordering::Greater => {
-                    NoncePoolNode::query(&node.child[1], nonce)
-                }
-            }
-        })
-    }
-
-    /// rotate to maintain max binary heap invariant
-    /// ch = 0 means rotate right; ch = 1 means rotate left
-    fn rotate(node: &mut Option<Box<NoncePoolNode>>, ch: usize) {
-        let mut c = mem::replace(&mut node.as_mut().unwrap().child[ch], None);
-        if c.is_some() {
-            mem::swap(node, &mut c);
-            mem::swap(
-                &mut c.as_mut().unwrap().child[ch],
-                &mut node.as_mut().unwrap().child[ch ^ 1],
-            );
-            c.as_mut().unwrap().update();
-            node.as_mut().unwrap().child[ch ^ 1] = c;
-            node.as_mut().unwrap().update();
-        }
-    }
-
-    /// update subtree info: cost_sum, size, unpacked
-    fn update(&mut self) {
-        self.subtree_unpacked = 1 - self.tx.packed as u32;
-        self.subtree_cost = self.tx.calc_tx_cost();
-        self.subtree_size = 1;
-        for i in 0..2 {
-            if self.child[i as usize].is_some() {
-                let child = self.child[i as usize].as_ref().unwrap();
-                self.subtree_unpacked += child.subtree_unpacked;
-                self.subtree_cost += child.subtree_cost;
-                self.subtree_size += child.subtree_size;
-            }
-        }
-    }
-
-    /// return the size and the sum of balance of current subtree
-    fn size(node: &Option<Box<NoncePoolNode>>) -> (u32, U256) {
-        if node.is_none() {
-            (0, 0.into())
-        } else {
-            (
-                node.as_ref().unwrap().subtree_size,
-                node.as_ref().unwrap().subtree_cost,
-            )
-        }
-    }
-}
-
 pub struct NoncePool {
-    root: Option<Box<NoncePoolNode>>,
-    rng: XorShiftRng,
+    map: NoncePoolMap,
 }
 
 impl MallocSizeOf for NoncePool {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.root.size_of(ops)
+        self.map.size_of(ops)
     }
 }
 
 impl NoncePool {
+    #[inline]
     pub fn new() -> Self {
-        NoncePool {
-            root: None,
-            rng: XorShiftRng::from_entropy(),
+        Self {
+            map: NoncePoolMap::new(),
         }
     }
 
+    #[inline]
     // FIXME: later we should limit the number of txs from one sender.
     //  the FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET roughly doing this job
     pub fn insert(
         &mut self, tx: &TxWithReadyInfo, force: bool,
     ) -> InsertResult {
-        NoncePoolNode::insert(&mut self.root, tx, self.rng.next_u64(), force)
+        self.map.insert(tx, force)
     }
 
+    pub fn mark_packed(&mut self, nonce: &U256, packed: bool) -> bool {
+        self.map.mark_packed(nonce, packed)
+    }
+
+    #[inline]
     pub fn get_tx_by_nonce(&self, nonce: U256) -> Option<TxWithReadyInfo> {
-        self.root
-            .as_ref()
-            .and_then(|node| node.get(&nonce).map(|x| x.clone()))
+        self.map.get(&nonce).cloned()
     }
 
+    #[inline]
     pub fn get_lowest_nonce_tx(&self) -> Option<&SignedTransaction> {
-        self.root
-            .as_ref()
-            .and_then(|node| node.leftmost().map(|x| x.transaction.as_ref()))
+        self.map.leftmost().map(|x| &*x.transaction)
     }
 
+    #[inline]
     pub fn remove(&mut self, nonce: &U256) -> Option<TxWithReadyInfo> {
-        NoncePoolNode::remove(&mut self.root, nonce)
+        self.map.remove(nonce)
     }
 
+    #[inline]
     pub fn remove_lowest_nonce(&mut self) -> Option<TxWithReadyInfo> {
-        let lowest_nonce =
-            self.get_lowest_nonce_tx().map(|x| x.nonce().clone());
-        lowest_nonce.and_then(|nonce| self.remove(&nonce))
+        let nonce = *self.get_lowest_nonce_tx()?.nonce();
+        self.remove(&nonce)
     }
 
     pub fn get_pending_info(
         &self, nonce: &U256,
     ) -> Option<(usize, Arc<SignedTransaction>)> {
-        let tx = self
-            .root
-            .as_ref()
-            .and_then(|node| node.succ(&nonce).map(|x| x.clone()));
+        let tx = self.map.succ(nonce).cloned();
         if let Some(tx) = tx {
             let pending_count = self.count_from(&(nonce));
             Some((pending_count, tx.transaction))
@@ -450,10 +183,7 @@ impl NoncePool {
         &self, nonce: &U256,
     ) -> Vec<Arc<SignedTransaction>> {
         let mut pending_txs = Vec::new();
-        let mut maybe_tx_info = self
-            .root
-            .as_ref()
-            .and_then(|node| node.succ(&nonce).map(|x| x.clone()));
+        let mut maybe_tx_info = self.map.succ(nonce).cloned();
         // TODO: More efficient traversal of Treap.
         while let Some(tx_info) = maybe_tx_info {
             if !tx_info.packed {
@@ -461,10 +191,8 @@ impl NoncePool {
             } else {
                 debug!("packed pending tx: tx_info={:?}", tx_info);
             }
-            maybe_tx_info = self.root.as_ref().and_then(|node| {
-                node.succ(&(tx_info.transaction.nonce() + U256::from(1)))
-                    .map(|x| x.clone())
-            });
+            maybe_tx_info =
+                self.map.succ(&(tx_info.transaction.nonce() + 1)).cloned();
         }
         pending_txs
     }
@@ -475,21 +203,22 @@ impl NoncePool {
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
-        NoncePoolNode::query(&self.root, &nonce).filter(|x| {
-            let a = if nonce == U256::from(0) {
-                (0, U256::from(0))
-            } else {
-                NoncePoolNode::rank(&self.root, &(nonce - 1))
-            };
-            let b = NoncePoolNode::rank(&self.root, &x.nonce());
-            // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
-            // tx.nonce()]`
-            // 2. b.0 - a.0 means number of transactions in `[nonce,
-            // tx.nonce()]` 3. x.nonce() - nonce + 1 means expected
-            // number of transactions in `[nonce, tx.nonce()]`
-            U256::from(b.0 - a.0 - 1) == x.nonce() - nonce
-                && b.1 - a.1 <= balance
-        })
+        let tx = self.map.query(&nonce)?;
+
+        let a = if nonce == U256::from(0) {
+            (0, U256::from(0))
+        } else {
+            self.map.rank(&(nonce - 1))
+        };
+        let b = self.map.rank(&tx.nonce());
+        // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
+        // tx.nonce()]`
+        // 2. b.0 - a.0 means number of transactions in `[nonce,
+        // tx.nonce()]` 3. x.nonce() - nonce + 1 means expected
+        // number of transactions in `[nonce, tx.nonce()]`
+        (U256::from(b.0 - a.0 - 1) == tx.nonce() - nonce
+            && b.1 - a.1 <= balance)
+            .then_some(tx)
     }
 
     pub fn check_pending_reason_with_local_info(
@@ -498,9 +227,9 @@ impl NoncePool {
         let a = if nonce == U256::from(0) {
             (0, U256::from(0))
         } else {
-            NoncePoolNode::rank(&self.root, &(nonce - 1))
+            self.map.rank(&(nonce - 1))
         };
-        let b = NoncePoolNode::rank(&self.root, &pending_tx.nonce());
+        let b = self.map.rank(&pending_tx.nonce());
         // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
         // tx.nonce()]`
         // 2. b.0 - a.0 means number of transactions in `[nonce, tx.nonce()]`
@@ -518,31 +247,30 @@ impl NoncePool {
         None
     }
 
-    pub fn is_empty(&self) -> bool { self.root.is_none() }
+    #[inline]
+    pub fn is_empty(&self) -> bool { self.map.len() == 0 }
 
     /// return the number of transactions whose nonce < `nonce`
     pub fn count_less(&self, nonce: &U256) -> usize {
         if *nonce == U256::from(0) {
             0
         } else {
-            NoncePoolNode::rank(&self.root, &(nonce - 1)).0 as usize
+            self.map.rank(&(nonce - 1)).0 as usize
         }
     }
 
     /// return the number of transactions whose nonce >= `nonce`
+    #[inline]
     pub fn count_from(&self, nonce: &U256) -> usize {
-        NoncePoolNode::size(&self.root).0 as usize - self.count_less(nonce)
+        self.map.len() - self.count_less(nonce)
     }
 
     pub fn check_nonce_exists(&self, nonce: &U256) -> bool {
-        self.root
-            .as_ref()
-            .and_then(|node| node.get(&nonce))
-            .is_some()
+        self.map.get(nonce).is_some()
     }
 
     pub fn succ_nonce(&self, nonce: &U256) -> Option<U256> {
-        self.root.as_ref()?.succ(nonce).map(|tx| *tx.nonce())
+        Some(*(self.map.succ(nonce)?.transaction.nonce()))
     }
 }
 
@@ -961,6 +689,24 @@ mod nonce_pool_test {
                 );
                 mock_nonce_pool.insert(nonce.into(), tx[nonce].clone());
             }
+        }
+
+        // random change packed
+        for _ in 0..count {
+            let nonce: usize = rng.next_u64() as usize % count;
+            let packed = rng.next_u64() % 2 == 1;
+            let current_packed =
+                if let Some(x) = mock_nonce_pool.get_mut(&nonce.into()) {
+                    let current_packed = x.packed;
+                    x.packed = packed;
+                    Some(current_packed)
+                } else {
+                    None
+                };
+            let should_change = current_packed.map_or(false, |p| p != packed);
+            let changed = nonce_pool.mark_packed(&nonce.into(), packed);
+            assert_eq!(should_change, changed);
+            tx[nonce].packed = packed;
         }
 
         for i in 0..count * 2 {
