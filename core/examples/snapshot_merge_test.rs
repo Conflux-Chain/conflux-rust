@@ -100,6 +100,7 @@ fn main() -> Result<(), Error> {
             info,
             &storage_manager.snapshot_info_map_by_epoch,
             height,
+            false,
         )?;
     storage_manager.register_new_snapshot(
         snapshot_info1.clone(),
@@ -170,6 +171,7 @@ fn main() -> Result<(), Error> {
             info,
             &storage_manager.snapshot_info_map_by_epoch,
             height,
+            false,
         )?;
     println!(
         "After merging: {:?}, accounts size {}",
@@ -236,6 +238,7 @@ fn main() -> Result<(), Error> {
             info,
             &storage_manager.snapshot_info_map_by_epoch,
             height,
+            false,
         )?;
     storage_manager.register_new_snapshot(
         snapshot_info3.clone(),
@@ -324,7 +327,7 @@ fn initialize_genesis(
         "fa4e44bc69cca4cb2ae88a8fd452826faab9e8764e7eed934feede46c98962fa",
     )
     .unwrap();
-    state.commit(genesis_hash.clone())?;
+    state.commit(genesis_hash.clone(), false)?;
 
     Ok((genesis_hash, root.state_root.delta_root))
 }
@@ -443,7 +446,9 @@ where
             .unwrap();
     }
     let epoch = H256::random();
-    state.commit(epoch, /* debug_record = */ None).unwrap();
+    state
+        .commit(epoch, /* debug_record = */ None, false)
+        .unwrap();
     epoch
 }
 

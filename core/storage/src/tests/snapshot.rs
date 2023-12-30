@@ -180,7 +180,7 @@ fn assert_snapshot_mpt_formation(mpt_kv_iter: &DumpedMptKvIterator) {
         let mut epoch_id = EpochId::default();
         epoch_id.as_bytes_mut()[0] = 1;
         let root = state.compute_state_root().unwrap().state_root;
-        state.commit(epoch_id).unwrap();
+        state.commit(epoch_id, false).unwrap();
 
         snapshot_mpt_nodes =
             state_manager.number_committed_nodes.load(Ordering::Relaxed);
@@ -245,7 +245,7 @@ fn test_mpt_node_path_to_from_db_key() {
     let mut epoch_id = EpochId::default();
     epoch_id.as_bytes_mut()[0] = 1;
     state.compute_state_root().unwrap();
-    let state_root_with_aux_info = state.commit(epoch_id).unwrap();
+    let state_root_with_aux_info = state.commit(epoch_id, false).unwrap();
 
     let state = state_manager
         .get_state_no_commit_inner(

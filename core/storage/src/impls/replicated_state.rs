@@ -79,7 +79,7 @@ impl ReplicationHandler {
                         }
                         StateOperation::Commit { epoch_id } => {
                             return replicated_state
-                                .commit(epoch_id)
+                                .commit(epoch_id, false)
                                 .map(|_| ());
                         }
                     };
@@ -314,8 +314,10 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
         self.state.get_state_root()
     }
 
-    fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
-        let r = self.state.commit(epoch_id);
+    fn commit(
+        &mut self, epoch_id: EpochId, recovery: bool,
+    ) -> Result<StateRootWithAuxInfo> {
+        let r = self.state.commit(epoch_id, recovery);
         self.replication_handler
             .send_op(StateOperation::Commit { epoch_id });
         // TODO(lpl): This can be probably delayed.

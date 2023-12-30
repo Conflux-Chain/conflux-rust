@@ -319,7 +319,9 @@ impl StateTrait for State {
     }
 
     // TODO(yz): replace coarse lock with a queue.
-    fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
+    fn commit(
+        &mut self, epoch_id: EpochId, recovery: bool,
+    ) -> Result<StateRootWithAuxInfo> {
         self.ensure_temp_slab_for_db_load();
 
         let merkle_root = self.state_root_check()?;
@@ -363,6 +365,7 @@ impl StateTrait for State {
                 self.intermediate_trie_root.clone(),
                 &self.intermediate_epoch_id,
                 snapshot_height,
+                recovery,
             )?;
         }
 

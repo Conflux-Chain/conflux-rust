@@ -619,11 +619,12 @@ impl ConsensusExecutor {
     /// Execute the epoch synchronously
     pub fn compute_epoch(
         &self, task: EpochExecutionTask,
-        debug_record: Option<&mut ComputeEpochDebugRecord>,
+        debug_record: Option<&mut ComputeEpochDebugRecord>, recovery: bool,
     )
     {
         if !self.consensus_graph_bench_mode {
-            self.handler.handle_epoch_execution(task, debug_record)
+            self.handler
+                .handle_epoch_execution(task, debug_record, recovery)
         }
     }
 
@@ -868,7 +869,7 @@ impl ConsensusExecutionHandler {
         debug!("Receive execution task: {:?}", task);
         match task {
             ExecutionTask::ExecuteEpoch(task) => {
-                self.handle_epoch_execution(task, None)
+                self.handle_epoch_execution(task, None, false)
             }
             ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
             ExecutionTask::Stop => return false,
@@ -878,7 +879,7 @@ impl ConsensusExecutionHandler {
 
     fn handle_epoch_execution(
         &self, task: EpochExecutionTask,
-        debug_record: Option<&mut ComputeEpochDebugRecord>,
+        debug_record: Option<&mut ComputeEpochDebugRecord>, recovery: bool,
     )
     {
         let _timer = MeterTimer::time_func(CONSENSIS_EXECUTION_TIMER.as_ref());
@@ -890,6 +891,7 @@ impl ConsensusExecutionHandler {
             task.on_local_pivot,
             debug_record,
             task.force_recompute,
+            recovery,
         );
     }
 
@@ -955,6 +957,7 @@ impl ConsensusExecutionHandler {
         on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         force_recompute: bool,
+        recovery: bool,
     )
     {
         // FIXME: Question: where to calculate if we should make a snapshot?
@@ -1148,7 +1151,7 @@ impl ConsensusExecutionHandler {
         let state_root;
         if on_local_pivot {
             state_root = state
-                .commit(*epoch_hash, debug_record.as_deref_mut())
+                .commit(*epoch_hash, debug_record.as_deref_mut(), recovery)
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
             {
                 debug!("Notify epoch[{}]", epoch_hash);
@@ -1172,7 +1175,7 @@ impl ConsensusExecutionHandler {
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         } else {
             state_root = state
-                .commit(*epoch_hash, debug_record)
+                .commit(*epoch_hash, debug_record, recovery)
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         };
 
