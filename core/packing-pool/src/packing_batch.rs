@@ -269,11 +269,7 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
         let mut before_txs = self.txs.clone();
         before_txs.push(tx);
 
-        dbg!(&self);
-
         let (res_txs, res) = self.insert(tx, &config);
-
-        dbg!(&self);
 
         let mut after_txs = res_txs.clone();
         if res.is_err() {

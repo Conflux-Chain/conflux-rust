@@ -383,12 +383,12 @@ fn test_change_weight() {
 #[test]
 fn test_apply_op_change_value() {
     let mut treap_map: TreapMap<ComplexTreapMapConfig> = TreapMap::new();
-    for i in 0..10 {
+    for i in 0..100 {
         treap_map.insert(i * 2, i * 2, i * 2);
         treap_map.assert_consistency();
     }
     // Test update value
-    let mut indicies: Vec<_> = (0u32..20).collect();
+    let mut indicies: Vec<_> = (0u32..200).collect();
     indicies.shuffle(&mut thread_rng());
     for i in indicies {
         let should_fail = i % 3 == 0;
@@ -396,7 +396,7 @@ fn test_apply_op_change_value() {
             if should_fail {
                 Err(())
             } else {
-                node.value = 100 + i;
+                node.value = 1000 + i;
                 Ok(ApplyOpOutcome {
                     out: (),
                     update_weight: false,
@@ -409,7 +409,7 @@ fn test_apply_op_change_value() {
             if should_fail {
                 Err(())
             } else {
-                Ok((Node::new(i, 100 + i, i, 100 + i, rng.next_u64()), ()))
+                Ok((Node::new(i, 1000 + i, i, 1000 + i, rng.next_u64()), ()))
             }
         };
         let res = treap_map.update(&i, update, insert);
@@ -417,7 +417,7 @@ fn test_apply_op_change_value() {
         assert_eq!(
             treap_map.get(&i).cloned(),
             if !should_fail {
-                Some(100 + i)
+                Some(1000 + i)
             } else if i % 2 == 0 {
                 Some(i)
             } else {
@@ -431,12 +431,12 @@ fn test_apply_op_change_value() {
 #[test]
 fn test_apply_op_change_weight() {
     let mut treap_map: TreapMap<ComplexTreapMapConfig> = TreapMap::new();
-    for i in 0..10 {
+    for i in 0..100 {
         treap_map.insert(i * 2, i * 2, i * 2);
         treap_map.assert_consistency();
     }
     // Test update value
-    let mut indicies: Vec<_> = (0u32..20).collect();
+    let mut indicies: Vec<_> = (0u32..200).collect();
     indicies.shuffle(&mut thread_rng());
     for i in indicies {
         let should_fail = i % 3 == 0;
@@ -444,7 +444,7 @@ fn test_apply_op_change_weight() {
             if should_fail {
                 Err(())
             } else {
-                node.weight = 100 + i;
+                node.weight = 1000 + i;
                 Ok(ApplyOpOutcome {
                     out: (),
                     update_weight: true,
@@ -457,17 +457,17 @@ fn test_apply_op_change_weight() {
             if should_fail {
                 Err(())
             } else {
-                Ok((Node::new(i, 100 + i, i, 100 + i, rng.next_u64()), ()))
+                Ok((Node::new(i, 1000 + i, i, 1000 + i, rng.next_u64()), ()))
             }
         };
         let res = treap_map.update(&i, update, insert);
         assert_eq!(res.is_ok(), !should_fail);
         treap_map.assert_consistency();
     }
-    let target_weight: usize = (0..20)
+    let target_weight: usize = (0..200)
         .map(|i| {
             if i % 3 != 0 {
-                i + 100
+                i + 1000
             } else if i % 2 == 0 {
                 i
             } else {
@@ -481,68 +481,82 @@ fn test_apply_op_change_weight() {
 #[test]
 fn test_apply_op_change_key() {
     let mut treap_map: TreapMap<ComplexTreapMapConfig> = TreapMap::new();
-    for i in 0..10 {
+    for i in 0..100 {
         treap_map.insert(i * 2, i * 2, i * 2);
         treap_map.assert_consistency();
     }
     // Test update value
-    let mut indicies: Vec<_> = (0u32..20).collect();
+    let mut indicies: Vec<_> = (0u32..200).collect();
     indicies.shuffle(&mut thread_rng());
     for i in indicies {
         let should_fail = i % 3 == 0;
+        let delete_item = i % 5 == 0;
+        let has_initial = i % 2 == 0;
         let update = |node: &mut Node<_>| {
             if should_fail {
                 Err(())
             } else {
-                node.key = 100 + i;
-                node.sort_key = 100 + i;
-                node.weight = 100 + i;
-                node.value = 100 + i;
+                node.key = 1000 + i;
+                node.sort_key = 1000 + i;
+                node.weight = 1000 + i;
+                node.value = 1000 + i;
                 Ok(ApplyOpOutcome {
                     out: (),
                     update_weight: true,
                     update_key: true,
-                    delete_item: false,
+                    delete_item,
                 })
             }
         };
         let insert = |rng: &mut dyn RngCore| {
-            if should_fail {
+            if should_fail || delete_item {
                 Err(())
             } else {
                 Ok((
-                    Node::new(i, 100 + i, 100 + i, 100 + i, rng.next_u64()),
+                    Node::new(i, 1000 + i, 1000 + i, 1000 + i, rng.next_u64()),
                     (),
                 ))
             }
         };
         let res = treap_map.update(&i, update, insert);
-        assert_eq!(res.is_ok(), !should_fail);
+        assert_eq!(res.is_err(), should_fail || (!has_initial && delete_item));
         treap_map.assert_consistency();
 
-        match (should_fail, i % 2 == 0) {
+        let no_erasure = !(delete_item && !should_fail);
+
+        match (should_fail, has_initial) {
             (true, true) => {
                 assert_eq!(treap_map.get(&i).cloned(), Some(i));
-                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+                assert_eq!(treap_map.get(&(i + 1000)).cloned(), None);
             }
             (true, false) => {
                 assert_eq!(treap_map.get(&i).cloned(), None);
-                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+                assert_eq!(treap_map.get(&(i + 1000)).cloned(), None);
             }
             (false, true) => {
                 assert_eq!(treap_map.get(&i).cloned(), None);
-                assert_eq!(treap_map.get(&(100 + i)).cloned(), Some(100 + i));
+                assert_eq!(
+                    treap_map.get(&(1000 + i)).cloned(),
+                    no_erasure.then_some(1000 + i)
+                );
             }
             (false, false) => {
-                assert_eq!(treap_map.get(&i).cloned(), Some(i + 100));
-                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+                assert_eq!(
+                    treap_map.get(&i).cloned(),
+                    no_erasure.then_some(i + 1000)
+                );
+                assert_eq!(treap_map.get(&(i + 1000)).cloned(), None);
             }
         }
     }
-    let target_weight: usize = (0..20)
+    let target_weight: usize = (0..200)
         .map(|i| {
             if i % 3 != 0 {
-                i + 100
+                if i % 5 != 0 {
+                    i + 1000
+                } else {
+                    0
+                }
             } else if i % 2 == 0 {
                 i
             } else {
@@ -556,64 +570,78 @@ fn test_apply_op_change_key() {
 #[test]
 fn test_apply_op_change_key_for_shared_key() {
     let mut treap_map: TreapMap<SimpleTreapMapConfig> = TreapMap::new();
-    for i in 0..10 {
+    for i in 0..100 {
         treap_map.insert(i * 2, i * 2, i * 2);
         treap_map.assert_consistency();
     }
     // Test update value
-    let mut indicies: Vec<_> = (0u32..20).collect();
+    let mut indicies: Vec<_> = (0u32..200).collect();
     indicies.shuffle(&mut thread_rng());
     for i in indicies {
         let should_fail = i % 3 == 0;
+        let delete_item = i % 5 == 0;
+        let has_initial = i % 2 == 0;
         let update = |node: &mut Node<_>| {
             if should_fail {
                 Err(())
             } else {
-                node.key = 100 + i;
-                node.weight = 100 + i;
-                node.value = 100 + i;
+                node.key = 1000 + i;
+                node.weight = 1000 + i;
+                node.value = 1000 + i;
                 Ok(ApplyOpOutcome {
                     out: (),
                     update_weight: true,
                     update_key: true,
-                    delete_item: false,
+                    delete_item,
                 })
             }
         };
         let insert = |rng: &mut dyn RngCore| {
-            if should_fail {
+            if should_fail || delete_item {
                 Err(())
             } else {
-                Ok((Node::new(i, 100 + i, (), 100 + i, rng.next_u64()), ()))
+                Ok((Node::new(i, 1000 + i, (), 1000 + i, rng.next_u64()), ()))
             }
         };
         let res = treap_map.update(&i, update, insert);
-        assert_eq!(res.is_ok(), !should_fail);
+        assert_eq!(res.is_err(), should_fail || (!has_initial && delete_item));
         treap_map.assert_consistency();
 
-        match (should_fail, i % 2 == 0) {
+        let no_erasure = !(delete_item && !should_fail);
+
+        match (should_fail, has_initial) {
             (true, true) => {
                 assert_eq!(treap_map.get(&i).cloned(), Some(i));
-                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+                assert_eq!(treap_map.get(&(i + 1000)).cloned(), None);
             }
             (true, false) => {
                 assert_eq!(treap_map.get(&i).cloned(), None);
-                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+                assert_eq!(treap_map.get(&(i + 1000)).cloned(), None);
             }
             (false, true) => {
                 assert_eq!(treap_map.get(&i).cloned(), None);
-                assert_eq!(treap_map.get(&(100 + i)).cloned(), Some(100 + i));
+                assert_eq!(
+                    treap_map.get(&(1000 + i)).cloned(),
+                    no_erasure.then_some(1000 + i)
+                );
             }
             (false, false) => {
-                assert_eq!(treap_map.get(&i).cloned(), Some(i + 100));
-                assert_eq!(treap_map.get(&(i + 100)).cloned(), None);
+                assert_eq!(
+                    treap_map.get(&i).cloned(),
+                    no_erasure.then_some(1000 + i)
+                );
+                assert_eq!(treap_map.get(&(i + 1000)).cloned(), None);
             }
         }
     }
-    let target_weight: usize = (0..20)
+    let target_weight: usize = (0..200)
         .map(|i| {
             if i % 3 != 0 {
-                i + 100
+                if i % 5 != 0 {
+                    i + 1000
+                } else {
+                    0
+                }
             } else if i % 2 == 0 {
                 i
             } else {

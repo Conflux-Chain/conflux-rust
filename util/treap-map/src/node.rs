@@ -8,8 +8,9 @@ use super::{
 };
 
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use std::mem;
+use std::{fmt::Debug, mem};
 
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct Node<C: TreapMapConfig> {
     pub key: C::SearchKey,
     pub value: C::Value,
@@ -26,22 +27,6 @@ pub struct Node<C: TreapMapConfig> {
 pub enum Direction {
     Left,
     Right,
-}
-
-impl<C: TreapMapConfig> MallocSizeOf for Node<C>
-where
-    C::SearchKey: MallocSizeOf,
-    C::Value: MallocSizeOf,
-    C::Weight: MallocSizeOf,
-{
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.key.size_of(ops)
-            + self.value.size_of(ops)
-            + self.weight.size_of(ops)
-            + self.sum_weight.size_of(ops)
-            + self.left.size_of(ops)
-            + self.right.size_of(ops)
-    }
 }
 
 impl<C: TreapMapConfig> Node<C> {
@@ -331,5 +316,23 @@ impl<C: TreapMapConfig> Node<C> {
         }
 
         assert_eq!(weight, self.sum_weight);
+    }
+}
+
+impl<C: TreapMapConfig> MallocSizeOf for Node<C>
+where
+    C::SearchKey: MallocSizeOf,
+    C::SortKey: MallocSizeOf,
+    C::Value: MallocSizeOf,
+    C::Weight: MallocSizeOf,
+{
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.key.size_of(ops)
+            + self.sort_key.size_of(ops)
+            + self.value.size_of(ops)
+            + self.weight.size_of(ops)
+            + self.sum_weight.size_of(ops)
+            + self.left.size_of(ops)
+            + self.right.size_of(ops)
     }
 }

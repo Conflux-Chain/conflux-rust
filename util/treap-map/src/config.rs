@@ -30,6 +30,15 @@ impl<T: Add<Output = T> + Clone + Zero + Eq> WeightConsolidate for T {
     fn accure(&mut self, other: &Self) { *self = self.clone() + other.clone() }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub struct NoWeight;
+
+impl WeightConsolidate for NoWeight {
+    fn empty() -> Self { NoWeight }
+
+    fn consolidate(_: &Self, _: &Self) -> Self { NoWeight }
+}
+
 /// `TreapMap` is a struct which implements a treap which can be indexed by a
 /// different key (type `SearchKey`). The associate type `SortKey` and
 /// `SearchKey` defines how to order node in treap collaborately.
