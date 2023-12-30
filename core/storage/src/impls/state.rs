@@ -32,10 +32,15 @@ pub struct State {
     // FIXME: this is a hack to get pivot chain from parent snapshot to a
     // FIXME: snapshot. it should be done in consensus.
     parent_epoch_id: EpochId,
+    recover_mpt_during_construct_pivot_state: bool,
 }
 
 impl State {
-    pub fn new(manager: Arc<StateManager>, state_trees: StateTrees) -> Self {
+    pub fn new(
+        manager: Arc<StateManager>, state_trees: StateTrees,
+        construct_pivot_state: bool,
+    ) -> Self
+    {
         Self {
             manager,
             snapshot_db: state_trees.snapshot_db,
@@ -57,6 +62,7 @@ impl State {
             dirty: false,
             children_merkle_map: ChildrenMerkleMap::new(),
             parent_epoch_id: state_trees.parent_epoch_id,
+            recover_mpt_during_construct_pivot_state: construct_pivot_state,
         }
     }
 
@@ -319,9 +325,7 @@ impl StateTrait for State {
     }
 
     // TODO(yz): replace coarse lock with a queue.
-    fn commit(
-        &mut self, epoch_id: EpochId, recovery: bool,
-    ) -> Result<StateRootWithAuxInfo> {
+    fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
         self.ensure_temp_slab_for_db_load();
 
         let merkle_root = self.state_root_check()?;
@@ -365,7 +369,7 @@ impl StateTrait for State {
                 self.intermediate_trie_root.clone(),
                 &self.intermediate_epoch_id,
                 snapshot_height,
-                recovery,
+                self.recover_mpt_during_construct_pivot_state,
             )?;
         }
 

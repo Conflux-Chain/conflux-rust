@@ -471,7 +471,7 @@ mod impls {
 
         pub fn commit(
             &mut self, epoch_id: EpochId,
-            debug_record: Option<&mut ComputeEpochDebugRecord>, recovery: bool,
+            debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<StateRootWithAuxInfo>
         {
             if !self.checkpoints.is_empty() {
@@ -483,7 +483,7 @@ mod impls {
                 Err(_) => self.compute_state_root(debug_record)?,
             };
 
-            self.storage.commit(epoch_id, recovery)?;
+            self.storage.commit(epoch_id)?;
 
             Ok(result)
         }

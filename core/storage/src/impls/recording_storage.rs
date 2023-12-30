@@ -53,7 +53,7 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
             fn delete_test_only(&mut self, access_key: StorageKeyWithSpace) -> Result<Option<Box<[u8]>>>;
             fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
             fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
-            fn commit(&mut self, epoch_id: EpochId, recovery: bool) -> Result<StateRootWithAuxInfo>;
+            fn commit(&mut self, epoch_id: EpochId,) -> Result<StateRootWithAuxInfo>;
         }
     }
 

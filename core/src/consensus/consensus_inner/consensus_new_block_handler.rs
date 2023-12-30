@@ -2031,19 +2031,23 @@ impl ConsensusNewBlockHandler {
                     .executor
                     .get_reward_execution_info(inner, pivot_arena_index);
 
-                let recovery = if recover_snapshot
-                    && (max_snapshot_epoch_index_has_mpt.is_none()
-                        || pivot_index
-                            > *max_snapshot_epoch_index_has_mpt
-                                .as_ref()
-                                .unwrap()
-                                + snapshot_epoch_count as usize)
-                {
-                    true
-                } else {
-                    false
-                };
-                info!("compute epoch recovery flag {}", recovery);
+                let recover_mpt_during_construct_pivot_state =
+                    if recover_snapshot
+                        && (max_snapshot_epoch_index_has_mpt.is_none()
+                            || pivot_index
+                                > *max_snapshot_epoch_index_has_mpt
+                                    .as_ref()
+                                    .unwrap()
+                                    + snapshot_epoch_count as usize)
+                    {
+                        true
+                    } else {
+                        false
+                    };
+                info!(
+                    "compute epoch recovery flag {}",
+                    recover_mpt_during_construct_pivot_state
+                );
                 self.executor.compute_epoch(
                     EpochExecutionTask::new(
                         pivot_arena_index,
@@ -2053,7 +2057,7 @@ impl ConsensusNewBlockHandler {
                         true, /* force_recompute */
                     ),
                     None,
-                    recovery,
+                    recover_mpt_during_construct_pivot_state,
                 );
 
                 // Remove old-pivot state during start up to save disk,

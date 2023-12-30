@@ -957,7 +957,7 @@ impl ConsensusExecutionHandler {
         on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         force_recompute: bool,
-        recovery: bool,
+        recover_mpt_during_construct_pivot_state: bool,
     )
     {
         // FIXME: Question: where to calculate if we should make a snapshot?
@@ -1050,19 +1050,22 @@ impl ConsensusExecutionHandler {
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                    pivot_block.block_header.parent_hash(),
-                    &self
-                        .data_man
-                        .get_epoch_execution_commitment(
-                            pivot_block.block_header.parent_hash(),
-                        )
-                        // Unwrapping is safe because the state exists.
-                        .unwrap()
-                        .state_root_with_aux_info,
-                    pivot_block.block_header.height() - 1,
-                    self.data_man.get_snapshot_epoch_count(),
-                ))
+                .get_state_for_next_epoch(
+                    StateIndex::new_for_next_epoch(
+                        pivot_block.block_header.parent_hash(),
+                        &self
+                            .data_man
+                            .get_epoch_execution_commitment(
+                                pivot_block.block_header.parent_hash(),
+                            )
+                            // Unwrapping is safe because the state exists.
+                            .unwrap()
+                            .state_root_with_aux_info,
+                        pivot_block.block_header.height() - 1,
+                        self.data_man.get_snapshot_epoch_count(),
+                    ),
+                    recover_mpt_during_construct_pivot_state,
+                )
                 .expect("No db error")
                 // Unwrapping is safe because the state exists.
                 .expect("State exists"),
@@ -1151,7 +1154,7 @@ impl ConsensusExecutionHandler {
         let state_root;
         if on_local_pivot {
             state_root = state
-                .commit(*epoch_hash, debug_record.as_deref_mut(), recovery)
+                .commit(*epoch_hash, debug_record.as_deref_mut())
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
             {
                 debug!("Notify epoch[{}]", epoch_hash);
@@ -1175,7 +1178,7 @@ impl ConsensusExecutionHandler {
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         } else {
             state_root = state
-                .commit(*epoch_hash, debug_record, recovery)
+                .commit(*epoch_hash, debug_record)
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         };
 
@@ -1897,19 +1900,22 @@ impl ConsensusExecutionHandler {
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                    pivot_block.block_header.parent_hash(),
-                    &self
-                        .data_man
-                        .get_epoch_execution_commitment(
-                            pivot_block.block_header.parent_hash(),
-                        )
-                        // Unwrapping is safe because the state exists.
-                        .unwrap()
-                        .state_root_with_aux_info,
-                    pivot_block.block_header.height() - 1,
-                    self.data_man.get_snapshot_epoch_count(),
-                ))
+                .get_state_for_next_epoch(
+                    StateIndex::new_for_next_epoch(
+                        pivot_block.block_header.parent_hash(),
+                        &self
+                            .data_man
+                            .get_epoch_execution_commitment(
+                                pivot_block.block_header.parent_hash(),
+                            )
+                            // Unwrapping is safe because the state exists.
+                            .unwrap()
+                            .state_root_with_aux_info,
+                        pivot_block.block_header.height() - 1,
+                        self.data_man.get_snapshot_epoch_count(),
+                    ),
+                    false,
+                )
                 .unwrap()
                 // Unwrapping is safe because the state exists.
                 .unwrap(),

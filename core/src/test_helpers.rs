@@ -21,7 +21,7 @@ pub fn get_state_for_genesis_write(
     );
     let genesis_epoch_id = EpochId::default();
     state
-        .commit(genesis_epoch_id, /* debug_record = */ None, false)
+        .commit(genesis_epoch_id, /* debug_record = */ None)
         .expect(
             // This is a comment to let cargo format the rest in a single line.
             &concat!(file!(), ":", line!(), ":", column!()),
@@ -29,9 +29,10 @@ pub fn get_state_for_genesis_write(
 
     State::new(StateDb::new(
         storage_manager
-            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-                &genesis_epoch_id,
-            ))
+            .get_state_for_next_epoch(
+                StateIndex::new_for_test_only_delta_mpt(&genesis_epoch_id),
+                false,
+            )
             .expect(&concat!(file!(), ":", line!(), ":", column!()))
             // Unwrap is safe because Genesis state exists.
             .unwrap(),

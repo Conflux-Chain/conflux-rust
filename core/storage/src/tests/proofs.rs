@@ -85,7 +85,7 @@ fn generate_random_state(
     let mut epoch_id_0 = H256::default();
     epoch_id_0.as_bytes_mut()[0] = 1;
     let root_0 = state_0.compute_state_root().unwrap();
-    state_0.commit(epoch_id_0, false).unwrap();
+    state_0.commit(epoch_id_0).unwrap();
 
     // insert 1st, 3rd, 4th, 5th 1/7 portions into state-1
     let mut state_1 = state_manager
@@ -97,6 +97,7 @@ fn generate_random_state(
                 snapshot_epoch_count,
             ),
             true,
+            false,
         )
         .unwrap()
         .unwrap();
@@ -140,7 +141,7 @@ fn generate_random_state(
     let mut epoch_id_1 = H256::default();
     epoch_id_1.as_bytes_mut()[0] = 2;
     let root_1 = state_1.compute_state_root().unwrap();
-    state_1.commit(epoch_id_1, false).unwrap();
+    state_1.commit(epoch_id_1).unwrap();
 
     // insert 2nd, 3rd, 5th, 6th 1/7 portions into state-2
     let mut state_2 = state_manager
@@ -152,6 +153,7 @@ fn generate_random_state(
                 snapshot_epoch_count,
             ),
             true,
+            false,
         )
         .unwrap()
         .unwrap();
@@ -195,7 +197,7 @@ fn generate_random_state(
     let mut epoch_id_2 = H256::default();
     epoch_id_2.as_bytes_mut()[0] = 3;
     let root_2 = state_2.compute_state_root().unwrap();
-    state_2.commit(epoch_id_2, false).unwrap();
+    state_2.commit(epoch_id_2).unwrap();
 
     keys.shuffle(rng);
 
@@ -213,6 +215,7 @@ fn generate_random_state(
                 snapshot_epoch_count,
             ),
             true,
+            false,
         )
         .unwrap()
         .unwrap();

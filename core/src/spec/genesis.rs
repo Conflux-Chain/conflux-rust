@@ -475,7 +475,6 @@ pub fn genesis_block(
         .commit(
             genesis.block_header.hash(),
             /* debug_record = */ debug_record.as_mut(),
-            false,
         )
         .unwrap();
     genesis.block_header.pow_hash = Some(Default::default());

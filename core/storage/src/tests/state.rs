@@ -12,7 +12,7 @@ fn test_empty_genesis_block() {
         let mut genesis_state = state_manager.get_state_for_genesis_write();
         genesis_state.compute_state_root().unwrap();
 
-        genesis_state.commit(genesis_epoch_id, false).unwrap();
+        genesis_state.commit(genesis_epoch_id).unwrap();
     }
 
     state_manager
@@ -60,7 +60,7 @@ fn test_set_get() {
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = 1;
     state.compute_state_root().unwrap();
-    state.commit(epoch_id, false).unwrap();
+    state.commit(epoch_id).unwrap();
 }
 
 #[test]
@@ -90,12 +90,13 @@ fn test_get_set_at_second_commit() {
     let mut epoch_id_0 = H256::default();
     epoch_id_0.as_bytes_mut()[0] = 1;
     state_0.compute_state_root().unwrap();
-    state_0.commit(epoch_id_0, false).unwrap();
+    state_0.commit(epoch_id_0).unwrap();
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &epoch_id_0,
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_test_only_delta_mpt(&epoch_id_0),
+            false,
+        )
         .unwrap()
         .unwrap();
     println!("Set new {} keys for state_1.", keys_1_new.len());
@@ -159,7 +160,7 @@ fn test_get_set_at_second_commit() {
     let mut epoch_id_1 = H256::default();
     epoch_id_1.as_bytes_mut()[0] = 2;
     state_1.compute_state_root().unwrap();
-    state_1.commit(epoch_id_1, false).unwrap();
+    state_1.commit(epoch_id_1).unwrap();
 }
 
 #[test]
@@ -207,7 +208,7 @@ fn test_snapshot_random_read_performance() {
 
     let epoch_id_0 = H256::default();
     let mut state_root = state_0.compute_state_root().unwrap();
-    state_0.commit(epoch_id_0, false).unwrap();
+    state_0.commit(epoch_id_0).unwrap();
 
     println!("Committing initial {} epochs.", EPOCHS);
 
@@ -287,14 +288,17 @@ fn simulate_transactions(
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = epoch;
     let mut state = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-            &epoch_id,
-            prev_state_root,
-            epoch as u64 + 1,
-            state_manager
-                .get_storage_manager()
-                .get_snapshot_epoch_count(),
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_next_epoch(
+                &epoch_id,
+                prev_state_root,
+                epoch as u64 + 1,
+                state_manager
+                    .get_storage_manager()
+                    .get_snapshot_epoch_count(),
+            ),
+            false,
+        )
         .unwrap()
         .unwrap();
     let mut values = vec![None; keys.len()];
@@ -403,7 +407,7 @@ fn simulate_transactions(
     let now = Instant::now();
     epoch_id.as_bytes_mut()[0] = epoch + 1;
     let state_root = state.compute_state_root().unwrap();
-    state.commit(epoch_id, false).unwrap();
+    state.commit(epoch_id).unwrap();
     *commit_ms += now.elapsed().as_millis() as u32;
 
     state_root
@@ -436,13 +440,14 @@ fn test_set_delete() {
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = 1;
     state.compute_state_root().unwrap();
-    state.commit(epoch_id, false).unwrap();
+    state.commit(epoch_id).unwrap();
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &epoch_id,
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+            false,
+        )
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
@@ -469,7 +474,7 @@ fn test_set_delete() {
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = 2;
     state.compute_state_root().unwrap();
-    state.commit(epoch_id, false).unwrap();
+    state.commit(epoch_id).unwrap();
 }
 
 #[test]
@@ -503,13 +508,14 @@ fn test_set_delete_all() {
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = 1;
     state.compute_state_root().unwrap();
-    state.commit(epoch_id, false).unwrap();
+    state.commit(epoch_id).unwrap();
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &epoch_id,
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+            false,
+        )
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
@@ -556,7 +562,7 @@ fn test_set_delete_all() {
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = 2;
     let state_root = state.compute_state_root().unwrap();
-    state.commit(epoch_id, false).unwrap();
+    state.commit(epoch_id).unwrap();
 
     assert_eq!(values.len(), keys.len());
     assert_eq!(state_root, empty_state_root);
@@ -588,7 +594,7 @@ fn test_set_order() {
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
     epoch_id.as_bytes_mut()[0] = 1;
-    state_0.commit(epoch_id, false).unwrap();
+    state_0.commit(epoch_id).unwrap();
 
     let mut state_1 = state_manager.get_state_for_genesis_write();
     println!("Setting state_1 with {} keys.", keys.len());
@@ -605,7 +611,7 @@ fn test_set_order() {
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
     epoch_id.as_bytes_mut()[0] = 2;
-    state_1.commit(epoch_id, false).unwrap();
+    state_1.commit(epoch_id).unwrap();
 
     let mut state_2 = state_manager.get_state_for_genesis_write();
     println!("Setting state_2 with {} keys.", keys.len());
@@ -622,7 +628,7 @@ fn test_set_order() {
     }
     let merkle_2 = state_2.compute_state_root().unwrap();
     epoch_id.as_bytes_mut()[0] = 3;
-    state_2.commit(epoch_id, false).unwrap();
+    state_2.commit(epoch_id).unwrap();
 
     assert_eq!(merkle_1, merkle_2);
 }
@@ -655,14 +661,15 @@ fn test_set_order_concurrent() {
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
     epoch_id.as_bytes_mut()[0] = 1;
-    state_0.commit(epoch_id, false).unwrap();
+    state_0.commit(epoch_id).unwrap();
 
     let parent_epoch_0 = epoch_id;
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &parent_epoch_0,
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_test_only_delta_mpt(&parent_epoch_0),
+            false,
+        )
         .unwrap()
         .unwrap();
     println!("Setting state_1 with {} keys.", keys.len());
@@ -679,7 +686,7 @@ fn test_set_order_concurrent() {
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
     epoch_id.as_bytes_mut()[0] = 2;
-    state_1.commit(epoch_id, false).unwrap();
+    state_1.commit(epoch_id).unwrap();
 
     let thread_count = if cfg!(debug_assertions) {
         // Debug build. Fewer threads.
@@ -698,6 +705,7 @@ fn test_set_order_concurrent() {
             let mut state_2 = state_manager
                 .get_state_for_next_epoch(
                     StateIndex::new_for_test_only_delta_mpt(&parent_epoch_0),
+                    false,
                 )
                 .unwrap()
                 .unwrap();
@@ -721,7 +729,7 @@ fn test_set_order_concurrent() {
             let merkle_2 = state_2.compute_state_root().unwrap();
             epoch_id.as_bytes_mut()[0] = ((3 + thread_id) % 256) as u8;
             epoch_id.as_bytes_mut()[1] = ((3 + thread_id) / 256) as u8;
-            state_2.commit(epoch_id, false).unwrap();
+            state_2.commit(epoch_id).unwrap();
 
             assert_eq!(merkle_1, merkle_2);
         }));

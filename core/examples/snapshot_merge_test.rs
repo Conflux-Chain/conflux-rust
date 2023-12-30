@@ -327,7 +327,7 @@ fn initialize_genesis(
         "fa4e44bc69cca4cb2ae88a8fd452826faab9e8764e7eed934feede46c98962fa",
     )
     .unwrap();
-    state.commit(genesis_hash.clone(), false)?;
+    state.commit(genesis_hash.clone())?;
 
     Ok((genesis_hash, root.state_root.delta_root))
 }
@@ -429,7 +429,7 @@ where
     Iter: Iterator<Item = (&'a AddressWithSpace, &'a Account)>,
 {
     let state = manager
-        .get_state_for_next_epoch(state_index)
+        .get_state_for_next_epoch(state_index, false)
         .unwrap()
         .unwrap();
     let mut state = StateDb::new(state);
@@ -446,9 +446,7 @@ where
             .unwrap();
     }
     let epoch = H256::random();
-    state
-        .commit(epoch, /* debug_record = */ None, false)
-        .unwrap();
+    state.commit(epoch, /* debug_record = */ None).unwrap();
     epoch
 }
 

@@ -27,9 +27,10 @@ fn get_state(
 ) -> State {
     State::new(StateDb::new(
         storage_manager
-            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-                epoch_id,
-            ))
+            .get_state_for_next_epoch(
+                StateIndex::new_for_test_only_delta_mpt(epoch_id),
+                false,
+            )
             .unwrap()
             .unwrap(),
     ))
@@ -523,7 +524,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1u64)), None, false)
+        .commit(BigEndianHash::from_uint(&U256::from(1u64)), None)
         .unwrap();
 
     state.clear();
@@ -891,7 +892,7 @@ fn kill_account_with_checkpoints() {
     state_0.discard_checkpoint();
     let epoch_id_1 = EpochId::from_uint(&U256::from(1));
     state_0
-        .commit(epoch_id_1, /* debug_record = */ None, false)
+        .commit(epoch_id_1, /* debug_record = */ None)
         .unwrap();
 
     let mut state = get_state(&storage_manager, &epoch_id_1);
@@ -906,9 +907,7 @@ fn kill_account_with_checkpoints() {
 
     // Commit the state and repeat the assertion.
     let epoch_id = EpochId::from_uint(&U256::from(2));
-    state
-        .commit(epoch_id, /* debug_record = */ None, false)
-        .unwrap();
+    state.commit(epoch_id, /* debug_record = */ None).unwrap();
     let state = get_state(&storage_manager, &epoch_id);
     assert_eq!(state.storage_at(&a_s, &k).unwrap(), U256::zero());
 
@@ -971,7 +970,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     state_0.discard_checkpoint();
     let epoch_id_1 = EpochId::from_uint(&U256::from(1));
     state_0
-        .commit(epoch_id_1, /* debug_record = */ None, false)
+        .commit(epoch_id_1, /* debug_record = */ None)
         .unwrap();
 
     let mut state = get_state(&storage_manager, &epoch_id_1);
@@ -992,9 +991,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     assert_eq!(state.code_hash(&a_s).unwrap(), Some(KECCAK_EMPTY));
     assert_eq!(state.code(&a_s).unwrap(), None);
     // assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
-    state
-        .commit(epoch_id, /* debug_record = */ None, false)
-        .unwrap();
+    state.commit(epoch_id, /* debug_record = */ None).unwrap();
 
     // Commit the state and assert that the account has no storage and no code.
     let state = get_state(&storage_manager, &epoch_id);
@@ -1039,7 +1036,7 @@ fn create_contract_fail() {
     assert_eq!(state.exists(&a_s).unwrap(), false);
 
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1)), None, false)
+        .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
 }
 
@@ -1111,7 +1108,7 @@ fn create_contract_fail_previous_storage() {
     );
     assert_eq!(state.balance(&a_s).unwrap(), U256::zero());
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1)), None, false)
+        .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
     state.clear();
     substates.clear();
@@ -1179,7 +1176,7 @@ fn create_contract_fail_previous_storage() {
     assert_eq!(state.balance(&a_s).unwrap(), U256::from(0));
 
     state
-        .commit(BigEndianHash::from_uint(&U256::from(2)), None, false)
+        .commit(BigEndianHash::from_uint(&U256::from(2)), None)
         .unwrap();
 }
 

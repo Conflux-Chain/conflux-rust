@@ -445,7 +445,7 @@ fn test_revert() {
         .new_contract_with_code(&contract_address_with_space, U256::zero())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1)), None, false)
+        .commit(BigEndianHash::from_uint(&U256::from(1)), None)
         .unwrap();
 
     let mut params = ActionParams::default();
@@ -1019,16 +1019,15 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         .unwrap();
     state.discard_checkpoint();
     let mut debug_record = ComputeEpochDebugRecord::default();
-    state
-        .commit(epoch_id, Some(&mut debug_record), false)
-        .unwrap();
+    state.commit(epoch_id, Some(&mut debug_record)).unwrap();
     debug!("{:?}", debug_record);
 
     let mut state = State::new(StateDb::new(
         storage_manager
-            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-                &epoch_id,
-            ))
+            .get_state_for_next_epoch(
+                StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+                false,
+            )
             .unwrap()
             .unwrap(),
     ))
@@ -1094,7 +1093,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         )
         .unwrap();
     state.discard_checkpoint();
-    state.commit(epoch_id, None, false).unwrap();
+    state.commit(epoch_id, None).unwrap();
 
     let state = State::new(StateDb::new(
         storage_manager
