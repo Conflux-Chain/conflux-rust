@@ -542,7 +542,8 @@ impl StorageManager {
 
     pub fn check_make_register_snapshot_background(
         this: Arc<Self>, snapshot_epoch_id: EpochId, height: u64,
-        maybe_delta_db: Option<DeltaMptIterator>, recovery: bool,
+        maybe_delta_db: Option<DeltaMptIterator>,
+        recover_mpt_during_construct_pivot_state: bool,
     ) -> Result<()>
     {
         let this_cloned = this.clone();
@@ -561,8 +562,9 @@ impl StorageManager {
                     {
                         true
                     } else {
-                        recover_mpt_with_kv_snapshot_exist = recovery;
-                        recovery
+                        recover_mpt_with_kv_snapshot_exist =
+                            recover_mpt_during_construct_pivot_state;
+                        recover_mpt_during_construct_pivot_state
                     }
                 })
         {
@@ -654,7 +656,8 @@ impl StorageManager {
                                     snapshot_epoch_id.clone(), delta_db,
                                     in_progress_snapshot_info_cloned,
                                     &this.snapshot_info_map_by_epoch,
-                                    height,recover_mpt_with_kv_snapshot_exist)?
+                                    height,
+                                    recover_mpt_with_kv_snapshot_exist)?
                         }
                     };
                     if let Err(e) = this.register_new_snapshot(new_snapshot_info.clone(), &mut snapshot_info_map_locked) {

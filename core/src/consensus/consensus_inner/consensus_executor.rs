@@ -619,12 +619,16 @@ impl ConsensusExecutor {
     /// Execute the epoch synchronously
     pub fn compute_epoch(
         &self, task: EpochExecutionTask,
-        debug_record: Option<&mut ComputeEpochDebugRecord>, recovery: bool,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+        recover_mpt_during_construct_pivot_state: bool,
     )
     {
         if !self.consensus_graph_bench_mode {
-            self.handler
-                .handle_epoch_execution(task, debug_record, recovery)
+            self.handler.handle_epoch_execution(
+                task,
+                debug_record,
+                recover_mpt_during_construct_pivot_state,
+            )
         }
     }
 
@@ -879,7 +883,8 @@ impl ConsensusExecutionHandler {
 
     fn handle_epoch_execution(
         &self, task: EpochExecutionTask,
-        debug_record: Option<&mut ComputeEpochDebugRecord>, recovery: bool,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+        recover_mpt_during_construct_pivot_state: bool,
     )
     {
         let _timer = MeterTimer::time_func(CONSENSIS_EXECUTION_TIMER.as_ref());
@@ -891,7 +896,7 @@ impl ConsensusExecutionHandler {
             task.on_local_pivot,
             debug_record,
             task.force_recompute,
-            recovery,
+            recover_mpt_during_construct_pivot_state,
         );
     }
 
