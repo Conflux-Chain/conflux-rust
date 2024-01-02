@@ -4,19 +4,16 @@ mod nonce_pool_map;
 mod weight;
 
 use crate::transaction_pool::transaction_pool_inner::PendingReason;
+use cfx_packing_pool::{PackingBatch, PackingPoolConfig};
 use cfx_parameters::{
     consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_types::{AddressWithSpace, U128, U256, U512};
+use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{SignedTransaction, Transaction};
-use std::{
-    collections::{btree_map::Entry::*, BTreeMap},
-    ops::Deref,
-    sync::Arc,
-};
+use std::{ops::Deref, sync::Arc};
 
 use self::nonce_pool_map::NoncePoolMap;
 
@@ -24,9 +21,27 @@ use self::nonce_pool_map::NoncePoolMap;
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
     pub packed: bool,
-    pub in_sample_pool: bool,
     pub sponsored_gas: U256,
     pub sponsored_storage: u64,
+    tx_cost: U256,
+}
+
+impl TxWithReadyInfo {
+    pub fn new(
+        transaction: Arc<SignedTransaction>, packed: bool, sponsored_gas: U256,
+        sponsored_storage: u64,
+    ) -> Self
+    {
+        let tx_cost =
+            Self::make_tx_cost(&*transaction, sponsored_gas, sponsored_storage);
+        Self {
+            transaction,
+            packed,
+            sponsored_gas,
+            sponsored_storage,
+            tx_cost,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -44,6 +59,8 @@ impl TxWithReadyInfo {
     pub fn is_already_packed(&self) -> bool { self.packed }
 
     pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> { &self.transaction }
+
+    pub fn calc_tx_cost(&self) -> U256 { self.tx_cost }
 
     pub fn should_replace(&self, x: &Self, force: bool) -> bool {
         if force {
@@ -86,32 +103,36 @@ impl TxWithReadyInfo {
             || self.gas_price() == x.gas_price() && higher_epoch_height
     }
 
-    pub fn calc_tx_cost(&self) -> U256 {
-        let estimate_gas_u512 =
-            (self.gas() - self.sponsored_gas).full_mul(*self.gas_price());
+    pub fn make_tx_cost(
+        transaction: &SignedTransaction, sponsored_gas: U256,
+        sponsored_storage: u64,
+    ) -> U256
+    {
+        let estimate_gas_u512 = (transaction.gas() - sponsored_gas)
+            .full_mul(*transaction.gas_price());
         // normally, the value <= 2^128
         let estimate_gas = if estimate_gas_u512 > U512::from(U128::max_value())
         {
             U256::from(U128::max_value())
         } else {
-            (self.gas() - self.sponsored_gas) * self.gas_price()
+            (transaction.gas() - sponsored_gas) * transaction.gas_price()
         };
-        let sponsored_storage = self.sponsored_storage;
         let storage_collateral_requirement =
-            if let Transaction::Native(ref tx) = self.unsigned {
+            if let Transaction::Native(ref tx) = transaction.unsigned {
                 U256::from(tx.storage_limit - sponsored_storage)
                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
             } else {
                 U256::zero()
             };
         // normally, the value <= 2^192
-        if *self.value() > U256::from(u64::MAX) * U256::from(U128::max_value())
+        if *transaction.value()
+            > U256::from(u64::MAX) * U256::from(U128::max_value())
         {
             U256::from(u64::MAX) * U256::from(U128::max_value())
                 + estimate_gas
                 + storage_collateral_requirement
         } else {
-            self.value() + estimate_gas + storage_collateral_requirement
+            transaction.value() + estimate_gas + storage_collateral_requirement
         }
     }
 }
@@ -161,60 +182,19 @@ impl NoncePool {
     }
 
     pub fn mark_packed(&mut self, nonce: &U256, packed: bool) -> bool {
-        self.map
-            .mark_packed_and_sample_pool(nonce, Some(packed), None)
-    }
-
-    #[inline]
-    pub fn mark_sample_pool(
-        &mut self, nonce: &U256, in_sample_pool: bool,
-    ) -> bool {
-        self.map
-            .mark_packed_and_sample_pool(nonce, None, Some(in_sample_pool))
-    }
-
-    // This approach seem inefficient, because the underlying binary balanced
-    // tree does not support direct range deletion. ortunately, CPU branch
-    // prediction can mitigate the time issue
-    #[inline]
-    pub fn mark_sample_pool_removed(
-        &mut self, txs: &[Arc<SignedTransaction>], sender: AddressWithSpace,
-    ) {
-        for removed_tx in txs {
-            assert_eq!(removed_tx.sender(), sender);
-            self.mark_sample_pool(removed_tx.nonce(), false);
-        }
-    }
-
-    #[inline]
-    pub fn mark_sample_pool_batch(
-        &mut self, removed_nonces: impl Iterator<Item = U256>,
-        inserted_nonces: impl Iterator<Item = U256>,
-    )
-    {
-        let mut change_set = BTreeMap::<U256, bool>::new();
-        for r in removed_nonces {
-            change_set.insert(r, false);
-        }
-        for i in inserted_nonces {
-            match change_set.entry(i) {
-                Vacant(e) => {
-                    e.insert(true);
-                }
-                Occupied(e) => {
-                    e.remove();
-                }
-            }
-        }
-
-        for (nonce, mark) in change_set.into_iter() {
-            self.mark_sample_pool(&nonce, mark);
-        }
+        self.map.mark_packed(nonce, packed)
     }
 
     #[inline]
     pub fn get_tx_by_nonce(&self, nonce: U256) -> Option<TxWithReadyInfo> {
         self.map.get(&nonce).cloned()
+    }
+
+    #[inline]
+    pub fn iter_tx_by_nonce(
+        &self, nonce: &U256,
+    ) -> impl Iterator<Item = &TxWithReadyInfo> {
+        self.map.iter_range(nonce)
     }
 
     #[inline]
@@ -250,15 +230,12 @@ impl NoncePool {
         &'a self, nonce: &U256,
     ) -> Vec<&'a TxWithReadyInfo> {
         let mut pending_txs = Vec::new();
-        let mut maybe_tx_info = self.map.succ(nonce);
-        // TODO: More efficient traversal of Treap.
-        while let Some(tx_info) = maybe_tx_info {
+        for tx_info in self.map.iter_range(&(nonce + 1)) {
             if !tx_info.packed {
                 pending_txs.push(tx_info);
             } else {
                 debug!("packed pending tx: tx_info={:?}", tx_info);
             }
-            maybe_tx_info = self.map.succ(&(tx_info.transaction.nonce() + 1));
         }
         pending_txs
     }
@@ -285,6 +262,34 @@ impl NoncePool {
         (U256::from(b.0 - a.0 - 1) == tx.nonce() - nonce
             && b.1 - a.1 <= balance)
             .then(|| (tx, balance - (b.1 - a.1)))
+    }
+
+    pub fn make_packing_batch(
+        &self, first_tx: &TxWithReadyInfo, config: &PackingPoolConfig,
+        mut rest_balance: U256,
+    ) -> PackingBatch<Arc<SignedTransaction>>
+    {
+        let start_nonce = *first_tx.transaction.nonce();
+        let mut batch = PackingBatch::new(first_tx.transaction.clone());
+
+        let mut next_nonce = start_nonce + 1;
+
+        for tx in self.iter_tx_by_nonce(&(start_nonce + 1)) {
+            if tx.nonce() != &next_nonce {
+                break;
+            }
+            next_nonce += 1.into();
+            let cost = tx.calc_tx_cost();
+            if cost > rest_balance {
+                break;
+            }
+            rest_balance -= cost;
+            let res = batch.insert(tx.transaction.clone(), config);
+            if res.1.is_err() {
+                break;
+            }
+        }
+        batch
     }
 
     #[cfg(test)]
@@ -389,13 +394,12 @@ mod nonce_pool_test {
     {
         let transaction =
             new_test_tx(sender, nonce, gas, gas_price, value, storage_limit);
-        TxWithReadyInfo {
+        TxWithReadyInfo::new(
             transaction,
             packed,
-            in_sample_pool: false,
-            sponsored_gas: gas / U256::from(2),
-            sponsored_storage: storage_limit / 2,
-        }
+            gas / U256::from(2),
+            storage_limit / 2,
+        )
     }
 
     #[test]

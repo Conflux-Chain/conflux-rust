@@ -36,6 +36,13 @@ impl NoncePoolMap {
         self.0.remove(nonce)
     }
 
+    #[inline]
+    pub fn iter_range(
+        &self, nonce: &U256,
+    ) -> impl Iterator<Item = &TxWithReadyInfo> {
+        self.0.iter_range(nonce).map(|x| &x.value)
+    }
+
     /// insert a new TxWithReadyInfo. if the corresponding nonce already exists,
     /// will replace with higher gas price transaction
     pub fn insert(
@@ -71,24 +78,13 @@ impl NoncePoolMap {
     }
 
     /// mark packed of given nonce, return false if nothing changes
-    pub fn mark_packed_and_sample_pool(
-        &mut self, nonce: &U256, packed: Option<bool>,
-        in_sample_pool: Option<bool>,
-    ) -> bool
-    {
+    pub fn mark_packed(&mut self, nonce: &U256, packed: bool) -> bool {
         let update = |node: &mut Node<NoncePoolConfig>| {
-            let no_change = packed.map_or(true, |x| x == node.value.packed)
-                && in_sample_pool
-                    .map_or(true, |x| x == node.value.in_sample_pool);
+            let no_change = packed == node.value.packed;
             if no_change {
                 return Err(());
             }
-            if let Some(x) = packed {
-                node.value.packed = x;
-            }
-            if let Some(x) = in_sample_pool {
-                node.value.in_sample_pool = x;
-            }
+            node.value.packed = packed;
             node.weight = NoncePoolWeight::from_tx_info(&node.value);
             Ok(ApplyOpOutcome {
                 out: (),

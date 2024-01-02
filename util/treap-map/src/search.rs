@@ -285,6 +285,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn iter_range() {
+        for n in 1..=1000 {
+            let map: TreapMap<SearchTestConfig> = default_map(n);
+            for i in 0..=(3 * (n + 1)) {
+                let x: Vec<usize> = map.iter_range(&i).map(|x| x.key).collect();
+                let y: Vec<usize> =
+                    (3usize..=(3 * n)).step_by(3).filter(|x| *x >= i).collect();
+                assert_eq!(x, y);
+            }
+        }
+    }
+
 }
 
 mod impl_std_trait {

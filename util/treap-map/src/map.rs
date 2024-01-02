@@ -6,7 +6,7 @@ use crate::{
     config::{KeyMngTrait, WeightConsolidate},
     search::{prefix_sum_search, SearchDirection},
     update::{ApplyOp, ApplyOpOutcome, InsertOp, RemoveOp},
-    NoWeight, SearchResult,
+    Direction, NoWeight, SearchResult,
 };
 
 use super::{config::TreapMapConfig, node::Node};
@@ -191,6 +191,16 @@ impl<C: TreapMapConfig> TreapMap<C> {
         iter
     }
 
+    pub fn iter_range(&self, key: &C::SearchKey) -> Iter<C>
+    where C: TreapMapConfig<SortKey = ()> {
+        let mut iter = Iter { nodes: vec![] };
+        if let Some(ref n) = self.root {
+            iter.nodes.push(&**n);
+            iter.extend_path_with_key((&(), key));
+        }
+        iter
+    }
+
     pub fn values(&self) -> impl Iterator<Item = &C::Value> {
         self.iter().map(|node| &node.value)
     }
@@ -229,6 +239,32 @@ impl<'a, C: TreapMapConfig> Iter<'a, C> {
             match node.left {
                 None => return,
                 Some(ref n) => self.nodes.push(&**n),
+            }
+        }
+    }
+
+    fn extend_path_with_key(&mut self, key: (&C::SortKey, &C::SearchKey)) {
+        loop {
+            let node = *self.nodes.last().unwrap();
+            match C::next_node_dir(key, (&node.sort_key, &node.key)) {
+                Some(Direction::Left) => {
+                    if let Some(left) = &node.left {
+                        self.nodes.push(left);
+                    } else {
+                        return;
+                    }
+                }
+                None => {
+                    return;
+                }
+                Some(Direction::Right) => {
+                    let node = self.nodes.pop().unwrap();
+                    if let Some(right) = &node.right {
+                        self.nodes.push(right);
+                    } else {
+                        return;
+                    }
+                }
             }
         }
     }

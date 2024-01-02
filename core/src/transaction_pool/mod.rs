@@ -289,13 +289,12 @@ impl TransactionPool {
                     if let Ok((_, balance)) =
                         account_cache.get_nonce_and_balance(&first_tx.sender())
                     {
-                        let tx_info = TxWithReadyInfo {
-                            transaction: first_tx.clone(),
-                            packed: false,
-                            in_sample_pool: false,
+                        let tx_info = TxWithReadyInfo::new(
+                            first_tx.clone(),
+                            false,
                             sponsored_gas,
                             sponsored_storage,
-                        };
+                        );
                         if tx_info.calc_tx_cost() <= balance {
                             // The tx should have been ready now.
                             if matches!(

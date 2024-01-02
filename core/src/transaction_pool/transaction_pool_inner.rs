@@ -7,9 +7,7 @@ use crate::{
     machine::Machine,
     verification::{PackingCheckResult, VerificationConfig},
 };
-use cfx_packing_pool::{
-    PackingBatch, PackingPool as SamplingPool, PackingPoolConfig,
-};
+use cfx_packing_pool::{PackingPool as SamplingPool, PackingPoolConfig};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
@@ -169,8 +167,8 @@ impl DeferredPool {
             }
         }
 
-        // TODO: maybe we can remove to drop txs from deferred pool. But
-        // removing them directly may break gc logic. So we only update packing
+        // Maybe we can remove to drop txs from deferred pool. But removing them
+        // directly may break gc logic. So we only update packing
         // pool now.
         for tx in to_drop_txs {
             self.packing_pool
@@ -188,23 +186,8 @@ impl DeferredPool {
             .buckets
             .entry(tx.sender())
             .or_insert_with(|| NoncePool::new());
-        let transaction = tx.transaction.clone();
 
-        let insert_result = bucket.insert(&tx, force);
-
-        if !matches!(insert_result, InsertResult::Failed(_)) && !tx.packed {
-            let (sender, nonce) = (transaction.sender(), *transaction.nonce());
-            let (txs, success) = self
-                .packing_pool
-                .in_space_mut(tx.space())
-                .insert(transaction);
-            bucket.mark_sample_pool_removed(&txs, sender);
-            if success.is_ok() {
-                bucket.mark_sample_pool(&nonce, true);
-            }
-        }
-
-        insert_result
+        bucket.insert(&tx, force)
     }
 
     fn mark_packed(
@@ -254,13 +237,9 @@ impl DeferredPool {
         }
 
         let tx = ret.as_ref()?;
-        if tx.in_sample_pool {
-            let txs = self
-                .packing_pool
-                .in_space_mut(addr.space)
-                .split_off_suffix(tx.sender(), tx.nonce());
-            bucket.mark_sample_pool_removed(&txs, tx.sender());
-        }
+        self.packing_pool
+            .in_space_mut(addr.space)
+            .split_off_suffix(tx.sender(), tx.nonce());
         ret
     }
 
@@ -281,37 +260,16 @@ impl DeferredPool {
         let buckets = self.buckets.get_mut(addr)?;
         let pack_info =
             buckets.recalculate_readiness_with_local_info(nonce, balance);
-        if let Some((first_tx, mut rest_balance)) = pack_info {
-            let start_nonce = *first_tx.transaction.nonce();
-            let mut batch = PackingBatch::new(first_tx.transaction.clone());
-            let res = first_tx.transaction.clone();
-
-            let mut nonce = start_nonce + 1;
+        if let Some((first_tx, rest_balance)) = pack_info {
             let config = self.packing_pool.in_space(addr.space).config();
-            while let Some(tx) = buckets.get_tx_by_nonce(nonce) {
-                let cost = tx.calc_tx_cost();
-                if cost > rest_balance {
-                    break;
-                }
-                rest_balance -= cost;
-                let res = batch.insert(tx.transaction.clone(), config);
-                if res.1.is_err() {
-                    break;
-                }
-                nonce = nonce + 1;
-            }
+            let batch =
+                buckets.make_packing_batch(first_tx, config, rest_balance);
+            let _ = self.packing_pool.in_space_mut(addr.space).replace(batch);
 
-            let length = batch.len();
-            let txs = self.packing_pool.in_space_mut(addr.space).replace(batch);
-
-            let removed_nonces = txs.iter().map(|x| *x.nonce());
-            let inserted_nonces = (0..length).map(|i| start_nonce + i);
-            buckets.mark_sample_pool_batch(removed_nonces, inserted_nonces);
-            Some(res)
+            Some(first_tx.transaction.clone())
         } else {
             // If cannot found such transaction, clear item in packing pool
-            let txs = self.packing_pool.in_space_mut(addr.space).remove(*addr);
-            buckets.mark_sample_pool_removed(&txs, *addr);
+            let _ = self.packing_pool.in_space_mut(addr.space).remove(*addr);
             None
         }
     }
@@ -769,13 +727,12 @@ impl TransactionPoolInner {
             let _timer =
                 MeterTimer::time_func(DEFERRED_POOL_INNER_INSERT.as_ref());
             self.deferred_pool.insert(
-                TxWithReadyInfo {
-                    transaction: transaction.clone(),
+                TxWithReadyInfo::new(
+                    transaction.clone(),
                     packed,
-                    in_sample_pool: false,
                     sponsored_gas,
                     sponsored_storage,
-                },
+                ),
                 force,
             )
         };
@@ -1323,13 +1280,7 @@ mod test_transaction_pool_inner {
     ) -> TxWithReadyInfo
     {
         let transaction = new_test_tx(sender, nonce, gas_price, value);
-        TxWithReadyInfo {
-            transaction,
-            packed,
-            in_sample_pool: false,
-            sponsored_gas: U256::from(0),
-            sponsored_storage: 0,
-        }
+        TxWithReadyInfo::new(transaction, packed, U256::from(0), 0)
     }
 
     #[test]
