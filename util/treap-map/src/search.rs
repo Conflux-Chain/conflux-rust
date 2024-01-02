@@ -14,17 +14,31 @@ pub enum SearchDirection<W> {
     RightOrStop(W),
 }
 
-pub enum SearchResult<'a, C: TreapMapConfig> {
-    Abort,
-    LeftMost,
-    Found {
-        base_weight: C::Weight,
-        node: &'a Node<C>,
-    },
-    RightMost(C::Weight),
+impl<W> SearchDirection<W> {
+    #[inline]
+    pub(crate) fn map_into<T, F>(self, f: F) -> SearchDirection<T>
+    where F: FnOnce(W) -> T {
+        match self {
+            SearchDirection::Abort => SearchDirection::Abort,
+            SearchDirection::Left => SearchDirection::Left,
+            SearchDirection::Stop => SearchDirection::Stop,
+            SearchDirection::Right(v) => SearchDirection::Right(f(v)),
+            SearchDirection::LeftOrStop => SearchDirection::LeftOrStop,
+            SearchDirection::RightOrStop(v) => {
+                SearchDirection::RightOrStop(f(v))
+            }
+        }
+    }
 }
 
-impl<'a, C: TreapMapConfig> SearchResult<'a, C> {
+pub enum SearchResult<'a, C: TreapMapConfig, W: WeightConsolidate> {
+    Abort,
+    LeftMost,
+    Found { base_weight: W, node: &'a Node<C> },
+    RightMost(W),
+}
+
+impl<'a, C: TreapMapConfig, W: WeightConsolidate> SearchResult<'a, C, W> {
     pub fn maybe_value(&self) -> Option<&'a C::Value> {
         if let SearchResult::Found { node, .. } = self {
             Some(&node.value)
@@ -32,68 +46,85 @@ impl<'a, C: TreapMapConfig> SearchResult<'a, C> {
             None
         }
     }
-
-    pub fn or(self, other: Self) -> Self {
-        if matches!(self, SearchResult::Found { .. }) {
-            self
-        } else {
-            other
-        }
-    }
-
-    pub fn check_dir(self, left: bool) -> Self {
-        if matches!(self, SearchResult::LeftMost) && !left {
-            return SearchResult::Abort;
-        }
-        if matches!(self, SearchResult::RightMost(_)) && left {
-            return SearchResult::Abort;
-        }
-        self
-    }
 }
 
 #[inline]
-pub fn prefix_sum_search<C, F>(
-    node: &Node<C>, base_weight: C::Weight, mut f: F,
-) -> SearchResult<C>
+pub fn prefix_sum_search<C, W, F, E>(
+    node: &Node<C>, base_weight: W, mut f: F, extract: E,
+) -> SearchResult<C, W>
 where
     C: TreapMapConfig,
-    F: FnMut(&C::Weight, &Node<C>) -> SearchDirection<C::Weight>,
+    F: FnMut(&W, &Node<C>) -> SearchDirection<W>,
+    W: WeightConsolidate,
+    E: Fn(&C::Weight) -> &W,
 {
     use SearchDirection::*;
 
-    let left_weight = if let Some(ref left) = node.left {
-        C::Weight::consolidate(&base_weight, &left.sum_weight)
-    } else {
-        base_weight.clone()
-    };
-    let search_dir = f(&left_weight, &node);
+    let mut node = node;
+    let mut base_weight = base_weight;
 
-    let found = SearchResult::Found {
-        base_weight: left_weight,
-        node: &node,
-    };
+    let mut candidate_result = None;
 
-    match (search_dir, &node.left, &node.right) {
-        (Abort, _, _) => SearchResult::Abort,
-        (Stop, _, _) | (LeftOrStop, None, _) | (RightOrStop(_), _, None) => {
-            found
+    let mut all_left = true;
+    let mut all_right = true;
+
+    // Using loops instead of recursion can improve performance by 20%.
+    loop {
+        let left_weight = if let Some(ref left) = node.left {
+            W::consolidate(&base_weight, extract(&left.sum_weight))
+        } else {
+            base_weight.clone()
+        };
+        let search_dir = f(&left_weight, &node);
+
+        let found = SearchResult::Found {
+            base_weight: left_weight,
+            node: &node,
+        };
+
+        if matches!(search_dir, Left | LeftOrStop) {
+            all_right = false;
         }
-        (Left, None, _) => SearchResult::LeftMost,
-        (Right(weight), _, None) => SearchResult::RightMost(weight),
-        (Left, Some(left), _) => {
-            prefix_sum_search(left, base_weight, f).check_dir(true)
+
+        if matches!(search_dir, Right(_)|RightOrStop(_)) {
+            all_left = false;
         }
-        (LeftOrStop, Some(left), _) => prefix_sum_search(left, base_weight, f)
-            .or(found)
-            .check_dir(true),
-        (Right(weight), _, Some(right)) => {
-            prefix_sum_search(right, weight, f).check_dir(false)
+
+        let next_node = match search_dir {
+            Right(_) | RightOrStop(_) => &node.right,
+            Left | LeftOrStop => &node.left,
+            Abort => {
+                return candidate_result.unwrap_or(SearchResult::Abort);
+            }
+            Stop => {
+                return found;
+            }
+        };
+
+        if matches!(search_dir, Stop | LeftOrStop | RightOrStop(_)) {
+            candidate_result = Some(found);
         }
-        (RightOrStop(weight), _, Some(right)) => {
-            prefix_sum_search(right, weight, f)
-                .or(found)
-                .check_dir(false)
+
+        let right_weight = match search_dir {
+            Right(w) | RightOrStop(w) => Some(w),
+            _ => None,
+        };
+
+        if let Some(found_node) = next_node {
+            node = found_node;
+            if let Some(w) = right_weight {
+                base_weight = w;
+            }
+        } else {
+            if let Some(result) = candidate_result {
+                return result;
+            } else if all_left {
+                return SearchResult::LeftMost;
+            } else if all_right {
+                return SearchResult::RightMost(right_weight.unwrap());
+            } else {
+                return SearchResult::Abort;
+            }
         }
     }
 }
@@ -128,13 +159,10 @@ mod tests {
         let map = default_map(1000);
         for i in 0usize..=3003 {
             let res = map
-                .search(|_, node| match i.cmp(&node.value) {
+                .search_no_weight(|node| match i.cmp(&node.value) {
                     Less => Left,
                     Equal => Stop,
-                    // If the search doesn't read weight, the carried weight
-                    // could by anything. Some implementation relies on this
-                    // feature
-                    Greater => Right(0),
+                    Greater => Right(()),
                 })
                 .unwrap();
             if i < 3 {
@@ -244,18 +272,34 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn search_left_most() {
+        let map = default_map(1000);
+        let res = map.search_no_weight(|_| LeftOrStop).unwrap();
+
+        if let Found { node, .. } = res {
+            assert_eq!(node.key, 3);
+        } else {
+            unreachable!("Unexpected");
+        }
+    }
+
 }
 
 mod impl_std_trait {
+    use crate::WeightConsolidate;
+
     use super::{Node, SearchResult, TreapMapConfig};
     use core::{
         cmp::PartialEq,
         fmt::{self, Debug, Formatter},
     };
 
-    impl<'a, C: TreapMapConfig> Debug for SearchResult<'a, C>
+    impl<'a, C: TreapMapConfig, W: WeightConsolidate> Debug
+        for SearchResult<'a, C, W>
     where
-        C::Weight: Debug,
+        W: Debug,
         Node<C>: Debug,
     {
         #[inline]
@@ -275,7 +319,8 @@ mod impl_std_trait {
         }
     }
 
-    impl<'a, C: TreapMapConfig> PartialEq for SearchResult<'a, C>
+    impl<'a, C: TreapMapConfig, W: WeightConsolidate> PartialEq
+        for SearchResult<'a, C, W>
     where
         C::Weight: PartialEq,
         Node<C>: PartialEq,

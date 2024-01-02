@@ -13,7 +13,8 @@ mod tests;
 
 pub use self::{
     config::{
-        KeyMngTrait, SharedKeyTreapMapConfig, TreapMapConfig, WeightConsolidate,
+        KeyMngTrait, NoWeight, SharedKeyTreapMapConfig, TreapMapConfig,
+        WeightConsolidate,
     },
     map::{Iter, TreapMap},
     node::{Direction, Node},

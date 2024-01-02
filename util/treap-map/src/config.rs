@@ -30,13 +30,18 @@ impl<T: Add<Output = T> + Clone + Zero + Eq> WeightConsolidate for T {
     fn accure(&mut self, other: &Self) { *self = self.clone() + other.clone() }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Copy, Debug)]
 pub struct NoWeight;
 
 impl WeightConsolidate for NoWeight {
+    #[inline]
     fn empty() -> Self { NoWeight }
 
+    #[inline]
     fn consolidate(_: &Self, _: &Self) -> Self { NoWeight }
+
+    #[inline]
+    fn accure(&mut self, _other: &Self) {}
 }
 
 /// `TreapMap` is a struct which implements a treap which can be indexed by a

@@ -21,3 +21,7 @@ criterion = "0.3.0"
 [[bench]]
 name = "map_cmp"
 harness = false
+
+[[bench]]
+name = "useless_weight"
+harness = false

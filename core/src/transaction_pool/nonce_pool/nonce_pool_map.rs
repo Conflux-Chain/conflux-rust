@@ -151,13 +151,11 @@ impl NoncePoolMap {
 
     // return the next item with nonce >= given nonce
     pub fn succ(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
-        let ret = self.0.search(|_, node| {
+        let ret = self.0.search_no_weight(|node| {
             if nonce <= &node.key {
                 SearchDirection::LeftOrStop
             } else {
-                // This search don't read weight, so we can return arbitrary
-                // here.
-                SearchDirection::Right(NoncePoolWeight::empty())
+                SearchDirection::Right(())
             }
         });
         if let Some(SearchResult::Found { node, .. }) = ret {
@@ -169,7 +167,7 @@ impl NoncePoolMap {
 
     /// return the leftmost node
     pub fn leftmost(&self) -> Option<&TxWithReadyInfo> {
-        let ret = self.0.search(|_, _| SearchDirection::LeftOrStop);
+        let ret = self.0.search_no_weight(|_| SearchDirection::LeftOrStop);
         if let Some(SearchResult::Found { node, .. }) = ret {
             Some(&node.value)
         } else {

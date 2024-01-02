@@ -6,7 +6,7 @@ use crate::{
     config::{KeyMngTrait, WeightConsolidate},
     search::{prefix_sum_search, SearchDirection},
     update::{ApplyOp, ApplyOpOutcome, InsertOp, RemoveOp},
-    SearchResult,
+    NoWeight, SearchResult,
 };
 
 use super::{config::TreapMapConfig, node::Node};
@@ -137,34 +137,48 @@ impl<C: TreapMapConfig> TreapMap<C> {
         self.root.as_ref().and_then(|x| x.get(&sort_key, key))
     }
 
+    #[inline]
     pub fn get_by_weight(&self, weight: C::Weight) -> Option<&C::Value>
     where C::Weight: Ord {
         use SearchDirection::*;
-        prefix_sum_search(
-            self.root.as_ref()?,
-            C::Weight::empty(),
-            |base, mid| {
-                if &weight < base {
-                    Left
+        self.search(|base, mid| {
+            if &weight < base {
+                Left
+            } else {
+                let right_base = C::Weight::consolidate(base, &mid.weight);
+                if weight < right_base {
+                    Stop
                 } else {
-                    let right_base = C::Weight::consolidate(base, &mid.weight);
-                    if weight < right_base {
-                        Stop
-                    } else {
-                        Right(right_base)
-                    }
+                    Right(right_base)
                 }
-            },
-        )
+            }
+        })?
         .maybe_value()
     }
 
-    pub fn search<F>(&self, f: F) -> Option<SearchResult<C>>
+    pub fn search<F>(&self, f: F) -> Option<SearchResult<C, C::Weight>>
     where F: FnMut(&C::Weight, &Node<C>) -> SearchDirection<C::Weight> {
         Some(prefix_sum_search(
             self.root.as_ref()?,
             C::Weight::empty(),
             f,
+            |weight| weight,
+        ))
+    }
+
+    /// If the search process does not require accessing 'weight', this function
+    /// can outperform `search` by eliminating the maintenance of the 'weight'
+    /// dimension.
+    pub fn search_no_weight<F>(
+        &self, mut f: F,
+    ) -> Option<SearchResult<C, NoWeight>>
+    where F: FnMut(&Node<C>) -> SearchDirection<()> {
+        static NW: NoWeight = NoWeight;
+        Some(prefix_sum_search(
+            self.root.as_ref()?,
+            NoWeight,
+            |_, node| f(node).map_into(|_| NoWeight),
+            |_| &NW,
         ))
     }
 
