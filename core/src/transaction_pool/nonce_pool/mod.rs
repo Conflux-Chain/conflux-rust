@@ -230,7 +230,7 @@ impl NoncePool {
         &'a self, nonce: &U256,
     ) -> Vec<&'a TxWithReadyInfo> {
         let mut pending_txs = Vec::new();
-        for tx_info in self.map.iter_range(&(nonce + 1)) {
+        for tx_info in self.map.iter_range(&nonce) {
             if !tx_info.packed {
                 pending_txs.push(tx_info);
             } else {
