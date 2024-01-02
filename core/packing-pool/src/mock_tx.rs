@@ -1,6 +1,6 @@
 use crate::transaction::PackingPoolTransaction;
 
-#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub struct MockTransaction {
     pub id: usize,
     pub sender: u64,

@@ -201,7 +201,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
         self.iter().map(|node| (&node.key, &node.value))
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testonly_code"))]
     pub fn assert_consistency(&self)
     where C::Weight: std::fmt::Debug {
         if let Some(node) = self.root.as_ref() {

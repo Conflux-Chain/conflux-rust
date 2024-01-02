@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 use crate::{
     packing_batch::{InsertError, PackInfo, PackingBatch, RemoveError},
-    sample::TxSampler,
+    sample::{SampleTag, TxSampler},
     weight::PackingPoolWeight,
     PackingPoolConfig,
 };
@@ -134,7 +134,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 
     pub fn tx_sampler<'a, 'b, R: RngCore>(
         &'a self, rng: &'b mut R, block_gas_limit: U256,
-    ) -> impl Iterator<Item = (TX::Sender, &'a [TX])> + 'b
+    ) -> impl Iterator<Item = (TX::Sender, &'a [TX], SampleTag)> + 'b
     where 'a: 'b {
         let global_loss_base =
             if let Some(r) = self.truncate_loss_ratio(block_gas_limit) {
@@ -170,6 +170,22 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             )
         } else {
             None
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_consistency(&self) {
+        self.treap_map.assert_consistency();
+        for node in self.treap_map.iter() {
+            let weight = &node.weight;
+            let packing_batch = &node.value;
+            packing_batch.assert_constraints();
+            let loss_ratio =
+                self.config.loss_ratio(packing_batch.first_gas_price());
+            let gas_limit = packing_batch.total_gas_limit();
+            assert_eq!(gas_limit, weight.gas_limit);
+            assert_eq!(loss_ratio, weight.max_loss_ratio);
+            assert_eq!(loss_ratio * gas_limit, weight.weighted_loss_ratio);
         }
     }
 }
@@ -227,5 +243,254 @@ where
 {
     fn size_of(&self, ops: &mut malloc_size_of::MallocSizeOfOps) -> usize {
         self.treap_map.size_of(ops) + self.config.size_of(ops)
+    }
+}
+
+#[cfg(test)]
+mod pool_tests {
+    use std::sync::atomic::AtomicUsize;
+
+    use crate::{
+        mock_tx::MockTransaction, transaction::PackingPoolTransaction,
+        PackingBatch, PackingPool, PackingPoolConfig,
+    };
+
+    fn default_pool(
+        len: usize, accounts: usize,
+    ) -> PackingPool<MockTransaction> {
+        let config = PackingPoolConfig::new_for_test();
+        let mut pool = PackingPool::new(config);
+        for accound_id in 0u64..accounts as u64 {
+            let mut batch = PackingBatch::new(default_tx(accound_id, 2));
+            for i in 3..(len as u64 + 2) {
+                batch.insert(default_tx(accound_id, i), &config).1.unwrap();
+            }
+            pool.replace(batch);
+        }
+        pool.assert_consistency();
+        assert_eq!(pool.treap_map.len(), accounts);
+        pool
+    }
+
+    fn default_tx(sender: u64, i: u64) -> MockTransaction {
+        static ID: AtomicUsize = AtomicUsize::new(0);
+        MockTransaction {
+            sender,
+            nonce: i,
+            gas_price: i,
+            gas_limit: i,
+            id: ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        }
+    }
+
+    #[test]
+    fn test_split_in_middle() {
+        let mut pool = default_pool(5, 10);
+        let txs = pool.split_off_prefix(2, &4.into());
+        pool.assert_consistency();
+        assert_eq!(pool.treap_map.len(), 10);
+        assert_eq!(txs.len(), 2);
+        for (idx, tx) in txs.into_iter().enumerate() {
+            assert_eq!(tx.sender(), 2);
+            assert_eq!(tx.nonce(), (2 + idx).into());
+        }
+        assert_eq!(pool.iter().into_iter().flatten().count(), 48);
+    }
+
+    #[test]
+    fn test_split_all() {
+        let mut pool = default_pool(5, 10);
+        let txs = pool.split_off_suffix(2, &2.into());
+        pool.assert_consistency();
+        assert_eq!(pool.treap_map.len(), 9);
+        assert!(!pool.treap_map.contains_key(&2));
+        assert_eq!(txs.len(), 5);
+        for (idx, tx) in txs.into_iter().enumerate() {
+            assert_eq!(tx.sender(), 2);
+            assert_eq!(tx.nonce(), (2 + idx).into());
+        }
+
+        let txs = pool.remove(3);
+        pool.assert_consistency();
+        assert_eq!(pool.treap_map.len(), 8);
+        assert!(!pool.treap_map.contains_key(&3));
+        assert_eq!(txs.len(), 5);
+        for (idx, tx) in txs.into_iter().enumerate() {
+            assert_eq!(tx.sender(), 3);
+            assert_eq!(tx.nonce(), (2 + idx).into());
+        }
+        assert_eq!(pool.iter().into_iter().flatten().count(), 40);
+    }
+
+    #[test]
+    fn test_change_price() {
+        let mut pool = default_pool(5, 10);
+        let mut new_tx = default_tx(2, 2);
+        new_tx.gas_price = 10;
+        let (tx, res) = pool.insert(new_tx);
+        assert_eq!(tx.first().unwrap().nonce(), 2.into());
+        res.unwrap();
+        pool.assert_consistency();
+        assert_eq!(pool.treap_map.len(), 10);
+        let first = pool.treap_map.iter().next().unwrap();
+        assert_eq!(first.value.sender(), 2);
+        assert_eq!(pool.iter().into_iter().flatten().count(), 46);
+    }
+
+    #[test]
+    fn test_change_limit() {
+        let mut pool = default_pool(5, 10);
+        let mut new_tx = default_tx(2, 2);
+        new_tx.gas_limit = 10;
+        let (tx, res) = pool.insert(new_tx);
+        assert_eq!(tx.first().unwrap().nonce(), 2.into());
+        res.unwrap();
+        pool.assert_consistency();
+        assert_eq!(pool.treap_map.len(), 10);
+        assert_eq!(pool.iter().into_iter().flatten().count(), 50);
+    }
+
+    #[test]
+    fn test_insert_empty_sender() {
+        let mut pool = default_pool(5, 10);
+        let new_tx = default_tx(11, 2);
+        let (_tx, res) = pool.insert(new_tx);
+        res.unwrap();
+        pool.assert_consistency();
+        assert_eq!(pool.treap_map.len(), 11);
+        assert_eq!(pool.iter().into_iter().flatten().count(), 51);
+    }
+
+    #[test]
+    fn test_replace() {
+        let mut pool = default_pool(5, 10);
+        let mut batch = PackingBatch::new(default_tx(2, 12));
+        for i in 13..18 {
+            batch.insert(default_tx(2, i), &pool.config).1.unwrap();
+        }
+        let txs = pool.replace(batch);
+        for (idx, tx) in txs.into_iter().enumerate() {
+            assert_eq!(tx.sender(), 2);
+            assert_eq!(tx.nonce(), (2 + idx).into());
+        }
+        pool.assert_consistency();
+        assert_eq!(pool.treap_map.len(), 10);
+        assert_eq!(pool.iter().into_iter().flatten().count(), 51);
+    }
+}
+
+#[cfg(test)]
+mod sample_tests {
+    use std::{cmp::Reverse, collections::HashSet, sync::atomic::AtomicUsize};
+
+    use crate::{
+        mock_tx::MockTransaction, sample::SampleTag,
+        transaction::PackingPoolTransaction, PackingPool, PackingPoolConfig,
+    };
+    use cfx_types::U256;
+    use rand::{distributions::Uniform, Rng, SeedableRng};
+    use rand_xorshift::XorShiftRng;
+
+    #[derive(Default)]
+    struct MockPriceBook(Vec<MockTransaction>);
+    impl MockPriceBook {
+        fn truncate_loss_ratio(&self, block_limit: usize) -> Option<U256> {
+            let config = PackingPoolConfig::new_for_test();
+            let mut total_gas_limit = U256::zero();
+            let mut total_weighted_loss = U256::zero();
+            let mut last_ans = None;
+            for tx in self.0.iter() {
+                total_gas_limit += tx.gas_limit();
+                let loss_ratio = config.loss_ratio(tx.gas_price());
+                total_weighted_loss += loss_ratio * tx.gas_limit();
+                if let Some(quot) =
+                    total_gas_limit.checked_sub(block_limit.into())
+                {
+                    if quot * loss_ratio >= total_weighted_loss {
+                        return Some(last_ans.unwrap());
+                    }
+                    last_ans = Some(
+                        total_weighted_loss / (total_gas_limit - block_limit),
+                    );
+                }
+            }
+            None
+        }
+    }
+
+    fn default_tx(
+        sender: u64, gas_limit: u64, gas_price: u64,
+    ) -> MockTransaction {
+        static ID: AtomicUsize = AtomicUsize::new(0);
+        MockTransaction {
+            sender,
+            nonce: 0,
+            gas_price,
+            gas_limit,
+            id: ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        }
+    }
+
+    #[test]
+    fn test_truncate_price_and_sample() {
+        let mut rand = XorShiftRng::from_entropy();
+        let mut pool = PackingPool::new(PackingPoolConfig::new_for_test());
+        let mut mock_pool = MockPriceBook::default();
+        for i in 0..1000 {
+            let mut gas_limit = 1.01f64.powf(2000.0 + i as f64) as u64;
+            gas_limit -= gas_limit / rand.sample(Uniform::new(50, 200));
+            let mut gas_price = 1.01f64.powf(3000.0 - i as f64) as u64;
+            gas_price -= gas_price / rand.sample(Uniform::new(50, 200));
+
+            let tx = default_tx(i, gas_limit, gas_price);
+
+            mock_pool.0.push(tx);
+            let (_, res) = pool.insert(tx);
+            res.unwrap();
+        }
+        mock_pool.0.sort_by_key(|x| Reverse(x.gas_price()));
+        pool.assert_consistency();
+        for i in 1900..3500 {
+            dbg!(i);
+            let mut total_gas_limit = 1.01f64.powf(i as f64) as u64;
+            total_gas_limit -=
+                total_gas_limit / rand.sample(Uniform::new(50, 200));
+            assert_eq!(
+                pool.truncate_loss_ratio(total_gas_limit.into()),
+                mock_pool.truncate_loss_ratio(total_gas_limit as usize)
+            );
+
+            let truncate_loss_ratio =
+                pool.truncate_loss_ratio(total_gas_limit.into());
+            let mut last_loss_ratio = truncate_loss_ratio;
+            // // Debug info
+            // eprintln!("===== Limit Level {} =======", i);
+            // if let Some(x) = truncate_loss_ratio {
+            //     let r = (u64::MAX as f64).log(1.01) - ((x>>64).as_u64() as
+            // f64).log(1.01);     let r = r *
+            // pool.config().loss_ratio_degree as f64;     eprintln!
+            // (">> Truncate price {:.2}", r); }
+            let mut packing_set = HashSet::new();
+            for (_, txs, tag) in
+                pool.tx_sampler(&mut rand, total_gas_limit.into())
+            {
+                let tx = txs.first().unwrap();
+                let loss_ratio = pool.config().loss_ratio(tx.gas_price());
+                if tag != SampleTag::PriceDesc {
+                    assert!(loss_ratio < truncate_loss_ratio.unwrap());
+                } else if let Some(r) = last_loss_ratio {
+                    assert!(loss_ratio >= r);
+                    last_loss_ratio = Some(loss_ratio);
+                }
+                packing_set.insert(tx.clone());
+
+                // let price_level = (tx.gas_price as f64).log(1.01);
+                // let limit_level = (tx.gas_limit as f64).log(1.01);
+                // eprintln!("{:?}: Price: {:.2}, Limit: {:.1}, Sender {}", tag,
+                // price_level, limit_level, tx.sender);
+            }
+            assert_eq!(packing_set.len(), 1000);
+            // eprintln!("");
+        }
     }
 }

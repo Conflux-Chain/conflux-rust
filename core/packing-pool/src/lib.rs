@@ -10,7 +10,6 @@ extern crate treap_map;
 extern crate typenum;
 
 mod key_mng;
-#[cfg(test)]
 mod mock_tx;
 mod packing_batch;
 mod pool;
@@ -20,7 +19,8 @@ mod transaction;
 mod treapmap_config;
 mod weight;
 
+pub use mock_tx::MockTransaction;
 pub use packing_batch::PackingBatch;
 pub use pool::PackingPool;
 pub use pool_config::PackingPoolConfig;
-pub use sample::TxSampler;
+pub use sample::{SampleTag, TxSampler};

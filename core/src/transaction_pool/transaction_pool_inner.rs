@@ -120,7 +120,7 @@ impl DeferredPool {
         let mut rest_size_limit = block_size_limit;
         let mut rest_gas_limit = block_gas_limit;
 
-        'all: for (_, sender_txs) in self
+        'all: for (_, sender_txs, _) in self
             .packing_pool
             .in_space_mut(space)
             .tx_sampler(&mut rng, block_gas_limit.into())

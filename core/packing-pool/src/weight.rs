@@ -2,7 +2,7 @@ use cfx_types::U256;
 use malloc_size_of_derive::MallocSizeOf;
 use treap_map::WeightConsolidate;
 
-#[derive(Default, Clone, Eq, PartialEq, MallocSizeOf)]
+#[derive(Default, Clone, Eq, PartialEq, MallocSizeOf, Debug)]
 pub struct PackingPoolWeight {
     pub gas_limit: U256,
     pub weighted_loss_ratio: U256,

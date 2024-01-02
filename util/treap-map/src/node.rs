@@ -285,7 +285,7 @@ impl<C: TreapMapConfig> Node<C> {
 
     pub fn sum_weight(&self) -> C::Weight { self.sum_weight.clone() }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testonly_code"))]
     pub(crate) fn assert_consistency(&self)
     where C::Weight: Eq + std::fmt::Debug {
         let mut weight = self.weight.clone();

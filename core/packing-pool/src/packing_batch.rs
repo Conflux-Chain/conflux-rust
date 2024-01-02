@@ -246,7 +246,7 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
     }
 
     #[cfg(test)]
-    fn assert_constraints(&self) {
+    pub fn assert_constraints(&self) {
         assert!(self.txs.len() > 0);
         for i in 0..(self.txs.len() - 1) {
             assert_eq!(self.txs[i].sender(), self.txs[i + 1].sender());

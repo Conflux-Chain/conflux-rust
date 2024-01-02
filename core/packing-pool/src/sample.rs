@@ -7,8 +7,17 @@ use crate::{
     transaction::PackingPoolTransaction, treapmap_config::PackingPoolMap,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SampleTag {
+    PriceDesc,
+    RandomPick,
+    CandidateAddress,
+}
+
 pub struct TxSampler<'a, 'b, TX: PackingPoolTransaction, R: RngCore> {
     iter: treap_map::Iter<'a, PackingPoolMap<TX>>,
+    first_unsample: Option<&'a treap_map::Node<PackingPoolMap<TX>>>,
+    random_sample_phase: bool,
     alter_address: HeapMap<TX::Sender, CandidateAddress<'a, TX>>,
     loss_base: U256,
     rng: &'b mut R,
@@ -22,48 +31,97 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> TxSampler<'a, 'b, TX, R> {
     {
         Self {
             iter,
+            random_sample_phase: true,
+            first_unsample: None,
             alter_address: Default::default(),
             loss_base,
             rng,
         }
+    }
+
+    #[inline]
+    fn price_desc_sample(
+        &mut self,
+    ) -> Option<(TX::Sender, &'a [TX], SampleTag)> {
+        if let Some(node) = self.first_unsample {
+            self.first_unsample = None;
+            return Some((node.key, &node.value.txs[..], SampleTag::PriceDesc));
+        }
+        self.iter
+            .next()
+            .map(|node| (node.key, &node.value.txs[..], SampleTag::PriceDesc))
+    }
+
+    #[inline]
+    fn alternative_sample(
+        &mut self,
+    ) -> Option<(TX::Sender, &'a [TX], SampleTag)> {
+        self.alter_address.pop().map(|(addr, candidate)| {
+            (
+                addr,
+                &candidate.node.value.txs[..],
+                SampleTag::CandidateAddress,
+            )
+        })
+    }
+
+    #[inline]
+    fn random_sample(&mut self) -> Option<(TX::Sender, &'a [TX], SampleTag)> {
+        while let Some(node) = self.iter.next() {
+            let loss_threshold = if let Some(x) =
+                self.loss_base.checked_mul(node.weight.max_loss_ratio)
+            {
+                (x >> 192).as_u64()
+            } else {
+                self.random_sample_phase = false;
+                self.first_unsample = Some(node);
+                return None;
+            };
+
+            let sampled = self.rng.next_u64();
+            if sampled >= loss_threshold {
+                return Some((
+                    node.key,
+                    &node.value.txs,
+                    SampleTag::RandomPick,
+                ));
+            } else {
+                self.alter_address.insert(
+                    &node.key,
+                    CandidateAddress {
+                        node,
+                        priority: (sampled as f64) / (loss_threshold as f64),
+                    },
+                );
+            }
+        }
+        None
     }
 }
 
 impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> Iterator
     for TxSampler<'a, 'b, TX, R>
 {
-    type Item = (TX::Sender, &'a [TX]);
+    type Item = (TX::Sender, &'a [TX], SampleTag);
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(node) = self.iter.next() {
-                if self.loss_base.is_zero() {
-                    // Packing pool is not full
-                    return Some((node.key, &node.value.txs));
-                }
-                let loss_threshold =
-                    ((self.loss_base * node.weight.max_loss_ratio) >> 192)
-                        .as_u64();
-                let sampled = self.rng.next_u64();
-                if sampled >= loss_threshold {
-                    return Some((node.key, &node.value.txs));
-                } else {
-                    self.alter_address.insert(
-                        &node.key,
-                        CandidateAddress {
-                            node,
-                            priority: (sampled as f64)
-                                / (loss_threshold as f64),
-                        },
-                    );
-                }
-            } else if let Some((address, candidate)) = self.alter_address.pop()
-            {
-                return Some((address, &candidate.node.value.txs));
-            } else {
-                return None;
+        // Packing pool is not full
+        if self.loss_base.is_zero() {
+            return self.price_desc_sample();
+        }
+
+        if self.random_sample_phase {
+            let res = self.random_sample();
+            if res.is_some() {
+                return res;
             }
         }
+
+        let res = self.alternative_sample();
+        if res.is_some() {
+            return res;
+        }
+        self.price_desc_sample()
     }
 }
 

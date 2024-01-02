@@ -765,12 +765,13 @@ version = "0.1.0"
 dependencies = [
  "cfx-math",
  "cfx-types",
+ "criterion",
  "heap-map",
  "malloc_size_of",
  "malloc_size_of_derive",
  "primitives",
  "rand 0.7.3",
- "rand_xorshift 0.3.0",
+ "rand_xorshift 0.2.0",
  "treap-map",
  "typenum",
 ]
