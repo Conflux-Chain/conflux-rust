@@ -4,7 +4,7 @@ use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::hint::black_box;
 use treap_map::{
-    SearchDirection, SharedKeyTreapMapConfig, TreapMap, WeightConsolidate,
+    ConsoliableWeight, SearchDirection, SharedKeyTreapMapConfig, TreapMap,
 };
 
 pub struct SmallWeight;

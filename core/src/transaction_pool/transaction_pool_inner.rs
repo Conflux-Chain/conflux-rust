@@ -60,9 +60,19 @@ lazy_static! {
         register_meter_with_group("txpool", "gc_txs_tps");
 }
 
+/// The `DeferredPool` is designed to organize transactions for each address
+/// based on their nonce. It efficiently maintains and queries transactions even
+/// when received nonces are non-sequential. In addition, it calculates
+/// transactions that are ready to be packed for each address and stores them in
+/// the `packing_pool`. The transactions in the `packing_pool` should always be
+/// a subset of the transactions in the nonce pools for all addresses.
 #[derive(DeriveMallocSizeOf)]
 struct DeferredPool {
+    /// Store transactions organized in binary balanced trees keyed by nonce
+    /// for each address.
     buckets: HashMap<AddressWithSpace, NoncePool>,
+    /// Store transactions that are ready to be packed for each address, and
+    /// implements random sampling logic.
     packing_pool: SpaceMap<PackingPool<Arc<SignedTransaction>>>,
 }
 
@@ -111,9 +121,21 @@ impl DeferredPool {
         let mut to_drop_txs = Vec::new();
 
         let mut minimum_unit_gas_limit = U256::from(21000);
-        let mut minimum_uint_tx_size = 80;
+        let mut minimum_unit_tx_size = 80;
 
         let mut rng = XorShiftRng::from_entropy();
+
+        // When a sampled transaction exceeds the remaining capacity (gas limit
+        // or size) in a block, we skip it and look for the next transaction.
+        // However, if the remaining space is too small, we might sample a large
+        // number of transactions and still fail to find one that meets the
+        // criteria.
+
+        // Here, we maintain a threshold. When the remaining capacity is less
+        // than the threshold, the packing process stopped. The threshold
+        // increases by 1/16 for each fail due to insufficient capacity. This
+        // way, the packing process can always stop after a finite number of
+        // failures.
 
         let mut rest_size_limit = block_size_limit;
         let mut rest_gas_limit = block_gas_limit;
@@ -124,9 +146,18 @@ impl DeferredPool {
             .tx_sampler(&mut rng, block_gas_limit.into())
         {
             'sender: for tx in sender_txs.iter() {
-                let tx_size = tx.rlp_size();
-                let gas_limit = *tx.gas_limit();
+                match validity(&*tx) {
+                    PackingCheckResult::Pack => {}
+                    PackingCheckResult::Pending => {
+                        break 'sender;
+                    }
+                    PackingCheckResult::Drop => {
+                        to_drop_txs.push(tx.clone());
+                        break 'sender;
+                    }
+                }
 
+                let gas_limit = *tx.gas_limit();
                 if gas_limit > rest_gas_limit {
                     if gas_limit >= minimum_unit_gas_limit {
                         minimum_unit_gas_limit += minimum_unit_gas_limit >> 4;
@@ -138,26 +169,16 @@ impl DeferredPool {
                     rest_gas_limit -= gas_limit;
                 }
 
+                let tx_size = tx.rlp_size();
                 if tx_size > rest_size_limit {
-                    if tx_size >= minimum_uint_tx_size {
-                        minimum_uint_tx_size += minimum_uint_tx_size >> 4;
+                    if tx_size >= minimum_unit_tx_size {
+                        minimum_unit_tx_size += minimum_unit_tx_size >> 4;
                         break 'sender;
                     } else {
                         break 'all;
                     }
                 } else {
                     rest_size_limit -= tx_size;
-                }
-
-                match validity(&*tx) {
-                    PackingCheckResult::Pack => {}
-                    PackingCheckResult::Pending => {
-                        break 'sender;
-                    }
-                    PackingCheckResult::Drop => {
-                        to_drop_txs.push(tx.clone());
-                        break 'sender;
-                    }
                 }
 
                 to_pack_txs.push(tx.clone());
@@ -275,9 +296,9 @@ impl DeferredPool {
     fn recalculate_readiness_with_local_info(
         &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
-        let buckets = self.buckets.get_mut(addr)?;
+        let bucket = self.buckets.get_mut(addr)?;
         let pack_info =
-            buckets.recalculate_readiness_with_local_info(nonce, balance);
+            bucket.recalculate_readiness_with_local_info(nonce, balance);
 
         let (first_tx, last_valid_nonce) = if let Some(info) = pack_info {
             info
@@ -303,7 +324,7 @@ impl DeferredPool {
             // (unlikely happens unless execution revert)
             let config = self.packing_pool.in_space(addr.space).config();
             let batch =
-                buckets.make_packing_batch(first_tx, config, last_valid_nonce);
+                bucket.make_packing_batch(first_tx, config, last_valid_nonce);
             let _ = self.packing_pool.in_space_mut(addr.space).replace(batch);
             return Some(first_tx.transaction.clone());
         };
@@ -322,7 +343,7 @@ impl DeferredPool {
                 .in_space_mut(addr.space)
                 .split_off_suffix(*addr, &(last_valid_nonce + 1));
         } else if current_last_nonce < last_valid_nonce {
-            for tx in buckets.iter_tx_by_nonce(&current_last_nonce) {
+            for tx in bucket.iter_tx_by_nonce(&current_last_nonce) {
                 if tx.nonce() > &last_valid_nonce {
                     break;
                 }

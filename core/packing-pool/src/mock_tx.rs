@@ -1,6 +1,8 @@
 use crate::transaction::PackingPoolTransaction;
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug, Hash)]
+/// A minimal implementation of the [`PackingPoolTransaction`] trait for testing
+/// purposes.
 pub struct MockTransaction {
     pub id: usize,
     pub sender: u64,

@@ -3,8 +3,8 @@ use std::convert::Infallible;
 use cfx_types::U256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use treap_map::{
-    ApplyOpOutcome, Node, SearchDirection, SearchResult,
-    SharedKeyTreapMapConfig, TreapMap, WeightConsolidate,
+    ApplyOpOutcome, ConsoliableWeight, Node, SearchDirection, SearchResult,
+    SharedKeyTreapMapConfig, TreapMap,
 };
 
 use super::{weight::NoncePoolWeight, InsertResult, TxWithReadyInfo};
@@ -36,6 +36,8 @@ impl NoncePoolMap {
         self.0.remove(nonce)
     }
 
+    /// Iter transactions with nonce >= the start nonce. The start nonce may not
+    /// exist and the transaction nonces may not continous.
     #[inline]
     pub fn iter_range(
         &self, nonce: &U256,
@@ -43,7 +45,7 @@ impl NoncePoolMap {
         self.0.iter_range(nonce).map(|x| &x.value)
     }
 
-    /// insert a new TxWithReadyInfo. if the corresponding nonce already exists,
+    /// Insert a new TxWithReadyInfo. if the corresponding nonce already exists,
     /// will replace with higher gas price transaction
     pub fn insert(
         &mut self, tx: &TxWithReadyInfo, force: bool,
@@ -122,7 +124,7 @@ impl NoncePoolMap {
         }
     }
 
-    /// find number of transactions and sum of cost whose nonce <= `nonce`
+    /// Find the accumulated weight for the transactions whose nonce <= `nonce`
     pub fn weight(&self, nonce: &U256) -> NoncePoolWeight {
         let ret = self.0.search(|left_weight, node| {
             if nonce < &node.key {
@@ -143,6 +145,10 @@ impl NoncePoolMap {
         }
     }
 
+    /// Find last valid nonce passing the readiness check. The `start_weight`
+    /// must equal to `self.weight(start_nonce)`, otherwise it may cause
+    /// unexpected behaviour.
+    #[inline]
     pub fn continous_ready_nonce(
         &self, start_nonce: &U256, start_weight: NoncePoolWeight,
         rest_balance: U256,
@@ -164,10 +170,10 @@ impl NoncePoolMap {
             }
             let nonce_elapsed = nonce_elapsed.as_u32();
 
-            let item_elapsed = weight.subtree_size - start_weight.subtree_size;
+            let item_elapsed = weight.size - start_weight.size;
             let unpacked_elapsed =
-                weight.subtree_unpacked - start_weight.subtree_unpacked;
-            let cost_elapsed = weight.subtree_cost - start_weight.subtree_cost;
+                weight.unpacked_size - start_weight.unpacked_size;
+            let cost_elapsed = weight.cost - start_weight.cost;
 
             if item_elapsed != unpacked_elapsed
                 || nonce_elapsed != unpacked_elapsed
@@ -189,7 +195,7 @@ impl NoncePoolMap {
         }
     }
 
-    // return the next item with nonce >= given nonce
+    /// return the next item with nonce >= given nonce
     pub fn succ(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
         let ret = self.0.search_no_weight(|node| {
             if nonce <= &node.key {

@@ -14,10 +14,12 @@ use cfx_types::U256;
 use malloc_size_of::MallocSizeOf;
 use rand::RngCore;
 use treap_map::{
-    ApplyOpOutcome, Node, SearchDirection, SearchResult, TreapMap,
-    WeightConsolidate,
+    ApplyOpOutcome, ConsoliableWeight, Node, SearchDirection, SearchResult,
+    TreapMap,
 };
 
+/// A `PackingPool` implementing random packing algorithm and supporting packing
+/// a series of transactions with the same nonce.
 pub struct PackingPool<TX: PackingPoolTransaction> {
     treap_map: TreapMap<PackingPoolMap<TX>>,
     config: PackingPoolConfig,
@@ -49,6 +51,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 
     pub fn clear(&mut self) { self.treap_map = TreapMap::new(); }
 
+    #[inline]
     pub fn insert(&mut self, tx: TX) -> (Vec<TX>, Result<(), InsertError>) {
         let config = &self.config;
         let tx_clone = tx.clone();
@@ -150,6 +153,9 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         )
     }
 
+    /// The maximum loss ratio that a gas_price is considered in random packing
+    /// algorithm. If the return value is `None`, all the transactions can
+    /// not fulfill the given `block_gas_limit`.
     pub fn truncate_loss_ratio(&self, block_gas_limit: U256) -> Option<U256> {
         let ret = self.treap_map.search(|left_weight, node| {
             if !can_sample(left_weight, block_gas_limit) {

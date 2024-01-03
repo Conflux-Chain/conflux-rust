@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    config::{KeyMngTrait, WeightConsolidate},
-    search::{prefix_sum_search, SearchDirection},
+    config::{ConsoliableWeight, KeyMngTrait},
+    search::{accumulate_weight_search, SearchDirection},
     update::{ApplyOp, ApplyOpOutcome, InsertOp, RemoveOp},
     Direction, NoWeight, SearchResult,
 };
@@ -14,12 +14,23 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rand::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 
+/// A treap map data structure.
+///
+/// See [`TreapMapConfig`][crate::TreapMapConfig] for more details.
 pub struct TreapMap<C: TreapMapConfig> {
+    /// The root node of the treap.
     #[cfg(test)]
     pub(crate) root: Option<Box<Node<C>>>,
     #[cfg(not(test))]
     root: Option<Box<Node<C>>>,
+
+    /// A map for recovering the `sort_key` from the `search_key`.
+    /// This is useful when the `sort_key` is derived from `search_key` and
+    /// `value`.
     ext_map: C::ExtMap,
+
+    /// A random number generator used for generating priority values for new
+    /// nodes.
     rng: XorShiftRng,
 }
 
@@ -90,6 +101,21 @@ impl<C: TreapMapConfig> TreapMap<C> {
         result
     }
 
+    /// Updates the value of a node with the given key in the treap map.
+    ///
+    /// # Parameters
+    /// - `key`: The search key of the node to be updated.
+    /// - `update`: A function that is called if a node with the given key
+    ///   already exists. It takes a mutable reference to the node and returns
+    ///   an `ApplyOpOutcome<T>` or a custom error `E`. See
+    ///   [`ApplyOpOutcome`][crate::ApplyOpOutcome] for more details.
+    /// - `insert`: A function that is called if a node with the given key does
+    ///   not exist. It takes a mutable reference to a random number generator
+    ///   (for computing priority for a [`Node`][crate::Node]) and should return
+    ///   a tuple containing a new `Node<C>` and a value of type `T`, or an
+    ///   error of type `E`.
+    ///   - WARNING: The key of the new node must match the key provided to the
+    ///     function.
     pub fn update<U, I, T, E>(
         &mut self, key: &C::SearchKey, update: U, insert: I,
     ) -> Result<T, E>
@@ -156,16 +182,15 @@ impl<C: TreapMapConfig> TreapMap<C> {
         .maybe_value()
     }
 
+    /// See details in [`crate::accumulate_weight_search`]
     pub fn search<F>(&self, f: F) -> Option<SearchResult<C, C::Weight>>
     where F: FnMut(&C::Weight, &Node<C>) -> SearchDirection<C::Weight> {
-        Some(prefix_sum_search(
-            self.root.as_ref()?,
-            C::Weight::empty(),
-            f,
-            |weight| weight,
-        ))
+        Some(accumulate_weight_search(self.root.as_ref()?, f, |weight| {
+            weight
+        }))
     }
 
+    /// See details in [`crate::accumulate_weight_search`]
     /// If the search process does not require accessing 'weight', this function
     /// can outperform `search` by eliminating the maintenance of the 'weight'
     /// dimension.
@@ -174,9 +199,8 @@ impl<C: TreapMapConfig> TreapMap<C> {
     ) -> Option<SearchResult<C, NoWeight>>
     where F: FnMut(&Node<C>) -> SearchDirection<()> {
         static NW: NoWeight = NoWeight;
-        Some(prefix_sum_search(
+        Some(accumulate_weight_search(
             self.root.as_ref()?,
-            NoWeight,
             |_, node| f(node).map_into(|_| NoWeight),
             |_| &NW,
         ))

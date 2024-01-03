@@ -8,9 +8,20 @@ use crate::{
 };
 use malloc_size_of_derive::MallocSizeOf;
 
+/// A batch of transactions that have the same sender and continuous nonces.
+///
+/// `PackingBatch` is designed to group transactions from the same sender that
+/// can be packed into the same block. This struct ensures that all transactions
+/// in the batch have the same sender and their nonces form a continuous
+/// sequence.
 #[derive(Default, Clone, Eq, PartialEq, Debug, MallocSizeOf)]
 pub struct PackingBatch<TX: PackingPoolTransaction> {
+    /// A list of transactions with the same sender and continuous nonces.
+    /// This vector is guaranteed to contain at least one transaction. The
+    /// transactions are sorted in the order of their nonces.
     pub(crate) txs: Vec<TX>,
+
+    /// The total gas limit of all transactions in the batch.
     total_gas_limit: U256,
 }
 
@@ -69,6 +80,14 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
     pub fn len(&self) -> usize { self.txs.len() }
 
     #[inline]
+    /// Inserts a transaction into the pool according to [`PackingPoolConfig`],
+    /// without violating the assumptions of [`PackingBatch`].
+    ///
+    /// # Returns
+    /// Returns a tuple consisting of:
+    /// - A vector of transactions that were replaced by the insertion. This can
+    ///   be empty if no transactions were displaced.
+    /// - A result indicating the success or failure of the insertion operation.
     pub fn insert(
         &mut self, mut tx: TX, config: &PackingPoolConfig,
     ) -> (Vec<TX>, Result<(), InsertError>) {
@@ -165,12 +184,16 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
         }
     }
 
+    /// Removes transactions starting from the specified index (included) and
+    /// returns them.
     pub fn split_off_suffix(
         &mut self, index: usize,
     ) -> Result<Vec<TX>, RemoveError> {
         self.split_off_inner(index, true)
     }
 
+    /// Removes transactions ending at the specified index (not included) and
+    /// returns them.
     pub fn split_off_prefix(
         &mut self, index: usize,
     ) -> Result<Vec<TX>, RemoveError> {
@@ -205,6 +228,9 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
             .fold(U256::zero(), |acc, e| acc + e);
     }
 
+    /// Split transactions at the specified nonce (the specified one is in the
+    /// past half). Retains a half according to `keep_prefix` and returns the
+    /// rest half.
     pub fn split_off_by_nonce(
         &mut self, nonce: &U256, keep_prefix: bool,
     ) -> Result<Vec<TX>, RemoveError> {
@@ -220,6 +246,7 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
         }
     }
 
+    #[inline]
     pub(crate) fn make_outcome_on_delete(&mut self) -> ApplyOpOutcome<Vec<TX>> {
         let txs = std::mem::take(&mut self.txs);
         ApplyOpOutcome {

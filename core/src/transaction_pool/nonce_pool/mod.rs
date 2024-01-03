@@ -101,8 +101,17 @@ impl TxWithReadyInfo {
             } else {
                 false
             };
-        self.gas_price() > x.gas_price()
-            || self.gas_price() == x.gas_price() && higher_epoch_height
+        self.gas_price() >= &Self::compute_next_price(*x.gas_price())
+            || self.gas_price() >= x.gas_price() && higher_epoch_height
+    }
+
+    #[inline]
+    pub fn compute_next_price(price: U256) -> U256 {
+        if price < 100.into() {
+            price + 1
+        } else {
+            price + (price / 100) * 2
+        }
     }
 
     pub fn make_tx_cost(
@@ -192,6 +201,8 @@ impl NoncePool {
         self.map.get(&nonce).cloned()
     }
 
+    /// Iter transactions with nonce >= the start nonce. The start nonce may not
+    /// exist and the transaction nonces may not continous.
     #[inline]
     pub fn iter_tx_by_nonce(
         &self, nonce: &U256,
@@ -246,8 +257,10 @@ impl NoncePool {
     ///   1. all nonce in `[nonce, tx.nonce()]` exists
     ///   2. tx.packed is false and tx.nonce() is minimum
     /// Then, find a sequential of transactions started at the first transaction
-    /// such that   1. the nonce is continous and all transactions are not
-    /// packed   2. the balance is enough.
+    /// such that   
+    ///   1. the nonce is continous and all transactions are not packed   
+    ///   2. the balance is enough.
+    ///
     /// The first return value is the transaction in the first step.
     /// The second return value is the last nonce in the transaction series.
     pub fn recalculate_readiness_with_local_info(
@@ -261,13 +274,13 @@ impl NoncePool {
             self.map.weight(&(nonce - 1))
         };
         let b = self.map.weight(&tx.nonce());
-        // 1. b.subtree_cost - a.subtree_cost means the sum of cost of
+        // 1. b.cost - a.cost means the sum of cost of
         // transactions in `[nonce, tx.nonce()]`
-        // 2. b.subtree_size - a.subtree_size means number of transactions in
+        // 2. b.size - a.size means number of transactions in
         // `[nonce, tx.nonce()]` 3. x.nonce() - nonce + 1 means expected
         // number of transactions in `[nonce, tx.nonce()]`
-        let size_elapsed = b.subtree_size - a.subtree_size;
-        let cost_elapsed = b.subtree_cost - a.subtree_cost;
+        let size_elapsed = b.size - a.size;
+        let cost_elapsed = b.cost - a.cost;
         if U256::from(size_elapsed - 1) != tx.nonce() - nonce
             || cost_elapsed > balance
         {
@@ -282,6 +295,9 @@ impl NoncePool {
         Some((tx, end_nonce))
     }
 
+    /// Make packing batch with readiness info (`first_tx` and
+    /// `last_valid_nonce`). Input without readiness check may cause unexpected
+    /// behaviour.
     pub fn make_packing_batch(
         &self, first_tx: &TxWithReadyInfo, config: &PackingPoolConfig,
         last_valid_nonce: U256,
@@ -325,18 +341,18 @@ impl NoncePool {
             self.map.weight(&(nonce - 1))
         };
         let b = self.map.weight(&pending_tx.nonce());
-        // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
+        // 1. b.cost - a.cost means the sum of cost of transactions in `[nonce,
         // tx.nonce()]`
-        // 2. b.0 - a.0 means number of transactions in `[nonce, tx.nonce()]`
+        // 2. b.size - a.size means number of transactions in `[nonce,
+        // tx.nonce()]`
 
         // The expected nonce is just an estimation by assuming all packed
         // transactions will be executed successfully.
-        let expected_nonce =
-            nonce + U256::from(b.subtree_size - a.subtree_size - 1);
+        let expected_nonce = nonce + U256::from(b.size - a.size - 1);
         if expected_nonce != *pending_tx.nonce() {
             return Some(PendingReason::FutureNonce);
         }
-        let expected_balance = b.subtree_cost - a.subtree_cost;
+        let expected_balance = b.cost - a.cost;
         if expected_balance > balance {
             return Some(PendingReason::NotEnoughCash);
         }
@@ -351,7 +367,7 @@ impl NoncePool {
         if *nonce == U256::from(0) {
             0
         } else {
-            self.map.weight(&(nonce - 1)).subtree_size as usize
+            self.map.weight(&(nonce - 1)).size as usize
         }
     }
 

@@ -3,6 +3,7 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 use cfx_types::{AddressWithSpace, U256};
 use primitives::SignedTransaction;
 
+/// Trait representing a transaction processed by the `PackingPool`.
 pub trait PackingPoolTransaction: Clone {
     type Sender: Default + Ord + Hash + Copy + Debug;
     fn sender(&self) -> Self::Sender;

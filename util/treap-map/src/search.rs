@@ -1,16 +1,49 @@
 use std::fmt::Debug;
 
 use super::{
-    config::{TreapMapConfig, WeightConsolidate},
+    config::{ConsoliableWeight, TreapMapConfig},
     node::Node,
 };
+
+/// Represents the directions for the search in [`accumulate_weight_search`].
+///
+/// This enum is used by the user-provided function to indicate how the search
+/// should proceed or terminate in `accumulate_weight_search`.
 #[derive(Debug, PartialEq, Eq)]
 pub enum SearchDirection<W> {
+    /// Indicates to abort the search immediately.
+    /// This stops further searching in any subtree.
     Abort,
+
+    /// Indicates to continue the search in the left subtree.
+    /// This is used when the current search result is unacceptable and the
+    /// search should move left.
     Left,
+
+    /// Indicates that the current search result is acceptable and the search
+    /// should stop.
     Stop,
+
+    /// Indicates to continue the search in the right subtree, with the
+    /// provided weight `W`. This is used when the current search result is
+    /// unacceptable and the search should move right. The user function is
+    /// expected to merge the accumulate weight with the node weight and
+    /// provide it in this variant to avoid recalculating it in
+    /// [`accumulate_weight_search`].
     Right(W),
+
+    /// Indicates that the current search result is acceptable, but the search
+    /// should still continue in the left subtree. If the subtree yields no
+    /// results, the current result is returned.
     LeftOrStop,
+
+    /// Similar to `LeftOrStop`, but for the right subtree.
+    /// Indicates that the current search result is acceptable, but the search
+    /// should still continue in the right subtree. If the subtree yields
+    /// no results, the current result is returned, along with the merged
+    /// weight. The user function is expected to merge the accumulate
+    /// weight with the node weight and provide it in this variant to avoid
+    /// recalculating it in [`accumulate_weight_search`].
     RightOrStop(W),
 }
 
@@ -31,14 +64,35 @@ impl<W> SearchDirection<W> {
     }
 }
 
-pub enum SearchResult<'a, C: TreapMapConfig, W: WeightConsolidate> {
+/// Represents the possible outcomes of the `accumulate_weight_search`.
+///
+/// This enum encapsulates the results that can be returned by
+/// `accumulate_weight_search`, indicating the outcome of the search within a
+/// treap map.
+pub enum SearchResult<'a, C: TreapMapConfig, W: ConsoliableWeight> {
+    /// Indicates that the search was aborted.
+    /// This variant is used when no feasible result is found and the search
+    /// position is neither at the extreme left nor the extreme right of
+    /// the treap.
     Abort,
+
+    /// Indicates that the search reached the leftmost edge of the entire treap
+    /// without finding a feasible result.
     LeftMost,
+
+    /// Represents a successful search, indicating a feasible result has been
+    /// found. Contains `base_weight`, which is the total weight from the
+    /// leftmost edge up to but not including the current node,
+    /// and a reference to the `node` itself.
     Found { base_weight: W, node: &'a Node<C> },
+
+    /// Indicates that the search reached the rightmost edge of the entire
+    /// treap without finding a feasible result. Also returns the total
+    /// weight of the entire tree (`RightMost(W)`).
     RightMost(W),
 }
 
-impl<'a, C: TreapMapConfig, W: WeightConsolidate> SearchResult<'a, C, W> {
+impl<'a, C: TreapMapConfig, W: ConsoliableWeight> SearchResult<'a, C, W> {
     pub fn maybe_value(&self) -> Option<&'a C::Value> {
         if let SearchResult::Found { node, .. } = self {
             Some(&node.value)
@@ -48,20 +102,35 @@ impl<'a, C: TreapMapConfig, W: WeightConsolidate> SearchResult<'a, C, W> {
     }
 }
 
+/// Performs a binary search in a treap-map.
+///
+/// This function conducts a binary search within a treap-map structure, where
+/// at each step it can access the accumulated weight from the leftmost node to
+/// the current node.
+///
+/// # Parameters
+/// - `node`: The root node of the treap-map.
+/// - `f`: A search function that takes the accumulated weight from the leftmost
+///   node to the current node (excluding the current node) and the current node
+///   itself. It returns a search direction (see [`SearchDirection`
+///   struct][SearchDirection] for more details).
+/// - `extract`: A function to extract a subset of the weight stored in the
+///   treap-map. This allows for avoiding the reading and maintenance of fields
+///   that are not needed during the search.
 #[inline]
-pub fn prefix_sum_search<C, W, F, E>(
-    node: &Node<C>, base_weight: W, mut f: F, extract: E,
+pub fn accumulate_weight_search<C, W, F, E>(
+    root: &Node<C>, mut f: F, extract: E,
 ) -> SearchResult<C, W>
 where
     C: TreapMapConfig,
     F: FnMut(&W, &Node<C>) -> SearchDirection<W>,
-    W: WeightConsolidate,
+    W: ConsoliableWeight,
     E: Fn(&C::Weight) -> &W,
 {
     use SearchDirection::*;
 
-    let mut node = node;
-    let mut base_weight = base_weight;
+    let mut node = root;
+    let mut base_weight = W::empty();
 
     let mut candidate_result = None;
 
@@ -135,7 +204,7 @@ mod tests {
         SearchDirection::*,
         SearchResult::{self, *},
     };
-    use crate::{SharedKeyTreapMapConfig, TreapMap, WeightConsolidate};
+    use crate::{ConsoliableWeight, SharedKeyTreapMapConfig, TreapMap};
     use std::cmp::Ordering::*;
 
     #[derive(Debug, PartialEq, Eq)]
@@ -185,10 +254,7 @@ mod tests {
                 .search(|left_weight, node| match i.cmp(&node.value) {
                     Less => Left,
                     Equal => Stop,
-                    // If the search doesn't read weight, the carried weight
-                    // could by anything. Some implementation relies on this
-                    // feature
-                    Greater => Right(WeightConsolidate::consolidate(
+                    Greater => Right(ConsoliableWeight::consolidate(
                         left_weight,
                         &node.weight,
                     )),
@@ -218,7 +284,7 @@ mod tests {
             let res = map
                 .search(|left_weight, node| {
                     if node.value <= i {
-                        RightOrStop(WeightConsolidate::consolidate(
+                        RightOrStop(ConsoliableWeight::consolidate(
                             left_weight,
                             &node.weight,
                         ))
@@ -251,7 +317,7 @@ mod tests {
             let res = map
                 .search(|left_weight, node| {
                     if node.value <= i {
-                        Right(WeightConsolidate::consolidate(
+                        Right(ConsoliableWeight::consolidate(
                             left_weight,
                             &node.weight,
                         ))
@@ -301,7 +367,7 @@ mod tests {
 }
 
 mod impl_std_trait {
-    use crate::WeightConsolidate;
+    use crate::ConsoliableWeight;
 
     use super::{Node, SearchResult, TreapMapConfig};
     use core::{
@@ -309,7 +375,7 @@ mod impl_std_trait {
         fmt::{self, Debug, Formatter},
     };
 
-    impl<'a, C: TreapMapConfig, W: WeightConsolidate> Debug
+    impl<'a, C: TreapMapConfig, W: ConsoliableWeight> Debug
         for SearchResult<'a, C, W>
     where
         W: Debug,
@@ -332,7 +398,7 @@ mod impl_std_trait {
         }
     }
 
-    impl<'a, C: TreapMapConfig, W: WeightConsolidate> PartialEq
+    impl<'a, C: TreapMapConfig, W: ConsoliableWeight> PartialEq
         for SearchResult<'a, C, W>
     where
         C::Weight: PartialEq,

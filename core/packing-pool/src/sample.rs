@@ -7,19 +7,49 @@ use crate::{
     transaction::PackingPoolTransaction, treapmap_config::PackingPoolMap,
 };
 
+/// Enum representing the phase in which a transaction was selected during the
+/// sampling process. See [`TxSampler`] for more details.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SampleTag {
-    PriceDesc,
+    /// Transaction was picked during the Random Sampling Phase.
     RandomPick,
+    /// Transaction was picked during the Candidate Queue Phase.
     CandidateAddress,
+    /// Transaction was picked during the Remaining Transactions Phase.
+    PriceDesc,
 }
 
+/// An iterator for sampling transactions from a packing pool.
+///
+/// `TxSampler` iterates over addresses, returning lists of transactions that
+/// come from the same sender, have continuous nonces, and pass
+/// [`PackingBatch`][crate::PackingBatch] and readiness checks.
+///
+/// The iterator operates in three phases:
+/// 1. **Random Sampling Phase**: Based on the random packing algorithm,
+/// addresses are selected from high    to low gas prices of their first
+/// transaction. The probability of inclusion is determined by the algorithm.
+/// Transactions not selected    are placed in a candidate queue.
+/// 2. **Candidate Queue Phase**: Transactions from the candidate queue are
+/// output in a random order. Transactions    with a higher probability in the
+/// first phase have a greater chance of appearing earlier in this phase.
+/// 3. **Remaining Transactions Phase**: Remaining addresses are output in
+/// descending order of their first transaction gas prices.
+///
+/// If the block's gas limit can accommodate all transactions in the packing
+/// pool, the iterator directly enters the third phase.
 pub struct TxSampler<'a, 'b, TX: PackingPoolTransaction, R: RngCore> {
     iter: treap_map::Iter<'a, PackingPoolMap<TX>>,
+    /// A intermediated variable, record the first node that not considered in
+    /// the Random Sampling Phase.
     first_unsample: Option<&'a treap_map::Node<PackingPoolMap<TX>>>,
+    /// If the iterator in the Random Sampling Phase.
     random_sample_phase: bool,
-    alter_address: HeapMap<TX::Sender, CandidateAddress<'a, TX>>,
+    /// The candidate quese
+    candidate_queue: HeapMap<TX::Sender, CandidateAddress<'a, TX>>,
+    /// A parameter from packing algorithm
     loss_base: U256,
+    /// Random source
     rng: &'b mut R,
 }
 
@@ -33,16 +63,15 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> TxSampler<'a, 'b, TX, R> {
             iter,
             random_sample_phase: true,
             first_unsample: None,
-            alter_address: Default::default(),
+            candidate_queue: Default::default(),
             loss_base,
             rng,
         }
     }
 
+    /// Iter in the **Remaining Transactions Phase**
     #[inline]
-    fn price_desc_sample(
-        &mut self,
-    ) -> Option<(TX::Sender, &'a [TX], SampleTag)> {
+    fn price_desc_next(&mut self) -> Option<(TX::Sender, &'a [TX], SampleTag)> {
         if let Some(node) = self.first_unsample {
             self.first_unsample = None;
             return Some((node.key, &node.value.txs[..], SampleTag::PriceDesc));
@@ -52,11 +81,10 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> TxSampler<'a, 'b, TX, R> {
             .map(|node| (node.key, &node.value.txs[..], SampleTag::PriceDesc))
     }
 
+    /// Iter in the **Candidate Queue Phase**
     #[inline]
-    fn alternative_sample(
-        &mut self,
-    ) -> Option<(TX::Sender, &'a [TX], SampleTag)> {
-        self.alter_address.pop().map(|(addr, candidate)| {
+    fn candidate_next(&mut self) -> Option<(TX::Sender, &'a [TX], SampleTag)> {
+        self.candidate_queue.pop().map(|(addr, candidate)| {
             (
                 addr,
                 &candidate.node.value.txs[..],
@@ -65,6 +93,7 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> TxSampler<'a, 'b, TX, R> {
         })
     }
 
+    /// Iter in the **Random Sampling Phase**
     #[inline]
     fn random_sample(&mut self) -> Option<(TX::Sender, &'a [TX], SampleTag)> {
         while let Some(node) = self.iter.next() {
@@ -86,7 +115,7 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> TxSampler<'a, 'b, TX, R> {
                     SampleTag::RandomPick,
                 ));
             } else {
-                self.alter_address.insert(
+                self.candidate_queue.insert(
                     &node.key,
                     CandidateAddress {
                         node,
@@ -107,7 +136,7 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> Iterator
     fn next(&mut self) -> Option<Self::Item> {
         // Packing pool is not full
         if self.loss_base.is_zero() {
-            return self.price_desc_sample();
+            return self.price_desc_next();
         }
 
         if self.random_sample_phase {
@@ -117,11 +146,11 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> Iterator
             }
         }
 
-        let res = self.alternative_sample();
+        let res = self.candidate_next();
         if res.is_some() {
             return res;
         }
-        self.price_desc_sample()
+        self.price_desc_next()
     }
 }
 

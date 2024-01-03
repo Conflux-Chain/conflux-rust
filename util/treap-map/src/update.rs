@@ -133,10 +133,26 @@ impl<'a, C: TreapMapConfig> TreapNodeUpdate<C> for RemoveOp<'a, C> {
     }
 }
 
+/// Represents the outcome of an operation applied in the
+/// [`TreapMap::update`][crate::TreapMap::update] function.
+///
+/// `ApplyOpOutcome` is used to convey the result of a user-defined operation
+/// applied to a node in the `TreapMap`. It provides details to the `TreapMap`
+/// about how to properly maintain the node after the operation.
+
 pub struct ApplyOpOutcome<T> {
+    /// The value to be forwarded as the return value of the `update`
+    /// function.
     pub out: T,
+    /// A flag indicating whether the operation has modified the node's weight.
+    /// If `true`, the `TreapMap` will recompute the accumulated weights.
     pub update_weight: bool,
+    ///  A flag indicating whether the operation has changed the node's key or
+    /// sort key. If `true`, the `TreapMap` will reposition the node within the
+    /// treap.
     pub update_key: bool,
+    /// A flag indicating whether the node should be deleted following the
+    /// operation. If `true`, the `TreapMap` will remove the node.
     pub delete_item: bool,
 }
 

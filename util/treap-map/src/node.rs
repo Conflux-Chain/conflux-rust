@@ -3,30 +3,50 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    config::{TreapMapConfig, WeightConsolidate},
+    config::{ConsoliableWeight, Direction, TreapMapConfig},
     update::{OpResult, TreapNodeUpdate},
 };
 
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use std::{fmt::Debug, mem};
+use std::mem;
 
+/// A node in a treap-map data structure.
+///
+/// The `Node` struct represents a node in a treap-map and contains various
+/// key-value pairs and metadata required for the proper functioning and
+/// maintenance of the treap-map. Direct modification of these fields is not
+/// recommended outside of the `TreapMap::update` function, as this function
+/// correctly maintains the integrity of the treap-map.
 #[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct Node<C: TreapMapConfig> {
+    /// The key exposed externally. Used for key-based searches within the
+    /// treap-map.
     pub key: C::SearchKey,
+
+    /// The value stored in the node.
     pub value: C::Value,
+
+    /// The sorting key for the treap-map. If the type is `()`, the
+    /// `search_key` is used for sorting.
     pub sort_key: C::SortKey,
+
+    /// The weight of the node, used by the treap-map to maintain accumulated
+    /// weights.
     pub weight: C::Weight,
+
+    /// The sum of the weights of this node and its descendants. Maintained
+    /// internally for efficient operations.
     pub(crate) sum_weight: C::Weight,
+
+    /// A priority value used by the treap algorithm, typically a random
+    /// number.
     priority: u64,
 
+    /// The left child of the node in the treap-map structure.
     pub(crate) left: Option<Box<Node<C>>>,
-    pub(crate) right: Option<Box<Node<C>>>,
-}
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Direction {
-    Left,
-    Right,
+    /// The right child of the node in the treap-map structure.
+    pub(crate) right: Option<Box<Node<C>>>,
 }
 
 impl<C: TreapMapConfig> Node<C> {

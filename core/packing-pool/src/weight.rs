@@ -1,6 +1,6 @@
 use cfx_types::U256;
 use malloc_size_of_derive::MallocSizeOf;
-use treap_map::WeightConsolidate;
+use treap_map::ConsoliableWeight;
 
 #[derive(Default, Clone, Eq, PartialEq, MallocSizeOf, Debug)]
 pub struct PackingPoolWeight {
@@ -9,7 +9,7 @@ pub struct PackingPoolWeight {
     pub max_loss_ratio: U256,
 }
 
-impl WeightConsolidate for PackingPoolWeight {
+impl ConsoliableWeight for PackingPoolWeight {
     #[inline]
     fn empty() -> Self { Self::default() }
 

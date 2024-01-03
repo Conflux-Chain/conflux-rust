@@ -24,3 +24,4 @@ pub use packing_batch::PackingBatch;
 pub use pool::PackingPool;
 pub use pool_config::PackingPoolConfig;
 pub use sample::{SampleTag, TxSampler};
+pub use transaction::PackingPoolTransaction;

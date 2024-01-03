@@ -13,11 +13,11 @@ mod tests;
 
 pub use self::{
     config::{
-        KeyMngTrait, NoWeight, SharedKeyTreapMapConfig, TreapMapConfig,
-        WeightConsolidate,
+        ConsoliableWeight, Direction, KeyMngTrait, NoWeight,
+        SharedKeyTreapMapConfig, TreapMapConfig,
     },
     map::{Iter, TreapMap},
-    node::{Direction, Node},
-    search::{SearchDirection, SearchResult},
+    node::Node,
+    search::{accumulate_weight_search, SearchDirection, SearchResult},
     update::ApplyOpOutcome,
 };
