@@ -100,6 +100,7 @@ fn main() -> Result<(), Error> {
             info,
             &storage_manager.snapshot_info_map_by_epoch,
             height,
+            false,
         )?;
     storage_manager.register_new_snapshot(
         snapshot_info1.clone(),
@@ -170,6 +171,7 @@ fn main() -> Result<(), Error> {
             info,
             &storage_manager.snapshot_info_map_by_epoch,
             height,
+            false,
         )?;
     println!(
         "After merging: {:?}, accounts size {}",
@@ -236,6 +238,7 @@ fn main() -> Result<(), Error> {
             info,
             &storage_manager.snapshot_info_map_by_epoch,
             height,
+            false,
         )?;
     storage_manager.register_new_snapshot(
         snapshot_info3.clone(),
@@ -426,7 +429,7 @@ where
     Iter: Iterator<Item = (&'a AddressWithSpace, &'a Account)>,
 {
     let state = manager
-        .get_state_for_next_epoch(state_index)
+        .get_state_for_next_epoch(state_index, false)
         .unwrap()
         .unwrap();
     let mut state = StateDb::new(state);
