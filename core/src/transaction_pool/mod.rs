@@ -2,11 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod impls;
-
-#[cfg(test)]
-mod test_treap;
-
 mod account_cache;
 mod garbage_collector;
 mod nonce_pool;
@@ -14,7 +9,7 @@ mod transaction_pool_inner;
 
 extern crate rand;
 
-pub use self::{impls::TreapMap, transaction_pool_inner::TransactionStatus};
+pub use self::transaction_pool_inner::TransactionStatus;
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,

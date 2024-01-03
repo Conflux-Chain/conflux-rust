@@ -1,12 +1,14 @@
 use super::{
     account_cache::AccountCache,
     garbage_collector::GarbageCollector,
-    impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
 use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_parameters::{
+    block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
+    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressWithSpace, Space, SpaceMap,
@@ -28,6 +30,7 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+use treap_map::{SharedKeyTreapMapConfig, TreapMap};
 
 type WeightType = u128;
 lazy_static! {
@@ -78,6 +81,16 @@ impl DeferredPool {
         let bucket =
             self.buckets.entry(tx.sender()).or_insert(NoncePool::new());
         bucket.insert(&tx, force)
+    }
+
+    fn mark_packed(
+        &mut self, addr: AddressWithSpace, nonce: &U256, packed: bool,
+    ) -> bool {
+        if let Some(bucket) = self.buckets.get_mut(&addr) {
+            bucket.mark_packed(&nonce, packed)
+        } else {
+            false
+        }
     }
 
     fn contain_address(&self, addr: &AddressWithSpace) -> bool {
@@ -348,11 +361,18 @@ impl SpacedReadyAccountPool {
     fn top(&self) -> Option<Arc<SignedTransaction>> { self.packing_pool.top() }
 }
 
+struct PackPoolTreapMapConfig;
+impl SharedKeyTreapMapConfig for PackPoolTreapMapConfig {
+    type Key = Address;
+    type Value = Arc<SignedTransaction>;
+    type Weight = WeightType;
+}
+
 #[derive(DeriveMallocSizeOf)]
 struct PackingPool {
     /// A balance tree used to randomly sample transactions with `gas_price` as
     /// a sampling weight.
-    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
+    treap: TreapMap<PackPoolTreapMapConfig>,
     /// A priority queue to order transactions based on their gas_price.
     heap_map: HeapMap<Address, Reverse<PriceOrderedTransaction>>,
     tx_weight_scaling: u64,
@@ -390,7 +410,7 @@ impl PackingPool {
     fn len(&self) -> usize { self.treap.len() }
 
     fn get_all_transaction_hashes(&self) -> BTreeSet<H256> {
-        self.treap.iter().map(|v| v.1.hash()).collect()
+        self.treap.values().map(|tx| tx.hash()).collect()
     }
 
     fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
@@ -506,7 +526,9 @@ impl ReadyAccountPool {
             evm_pool: SpacedReadyAccountPool::new(
                 tx_weight_scaling,
                 tx_weight_exp,
-                total_gas_capacity,
+                total_gas_capacity
+                    / EVM_TRANSACTION_BLOCK_RATIO
+                    / EVM_TRANSACTION_GAS_RATIO,
             ),
         }
     }
@@ -712,7 +734,6 @@ pub struct TransactionPoolInner {
     /// Keeps all transactions in the transaction pool.
     /// It should contain the same transaction set as `deferred_pool`.
     txs: TransactionSet,
-    tx_sponsored_gas_map: HashMap<H256, (U256, u64)>,
 }
 
 impl TransactionPoolInner {
@@ -734,7 +755,6 @@ impl TransactionPoolInner {
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: SpaceMap::default(),
             txs: TransactionSet::default(),
-            tx_sponsored_gas_map: HashMap::new(),
         }
     }
 
@@ -744,7 +764,6 @@ impl TransactionPoolInner {
         self.ready_nonces_and_balances.clear();
         self.garbage_collector.apply_all(|x| x.clear());
         self.txs.clear();
-        self.tx_sponsored_gas_map.clear();
         self.total_received_count = 0;
         self.unpacked_transaction_count = 0;
     }
@@ -926,7 +945,6 @@ impl TransactionPoolInner {
 
             // maintain txs
             self.txs.remove(&to_remove_tx.hash());
-            self.tx_sponsored_gas_map.remove(&to_remove_tx.hash());
         }
 
         // Insert back skipped nodes to keep `garbage_collector`
@@ -956,7 +974,7 @@ impl TransactionPoolInner {
     // the new inserting will fail if tx_pool is full (even if `force` is true)
     fn insert_transaction_without_readiness_check(
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
-        force: bool, state_nonce_and_balance: Option<(U256, U256)>,
+        force: bool, state_nonce_and_balance: (U256, U256),
         (sponsored_gas, sponsored_storage): (U256, u64),
     ) -> InsertResult
     {
@@ -988,11 +1006,7 @@ impl TransactionPoolInner {
 
         match &result {
             InsertResult::NewAdded => {
-                // This will only happen when called by
-                // `insert_transaction_with_readiness_check`, so
-                // state_nonce_and_balance will never be `None`.
-                let (state_nonce, state_balance) =
-                    state_nonce_and_balance.unwrap();
+                let (state_nonce, state_balance) = state_nonce_and_balance;
                 self.update_nonce_and_balance(
                     &transaction.sender(),
                     state_nonce,
@@ -1000,10 +1014,6 @@ impl TransactionPoolInner {
                 );
                 // GarbageCollector will be updated by the caller.
                 self.txs.insert(transaction.hash(), transaction.clone());
-                self.tx_sponsored_gas_map.insert(
-                    transaction.hash(),
-                    (sponsored_gas, sponsored_storage),
-                );
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
@@ -1021,11 +1031,6 @@ impl TransactionPoolInner {
                 }
                 self.txs.remove(&replaced_tx.hash());
                 self.txs.insert(transaction.hash(), transaction.clone());
-                self.tx_sponsored_gas_map.remove(&replaced_tx.hash());
-                self.tx_sponsored_gas_map.insert(
-                    transaction.hash(),
-                    (sponsored_gas, sponsored_storage),
-                );
                 if !packed {
                     self.unpacked_transaction_count += 1;
                 }
@@ -1033,6 +1038,23 @@ impl TransactionPoolInner {
         }
 
         result
+    }
+
+    fn mark_packed(&mut self, tx: &SignedTransaction, packed: bool) {
+        let changed =
+            self.deferred_pool
+                .mark_packed(tx.sender(), tx.nonce(), packed);
+        if changed {
+            if packed {
+                if self.unpacked_transaction_count == 0 {
+                    error!("unpacked_transaction_count under-flows.");
+                } else {
+                    self.unpacked_transaction_count -= 1;
+                }
+            } else {
+                self.unpacked_transaction_count += 1;
+            }
+        }
     }
 
     pub fn get_account_pending_info(
@@ -1310,16 +1332,7 @@ impl TransactionPoolInner {
             total_tx_size += tx_size;
 
             packed_transactions.push(tx.clone());
-            self.insert_transaction_without_readiness_check(
-                tx.clone(),
-                true, /* packed */
-                true, /* force */
-                None, /* state_nonce_and_balance */
-                self.tx_sponsored_gas_map
-                    .get(&tx.hash())
-                    .map(|x| x.clone())
-                    .unwrap_or((U256::from(0), 0)),
-            );
+            self.mark_packed(&tx, true);
             self.recalculate_readiness_with_local_info(&tx.sender());
             if packed_transactions.len() >= num_txs {
                 break 'out;
@@ -1335,16 +1348,7 @@ impl TransactionPoolInner {
         // FIXME: to be optimized by only recalculating readiness once for one
         //  sender
         for tx in packed_transactions.iter().rev() {
-            self.insert_transaction_without_readiness_check(
-                tx.clone(),
-                false, /* packed */
-                true,  /* force */
-                None,  /* state_nonce_and_balance */
-                self.tx_sponsored_gas_map
-                    .get(&tx.hash())
-                    .map(|x| x.clone())
-                    .unwrap_or((U256::from(0), 0)),
-            );
+            self.mark_packed(tx, false);
             self.recalculate_readiness_with_local_info(&tx.sender());
         }
 
@@ -1385,24 +1389,22 @@ impl TransactionPoolInner {
                     Space::Native => &self.ready_account_pool.native_pool,
                     Space::Ethereum => &self.ready_account_pool.evm_pool,
                 };
-                spaced_pool
-                    .packing_pool
-                    .treap
-                    .iter()
-                    .filter(|address_tx| addr.address == *address_tx.0)
-                    .map(|(_, tx)| tx.clone())
-                    .collect()
+                spaced_pool.packing_pool.treap.values().cloned().collect()
             }
             None => self
                 .ready_account_pool
                 .native_pool
                 .packing_pool
                 .treap
-                .iter()
+                .values()
                 .chain(
-                    self.ready_account_pool.evm_pool.packing_pool.treap.iter(),
+                    self.ready_account_pool
+                        .evm_pool
+                        .packing_pool
+                        .treap
+                        .values(),
                 )
-                .map(|(_, tx)| tx.clone())
+                .cloned()
                 .collect(),
         };
 
@@ -1505,7 +1507,7 @@ impl TransactionPoolInner {
             transaction.clone(),
             packed,
             force,
-            Some((state_nonce, state_balance)),
+            (state_nonce, state_balance),
             (sponsored_gas, sponsored_storage),
         );
         if let InsertResult::Failed(info) = result {

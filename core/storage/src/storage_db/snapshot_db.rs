@@ -139,6 +139,7 @@ pub trait SnapshotDbTrait:
     fn direct_merge(
         &mut self, old_snapshot_db: Option<&Arc<Self>>,
         mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
+        recover_mpt_with_kv_snapshot_exist: bool,
     ) -> StorageResult<MerkleHash>;
 
     fn copy_and_merge(
