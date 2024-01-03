@@ -29,9 +29,10 @@ fn get_state(
 ) -> State {
     State::new(StateDb::new(
         storage_manager
-            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-                epoch_id,
-            ))
+            .get_state_for_next_epoch(
+                StateIndex::new_for_test_only_delta_mpt(epoch_id),
+                false,
+            )
             .unwrap()
             .unwrap(),
     ))
@@ -61,7 +62,7 @@ pub fn get_state_for_genesis_write(
         storage_manager
             .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
                 &genesis_epoch_id,
-            ))
+            ), false)
             .expect(&concat!(file!(), ":", line!(), ":", column!()))
             // Unwrap is safe because Genesis state exists.
             .unwrap(),

@@ -50,7 +50,6 @@ use cfx_parameters::{
     consensus::*,
     consensus_internal::REWARD_EPOCH_COUNT,
     rpc::{
-        EVM_GAS_PRICE_BLOCK_SAMPLE_SIZE, EVM_GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
         GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_DEFAULT_VALUE,
         GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
     },
@@ -519,18 +518,11 @@ impl ConsensusGraph {
             number_of_tx_to_sample,
             mut number_of_blocks_to_sample,
             block_gas_ratio,
-        ) = match space {
-            Space::Native => (
-                GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-                GAS_PRICE_BLOCK_SAMPLE_SIZE,
-                1,
-            ),
-            Space::Ethereum => (
-                EVM_GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-                EVM_GAS_PRICE_BLOCK_SAMPLE_SIZE,
-                self.txpool.machine().params().evm_transaction_gas_ratio,
-            ),
-        };
+        ) = (
+            GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
+            GAS_PRICE_BLOCK_SAMPLE_SIZE,
+            1,
+        );
         let mut prices = Vec::new();
         let mut total_block_gas_limit: u64 = 0;
         let mut total_tx_gas_limit: u64 = 0;
@@ -553,24 +545,11 @@ impl ConsensusGraph {
                     .data_man
                     .block_by_hash(&hash, false /* update_cache */)
                     .unwrap();
-                if space == Space::Ethereum
-                    && !self
-                        .txpool
-                        .machine()
-                        .params()
-                        .can_pack_evm_transaction(block.block_header.height())
-                {
-                    // This block cannot pack Ethereum transactions, so we do
-                    // not need to check every transaction.
-                    continue;
-                }
                 total_block_gas_limit +=
                     block.block_header.gas_limit().as_u64() * block_gas_ratio;
                 for tx in block.transactions.iter() {
-                    if space == Space::Ethereum && tx.space() != Space::Ethereum
-                    {
-                        // For eth_gasPrice, we only count Ethereum
-                        // transactions.
+                    if space == Space::Native && tx.space() != Space::Native {
+                        // For cfx_gasPrice, we only count Native transactions.
                         continue;
                     }
                     // add the tx.gas() to total_tx_gas_limit even it is packed

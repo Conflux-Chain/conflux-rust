@@ -93,9 +93,10 @@ fn test_get_set_at_second_commit() {
     state_0.commit(epoch_id_0).unwrap();
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &epoch_id_0,
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_test_only_delta_mpt(&epoch_id_0),
+            false,
+        )
         .unwrap()
         .unwrap();
     println!("Set new {} keys for state_1.", keys_1_new.len());
@@ -287,14 +288,17 @@ fn simulate_transactions(
     let mut epoch_id = H256::default();
     epoch_id.as_bytes_mut()[0] = epoch;
     let mut state = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-            &epoch_id,
-            prev_state_root,
-            epoch as u64 + 1,
-            state_manager
-                .get_storage_manager()
-                .get_snapshot_epoch_count(),
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_next_epoch(
+                &epoch_id,
+                prev_state_root,
+                epoch as u64 + 1,
+                state_manager
+                    .get_storage_manager()
+                    .get_snapshot_epoch_count(),
+            ),
+            false,
+        )
         .unwrap()
         .unwrap();
     let mut values = vec![None; keys.len()];
@@ -440,9 +444,10 @@ fn test_set_delete() {
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &epoch_id,
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+            false,
+        )
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
@@ -507,9 +512,10 @@ fn test_set_delete_all() {
 
     // In second state, insert part 2, then delete everything.
     let mut state = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &epoch_id,
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+            false,
+        )
         .unwrap()
         .unwrap();
     for key in keys_1.iter() {
@@ -660,9 +666,10 @@ fn test_set_order_concurrent() {
     let parent_epoch_0 = epoch_id;
 
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-            &parent_epoch_0,
-        ))
+        .get_state_for_next_epoch(
+            StateIndex::new_for_test_only_delta_mpt(&parent_epoch_0),
+            false,
+        )
         .unwrap()
         .unwrap();
     println!("Setting state_1 with {} keys.", keys.len());
@@ -698,6 +705,7 @@ fn test_set_order_concurrent() {
             let mut state_2 = state_manager
                 .get_state_for_next_epoch(
                     StateIndex::new_for_test_only_delta_mpt(&parent_epoch_0),
+                    false,
                 )
                 .unwrap()
                 .unwrap();

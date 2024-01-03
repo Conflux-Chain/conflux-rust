@@ -1012,9 +1012,10 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
 
     let mut state = State::new(StateDb::new(
         storage_manager
-            .get_state_for_next_epoch(StateIndex::new_for_test_only_delta_mpt(
-                &epoch_id,
-            ))
+            .get_state_for_next_epoch(
+                StateIndex::new_for_test_only_delta_mpt(&epoch_id),
+                false,
+            )
             .unwrap()
             .unwrap(),
     ))
