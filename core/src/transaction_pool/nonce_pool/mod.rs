@@ -3,7 +3,9 @@
 mod nonce_pool_map;
 mod weight;
 
-use crate::transaction_pool::transaction_pool_inner::PendingReason;
+use crate::transaction_pool::{
+    nonce_pool::weight::NoncePoolWeight, transaction_pool_inner::PendingReason,
+};
 use cfx_packing_pool::{PackingBatch, PackingPoolConfig};
 use cfx_parameters::{
     consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
@@ -240,33 +242,49 @@ impl NoncePool {
         pending_txs
     }
 
-    /// find a transaction `tx` such that
+    /// First, find a transaction `tx` such that
     ///   1. all nonce in `[nonce, tx.nonce()]` exists
     ///   2. tx.packed is false and tx.nonce() is minimum
+    /// Then, find a sequential of transactions started at the first transaction
+    /// such that   1. the nonce is continous and all transactions are not
+    /// packed   2. the balance is enough.
+    /// The first return value is the transaction in the first step.
+    /// The second return value is the last nonce in the transaction series.
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
     ) -> Option<(&TxWithReadyInfo, U256)> {
         let tx = self.map.query(&nonce)?;
 
         let a = if nonce == U256::from(0) {
-            (0, U256::from(0))
+            NoncePoolWeight::default()
         } else {
-            self.map.rank(&(nonce - 1))
+            self.map.weight(&(nonce - 1))
         };
-        let b = self.map.rank(&tx.nonce());
-        // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
-        // tx.nonce()]`
-        // 2. b.0 - a.0 means number of transactions in `[nonce,
-        // tx.nonce()]` 3. x.nonce() - nonce + 1 means expected
+        let b = self.map.weight(&tx.nonce());
+        // 1. b.subtree_cost - a.subtree_cost means the sum of cost of
+        // transactions in `[nonce, tx.nonce()]`
+        // 2. b.subtree_size - a.subtree_size means number of transactions in
+        // `[nonce, tx.nonce()]` 3. x.nonce() - nonce + 1 means expected
         // number of transactions in `[nonce, tx.nonce()]`
-        (U256::from(b.0 - a.0 - 1) == tx.nonce() - nonce
-            && b.1 - a.1 <= balance)
-            .then(|| (tx, balance - (b.1 - a.1)))
+        let size_elapsed = b.subtree_size - a.subtree_size;
+        let cost_elapsed = b.subtree_cost - a.subtree_cost;
+        if U256::from(size_elapsed - 1) != tx.nonce() - nonce
+            || cost_elapsed > balance
+        {
+            return None;
+        }
+
+        let end_nonce = self.map.continous_ready_nonce(
+            tx.nonce(),
+            b,
+            balance - cost_elapsed,
+        );
+        Some((tx, end_nonce))
     }
 
     pub fn make_packing_batch(
         &self, first_tx: &TxWithReadyInfo, config: &PackingPoolConfig,
-        mut rest_balance: U256,
+        last_valid_nonce: U256,
     ) -> PackingBatch<Arc<SignedTransaction>>
     {
         let start_nonce = *first_tx.transaction.nonce();
@@ -279,13 +297,11 @@ impl NoncePool {
                 break;
             }
             next_nonce += 1.into();
-            let cost = tx.calc_tx_cost();
-            if cost > rest_balance {
-                break;
-            }
-            rest_balance -= cost;
             let res = batch.insert(tx.transaction.clone(), config);
             if res.1.is_err() {
+                break;
+            }
+            if next_nonce > last_valid_nonce {
                 break;
             }
         }
@@ -304,22 +320,23 @@ impl NoncePool {
         &self, nonce: U256, balance: U256, pending_tx: &SignedTransaction,
     ) -> Option<PendingReason> {
         let a = if nonce == U256::from(0) {
-            (0, U256::from(0))
+            NoncePoolWeight::default()
         } else {
-            self.map.rank(&(nonce - 1))
+            self.map.weight(&(nonce - 1))
         };
-        let b = self.map.rank(&pending_tx.nonce());
+        let b = self.map.weight(&pending_tx.nonce());
         // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
         // tx.nonce()]`
         // 2. b.0 - a.0 means number of transactions in `[nonce, tx.nonce()]`
 
         // The expected nonce is just an estimation by assuming all packed
         // transactions will be executed successfully.
-        let expected_nonce = nonce + U256::from(b.0 - a.0 - 1);
+        let expected_nonce =
+            nonce + U256::from(b.subtree_size - a.subtree_size - 1);
         if expected_nonce != *pending_tx.nonce() {
             return Some(PendingReason::FutureNonce);
         }
-        let expected_balance = b.1 - a.1;
+        let expected_balance = b.subtree_cost - a.subtree_cost;
         if expected_balance > balance {
             return Some(PendingReason::NotEnoughCash);
         }
@@ -334,7 +351,7 @@ impl NoncePool {
         if *nonce == U256::from(0) {
             0
         } else {
-            self.map.rank(&(nonce - 1)).0 as usize
+            self.map.weight(&(nonce - 1)).subtree_size as usize
         }
     }
 
@@ -726,23 +743,43 @@ mod nonce_pool_test {
     fn recalculate_readiness_with_local_info(
         nonce_pool: &BTreeMap<U256, TxWithReadyInfo>, nonce: U256,
         balance: U256,
-    ) -> Option<Arc<SignedTransaction>>
+    ) -> Option<(Arc<SignedTransaction>, U256)>
     {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
-        while let Some(tx) = nonce_pool.get(&next_nonce) {
+
+        let first_tx = loop {
+            let tx = nonce_pool.get(&next_nonce)?;
             let cost = tx.calc_tx_cost();
             if balance_left < cost {
                 return None;
             }
 
             if !tx.is_already_packed() {
-                return Some(tx.transaction.clone());
+                balance_left -= cost;
+                next_nonce += 1.into();
+
+                break tx.transaction.clone();
             }
             balance_left -= cost;
             next_nonce += 1.into();
+        };
+
+        loop {
+            let tx = if let Some(tx) = nonce_pool.get(&next_nonce) {
+                tx
+            } else {
+                return Some((first_tx, next_nonce - 1));
+            };
+            let cost = tx.calc_tx_cost();
+
+            if balance_left < cost || tx.is_already_packed() {
+                return Some((first_tx, next_nonce - 1));
+            }
+
+            balance_left -= cost;
+            next_nonce += 1.into();
         }
-        None
     }
 
     #[test]
@@ -820,10 +857,12 @@ mod nonce_pool_test {
             );
             assert_eq!(
                 expected,
-                nonce_pool.recalculate_readiness_with_local_info_test(
-                    nonce.into(),
-                    balance.into(),
-                )
+                nonce_pool
+                    .recalculate_readiness_with_local_info(
+                        nonce.into(),
+                        balance.into(),
+                    )
+                    .map(|(tx, nonce)| (tx.transaction.clone(), nonce))
             );
         }
 
@@ -867,10 +906,12 @@ mod nonce_pool_test {
             );
             assert_eq!(
                 expected,
-                nonce_pool.recalculate_readiness_with_local_info_test(
-                    nonce.into(),
-                    balance,
-                )
+                nonce_pool
+                    .recalculate_readiness_with_local_info(
+                        nonce.into(),
+                        balance,
+                    )
+                    .map(|(tx, nonce)| (tx.transaction.clone(), nonce))
             );
         }
     }

@@ -7,7 +7,7 @@ use crate::{
     machine::Machine,
     verification::{PackingCheckResult, VerificationConfig},
 };
-use cfx_packing_pool::{PackingPool as SamplingPool, PackingPoolConfig};
+use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
@@ -63,7 +63,7 @@ lazy_static! {
 #[derive(DeriveMallocSizeOf)]
 struct DeferredPool {
     buckets: HashMap<AddressWithSpace, NoncePool>,
-    packing_pool: SpaceMap<SamplingPool<Arc<SignedTransaction>>>,
+    packing_pool: SpaceMap<PackingPool<Arc<SignedTransaction>>>,
 }
 
 impl DeferredPool {
@@ -71,8 +71,8 @@ impl DeferredPool {
         DeferredPool {
             buckets: Default::default(),
             packing_pool: SpaceMap::new(
-                SamplingPool::new(config),
-                SamplingPool::new(config),
+                PackingPool::new(config),
+                PackingPool::new(config),
             ),
         }
     }
@@ -83,8 +83,8 @@ impl DeferredPool {
         DeferredPool {
             buckets: Default::default(),
             packing_pool: SpaceMap::new(
-                SamplingPool::new(config),
-                SamplingPool::new(config),
+                PackingPool::new(config),
+                PackingPool::new(config),
             ),
         }
     }
@@ -187,7 +187,17 @@ impl DeferredPool {
             .entry(tx.sender())
             .or_insert_with(|| NoncePool::new());
 
-        bucket.insert(&tx, force)
+        let res = bucket.insert(&tx, force);
+        if matches!(res, InsertResult::Updated(_)) {
+            // The transactions in the packing_pool must be consistent with the
+            // nonce pool. However, the replaced transactions have not undergone
+            // a readiness check, so we will temporarily remove them from the
+            // packing_pool.
+            self.packing_pool
+                .in_space_mut(tx.space())
+                .split_off_suffix(tx.sender(), tx.nonce());
+        }
+        res
     }
 
     fn mark_packed(
@@ -225,21 +235,29 @@ impl DeferredPool {
     fn remove_lowest_nonce(
         &mut self, addr: &AddressWithSpace,
     ) -> Option<TxWithReadyInfo> {
-        // TODO: stat gc-ed ready account here
-        //
-        // warn!("a ready tx is garbage-collected");
-        // GC_READY_COUNTER.inc(1);
         let bucket = self.buckets.get_mut(addr)?;
         let ret = bucket.remove_lowest_nonce();
         if bucket.is_empty() {
             self.buckets.remove(addr);
+            self.packing_pool.in_space_mut(addr.space).remove(*addr);
             return ret;
         }
 
         let tx = ret.as_ref()?;
-        self.packing_pool
+        let removed_tx = self
+            .packing_pool
             .in_space_mut(addr.space)
-            .split_off_suffix(tx.sender(), tx.nonce());
+            .split_off_prefix(tx.sender(), &(tx.nonce() - 1));
+        if let Some(removed_tx) = removed_tx.first() {
+            if removed_tx.nonce() < tx.nonce() {
+                warn!("Internal Issue: Packing pool has inconsistent tranaction with nonce pool.");
+            } else if removed_tx.nonce() == tx.nonce() {
+                // TODO: remove the lowest nonce makes the rest nonce
+                info!("a ready tx is garbage-collected");
+                GC_READY_COUNTER.inc(1);
+            }
+        }
+
         ret
     }
 
@@ -260,18 +278,65 @@ impl DeferredPool {
         let buckets = self.buckets.get_mut(addr)?;
         let pack_info =
             buckets.recalculate_readiness_with_local_info(nonce, balance);
-        if let Some((first_tx, rest_balance)) = pack_info {
-            let config = self.packing_pool.in_space(addr.space).config();
-            let batch =
-                buckets.make_packing_batch(first_tx, config, rest_balance);
-            let _ = self.packing_pool.in_space_mut(addr.space).replace(batch);
 
-            Some(first_tx.transaction.clone())
+        let (first_tx, last_valid_nonce) = if let Some(info) = pack_info {
+            info
         } else {
             // If cannot found such transaction, clear item in packing pool
             let _ = self.packing_pool.in_space_mut(addr.space).remove(*addr);
-            None
+            return None;
+        };
+
+        let first_valid_nonce = *first_tx.nonce();
+        let current_txs = if let Some(txs) = self
+            .packing_pool
+            .in_space(addr.space)
+            .get_transactions(addr)
+            .filter(|txs| txs.first().unwrap().nonce() <= &first_valid_nonce)
+        {
+            txs
+        } else {
+            // If one of the following condition happens, we organize a new
+            // batch
+            //  1. the packing batch is absent
+            //  2. the nonce of first valid transaction becomes smaller
+            // (unlikely happens unless execution revert)
+            let config = self.packing_pool.in_space(addr.space).config();
+            let batch =
+                buckets.make_packing_batch(first_tx, config, last_valid_nonce);
+            let _ = self.packing_pool.in_space_mut(addr.space).replace(batch);
+            return Some(first_tx.transaction.clone());
+        };
+
+        let current_first_nonce = *current_txs.first().unwrap().nonce();
+        let current_last_nonce = *current_txs.last().unwrap().nonce();
+        // There must be current_first_nonce <= first_valid_nonce
+        if current_first_nonce < first_valid_nonce {
+            self.packing_pool
+                .in_space_mut(addr.space)
+                .split_off_prefix(*addr, &first_valid_nonce);
         }
+
+        if current_last_nonce > last_valid_nonce {
+            self.packing_pool
+                .in_space_mut(addr.space)
+                .split_off_suffix(*addr, &(last_valid_nonce + 1));
+        } else if current_last_nonce < last_valid_nonce {
+            for tx in buckets.iter_tx_by_nonce(&current_last_nonce) {
+                if tx.nonce() > &last_valid_nonce {
+                    break;
+                }
+                let (_, res) = self
+                    .packing_pool
+                    .in_space_mut(addr.space)
+                    .insert(tx.transaction.clone());
+                if res.is_err() {
+                    break;
+                }
+            }
+        }
+
+        return Some(first_tx.transaction.clone());
     }
 
     fn get_pending_info(
@@ -484,12 +549,12 @@ pub struct TransactionPoolInner {
 impl TransactionPoolInner {
     pub fn new(
         capacity: usize, max_packing_batch_gas_limit: usize,
-        max_packing_batch_count: usize, packing_pool_degree: u8,
+        max_packing_batch_size: usize, packing_pool_degree: u8,
     ) -> Self
     {
         let config = PackingPoolConfig::new(
             max_packing_batch_gas_limit.into(),
-            max_packing_batch_count,
+            max_packing_batch_size,
             packing_pool_degree,
         );
         TransactionPoolInner {

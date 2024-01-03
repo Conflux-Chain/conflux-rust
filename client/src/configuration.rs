@@ -267,7 +267,7 @@ build_config! {
         (tx_pool_min_native_tx_gas_price, (Option<u64>), None)
         (tx_pool_min_eth_tx_gas_price, (Option<u64>), None)
         (max_packing_batch_gas_limit, (u64), 3_000_000)
-        (max_packing_batch_count, (usize), 20)
+        (max_packing_batch_size, (usize), 50)
         (packing_pool_degree, (u8), 4)
 
         // Storage Section.
@@ -1038,7 +1038,7 @@ impl Configuration {
             max_packing_batch_gas_limit: self
                 .raw_conf
                 .max_packing_batch_gas_limit,
-            max_packing_batch_count: self.raw_conf.max_packing_batch_count,
+            max_packing_batch_size: self.raw_conf.max_packing_batch_size,
             packing_pool_degree: self.raw_conf.packing_pool_degree,
         }
     }

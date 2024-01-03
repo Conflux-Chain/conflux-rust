@@ -123,7 +123,7 @@ impl NoncePoolMap {
     }
 
     /// find number of transactions and sum of cost whose nonce <= `nonce`
-    pub fn rank(&self, nonce: &U256) -> (u32, U256) {
+    pub fn weight(&self, nonce: &U256) -> NoncePoolWeight {
         let ret = self.0.search(|left_weight, node| {
             if nonce < &node.key {
                 SearchDirection::Left
@@ -137,11 +137,55 @@ impl NoncePoolMap {
             }
         });
         if let Some(SearchResult::Found { node, base_weight }) = ret {
-            let weight =
-                NoncePoolWeight::consolidate(&base_weight, &node.weight);
-            (weight.subtree_size, weight.subtree_cost)
+            NoncePoolWeight::consolidate(&base_weight, &node.weight)
         } else {
-            (0, 0.into())
+            NoncePoolWeight::empty()
+        }
+    }
+
+    pub fn continous_ready_nonce(
+        &self, start_nonce: &U256, start_weight: NoncePoolWeight,
+        rest_balance: U256,
+    ) -> U256
+    {
+        let ret = self.0.search(|left_weight, node| {
+            let weight =
+                NoncePoolWeight::consolidate(left_weight, &node.weight);
+            if start_nonce > &node.key {
+                return SearchDirection::Right(weight);
+            }
+            if start_nonce == &node.key {
+                return SearchDirection::RightOrStop(weight);
+            }
+
+            let nonce_elapsed = node.value.nonce() - start_nonce;
+            if nonce_elapsed > U256::from(u32::MAX) {
+                return SearchDirection::Left;
+            }
+            let nonce_elapsed = nonce_elapsed.as_u32();
+
+            let item_elapsed = weight.subtree_size - start_weight.subtree_size;
+            let unpacked_elapsed =
+                weight.subtree_unpacked - start_weight.subtree_unpacked;
+            let cost_elapsed = weight.subtree_cost - start_weight.subtree_cost;
+
+            if item_elapsed != unpacked_elapsed
+                || nonce_elapsed != unpacked_elapsed
+            {
+                // There should be packed transaction or missed nonce in middle
+                return SearchDirection::Left;
+            }
+
+            if cost_elapsed > rest_balance {
+                return SearchDirection::Left;
+            }
+
+            SearchDirection::RightOrStop(weight)
+        });
+        if let Some(SearchResult::Found { node, .. }) = ret {
+            *node.value.nonce()
+        } else {
+            *start_nonce
         }
     }
 

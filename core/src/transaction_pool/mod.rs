@@ -91,7 +91,7 @@ pub struct TxPoolConfig {
     pub packing_gas_limit_block_count: u64,
     pub target_block_gas_limit: u64,
     pub max_packing_batch_gas_limit: u64,
-    pub max_packing_batch_count: usize,
+    pub max_packing_batch_size: usize,
     pub packing_pool_degree: u8,
 }
 
@@ -109,7 +109,7 @@ impl Default for TxPoolConfig {
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
             packing_gas_limit_block_count: 10,
-            max_packing_batch_count: 20,
+            max_packing_batch_size: 20,
             max_packing_batch_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT / 10,
             packing_pool_degree: 4,
             target_block_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT,
@@ -167,7 +167,7 @@ impl TransactionPool {
         let inner = TransactionPoolInner::new(
             config.capacity,
             config.max_packing_batch_gas_limit as usize,
-            config.max_packing_batch_count,
+            config.max_packing_batch_size,
             config.packing_pool_degree,
         );
         let best_executed_state = Mutex::new(
