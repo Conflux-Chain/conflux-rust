@@ -9,7 +9,7 @@ function install() {
 }
 
 install eth-utils
-install rlp
+install rlp==1.2.0
 install py-ecc==5.2.0
 install coincurve==15.0.1
 install pysha3

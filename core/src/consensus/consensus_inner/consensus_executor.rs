@@ -620,10 +620,15 @@ impl ConsensusExecutor {
     pub fn compute_epoch(
         &self, task: EpochExecutionTask,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
+        recover_mpt_during_construct_pivot_state: bool,
     )
     {
         if !self.consensus_graph_bench_mode {
-            self.handler.handle_epoch_execution(task, debug_record)
+            self.handler.handle_epoch_execution(
+                task,
+                debug_record,
+                recover_mpt_during_construct_pivot_state,
+            )
         }
     }
 
@@ -868,7 +873,7 @@ impl ConsensusExecutionHandler {
         debug!("Receive execution task: {:?}", task);
         match task {
             ExecutionTask::ExecuteEpoch(task) => {
-                self.handle_epoch_execution(task, None)
+                self.handle_epoch_execution(task, None, false)
             }
             ExecutionTask::GetResult(task) => self.handle_get_result_task(task),
             ExecutionTask::Stop => return false,
@@ -879,6 +884,7 @@ impl ConsensusExecutionHandler {
     fn handle_epoch_execution(
         &self, task: EpochExecutionTask,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
+        recover_mpt_during_construct_pivot_state: bool,
     )
     {
         let _timer = MeterTimer::time_func(CONSENSIS_EXECUTION_TIMER.as_ref());
@@ -890,6 +896,7 @@ impl ConsensusExecutionHandler {
             task.on_local_pivot,
             debug_record,
             task.force_recompute,
+            recover_mpt_during_construct_pivot_state,
         );
     }
 
@@ -955,6 +962,7 @@ impl ConsensusExecutionHandler {
         on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         force_recompute: bool,
+        recover_mpt_during_construct_pivot_state: bool,
     )
     {
         // FIXME: Question: where to calculate if we should make a snapshot?
@@ -1047,19 +1055,22 @@ impl ConsensusExecutionHandler {
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                    pivot_block.block_header.parent_hash(),
-                    &self
-                        .data_man
-                        .get_epoch_execution_commitment(
-                            pivot_block.block_header.parent_hash(),
-                        )
-                        // Unwrapping is safe because the state exists.
-                        .unwrap()
-                        .state_root_with_aux_info,
-                    pivot_block.block_header.height() - 1,
-                    self.data_man.get_snapshot_epoch_count(),
-                ))
+                .get_state_for_next_epoch(
+                    StateIndex::new_for_next_epoch(
+                        pivot_block.block_header.parent_hash(),
+                        &self
+                            .data_man
+                            .get_epoch_execution_commitment(
+                                pivot_block.block_header.parent_hash(),
+                            )
+                            // Unwrapping is safe because the state exists.
+                            .unwrap()
+                            .state_root_with_aux_info,
+                        pivot_block.block_header.height() - 1,
+                        self.data_man.get_snapshot_epoch_count(),
+                    ),
+                    recover_mpt_during_construct_pivot_state,
+                )
                 .expect("No db error")
                 // Unwrapping is safe because the state exists.
                 .expect("State exists"),
@@ -1894,19 +1905,22 @@ impl ConsensusExecutionHandler {
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
-                    pivot_block.block_header.parent_hash(),
-                    &self
-                        .data_man
-                        .get_epoch_execution_commitment(
-                            pivot_block.block_header.parent_hash(),
-                        )
-                        // Unwrapping is safe because the state exists.
-                        .unwrap()
-                        .state_root_with_aux_info,
-                    pivot_block.block_header.height() - 1,
-                    self.data_man.get_snapshot_epoch_count(),
-                ))
+                .get_state_for_next_epoch(
+                    StateIndex::new_for_next_epoch(
+                        pivot_block.block_header.parent_hash(),
+                        &self
+                            .data_man
+                            .get_epoch_execution_commitment(
+                                pivot_block.block_header.parent_hash(),
+                            )
+                            // Unwrapping is safe because the state exists.
+                            .unwrap()
+                            .state_root_with_aux_info,
+                        pivot_block.block_header.height() - 1,
+                        self.data_man.get_snapshot_epoch_count(),
+                    ),
+                    false,
+                )
                 .unwrap()
                 // Unwrapping is safe because the state exists.
                 .unwrap(),

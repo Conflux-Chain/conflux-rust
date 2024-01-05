@@ -1981,19 +1981,28 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        self.recover_latest_mpt_snapshot_if_needed(
-            inner,
-            &mut start_compute_epoch_pivot_index,
-            start_pivot_index,
-            end_index,
-        );
+        let snapshot_epoch_count = inner
+            .data_man
+            .storage_manager
+            .get_storage_manager()
+            .get_snapshot_epoch_count();
+        let mut need_set_intermediate_trie_root_merkle = false;
+        let (recover_snapshot, max_snapshot_epoch_index_has_mpt) = self
+            .recover_latest_mpt_snapshot_if_needed(
+                inner,
+                &mut start_compute_epoch_pivot_index,
+                start_pivot_index,
+                end_index,
+                &mut need_set_intermediate_trie_root_merkle,
+                snapshot_epoch_count as u64,
+            );
         self.set_intermediate_trie_root_merkle(
             inner,
             start_compute_epoch_pivot_index,
+            need_set_intermediate_trie_root_merkle,
+            snapshot_epoch_count as u64,
         );
 
-        // let mut previous_pivot_hash = start_hash;
-        // let mut previous_compute = false;
         let confirmed_epoch_num = meter.get_confirmed_epoch_num();
         for pivot_index in start_pivot_index + 1..end_index {
             let pivot_arena_index = inner.pivot_chain[pivot_index];
@@ -2028,6 +2037,23 @@ impl ConsensusNewBlockHandler {
                     .executor
                     .get_reward_execution_info(inner, pivot_arena_index);
 
+                let recover_mpt_during_construct_pivot_state =
+                    if recover_snapshot
+                        && (max_snapshot_epoch_index_has_mpt.is_none()
+                            || pivot_index
+                                > *max_snapshot_epoch_index_has_mpt
+                                    .as_ref()
+                                    .unwrap()
+                                    + snapshot_epoch_count as usize)
+                    {
+                        true
+                    } else {
+                        false
+                    };
+                info!(
+                    "compute epoch recovery flag {}",
+                    recover_mpt_during_construct_pivot_state
+                );
                 self.executor.compute_epoch(
                     EpochExecutionTask::new(
                         pivot_arena_index,
@@ -2037,6 +2063,7 @@ impl ConsensusNewBlockHandler {
                         true, /* force_recompute */
                     ),
                     None,
+                    recover_mpt_during_construct_pivot_state,
                 );
 
                 // Remove old-pivot state during start up to save disk,
@@ -2070,6 +2097,14 @@ impl ConsensusNewBlockHandler {
                 }
             }
         }
+
+        inner
+            .data_man
+            .storage_manager
+            .get_storage_manager()
+            .get_snapshot_manager()
+            .get_snapshot_db_manager()
+            .clean_snapshot_epoch_id_before_recovered();
     }
 
     fn get_force_compute_index(
@@ -2161,17 +2196,24 @@ impl ConsensusNewBlockHandler {
     fn recover_latest_mpt_snapshot_if_needed(
         &self, inner: &mut ConsensusGraphInner,
         start_compute_epoch_pivot_index: &mut usize, start_pivot_index: usize,
-        end_index: usize,
-    )
+        end_index: usize, need_set_intermediate_trie_root_merkle: &mut bool,
+        snapshot_epoch_count: u64,
+    ) -> (bool, Option<usize>)
     {
+        if !self.conf.inner_conf.use_isolated_db_for_mpt_table {
+            return (false, None);
+        }
+
         let (
             temp_snapshot_db_existing,
             removed_snapshots,
             latest_snapshot_epoch_height,
+            max_snapshot_epoch_height_has_mpt,
         ) = if let Some((
             temp_snapshot_db_existing,
             removed_snapshots,
             latest_snapshot_epoch_height,
+            max_snapshot_epoch_height_has_mpt,
         )) = inner
             .data_man
             .storage_manager
@@ -2184,122 +2226,187 @@ impl ConsensusNewBlockHandler {
                 temp_snapshot_db_existing,
                 removed_snapshots,
                 max(latest_snapshot_epoch_height, inner.cur_era_stable_height),
+                max_snapshot_epoch_height_has_mpt,
             )
         } else {
-            (false, HashSet::new(), inner.cur_era_stable_height)
+            (false, HashSet::new(), inner.cur_era_stable_height, None)
         };
 
-        // The upcoming snapshot is not ready, we need to trigger the
-        // snapshotting process by computing epoch
-        let snapshot_epoch_count = inner
-            .data_man
-            .storage_manager
-            .get_storage_manager()
-            .get_snapshot_epoch_count()
-            as u64;
+        debug!("latest snapshot epoch height: {}, temp snapshot status: {}, max snapshot epoch height has mpt: {:?}, removed snapshots {:?}",
+            latest_snapshot_epoch_height, temp_snapshot_db_existing, max_snapshot_epoch_height_has_mpt, removed_snapshots);
         // maximum epoch need to compute
         let maximum_height_to_create_next_snapshot =
             latest_snapshot_epoch_height + snapshot_epoch_count * 2;
         let index =
             inner.height_to_pivot_index(maximum_height_to_create_next_snapshot);
+        debug!("start_compute_epoch_pivot_index {}, maximum index for next snapshot {}",
+            start_compute_epoch_pivot_index, index);
 
-        *start_compute_epoch_pivot_index =
-            min(*start_compute_epoch_pivot_index, index);
-        debug!("latest snapshot epoch height {}, maximun index for next snapshot {}", latest_snapshot_epoch_height, index);
+        if *start_compute_epoch_pivot_index > index {
+            warn!("start_compute_epoch_pivot_index is greater than (latest_snapshot_epoch_height + snapshot_epoch_count * 2)");
+            *start_compute_epoch_pivot_index = index;
+        }
 
-        if self.conf.inner_conf.use_isolated_db_for_mpt_table {
-            // Find the closest ear prior to the start_compute_epoch_height
-            let start_compute_epoch_height = inner.arena
-                [inner.pivot_chain[*start_compute_epoch_pivot_index]]
-                .height;
-
-            let recovery_latest_mpt_snapshot =
-                if self.conf.inner_conf.recovery_latest_mpt_snapshot
-                    || temp_snapshot_db_existing
-                {
-                    true
-                } else {
-                    let mut max_epoch_height = 0;
-                    for pivot_index in (start_pivot_index..end_index)
-                        .step_by(snapshot_epoch_count as usize)
-                    {
-                        let pivot_arena_index = inner.pivot_chain[pivot_index];
-                        let pivot_hash = inner.arena[pivot_arena_index].hash;
-
-                        debug!(
-                            "snapshot pivot_index {} height {} ",
-                            pivot_index, inner.arena[pivot_arena_index].height
-                        );
-
-                        if removed_snapshots.contains(&pivot_hash) {
-                            max_epoch_height = max(
-                                max_epoch_height,
-                                inner.arena[pivot_arena_index].height,
-                            );
-                        }
-                    }
-
-                    latest_snapshot_epoch_height < max_epoch_height
-                };
-
-            // if the latest_snapshot_epoch_height is greater than
-            // start_compute_epoch_height, the latest MPT snapshot is dirty
-            if recovery_latest_mpt_snapshot
-                || latest_snapshot_epoch_height >= start_compute_epoch_height
-            {
-                let era_pivot_epoch_height = start_compute_epoch_height
-                    / self.conf.inner_conf.era_epoch_count
-                    * self.conf.inner_conf.era_epoch_count;
-                let era_pivot_hash = if era_pivot_epoch_height == 0 {
-                    NULL_EPOCH
-                } else {
-                    inner
-                        .get_pivot_hash_from_epoch_number(
-                            era_pivot_epoch_height,
-                        )
-                        .expect("pivot hash should be exist")
-                };
-
-                debug!("start_compute_epoch_index {}, start_compute_epoch_height {}, era_pivot_epoch_height {}",start_compute_epoch_pivot_index, start_compute_epoch_height, era_pivot_epoch_height);
-
-                if era_pivot_epoch_height >= inner.cur_era_genesis_height {
-                    let pivot_idx =
-                        inner.height_to_pivot_index(era_pivot_epoch_height) + 1;
-                    debug!(
-                        "Begin computing epoch from ear checkpoint, index {}",
-                        pivot_idx
-                    );
-                    *start_compute_epoch_pivot_index =
-                        min(*start_compute_epoch_pivot_index, pivot_idx);
-                } else {
-                    panic!("unreachable, era_pivot_epoch_height is less than cur_era_genesis_height");
-                }
-
-                let snapshot_db_manager = inner
-                    .data_man
-                    .storage_manager
-                    .get_storage_manager()
-                    .get_snapshot_manager()
-                    .get_snapshot_db_manager();
-
-                snapshot_db_manager.update_latest_snapshot_id(
-                    era_pivot_hash.clone(),
-                    era_pivot_epoch_height,
+        let max_snapshot_epoch_index_has_mpt =
+            if max_snapshot_epoch_height_has_mpt.is_some() {
+                let full_snapshot_index = inner.height_to_pivot_index(
+                    max_snapshot_epoch_height_has_mpt.unwrap(),
                 );
 
-                // use ear snapshot replace latest
-                snapshot_db_manager
-                    .recovery_lastest_mpt_snapshot(&era_pivot_hash)
-                    .unwrap();
+                if *start_compute_epoch_pivot_index
+                    <= full_snapshot_index + snapshot_epoch_count as usize * 2
+                {
+                    if temp_snapshot_db_existing {
+                        inner
+                            .data_man
+                            .storage_manager
+                            .get_storage_manager()
+                            .get_snapshot_manager()
+                            .get_snapshot_db_manager()
+                            .recreate_latest_mpt_snapshot()
+                            .unwrap();
+                    }
+
+                    info!("snapshot for epoch height {} is still not use mpt database", start_compute_epoch_pivot_index);
+                    return (false, Some(full_snapshot_index));
+                }
+                Some(full_snapshot_index)
             } else {
-                debug!("the latest MPT snapshot is valid");
+                None
+            };
+
+        // Find the closest ear prior to the start_compute_epoch_height
+        let start_compute_epoch_height = inner.arena
+            [inner.pivot_chain[*start_compute_epoch_pivot_index]]
+            .height;
+
+        let recovery_latest_mpt_snapshot = if self
+            .conf
+            .inner_conf
+            .recovery_latest_mpt_snapshot
+            || start_compute_epoch_height <= latest_snapshot_epoch_height
+            || (temp_snapshot_db_existing
+                && latest_snapshot_epoch_height < start_compute_epoch_height
+                && start_compute_epoch_height
+                    <= latest_snapshot_epoch_height + 2 * snapshot_epoch_count)
+        {
+            true
+        } else {
+            let mut max_epoch_height = 0;
+            for pivot_index in (start_pivot_index..end_index)
+                .step_by(snapshot_epoch_count as usize)
+            {
+                let pivot_arena_index = inner.pivot_chain[pivot_index];
+                let pivot_hash = inner.arena[pivot_arena_index].hash;
+
+                debug!(
+                    "snapshot pivot_index {} height {} ",
+                    pivot_index, inner.arena[pivot_arena_index].height
+                );
+
+                if removed_snapshots.contains(&pivot_hash) {
+                    max_epoch_height = max(
+                        max_epoch_height,
+                        inner.arena[pivot_arena_index].height,
+                    );
+                }
             }
+
+            // snapshots after latest_snapshot_epoch_height is removed
+            latest_snapshot_epoch_height < max_epoch_height
+        };
+
+        // if the latest_snapshot_epoch_height is greater than
+        // start_compute_epoch_height, the latest MPT snapshot is dirty
+        if recovery_latest_mpt_snapshot {
+            let era_pivot_epoch_height = (start_compute_epoch_height - 1)
+                / self.conf.inner_conf.era_epoch_count
+                * self.conf.inner_conf.era_epoch_count;
+
+            debug!(
+                "need recovery latest mpt snapshot, start compute epoch height {}, era pivot epoch height {}",
+                start_compute_epoch_height, era_pivot_epoch_height
+            );
+
+            if era_pivot_epoch_height < inner.cur_era_genesis_height {
+                panic!("unreachable, era_pivot_epoch_height is less than cur_era_genesis_height");
+            }
+
+            if start_compute_epoch_height <= era_pivot_epoch_height {
+                unreachable!("start_compute_epoch_height {} is smaller than era_pivot_epoch_height {}", start_compute_epoch_height, era_pivot_epoch_height);
+            } else if start_compute_epoch_height
+                <= era_pivot_epoch_height + snapshot_epoch_count
+            {
+                if start_compute_epoch_height % snapshot_epoch_count == 1 {
+                    *need_set_intermediate_trie_root_merkle = true;
+                }
+            } else if start_compute_epoch_height
+                <= era_pivot_epoch_height + snapshot_epoch_count * 2
+            {
+                // nothing need to do
+            } else {
+                let new_height =
+                    era_pivot_epoch_height + snapshot_epoch_count * 2;
+                let new_index = inner.height_to_pivot_index(new_height);
+
+                info!("reset start_compute_epoch_pivot_index to {}", new_index);
+                *start_compute_epoch_pivot_index = new_index;
+            }
+
+            let era_pivot_hash = if era_pivot_epoch_height == 0 {
+                NULL_EPOCH
+            } else {
+                inner
+                    .get_pivot_hash_from_epoch_number(era_pivot_epoch_height)
+                    .expect("pivot hash should be exist")
+            };
+
+            let pivot_hash_before_era = if era_pivot_epoch_height == 0
+                || era_pivot_epoch_height == snapshot_epoch_count
+            {
+                NULL_EPOCH
+            } else {
+                inner
+                    .get_pivot_hash_from_epoch_number(
+                        era_pivot_epoch_height - snapshot_epoch_count,
+                    )
+                    .expect("pivot hash should be exist")
+            };
+
+            let snapshot_db_manager = inner
+                .data_man
+                .storage_manager
+                .get_storage_manager()
+                .get_snapshot_manager()
+                .get_snapshot_db_manager();
+
+            snapshot_db_manager.update_latest_snapshot_id(
+                era_pivot_hash.clone(),
+                era_pivot_epoch_height,
+            );
+
+            // use ear snapshot replace latest
+            snapshot_db_manager
+                .recovery_latest_mpt_snapshot_from_checkpoint(
+                    &era_pivot_hash,
+                    Some(pivot_hash_before_era),
+                )
+                .unwrap();
+        } else {
+            debug!("the latest MPT snapshot is valid");
         }
+
+        (
+            recovery_latest_mpt_snapshot,
+            max_snapshot_epoch_index_has_mpt,
+        )
     }
 
     fn set_intermediate_trie_root_merkle(
         &self, inner: &mut ConsensusGraphInner,
         start_compute_epoch_pivot_index: usize,
+        need_set_intermediate_trie_root_merkle: bool,
+        snapshot_epoch_count: u64,
     )
     {
         let storage_manager =
@@ -2307,6 +2414,7 @@ impl ConsensusNewBlockHandler {
         if !storage_manager
             .storage_conf
             .keep_snapshot_before_stable_checkpoint
+            || need_set_intermediate_trie_root_merkle
         {
             let pivot_arena_index =
                 inner.pivot_chain[start_compute_epoch_pivot_index - 1];
@@ -2318,10 +2426,7 @@ impl ConsensusNewBlockHandler {
                 .get_epoch_execution_commitment(&pivot_hash)
             {
                 Some(commitment) => {
-                    if height
-                        % storage_manager.get_snapshot_epoch_count() as u64
-                        == 1
-                    {
+                    if height % snapshot_epoch_count == 1 {
                         commitment
                             .state_root_with_aux_info
                             .state_root
