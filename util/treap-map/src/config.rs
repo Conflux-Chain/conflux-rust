@@ -2,12 +2,10 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use primitives::Zero;
 use std::{cmp::Ordering, ops::Add};
 
-use crate::Direction;
-
 /// The weight type in a Treap. It is used to perform operations like
 /// calculating sums or maximum values of an interval in logrithmic time over
 /// treap.
-pub trait WeightConsolidate: Clone + Eq {
+pub trait ConsoliableWeight: Clone + Eq {
     /// Create a default or 'zero' value for the weight. Consolidating with this
     /// value should not change the other value.
     fn empty() -> Self;
@@ -22,12 +20,32 @@ pub trait WeightConsolidate: Clone + Eq {
     }
 }
 
-impl<T: Add<Output = T> + Clone + Zero + Eq> WeightConsolidate for T {
+impl<T: Add<Output = T> + Clone + Zero + Eq> ConsoliableWeight for T {
     fn empty() -> Self { T::zero() }
 
     fn consolidate(a: &Self, b: &Self) -> Self { a.clone() + b.clone() }
 
     fn accure(&mut self, other: &Self) { *self = self.clone() + other.clone() }
+}
+
+#[derive(Clone, PartialEq, Eq, Copy, Debug)]
+/// Represents a dummy version of `ConsolidatableWeight`.
+///
+/// `NoWeight` is a unit struct that doesn't store any data. It is used as a
+/// placeholder or a default implementation in scenarios where a weight
+/// component is required by the interface but not actually needed for the
+/// specific use case.
+pub struct NoWeight;
+
+impl ConsoliableWeight for NoWeight {
+    #[inline]
+    fn empty() -> Self { NoWeight }
+
+    #[inline]
+    fn consolidate(_: &Self, _: &Self) -> Self { NoWeight }
+
+    #[inline]
+    fn accure(&mut self, _other: &Self) {}
 }
 
 /// `TreapMap` is a struct which implements a treap which can be indexed by a
@@ -55,13 +73,33 @@ pub trait TreapMapConfig: Sized {
     /// needed, it could be a unit type.
     type ExtMap: KeyMngTrait<Self>;
     /// The consolidable weight.
-    type Weight: WeightConsolidate;
+    type Weight: ConsoliableWeight;
 
     /// Compare the key.
     fn next_node_dir(
         me: (&Self::SortKey, &Self::SearchKey),
         other: (&Self::SortKey, &Self::SearchKey),
     ) -> Option<Direction>;
+}
+
+/// Represents the possible directions in a binary tree search based on key
+/// comparisons.
+///
+/// This enum is defined as part of the [`TreapMapConfig`] trait and is used to
+/// determine the direction of traversal in a binary tree during key-based
+/// searches.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+
+pub enum Direction {
+    /// Indicates that the search should proceed to the left child of the
+    /// current node. This direction is typically chosen when the current
+    /// key is greater than the search key.
+    Left,
+
+    /// Indicates that the search should proceed to the right child of the
+    /// current node. This direction is usually selected when the current
+    /// key is less than the search key.
+    Right,
 }
 
 /// Searching in `Treap` requires sort key. This trait manages the relationship
@@ -92,7 +130,7 @@ pub trait SharedKeyTreapMapConfig {
     /// The stored value.
     type Value: Clone;
     /// The consolidable weight.
-    type Weight: WeightConsolidate;
+    type Weight: ConsoliableWeight;
 }
 
 impl<T: SharedKeyTreapMapConfig> TreapMapConfig for T {

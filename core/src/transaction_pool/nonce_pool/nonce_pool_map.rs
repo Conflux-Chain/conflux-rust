@@ -1,11 +1,10 @@
-use std::{convert::Infallible, sync::Arc};
+use std::convert::Infallible;
 
 use cfx_types::U256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use primitives::SignedTransaction;
 use treap_map::{
-    ApplyOpOutcome, Node, SearchDirection, SearchResult,
-    SharedKeyTreapMapConfig, TreapMap, WeightConsolidate,
+    ApplyOpOutcome, ConsoliableWeight, Node, SearchDirection, SearchResult,
+    SharedKeyTreapMapConfig, TreapMap,
 };
 
 use super::{weight::NoncePoolWeight, InsertResult, TxWithReadyInfo};
@@ -37,7 +36,16 @@ impl NoncePoolMap {
         self.0.remove(nonce)
     }
 
-    /// insert a new TxWithReadyInfo. if the corresponding nonce already exists,
+    /// Iter transactions with nonce >= the start nonce. The start nonce may not
+    /// exist and the transaction nonces may not continous.
+    #[inline]
+    pub fn iter_range(
+        &self, nonce: &U256,
+    ) -> impl Iterator<Item = &TxWithReadyInfo> {
+        self.0.iter_range(nonce).map(|x| &x.value)
+    }
+
+    /// Insert a new TxWithReadyInfo. if the corresponding nonce already exists,
     /// will replace with higher gas price transaction
     pub fn insert(
         &mut self, tx: &TxWithReadyInfo, force: bool,
@@ -52,7 +60,8 @@ impl NoncePoolMap {
                 Ok(ApplyOpOutcome {
                     out: InsertResult::Updated(old_value),
                     update_weight: true,
-                    update_key:false
+                    update_key:false,
+                    delete_item: false,
                 })
             } else {
                 let err_msg = format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &node.value.transaction.gas_price());
@@ -60,6 +69,7 @@ impl NoncePoolMap {
                     out: InsertResult::Failed(err_msg),
                     update_weight: false,
                     update_key: false,
+                    delete_item: false,
                 })
             }
         }, |rng| {
@@ -71,29 +81,26 @@ impl NoncePoolMap {
 
     /// mark packed of given nonce, return false if nothing changes
     pub fn mark_packed(&mut self, nonce: &U256, packed: bool) -> bool {
-        self.0
-            .update(
-                nonce,
-                |node| {
-                    if node.value.packed == packed {
-                        return Err(());
-                    }
-                    node.value.packed = packed;
-                    node.weight = NoncePoolWeight::from_tx_info(&node.value);
-                    Ok(ApplyOpOutcome {
-                        out: (),
-                        update_weight: true,
-                        update_key: false,
-                    })
-                },
-                |_| Err(()),
-            )
-            .is_ok()
+        let update = |node: &mut Node<NoncePoolConfig>| {
+            let no_change = packed == node.value.packed;
+            if no_change {
+                return Err(());
+            }
+            node.value.packed = packed;
+            node.weight = NoncePoolWeight::from_tx_info(&node.value);
+            Ok(ApplyOpOutcome {
+                out: (),
+                update_weight: true,
+                update_key: false,
+                delete_item: false,
+            })
+        };
+        self.0.update(nonce, update, |_| Err(())).is_ok()
     }
 
     /// find an unpacked transaction `tx` where `tx.nonce() >= nonce`
     /// and `tx.nonce()` is minimum
-    pub fn query(&self, nonce: &U256) -> Option<Arc<SignedTransaction>> {
+    pub fn query(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
         let ret = self.0.search(|left_weight, node| {
             if left_weight.max_unpackd_nonce.map_or(false, |x| x >= *nonce) {
                 SearchDirection::Left
@@ -111,14 +118,14 @@ impl NoncePoolMap {
             }
         });
         if let Some(SearchResult::Found { node, .. }) = ret {
-            Some(node.value.transaction.clone())
+            Some(&node.value)
         } else {
             None
         }
     }
 
-    /// find number of transactions and sum of cost whose nonce <= `nonce`
-    pub fn rank(&self, nonce: &U256) -> (u32, U256) {
+    /// Find the accumulated weight for the transactions whose nonce <= `nonce`
+    pub fn weight(&self, nonce: &U256) -> NoncePoolWeight {
         let ret = self.0.search(|left_weight, node| {
             if nonce < &node.key {
                 SearchDirection::Left
@@ -132,23 +139,69 @@ impl NoncePoolMap {
             }
         });
         if let Some(SearchResult::Found { node, base_weight }) = ret {
-            let weight =
-                NoncePoolWeight::consolidate(&base_weight, &node.weight);
-            (weight.subtree_size, weight.subtree_cost)
+            NoncePoolWeight::consolidate(&base_weight, &node.weight)
         } else {
-            (0, 0.into())
+            NoncePoolWeight::empty()
         }
     }
 
-    // return the next item with nonce >= given nonce
+    /// Find last valid nonce passing the readiness check. The `start_weight`
+    /// must equal to `self.weight(start_nonce)`, otherwise it may cause
+    /// unexpected behaviour.
+    #[inline]
+    pub fn continous_ready_nonce(
+        &self, start_nonce: &U256, start_weight: NoncePoolWeight,
+        rest_balance: U256,
+    ) -> U256
+    {
+        let ret = self.0.search(|left_weight, node| {
+            let weight =
+                NoncePoolWeight::consolidate(left_weight, &node.weight);
+            if start_nonce > &node.key {
+                return SearchDirection::Right(weight);
+            }
+            if start_nonce == &node.key {
+                return SearchDirection::RightOrStop(weight);
+            }
+
+            let nonce_elapsed = node.value.nonce() - start_nonce;
+            if nonce_elapsed > U256::from(u32::MAX) {
+                return SearchDirection::Left;
+            }
+            let nonce_elapsed = nonce_elapsed.as_u32();
+
+            let item_elapsed = weight.size - start_weight.size;
+            let unpacked_elapsed =
+                weight.unpacked_size - start_weight.unpacked_size;
+            let cost_elapsed = weight.cost - start_weight.cost;
+
+            if item_elapsed != unpacked_elapsed
+                || nonce_elapsed != unpacked_elapsed
+            {
+                // There should be packed transaction or missed nonce in middle
+                return SearchDirection::Left;
+            }
+
+            if cost_elapsed > rest_balance {
+                return SearchDirection::Left;
+            }
+
+            SearchDirection::RightOrStop(weight)
+        });
+        if let Some(SearchResult::Found { node, .. }) = ret {
+            *node.value.nonce()
+        } else {
+            *start_nonce
+        }
+    }
+
+    /// return the next item with nonce >= given nonce
     pub fn succ(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
-        let ret = self.0.search(|_, node| {
+        let ret = self.0.search_no_weight(|node| {
             if nonce <= &node.key {
                 SearchDirection::LeftOrStop
             } else {
-                // This search don't read weight, so we can return arbitrary
-                // here.
-                SearchDirection::Right(NoncePoolWeight::empty())
+                SearchDirection::Right(())
             }
         });
         if let Some(SearchResult::Found { node, .. }) = ret {
@@ -160,7 +213,7 @@ impl NoncePoolMap {
 
     /// return the leftmost node
     pub fn leftmost(&self) -> Option<&TxWithReadyInfo> {
-        let ret = self.0.search(|_, _| SearchDirection::LeftOrStop);
+        let ret = self.0.search_no_weight(|_| SearchDirection::LeftOrStop);
         if let Some(SearchResult::Found { node, .. }) = ret {
             Some(&node.value)
         } else {

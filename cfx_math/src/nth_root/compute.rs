@@ -48,7 +48,6 @@ pub trait NthRoot:
             let adjust_bits = (n + (next_bits % n) - bits % n) % n;
             next_bits - adjust_bits
         };
-        // dbg!(bits, next_bits, multiply, significant_bits);
 
         // The `rest_bits` must be multiply of N.
         let rest_bits = bits - significant_bits;

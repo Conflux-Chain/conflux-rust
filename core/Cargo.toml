@@ -130,6 +130,7 @@ diem-temppath = { path = "./src/pos/common/temppath" }
 crash-handler = { path = "../core/src/pos/common/crash-handler" }
 heap-map = {path = "../util/heap-map" }
 treap-map = {path = "../util/treap-map" }
+cfx-packing-pool = { path = "./packing-pool"}
 
 
 [dev-dependencies]
