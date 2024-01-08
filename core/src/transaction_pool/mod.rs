@@ -87,10 +87,11 @@ pub struct TxPoolConfig {
     pub min_native_tx_price: u64,
     pub min_eth_tx_price: u64,
     pub max_tx_gas: RwLock<U256>,
-    pub tx_weight_scaling: u64,
-    pub tx_weight_exp: u8,
     pub packing_gas_limit_block_count: u64,
     pub target_block_gas_limit: u64,
+    pub max_packing_batch_gas_limit: u64,
+    pub max_packing_batch_size: usize,
+    pub packing_pool_degree: u8,
 }
 
 impl MallocSizeOf for TxPoolConfig {
@@ -106,11 +107,10 @@ impl Default for TxPoolConfig {
             max_tx_gas: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
-            // TODO: Set a proper default scaling since tx pool uses u128 as
-            // weight.
-            tx_weight_scaling: 1,
-            tx_weight_exp: 1,
             packing_gas_limit_block_count: 10,
+            max_packing_batch_size: 20,
+            max_packing_batch_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT / 10,
+            packing_pool_degree: 4,
             target_block_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT,
         }
     }
@@ -165,11 +165,9 @@ impl TransactionPool {
         let genesis_hash = data_man.true_genesis.hash();
         let inner = TransactionPoolInner::new(
             config.capacity,
-            config.tx_weight_scaling,
-            config.tx_weight_exp,
-            (config.packing_gas_limit_block_count
-                * config.target_block_gas_limit)
-                .into(),
+            config.max_packing_batch_gas_limit as usize,
+            config.max_packing_batch_size,
+            config.packing_pool_degree,
         );
         let best_executed_state = Mutex::new(
             Self::best_executed_state(
@@ -290,12 +288,12 @@ impl TransactionPool {
                     if let Ok((_, balance)) =
                         account_cache.get_nonce_and_balance(&first_tx.sender())
                     {
-                        let tx_info = TxWithReadyInfo {
-                            transaction: first_tx.clone(),
-                            packed: false,
+                        let tx_info = TxWithReadyInfo::new(
+                            first_tx.clone(),
+                            false,
                             sponsored_gas,
                             sponsored_storage,
-                        };
+                        );
                         if tx_info.calc_tx_cost() <= balance {
                             // The tx should have been ready now.
                             if matches!(

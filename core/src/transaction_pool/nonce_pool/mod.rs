@@ -1,7 +1,12 @@
+#![allow(dead_code)]
+
 mod nonce_pool_map;
 mod weight;
 
-use crate::transaction_pool::transaction_pool_inner::PendingReason;
+use crate::transaction_pool::{
+    nonce_pool::weight::NoncePoolWeight, transaction_pool_inner::PendingReason,
+};
+use cfx_packing_pool::{PackingBatch, PackingPoolConfig};
 use cfx_parameters::{
     consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
@@ -14,18 +19,50 @@ use std::{ops::Deref, sync::Arc};
 
 use self::nonce_pool_map::NoncePoolMap;
 
-#[derive(Clone, Debug, PartialEq, DeriveMallocSizeOf)]
+#[derive(Clone, Debug, DeriveMallocSizeOf)]
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
     pub packed: bool,
     pub sponsored_gas: U256,
     pub sponsored_storage: u64,
+    tx_cost: U256,
+}
+
+impl TxWithReadyInfo {
+    pub fn new(
+        transaction: Arc<SignedTransaction>, packed: bool, sponsored_gas: U256,
+        sponsored_storage: u64,
+    ) -> Self
+    {
+        let tx_cost =
+            Self::make_tx_cost(&*transaction, sponsored_gas, sponsored_storage);
+        Self {
+            transaction,
+            packed,
+            sponsored_gas,
+            sponsored_storage,
+            tx_cost,
+        }
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for TxWithReadyInfo {
+    fn eq(&self, other: &Self) -> bool {
+        // We don't compare `in_sample_pool` in test
+        self.transaction == other.transaction
+            && self.packed == other.packed
+            && self.sponsored_gas == other.sponsored_gas
+            && self.sponsored_storage == other.sponsored_storage
+    }
 }
 
 impl TxWithReadyInfo {
     pub fn is_already_packed(&self) -> bool { self.packed }
 
     pub fn get_arc_tx(&self) -> &Arc<SignedTransaction> { &self.transaction }
+
+    pub fn calc_tx_cost(&self) -> U256 { self.tx_cost }
 
     pub fn should_replace(&self, x: &Self, force: bool) -> bool {
         if force {
@@ -64,36 +101,49 @@ impl TxWithReadyInfo {
             } else {
                 false
             };
-        self.gas_price() > x.gas_price()
-            || self.gas_price() == x.gas_price() && higher_epoch_height
+        self.gas_price() >= &Self::compute_next_price(*x.gas_price())
+            || self.gas_price() >= x.gas_price() && higher_epoch_height
     }
 
-    pub fn calc_tx_cost(&self) -> U256 {
-        let estimate_gas_u512 =
-            (self.gas() - self.sponsored_gas).full_mul(*self.gas_price());
+    #[inline]
+    pub fn compute_next_price(price: U256) -> U256 {
+        if price < 100.into() {
+            price + 1
+        } else {
+            price + (price / 100) * 2
+        }
+    }
+
+    pub fn make_tx_cost(
+        transaction: &SignedTransaction, sponsored_gas: U256,
+        sponsored_storage: u64,
+    ) -> U256
+    {
+        let estimate_gas_u512 = (transaction.gas() - sponsored_gas)
+            .full_mul(*transaction.gas_price());
         // normally, the value <= 2^128
         let estimate_gas = if estimate_gas_u512 > U512::from(U128::max_value())
         {
             U256::from(U128::max_value())
         } else {
-            (self.gas() - self.sponsored_gas) * self.gas_price()
+            (transaction.gas() - sponsored_gas) * transaction.gas_price()
         };
-        let sponsored_storage = self.sponsored_storage;
         let storage_collateral_requirement =
-            if let Transaction::Native(ref tx) = self.unsigned {
+            if let Transaction::Native(ref tx) = transaction.unsigned {
                 U256::from(tx.storage_limit - sponsored_storage)
                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
             } else {
                 U256::zero()
             };
         // normally, the value <= 2^192
-        if *self.value() > U256::from(u64::MAX) * U256::from(U128::max_value())
+        if *transaction.value()
+            > U256::from(u64::MAX) * U256::from(U128::max_value())
         {
             U256::from(u64::MAX) * U256::from(U128::max_value())
                 + estimate_gas
                 + storage_collateral_requirement
         } else {
-            self.value() + estimate_gas + storage_collateral_requirement
+            transaction.value() + estimate_gas + storage_collateral_requirement
         }
     }
 }
@@ -104,7 +154,8 @@ impl Deref for TxWithReadyInfo {
     fn deref(&self) -> &Self::Target { &self.transaction }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 pub enum InsertResult {
     /// new item added
     NewAdded,
@@ -150,6 +201,15 @@ impl NoncePool {
         self.map.get(&nonce).cloned()
     }
 
+    /// Iter transactions with nonce >= the start nonce. The start nonce may not
+    /// exist and the transaction nonces may not continous.
+    #[inline]
+    pub fn iter_tx_by_nonce(
+        &self, nonce: &U256,
+    ) -> impl Iterator<Item = &TxWithReadyInfo> {
+        self.map.iter_range(nonce)
+    }
+
     #[inline]
     pub fn get_lowest_nonce_tx(&self) -> Option<&SignedTransaction> {
         self.map.leftmost().map(|x| &*x.transaction)
@@ -179,68 +239,120 @@ impl NoncePool {
     }
 
     /// Return unpacked transactions from `nonce`.
-    pub fn get_pending_transactions(
-        &self, nonce: &U256,
-    ) -> Vec<Arc<SignedTransaction>> {
+    pub fn get_pending_transactions<'a>(
+        &'a self, nonce: &U256,
+    ) -> Vec<&'a TxWithReadyInfo> {
         let mut pending_txs = Vec::new();
-        let mut maybe_tx_info = self.map.succ(nonce).cloned();
-        // TODO: More efficient traversal of Treap.
-        while let Some(tx_info) = maybe_tx_info {
+        for tx_info in self.map.iter_range(&nonce) {
             if !tx_info.packed {
-                pending_txs.push(tx_info.transaction.clone());
+                pending_txs.push(tx_info);
             } else {
                 debug!("packed pending tx: tx_info={:?}", tx_info);
             }
-            maybe_tx_info =
-                self.map.succ(&(tx_info.transaction.nonce() + 1)).cloned();
         }
         pending_txs
     }
 
-    /// find a transaction `tx` such that
+    /// First, find a transaction `tx` such that
     ///   1. all nonce in `[nonce, tx.nonce()]` exists
     ///   2. tx.packed is false and tx.nonce() is minimum
+    /// Then, find a sequential of transactions started at the first transaction
+    /// such that   
+    ///   1. the nonce is continous and all transactions are not packed   
+    ///   2. the balance is enough.
+    ///
+    /// The first return value is the transaction in the first step.
+    /// The second return value is the last nonce in the transaction series.
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
-    ) -> Option<Arc<SignedTransaction>> {
+    ) -> Option<(&TxWithReadyInfo, U256)> {
         let tx = self.map.query(&nonce)?;
 
         let a = if nonce == U256::from(0) {
-            (0, U256::from(0))
+            NoncePoolWeight::default()
         } else {
-            self.map.rank(&(nonce - 1))
+            self.map.weight(&(nonce - 1))
         };
-        let b = self.map.rank(&tx.nonce());
-        // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
-        // tx.nonce()]`
-        // 2. b.0 - a.0 means number of transactions in `[nonce,
-        // tx.nonce()]` 3. x.nonce() - nonce + 1 means expected
+        let b = self.map.weight(&tx.nonce());
+        // 1. b.cost - a.cost means the sum of cost of
+        // transactions in `[nonce, tx.nonce()]`
+        // 2. b.size - a.size means number of transactions in
+        // `[nonce, tx.nonce()]` 3. x.nonce() - nonce + 1 means expected
         // number of transactions in `[nonce, tx.nonce()]`
-        (U256::from(b.0 - a.0 - 1) == tx.nonce() - nonce
-            && b.1 - a.1 <= balance)
-            .then_some(tx)
+        let size_elapsed = b.size - a.size;
+        let cost_elapsed = b.cost - a.cost;
+        if U256::from(size_elapsed - 1) != tx.nonce() - nonce
+            || cost_elapsed > balance
+        {
+            return None;
+        }
+
+        let end_nonce = self.map.continous_ready_nonce(
+            tx.nonce(),
+            b,
+            balance - cost_elapsed,
+        );
+        Some((tx, end_nonce))
+    }
+
+    /// Make packing batch with readiness info (`first_tx` and
+    /// `last_valid_nonce`). Input without readiness check may cause unexpected
+    /// behaviour.
+    pub fn make_packing_batch(
+        &self, first_tx: &TxWithReadyInfo, config: &PackingPoolConfig,
+        last_valid_nonce: U256,
+    ) -> PackingBatch<Arc<SignedTransaction>>
+    {
+        let start_nonce = *first_tx.transaction.nonce();
+        let mut batch = PackingBatch::new(first_tx.transaction.clone());
+
+        let mut next_nonce = start_nonce + 1;
+
+        for tx in self.iter_tx_by_nonce(&(start_nonce + 1)) {
+            if tx.nonce() != &next_nonce {
+                break;
+            }
+            next_nonce += 1.into();
+            let res = batch.insert(tx.transaction.clone(), config);
+            if res.1.is_err() {
+                break;
+            }
+            if next_nonce > last_valid_nonce {
+                break;
+            }
+        }
+        batch
+    }
+
+    #[cfg(test)]
+    pub fn recalculate_readiness_with_local_info_test(
+        &self, nonce: U256, balance: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        self.recalculate_readiness_with_local_info(nonce, balance)
+            .map(|x| x.0.transaction.clone())
     }
 
     pub fn check_pending_reason_with_local_info(
         &self, nonce: U256, balance: U256, pending_tx: &SignedTransaction,
     ) -> Option<PendingReason> {
         let a = if nonce == U256::from(0) {
-            (0, U256::from(0))
+            NoncePoolWeight::default()
         } else {
-            self.map.rank(&(nonce - 1))
+            self.map.weight(&(nonce - 1))
         };
-        let b = self.map.rank(&pending_tx.nonce());
-        // 1. b.1 - a.1 means the sum of cost of transactions in `[nonce,
+        let b = self.map.weight(&pending_tx.nonce());
+        // 1. b.cost - a.cost means the sum of cost of transactions in `[nonce,
         // tx.nonce()]`
-        // 2. b.0 - a.0 means number of transactions in `[nonce, tx.nonce()]`
+        // 2. b.size - a.size means number of transactions in `[nonce,
+        // tx.nonce()]`
 
         // The expected nonce is just an estimation by assuming all packed
         // transactions will be executed successfully.
-        let expected_nonce = nonce + U256::from(b.0 - a.0 - 1);
+        let expected_nonce = nonce + U256::from(b.size - a.size - 1);
         if expected_nonce != *pending_tx.nonce() {
             return Some(PendingReason::FutureNonce);
         }
-        let expected_balance = b.1 - a.1;
+        let expected_balance = b.cost - a.cost;
         if expected_balance > balance {
             return Some(PendingReason::NotEnoughCash);
         }
@@ -255,7 +367,7 @@ impl NoncePool {
         if *nonce == U256::from(0) {
             0
         } else {
-            self.map.rank(&(nonce - 1)).0 as usize
+            self.map.weight(&(nonce - 1)).size as usize
         }
     }
 
@@ -315,12 +427,12 @@ mod nonce_pool_test {
     {
         let transaction =
             new_test_tx(sender, nonce, gas, gas_price, value, storage_limit);
-        TxWithReadyInfo {
+        TxWithReadyInfo::new(
             transaction,
             packed,
-            sponsored_gas: gas / U256::from(2),
-            sponsored_storage: storage_limit / 2,
-        }
+            gas / U256::from(2),
+            storage_limit / 2,
+        )
     }
 
     #[test]
@@ -569,18 +681,24 @@ mod nonce_pool_test {
 
         assert_eq!(nonce_pool.get_tx_by_nonce(7.into()), None);
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(4.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                4.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(5.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                5.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(7.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                7.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
@@ -588,37 +706,49 @@ mod nonce_pool_test {
             InsertResult::NewAdded
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(4.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                4.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(5.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                5.into(),
+                exact_cost
+            ),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(7.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                7.into(),
+                exact_cost
+            ),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(8.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                8.into(),
+                exact_cost
+            ),
             Some(tx[3].transaction.clone())
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(9.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                9.into(),
+                exact_cost
+            ),
             Some(tx[4].transaction.clone())
         );
         assert_eq!(
-            nonce_pool
-                .recalculate_readiness_with_local_info(10.into(), exact_cost),
+            nonce_pool.recalculate_readiness_with_local_info_test(
+                10.into(),
+                exact_cost
+            ),
             None
         );
         assert_eq!(
-            nonce_pool.recalculate_readiness_with_local_info(
+            nonce_pool.recalculate_readiness_with_local_info_test(
                 5.into(),
                 exact_cost - U256::from(1),
             ),
@@ -629,23 +759,43 @@ mod nonce_pool_test {
     fn recalculate_readiness_with_local_info(
         nonce_pool: &BTreeMap<U256, TxWithReadyInfo>, nonce: U256,
         balance: U256,
-    ) -> Option<Arc<SignedTransaction>>
+    ) -> Option<(Arc<SignedTransaction>, U256)>
     {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
-        while let Some(tx) = nonce_pool.get(&next_nonce) {
+
+        let first_tx = loop {
+            let tx = nonce_pool.get(&next_nonce)?;
             let cost = tx.calc_tx_cost();
             if balance_left < cost {
                 return None;
             }
 
             if !tx.is_already_packed() {
-                return Some(tx.transaction.clone());
+                balance_left -= cost;
+                next_nonce += 1.into();
+
+                break tx.transaction.clone();
             }
             balance_left -= cost;
             next_nonce += 1.into();
+        };
+
+        loop {
+            let tx = if let Some(tx) = nonce_pool.get(&next_nonce) {
+                tx
+            } else {
+                return Some((first_tx, next_nonce - 1));
+            };
+            let cost = tx.calc_tx_cost();
+
+            if balance_left < cost || tx.is_already_packed() {
+                return Some((first_tx, next_nonce - 1));
+            }
+
+            balance_left -= cost;
+            next_nonce += 1.into();
         }
-        None
     }
 
     #[test]
@@ -723,10 +873,12 @@ mod nonce_pool_test {
             );
             assert_eq!(
                 expected,
-                nonce_pool.recalculate_readiness_with_local_info(
-                    nonce.into(),
-                    balance.into(),
-                )
+                nonce_pool
+                    .recalculate_readiness_with_local_info(
+                        nonce.into(),
+                        balance.into(),
+                    )
+                    .map(|(tx, nonce)| (tx.transaction.clone(), nonce))
             );
         }
 
@@ -770,10 +922,12 @@ mod nonce_pool_test {
             );
             assert_eq!(
                 expected,
-                nonce_pool.recalculate_readiness_with_local_info(
-                    nonce.into(),
-                    balance,
-                )
+                nonce_pool
+                    .recalculate_readiness_with_local_info(
+                        nonce.into(),
+                        balance,
+                    )
+                    .map(|(tx, nonce)| (tx.transaction.clone(), nonce))
             );
         }
     }

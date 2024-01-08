@@ -133,10 +133,27 @@ impl<'a, C: TreapMapConfig> TreapNodeUpdate<C> for RemoveOp<'a, C> {
     }
 }
 
+/// Represents the outcome of an operation applied in the
+/// [`TreapMap::update`][crate::TreapMap::update] function.
+///
+/// `ApplyOpOutcome` is used to convey the result of a user-defined operation
+/// applied to a node in the `TreapMap`. It provides details to the `TreapMap`
+/// about how to properly maintain the node after the operation.
+
 pub struct ApplyOpOutcome<T> {
+    /// The value to be forwarded as the return value of the `update`
+    /// function.
     pub out: T,
+    /// A flag indicating whether the operation has modified the node's weight.
+    /// If `true`, the `TreapMap` will recompute the accumulated weights.
     pub update_weight: bool,
+    ///  A flag indicating whether the operation has changed the node's key or
+    /// sort key. If `true`, the `TreapMap` will reposition the node within the
+    /// treap.
     pub update_key: bool,
+    /// A flag indicating whether the node should be deleted following the
+    /// operation. If `true`, the `TreapMap` will remove the node.
+    pub delete_item: bool,
 }
 
 pub(crate) struct ApplyOp<'a, C, U, I, T, E>
@@ -157,7 +174,7 @@ where
     U: FnOnce(&mut Node<C>) -> Result<ApplyOpOutcome<T>, E>,
     I: FnOnce() -> Result<(Node<C>, T), E>,
 {
-    type DeleteRet = T;
+    type DeleteRet = (T, bool);
     type Ret = Result<(T, Option<Box<Node<C>>>), E>;
 
     fn treap_key(&self) -> (&'a C::SortKey, &'a C::SearchKey) { self.key }
@@ -193,20 +210,23 @@ where
                     out,
                     update_weight,
                     update_key,
+                    delete_item,
                 } = match (self.update)(node) {
                     Ok(x) => x,
                     Err(err) => {
                         return Noop(Err(err));
                     }
                 };
+                let new_value =
+                    if delete_item { None } else { Some(&node.value) };
                 self.ext_map.view_update(
                     &*self.key.1,
-                    Some(&node.value),
+                    new_value,
                     Some(&old_value),
                 );
 
-                if update_key {
-                    Delete(out)
+                if update_key || delete_item {
+                    Delete((out, delete_item))
                 } else {
                     Updated {
                         update_weight,
@@ -218,8 +238,13 @@ where
     }
 
     fn handle_delete(
-        deleted_node: Option<Box<Node<C>>>, delete_ret: T,
+        deleted_node: Option<Box<Node<C>>>, (ret, delete_item): (T, bool),
     ) -> Self::Ret {
-        Ok((delete_ret, Some(deleted_node.unwrap())))
+        let to_reinsert_node = if !delete_item {
+            Some(deleted_node.unwrap())
+        } else {
+            None
+        };
+        Ok((ret, to_reinsert_node))
     }
 }

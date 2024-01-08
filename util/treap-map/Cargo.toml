@@ -18,6 +18,13 @@ cfx-types = { path = "../../cfx_types" }
 cfxkey = { path = "../../accounts/cfxkey" }
 criterion = "0.3.0"
 
+[features]
+testonly_code = []
+
 [[bench]]
 name = "map_cmp"
+harness = false
+
+[[bench]]
+name = "useless_weight"
 harness = false

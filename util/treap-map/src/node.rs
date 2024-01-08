@@ -3,45 +3,50 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    config::{TreapMapConfig, WeightConsolidate},
+    config::{ConsoliableWeight, Direction, TreapMapConfig},
     update::{OpResult, TreapNodeUpdate},
 };
 
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use std::mem;
 
+/// A node in a treap-map data structure.
+///
+/// The `Node` struct represents a node in a treap-map and contains various
+/// key-value pairs and metadata required for the proper functioning and
+/// maintenance of the treap-map. Direct modification of these fields is not
+/// recommended outside of the `TreapMap::update` function, as this function
+/// correctly maintains the integrity of the treap-map.
+#[cfg_attr(test, derive(Debug, PartialEq, Eq))]
 pub struct Node<C: TreapMapConfig> {
+    /// The key exposed externally. Used for key-based searches within the
+    /// treap-map.
     pub key: C::SearchKey,
+
+    /// The value stored in the node.
     pub value: C::Value,
+
+    /// The sorting key for the treap-map. If the type is `()`, the
+    /// `search_key` is used for sorting.
     pub sort_key: C::SortKey,
+
+    /// The weight of the node, used by the treap-map to maintain accumulated
+    /// weights.
     pub weight: C::Weight,
+
+    /// The sum of the weights of this node and its descendants. Maintained
+    /// internally for efficient operations.
     pub(crate) sum_weight: C::Weight,
+
+    /// A priority value used by the treap algorithm, typically a random
+    /// number.
     priority: u64,
 
+    /// The left child of the node in the treap-map structure.
     pub(crate) left: Option<Box<Node<C>>>,
+
+    /// The right child of the node in the treap-map structure.
     pub(crate) right: Option<Box<Node<C>>>,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Direction {
-    Left,
-    Right,
-}
-
-impl<C: TreapMapConfig> MallocSizeOf for Node<C>
-where
-    C::SearchKey: MallocSizeOf,
-    C::Value: MallocSizeOf,
-    C::Weight: MallocSizeOf,
-{
-    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.key.size_of(ops)
-            + self.value.size_of(ops)
-            + self.weight.size_of(ops)
-            + self.sum_weight.size_of(ops)
-            + self.left.size_of(ops)
-            + self.right.size_of(ops)
-    }
 }
 
 impl<C: TreapMapConfig> Node<C> {
@@ -300,7 +305,7 @@ impl<C: TreapMapConfig> Node<C> {
 
     pub fn sum_weight(&self) -> C::Weight { self.sum_weight.clone() }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "testonly_code"))]
     pub(crate) fn assert_consistency(&self)
     where C::Weight: Eq + std::fmt::Debug {
         let mut weight = self.weight.clone();
@@ -331,5 +336,23 @@ impl<C: TreapMapConfig> Node<C> {
         }
 
         assert_eq!(weight, self.sum_weight);
+    }
+}
+
+impl<C: TreapMapConfig> MallocSizeOf for Node<C>
+where
+    C::SearchKey: MallocSizeOf,
+    C::SortKey: MallocSizeOf,
+    C::Value: MallocSizeOf,
+    C::Weight: MallocSizeOf,
+{
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.key.size_of(ops)
+            + self.sort_key.size_of(ops)
+            + self.value.size_of(ops)
+            + self.weight.size_of(ops)
+            + self.sum_weight.size_of(ops)
+            + self.left.size_of(ops)
+            + self.right.size_of(ops)
     }
 }
