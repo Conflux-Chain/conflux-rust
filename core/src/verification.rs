@@ -38,6 +38,7 @@ pub struct VerificationConfig {
     pub referee_bound: usize,
     pub max_block_size_in_bytes: usize,
     pub transaction_epoch_bound: u64,
+    pub max_nonce: Option<U256>,
     machine: Arc<Machine>,
     pos_verifier: Arc<PosVerifier>,
 }
@@ -220,10 +221,15 @@ pub fn is_valid_receipt_inclusion_proof(
 impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
-        transaction_epoch_bound: u64, machine: Arc<Machine>,
-        pos_verifier: Arc<PosVerifier>,
+        transaction_epoch_bound: u64, tx_pool_nonce_bits: usize,
+        machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
+        let max_nonce = if tx_pool_nonce_bits < 256 {
+            Some((U256::one() << tx_pool_nonce_bits) - 1)
+        } else {
+            None
+        };
         if test_mode {
             VerificationConfig {
                 verify_timestamp: false,
@@ -232,6 +238,7 @@ impl VerificationConfig {
                 transaction_epoch_bound,
                 machine,
                 pos_verifier,
+                max_nonce,
             }
         } else {
             VerificationConfig {
@@ -241,6 +248,7 @@ impl VerificationConfig {
                 transaction_epoch_bound,
                 machine,
                 pos_verifier,
+                max_nonce,
             }
         }
     }
@@ -626,6 +634,14 @@ impl VerificationConfig {
                 if !address.is_genesis_valid_address() {
                     bail!(TransactionError::InvalidReceiver)
                 }
+            }
+        }
+
+        if let (VerifyTxMode::Local(..), Some(max_nonce)) =
+            (mode, self.max_nonce)
+        {
+            if tx.nonce() > &max_nonce {
+                bail!(TransactionError::TooLargeNonce)
             }
         }
 
