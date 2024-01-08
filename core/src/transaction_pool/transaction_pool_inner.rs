@@ -7,10 +7,7 @@ use super::{
 use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
-use cfx_parameters::{
-    block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
-    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
-};
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
