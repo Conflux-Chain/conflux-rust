@@ -259,7 +259,7 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         else:
             return tx.hash_hex()
     
-    def initialize_accounts(self, number = 10, value = 100):
+    def initialize_accounts(self, number = 10, value = 100) -> List[Account]:
         def initialize_new_account() -> (str, bytes):
             (address, priv) = self.client.rand_account()
             if value > 0:
