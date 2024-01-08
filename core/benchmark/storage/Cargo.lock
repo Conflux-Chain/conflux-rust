@@ -1667,6 +1667,24 @@ version = "0.1.0"
 dependencies = [
  "cfx-types",
  "num 0.2.1",
+ "typenum",
+ "unroll",
+]
+
+[[package]]
+name = "cfx-packing-pool"
+version = "0.1.0"
+dependencies = [
+ "cfx-math",
+ "cfx-types",
+ "heap-map",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "primitives",
+ "rand 0.7.3",
+ "rand_xorshift 0.2.0",
+ "treap-map",
+ "typenum",
 ]
 
 [[package]]
@@ -1774,7 +1792,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.3.3"
+version = "2.3.4-2-beta"
 dependencies = [
  "anyhow",
  "async-oneshot",
@@ -1789,6 +1807,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-math",
+ "cfx-packing-pool",
  "cfx-parameters",
  "cfx-state",
  "cfx-statedb",
@@ -1858,7 +1877,6 @@ dependencies = [
  "prometheus 0.7.0",
  "rand 0.7.3",
  "rand 0.8.5",
- "rand_chacha 0.2.2",
  "rand_xorshift 0.2.0",
  "random-crash",
  "rayon",
@@ -1897,6 +1915,7 @@ dependencies = [
  "tokio-stream",
  "tokio-timer",
  "toml",
+ "treap-map",
  "unexpected 0.1.0 (git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1)",
 ]
 
@@ -8774,6 +8793,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "treap-map"
+version = "0.1.0"
+dependencies = [
+ "malloc_size_of",
+ "primitives",
+ "rand 0.7.3",
+ "rand_xorshift 0.2.0",
+]
+
+[[package]]
 name = "trie-db"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8929,6 +8958,16 @@ checksum = "9f214e8f697e925001e66ec2c6e37a4ef93f0f78c2eed7814394e10c62025b05"
 dependencies = [
  "generic-array",
  "subtle",
+]
+
+[[package]]
+name = "unroll"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ad948c1cb799b1a70f836077721a92a35ac177d4daddf4c20a633786d4cf618"
+dependencies = [
+ "quote 1.0.33",
+ "syn 1.0.109",
 ]
 
 [[package]]
