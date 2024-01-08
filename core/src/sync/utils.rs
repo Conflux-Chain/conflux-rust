@@ -10,6 +10,7 @@ use cfx_internal_common::ChainIdParamsInner;
 use cfx_parameters::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
     consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
+    tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
     WORKER_COMPUTATION_PARALLELISM,
 };
 use cfx_storage::{StorageConfiguration, StorageManager};
@@ -205,6 +206,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         REFEREE_DEFAULT_BOUND,
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
+        TXPOOL_DEFAULT_NONCE_BITS,
         machine.clone(),
         pos_verifier.clone(),
     );
