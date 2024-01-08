@@ -199,6 +199,10 @@ pub mod pow {
     pub const INITIAL_DIFFICULTY: u64 = 5_000_000;
 }
 
+pub mod tx_pool {
+    pub const TXPOOL_DEFAULT_NONCE_BITS: usize = 128;
+}
+
 pub mod block {
     use crate::consensus::GENESIS_GAS_LIMIT;
 

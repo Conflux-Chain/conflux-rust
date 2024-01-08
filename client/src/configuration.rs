@@ -12,7 +12,9 @@ use cfx_addr::{cfx_addr_decode, Network};
 use cfx_internal_common::{
     ChainIdParams, ChainIdParamsInner, ChainIdParamsOneChainInner,
 };
-use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
+use cfx_parameters::{
+    block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
+};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -266,6 +268,7 @@ build_config! {
         (tx_pool_size, (usize), 50_000)
         (tx_pool_min_native_tx_gas_price, (Option<u64>), None)
         (tx_pool_min_eth_tx_gas_price, (Option<u64>), None)
+        (tx_pool_nonce_bits, (usize), TXPOOL_DEFAULT_NONCE_BITS)
         (max_packing_batch_gas_limit, (u64), 3_000_000)
         (max_packing_batch_size, (usize), 50)
         (packing_pool_degree, (u8), 4)
@@ -694,6 +697,7 @@ impl Configuration {
             self.raw_conf.referee_bound,
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
+            self.raw_conf.tx_pool_nonce_bits,
             machine,
             pos_verifier,
         )

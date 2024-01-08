@@ -268,7 +268,7 @@ impl DeferredPool {
         let removed_tx = self
             .packing_pool
             .in_space_mut(addr.space)
-            .split_off_prefix(tx.sender(), &(tx.nonce() - 1));
+            .split_off_prefix(tx.sender(), &(tx.nonce() + 1));
         if let Some(removed_tx) = removed_tx.first() {
             if removed_tx.nonce() < tx.nonce() {
                 warn!("Internal Issue: Packing pool has inconsistent tranaction with nonce pool.");
