@@ -242,21 +242,24 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
     def internal_contract(self, name: InternalContractName):
         return cfx_internal_contract(name, self)
 
-    def cfx_transfer(self, receiver, value=None, gas_price=1, priv_key=None, decimals: int = 18):
+    def cfx_transfer(self, receiver, value=None, gas_price=1, priv_key=None, decimals: int = 18, nonce = None, execute: bool = True):
         if value is not None:
             value = int(value * (10**decimals))
         else:
             value = 0
 
         tx = self.client.new_tx(
-            receiver=receiver, gas_price=gas_price, priv_key=priv_key, value=value)
-        self.client.send_tx(tx, True)
-        self.wait_for_tx([tx], True)
-        receipt = self.client.get_transaction_receipt(tx.hash_hex())
-        # self.log.info(receipt)
-        return receipt
+            receiver=receiver, gas_price=gas_price, priv_key=priv_key, value=value, nonce=nonce)
+        self.client.send_tx(tx, execute)
+        if execute:
+            self.wait_for_tx([tx], True)
+            receipt = self.client.get_transaction_receipt(tx.hash_hex())
+            # self.log.info(receipt)
+            return receipt
+        else:
+            return tx.hash_hex()
     
-    def initialize_accounts(self, number = 10, value = 100):
+    def initialize_accounts(self, number = 10, value = 100) -> List[Account]:
         def initialize_new_account() -> (str, bytes):
             (address, priv) = self.client.rand_account()
             if value > 0:

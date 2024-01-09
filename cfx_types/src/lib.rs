@@ -126,6 +126,8 @@ pub struct SpaceMap<T> {
 }
 
 impl<T> SpaceMap<T> {
+    pub fn new(native: T, evm: T) -> Self { SpaceMap { native, evm } }
+
     #[inline]
     pub fn in_space(&self, space: Space) -> &T {
         match space {
