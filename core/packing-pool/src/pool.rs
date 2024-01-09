@@ -415,9 +415,9 @@ mod sample_tests {
                     if quot * loss_ratio >= total_weighted_loss {
                         return Some(last_ans.unwrap());
                     }
-                    last_ans = Some(
-                        total_weighted_loss / (total_gas_limit - block_limit),
-                    );
+                    if quot > U256::zero() {
+                        last_ans = Some(total_weighted_loss / quot);
+                    }
                 }
             }
             None
@@ -457,7 +457,6 @@ mod sample_tests {
         mock_pool.0.sort_by_key(|x| Reverse(x.gas_price()));
         pool.assert_consistency();
         for i in 1900..3500 {
-            dbg!(i);
             let mut total_gas_limit = 1.01f64.powf(i as f64) as u64;
             total_gas_limit -=
                 total_gas_limit / rand.sample(Uniform::new(50, 200));
