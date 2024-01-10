@@ -368,7 +368,9 @@ impl SnapshotDbManagerSqlite {
                     );
                     assert!(
                         new_epoch_height > self.latest_snapshot_id.read().1,
-                        "Try to write an old snapshot"
+                        "Try to write an old snapshot {}, {}",
+                        new_epoch_height,
+                        self.latest_snapshot_id.read().1
                     );
                     (self.get_latest_mpt_snapshot_db_path(), false)
                 }
@@ -559,7 +561,10 @@ impl SnapshotDbManagerSqlite {
         new_snapshot_id: &EpochId,
     ) -> Result<SnapshotMptDbSqlite>
     {
-        debug!("open mpt snapshot with write {:?}", snapshot_path);
+        debug!(
+            "open mpt snapshot with write {:?}, new epoch height {}",
+            snapshot_path, new_epoch_height
+        );
         let latest_mpt_semaphore_permit: tokio::sync::SemaphorePermit =
             executor::block_on(self.latest_mpt_snapshot_semaphore.acquire());
 
@@ -1399,6 +1404,11 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             "recovery latest mpt snapshot from checkpoint {}",
             snapshot_epoch_id
         );
+        if snapshot_epoch_id == &NULL_EPOCH {
+            self.recreate_latest_mpt_snapshot()?;
+            return Ok(());
+        }
+
         *self.snapshot_epoch_id_before_recovered.write() =
             snapshot_epoch_id_before_recovered;
 
@@ -1435,14 +1445,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             )?;
             Self::rename_snapshot_db(&temp_mpt_path, &latest_mpt_snapshot_path)
         } else {
-            if *snapshot_epoch_id != NULL_EPOCH {
-                panic!(
-                    "mpt snapshot for epoch {} does not exist",
-                    snapshot_epoch_id
-                );
-            }
-
-            Ok(())
+            panic!(
+                "mpt snapshot for epoch {} does not exist",
+                snapshot_epoch_id
+            );
         }
     }
 
