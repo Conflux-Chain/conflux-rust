@@ -15,6 +15,8 @@ pub enum AccountEntry {
     Cached(OverlayAccount, bool),
 }
 
+use cfx_parameters::genesis::GENESIS_ACCOUNT_ADDRESS;
+use cfx_types::AddressWithSpace;
 use primitives::Account;
 use AccountEntry::*;
 
@@ -53,8 +55,16 @@ impl AccountEntry {
     }
 
     pub fn try_into_dirty_account(self) -> Option<OverlayAccount> {
+        // Due to an existing bug, the genesis account is very special. It is
+        // always dirty.
+        const SPECIAL_ADDRESS: AddressWithSpace = AddressWithSpace {
+            address: GENESIS_ACCOUNT_ADDRESS,
+            space: cfx_types::Space::Native,
+        };
+
         match self {
             Cached(acc, true) => Some(acc),
+            Cached(acc, _) if acc.address == SPECIAL_ADDRESS => Some(acc),
             _ => None,
         }
     }

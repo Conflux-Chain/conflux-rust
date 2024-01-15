@@ -129,10 +129,7 @@ pub fn genesis_block(
             state.add_total_evm_tokens(balance);
         }
     }
-    let genesis_account_address = GENESIS_ACCOUNT_ADDRESS_STR
-        .parse::<Address>()
-        .unwrap()
-        .with_native_space();
+    let genesis_account_address = GENESIS_ACCOUNT_ADDRESS.with_native_space();
 
     let genesis_token_count =
         U256::from(GENESIS_TOKEN_COUNT_IN_CFX) * U256::from(ONE_CFX_IN_DRIP);
