@@ -97,6 +97,7 @@ fn generate_random_state(
                 snapshot_epoch_count,
             ),
             true,
+            false,
         )
         .unwrap()
         .unwrap();
@@ -152,6 +153,7 @@ fn generate_random_state(
                 snapshot_epoch_count,
             ),
             true,
+            false,
         )
         .unwrap()
         .unwrap();
@@ -213,6 +215,7 @@ fn generate_random_state(
                 snapshot_epoch_count,
             ),
             true,
+            false,
         )
         .unwrap()
         .unwrap();

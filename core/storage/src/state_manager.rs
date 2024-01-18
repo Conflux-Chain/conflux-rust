@@ -38,6 +38,7 @@ pub trait StateManagerTrait {
     ) -> Result<Option<Box<dyn StateTrait>>>;
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
+        recover_mpt_during_construct_pivot_state: bool,
     ) -> Result<Option<Box<dyn StateTrait>>>;
     fn get_state_for_genesis_write(self: &Arc<Self>) -> Box<dyn StateTrait>;
 }

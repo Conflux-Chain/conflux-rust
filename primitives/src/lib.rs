@@ -30,6 +30,7 @@ pub mod storage;
 pub mod storage_key;
 pub mod transaction;
 pub mod transaction_index;
+pub mod zero;
 
 pub use crate::{
     account::{
@@ -54,4 +55,5 @@ pub use crate::{
         TransactionWithSignatureSerializePart, TxPropagateId,
     },
     transaction_index::TransactionIndex,
+    zero::Zero,
 };

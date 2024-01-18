@@ -136,7 +136,7 @@ pub struct StorageManager {
     pub intermediate_trie_root_merkle: RwLock<Option<MerkleHash>>,
 
     pub persist_state_from_initialization:
-        RwLock<Option<(bool, HashSet<EpochId>, u64)>>,
+        RwLock<Option<(bool, HashSet<EpochId>, u64, Option<u64>)>>,
 }
 
 impl MallocSizeOf for StorageManager {
@@ -543,20 +543,29 @@ impl StorageManager {
     pub fn check_make_register_snapshot_background(
         this: Arc<Self>, snapshot_epoch_id: EpochId, height: u64,
         maybe_delta_db: Option<DeltaMptIterator>,
+        recover_mpt_during_construct_pivot_state: bool,
     ) -> Result<()>
     {
         let this_cloned = this.clone();
         let mut in_progress_snapshotting_tasks =
             this_cloned.in_progress_snapshotting_tasks.write();
 
+        let mut recover_mpt_with_kv_snapshot_exist = false;
         if !in_progress_snapshotting_tasks.contains_key(&snapshot_epoch_id)
             && this
                 .snapshot_info_map_by_epoch
                 .read()
                 .get(&snapshot_epoch_id)
                 .map_or(true, |info| {
-                    info.snapshot_info_kept_to_provide_sync
+                    if info.snapshot_info_kept_to_provide_sync
                         == SnapshotKeptToProvideSyncStatus::InfoOnly
+                    {
+                        true
+                    } else {
+                        recover_mpt_with_kv_snapshot_exist =
+                            recover_mpt_during_construct_pivot_state;
+                        recover_mpt_during_construct_pivot_state
+                    }
                 })
         {
             debug!(
@@ -647,7 +656,8 @@ impl StorageManager {
                                     snapshot_epoch_id.clone(), delta_db,
                                     in_progress_snapshot_info_cloned,
                                     &this.snapshot_info_map_by_epoch,
-                                    height,)?
+                                    height,
+                                    recover_mpt_with_kv_snapshot_exist)?
                         }
                     };
                     if let Err(e) = this.register_new_snapshot(new_snapshot_info.clone(), &mut snapshot_info_map_locked) {
@@ -1356,6 +1366,7 @@ impl StorageManager {
             snapshot_persist_state.temp_snapshot_db_existing,
             snapshot_persist_state.removed_snapshots,
             snapshot_persist_state.max_epoch_height,
+            snapshot_persist_state.max_snapshot_epoch_height_has_mpt,
         ));
         self.snapshot_manager
             .get_snapshot_db_manager()

@@ -610,6 +610,7 @@ impl StateManager {
         &self, maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         intermediate_trie_root: Option<NodeRefDeltaMpt>,
         intermediate_epoch_id: &EpochId, new_height: u64,
+        recover_mpt_during_construct_pivot_state: bool,
     ) -> Result<()>
     {
         StorageManager::check_make_register_snapshot_background(
@@ -620,6 +621,7 @@ impl StateManager {
                 mpt: intermediate_trie,
                 maybe_root_node: intermediate_trie_root,
             }),
+            recover_mpt_during_construct_pivot_state,
         )
     }
 
@@ -633,7 +635,7 @@ impl StateManager {
         match maybe_state_trees {
             None => Ok(None),
             Some(state_trees) => {
-                Ok(Some(State::new(self.clone(), state_trees)))
+                Ok(Some(State::new(self.clone(), state_trees, false)))
             }
         }
     }
@@ -670,6 +672,7 @@ impl StateManager {
                 intermediate_epoch_id: NULL_EPOCH,
                 parent_epoch_id: NULL_EPOCH,
             },
+            false,
         )
     }
 
@@ -689,7 +692,9 @@ impl StateManager {
     // simple approach.
     pub fn get_state_for_next_epoch_inner(
         self: &Arc<Self>, parent_epoch_id: StateIndex, open_mpt_snapshot: bool,
-    ) -> Result<Option<State>> {
+        recover_mpt_during_construct_pivot_state: bool,
+    ) -> Result<Option<State>>
+    {
         let maybe_state_trees = self.get_state_trees_for_next_epoch(
             &parent_epoch_id,
             /* try_open = */ false,
@@ -697,9 +702,11 @@ impl StateManager {
         )?;
         match maybe_state_trees {
             None => Ok(None),
-            Some(state_trees) => {
-                Ok(Some(State::new(self.clone(), state_trees)))
-            }
+            Some(state_trees) => Ok(Some(State::new(
+                self.clone(),
+                state_trees,
+                recover_mpt_during_construct_pivot_state,
+            ))),
         }
     }
 
@@ -729,6 +736,7 @@ impl StateManagerTrait for StateManager {
                 return Ok(Some(Box::new(State::new(
                     self.clone(),
                     state_trees,
+                    false,
                 ))));
             }
             Err(e) => Err(e),
@@ -789,11 +797,16 @@ impl StateManagerTrait for StateManager {
     // simple approach.
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<Box<dyn StateTrait>>> {
+        recover_mpt_during_construct_pivot_state: bool,
+    ) -> Result<Option<Box<dyn StateTrait>>>
+    {
         let mut parent_epoch = parent_epoch_id.epoch_id;
         let parent_height = parent_epoch_id.maybe_height;
-        let state =
-            self.get_state_for_next_epoch_inner(parent_epoch_id, false)?;
+        let state = self.get_state_for_next_epoch_inner(
+            parent_epoch_id,
+            false,
+            recover_mpt_during_construct_pivot_state,
+        )?;
         if state.is_none() {
             return Ok(None);
         }

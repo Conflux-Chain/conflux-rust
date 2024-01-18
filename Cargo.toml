@@ -1,6 +1,6 @@
 [package]
 name = "conflux"
-version = "2.3.3"
+version = "2.3.4"
 edition = "2018"
 build = "build.rs"
 
@@ -103,6 +103,9 @@ sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = 
 
 [profile.test]
 debug-assertions = true
+
+[profile.test.package]
+parity-secp256k1 = { opt-level = 3 }
 
 [profile.bench]
 debug-assertions = true

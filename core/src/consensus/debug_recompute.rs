@@ -78,7 +78,7 @@ pub fn log_debug_epoch_computation(
             .map(|block| *block.block_header.author())
             .collect::<Vec<_>>();
     }
-    executor.compute_epoch(task, Some(&mut debug_record));
+    executor.compute_epoch(task, Some(&mut debug_record), false);
 
     debug_record
 }
