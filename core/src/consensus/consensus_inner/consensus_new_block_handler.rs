@@ -1987,7 +1987,7 @@ impl ConsensusNewBlockHandler {
             .get_storage_manager()
             .get_snapshot_epoch_count();
         let mut need_set_intermediate_trie_root_merkle = false;
-        let (recover_snapshot, max_snapshot_epoch_index_has_mpt) = self
+        let max_snapshot_epoch_index_has_mpt = self
             .recover_latest_mpt_snapshot_if_needed(
                 inner,
                 &mut start_compute_epoch_pivot_index,
@@ -2038,18 +2038,9 @@ impl ConsensusNewBlockHandler {
                     .get_reward_execution_info(inner, pivot_arena_index);
 
                 let recover_mpt_during_construct_pivot_state =
-                    if recover_snapshot
-                        && (max_snapshot_epoch_index_has_mpt.is_none()
-                            || pivot_index
-                                > *max_snapshot_epoch_index_has_mpt
-                                    .as_ref()
-                                    .unwrap()
-                                    + snapshot_epoch_count as usize)
-                    {
-                        true
-                    } else {
-                        false
-                    };
+                    max_snapshot_epoch_index_has_mpt.map_or(true, |idx| {
+                        pivot_index > idx + snapshot_epoch_count as usize
+                    });
                 info!(
                     "compute epoch recovery flag {}",
                     recover_mpt_during_construct_pivot_state
@@ -2198,10 +2189,10 @@ impl ConsensusNewBlockHandler {
         start_compute_epoch_pivot_index: &mut usize, start_pivot_index: usize,
         end_index: usize, need_set_intermediate_trie_root_merkle: &mut bool,
         snapshot_epoch_count: u64,
-    ) -> (bool, Option<usize>)
+    ) -> Option<usize>
     {
         if !self.conf.inner_conf.use_isolated_db_for_mpt_table {
-            return (false, None);
+            return Some(end_index);
         }
 
         let (
@@ -2234,6 +2225,26 @@ impl ConsensusNewBlockHandler {
 
         debug!("latest snapshot epoch height: {}, temp snapshot status: {}, max snapshot epoch height has mpt: {:?}, removed snapshots {:?}",
             latest_snapshot_epoch_height, temp_snapshot_db_existing, max_snapshot_epoch_height_has_mpt, removed_snapshots);
+
+        if max_snapshot_epoch_height_has_mpt
+            .is_some_and(|h| h == latest_snapshot_epoch_height)
+        {
+            inner
+                .data_man
+                .storage_manager
+                .get_storage_manager()
+                .get_snapshot_manager()
+                .get_snapshot_db_manager()
+                .recreate_latest_mpt_snapshot()
+                .unwrap();
+
+            info!(
+                "snapshot for epoch height {} is still not use mpt database",
+                start_compute_epoch_pivot_index
+            );
+            return Some(end_index);
+        }
+
         // maximum epoch need to compute
         let maximum_height_to_create_next_snapshot =
             latest_snapshot_epoch_height + snapshot_epoch_count * 2;
@@ -2247,30 +2258,11 @@ impl ConsensusNewBlockHandler {
             *start_compute_epoch_pivot_index = index;
         }
 
-        let max_snapshot_epoch_index_has_mpt =
+        let mut max_snapshot_epoch_index_has_mpt =
             if max_snapshot_epoch_height_has_mpt.is_some() {
-                let full_snapshot_index = inner.height_to_pivot_index(
+                Some(inner.height_to_pivot_index(
                     max_snapshot_epoch_height_has_mpt.unwrap(),
-                );
-
-                if *start_compute_epoch_pivot_index
-                    <= full_snapshot_index + snapshot_epoch_count as usize * 2
-                {
-                    if temp_snapshot_db_existing {
-                        inner
-                            .data_man
-                            .storage_manager
-                            .get_storage_manager()
-                            .get_snapshot_manager()
-                            .get_snapshot_db_manager()
-                            .recreate_latest_mpt_snapshot()
-                            .unwrap();
-                    }
-
-                    info!("snapshot for epoch height {} is still not use mpt database", start_compute_epoch_pivot_index);
-                    return (false, Some(full_snapshot_index));
-                }
-                Some(full_snapshot_index)
+                ))
             } else {
                 None
             };
@@ -2319,9 +2311,14 @@ impl ConsensusNewBlockHandler {
         // if the latest_snapshot_epoch_height is greater than
         // start_compute_epoch_height, the latest MPT snapshot is dirty
         if recovery_latest_mpt_snapshot {
-            let era_pivot_epoch_height = (start_compute_epoch_height - 1)
-                / self.conf.inner_conf.era_epoch_count
-                * self.conf.inner_conf.era_epoch_count;
+            let era_pivot_epoch_height =
+                (start_compute_epoch_height - snapshot_epoch_count - 1)
+                    / self.conf.inner_conf.era_epoch_count
+                    * self.conf.inner_conf.era_epoch_count;
+
+            if era_pivot_epoch_height > latest_snapshot_epoch_height {
+                panic!("era_pivot_epoch_height is greater than latest_snapshot_epoch_height, this should not happen");
+            }
 
             debug!(
                 "need recovery latest mpt snapshot, start compute epoch height {}, era pivot epoch height {}",
@@ -2361,16 +2358,16 @@ impl ConsensusNewBlockHandler {
                     .expect("pivot hash should be exist")
             };
 
-            let pivot_hash_before_era = if era_pivot_epoch_height == 0
-                || era_pivot_epoch_height == snapshot_epoch_count
-            {
-                NULL_EPOCH
+            let pivot_hash_before_era = if era_pivot_epoch_height == 0 {
+                None
             } else {
-                inner
-                    .get_pivot_hash_from_epoch_number(
-                        era_pivot_epoch_height - snapshot_epoch_count,
-                    )
-                    .expect("pivot hash should be exist")
+                Some(
+                    inner
+                        .get_pivot_hash_from_epoch_number(
+                            era_pivot_epoch_height - snapshot_epoch_count,
+                        )
+                        .expect("pivot hash should be exist"),
+                )
             };
 
             let snapshot_db_manager = inner
@@ -2385,21 +2382,35 @@ impl ConsensusNewBlockHandler {
                 era_pivot_epoch_height,
             );
 
+            if max_snapshot_epoch_height_has_mpt
+                .is_some_and(|height| height >= era_pivot_epoch_height)
+            {
+                // mpt snapshot will be created from empty
+                inner
+                    .data_man
+                    .storage_manager
+                    .get_storage_manager()
+                    .get_snapshot_manager()
+                    .get_snapshot_db_manager()
+                    .recreate_latest_mpt_snapshot()
+                    .unwrap();
+
+                return max_snapshot_epoch_index_has_mpt;
+            }
+
             // use ear snapshot replace latest
             snapshot_db_manager
                 .recovery_latest_mpt_snapshot_from_checkpoint(
                     &era_pivot_hash,
-                    Some(pivot_hash_before_era),
+                    pivot_hash_before_era,
                 )
                 .unwrap();
         } else {
             debug!("the latest MPT snapshot is valid");
+            max_snapshot_epoch_index_has_mpt = Some(end_index);
         }
 
-        (
-            recovery_latest_mpt_snapshot,
-            max_snapshot_epoch_index_has_mpt,
-        )
+        max_snapshot_epoch_index_has_mpt
     }
 
     fn set_intermediate_trie_root_merkle(
