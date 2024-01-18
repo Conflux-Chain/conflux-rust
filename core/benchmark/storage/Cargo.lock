@@ -1792,7 +1792,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.3.4-2-testnet"
+version = "2.3.4-3-testnet"
 dependencies = [
  "anyhow",
  "async-oneshot",
