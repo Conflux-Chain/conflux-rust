@@ -2249,27 +2249,19 @@ impl ConsensusNewBlockHandler {
             latest_snapshot_epoch_height + snapshot_epoch_count * 2;
         let index =
             inner.height_to_pivot_index(maximum_height_to_create_next_snapshot);
-        debug!("start_compute_epoch_pivot_index {}, maximum index for next snapshot {}",
-            start_compute_epoch_pivot_index, index);
-
         if *start_compute_epoch_pivot_index > index {
-            warn!("start_compute_epoch_pivot_index is greater than (latest_snapshot_epoch_height + snapshot_epoch_count * 2)");
+            warn!("start_compute_epoch_pivot_index is greater than maximum epoch need to compute {}", index);
             *start_compute_epoch_pivot_index = index;
         }
-
-        let mut max_snapshot_epoch_index_has_mpt =
-            if max_snapshot_epoch_height_has_mpt.is_some() {
-                Some(inner.height_to_pivot_index(
-                    max_snapshot_epoch_height_has_mpt.unwrap(),
-                ))
-            } else {
-                None
-            };
 
         // Find the closest ear prior to the start_compute_epoch_height
         let start_compute_epoch_height = inner.arena
             [inner.pivot_chain[*start_compute_epoch_pivot_index]]
             .height;
+        info!(
+            "current start compute epoch height {}",
+            start_compute_epoch_height
+        );
 
         let recovery_latest_mpt_snapshot = if self
             .conf
@@ -2357,18 +2349,6 @@ impl ConsensusNewBlockHandler {
                     .expect("pivot hash should be exist")
             };
 
-            let pivot_hash_before_era = if era_pivot_epoch_height == 0 {
-                None
-            } else {
-                Some(
-                    inner
-                        .get_pivot_hash_from_epoch_number(
-                            era_pivot_epoch_height - snapshot_epoch_count,
-                        )
-                        .expect("pivot hash should be exist"),
-                )
-            };
-
             let snapshot_db_manager = inner
                 .data_man
                 .storage_manager
@@ -2393,23 +2373,41 @@ impl ConsensusNewBlockHandler {
                     .get_snapshot_db_manager()
                     .recreate_latest_mpt_snapshot()
                     .unwrap();
+            } else {
+                let pivot_hash_before_era = if era_pivot_epoch_height == 0 {
+                    None
+                } else {
+                    Some(
+                        inner
+                            .get_pivot_hash_from_epoch_number(
+                                era_pivot_epoch_height - snapshot_epoch_count,
+                            )
+                            .expect("pivot hash should be exist"),
+                    )
+                };
 
-                return max_snapshot_epoch_index_has_mpt;
+                // use ear snapshot replace latest
+                snapshot_db_manager
+                    .recovery_latest_mpt_snapshot_from_checkpoint(
+                        &era_pivot_hash,
+                        pivot_hash_before_era,
+                    )
+                    .unwrap();
             }
 
-            // use ear snapshot replace latest
-            snapshot_db_manager
-                .recovery_latest_mpt_snapshot_from_checkpoint(
-                    &era_pivot_hash,
-                    pivot_hash_before_era,
-                )
-                .unwrap();
+            let max_snapshot_epoch_index_has_mpt =
+                if max_snapshot_epoch_height_has_mpt.is_some() {
+                    Some(inner.height_to_pivot_index(
+                        max_snapshot_epoch_height_has_mpt.unwrap(),
+                    ))
+                } else {
+                    None
+                };
+            max_snapshot_epoch_index_has_mpt
         } else {
             debug!("the latest MPT snapshot is valid");
-            max_snapshot_epoch_index_has_mpt = Some(end_index);
+            Some(end_index)
         }
-
-        max_snapshot_epoch_index_has_mpt
     }
 
     fn set_intermediate_trie_root_merkle(
