@@ -2397,17 +2397,13 @@ impl ConsensusNewBlockHandler {
                     .unwrap();
             }
 
-            let max_snapshot_epoch_index_has_mpt =
-                if max_snapshot_epoch_height_has_mpt
-                    .is_some_and(|v| v >= inner.cur_era_stable_height)
-                {
-                    Some(inner.height_to_pivot_index(
-                        max_snapshot_epoch_height_has_mpt.unwrap(),
-                    ))
+            max_snapshot_epoch_height_has_mpt.and_then(|v| {
+                if v >= inner.cur_era_stable_height {
+                    Some(inner.height_to_pivot_index(v))
                 } else {
                     None
-                };
-            max_snapshot_epoch_index_has_mpt
+                }
+            })
         } else {
             debug!("the latest MPT snapshot is valid");
             Some(end_index)
