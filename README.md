@@ -87,7 +87,7 @@ Follow the steps below to build the project:
 10. Generate random signed transactions for test
     
     ```bash
-    python3 tests/asb-e2e/produce_tx/main.py
+    python3 tests/asb-e2e/produce_tx.py
     ```
     
     This command may take hours to generate signed transactions. The bottleneck of transaction generation is generating public keys from private keys and signing transactions, which can be parallelized. A CPU with high multi-core performance can accelerate this process.

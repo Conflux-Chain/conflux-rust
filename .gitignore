@@ -1,6 +1,7 @@
 target
 **/Cargo.lock
 **/target
+**/.DS_Store
 **/*.rs.bk
 **/__pycache__
 .idea/
