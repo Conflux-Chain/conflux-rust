@@ -27,7 +27,7 @@ impl<Mpt, PathNode> MptCursor<Mpt, PathNode> {
 impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
     pub fn load_root(&mut self) -> Result<()>
     where Self: CursorToRootNode<Mpt, PathNode> {
-        let root_node = PathNode::load_root(self)?;
+        let root_node = PathNode::load_root(self, false)?;
         self.path_nodes.push(root_node);
         Ok(())
     }
@@ -307,9 +307,9 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
         }
     }
 
-    pub fn load_root(&mut self) -> Result<()>
+    pub fn load_root(&mut self, in_construct_pivot_state: bool) -> Result<()>
     where Self: CursorToRootNode<Mpt, PathNode> {
-        let root_node = PathNode::load_root(self)?;
+        let root_node = PathNode::load_root(self, in_construct_pivot_state)?;
         self.path_nodes.push(root_node);
         Ok(())
     }
@@ -625,6 +625,7 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
 pub trait CursorToRootNode<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> {
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
+        in_construct_pivot_state: bool,
     ) -> PathNode;
 }
 
@@ -633,7 +634,9 @@ impl<Mpt: GetReadMpt, Cursor: CursorLoadNodeWrapper<Mpt>>
 {
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, _mpt_is_empty: bool,
-    ) -> BasicPathNode<Mpt> {
+        _in_construct_pivot_state: bool,
+    ) -> BasicPathNode<Mpt>
+    {
         basic_node
     }
 }
@@ -643,7 +646,9 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
 {
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
-    ) -> ReadWritePathNode<Mpt> {
+        in_construct_pivot_state: bool,
+    ) -> ReadWritePathNode<Mpt>
+    {
         ReadWritePathNode {
             basic_node,
             is_loaded: !mpt_is_empty,
@@ -657,6 +662,7 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
             delta_subtree_size: 0,
             has_io_error: self.io_error(),
             db_committed: false,
+            in_construct_pivot_state,
         }
     }
 }
@@ -751,6 +757,8 @@ pub struct ReadWritePathNode<Mpt> {
 
     has_io_error: *const Cell<bool>,
     db_committed: bool,
+
+    in_construct_pivot_state: bool,
 }
 
 impl<Mpt> Deref for ReadWritePathNode<Mpt> {
@@ -793,7 +801,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
     fn load_root<
         Cursor: CursorLoadNodeWrapper<Mpt> + CursorToRootNode<Mpt, Self>,
     >(
-        cursor: &mut Cursor,
+        cursor: &mut Cursor, in_construct_pivot_state: bool,
     ) -> Result<Self> {
         let mut mpt = cursor.take_mpt();
         // Special case for Genesis snapshot, where the mpt is an non-existence
@@ -835,12 +843,13 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
                 next_child_index: 0,
             },
             mpt_is_empty,
+            in_construct_pivot_state,
         ))
     }
 
     fn load_into(
         parent_node: &Self, mpt: &mut Option<Mpt>, node_child_index: u8,
-        supposed_merkle_root: &MerkleHash,
+        supposed_merkle_root: &MerkleHash, in_construct_pivot_state: bool,
     ) -> Result<Self>
     {
         let parent_path = &parent_node.get_basic_path_node().full_path_to_node;
@@ -851,7 +860,10 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
         let trie_node = parent_node
             .load_node_wrapper(mpt.as_mut().unwrap(), &path_db_key)?;
 
-        assert_eq!(
+        debug!("in_construct_pivot_state {}, loaded trie node merkle hash {:?}, supposed merkle hash {:?}", in_construct_pivot_state, trie_node.get_merkle(),
+        supposed_merkle_root,);
+        if !in_construct_pivot_state {
+            assert_eq!(
             trie_node.get_merkle(),
             supposed_merkle_root,
             "loaded trie node merkle hash {:?} != supposed merkle hash {:?}, path_db_key={:?}",
@@ -859,6 +871,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
             supposed_merkle_root,
             path_db_key,
         );
+        }
 
         let full_path_to_node = CompressedPathRaw::join_connected_paths(
             parent_path,
@@ -952,6 +965,7 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
                     &mut mpt_taken,
                     child_index,
                     supposed_merkle_hash,
+                    false,
                 )?))
             }
         }
@@ -971,6 +985,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
             delta_subtree_size: 0,
             has_io_error: parent_node.has_io_error,
             db_committed: false,
+            in_construct_pivot_state: parent_node.in_construct_pivot_state,
         }
     }
 
@@ -1106,6 +1121,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                 delta_subtree_size: self.delta_subtree_size,
                 has_io_error: self.has_io_error,
                 db_committed: self.db_committed,
+                in_construct_pivot_state: self.in_construct_pivot_state,
             };
 
             mem::swap(&mut child_node.trie_node, &mut self.trie_node);
@@ -1297,6 +1313,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                                     &mut mpt_taken,
                                     this_child_index,
                                     this_child_node_merkle_ref,
+                                    self.in_construct_pivot_state,
                                 )?);
 
                             if is_save_as_mode {

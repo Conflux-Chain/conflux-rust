@@ -119,11 +119,16 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
 {
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
-    ) -> SliceVerifyReadWritePathNode<Mpt> {
-        let mut root_node = <Self as CursorToRootNode<
-            Mpt,
-            ReadWritePathNode<Mpt>,
-        >>::new_root(self, basic_node, mpt_is_empty);
+        in_construct_pivot_state: bool,
+    ) -> SliceVerifyReadWritePathNode<Mpt>
+    {
+        let mut root_node =
+            <Self as CursorToRootNode<Mpt, ReadWritePathNode<Mpt>>>::new_root(
+                self,
+                basic_node,
+                mpt_is_empty,
+                in_construct_pivot_state,
+            );
         root_node.disable_path_compression();
         SliceVerifyReadWritePathNode(Some(root_node))
     }

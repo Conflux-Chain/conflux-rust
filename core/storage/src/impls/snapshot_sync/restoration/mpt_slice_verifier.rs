@@ -82,7 +82,7 @@ impl MptSliceVerifier {
     pub fn restore<Key: Borrow<[u8]>>(
         mut self, keys: &Vec<Key>, values: &Vec<Vec<u8>>,
     ) -> Result<SliceMptRebuilder> {
-        self.key_value_inserter.load_root()?;
+        self.key_value_inserter.load_root(false)?;
         // We must open the path of the left bound, in order to check the merkle
         // root, when the left bound key is missing from the chunk to
         // restore.

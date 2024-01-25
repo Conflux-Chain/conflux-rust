@@ -343,6 +343,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         &mut self, old_snapshot_db: Option<&Arc<SnapshotKvDbSqlite>>,
         mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
         recover_mpt_with_kv_snapshot_exist: bool,
+        in_construct_pivot_state: bool,
     ) -> Result<MerkleHash>
     {
         debug!("direct_merge begins.");
@@ -387,6 +388,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?.take(),
             set_keys_iter.iter_range(&[], None)?.take(),
+            in_construct_pivot_state,
         )?;
         self.commit_transaction()?;
 
@@ -400,6 +402,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
     fn copy_and_merge(
         &mut self, old_snapshot_db: &Arc<SnapshotKvDbSqlite>,
         mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
+        in_construct_pivot_state: bool,
     ) -> Result<MerkleHash>
     {
         debug!("copy_and_merge begins.");
@@ -448,6 +451,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?.take(),
             set_keys_iter.iter_range(&[], None)?.take(),
+            in_construct_pivot_state,
         )?;
         self.commit_transaction()?;
 

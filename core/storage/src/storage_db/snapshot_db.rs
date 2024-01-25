@@ -140,11 +140,13 @@ pub trait SnapshotDbTrait:
         &mut self, old_snapshot_db: Option<&Arc<Self>>,
         mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
         recover_mpt_with_kv_snapshot_exist: bool,
+        in_construct_pivot_state: bool,
     ) -> StorageResult<MerkleHash>;
 
     fn copy_and_merge(
         &mut self, old_snapshot_db: &Arc<Self>,
         mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
+        in_construct_pivot_state: bool,
     ) -> StorageResult<MerkleHash>;
 
     fn start_transaction(&mut self) -> StorageResult<()>;

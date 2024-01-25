@@ -187,6 +187,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         &mut self, _old_snapshot_db: Option<&Arc<SnapshotDbSqlite>>,
         _mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
         _recover_mpt_with_kv_snapshot_exist: bool,
+        _in_construct_pivot_state: bool,
     ) -> Result<MerkleHash>
     {
         unreachable!()
@@ -195,6 +196,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     fn copy_and_merge(
         &mut self, _old_snapshot_db: &Arc<SnapshotDbSqlite>,
         _mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
+        _in_construct_pivot_state: bool,
     ) -> Result<MerkleHash>
     {
         unreachable!()

@@ -43,7 +43,7 @@ impl<'a> MptMerger<'a> {
     pub fn merge(
         &mut self, inserter: &DumpedMptKvIterator,
     ) -> Result<MerkleHash> {
-        self.rw_cursor.load_root()?;
+        self.rw_cursor.load_root(false)?;
 
         struct Merger<'x, 'a: 'x> {
             merger: &'x mut MptMerger<'a>,
@@ -78,9 +78,10 @@ impl<'a> MptMerger<'a> {
             Error = Error,
         >,
         mut set_keys_iter: impl FallibleIterator<Item = MptKeyValue, Error = Error>,
+        in_construct_pivot_state: bool,
     ) -> Result<MerkleHash>
     {
-        self.rw_cursor.load_root()?;
+        self.rw_cursor.load_root(in_construct_pivot_state)?;
 
         let mut key_to_delete = delete_keys_iter.next()?;
         let mut key_value_to_set = set_keys_iter.next()?;
@@ -104,8 +105,8 @@ impl<'a> MptMerger<'a> {
                     while let Some((key, _)) = delete_keys_iter.next()? {
                         self.rw_cursor.delete(&key)?;
                     }
-                    break;
                 }
+                break;
             }
 
             // In a diff, if there is a deletion of the same key of a insertion,
