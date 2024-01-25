@@ -8,7 +8,7 @@ use cfx_storage::{
     storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
     FullSyncVerifier, Result as StorageResult, SnapshotDbManagerSqlite,
 };
-use primitives::{EpochId, MerkleHash};
+use primitives::{EpochId, MerkleHash, NULL_EPOCH};
 use std::sync::Arc;
 
 pub struct Restorer {
@@ -116,6 +116,7 @@ impl Restorer {
             )?;
         }
 
+        let snapshot_height = snapshot_info.height;
         storage_manager.register_new_snapshot(
             snapshot_info,
             &mut snapshot_info_map_locked,
@@ -127,6 +128,14 @@ impl Restorer {
         );
         *storage_manager.intermediate_trie_root_merkle.write() =
             Some(intermediate_trie_root_merkle);
+
+        // rewrite for special case
+        *storage_manager.persist_state_from_initialization.write() = Some((
+            false,
+            std::collections::HashSet::from([NULL_EPOCH]),
+            snapshot_height,
+            None,
+        ));
 
         debug!("Completed snapshot restoration.");
         Ok(())
