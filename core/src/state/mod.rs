@@ -945,9 +945,7 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
                     }
                 }
             } else {
-                accounts.extend(checkpoint.drain().map(|x| {
-                    x.0
-                }));
+                accounts.extend(checkpoint.drain().map(|x| x.0));
             }
         }
         self.merge_storage_changes(accounts);

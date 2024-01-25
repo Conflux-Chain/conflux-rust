@@ -71,15 +71,21 @@ class Contract:
         return tx_param, self.at_address(tx_param.contract_address())
 
     def call(self, sender_index, name, *args):
+        return self.call_with_value(sender_index, name, 0, *args)
+
+    def call_with_value(self, sender_index, name, value, *args):
         func = getattr(self.contract.functions, name)
         calldata = func(*args).buildTransaction({"gas": 21000, "gasPrice":1, "chainId": 1})["data"][2:]
         
 
-        tx_param = TxParam(sender_index=sender_index, action=bytearray.fromhex(self.address[2:]), data = calldata)
+        tx_param = TxParam(sender_index=sender_index, action=bytearray.fromhex(self.address[2:]), data = calldata, value = value)
         tx_param.assign_nonce()
         return tx_param
     
     def build_template(self, name, *args) -> CalldataTemplate:
+        return self.build_template_with_value(name, 0, *args)
+
+    def build_template_with_value(self, name, value, *args) -> CalldataTemplate:
         func = getattr(self.contract.functions, name)
         calldata = func(*args).buildTransaction({"gas": 21000, "gasPrice":1, "chainId": 1})["data"][2:]
-        return CalldataTemplate(calldata, self.address)
+        return CalldataTemplate(calldata, self.address, value)

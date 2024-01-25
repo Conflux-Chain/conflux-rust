@@ -40,6 +40,8 @@ impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> crate::Result<Option<Box<[u8]>>> {
         metric_record!(STORAGE_GET_TIMER, STORAGE_GET_TIMER2);
 
+        // info!("MPTStateOp: Get key {:?}", access_key);
+
         let db = self.state.read();
         let hash_db = &db.as_hash_db();
 
@@ -54,7 +56,7 @@ impl StateTrait for State {
         &mut self, access_key: StorageKey, value: Box<[u8]>,
     ) -> crate::Result<()> {
         assert!(!self.read_only);
-        trace!("MPTStateOp: Set key {:?}, value {:?}", access_key, value);
+        // info!("MPTStateOp: Set key {:?}, value {:?}", access_key, value);
         metric_record!(STORAGE_SET_TIMER, STORAGE_SET_TIMER2);
 
         let mut db = self.state.write();
@@ -69,7 +71,7 @@ impl StateTrait for State {
 
     fn delete(&mut self, access_key: StorageKey) -> crate::Result<()> {
         assert!(!self.read_only);
-        trace!("MPTStateOp: Del key {:?}", access_key);
+        // info!("MPTStateOp: Del key {:?}", access_key);
         metric_record!(STORAGE_SET_TIMER, STORAGE_SET_TIMER2);
 
         let mut db = self.state.write();
@@ -102,6 +104,7 @@ impl StateTrait for State {
 
     fn compute_state_root(&mut self) -> crate::Result<StateRootWithAuxInfo> {
         assert!(!self.read_only);
+        // info!("MPTState: Commit {:?}", self.root);
         self.get_state_root()
     }
 

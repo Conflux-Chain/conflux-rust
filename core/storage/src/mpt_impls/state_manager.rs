@@ -96,7 +96,11 @@ impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
         self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
     ) -> Result<Option<State>> {
+        use backtrace::Backtrace;
+
         assert!(epoch_id.is_read_only());
+        // info!("State Manager: get state no commit {:?}", epoch_id);
+        // info!("Back trace \n {:?}", Backtrace::new());
         let root = epoch_id.state_root.state_root.0.clone();
         Ok(Some(self.new_state(true, 0, root)))
     }
@@ -111,6 +115,8 @@ impl StateManagerTrait for StateManager {
         };
 
         let root = parent_epoch_id.state_root.state_root.0.clone();
+
+        // info!("State Manager: get state for next epoch {:?}", root);
 
         Ok(Some(
             if parent_epoch_id.is_read_only() {

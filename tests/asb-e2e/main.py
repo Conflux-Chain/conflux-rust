@@ -29,7 +29,7 @@ if LIGHT_HASH is not None:
         GENESIS_ROOT = "0x1d1e39c7083d3962249ddd2ea46c2ec55e6209c33aa462885d7aa999fd77e16a"
 else:
     if STORAGE == "lvmt":
-        GENESIS_ROOT = "0x2656c8cf5e759be06784c0cb950500598b6ca3078ed6e0a9c3a3ad8583cbae2f"
+        GENESIS_ROOT = "0x2b5846e6160f0aa8a37962468a8f09824c4170f268c923ea7b93f19141bbb475"
     elif STORAGE == "mpt" or STORAGE == "rain":
         GENESIS_ROOT = "0x4fc2fca496fcbab3a34ac370138c9c15d3af36b738ee655ca6a90dbf213c0338"
     elif STORAGE == "raw":
@@ -85,7 +85,7 @@ class SingleBench(ConfluxTestFramework):
             executive_trace="false",
             genesis_secrets=f"\"{genesis_file_path}\"",
             amt_public_params=f"'{amt_public_params_path}'",
-            log_level="'info'",
+            log_level="'debug'",
             # log_conf=f"'{log_config}'",
             storage_delta_mpts_cache_size=4_000_000,
             storage_delta_mpts_cache_start_size=2_000_000,

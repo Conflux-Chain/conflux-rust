@@ -45,11 +45,12 @@ def hex_no_prefix(input: str):
 
 
 class CalldataTemplate:
-    def __init__(self, template, address):
+    def __init__(self, template, address, value = 0):
         template = hex_no_prefix(template)
 
         self.template = template
         self.address = address
+        self.value = value
         self.params: List[ReplacePosition] = []
 
         for i in range(256):
@@ -63,7 +64,7 @@ class CalldataTemplate:
 
     def build_tx_param(self, sender_index, *params):
         calldata = self.fill(*params)
-        return TxParam(sender_index=sender_index, action=bytearray.fromhex(self.address[2:]), data = bytearray.fromhex(calldata))
+        return TxParam(sender_index=sender_index, action=bytearray.fromhex(self.address[2:]), data = bytearray.fromhex(calldata), value = self.value)
 
     def fill(self, *params):
         def detect_length(input):

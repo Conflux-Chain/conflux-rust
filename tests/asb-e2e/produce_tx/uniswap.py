@@ -9,6 +9,7 @@ from . import log
 from .contract import Contract
 from .params import *
 from .transfer import generate_transfer, sign_encode_dump_txs_in_batch
+from .native import faucet_balance
 import sha3
 import random
 from web3 import Web3
@@ -20,15 +21,19 @@ DATA_PATH = join(dirname(realpath(__file__)), "../../../experiment_data/transact
 def make_approve_transactions(sender_list, spender, contracts: List[Contract]) -> List[TxParam]:
     answers = []
     sender_list = list(sender_list)
+    batch_size = RLP_BATCH_SIZE
+
+    assert len(sender_list) % batch_size == 0, "List length must be a multiple of batch_size"
     templates = [contract.build_template("approve", spender, 2**256 - 1) for contract in contracts]
 
-    for sender_index in sender_list:
+    for sender_batch in [sender_list[i:i+batch_size] for i in range(0, len(sender_list), batch_size)]:
         for template in templates:
-            answers.append(template.build_tx_param(sender_index))
+            for sender_index in sender_batch:
+                answers.append(template.build_tx_param(sender_index))
 
     return answers
 
-def make_swap_transactions(sender_list, token_a_address, token_b_address, router_contracts, tx_n) -> List[TxParam]:
+def make_swap_transactions(sender_list, token_a_address, token_b_address, router_contracts, tx_n, swap_eth = False) -> List[TxParam]:
     SWAP_BASE = 10 ** 16
     sender_list = list(sender_list)
     log.info("Random pick swap task")
@@ -36,10 +41,16 @@ def make_swap_transactions(sender_list, token_a_address, token_b_address, router
 
     templates = []
 
-    templates.append(router_contracts.build_template("swapExactTokensForTokens", SWAP_BASE, int(SWAP_BASE / 2), [token_a_address, token_b_address], address_ph(0), 2**60))
-    templates.append(router_contracts.build_template("swapExactTokensForTokens", SWAP_BASE, int(SWAP_BASE / 2), [token_b_address, token_a_address], address_ph(0), 2**60))
-    templates.append(router_contracts.build_template("swapTokensForExactTokens", SWAP_BASE, SWAP_BASE * 2, [token_a_address, token_b_address], address_ph(0), 2**60))
-    templates.append(router_contracts.build_template("swapTokensForExactTokens", SWAP_BASE, SWAP_BASE * 2, [token_b_address, token_a_address], address_ph(0), 2**60))
+    if not swap_eth:
+        templates.append(router_contracts.build_template("swapExactTokensForTokens", SWAP_BASE, int(SWAP_BASE / 2), [token_a_address, token_b_address], address_ph(0), 2**60))
+        templates.append(router_contracts.build_template("swapExactTokensForTokens", SWAP_BASE, int(SWAP_BASE / 2), [token_b_address, token_a_address], address_ph(0), 2**60))
+        templates.append(router_contracts.build_template("swapTokensForExactTokens", SWAP_BASE, SWAP_BASE * 2, [token_a_address, token_b_address], address_ph(0), 2**60))
+        templates.append(router_contracts.build_template("swapTokensForExactTokens", SWAP_BASE, SWAP_BASE * 2, [token_b_address, token_a_address], address_ph(0), 2**60))
+    else:
+        templates.append(router_contracts.build_template("swapExactTokensForETH", SWAP_BASE, int(SWAP_BASE / 2), [token_a_address, token_b_address], address_ph(0), 2**60))
+        templates.append(router_contracts.build_template_with_value("swapExactETHForTokens", SWAP_BASE, int(SWAP_BASE / 2), [token_b_address, token_a_address], address_ph(0), 2**60))
+        templates.append(router_contracts.build_template("swapTokensForExactETH", SWAP_BASE, SWAP_BASE * 2, [token_a_address, token_b_address], address_ph(0), 2**60))
+        templates.append(router_contracts.build_template_with_value("swapETHForExactTokens", SWAP_BASE * 2, SWAP_BASE,  [token_b_address, token_a_address], address_ph(0), 2**60))
     log.info("Construct calldata")
     return [templates[i].build_tx_param(sender_index, get_account_address(sender_index)) for (sender_index, i) in tasks]
 
@@ -93,16 +104,24 @@ def deploy():
     pair_bytecode_hash()
     pair_deploy.set_gas(gas = 13_000_000, storage_limit = deploy_size)
 
+    eth_pair_deploy = factory_contract.call(0, "createPair", token_a_contract.address, weth_contract.address)
+    eth_pair_deploy.set_tag("ETH Pair deploy")
+    deploy_size = int(len(Contract.from_artifacts("UniswapV2Pair").contract.bytecode) * 1.2)
+    log.warn("Deploy size", deploy_size)
+    pair_bytecode_hash()
+    eth_pair_deploy.set_gas(gas = 13_000_000, storage_limit = deploy_size)
+
     # 2b. deploy uniswap router
     router_deploy, router_contract = Contract.from_artifacts("UniswapV2Router02").deploy(3, factory_contract.address, weth_contract.address)
     router_deploy.set_tag("Router deploy")
 
     # 2b. add liquidity
-    send_token_a = token_a_contract.call(1, "transfer", get_account_address(3), 10 ** 6 * 10 ** 18)
+    send_token_a = token_a_contract.call(1, "transfer", get_account_address(3), 2 * 10 ** 6 * 10 ** 18)
     send_token_b = token_b_contract.call(2, "transfer", get_account_address(3), 10 ** 6 * 10 ** 18)
+    faucet_token = faucet_balance(3, 10 ** 6)
 
     with open(join(folder_path, "deploy_2"), "wb") as fout:
-        txs = sign([pair_deploy, router_deploy, send_token_a, send_token_b])
+        txs = sign([pair_deploy, eth_pair_deploy, router_deploy, send_token_a, send_token_b, faucet_token])
         dump_rpc_batches(txs, fout)
 
     ##########################
@@ -111,9 +130,13 @@ def deploy():
     approve_token_a = token_a_contract.call(3, "approve", router_contract.address, 2**256 - 1)
     approve_token_b = token_b_contract.call(3, "approve", router_contract.address, 2**256 - 1)
     add_liquidity = router_contract.call(3, "addLiquidity", token_a_contract.address, token_b_contract.address, 10 ** 6 * 10 ** 18, 10 ** 6 * 10 ** 18, 0, 0, get_account_address(3), 2**60)
+    add_liquidity.set_tag("Add liquidity for token pool")
+    add_liquidity_eth = router_contract.call_with_value(3, "addLiquidityETH", 10 ** 6 * 10 ** 18, token_a_contract.address, 10 ** 6 * 10 ** 18, 0, 0, get_account_address(3), 2**60) 
+    add_liquidity_eth.set_tag("Add liquidity for ETH pool")
+
 
     with open(join(folder_path, "add_liquidity"), "wb") as fout:
-        txs = sign([approve_token_a, approve_token_b, add_liquidity])
+        txs = sign([approve_token_a, approve_token_b, add_liquidity, add_liquidity_eth])
         for tx in txs:
             dump_rpc_batches([tx], fout)
 
@@ -143,10 +166,16 @@ def deploy():
 
     record_account_map("swap")
     for acc_num in ACCOUNT_SIZE_LIST:
-        log.notice(f"Swap for {acc_num}")
+        log.notice(f"Swap token for {acc_num}")
         recover_account_map("swap")
         txs = make_swap_transactions(range(reserve_range, reserve_range + acc_num), token_a_contract.address, token_b_contract.address, router_contract, SWAP_TXS(acc_num) )
         sign_encode_dump_txs_in_batch(path(f"swap_token_{acc_num}"), txs)
+
+    for acc_num in ACCOUNT_SIZE_LIST:
+        log.notice(f"Swap eth for {acc_num}")
+        recover_account_map("swap")
+        txs = make_swap_transactions(range(reserve_range, reserve_range + acc_num), token_a_contract.address, weth_contract.address, router_contract, SWAP_TXS(acc_num), swap_eth = True )
+        sign_encode_dump_txs_in_batch(path(f"swap_eth_{acc_num}"), txs)
 
 
 def pair_bytecode_hash():

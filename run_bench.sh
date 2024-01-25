@@ -1,9 +1,9 @@
 #!/bin/bash
 
 export folder="tos23"
-export common_features='--features client/metric-goodput --features cfxcore/bypass-txpool'
+export common_features='--features client/metric-goodput --features cfxcore/bypass-txpool --features pprof-profile'
 function cgenv {
-  $@
+  cgrun $@
 }
 
 function build {
@@ -16,7 +16,7 @@ function build {
   # RainBlock's MPT
   cargo build --release $common_features --features "rain-storage" --target-dir target/rain-db
   # LMPTs
-  cargo build --release --features "client/metric-goodput" --features "cfxcore/bypass-txpool" --features "cfxcore/storage-dev"  
+  cargo build --release $common_features --features "cfxcore/storage-dev"  
 }
 
 function clear_caches {
@@ -26,12 +26,14 @@ function clear_caches {
 }
 
 function run {
-  clear_caches
-  cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-token native --metric-folder $folder
-  clear_caches
-  cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-token erc20 --metric-folder $folder
+  # clear_caches
+  # cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-token native --metric-folder $folder
+  # clear_caches
+  # cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-token erc20 --metric-folder $folder
   clear_caches
   cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $1 --bench-token erc20 --bench-mode uniswap --metric-folder $folder
+  clear_caches
+  cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $1 --bench-token native --bench-mode uniswap --metric-folder $folder
 }
 
 
@@ -64,6 +66,12 @@ unset http_proxy
 
 if [[ $1 == "build" ]]; then
   build
+elif [[ $1 == "test" ]]; then
+  cargo build --release --features client/metric-goodput --features cfxcore/bypass-txpool --features pprof-profile --features "raw-storage" --target-dir target/raw-db
+  export CONFLUX_DEV_STORAGE=raw
+  # echo `which python3`
+  python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys 1m --bench-txs 1m --bench-token erc20 --bench-mode uniswap --metric-folder tos-test
+  python3 tests/asb-e2e/main.py --port-min 24000 --bench-keys 1m --bench-txs 1m --bench-token native --bench-mode uniswap --metric-folder tos-test
 else
   # export LIGHT_HASH=1
   main "1m" "3m"

@@ -49,9 +49,7 @@ impl LayeredHashMap {
         return None;
     }
 
-    pub fn new_level(&mut self) { 
-        self.levels.push(Default::default()); 
-    }
+    pub fn new_level(&mut self) { self.levels.push(Default::default()); }
 
     pub fn insert(&mut self, key: Vec<u8>, value: U256) {
         self.levels.last_mut().unwrap().insert(key, value);
@@ -70,7 +68,7 @@ impl LayeredHashMap {
 
     pub fn merge(&mut self) {
         if self.levels.len() == 1 {
-            return
+            return;
         }
         let popped_level = self.levels.pop().unwrap();
         let top_level = self.levels.last_mut().unwrap();

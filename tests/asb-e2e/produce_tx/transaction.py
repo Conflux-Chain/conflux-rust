@@ -5,6 +5,7 @@ import sha3
 
 from .framework import DEFAULT_PY_TEST_CHAIN_ID, Transactions
 from .account import get_account, AccountIndex
+from .params import RLP_BATCH_SIZE
 
 class CallType(Enum):
     Transfer = 0
@@ -96,7 +97,7 @@ class EncodedTransaction:
         self.length = len(batch_tx)
 
 
-def dump_rpc_batches(txs, fout, batch_size=200, print_hash=False):
+def dump_rpc_batches(txs, fout, batch_size=RLP_BATCH_SIZE, print_hash=False):
     encoded_txs = []
     i = 0
     batch_tx = []

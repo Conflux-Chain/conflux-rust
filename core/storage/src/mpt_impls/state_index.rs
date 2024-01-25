@@ -1,6 +1,7 @@
 use cfx_storage_primitives::mpt::StateRootWithAuxInfo;
 use primitives::EpochId;
 
+#[derive(Debug)]
 pub struct StateIndex {
     pub epoch_id: EpochId,
     pub height: Option<u64>,

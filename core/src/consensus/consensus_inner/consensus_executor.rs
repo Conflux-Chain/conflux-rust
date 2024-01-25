@@ -213,66 +213,97 @@ impl ConsensusExecutor {
         // It receives blocks hashes from on_new_block and execute them
         let handle = thread::Builder::new()
             .name("Consensus Execution Worker".into())
-            .spawn(move || loop {
-                if executor_thread.stopped.load(Relaxed) {
-                    // The thread should be stopped. The rest tasks in the queue
-                    // will be discarded.
-                    break;
-                }
-                let maybe_task = {
-                    // Here we use `try_write` because some thread
-                    // may wait for execution results while holding the
-                    // Consensus Inner lock, if we wait on
-                    // inner lock here we may get deadlock.
-                    match receiver.try_recv() {
-                        Ok(task) => Some(task),
-                        Err(TryRecvError::Empty) => {
-                            // The channel is empty, so we try to optimistically
-                            // get later epochs to execute.
-                            consensus_inner
-                                .try_write()
-                                .and_then(|mut inner| {
-                                    executor_thread
-                                        .get_optimistic_execution_task(
-                                            &mut *inner,
-                                        )
-                                })
-                                .map(|task| {
-                                    debug!(
+            .spawn(move || {
+                let mut last_executed: Option<u64> = None;
+                loop {
+                    if executor_thread.stopped.load(Relaxed) {
+                        // The thread should be stopped. The rest tasks in the
+                        // queue will be discarded.
+                        break;
+                    }
+                    let maybe_task = {
+                        // Here we use `try_write` because some thread
+                        // may wait for execution results while holding the
+                        // Consensus Inner lock, if we wait on
+                        // inner lock here we may get deadlock.
+                        match receiver.try_recv() {
+                            Ok(task) => {
+                                // info!("[asb-debug] UnBlocked receive task
+                                // {:?}", task);
+                                Some(task)
+                            }
+                            Err(TryRecvError::Empty) => {
+                                // The channel is empty, so we try to
+                                // optimistically
+                                // get later epochs to execute.
+                                consensus_inner
+                                    .try_write()
+                                    .and_then(|mut inner| {
+                                        executor_thread
+                                            .get_optimistic_execution_task(
+                                                &mut *inner,
+                                            )
+                                    })
+                                    .map(|task| {
+                                        debug!(
                                         "Get optimistic_execution_task {:?}",
                                         task
                                     );
-                                    ExecutionTask::ExecuteEpoch(task)
-                                })
-                        }
-                        Err(TryRecvError::Disconnected) => {
-                            info!("Channel disconnected, stop thread");
-                            break;
-                        }
-                    }
-                };
-                let task = match maybe_task {
-                    Some(task) => task,
-                    None => {
-                        //  Even optimistic tasks are all finished, so we block
-                        // and wait for  new execution
-                        // tasks.  New optimistic tasks
-                        // will only exist if pivot_chain changes,
-                        //  and new tasks will be sent to `receiver` in this
-                        // case, so this waiting will
-                        // not prevent new optimistic tasks from being executed.
-                        match receiver.recv() {
-                            Ok(task) => task,
-                            Err(RecvError) => {
-                                info!("Channel receive error, stop thread");
+                                        // info!("[asb-debug] Optimistic
+                                        // Execution Task {:?}", task);
+                                        ExecutionTask::ExecuteEpoch(task)
+                                    })
+                            }
+                            Err(TryRecvError::Disconnected) => {
+                                info!("Channel disconnected, stop thread");
                                 break;
                             }
                         }
+                    };
+                    let task = match maybe_task {
+                        Some(task) => task,
+                        None => {
+                            //  Even optimistic tasks are all finished, so we
+                            // block and wait for
+                            // new execution tasks.
+                            // New optimistic tasks
+                            // will only exist if pivot_chain changes,
+                            //  and new tasks will be sent to `receiver` in this
+                            // case, so this waiting will
+                            // not prevent new optimistic tasks from being
+                            // executed.
+                            match receiver.recv() {
+                                Ok(task) => {
+                                    // info!("[asb-debug] Blocked receive task
+                                    // {:?}", task);
+                                    task
+                                }
+                                Err(RecvError) => {
+                                    info!("Channel receive error, stop thread");
+                                    break;
+                                }
+                            }
+                        }
+                    };
+                    if cfg!(feature = "storage-dev") {
+                        if let ExecutionTask::ExecuteEpoch(
+                            EpochExecutionTask {
+                                start_block_number, ..
+                            },
+                        ) = task
+                        {
+                            if last_executed.map_or(false, |last| {
+                                last >= start_block_number
+                            }) {
+                                continue;
+                            }
+                            last_executed = Some(start_block_number);
+                        }
                     }
-                };
-                if !handler.handle_execution_work(task) {
-                    // `task` is `Stop`, so just stop.
-                    break;
+                    if !handler.handle_execution_work(task) {
+                        // `task` is `Stop`, so just stop.
+                        break;
+                    }
                 }
             })
             .expect("Cannot fail");
@@ -597,10 +628,14 @@ impl ConsensusExecutor {
     /// holding inner lock.
     pub fn enqueue_epoch(&self, task: EpochExecutionTask) -> bool {
         if !self.consensus_graph_bench_mode {
-            self.sender
+            // info!("[asb-debug] Try send task {:?}", task);
+            let success = self
+                .sender
                 .lock()
                 .send(ExecutionTask::ExecuteEpoch(task))
-                .is_ok()
+                .is_ok();
+            // info!("[asb-debug] success {}", success);
+            success
         } else {
             true
         }
@@ -904,6 +939,8 @@ impl ConsensusExecutionHandler {
         // FIXME: Currently we make the snapshotting decision when committing
         // FIXME: a new state.
 
+        info!("Compute Epoch: epoch hash {:?}, start_block_number {:?}, on_local_pivot {:?}, force_recompute {:?}", epoch_hash, start_block_number, on_local_pivot, force_recompute);
+
         // persist block number index
         // note: we need to persist before execution because in some cases,
         // execution is skipped. when `compute_epoch` is called, it is
@@ -1079,6 +1116,8 @@ impl ConsensusExecutionHandler {
             .state_availability_boundary
             .write()
             .adjust_upper_bound(&pivot_block.block_header);
+
+        info!("Compute Epoch Done: epoch hash {:?}, start_block_number {:?}, on_local_pivot {:?}, force_recompute {:?}", epoch_hash, start_block_number, on_local_pivot, force_recompute);
     }
 
     fn process_epoch_transactions(

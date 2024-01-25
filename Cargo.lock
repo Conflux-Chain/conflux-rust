@@ -869,6 +869,7 @@ dependencies = [
 name = "cfxcore"
 version = "1.1.7"
 dependencies = [
+ "backtrace",
  "bit-set",
  "bn",
  "byteorder",

@@ -88,6 +88,7 @@ strum = "0.20"
 strum_macros = "0.20"
 smart-default = "0.6.0"
 flame = { git="https://github.com/llogiq/flame.git" }
+backtrace = "*"
 
 
 [dev-dependencies]

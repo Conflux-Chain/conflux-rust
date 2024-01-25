@@ -731,8 +731,8 @@ pub mod delegate_convert {
                 },
                 // We exhausted all possible ErrorKinds here, however
                 // https://stackoverflow.com/questions/36440021/whats-purpose-of-errorkind-nonexhaustive
-                RpcErrorKind::__Nonexhaustive {} => unsafe {
-                    unreachable_unchecked()
+                RpcErrorKind::__Nonexhaustive {} => {
+                    unreachable!()
                 },
             }
         }

@@ -652,7 +652,7 @@ impl RpcImpl {
 }
 
 use lazy_static::lazy_static;
-use profile::report_pprof;
+use profile::{report_pprof, initialize_pprof};
 lazy_static! {
     pub(crate) static ref DEBUG_MARK: Arc<dyn metrics::Meter> =
         metrics::register_meter_with_group("debug", "debug");
@@ -662,6 +662,7 @@ lazy_static! {
 impl RpcImpl {
     pub fn debug_mark(&self) -> JsonRpcResult<()> {
         DEBUG_MARK.mark(1);
+        initialize_pprof();
         info!("debug_mark");
         Ok(())
     }

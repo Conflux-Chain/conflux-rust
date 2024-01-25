@@ -96,14 +96,15 @@ def load(path, tx_n = None):
 class Uniswap(LoadTask):
     def warmup_transaction(self):
         path = lambda x: os.path.join(TRANSACTION_PATH, f"uniswap/{x}")
+        print("warmup uniswap erc20")
 
         print("Deploy contract group 1")
         yield load(path("deploy_1"), 4)
 
         print("Deploy contract group 2")
-        yield load(path("deploy_2"), 4)
+        yield load(path("deploy_2"), 6)
 
-        for tx in load(path("add_liquidity"), 3):
+        for tx in load(path("add_liquidity"), 4):
             print("Add liquidity in step")
             yield [tx]
         
@@ -119,12 +120,38 @@ class Uniswap(LoadTask):
     def bench_transaction(self):
         path = lambda x: os.path.join(TRANSACTION_PATH, f"uniswap/{x}")
         return load(path(f"swap_token_{self.accounts_n}"), self.tx_n)
+
+class UniswapETH(LoadTask):
+    def warmup_transaction(self):
+        path = lambda x: os.path.join(TRANSACTION_PATH, f"uniswap/{x}")
+        print("warmup uniswap eth")
+
+        print("Deploy contract group 1")
+        yield load(path("deploy_1"), 4)
+
+        print("Deploy contract group 2")
+        yield load(path("deploy_2"), 6)
+
+        for tx in load(path("add_liquidity"), 4):
+            print("Add liquidity in step")
+            yield [tx]
+        
+        print("Distribute toke A")
+        yield load(path("distribute_token_a"), self.accounts_n)
+        print("Distribute native")
+        yield load(path("distribute_native"), self.accounts_n)
+        print("Approval")
+        yield load(path("approval"), self.accounts_n * 2)[::2]
+
+    def bench_transaction(self):
+        path = lambda x: os.path.join(TRANSACTION_PATH, f"uniswap/{x}")
+        return load(path(f"swap_eth_{self.accounts_n}"), self.tx_n)
         
 
 def get_loader(options):
     if options.bench_token == "erc20":
         is_erc20 = True
-    elif options.bench_token == "normal":
+    elif options.bench_token == "native":
         is_erc20 = False
     else:
         raise Exception("Unrecognized bench token")
@@ -135,6 +162,6 @@ def get_loader(options):
     elif options.bench_mode == "less-sender":
         return Erc20LessSender(options) if is_erc20 else NativeLessSender(options)
     elif options.bench_mode == "uniswap":
-        return Uniswap(options)
+        return Uniswap(options) if is_erc20 else UniswapETH(options)
     else:
         raise Exception("Unrecognized bench mode")
