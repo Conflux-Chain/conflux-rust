@@ -24,6 +24,7 @@ pub struct SnapshotDbManagerSqlite {
     latest_snapshot_id: RwLock<(EpochId, u64)>,
     copying_mpt_snapshot: Arc<Mutex<()>>,
     snapshot_epoch_id_before_recovered: RwLock<Option<EpochId>>,
+    in_construct_pivot_state: RwLock<bool>,
 }
 
 #[derive(Debug)]
@@ -151,6 +152,7 @@ impl SnapshotDbManagerSqlite {
             latest_snapshot_id: RwLock::new((NULL_EPOCH, 0)),
             copying_mpt_snapshot: Arc::new(Default::default()),
             snapshot_epoch_id_before_recovered: RwLock::new(None),
+            in_construct_pivot_state: RwLock::new(false),
         })
     }
 
@@ -160,6 +162,10 @@ impl SnapshotDbManagerSqlite {
 
     pub fn clean_snapshot_epoch_id_before_recovered(&self) {
         *self.snapshot_epoch_id_before_recovered.write() = None;
+    }
+
+    pub fn set_in_construct_pivot_state(&self, in_construct_pivot_state: bool) {
+        *self.in_construct_pivot_state.write() = in_construct_pivot_state;
     }
 
     pub fn recreate_latest_mpt_snapshot(&self) -> Result<()> {
@@ -884,8 +890,11 @@ impl SnapshotDbManagerSqlite {
         )?;
         let old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
-        temp_snapshot_db
-            .copy_and_merge(&old_snapshot_db.snapshot_db, mpt_snapshot_db)
+        temp_snapshot_db.copy_and_merge(
+            &old_snapshot_db.snapshot_db,
+            mpt_snapshot_db,
+            *self.in_construct_pivot_state.read(),
+        )
     }
 
     fn rename_snapshot_db<P: AsRef<Path>>(
@@ -1091,6 +1100,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 None,
                 &mut snapshot_mpt_db,
                 recover_mpt_with_kv_snapshot_exist,
+                *self.in_construct_pivot_state.read(),
             )?
         } else {
             let (db_path, copied) = if recover_mpt_with_kv_snapshot_exist {
@@ -1158,6 +1168,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     old_snapshot_db,
                     &mut snapshot_mpt_db,
                     recover_mpt_with_kv_snapshot_exist,
+                    *self.in_construct_pivot_state.read(),
                 )?
             } else {
                 (snapshot_kv_db, snapshot_mpt_db) = self.open_snapshot_write(
