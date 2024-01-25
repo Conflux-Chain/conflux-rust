@@ -366,7 +366,7 @@ impl SnapshotDbManagerSqlite {
                         self.latest_snapshot_id.read().0,
                         self.latest_snapshot_id.read().1
                     );
-                    if new_epoch_height < self.latest_snapshot_id.read().1 {
+                    if new_epoch_height <= self.latest_snapshot_id.read().1 {
                         bail!(format!(
                             "Try to write an old snapshot {}, {}",
                             new_epoch_height,

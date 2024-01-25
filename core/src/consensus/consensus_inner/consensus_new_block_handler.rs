@@ -2365,14 +2365,7 @@ impl ConsensusNewBlockHandler {
                 .is_some_and(|height| height >= era_pivot_epoch_height)
             {
                 // mpt snapshot will be created from empty
-                inner
-                    .data_man
-                    .storage_manager
-                    .get_storage_manager()
-                    .get_snapshot_manager()
-                    .get_snapshot_db_manager()
-                    .recreate_latest_mpt_snapshot()
-                    .unwrap();
+                snapshot_db_manager.recreate_latest_mpt_snapshot().unwrap();
             } else {
                 let pivot_hash_before_era = if era_pivot_epoch_height == 0 {
                     None
