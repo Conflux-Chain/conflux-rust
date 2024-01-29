@@ -2221,6 +2221,13 @@ impl ConsensusNewBlockHandler {
         debug!("latest snapshot epoch height: {}, temp snapshot status: {}, max snapshot epoch height has mpt: {:?}, removed snapshots {:?}",
             latest_snapshot_epoch_height, temp_snapshot_db_existing, max_snapshot_epoch_height_has_mpt, removed_snapshots);
 
+        if removed_snapshots.len() == 1
+            && removed_snapshots.contains(&NULL_EPOCH)
+        {
+            debug!("special case for synced snapshot");
+            return Some(end_index);
+        }
+
         if max_snapshot_epoch_height_has_mpt
             .is_some_and(|h| h == latest_snapshot_epoch_height)
         {
@@ -2297,10 +2304,16 @@ impl ConsensusNewBlockHandler {
         // if the latest_snapshot_epoch_height is greater than
         // start_compute_epoch_height, the latest MPT snapshot is dirty
         if recovery_latest_mpt_snapshot {
-            let era_pivot_epoch_height =
+            let era_pivot_epoch_height = if start_compute_epoch_height
+                <= inner.cur_era_stable_height + snapshot_epoch_count
+            {
+                debug!("snapshot for cur_era_stable_height must be exist");
+                inner.cur_era_stable_height
+            } else {
                 (start_compute_epoch_height - snapshot_epoch_count - 1)
                     / self.conf.inner_conf.era_epoch_count
-                    * self.conf.inner_conf.era_epoch_count;
+                    * self.conf.inner_conf.era_epoch_count
+            };
 
             if era_pivot_epoch_height > latest_snapshot_epoch_height {
                 panic!("era_pivot_epoch_height is greater than latest_snapshot_epoch_height, this should not happen");
@@ -2310,10 +2323,6 @@ impl ConsensusNewBlockHandler {
                 "need recovery latest mpt snapshot, start compute epoch height {}, era pivot epoch height {}",
                 start_compute_epoch_height, era_pivot_epoch_height
             );
-
-            if era_pivot_epoch_height < inner.cur_era_genesis_height {
-                panic!("unreachable, era_pivot_epoch_height is less than cur_era_genesis_height");
-            }
 
             if start_compute_epoch_height <= era_pivot_epoch_height {
                 unreachable!("start_compute_epoch_height {} is smaller than era_pivot_epoch_height {}", start_compute_epoch_height, era_pivot_epoch_height);
@@ -2383,15 +2392,13 @@ impl ConsensusNewBlockHandler {
                     .unwrap();
             }
 
-            let max_snapshot_epoch_index_has_mpt =
-                if max_snapshot_epoch_height_has_mpt.is_some() {
-                    Some(inner.height_to_pivot_index(
-                        max_snapshot_epoch_height_has_mpt.unwrap(),
-                    ))
+            max_snapshot_epoch_height_has_mpt.and_then(|v| {
+                if v >= inner.cur_era_stable_height {
+                    Some(inner.height_to_pivot_index(v))
                 } else {
                     None
-                };
-            max_snapshot_epoch_index_has_mpt
+                }
+            })
         } else {
             if temp_snapshot_db_existing
                 && latest_snapshot_epoch_height + snapshot_epoch_count
