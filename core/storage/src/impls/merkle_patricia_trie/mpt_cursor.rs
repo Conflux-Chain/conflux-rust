@@ -344,6 +344,8 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                     .skip_till_child_index(child_index)?;
                 parent_node.get_read_write_path_node().next_child_index =
                     child_index;
+                let in_construct_pivot_state =
+                    parent_node.in_construct_pivot_state();
                 let new_node = PathNode::new(
                     BasicPathNode::new(
                         SnapshotMptNode(VanillaTrieNode::new(
@@ -357,6 +359,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                             .get_read_write_path_node()
                             .full_path_to_node,
                         child_index,
+                        in_construct_pivot_state,
                     ),
                     parent_node,
                     value_len,
@@ -406,6 +409,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                         None,
                         &parent_node.get_basic_path_node().full_path_to_node,
                         parent_node.get_basic_path_node().next_child_index,
+                        parent_node.in_construct_pivot_state(),
                     ),
                     parent_node,
                     if insert_value_at_fork { value_len } else { 0 },
@@ -475,6 +479,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                                     .get_basic_path_node()
                                     .full_path_to_node,
                                 child_index,
+                                parent_node.in_construct_pivot_state(),
                             ),
                             &fork_node,
                             value_len,
@@ -625,7 +630,6 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
 pub trait CursorToRootNode<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> {
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
-        in_construct_pivot_state: bool,
     ) -> PathNode;
 }
 
@@ -634,9 +638,7 @@ impl<Mpt: GetReadMpt, Cursor: CursorLoadNodeWrapper<Mpt>>
 {
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, _mpt_is_empty: bool,
-        _in_construct_pivot_state: bool,
-    ) -> BasicPathNode<Mpt>
-    {
+    ) -> BasicPathNode<Mpt> {
         basic_node
     }
 }
@@ -646,9 +648,7 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
 {
     fn new_root(
         &self, basic_node: BasicPathNode<Mpt>, mpt_is_empty: bool,
-        in_construct_pivot_state: bool,
-    ) -> ReadWritePathNode<Mpt>
-    {
+    ) -> ReadWritePathNode<Mpt> {
         ReadWritePathNode {
             basic_node,
             is_loaded: !mpt_is_empty,
@@ -662,7 +662,6 @@ impl<Mpt: GetRwMpt, Cursor: CursorLoadNodeWrapper<Mpt> + CursorSetIoError>
             delta_subtree_size: 0,
             has_io_error: self.io_error(),
             db_committed: false,
-            in_construct_pivot_state,
         }
     }
 }
@@ -687,12 +686,15 @@ pub struct BasicPathNode<Mpt> {
 
     /// The next child index to look into.
     pub next_child_index: u8,
+
+    pub in_construct_pivot_state: bool,
 }
 
 impl<Mpt> BasicPathNode<Mpt> {
     fn new(
         trie_node: SnapshotMptNode, mpt: Option<Mpt>,
         parent_path: &CompressedPathRaw, child_index: u8,
+        in_construct_pivot_state: bool,
     ) -> Self
     {
         let full_path_to_node = CompressedPathRaw::join_connected_paths(
@@ -710,6 +712,7 @@ impl<Mpt> BasicPathNode<Mpt> {
             full_path_to_node,
             path_db_key,
             next_child_index: 0,
+            in_construct_pivot_state,
         }
     }
 
@@ -757,8 +760,6 @@ pub struct ReadWritePathNode<Mpt> {
 
     has_io_error: *const Cell<bool>,
     db_committed: bool,
-
-    in_construct_pivot_state: bool,
 }
 
 impl<Mpt> Deref for ReadWritePathNode<Mpt> {
@@ -841,9 +842,9 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
                 full_path_to_node: Default::default(),
                 path_db_key: Default::default(),
                 next_child_index: 0,
+                in_construct_pivot_state,
             },
             mpt_is_empty,
-            in_construct_pivot_state,
         ))
     }
 
@@ -887,12 +888,15 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
                 full_path_to_node,
                 path_db_key,
                 next_child_index: 0,
+                in_construct_pivot_state,
             },
             parent_node,
         ))
     }
 
     fn open_child_index(&mut self, child_index: u8) -> Result<Option<Self>>;
+
+    fn in_construct_pivot_state(&self) -> bool;
 }
 
 // TODO: What's the value of RwPathNodeTrait? It seems sufficient now to have
@@ -965,11 +969,13 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
                     &mut mpt_taken,
                     child_index,
                     supposed_merkle_hash,
-                    false,
+                    self.in_construct_pivot_state,
                 )?))
             }
         }
     }
+
+    fn in_construct_pivot_state(&self) -> bool { self.in_construct_pivot_state }
 }
 
 impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
@@ -985,7 +991,6 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
             delta_subtree_size: 0,
             has_io_error: parent_node.has_io_error,
             db_committed: false,
-            in_construct_pivot_state: parent_node.in_construct_pivot_state,
         }
     }
 
@@ -1078,6 +1083,8 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
             },
         }
     }
+
+    fn in_construct_pivot_state(&self) -> bool { self.in_construct_pivot_state }
 }
 
 impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
@@ -1105,6 +1112,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                     full_path_to_node: self.full_path_to_node.clone(),
                     path_db_key: new_path_db_key,
                     next_child_index: self.next_child_index,
+                    in_construct_pivot_state: self.in_construct_pivot_state,
                 },
                 is_loaded: false,
                 maybe_first_realized_child_index: self
@@ -1121,7 +1129,6 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                 delta_subtree_size: self.delta_subtree_size,
                 has_io_error: self.has_io_error,
                 db_committed: self.db_committed,
-                in_construct_pivot_state: self.in_construct_pivot_state,
             };
 
             mem::swap(&mut child_node.trie_node, &mut self.trie_node);

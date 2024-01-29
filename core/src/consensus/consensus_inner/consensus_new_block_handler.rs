@@ -2095,7 +2095,6 @@ impl ConsensusNewBlockHandler {
             .get_snapshot_manager()
             .get_snapshot_db_manager();
         snapshot_db_manager.clean_snapshot_epoch_id_before_recovered();
-        snapshot_db_manager.set_in_construct_pivot_state(false);
     }
 
     fn get_force_compute_index(
@@ -2220,10 +2219,10 @@ impl ConsensusNewBlockHandler {
                 max_snapshot_epoch_height_has_mpt,
             )
         } else {
-            (false, HashSet::new(), inner.cur_era_stable_height, None)
+            (None, HashSet::new(), inner.cur_era_stable_height, None)
         };
 
-        debug!("latest snapshot epoch height: {}, temp snapshot status: {}, max snapshot epoch height has mpt: {:?}, removed snapshots {:?}",
+        debug!("latest snapshot epoch height: {}, temp snapshot status: {:?}, max snapshot epoch height has mpt: {:?}, removed snapshots {:?}",
             latest_snapshot_epoch_height, temp_snapshot_db_existing, max_snapshot_epoch_height_has_mpt, removed_snapshots);
 
         if removed_snapshots.len() == 1
@@ -2274,7 +2273,7 @@ impl ConsensusNewBlockHandler {
         let recovery_latest_mpt_snapshot =
             if self.conf.inner_conf.recovery_latest_mpt_snapshot
                 || start_compute_epoch_height <= latest_snapshot_epoch_height
-                || (temp_snapshot_db_existing
+                || (temp_snapshot_db_existing.is_some()
                     && latest_snapshot_epoch_height
                         < start_compute_epoch_height
                     && start_compute_epoch_height
@@ -2405,20 +2404,19 @@ impl ConsensusNewBlockHandler {
                 }
             })
         } else {
-            if temp_snapshot_db_existing
+            if temp_snapshot_db_existing.is_some()
                 && latest_snapshot_epoch_height + snapshot_epoch_count
                     < start_compute_epoch_height
                 && start_compute_epoch_height
                     <= latest_snapshot_epoch_height + 2 * snapshot_epoch_count
             {
-                info!("set in_construct_pivot_state in snapshot_db_manager to true");
                 inner
                     .data_man
                     .storage_manager
                     .get_storage_manager()
                     .get_snapshot_manager()
                     .get_snapshot_db_manager()
-                    .set_in_construct_pivot_state(true);
+                    .set_need_reconstruct_snapshot(temp_snapshot_db_existing);
             }
 
             debug!("the latest MPT snapshot is valid");
