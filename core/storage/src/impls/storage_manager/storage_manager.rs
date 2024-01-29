@@ -136,7 +136,7 @@ pub struct StorageManager {
     pub intermediate_trie_root_merkle: RwLock<Option<MerkleHash>>,
 
     pub persist_state_from_initialization:
-        RwLock<Option<(bool, HashSet<EpochId>, u64, Option<u64>)>>,
+        RwLock<Option<(Option<EpochId>, HashSet<EpochId>, u64, Option<u64>)>>,
 }
 
 impl MallocSizeOf for StorageManager {

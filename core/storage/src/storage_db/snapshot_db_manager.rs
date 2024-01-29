@@ -7,7 +7,7 @@ pub struct SnapshotPersistState {
     pub missing_snapshots: Vec<EpochId>,
     pub max_epoch_id: EpochId,
     pub max_epoch_height: u64,
-    pub temp_snapshot_db_existing: bool,
+    pub temp_snapshot_db_existing: Option<EpochId>,
     pub removed_snapshots: HashSet<EpochId>,
     pub max_snapshot_epoch_height_has_mpt: Option<u64>,
 }
@@ -85,7 +85,7 @@ pub trait SnapshotDbManagerTrait {
         // missing snapshots.
         let mut max_epoch_height = 0;
         let mut max_epoch_id = NULL_EPOCH;
-        let mut temp_snapshot_db_existing = false;
+        let mut temp_snapshot_db_existing = None;
         let mut removed_snapshots = HashSet::new();
         let mut max_snapshot_epoch_height_has_mpt = None;
 
@@ -111,7 +111,11 @@ pub trait SnapshotDbManagerTrait {
                 match self.try_get_new_snapshot_epoch_from_temp_path(dir_name) {
                     Some(e) => {
                         info!("remove temp kv snapshot {}", e);
-                        temp_snapshot_db_existing = true;
+                        if temp_snapshot_db_existing.is_none() {
+                            temp_snapshot_db_existing = Some(e);
+                        } else {
+                            panic!("there are more than one temp kv snapshot");
+                        }
                     }
                     None => {
                         if let Ok(epoch_id) =
@@ -185,7 +189,7 @@ pub trait SnapshotDbManagerTrait {
             }
         }
 
-        info!("max epoch height: {}, temp snapshot db existing: {}, removed snapshots: {:?}, max snapshot epoch height has mpt: {:?}", max_epoch_height, temp_snapshot_db_existing, removed_snapshots, max_snapshot_epoch_height_has_mpt);
+        info!("max epoch height: {}, temp snapshot db existing: {:?}, removed snapshots: {:?}, max snapshot epoch height has mpt: {:?}", max_epoch_height, temp_snapshot_db_existing, removed_snapshots, max_snapshot_epoch_height_has_mpt);
         Ok(SnapshotPersistState {
             missing_snapshots: missing_snapshots
                 .into_iter()
