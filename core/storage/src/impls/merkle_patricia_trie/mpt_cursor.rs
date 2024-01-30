@@ -307,9 +307,12 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
         }
     }
 
-    pub fn load_root(&mut self, in_reconstruct_snapshot_state: bool) -> Result<()>
+    pub fn load_root(
+        &mut self, in_reconstruct_snapshot_state: bool,
+    ) -> Result<()>
     where Self: CursorToRootNode<Mpt, PathNode> {
-        let root_node = PathNode::load_root(self, in_reconstruct_snapshot_state)?;
+        let root_node =
+            PathNode::load_root(self, in_reconstruct_snapshot_state)?;
         self.path_nodes.push(root_node);
         Ok(())
     }
@@ -861,17 +864,22 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
         let trie_node = parent_node
             .load_node_wrapper(mpt.as_mut().unwrap(), &path_db_key)?;
 
-        debug!("in_reconstruct_snapshot_state {}, loaded trie node merkle hash {:?}, supposed merkle hash {:?}", in_reconstruct_snapshot_state, trie_node.get_merkle(),
-        supposed_merkle_root,);
-        if !in_reconstruct_snapshot_state {
+        if in_reconstruct_snapshot_state {
+            if trie_node.get_merkle() != supposed_merkle_root {
+                warn!("loaded trie node merkle hash {:?} != supposed merkle hash {:?}, path_db_key={:?}",
+                trie_node.get_merkle(),
+                supposed_merkle_root,
+                path_db_key,);
+            }
+        } else {
             assert_eq!(
-            trie_node.get_merkle(),
-            supposed_merkle_root,
-            "loaded trie node merkle hash {:?} != supposed merkle hash {:?}, path_db_key={:?}",
-            trie_node.get_merkle(),
-            supposed_merkle_root,
-            path_db_key,
-        );
+                trie_node.get_merkle(),
+                supposed_merkle_root,
+                "loaded trie node merkle hash {:?} != supposed merkle hash {:?}, path_db_key={:?}",
+                trie_node.get_merkle(),
+                supposed_merkle_root,
+                path_db_key,
+            );
         }
 
         let full_path_to_node = CompressedPathRaw::join_connected_paths(
@@ -975,7 +983,9 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
         }
     }
 
-    fn in_reconstruct_snapshot_state(&self) -> bool { self.in_reconstruct_snapshot_state }
+    fn in_reconstruct_snapshot_state(&self) -> bool {
+        self.in_reconstruct_snapshot_state
+    }
 }
 
 impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
@@ -1084,7 +1094,9 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
         }
     }
 
-    fn in_reconstruct_snapshot_state(&self) -> bool { self.in_reconstruct_snapshot_state }
+    fn in_reconstruct_snapshot_state(&self) -> bool {
+        self.in_reconstruct_snapshot_state
+    }
 }
 
 impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
@@ -1112,7 +1124,8 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                     full_path_to_node: self.full_path_to_node.clone(),
                     path_db_key: new_path_db_key,
                     next_child_index: self.next_child_index,
-                    in_reconstruct_snapshot_state: self.in_reconstruct_snapshot_state,
+                    in_reconstruct_snapshot_state: self
+                        .in_reconstruct_snapshot_state,
                 },
                 is_loaded: false,
                 maybe_first_realized_child_index: self
