@@ -2083,13 +2083,13 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        let snapshot_db_manager = inner
+        inner
             .data_man
             .storage_manager
             .get_storage_manager()
             .get_snapshot_manager()
-            .get_snapshot_db_manager();
-        snapshot_db_manager.clean_snapshot_epoch_id_before_recovered();
+            .get_snapshot_db_manager()
+            .clean_snapshot_epoch_id_before_recovered();
     }
 
     fn get_force_compute_index(
@@ -2411,7 +2411,7 @@ impl ConsensusNewBlockHandler {
                     .get_storage_manager()
                     .get_snapshot_manager()
                     .get_snapshot_db_manager()
-                    .set_need_reconstruct_snapshot(temp_snapshot_db_existing);
+                    .set_reconstruct_snapshot_id(temp_snapshot_db_existing);
             }
 
             debug!("the latest MPT snapshot is valid");

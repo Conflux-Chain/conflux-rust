@@ -78,10 +78,10 @@ impl<'a> MptMerger<'a> {
             Error = Error,
         >,
         mut set_keys_iter: impl FallibleIterator<Item = MptKeyValue, Error = Error>,
-        in_construct_pivot_state: bool,
+        in_reconstruct_snapshot_state: bool,
     ) -> Result<MerkleHash>
     {
-        self.rw_cursor.load_root(in_construct_pivot_state)?;
+        self.rw_cursor.load_root(in_reconstruct_snapshot_state)?;
 
         let mut key_to_delete = delete_keys_iter.next()?;
         let mut key_value_to_set = set_keys_iter.next()?;

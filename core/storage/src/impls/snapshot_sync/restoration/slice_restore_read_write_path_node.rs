@@ -73,8 +73,8 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
         }
     }
 
-    fn in_construct_pivot_state(&self) -> bool {
-        self.as_ref().in_construct_pivot_state
+    fn in_reconstruct_snapshot_state(&self) -> bool {
+        self.as_ref().in_reconstruct_snapshot_state
     }
 }
 

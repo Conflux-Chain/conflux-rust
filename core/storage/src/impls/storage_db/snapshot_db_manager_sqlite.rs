@@ -24,7 +24,7 @@ pub struct SnapshotDbManagerSqlite {
     latest_snapshot_id: RwLock<(EpochId, u64)>,
     copying_mpt_snapshot: Arc<Mutex<()>>,
     snapshot_epoch_id_before_recovered: RwLock<Option<EpochId>>,
-    reconstruct_snapshot_for_reboot: RwLock<Option<EpochId>>,
+    reconstruct_snapshot_id_for_reboot: RwLock<Option<EpochId>>,
 }
 
 #[derive(Debug)]
@@ -152,7 +152,7 @@ impl SnapshotDbManagerSqlite {
             latest_snapshot_id: RwLock::new((NULL_EPOCH, 0)),
             copying_mpt_snapshot: Arc::new(Default::default()),
             snapshot_epoch_id_before_recovered: RwLock::new(None),
-            reconstruct_snapshot_for_reboot: RwLock::new(None),
+            reconstruct_snapshot_id_for_reboot: RwLock::new(None),
         })
     }
 
@@ -164,11 +164,11 @@ impl SnapshotDbManagerSqlite {
         *self.snapshot_epoch_id_before_recovered.write() = None;
     }
 
-    pub fn set_need_reconstruct_snapshot(
+    pub fn set_reconstruct_snapshot_id(
         &self, reconstruct_pivot: Option<EpochId>,
     ) {
-        debug!("set_need_reconstruct_snapshot to {:?}", reconstruct_pivot);
-        *self.reconstruct_snapshot_for_reboot.write() = reconstruct_pivot;
+        debug!("set_reconstruct_snapshot_id to {:?}", reconstruct_pivot);
+        *self.reconstruct_snapshot_id_for_reboot.write() = reconstruct_pivot;
     }
 
     pub fn recreate_latest_mpt_snapshot(&self) -> Result<()> {
@@ -897,8 +897,9 @@ impl SnapshotDbManagerSqlite {
         temp_snapshot_db.copy_and_merge(
             &old_snapshot_db.snapshot_db,
             mpt_snapshot_db,
-            self.reconstruct_snapshot_for_reboot
-                .read()
+            self.reconstruct_snapshot_id_for_reboot
+                .write()
+                .take()
                 .is_some_and(|v| v == snapshot_epoch_id),
         )
     }
@@ -1106,8 +1107,9 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 None,
                 &mut snapshot_mpt_db,
                 recover_mpt_with_kv_snapshot_exist,
-                self.reconstruct_snapshot_for_reboot
-                    .read()
+                self.reconstruct_snapshot_id_for_reboot
+                    .write()
+                    .take()
                     .is_some_and(|v| v == snapshot_epoch_id),
             )?
         } else {
@@ -1123,7 +1125,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         CopyType::Cow => true,
                         _ => false,
                     };
-                    debug!("current copy on write {}", cow);
+                    debug!("copy on write state: {}", cow);
                     true
                 } else {
                     false
@@ -1177,8 +1179,9 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     old_snapshot_db,
                     &mut snapshot_mpt_db,
                     recover_mpt_with_kv_snapshot_exist,
-                    self.reconstruct_snapshot_for_reboot
-                        .read()
+                    self.reconstruct_snapshot_id_for_reboot
+                        .write()
+                        .take()
                         .is_some_and(|v| v == snapshot_epoch_id),
                 )?
             } else {
