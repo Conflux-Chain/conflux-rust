@@ -307,9 +307,9 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
         }
     }
 
-    pub fn load_root(&mut self, in_construct_pivot_state: bool) -> Result<()>
+    pub fn load_root(&mut self, in_reconstruct_snapshot_state: bool) -> Result<()>
     where Self: CursorToRootNode<Mpt, PathNode> {
-        let root_node = PathNode::load_root(self, in_construct_pivot_state)?;
+        let root_node = PathNode::load_root(self, in_reconstruct_snapshot_state)?;
         self.path_nodes.push(root_node);
         Ok(())
     }
@@ -344,8 +344,8 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                     .skip_till_child_index(child_index)?;
                 parent_node.get_read_write_path_node().next_child_index =
                     child_index;
-                let in_construct_pivot_state =
-                    parent_node.in_construct_pivot_state();
+                let in_reconstruct_snapshot_state =
+                    parent_node.in_reconstruct_snapshot_state();
                 let new_node = PathNode::new(
                     BasicPathNode::new(
                         SnapshotMptNode(VanillaTrieNode::new(
@@ -359,7 +359,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                             .get_read_write_path_node()
                             .full_path_to_node,
                         child_index,
-                        in_construct_pivot_state,
+                        in_reconstruct_snapshot_state,
                     ),
                     parent_node,
                     value_len,
@@ -409,7 +409,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                         None,
                         &parent_node.get_basic_path_node().full_path_to_node,
                         parent_node.get_basic_path_node().next_child_index,
-                        parent_node.in_construct_pivot_state(),
+                        parent_node.in_reconstruct_snapshot_state(),
                     ),
                     parent_node,
                     if insert_value_at_fork { value_len } else { 0 },
@@ -479,7 +479,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                                     .get_basic_path_node()
                                     .full_path_to_node,
                                 child_index,
-                                parent_node.in_construct_pivot_state(),
+                                parent_node.in_reconstruct_snapshot_state(),
                             ),
                             &fork_node,
                             value_len,
@@ -687,14 +687,14 @@ pub struct BasicPathNode<Mpt> {
     /// The next child index to look into.
     pub next_child_index: u8,
 
-    pub in_construct_pivot_state: bool,
+    pub in_reconstruct_snapshot_state: bool,
 }
 
 impl<Mpt> BasicPathNode<Mpt> {
     fn new(
         trie_node: SnapshotMptNode, mpt: Option<Mpt>,
         parent_path: &CompressedPathRaw, child_index: u8,
-        in_construct_pivot_state: bool,
+        in_reconstruct_snapshot_state: bool,
     ) -> Self
     {
         let full_path_to_node = CompressedPathRaw::join_connected_paths(
@@ -712,7 +712,7 @@ impl<Mpt> BasicPathNode<Mpt> {
             full_path_to_node,
             path_db_key,
             next_child_index: 0,
-            in_construct_pivot_state,
+            in_reconstruct_snapshot_state,
         }
     }
 
@@ -802,7 +802,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
     fn load_root<
         Cursor: CursorLoadNodeWrapper<Mpt> + CursorToRootNode<Mpt, Self>,
     >(
-        cursor: &mut Cursor, in_construct_pivot_state: bool,
+        cursor: &mut Cursor, in_reconstruct_snapshot_state: bool,
     ) -> Result<Self> {
         let mut mpt = cursor.take_mpt();
         // Special case for Genesis snapshot, where the mpt is an non-existence
@@ -842,7 +842,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
                 full_path_to_node: Default::default(),
                 path_db_key: Default::default(),
                 next_child_index: 0,
-                in_construct_pivot_state,
+                in_reconstruct_snapshot_state,
             },
             mpt_is_empty,
         ))
@@ -850,7 +850,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 
     fn load_into(
         parent_node: &Self, mpt: &mut Option<Mpt>, node_child_index: u8,
-        supposed_merkle_root: &MerkleHash, in_construct_pivot_state: bool,
+        supposed_merkle_root: &MerkleHash, in_reconstruct_snapshot_state: bool,
     ) -> Result<Self>
     {
         let parent_path = &parent_node.get_basic_path_node().full_path_to_node;
@@ -861,9 +861,9 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
         let trie_node = parent_node
             .load_node_wrapper(mpt.as_mut().unwrap(), &path_db_key)?;
 
-        debug!("in_construct_pivot_state {}, loaded trie node merkle hash {:?}, supposed merkle hash {:?}", in_construct_pivot_state, trie_node.get_merkle(),
+        debug!("in_reconstruct_snapshot_state {}, loaded trie node merkle hash {:?}, supposed merkle hash {:?}", in_reconstruct_snapshot_state, trie_node.get_merkle(),
         supposed_merkle_root,);
-        if !in_construct_pivot_state {
+        if !in_reconstruct_snapshot_state {
             assert_eq!(
             trie_node.get_merkle(),
             supposed_merkle_root,
@@ -888,7 +888,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
                 full_path_to_node,
                 path_db_key,
                 next_child_index: 0,
-                in_construct_pivot_state,
+                in_reconstruct_snapshot_state,
             },
             parent_node,
         ))
@@ -896,7 +896,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 
     fn open_child_index(&mut self, child_index: u8) -> Result<Option<Self>>;
 
-    fn in_construct_pivot_state(&self) -> bool;
+    fn in_reconstruct_snapshot_state(&self) -> bool;
 }
 
 // TODO: What's the value of RwPathNodeTrait? It seems sufficient now to have
@@ -969,13 +969,13 @@ impl<Mpt: GetReadMpt> PathNodeTrait<Mpt> for BasicPathNode<Mpt> {
                     &mut mpt_taken,
                     child_index,
                     supposed_merkle_hash,
-                    self.in_construct_pivot_state,
+                    self.in_reconstruct_snapshot_state,
                 )?))
             }
         }
     }
 
-    fn in_construct_pivot_state(&self) -> bool { self.in_construct_pivot_state }
+    fn in_reconstruct_snapshot_state(&self) -> bool { self.in_reconstruct_snapshot_state }
 }
 
 impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
@@ -1084,7 +1084,7 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
         }
     }
 
-    fn in_construct_pivot_state(&self) -> bool { self.in_construct_pivot_state }
+    fn in_reconstruct_snapshot_state(&self) -> bool { self.in_reconstruct_snapshot_state }
 }
 
 impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
@@ -1112,7 +1112,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
                     full_path_to_node: self.full_path_to_node.clone(),
                     path_db_key: new_path_db_key,
                     next_child_index: self.next_child_index,
-                    in_construct_pivot_state: self.in_construct_pivot_state,
+                    in_reconstruct_snapshot_state: self.in_reconstruct_snapshot_state,
                 },
                 is_loaded: false,
                 maybe_first_realized_child_index: self
@@ -1320,7 +1320,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                                     &mut mpt_taken,
                                     this_child_index,
                                     this_child_node_merkle_ref,
-                                    self.in_construct_pivot_state,
+                                    self.in_reconstruct_snapshot_state,
                                 )?);
 
                             if is_save_as_mode {
