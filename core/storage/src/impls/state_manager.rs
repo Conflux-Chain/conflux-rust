@@ -47,6 +47,9 @@ impl Drop for StateManager {
 impl StateManager {
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
         debug!("Storage conf {:?}", conf);
+        // Make sure sqlite temp directory is using the data disk instead of the
+        // system disk.
+        std::env::set_var("SQLITE_TMPDIR", conf.path_snapshot_dir);
 
         let single_mpt_storage_manager = if conf.enable_single_mpt_storage {
             Some(SingleMptStorageManager::new_arc(
