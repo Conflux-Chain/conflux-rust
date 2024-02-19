@@ -24,6 +24,7 @@ pub struct SnapshotDbManagerSqlite {
     latest_snapshot_id: RwLock<(EpochId, u64)>,
     copying_mpt_snapshot: Arc<Mutex<()>>,
     snapshot_epoch_id_before_recovered: RwLock<Option<EpochId>>,
+    reconstruct_snapshot_id_for_reboot: RwLock<Option<EpochId>>,
 }
 
 #[derive(Debug)]
@@ -151,6 +152,7 @@ impl SnapshotDbManagerSqlite {
             latest_snapshot_id: RwLock::new((NULL_EPOCH, 0)),
             copying_mpt_snapshot: Arc::new(Default::default()),
             snapshot_epoch_id_before_recovered: RwLock::new(None),
+            reconstruct_snapshot_id_for_reboot: RwLock::new(None),
         })
     }
 
@@ -160,6 +162,13 @@ impl SnapshotDbManagerSqlite {
 
     pub fn clean_snapshot_epoch_id_before_recovered(&self) {
         *self.snapshot_epoch_id_before_recovered.write() = None;
+    }
+
+    pub fn set_reconstruct_snapshot_id(
+        &self, reconstruct_pivot: Option<EpochId>,
+    ) {
+        debug!("set_reconstruct_snapshot_id to {:?}", reconstruct_pivot);
+        *self.reconstruct_snapshot_id_for_reboot.write() = reconstruct_pivot;
     }
 
     pub fn recreate_latest_mpt_snapshot(&self) -> Result<()> {
@@ -366,12 +375,14 @@ impl SnapshotDbManagerSqlite {
                         self.latest_snapshot_id.read().0,
                         self.latest_snapshot_id.read().1
                     );
-                    assert!(
-                        new_epoch_height > self.latest_snapshot_id.read().1,
-                        "Try to write an old snapshot {}, {}",
-                        new_epoch_height,
-                        self.latest_snapshot_id.read().1
-                    );
+                    if new_epoch_height <= self.latest_snapshot_id.read().1 {
+                        bail!(format!(
+                            "Try to write an old snapshot {}, {}",
+                            new_epoch_height,
+                            self.latest_snapshot_id.read().1
+                        ))
+                    }
+
                     (self.get_latest_mpt_snapshot_db_path(), false)
                 }
             };
@@ -815,6 +826,7 @@ impl SnapshotDbManagerSqlite {
     fn try_copy_snapshot(
         old_snapshot_path: &Path, new_snapshot_path: &Path, force_cow: bool,
     ) -> Result<CopyType> {
+        debug!("try copy into {:?}", new_snapshot_path);
         if Self::try_make_snapshot_cow_copy(
             old_snapshot_path,
             new_snapshot_path,
@@ -869,7 +881,7 @@ impl SnapshotDbManagerSqlite {
     fn copy_and_merge(
         &self, temp_snapshot_db: &mut SnapshotKvDbSqlite,
         mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
-        old_snapshot_epoch_id: &EpochId,
+        old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
     ) -> Result<MerkleHash>
     {
         let snapshot_path = self.get_snapshot_db_path(old_snapshot_epoch_id);
@@ -882,8 +894,14 @@ impl SnapshotDbManagerSqlite {
         )?;
         let old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
-        temp_snapshot_db
-            .copy_and_merge(&old_snapshot_db.snapshot_db, mpt_snapshot_db)
+        temp_snapshot_db.copy_and_merge(
+            &old_snapshot_db.snapshot_db,
+            mpt_snapshot_db,
+            self.reconstruct_snapshot_id_for_reboot
+                .write()
+                .take()
+                .is_some_and(|v| v == snapshot_epoch_id),
+        )
     }
 
     fn rename_snapshot_db<P: AsRef<Path>>(
@@ -931,16 +949,14 @@ impl SnapshotDbManagerSqlite {
             .unwrap();
     }
 
-    fn copy_mpt_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
+    fn copy_mpt_snapshot(
+        &self, temp_mpt_path: PathBuf, new_mpt_snapshot_db_path: PathBuf,
+    ) -> Result<()> {
         debug!(
-            "Copy mpt db for new snapshot {}, era_epoch_count {}",
-            snapshot_epoch_id, self.era_epoch_count
+            "Copy mpt db to {:?}, era_epoch_count {}",
+            new_mpt_snapshot_db_path, self.era_epoch_count
         );
-        let temp_mpt_path =
-            self.get_merge_temp_mpt_snapshot_db_path(snapshot_epoch_id);
         let latest_mpt_path = self.get_latest_mpt_snapshot_db_path();
-        let new_mpt_snapshot_db_path =
-            self.get_mpt_snapshot_db_path(snapshot_epoch_id);
 
         let force_cow = self.force_cow;
         let copying_mpt_snapshot = Arc::clone(&self.copying_mpt_snapshot);
@@ -1038,7 +1054,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         new_epoch_height: u64, recover_mpt_with_kv_snapshot_exist: bool,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>
     {
-        debug!(
+        info!(
             "new_snapshot_by_merging: old={:?} new={:?} new epoch height={}, recovering mpt={}",
             old_snapshot_epoch_id, snapshot_epoch_id, new_epoch_height, recover_mpt_with_kv_snapshot_exist
         );
@@ -1091,6 +1107,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 None,
                 &mut snapshot_mpt_db,
                 recover_mpt_with_kv_snapshot_exist,
+                self.reconstruct_snapshot_id_for_reboot
+                    .write()
+                    .take()
+                    .is_some_and(|v| v == snapshot_epoch_id),
             )?
         } else {
             let (db_path, copied) = if recover_mpt_with_kv_snapshot_exist {
@@ -1105,6 +1125,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         CopyType::Cow => true,
                         _ => false,
                     };
+                    debug!("copy on write state: {}", cow);
                     true
                 } else {
                     false
@@ -1158,6 +1179,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     old_snapshot_db,
                     &mut snapshot_mpt_db,
                     recover_mpt_with_kv_snapshot_exist,
+                    self.reconstruct_snapshot_id_for_reboot
+                        .write()
+                        .take()
+                        .is_some_and(|v| v == snapshot_epoch_id),
                 )?
             } else {
                 (snapshot_kv_db, snapshot_mpt_db) = self.open_snapshot_write(
@@ -1173,16 +1198,28 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     &mut snapshot_kv_db,
                     &mut snapshot_mpt_db,
                     old_snapshot_epoch_id,
+                    snapshot_epoch_id,
                 )?
             }
         };
 
         // Create a specific MPT database for EAR checkpoint
-        if !mpt_table_in_current_db
+        let temp_mpt_path = if !mpt_table_in_current_db
             && new_epoch_height % self.era_epoch_count == 0
         {
-            self.copy_mpt_snapshot(&snapshot_epoch_id)?;
-        }
+            let temp_mpt_path =
+                self.get_merge_temp_mpt_snapshot_db_path(&snapshot_epoch_id);
+            let new_mpt_snapshot_db_path =
+                self.get_mpt_snapshot_db_path(&snapshot_epoch_id);
+
+            self.copy_mpt_snapshot(
+                temp_mpt_path.clone(),
+                new_mpt_snapshot_db_path.clone(),
+            )?;
+            Some((temp_mpt_path, new_mpt_snapshot_db_path))
+        } else {
+            None
+        };
 
         in_progress_snapshot_info.merkle_root = new_snapshot_root.clone();
         drop(snapshot_kv_db);
@@ -1190,6 +1227,18 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         let locked = snapshot_info_map_rwlock.write();
 
         if !recover_mpt_with_kv_snapshot_exist {
+            if let Some((temp_mpt_path, new_mpt_snapshot_db_path)) =
+                temp_mpt_path
+            {
+                while !temp_mpt_path.exists()
+                    && !new_mpt_snapshot_db_path.exists()
+                {
+                    // wait till mpt path created
+                    debug!("Wait mpt path existing");
+                    thread::sleep(Duration::from_millis(5));
+                }
+            }
+
             Self::rename_snapshot_db(&temp_db_path, &new_snapshot_db_path)?;
         }
 
@@ -1388,7 +1437,22 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 &temp_mpt_snapshot_path,
                 &latest_mpt_snapshot_path,
             )?;
-            self.copy_mpt_snapshot(snapshot_epoch_id)?;
+
+            let temp_mpt_path =
+                self.get_merge_temp_mpt_snapshot_db_path(&snapshot_epoch_id);
+            let new_mpt_snapshot_db_path =
+                self.get_mpt_snapshot_db_path(&snapshot_epoch_id);
+
+            self.copy_mpt_snapshot(
+                temp_mpt_path.clone(),
+                new_mpt_snapshot_db_path.clone(),
+            )?;
+            while !temp_mpt_path.exists() && !new_mpt_snapshot_db_path.exists()
+            {
+                // wait till mpt path created
+                debug!("Wait mpt path existing");
+                thread::sleep(Duration::from_millis(5));
+            }
         }
 
         Self::rename_snapshot_db(&temp_db_path, &final_db_path)?;
