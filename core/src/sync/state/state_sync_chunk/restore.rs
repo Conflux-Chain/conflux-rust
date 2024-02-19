@@ -131,7 +131,7 @@ impl Restorer {
 
         // rewrite for special case
         *storage_manager.persist_state_from_initialization.write() = Some((
-            false,
+            None,
             std::collections::HashSet::from([NULL_EPOCH]),
             snapshot_height,
             None,

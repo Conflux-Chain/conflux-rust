@@ -24,6 +24,7 @@ pub struct SnapshotDbManagerSqlite {
     latest_snapshot_id: RwLock<(EpochId, u64)>,
     copying_mpt_snapshot: Arc<Mutex<()>>,
     snapshot_epoch_id_before_recovered: RwLock<Option<EpochId>>,
+    reconstruct_snapshot_id_for_reboot: RwLock<Option<EpochId>>,
 }
 
 #[derive(Debug)]
@@ -151,6 +152,7 @@ impl SnapshotDbManagerSqlite {
             latest_snapshot_id: RwLock::new((NULL_EPOCH, 0)),
             copying_mpt_snapshot: Arc::new(Default::default()),
             snapshot_epoch_id_before_recovered: RwLock::new(None),
+            reconstruct_snapshot_id_for_reboot: RwLock::new(None),
         })
     }
 
@@ -160,6 +162,13 @@ impl SnapshotDbManagerSqlite {
 
     pub fn clean_snapshot_epoch_id_before_recovered(&self) {
         *self.snapshot_epoch_id_before_recovered.write() = None;
+    }
+
+    pub fn set_reconstruct_snapshot_id(
+        &self, reconstruct_pivot: Option<EpochId>,
+    ) {
+        debug!("set_reconstruct_snapshot_id to {:?}", reconstruct_pivot);
+        *self.reconstruct_snapshot_id_for_reboot.write() = reconstruct_pivot;
     }
 
     pub fn recreate_latest_mpt_snapshot(&self) -> Result<()> {
@@ -817,6 +826,7 @@ impl SnapshotDbManagerSqlite {
     fn try_copy_snapshot(
         old_snapshot_path: &Path, new_snapshot_path: &Path, force_cow: bool,
     ) -> Result<CopyType> {
+        debug!("try copy into {:?}", new_snapshot_path);
         if Self::try_make_snapshot_cow_copy(
             old_snapshot_path,
             new_snapshot_path,
@@ -871,7 +881,7 @@ impl SnapshotDbManagerSqlite {
     fn copy_and_merge(
         &self, temp_snapshot_db: &mut SnapshotKvDbSqlite,
         mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
-        old_snapshot_epoch_id: &EpochId,
+        old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
     ) -> Result<MerkleHash>
     {
         let snapshot_path = self.get_snapshot_db_path(old_snapshot_epoch_id);
@@ -884,8 +894,14 @@ impl SnapshotDbManagerSqlite {
         )?;
         let old_snapshot_db = maybe_old_snapshot_db
             .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
-        temp_snapshot_db
-            .copy_and_merge(&old_snapshot_db.snapshot_db, mpt_snapshot_db)
+        temp_snapshot_db.copy_and_merge(
+            &old_snapshot_db.snapshot_db,
+            mpt_snapshot_db,
+            self.reconstruct_snapshot_id_for_reboot
+                .write()
+                .take()
+                .is_some_and(|v| v == snapshot_epoch_id),
+        )
     }
 
     fn rename_snapshot_db<P: AsRef<Path>>(
@@ -1091,6 +1107,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 None,
                 &mut snapshot_mpt_db,
                 recover_mpt_with_kv_snapshot_exist,
+                self.reconstruct_snapshot_id_for_reboot
+                    .write()
+                    .take()
+                    .is_some_and(|v| v == snapshot_epoch_id),
             )?
         } else {
             let (db_path, copied) = if recover_mpt_with_kv_snapshot_exist {
@@ -1105,6 +1125,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         CopyType::Cow => true,
                         _ => false,
                     };
+                    debug!("copy on write state: {}", cow);
                     true
                 } else {
                     false
@@ -1158,6 +1179,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     old_snapshot_db,
                     &mut snapshot_mpt_db,
                     recover_mpt_with_kv_snapshot_exist,
+                    self.reconstruct_snapshot_id_for_reboot
+                        .write()
+                        .take()
+                        .is_some_and(|v| v == snapshot_epoch_id),
                 )?
             } else {
                 (snapshot_kv_db, snapshot_mpt_db) = self.open_snapshot_write(
@@ -1173,6 +1198,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     &mut snapshot_kv_db,
                     &mut snapshot_mpt_db,
                     old_snapshot_epoch_id,
+                    snapshot_epoch_id,
                 )?
             }
         };
