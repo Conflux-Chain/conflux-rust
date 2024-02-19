@@ -136,7 +136,7 @@ pub struct StorageManager {
     pub intermediate_trie_root_merkle: RwLock<Option<MerkleHash>>,
 
     pub persist_state_from_initialization:
-        RwLock<Option<(bool, HashSet<EpochId>, u64, Option<u64>)>>,
+        RwLock<Option<(Option<EpochId>, HashSet<EpochId>, u64, Option<u64>)>>,
 }
 
 impl MallocSizeOf for StorageManager {
@@ -861,8 +861,7 @@ impl StorageManager {
     {
         let additional_state_height_gap =
             (self.storage_conf.additional_maintained_snapshot_count
-                * self.storage_conf.consensus_param.snapshot_epoch_count)
-                as u64;
+                * self.get_snapshot_epoch_count()) as u64;
         let maintained_state_height_lower_bound =
             if confirmed_height > additional_state_height_gap {
                 confirmed_height - additional_state_height_gap
@@ -950,10 +949,10 @@ impl StorageManager {
             ) as u64;
 
         let confirmed_snapshot_height = if confirmed_intermediate_height
-            > self.storage_conf.consensus_param.snapshot_epoch_count as u64
+            > self.get_snapshot_epoch_count() as u64
         {
             confirmed_intermediate_height
-                - self.storage_conf.consensus_param.snapshot_epoch_count as u64
+                - self.get_snapshot_epoch_count() as u64
         } else {
             0
         };
@@ -1510,6 +1509,22 @@ fn extra_snapshots_to_keep_predicate(
                         == 0
                 {
                     return storage_conf.keep_snapshot_before_stable_checkpoint;
+                }
+
+                if storage_conf.keep_era_genesis_snapshot {
+                    let era_genesis_snapshot_height =
+                        if stable_checkpoint_height
+                            >= storage_conf.consensus_param.era_epoch_count
+                        {
+                            stable_checkpoint_height
+                                - storage_conf.consensus_param.era_epoch_count
+                        } else {
+                            0
+                        };
+
+                    if era_genesis_snapshot_height == height {
+                        return true;
+                    }
                 }
             }
             ProvideExtraSnapshotSyncConfig::EpochNearestMultipleOf(

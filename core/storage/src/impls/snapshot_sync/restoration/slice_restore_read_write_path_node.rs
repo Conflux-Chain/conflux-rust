@@ -72,6 +72,10 @@ impl<Mpt: GetRwMpt> PathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
             Ok(None) => Ok(None),
         }
     }
+
+    fn in_reconstruct_snapshot_state(&self) -> bool {
+        self.as_ref().in_reconstruct_snapshot_state
+    }
 }
 
 impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {

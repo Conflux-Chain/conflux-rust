@@ -606,6 +606,7 @@ fn test_two_way_merge() {
         .merge_insertion_deletion_separated(
             fallible_iterator::convert(deletion.into_iter()),
             fallible_iterator::convert(insertion.into_iter()),
+            false,
         )
         .unwrap();
 
