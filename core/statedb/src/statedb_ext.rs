@@ -145,8 +145,7 @@ impl StateDbExt for StateDbGeneric {
     fn set_global_param<T: GlobalParamKey>(
         &mut self, value: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         self.set::<U256>(T::STORAGE_KEY, value, debug_record)
     }
 

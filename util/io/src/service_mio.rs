@@ -273,8 +273,7 @@ where Message: Send + Sync + 'static
         event_loop: &mut EventLoop<IoManager<Message>>,
         handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
         network_poll: Arc<Poll>,
-    ) -> Result<(), IoError>
-    {
+    ) -> Result<(), IoError> {
         let worker = crossbeam_deque::Worker::new_fifo();
         let stealer = worker.stealer();
         let num_workers = 4;
@@ -608,8 +607,7 @@ where Message: Send + Sync + 'static
     fn new(
         channel: Sender<IoMessage<Message>>,
         handlers: Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
-    ) -> IoChannel<Message>
-    {
+    ) -> IoChannel<Message> {
         IoChannel {
             channel: Some(channel),
             handlers: Handlers::SharedCollection(handlers),
@@ -695,8 +693,7 @@ where Message: Send + Sync + 'static
         &self, network_poll: Arc<Poll>, handler: Arc<dyn IoHandler<Message>>,
         main_event_loop_channel: IoChannel<Message>, max_sessions: usize,
         stop_token: usize,
-    )
-    {
+    ) {
         network_poll
             .register(
                 &self.network_poll_stopped.0,

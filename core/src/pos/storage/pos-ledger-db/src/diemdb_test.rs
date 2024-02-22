@@ -346,8 +346,7 @@ fn verify_committed_transactions(
     _db: &PosLedgerDB, _txns_to_commit: &[TransactionToCommit],
     _first_version: Version, _ledger_info_with_sigs: &LedgerInfoWithSignatures,
     _is_latest: bool,
-)
-{
+) {
     // TODO(lpl): Verify this.
     return;
 }

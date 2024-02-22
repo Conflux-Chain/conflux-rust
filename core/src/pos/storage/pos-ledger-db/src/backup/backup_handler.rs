@@ -46,8 +46,7 @@ impl BackupHandler {
         ledger_store: Arc<LedgerStore>,
         transaction_store: Arc<TransactionStore>, state_store: Arc<StateStore>,
         event_store: Arc<EventStore>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             ledger_store,
             transaction_store,

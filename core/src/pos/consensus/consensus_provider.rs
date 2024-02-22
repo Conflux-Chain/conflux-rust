@@ -53,8 +53,7 @@ pub fn start_consensus(
     )>,
     test_command_receiver: channel::Receiver<TestCommand>,
     started_as_voter: bool,
-) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>)
-{
+) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>) {
     let stopped = Arc::new(AtomicBool::new(false));
     let runtime = runtime::Builder::new_multi_thread()
         .thread_name("consensus")

@@ -64,8 +64,7 @@ pub fn maybe_bootstrap<V: VMExecutor>(
     genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
     initial_committee: Vec<(AccountAddress, u64)>,
-) -> Result<bool>
-{
+) -> Result<bool> {
     let tree_state = db.reader.get_latest_tree_state()?;
     // if the waypoint is not targeted with the genesis txn, it may be either
     // already bootstrapped, or aiming for state sync to catch up.
@@ -137,8 +136,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
     initial_committee: Vec<(AccountAddress, u64)>,
-) -> Result<GenesisCommitter<V>>
-{
+) -> Result<GenesisCommitter<V>> {
     // DB bootstrapper works on either an empty transaction accumulator or an
     // existing block chain. In the very extreme and sad situation of losing
     // quorum among validators, we refer to the second use case said above.

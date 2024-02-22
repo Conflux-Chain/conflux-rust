@@ -103,7 +103,7 @@
 //!
 //! [`Slab::with_capacity`]: struct.Slab.html#with_capacity
 
-#![allow(unknown_lints,missing_safety_doc)]
+#![allow(unknown_lints, missing_safety_doc)]
 #![deny(warnings, missing_debug_implementations)]
 
 use super::super::{

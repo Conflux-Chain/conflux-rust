@@ -9,8 +9,7 @@ impl State {
     pub fn new_contract_with_admin(
         &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
         storage_layout: Option<StorageLayout>, cip107: bool,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         assert!(contract.space == Space::Native || admin.is_zero());
         // Check if the new contract is deployed on a killed contract in the
         // same block.

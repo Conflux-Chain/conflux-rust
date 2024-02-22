@@ -122,8 +122,7 @@ impl GetChunkRequest {
     pub fn new(
         known_version: Version, current_epoch: u64, limit: u64,
         target: TargetType,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             known_version,
             current_epoch,

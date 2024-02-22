@@ -24,8 +24,7 @@ where I: Iterator<Item = T> {
 pub fn validate_chain_id(
     ours: &ChainIdParamsOneChainInner, theirs: ChainIdParamsOneChainInner,
     peer_height: u64,
-) -> Result<(), Error>
-{
+) -> Result<(), Error> {
     if !ours.matches(&theirs, peer_height) {
         let error_kind = ErrorKind::ChainIdMismatch {
             ours: ours.clone(),

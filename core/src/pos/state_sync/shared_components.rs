@@ -39,8 +39,7 @@ impl SyncState {
     pub fn new(
         committed_ledger_info: LedgerInfoWithSignatures,
         synced_trees: ExecutedTrees, current_epoch_state: EpochState,
-    ) -> Self
-    {
+    ) -> Self {
         let trusted_epoch_state = committed_ledger_info
             .ledger_info()
             .next_epoch_state()

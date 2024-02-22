@@ -210,8 +210,7 @@ impl NodeIpLimit {
     pub fn insert(
         &mut self, id: NodeId, ip: IpAddr, trusted: bool,
         evictee: Option<NodeId>,
-    ) -> bool
-    {
+    ) -> bool {
         if !self.is_enabled() {
             return true;
         }

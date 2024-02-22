@@ -66,8 +66,7 @@ pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
 pub fn call_gas(
     receiver: Address, params: &ActionParams, context: &InternalRefContext,
     data: &[u8],
-) -> DbResult<U256>
-{
+) -> DbResult<U256> {
     let data_length = data.len();
 
     let transaction_gas =
@@ -226,8 +225,7 @@ pub fn evm_map(address: Address) -> AddressWithSpace {
 pub fn process_trap<T>(
     result: vm::Result<(ActionParams, Box<dyn Resumable>)>,
     _phantom: PhantomData<T>,
-) -> InternalTrapResult<T>
-{
+) -> InternalTrapResult<T> {
     match result {
         Ok((p, r)) => InternalTrapResult::Invoke(p, r),
         Err(err) => InternalTrapResult::Return(Err(err)),
@@ -237,8 +235,7 @@ pub fn process_trap<T>(
 pub fn call_to_evmcore(
     receiver: Address, data: Vec<u8>, call_type: CallType,
     params: &ActionParams, gas_left: U256, context: &mut InternalRefContext,
-) -> vm::Result<(ActionParams, Box<dyn Resumable>)>
-{
+) -> vm::Result<(ActionParams, Box<dyn Resumable>)> {
     if context.depth >= context.spec.max_depth {
         internal_bail!("Exceed Depth");
     }
@@ -319,8 +316,7 @@ pub fn call_to_evmcore(
 pub fn create_to_evmcore(
     init: Vec<u8>, salt: Option<H256>, params: &ActionParams, gas_left: U256,
     context: &mut InternalRefContext,
-) -> vm::Result<(ActionParams, Box<dyn Resumable>)>
-{
+) -> vm::Result<(ActionParams, Box<dyn Resumable>)> {
     if context.depth >= context.spec.max_depth {
         internal_bail!("Exceed Depth");
     }
@@ -406,8 +402,7 @@ pub fn create_to_evmcore(
 pub fn withdraw_from_evmcore(
     sender: Address, value: U256, params: &ActionParams,
     context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     let mapped_address = evm_map(sender);
     let balance = context.state.balance(&mapped_address)?;
     if balance < value {

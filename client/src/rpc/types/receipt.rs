@@ -92,8 +92,7 @@ impl Receipt {
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
         network: Network, include_eth_receipt: bool,
         include_accumulated_gas_used: bool,
-    ) -> Result<Receipt, String>
-    {
+    ) -> Result<Receipt, String> {
         let PrimitiveReceipt {
             accumulated_gas_used,
             gas_fee,

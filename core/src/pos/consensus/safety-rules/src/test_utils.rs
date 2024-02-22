@@ -64,8 +64,7 @@ pub fn make_genesis(
 pub fn make_proposal_with_qc_and_proof(
     payload: Payload, round: Round, proof: Proof, qc: QuorumCert,
     validator_signer: &ValidatorSigner, exec_key: Option<&BLSPrivateKey>,
-) -> MaybeSignedVoteProposal
-{
+) -> MaybeSignedVoteProposal {
     let vote_proposal = VoteProposal::new(
         proof,
         Block::new_proposal(
@@ -88,8 +87,7 @@ pub fn make_proposal_with_qc_and_proof(
 pub fn make_proposal_with_qc(
     round: Round, qc: QuorumCert, validator_signer: &ValidatorSigner,
     exec_key: Option<&BLSPrivateKey>,
-) -> MaybeSignedVoteProposal
-{
+) -> MaybeSignedVoteProposal {
     make_proposal_with_qc_and_proof(
         vec![],
         round,
@@ -105,8 +103,7 @@ pub fn make_proposal_with_parent_and_overrides(
     committed: Option<&MaybeSignedVoteProposal>,
     validator_signer: &ValidatorSigner, epoch: Option<u64>,
     next_epoch_state: Option<EpochState>, exec_key: Option<&BLSPrivateKey>,
-) -> MaybeSignedVoteProposal
-{
+) -> MaybeSignedVoteProposal {
     let block_epoch = match epoch {
         Some(e) => e,
         _ => parent.block().epoch(),
@@ -203,8 +200,7 @@ pub fn make_proposal_with_parent(
     payload: Payload, round: Round, parent: &MaybeSignedVoteProposal,
     committed: Option<&MaybeSignedVoteProposal>,
     validator_signer: &ValidatorSigner, exec_key: Option<&BLSPrivateKey>,
-) -> MaybeSignedVoteProposal
-{
+) -> MaybeSignedVoteProposal {
     make_proposal_with_parent_and_overrides(
         payload,
         round,

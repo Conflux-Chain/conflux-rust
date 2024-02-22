@@ -39,8 +39,7 @@ impl State {
     pub fn new(
         manager: Arc<StateManager>, state_trees: StateTrees,
         construct_pivot_state: bool,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             manager,
             snapshot_db: state_trees.snapshot_db,
@@ -102,8 +101,7 @@ impl State {
     fn get_from_delta<WithProof: StaticBool>(
         &self, mpt: &DeltaMpt, maybe_root_node: Option<NodeRefDeltaMpt>,
         access_key: &[u8],
-    ) -> Result<(MptValue<Box<[u8]>>, Option<TrieProof>)>
-    {
+    ) -> Result<(MptValue<Box<[u8]>>, Option<TrieProof>)> {
         // Get won't create any new nodes so it's fine to pass an empty
         // owned_node_set.
         let mut empty_owned_node_set: Option<OwnedNodeSet> =

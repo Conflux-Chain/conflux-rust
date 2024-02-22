@@ -17,8 +17,7 @@ use super::super::components::InternalRefContext;
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     let sponsor = &params.sender;
 
     if !context
@@ -131,8 +130,7 @@ pub fn set_sponsor_for_gas(
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams,
     context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     let sponsor = &params.sender;
 
     if !context
@@ -241,8 +239,7 @@ pub fn set_sponsor_for_collateral(
 pub fn add_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
     state: &mut State, substate: &mut Substate,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     for user_addr in addresses {
         state.add_to_contract_whitelist(
             contract,
@@ -260,8 +257,7 @@ pub fn add_privilege(
 pub fn remove_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
     state: &mut State, substate: &mut Substate,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     for user_addr in addresses {
         state.remove_from_contract_whitelist(
             contract,

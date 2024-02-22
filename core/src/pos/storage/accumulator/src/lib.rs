@@ -193,8 +193,7 @@ where
     pub fn get_range_proof(
         reader: &R, full_acc_leaves: LeafCount, first_leaf_index: Option<u64>,
         num_leaves: LeafCount,
-    ) -> Result<AccumulatorRangeProof<H>>
-    {
+    ) -> Result<AccumulatorRangeProof<H>> {
         MerkleAccumulatorView::<R, H>::new(reader, full_acc_leaves)
             .get_range_proof(first_leaf_index, num_leaves)
     }
@@ -204,8 +203,7 @@ where
     pub fn get_range_proof_positions(
         reader: &R, full_acc_leaves: LeafCount, first_leaf_index: Option<u64>,
         num_leaves: LeafCount,
-    ) -> Result<(Vec<Position>, Vec<Position>)>
-    {
+    ) -> Result<(Vec<Position>, Vec<Position>)> {
         MerkleAccumulatorView::<R, H>::new(reader, full_acc_leaves)
             .get_range_proof_positions(first_leaf_index, num_leaves)
     }

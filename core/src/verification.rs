@@ -139,8 +139,7 @@ pub struct EpochReceiptProof {
 pub fn compute_epoch_receipt_proof(
     epoch_receipts: &Vec<Arc<BlockReceipts>>, block_index_in_epoch: usize,
     tx_index_in_block: usize,
-) -> EpochReceiptProof
-{
+) -> EpochReceiptProof {
     let block_receipt_proof = compute_block_receipt_proof(
         &epoch_receipts[block_index_in_epoch].receipts,
         tx_index_in_block,
@@ -163,8 +162,7 @@ pub fn compute_epoch_receipt_proof(
 pub fn is_valid_tx_inclusion_proof(
     block_tx_root: MerkleHash, tx_index_in_block: usize,
     num_txs_in_block: usize, tx_hash: H256, proof: &TrieProof,
-) -> bool
-{
+) -> bool {
     let key = &into_simple_mpt_key(tx_index_in_block, num_txs_in_block);
     proof.is_valid_kv(key, Some(tx_hash.as_bytes()), &block_tx_root)
 }
@@ -180,8 +178,7 @@ pub fn is_valid_receipt_inclusion_proof(
     num_blocks_in_epoch: usize, block_index_proof: &TrieProof,
     tx_index_in_block: usize, num_txs_in_block: usize, receipt: &Receipt,
     block_receipt_proof: &TrieProof,
-) -> bool
-{
+) -> bool {
     // get block receipts root from block index trie (proof)
     // traversing along `key` also means we're validating the proof
     let key = &into_simple_mpt_key(block_index_in_epoch, num_blocks_in_epoch);
@@ -223,8 +220,7 @@ impl VerificationConfig {
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
         transaction_epoch_bound: u64, tx_pool_nonce_bits: usize,
         machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
-    ) -> Self
-    {
+    ) -> Self {
         let max_nonce = if tx_pool_nonce_bits < 256 {
             Some((U256::one() << tx_pool_nonce_bits) - 1)
         } else {
@@ -535,8 +531,7 @@ impl VerificationConfig {
     fn verify_transaction_epoch_height(
         tx: &NativeTransaction, block_height: u64,
         transaction_epoch_bound: u64, mode: &VerifyTxMode,
-    ) -> Result<(), TransactionError>
-    {
+    ) -> Result<(), TransactionError> {
         let result = Self::check_transaction_epoch_bound(
             tx,
             block_height,
@@ -567,8 +562,7 @@ impl VerificationConfig {
     pub fn fast_recheck(
         &self, tx: &TransactionWithSignature, height: BlockHeight,
         transitions: &TransitionsEpochHeight, spec: &Spec,
-    ) -> PackingCheckResult
-    {
+    ) -> PackingCheckResult {
         let cip90a = height >= transitions.cip90a;
 
         let (can_pack, later_pack) =
@@ -601,8 +595,7 @@ impl VerificationConfig {
         &self, tx: &TransactionWithSignature, chain_id: AllChainID,
         height: BlockHeight, transitions: &TransitionsEpochHeight,
         mode: VerifyTxMode,
-    ) -> Result<(), TransactionError>
-    {
+    ) -> Result<(), TransactionError> {
         tx.check_low_s()?;
 
         // Disallow unsigned transactions
@@ -832,5 +825,4 @@ mod tests {
             serde_json::from_str(&serialized).unwrap();
         assert_eq!(epoch_proof, deserialized);
     }
-
 }

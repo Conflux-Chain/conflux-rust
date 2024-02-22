@@ -38,8 +38,7 @@ impl State {
     pub fn set_sponsor_for_gas(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
         upper_bound: &U256,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         let sponsor_not_change =
             *sponsor == self.sponsor_for_gas(address)?.unwrap_or_default();
         let balance_not_change =
@@ -97,8 +96,7 @@ impl State {
     pub fn set_sponsor_for_collateral(
         &mut self, address: &Address, sponsor: &Address,
         sponsor_balance: &U256, is_cip107: bool,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         let sponsor_not_change = *sponsor
             == self.sponsor_for_collateral(address)?.unwrap_or_default();
         let balance_not_change =
@@ -174,8 +172,7 @@ impl State {
     pub fn add_to_contract_whitelist(
         &mut self, contract_address: Address, storage_owner: Address,
         user: Address, substate: &mut Substate,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         info!(
             "add_commission_privilege contract_address: {:?}, user: {:?}",
             contract_address, user
@@ -195,8 +192,7 @@ impl State {
     pub fn remove_from_contract_whitelist(
         &mut self, contract_address: Address, storage_owner: Address,
         user: Address, substate: &mut Substate,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         self.set_storage(
             &sponsor_address(),
             sponsor_key(&contract_address, &user),
@@ -258,8 +254,7 @@ fn special_sponsor_key(contract: &Address) -> Vec<u8> {
 fn storage_range_deletion_for_account(
     state: &mut State, address: &Address, key_prefix: &[u8],
     substate: &mut Substate,
-) -> DbResult<()>
-{
+) -> DbResult<()> {
     let delete_all = key_prefix.is_empty();
 
     let storage_key_prefix = if delete_all {

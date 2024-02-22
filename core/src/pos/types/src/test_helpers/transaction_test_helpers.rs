@@ -31,8 +31,7 @@ fn expiration_time(seconds: u64) -> u64 {
 pub fn get_test_signed_module_publishing_transaction(
     sender: AccountAddress, private_key: &BLSPrivateKey,
     public_key: BLSPublicKey, module: Module,
-) -> SignedTransaction
-{
+) -> SignedTransaction {
     let expiration_time = expiration_time(10);
     let raw_txn = RawTransaction::new_module(
         sender,
@@ -51,8 +50,7 @@ pub fn get_test_signed_transaction(
     sender: AccountAddress, private_key: &BLSPrivateKey,
     public_key: BLSPublicKey, script: Option<Script>,
     expiration_timestamp_secs: u64,
-) -> SignedTransaction
-{
+) -> SignedTransaction {
     let raw_txn = RawTransaction::new_script(
         sender,
         script.unwrap_or_else(|| {
@@ -72,8 +70,7 @@ pub fn get_test_signed_transaction(
 pub fn get_test_unchecked_transaction(
     sender: AccountAddress, private_key: &BLSPrivateKey,
     public_key: BLSPublicKey, script: Option<Script>, expiration_time: u64,
-) -> SignedTransaction
-{
+) -> SignedTransaction {
     get_test_unchecked_transaction_(
         sender,
         private_key,
@@ -90,8 +87,7 @@ fn get_test_unchecked_transaction_(
     sender: AccountAddress, private_key: &BLSPrivateKey,
     public_key: BLSPublicKey, script: Option<Script>,
     expiration_timestamp_secs: u64, chain_id: ChainId,
-) -> SignedTransaction
-{
+) -> SignedTransaction {
     let raw_txn = RawTransaction::new_script(
         sender,
         script.unwrap_or_else(|| {
@@ -111,8 +107,7 @@ fn get_test_unchecked_transaction_(
 pub fn get_test_signed_txn(
     sender: AccountAddress, private_key: &BLSPrivateKey,
     public_key: BLSPublicKey, script: Option<Script>,
-) -> SignedTransaction
-{
+) -> SignedTransaction {
     let expiration_time = expiration_time(10);
     get_test_signed_transaction(
         sender,
@@ -126,8 +121,7 @@ pub fn get_test_signed_txn(
 pub fn get_test_unchecked_txn(
     sender: AccountAddress, private_key: &BLSPrivateKey,
     public_key: BLSPublicKey, script: Option<Script>,
-) -> SignedTransaction
-{
+) -> SignedTransaction {
     let expiration_time = expiration_time(10);
     get_test_unchecked_transaction(
         sender,
@@ -141,8 +135,7 @@ pub fn get_test_unchecked_txn(
 pub fn get_test_txn_with_chain_id(
     sender: AccountAddress, private_key: &BLSPrivateKey,
     public_key: BLSPublicKey, chain_id: ChainId,
-) -> SignedTransaction
-{
+) -> SignedTransaction {
     let expiration_time = expiration_time(10);
     get_test_unchecked_transaction_(
         sender,
@@ -157,8 +150,7 @@ pub fn get_test_txn_with_chain_id(
 pub fn get_write_set_txn(
     sender: AccountAddress, private_key: &BLSPrivateKey,
     _public_key: BLSPublicKey, write_set: Option<WriteSet>,
-) -> SignatureCheckedTransaction
-{
+) -> SignatureCheckedTransaction {
     let write_set = write_set.unwrap_or_default();
     RawTransaction::new_write_set(sender, write_set, ChainId::test())
         .sign(&private_key)

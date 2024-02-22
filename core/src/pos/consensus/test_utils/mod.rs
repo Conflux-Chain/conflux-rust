@@ -122,8 +122,7 @@ impl TreeInserter {
     pub fn insert_block(
         &mut self, parent: &ExecutedBlock, round: Round,
         committed_block: Option<BlockInfo>,
-    ) -> Arc<ExecutedBlock>
-    {
+    ) -> Arc<ExecutedBlock> {
         // Node must carry a QC to its parent
         let parent_qc = self.create_qc_for_block(parent, committed_block);
         self.insert_block_with_qc(parent_qc, parent, round)
@@ -166,8 +165,7 @@ impl TreeInserter {
     pub fn create_block_with_qc(
         &self, parent_qc: QuorumCert, timestamp_usecs: u64, round: Round,
         payload: Payload,
-    ) -> Block
-    {
+    ) -> Block {
         Block::new_proposal(
             payload,
             round,

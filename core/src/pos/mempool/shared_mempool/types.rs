@@ -77,8 +77,7 @@ pub enum SharedMempoolNotification {
 pub(crate) fn notify_subscribers(
     event: SharedMempoolNotification,
     subscribers: &[UnboundedSender<SharedMempoolNotification>],
-)
-{
+) {
     for subscriber in subscribers {
         let _ = subscriber.unbounded_send(event);
     }

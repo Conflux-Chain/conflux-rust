@@ -76,8 +76,7 @@ impl TrustedState {
     pub fn verify_and_ratchet<'a>(
         &self, latest_li: &'a LedgerInfoWithSignatures,
         epoch_change_proof: &'a EpochChangeProof,
-    ) -> Result<TrustedStateChange<'a>>
-    {
+    ) -> Result<TrustedStateChange<'a>> {
         let res_version = latest_li.ledger_info().version();
         ensure!(
             res_version >= self.latest_version(),

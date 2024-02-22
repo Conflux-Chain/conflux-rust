@@ -350,7 +350,9 @@ impl Hash for Node {
 
 const MAX_NODES: usize = 4096;
 
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Enum, EnumIter)]
+#[derive(
+    Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Enum, EnumIter,
+)]
 enum NodeReputation {
     Success = 0,
     Unknown = 1,
@@ -739,8 +741,7 @@ impl NodeTable {
     pub fn note_unsuccess_contact(
         &mut self, id: &NodeId, by_connection: bool,
         last_contact: Option<NodeContact>,
-    )
-    {
+    ) {
         let mut _index;
         if let Some(index) = self.node_index.get(id) {
             _index = *index;

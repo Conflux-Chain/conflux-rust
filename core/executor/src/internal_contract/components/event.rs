@@ -14,8 +14,7 @@ pub trait SolidityEventTrait: Send + Sync {
     fn log(
         indexed: &Self::Indexed, non_indexed: &Self::NonIndexed,
         param: &ActionParams, context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         let mut topics = vec![Self::EVENT_SIG];
         topics.extend_from_slice(&indexed.indexed_event_encode());
 

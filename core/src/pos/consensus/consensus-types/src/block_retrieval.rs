@@ -75,8 +75,7 @@ impl BlockRetrievalResponse {
     pub fn verify(
         &self, block_id: HashValue, num_blocks: u64,
         sig_verifier: &ValidatorVerifier,
-    ) -> anyhow::Result<()>
-    {
+    ) -> anyhow::Result<()> {
         ensure!(
             self.status != BlockRetrievalStatus::Succeeded
                 || (self.blocks.len() as u64 <= num_blocks

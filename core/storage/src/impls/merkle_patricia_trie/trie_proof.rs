@@ -26,8 +26,7 @@ impl TrieProofNode {
         children_table: VanillaChildrenTable<MerkleHash>,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
         path_without_first_nibble: bool,
-    ) -> Self
-    {
+    ) -> Self {
         let merkle = compute_merkle(
             compressed_path.as_ref(),
             path_without_first_nibble,
@@ -184,8 +183,7 @@ impl TrieProof {
     pub fn is_valid_node_merkle(
         &self, key: &[u8], node_merkle: &MptValue<MerkleHash>,
         root: &MerkleHash,
-    ) -> bool
-    {
+    ) -> bool {
         self.is_valid(key, root, |node| match node {
             None => node_merkle == &MptValue::None,
             Some(node) if node.value_as_slice().is_tombstone() => {
@@ -201,8 +199,7 @@ impl TrieProof {
     fn is_valid<'this: 'pred_param, 'pred_param>(
         &'this self, path: &[u8], root: &MerkleHash,
         pred: impl FnOnce(Option<&'pred_param TrieProofNode>) -> bool,
-    ) -> bool
-    {
+    ) -> bool {
         // empty trie
         if root == &MERKLE_NULL_NODE {
             return pred(None);

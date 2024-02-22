@@ -88,8 +88,7 @@ impl State {
     pub fn deposit(
         &mut self, address: &Address, amount: &U256, current_block_number: u64,
         cip_97: bool,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         return_if!(amount.is_zero());
 
         let acc_interest_rate =

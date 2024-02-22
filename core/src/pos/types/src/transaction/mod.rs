@@ -116,8 +116,7 @@ impl RawTransaction {
     pub fn new(
         sender: AccountAddress, payload: TransactionPayload,
         expiration_timestamp_secs: u64, chain_id: ChainId,
-    ) -> Self
-    {
+    ) -> Self {
         RawTransaction {
             sender,
             payload,
@@ -133,8 +132,7 @@ impl RawTransaction {
     pub fn new_script(
         sender: AccountAddress, script: Script, expiration_timestamp_secs: u64,
         chain_id: ChainId,
-    ) -> Self
-    {
+    ) -> Self {
         RawTransaction {
             sender,
             payload: TransactionPayload::Script(script),
@@ -150,8 +148,7 @@ impl RawTransaction {
     pub fn new_script_function(
         sender: AccountAddress, script_function: ScriptFunction,
         expiration_timestamp_secs: u64, chain_id: ChainId,
-    ) -> Self
-    {
+    ) -> Self {
         RawTransaction {
             sender,
             payload: TransactionPayload::ScriptFunction(script_function),
@@ -167,8 +164,7 @@ impl RawTransaction {
     pub fn new_module(
         sender: AccountAddress, module: Module, expiration_timestamp_secs: u64,
         chain_id: ChainId,
-    ) -> Self
-    {
+    ) -> Self {
         RawTransaction {
             sender,
             payload: TransactionPayload::Module(module),
@@ -205,8 +201,7 @@ impl RawTransaction {
     pub fn new_writeset_script(
         sender: AccountAddress, script: Script, signer: AccountAddress,
         chain_id: ChainId,
-    ) -> Self
-    {
+    ) -> Self {
         RawTransaction {
             sender,
             payload: TransactionPayload::WriteSet(WriteSetPayload::Script {
@@ -223,8 +218,7 @@ impl RawTransaction {
     pub fn new_pivot_decision(
         sender: AccountAddress, pivot_decision: PivotBlockDecision,
         chain_id: ChainId,
-    ) -> Self
-    {
+    ) -> Self {
         RawTransaction {
             sender,
             payload: TransactionPayload::PivotDecision(pivot_decision),
@@ -238,8 +232,7 @@ impl RawTransaction {
     pub fn new_election(
         sender: AccountAddress, election_payload: ElectionPayload,
         chain_id: ChainId,
-    ) -> Self
-    {
+    ) -> Self {
         RawTransaction {
             sender,
             payload: TransactionPayload::Election(election_payload),
@@ -658,8 +651,7 @@ impl SignedTransaction {
     pub fn new(
         raw_txn: RawTransaction, public_key: ConsensusPublicKey,
         signature: ConsensusSignature,
-    ) -> SignedTransaction
-    {
+    ) -> SignedTransaction {
         let authenticator =
             TransactionAuthenticator::bls(public_key, signature);
         SignedTransaction {
@@ -744,8 +736,7 @@ impl TransactionWithProof {
     pub fn new(
         version: Version, transaction: Transaction,
         events: Option<Vec<ContractEvent>>, proof: TransactionInfoWithProof,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             version,
             transaction,
@@ -767,8 +758,7 @@ impl TransactionWithProof {
     pub fn verify_user_txn(
         &self, ledger_info: &LedgerInfo, version: Version,
         sender: AccountAddress,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let signed_transaction = self.transaction.as_signed_user_txn()?;
 
         ensure!(
@@ -920,8 +910,7 @@ impl VMValidatorResult {
     pub fn new(
         vm_status: Option<DiscardedVMStatus>, score: u64,
         governance_role: GovernanceRole,
-    ) -> Self
-    {
+    ) -> Self {
         debug_assert!(
             match vm_status {
                 None => true,
@@ -969,8 +958,7 @@ impl TransactionOutput {
     pub fn new(
         write_set: WriteSet, events: Vec<ContractEvent>, gas_used: u64,
         status: TransactionStatus,
-    ) -> Self
-    {
+    ) -> Self {
         TransactionOutput {
             write_set,
             events,
@@ -1034,8 +1022,7 @@ impl TransactionInfo {
     pub fn new(
         transaction_hash: HashValue, state_root_hash: HashValue,
         event_root_hash: HashValue, gas_used: u64, status: KeptVMStatus,
-    ) -> TransactionInfo
-    {
+    ) -> TransactionInfo {
         TransactionInfo {
             transaction_hash,
             state_root_hash,
@@ -1086,8 +1073,7 @@ impl TransactionToCommit {
         transaction: Transaction,
         account_states: HashMap<AccountAddress, AccountStateBlob>,
         events: Vec<ContractEvent>, gas_used: u64, status: KeptVMStatus,
-    ) -> Self
-    {
+    ) -> Self {
         TransactionToCommit {
             transaction,
             account_states,
@@ -1131,8 +1117,7 @@ impl TransactionListWithProof {
         events: Option<Vec<Vec<ContractEvent>>>,
         first_transaction_version: Option<Version>,
         proof: TransactionListProof,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             transactions,
             events,
@@ -1156,8 +1141,7 @@ impl TransactionListWithProof {
     pub fn verify(
         &self, ledger_info: &LedgerInfo,
         first_transaction_version: Option<Version>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         ensure!(
             self.first_transaction_version == first_transaction_version,
             "First transaction version ({}) not expected ({}).",

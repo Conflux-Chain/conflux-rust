@@ -63,8 +63,7 @@ impl OverlayAccount {
     pub fn deposit(
         &mut self, amount: U256, accumulated_interest_rate: U256,
         deposit_time: u64, cip_97: bool,
-    )
-    {
+    ) {
         self.address.assert_native();
         assert!(self.deposit_list.is_some());
         self.sub_balance(&amount);

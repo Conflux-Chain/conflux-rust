@@ -165,8 +165,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         _snapshot_path: &Path, _readonly: bool,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
-    ) -> Result<SnapshotDbSqlite>
-    {
+    ) -> Result<SnapshotDbSqlite> {
         unreachable!()
     }
 
@@ -177,8 +176,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         _snapshot_path: &Path,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>, _mpt_table_in_current_db: bool,
-    ) -> Result<SnapshotDbSqlite>
-    {
+    ) -> Result<SnapshotDbSqlite> {
         unreachable!()
     }
 
@@ -188,8 +186,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         _mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
         _recover_mpt_with_kv_snapshot_exist: bool,
         _in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         unreachable!()
     }
 
@@ -197,8 +194,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         &mut self, _old_snapshot_db: &Arc<SnapshotDbSqlite>,
         _mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
         _in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         unreachable!()
     }
 

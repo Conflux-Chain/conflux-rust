@@ -61,8 +61,7 @@ impl TransactionData {
         state_root_hash: HashValue,
         event_tree: Arc<InMemoryAccumulator<EventAccumulatorHasher>>,
         gas_used: u64, txn_info_hash: Option<HashValue>,
-    ) -> Self
-    {
+    ) -> Self {
         TransactionData {
             account_blobs,
             events,
@@ -115,8 +114,7 @@ impl ProcessedVMOutput {
         transaction_data: Vec<TransactionData>, executed_trees: ExecutedTrees,
         epoch_state: Option<EpochState>,
         pivot_block: Option<PivotBlockDecision>,
-    ) -> Self
-    {
+    ) -> Self {
         ProcessedVMOutput {
             transaction_data,
             executed_trees,
@@ -146,8 +144,7 @@ impl ProcessedVMOutput {
     pub fn compute_result(
         &self, parent_frozen_subtree_roots: Vec<HashValue>,
         parent_num_leaves: u64,
-    ) -> StateComputeResult
-    {
+    ) -> StateComputeResult {
         let txn_accu = self.executed_trees().txn_accumulator();
         // Now that we have the root hash and execution status we can send the
         // response to consensus.

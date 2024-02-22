@@ -72,8 +72,7 @@ pub fn exec_main_frame<'a>(
 fn run_executable<'a>(
     executable: Box<dyn 'a + Executable>, mut frame_local: FrameLocal<'a>,
     resources: &mut RuntimeRes<'a>,
-) -> DbResult<FrameStackAction<'a>>
-{
+) -> DbResult<FrameStackAction<'a>> {
     let vm_context = frame_local.make_vm_context(resources);
     let output = executable.execute(vm_context)?;
 

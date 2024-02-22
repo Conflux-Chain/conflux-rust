@@ -38,8 +38,7 @@ impl AccountResource {
         withdrawal_capability: Option<WithdrawCapabilityResource>,
         key_rotation_capability: Option<KeyRotationCapabilityResource>,
         sent_events: EventHandle, received_events: EventHandle,
-    ) -> Self
-    {
+    ) -> Self {
         AccountResource {
             sequence_number,
             withdrawal_capability,

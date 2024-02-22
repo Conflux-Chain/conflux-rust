@@ -154,8 +154,7 @@ where
     pub fn sync(
         &self, max_in_flight: usize, batch_size: usize,
         request: impl Fn(&NodeId, Vec<Key>) -> Result<Option<RequestId>, Error>,
-    )
-    {
+    ) {
         let _guard = match self.sync_lock.try_lock() {
             None => return,
             Some(g) => g,

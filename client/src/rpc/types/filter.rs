@@ -533,6 +533,9 @@ mod tests {
             revert_to: U256::from(1),
         }));
         let serialized = serde_json::to_string(&logs).unwrap();
-        assert_eq!(serialized, r#"[{"address":"CFXTEST:TYPE.USER:AAK3WAKCPSF3CP0MFHDWHTTUG924VERHBUV9NMM3YC","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"},{"revertTo":"0x1"}]"#);
+        assert_eq!(
+            serialized,
+            r#"[{"address":"CFXTEST:TYPE.USER:AAK3WAKCPSF3CP0MFHDWHTTUG924VERHBUV9NMM3YC","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"},{"revertTo":"0x1"}]"#
+        );
     }
 }

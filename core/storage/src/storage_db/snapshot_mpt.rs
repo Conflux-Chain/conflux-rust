@@ -145,8 +145,7 @@ impl SnapshotMptNode {
     fn initial_subtree_size(
         node: &VanillaTrieNode<SubtreeMerkleWithSize>,
         full_path: &dyn CompressedPathTrait,
-    ) -> u64
-    {
+    ) -> u64 {
         let mut size = match node.value_as_slice().into_option() {
             None => 0,
             Some(value) => {

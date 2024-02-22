@@ -159,8 +159,7 @@ impl SnapshotDbTrait for SnapshotMptDbSqlite {
         _snapshot_path: &Path, _readonly: bool,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
-    ) -> Result<SnapshotMptDbSqlite>
-    {
+    ) -> Result<SnapshotMptDbSqlite> {
         unreachable!()
     }
 
@@ -169,8 +168,7 @@ impl SnapshotDbTrait for SnapshotMptDbSqlite {
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_snapshots_semaphore: &Arc<Semaphore>,
         _mpt_table_in_current_db: bool,
-    ) -> Result<SnapshotMptDbSqlite>
-    {
+    ) -> Result<SnapshotMptDbSqlite> {
         unreachable!()
     }
 
@@ -179,8 +177,7 @@ impl SnapshotDbTrait for SnapshotMptDbSqlite {
         _mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
         _recover_mpt_with_kv_snapshot_exist: bool,
         _in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         unreachable!()
     }
 
@@ -188,8 +185,7 @@ impl SnapshotDbTrait for SnapshotMptDbSqlite {
         &mut self, _old_snapshot_db: &Arc<SnapshotMptDbSqlite>,
         _mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
         _in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         unreachable!()
     }
 
@@ -249,8 +245,7 @@ impl SnapshotMptDbSqlite {
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
         latest_mpt_snapshot_semaphore: Option<Arc<Semaphore>>,
-    ) -> Result<SnapshotMptDbSqlite>
-    {
+    ) -> Result<SnapshotMptDbSqlite> {
         let kvdb_sqlite_sharded = KvdbSqliteSharded::<Box<[u8]>>::open(
             Self::DB_SHARDS,
             snapshot_path,
@@ -273,8 +268,7 @@ impl SnapshotMptDbSqlite {
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_snapshots_semaphore: &Arc<Semaphore>,
         latest_mpt_snapshot_semaphore: Option<Arc<Semaphore>>,
-    ) -> Result<SnapshotMptDbSqlite>
-    {
+    ) -> Result<SnapshotMptDbSqlite> {
         fs::create_dir_all(snapshot_path)?;
         let create_result = (|| -> Result<Box<[SqliteConnection]>> {
             let kvdb_sqlite_sharded =

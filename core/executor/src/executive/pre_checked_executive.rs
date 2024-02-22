@@ -236,8 +236,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 pub(super) fn exec_vm<'a>(
     context: &mut ExecutiveContext<'a>, params: ActionParams,
     tracer: &mut dyn TracerTrait,
-) -> DbResult<FrameResult>
-{
+) -> DbResult<FrameResult> {
     let main_frame = FreshFrame::new(
         params,
         context.env,

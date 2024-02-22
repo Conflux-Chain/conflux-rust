@@ -85,8 +85,7 @@ impl PosHandler {
     pub fn new(
         pos_handler: Arc<PosVerifier>, pow_data_manager: Arc<BlockDataManager>,
         network_type: Network, consensus: SharedConsensusGraph,
-    ) -> Self
-    {
+    ) -> Self {
         PosHandler {
             pos_handler,
             pow_data_manager,

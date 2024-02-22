@@ -46,8 +46,7 @@ impl RequestManager {
     pub async fn unary_rpc<'a>(
         &'a self, io: &'a dyn NetworkContext, recipient: Option<NodeId>,
         mut request: Box<dyn Request>,
-    ) -> impl Future<Output = Result<Box<dyn RpcResponse>, Error>> + 'a
-    {
+    ) -> impl Future<Output = Result<Box<dyn RpcResponse>, Error>> + 'a {
         async move {
             // ask network to fulfill rpc request
             let (res_tx, res_rx) = oneshot::channel();
@@ -66,8 +65,7 @@ impl RequestManager {
     pub fn request_with_delay(
         &self, io: &dyn NetworkContext, mut request: Box<dyn Request>,
         peer: Option<NodeId>, delay: Option<Duration>,
-    )
-    {
+    ) {
         // increase delay for resent request.
         let (cur_delay, next_delay) = match delay {
             Some(d) => (d, d + *REQUEST_START_WAITING_TIME),

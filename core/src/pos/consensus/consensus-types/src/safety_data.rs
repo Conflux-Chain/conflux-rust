@@ -22,8 +22,7 @@ impl SafetyData {
     pub fn new(
         epoch: u64, last_voted_round: u64, preferred_round: u64,
         last_vote: Option<Vote>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             epoch,
             last_voted_round,

@@ -236,8 +236,7 @@ where V: crate::Value
     fn recover_partial_nodes(
         store: &dyn TreeReader<V>, version: Version,
         rightmost_leaf_node_key: NodeKey,
-    ) -> Result<Vec<InternalInfo<V>>>
-    {
+    ) -> Result<Vec<InternalInfo<V>>> {
         ensure!(
             rightmost_leaf_node_key.nibble_path().num_nibbles() > 0,
             "Root node would not be written until entire restoration process has completed \
@@ -404,8 +403,7 @@ where V: crate::Value
         &mut self, child_index: usize, existing_leaf: LeafNode<V>,
         new_key: HashValue, new_value: V,
         mut remaining_nibbles: NibbleIterator<'_>,
-    )
-    {
+    ) {
         let num_existing_partial_nodes = self.partial_nodes.len();
 
         // The node at this position becomes an internal node. Since we may

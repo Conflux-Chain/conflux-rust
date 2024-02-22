@@ -460,8 +460,7 @@ impl Signature for Ed25519Signature {
     fn batch_verify<T: CryptoHash + Serialize>(
         message: &T,
         keys_and_signatures: Vec<(Self::VerifyingKeyMaterial, Self)>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         for (_, sig) in keys_and_signatures.iter() {
             Ed25519Signature::check_malleability(&sig.to_bytes())?
         }

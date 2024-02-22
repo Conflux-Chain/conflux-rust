@@ -161,8 +161,7 @@ impl SqliteConnection {
     pub fn prepare<'db>(
         db: &'db mut Connection, statement_cache: &'db mut StatementCache,
         sql: &str,
-    ) -> Result<&'db mut ScopedStatement>
-    {
+    ) -> Result<&'db mut ScopedStatement> {
         // Actually safe. I don't want an unnecessary to_string() for the sql.
         // But the borrow-checker doesn't seem to understand branch very well.
         Ok(unsafe {

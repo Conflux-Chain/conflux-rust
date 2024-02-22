@@ -209,8 +209,7 @@ impl RoundState {
         timeout_sender: channel::Sender<(u64, Round)>,
         proposal_timeout_sender: channel::Sender<(u64, Round)>,
         new_round_timeout_sender: channel::Sender<(u64, Round)>,
-    ) -> Self
-    {
+    ) -> Self {
         // Our counters are initialized lazily, so they're not going to appear
         // in Prometheus if some conditions never happen. Invoking get()
         // function enforces creation.

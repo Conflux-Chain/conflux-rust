@@ -153,8 +153,7 @@ impl StateComputeResult {
         compute_status: Vec<TransactionStatus>,
         transaction_info_hashes: Vec<HashValue>,
         pivot_decision: Option<PivotBlockDecision>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             root_hash,
             frozen_subtree_roots,
@@ -273,8 +272,7 @@ impl ExecutedTrees {
             InMemoryAccumulator<TransactionAccumulatorHasher>,
         >,
         pos_state: PosState,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             state_tree,
             transaction_accumulator,
@@ -305,8 +303,7 @@ impl ExecutedTrees {
         state_root_hash: HashValue,
         frozen_subtrees_in_accumulator: Vec<HashValue>,
         num_leaves_in_accumulator: u64, pos_state: PosState,
-    ) -> ExecutedTrees
-    {
+    ) -> ExecutedTrees {
         ExecutedTrees {
             state_tree: Arc::new(SparseMerkleTree::new(state_root_hash)),
             transaction_accumulator: Arc::new(
