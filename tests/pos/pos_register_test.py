@@ -13,7 +13,7 @@ class PosRegisterTest(ConfluxTestFramework):
         self.num_nodes = 4
         self.conf_parameters["hydra_transition_height"] = 10
         self.conf_parameters["hydra_transition_number"] = 10
-        self.conf_parameters["sigma_fix_transition_number"] = 100
+        self.conf_parameters["sigma_fix_transition_number"] = 1000
 
     def run_test(self):
         client0 = RpcClient(self.nodes[0])
@@ -30,7 +30,7 @@ class PosRegisterTest(ConfluxTestFramework):
         pos_identifier0, priv_key0 = client0.wait_for_pos_register(priv_key=priv0, legacy=True)
         _, priv_key1 = client1.wait_for_pos_register(priv_key=priv1, legacy=False, should_fail=True)
 
-        client0.generate_empty_blocks(80)
+        client0.generate_empty_blocks(1000)
         pos_identifier2, priv_key2 = client2.wait_for_pos_register(priv_key=priv2, legacy=False)
         client3.wait_for_pos_register(priv_key=priv3, legacy=True, should_fail=True)
 
