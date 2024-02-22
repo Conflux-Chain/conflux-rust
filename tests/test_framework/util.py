@@ -47,6 +47,18 @@ def assert_fee_amount(fee, tx_size, fee_per_kB):
     if fee > (tx_size + 2) * fee_per_kB / 1000:
         raise AssertionError("Fee of %s BTC too high! (Should be %s BTC)" %
                              (str(fee), str(target_fee)))
+    
+    
+def assert_storage_occupied(receipt, addr, expected):
+    if receipt["storageCoveredBySponsor"]:
+        assert_equal(receipt["to"], addr.lower())
+    else:
+        assert_equal(receipt["from"], addr.lower())
+    assert_equal(receipt["storageCollateralized"], expected)
+
+
+def assert_storage_released(receipt, addr, expected):
+    assert_equal(receipt["storageReleased"].get(addr.lower(), 0), expected)
 
 
 def assert_equal(thing1, thing2, *args):

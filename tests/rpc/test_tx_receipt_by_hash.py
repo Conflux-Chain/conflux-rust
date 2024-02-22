@@ -32,9 +32,9 @@ class TestGetTxReceiptByHash(RpcClient):
         assert_equal(receipt['gasCoveredBySponsor'], False)
         assert_equal(receipt['logs'], [])
         assert_equal(receipt['outcomeStatus'], '0x0')
-        assert_equal(receipt['storageCollateralized'], '0x0')
+        assert_equal(receipt['storageCollateralized'], 0)
         assert_equal(receipt['storageCoveredBySponsor'], False)
-        assert_equal(receipt['storageReleased'], [])
+        assert_equal(len(receipt['storageReleased']), 0)
         assert_equal(receipt['txExecErrorMsg'], None)
 
     def test_receipt_with_storage_changes(self):
@@ -49,8 +49,8 @@ class TestGetTxReceiptByHash(RpcClient):
         assert_equal(receipt['outcomeStatus'], '0x0')
         contract = receipt['contractCreated']
 
-        assert_equal(receipt['storageCollateralized'], '0x280')
-        assert_equal(receipt['storageReleased'], [])
+        assert_equal(receipt['storageCollateralized'], 640)
+        assert_equal(len(receipt['storageReleased']), 0)
 
         # call increment()
         data_hex = encode_hex_0x(keccak(b"increment()"))
@@ -58,8 +58,8 @@ class TestGetTxReceiptByHash(RpcClient):
         assert_equal(self.send_tx(tx, True), tx.hash_hex())
         receipt = self.get_transaction_receipt(tx.hash_hex())
 
-        assert_equal(receipt['storageCollateralized'], '0x0')
-        assert_equal(receipt['storageReleased'], [])
+        assert_equal(receipt['storageCollateralized'], 0)
+        assert_equal(len(receipt['storageReleased']), 0)
 
         # call destroy()
         data_hex = encode_hex_0x(keccak(b"destroy()"))
@@ -67,11 +67,10 @@ class TestGetTxReceiptByHash(RpcClient):
         assert_equal(self.send_tx(tx, True), tx.hash_hex())
         receipt = self.get_transaction_receipt(tx.hash_hex())
 
-        assert_equal(receipt['storageCollateralized'], '0x0')
+        assert_equal(receipt['storageCollateralized'], 0)
 
         assert_equal(len(receipt['storageReleased']), 1)
-        assert_equal(receipt['storageReleased'][0]['collaterals'], '0x280')
-        assert_equal(b32_address_to_hex(receipt['storageReleased'][0]['address']), self.GENESIS_ADDR)
+        assert_equal(receipt['storageReleased'][self.GENESIS_ADDR.lower()], 640)
 
     def test_get_epoch_receipts(self):
         parent_hash = self.block_by_epoch("latest_mined")['hash']

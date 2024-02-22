@@ -87,6 +87,15 @@ impl LogEntry {
     }
 }
 
+pub fn build_bloom(logs: &[LogEntry]) -> Bloom {
+    logs.iter()
+        .map(LogEntry::bloom)
+        .fold(Bloom::default(), |mut acc, bloom| {
+            acc.accrue_bloom(&bloom);
+            acc
+        })
+}
+
 /// Log localized in a blockchain.
 #[derive(Default, Debug, PartialEq, Clone)]
 pub struct LocalizedLogEntry {

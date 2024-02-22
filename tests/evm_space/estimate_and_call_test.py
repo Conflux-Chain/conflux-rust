@@ -21,7 +21,7 @@ class EstimateAndCallTest(Web3Base):
         assert_equal(call_result, "0x")
 
         call_request["from"] = self.evmAccount.address
-        assert_raises_rpc_error(-32015, "Can not estimate: transaction execution failed, all gas will be charged", self.nodes[0].eth_estimateGas, call_request)
+        assert_raises_rpc_error(-32015, "Can not estimate: transaction can not be executed", self.nodes[0].eth_estimateGas, call_request)
         assert_raises_rpc_error(-32015, None, self.nodes[0].eth_call, call_request)
 
 if __name__ == "__main__":

@@ -12,11 +12,11 @@ use crate::{
         LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
-    state::COMMISSION_PRIVILEGE_SPECIAL_KEY,
     sync::SynchronizationGraph,
     ConsensusGraph, Notifications,
 };
 use cfx_addr::Network;
+use cfx_executor::state::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,

@@ -7,9 +7,10 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
-mod error;
 pub mod global_params;
 mod statedb_ext;
+
+use cfx_db_errors::statedb as error;
 
 #[cfg(test)]
 mod tests;
@@ -19,6 +20,7 @@ pub use self::{
     impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
     statedb_ext::StateDbExt,
 };
+pub use cfx_storage::utils::access_mode;
 pub type StateDb = StateDbGeneric;
 
 // Put StateDb in mod to make sure that methods from statedb_ext don't access
@@ -49,6 +51,7 @@ mod impls {
         checkpoints: Vec<Checkpoint>,
     }
 
+    // Note: Not used currently.
     pub trait StateDbCheckpointMethods {
         /// Create a new checkpoint. Returns the index of the checkpoint.
         fn checkpoint(&mut self) -> usize;
@@ -90,7 +93,7 @@ mod impls {
         }
 
         /// Update the accessed_entries while getting the value.
-        pub fn get_raw(
+        pub(crate) fn get_raw(
             &self, key: StorageKeyWithSpace,
         ) -> Result<Option<Arc<[u8]>>> {
             let key_bytes = key.to_key_bytes();
@@ -115,6 +118,13 @@ mod impls {
             };
             trace!("get_raw key={:?}, value={:?}", key, r);
             Ok(r)
+        }
+
+        #[cfg(feature = "testonly_code")]
+        pub fn get_raw_test(
+            &self, key: StorageKeyWithSpace,
+        ) -> Result<Option<Arc<[u8]>>> {
+            self.get_raw(key)
         }
 
         /// Set the value under `key` to `value` in `accessed_entries`.
@@ -156,7 +166,7 @@ mod impls {
             Ok(())
         }
 
-        pub fn set_raw(
+        pub(crate) fn set_raw(
             &mut self, key: StorageKeyWithSpace, value: Box<[u8]>,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()>
@@ -471,9 +481,10 @@ mod impls {
 
         pub fn commit(
             &mut self, epoch_id: EpochId,
-            debug_record: Option<&mut ComputeEpochDebugRecord>,
+            mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<StateRootWithAuxInfo>
         {
+            self.apply_changes_to_storage(debug_record.as_deref_mut())?;
             if !self.checkpoints.is_empty() {
                 panic!("Active checkpoints during state-db commit");
             }

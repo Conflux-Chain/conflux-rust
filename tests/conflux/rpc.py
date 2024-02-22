@@ -447,9 +447,19 @@ class RpcClient:
     def get_transaction_receipt(self, tx_hash: str) -> dict:
         assert_is_hash_string(tx_hash)
         r = self.node.cfx_getTransactionReceipt(tx_hash)
+        if r is None:
+            return None
+        
         convert_b32_address_field_to_hex(r, "contractCreated")
         convert_b32_address_field_to_hex(r, "from")
         convert_b32_address_field_to_hex(r, "to")
+
+        if "storageCollateralized" in r:
+            r["storageCollateralized"] = int(r["storageCollateralized"], 0)
+
+        if "storageReleased" in r:
+            storage_released = { b32_address_to_hex(item["address"]): int(item["collaterals"], 0) for item in r["storageReleased"] }
+            r["storageReleased"] = storage_released
         return r
 
     def txpool_status(self) -> (int, int):

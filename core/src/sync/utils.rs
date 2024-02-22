@@ -34,16 +34,15 @@ use crate::{
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
-    machine::new_machine_with_builtin,
+    genesis_block::{genesis_block, GenesisPosState},
     pow::{self, PowComputer, ProofOfWorkConfig},
-    spec::genesis::{genesis_block, GenesisPosState},
     statistics::Statistics,
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::TxPoolConfig,
     verification::VerificationConfig,
-    vm_factory::VmFactory,
     ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
+use cfx_executor::machine::{new_machine_with_builtin, VmFactory};
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
