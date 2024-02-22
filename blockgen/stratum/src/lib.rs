@@ -83,8 +83,7 @@ impl Stratum {
     pub fn start(
         addr: &SocketAddr, dispatcher: Arc<dyn JobDispatcher>,
         secret: Option<H256>,
-    ) -> Result<Arc<Stratum>, Error>
-    {
+    ) -> Result<Arc<Stratum>, Error> {
         let implementation = Arc::new(StratumImpl {
             dispatcher,
             workers: Arc::new(RwLock::default()),

@@ -554,8 +554,7 @@ fn ipv4_properties() {
         octets: &[u8; 4], unspec: bool, loopback: bool, private: bool,
         link_local: bool, global: bool, multicast: bool, broadcast: bool,
         documentation: bool,
-    )
-    {
+    ) {
         let ip = Ipv4Addr::new(octets[0], octets[1], octets[2], octets[3]);
         assert_eq!(octets, &ip.octets());
 

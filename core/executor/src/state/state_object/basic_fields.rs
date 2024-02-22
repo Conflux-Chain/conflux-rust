@@ -30,8 +30,7 @@ impl State {
     pub fn add_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
         cleanup_mode: CleanupMode,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         let exists = self.exists(address)?;
 
         // The caller should guarantee the validity of address.
@@ -54,8 +53,7 @@ impl State {
     pub fn sub_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
         cleanup_mode: &mut CleanupMode,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         if !by.is_zero() {
             self.write_account_lock(address)?.sub_balance(by);
         }
@@ -71,8 +69,7 @@ impl State {
     pub fn transfer_balance(
         &mut self, from: &AddressWithSpace, to: &AddressWithSpace, by: &U256,
         mut cleanup_mode: CleanupMode,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         self.sub_balance(from, by, &mut cleanup_mode)?;
         self.add_balance(to, by, cleanup_mode)?;
         Ok(())

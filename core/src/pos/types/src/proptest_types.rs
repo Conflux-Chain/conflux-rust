@@ -142,8 +142,7 @@ impl AccountInfo {
         private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
         vrf_private_key: ConsensusVRFPrivateKey,
         vrf_public_key: ConsensusVRFPublicKey,
-    ) -> Self
-    {
+    ) -> Self {
         let address = account_address::from_consensus_public_key(
             &public_key,
             &vrf_public_key,
@@ -177,8 +176,7 @@ impl AccountInfoUniverse {
             (ConsensusVRFPrivateKey, ConsensusVRFPublicKey),
         )>,
         epoch: u64, round: Round, next_version: Version,
-    ) -> Self
-    {
+    ) -> Self {
         let accounts = keypairs
             .into_iter()
             .map(
@@ -321,8 +319,7 @@ impl RawTransaction {
     fn strategy_impl(
         address_strategy: impl Strategy<Value = AccountAddress>,
         payload_strategy: impl Strategy<Value = TransactionPayload>,
-    ) -> impl Strategy<Value = Self>
-    {
+    ) -> impl Strategy<Value = Self> {
         // XXX what other constraints do these need to obey?
         (address_strategy, payload_strategy, any::<u64>()).prop_map(
             |(sender, payload, expiration_time_secs)| {
@@ -335,8 +332,7 @@ impl RawTransaction {
 fn new_raw_transaction(
     sender: AccountAddress, payload: TransactionPayload,
     expiration_time_secs: u64,
-) -> RawTransaction
-{
+) -> RawTransaction {
     let chain_id = ChainId::test();
     match payload {
         TransactionPayload::Module(module) => RawTransaction::new_module(
@@ -422,8 +418,7 @@ impl SignatureCheckedTransaction {
         vrf_keypair_strategy: impl Strategy<
             Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
-    ) -> impl Strategy<Value = Self>
-    {
+    ) -> impl Strategy<Value = Self> {
         Self::strategy_impl(
             keypair_strategy,
             vrf_keypair_strategy,
@@ -439,8 +434,7 @@ impl SignatureCheckedTransaction {
             Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
         payload_strategy: impl Strategy<Value = TransactionPayload>,
-    ) -> impl Strategy<Value = Self>
-    {
+    ) -> impl Strategy<Value = Self> {
         (keypair_strategy, vrf_keypair_strategy, payload_strategy)
             .prop_flat_map(|(keypair, vrf_keypair, payload)| {
                 let address = account_address::from_consensus_public_key(

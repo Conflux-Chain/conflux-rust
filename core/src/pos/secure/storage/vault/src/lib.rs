@@ -134,8 +134,7 @@ impl Client {
     pub fn new(
         host: String, token: String, ca_certificate: Option<String>,
         connection_timeout_ms: Option<u64>, response_timeout_ms: Option<u64>,
-    ) -> Self
-    {
+    ) -> Self {
         let mut tls_builder = native_tls::TlsConnector::builder();
         tls_builder.min_protocol_version(Some(native_tls::Protocol::Tlsv12));
         if let Some(certificate) = ca_certificate {

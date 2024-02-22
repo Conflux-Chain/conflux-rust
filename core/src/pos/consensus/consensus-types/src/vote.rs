@@ -64,8 +64,7 @@ impl Vote {
         vote_data: VoteData, author: Author,
         mut ledger_info_placeholder: LedgerInfo,
         validator_signer: &ValidatorSigner,
-    ) -> Self
-    {
+    ) -> Self {
         ledger_info_placeholder.set_consensus_data_hash(vote_data.hash());
         let signature = validator_signer.sign(&ledger_info_placeholder);
         Self::new_with_signature(
@@ -80,8 +79,7 @@ impl Vote {
     pub fn new_with_signature(
         vote_data: VoteData, author: Author, ledger_info: LedgerInfo,
         signature: ConsensusSignature,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             vote_data,
             author,

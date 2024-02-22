@@ -233,8 +233,7 @@ pub fn initialize_common_modules(
         EthPubSubClient,
     ),
     String,
->
-{
+> {
     info!("Working directory: {:?}", std::env::current_dir());
 
     // TODO(lpl): Keep it properly and allow not running pos.
@@ -553,8 +552,7 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
     ),
     String,
->
-{
+> {
     let (
         _machine,
         secret_store,
@@ -826,8 +824,7 @@ pub fn initialize_txgens(
 ) -> (
     Option<Arc<TransactionGenerator>>,
     Option<Arc<Mutex<DirectTransactionGenerator>>>,
-)
-{
+) {
     // This tx generator directly push simple transactions and erc20
     // transactions into blocks.
     let maybe_direct_txgen_with_contract = if conf.is_test_or_dev_mode() {

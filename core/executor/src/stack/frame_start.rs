@@ -29,8 +29,7 @@ impl<'a> FreshFrame<'a> {
     pub fn new(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, depth: usize, parent_static_flag: bool,
-    ) -> Self
-    {
+    ) -> Self {
         let is_create = params.create_type != CreateType::None;
         let create_address = is_create.then_some(params.code_address);
         trace!(
@@ -122,8 +121,7 @@ impl<'a> FreshFrame<'a> {
 fn transfer_balance(
     params: &ActionParams, spec: &Spec, state: &mut State,
     substate: &mut Substate,
-) -> DbResult<()>
-{
+) -> DbResult<()> {
     let sender = AddressWithSpace {
         address: params.sender,
         space: params.space,
@@ -147,8 +145,7 @@ fn transfer_balance(
 fn transfer_exec_balance_and_init_contract(
     params: &ActionParams, spec: &Spec, state: &mut State,
     substate: &mut Substate, storage_layout: Option<StorageLayout>,
-) -> DbResult<()>
-{
+) -> DbResult<()> {
     let sender = AddressWithSpace {
         address: params.sender,
         space: params.space,

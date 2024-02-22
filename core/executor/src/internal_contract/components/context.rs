@@ -30,8 +30,7 @@ impl<'a> InternalRefContext<'a> {
     pub fn log(
         &mut self, params: &ActionParams, spec: &Spec, topics: Vec<H256>,
         data: Vec<u8>,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         use primitives::log_entry::LogEntry;
 
         if self.static_flag || self.callstack.in_reentrancy(spec) {

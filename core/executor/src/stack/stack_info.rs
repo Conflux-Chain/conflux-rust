@@ -151,5 +151,4 @@ mod tests {
         assert_eq!(call_stack.pop(), None);
         assert_eq!(call_stack.last(), None);
     }
-
 }

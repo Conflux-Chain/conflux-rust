@@ -155,7 +155,7 @@ where
             all_right = false;
         }
 
-        if matches!(search_dir, Right(_)|RightOrStop(_)) {
+        if matches!(search_dir, Right(_) | RightOrStop(_)) {
             all_left = false;
         }
 
@@ -363,7 +363,6 @@ mod tests {
             }
         }
     }
-
 }
 
 mod impl_std_trait {

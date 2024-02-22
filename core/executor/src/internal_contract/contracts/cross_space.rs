@@ -74,8 +74,7 @@ impl UpfrontPaymentTrait for CreateToEVM {
     fn upfront_gas_payment(
         &self, init: &Bytes, _params: &ActionParams,
         context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         create_gas(context, init.as_ref())
     }
 }
@@ -84,8 +83,7 @@ impl ExecutionTrait for CreateToEVM {
     fn execute_inner(
         &self, init: Bytes, params: &ActionParams, gas_left: U256,
         context: &mut InternalRefContext,
-    ) -> InternalTrapResult<Bytes20>
-    {
+    ) -> InternalTrapResult<Bytes20> {
         let trap = create_to_evmcore(init, None, params, gas_left, context);
         process_trap(trap, PhantomData)
     }
@@ -101,8 +99,7 @@ impl UpfrontPaymentTrait for TransferToEVM {
     fn upfront_gas_payment(
         &self, receiver: &Bytes20, params: &ActionParams,
         context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         call_gas(H160(*receiver), params, context, &vec![])
     }
 }
@@ -111,8 +108,7 @@ impl ExecutionTrait for TransferToEVM {
     fn execute_inner(
         &self, to: Bytes20, params: &ActionParams, gas_left: U256,
         context: &mut InternalRefContext,
-    ) -> InternalTrapResult<Bytes>
-    {
+    ) -> InternalTrapResult<Bytes> {
         let trap = call_to_evmcore(
             H160(to),
             vec![],
@@ -135,8 +131,7 @@ impl UpfrontPaymentTrait for CallToEVM {
     fn upfront_gas_payment(
         &self, (ref receiver, ref data): &(Bytes20, Bytes),
         params: &ActionParams, context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         call_gas(H160(*receiver), params, context, data)
     }
 }
@@ -145,8 +140,7 @@ impl ExecutionTrait for CallToEVM {
     fn execute_inner(
         &self, (to, data): (Bytes20, Bytes), params: &ActionParams,
         gas_left: U256, context: &mut InternalRefContext,
-    ) -> InternalTrapResult<Bytes>
-    {
+    ) -> InternalTrapResult<Bytes> {
         let trap = call_to_evmcore(
             H160(to),
             data,
@@ -169,8 +163,7 @@ impl UpfrontPaymentTrait for StaticCallToEVM {
     fn upfront_gas_payment(
         &self, _: &(Bytes20, Bytes), _params: &ActionParams,
         context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         Ok(static_call_gas(context.spec))
     }
 }
@@ -179,8 +172,7 @@ impl ExecutionTrait for StaticCallToEVM {
     fn execute_inner(
         &self, (to, data): (Bytes20, Bytes), params: &ActionParams,
         gas_left: U256, context: &mut InternalRefContext,
-    ) -> InternalTrapResult<Bytes>
-    {
+    ) -> InternalTrapResult<Bytes> {
         let trap = call_to_evmcore(
             H160(to),
             data,
@@ -211,8 +203,7 @@ impl SimpleExecutionTrait for Withdraw {
     fn execute_inner(
         &self, value: U256, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         withdraw_from_evmcore(params.sender, value, params, context)
     }
 }
@@ -227,8 +218,7 @@ impl SimpleExecutionTrait for MappedBalance {
     fn execute_inner(
         &self, addr: Address, _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         mapped_balance(addr, context)
     }
 }
@@ -243,8 +233,7 @@ impl SimpleExecutionTrait for MappedNonce {
     fn execute_inner(
         &self, addr: Address, _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         mapped_nonce(addr, context)
     }
 }

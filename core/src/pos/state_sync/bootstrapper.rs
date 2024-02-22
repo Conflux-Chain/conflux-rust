@@ -37,8 +37,7 @@ impl StateSyncBootstrapper {
         storage: Arc<dyn DbReader>, executor: Box<dyn ChunkExecutor>,
         node_config: &NodeConfig, waypoint: Waypoint,
         reconfig_event_subscriptions: Vec<ReconfigSubscription>,
-    ) -> Self
-    {
+    ) -> Self {
         let runtime = Builder::new_multi_thread()
             .thread_name("state-sync")
             .enable_all()
@@ -64,8 +63,7 @@ impl StateSyncBootstrapper {
             diem_mempool::CommitNotification,
         >,
         node_config: &NodeConfig, waypoint: Waypoint, executor_proxy: E,
-    ) -> Self
-    {
+    ) -> Self {
         let (coordinator_sender, coordinator_receiver) = mpsc::unbounded();
         let initial_state = executor_proxy
             .get_local_storage_state()

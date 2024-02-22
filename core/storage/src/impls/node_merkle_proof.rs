@@ -37,8 +37,7 @@ impl NodeMerkleProof {
         &self, key: &Vec<u8>, storage_root: &StorageRoot,
         state_root: StateRoot,
         maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
-    ) -> bool
-    {
+    ) -> bool {
         let delta_root = &state_root.delta_root;
         let intermediate_root = &state_root.intermediate_delta_root;
         let snapshot_root = &state_root.snapshot_root;

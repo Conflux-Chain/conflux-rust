@@ -116,8 +116,7 @@ impl Headers {
     pub fn new(
         graph: Arc<SynchronizationGraph>, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>, config: LightNodeConfiguration,
-    ) -> Self
-    {
+    ) -> Self {
         let duplicate_count = AtomicU64::new(0);
         let inserted_count = AtomicU64::new(0);
         let sync_manager =
@@ -191,8 +190,7 @@ impl Headers {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         headers: impl Iterator<Item = BlockHeader>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let mut missing = HashSet::new();
         let mut has_invalid_header = false;
 

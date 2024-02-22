@@ -114,12 +114,12 @@ pub struct BlockDataManager {
     /// It is also used for checking whether an epoch has been executed.
     /// It can be updated, i.e., adding new items, in the following cases:
     /// 1) When a new epoch gets executed in normal execution;
-    /// 2) After syncing snapshot, we need to update execution commitment
-    ///    for pivot blocks around snapshot block based on blaming information;
+    /// 2) After syncing snapshot, we need to update execution commitment for
+    ///    pivot blocks around snapshot block based on blaming information;
     /// 3) After recovering block graph from db, update execution commitment
     ///    from db;
-    /// 4) In BlockDataManager::new(), update execution commitment
-    ///    of true_genesis_block.
+    /// 4) In BlockDataManager::new(), update execution commitment of
+    ///    true_genesis_block.
     epoch_execution_commitments:
         RwLock<HashMap<H256, EpochExecutionCommitment>>,
     epoch_execution_contexts: RwLock<HashMap<H256, EpochExecutionContext>>,
@@ -150,9 +150,9 @@ pub struct BlockDataManager {
     /// The upper bound always equal to latest executed epoch height.
     /// As for the lower bound:
     ///   1. For archive node, it always equals `cur_era_stable_height`.
-    ///   2. For full node, it equals the height of remotely synchronized
-    ///      state at start, and equals `cur_era_stable_height` after making a
-    ///      new checkpoint.
+    ///   2. For full node, it equals the height of remotely synchronized state
+    ///      at start, and equals `cur_era_stable_height` after making a new
+    ///      checkpoint.
     ///
     /// The lower boundary height will be updated when:
     ///   1. New checkpoint
@@ -174,8 +174,7 @@ impl BlockDataManager {
         storage_manager: Arc<StorageManager>,
         worker_pool: Arc<Mutex<ThreadPool>>, config: DataManagerConfiguration,
         pow: Arc<PowComputer>,
-    ) -> Self
-    {
+    ) -> Self {
         let mb = 1024 * 1024;
         let max_cache_size = cache_conf.ledger_mb() * mb;
         let pref_cache_size = max_cache_size * 3 / 4;
@@ -520,8 +519,7 @@ impl BlockDataManager {
     pub fn block_traces_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch: &H256,
         update_pivot_assumption: bool, update_cache: bool,
-    ) -> Option<BlockExecTraces>
-    {
+    ) -> Option<BlockExecTraces> {
         self.get_version(
             hash,
             assumed_epoch,
@@ -541,8 +539,7 @@ impl BlockDataManager {
     pub fn insert_block_traces(
         &self, hash: H256, trace: BlockExecTraces, pivot_hash: H256,
         persistent: bool,
-    )
-    {
+    ) {
         trace! {"insert_block_traces start pivot={:?}", pivot_hash};
         self.insert_version(
             hash,
@@ -644,8 +641,7 @@ impl BlockDataManager {
     pub fn block_execution_result_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch: &H256,
         update_pivot_assumption: bool, update_cache: bool,
-    ) -> Option<BlockExecutionResult>
-    {
+    ) -> Option<BlockExecutionResult> {
         self.get_version(
             hash,
             assumed_epoch,
@@ -684,8 +680,7 @@ impl BlockDataManager {
     pub fn insert_block_execution_result(
         &self, hash: H256, epoch: H256, block_receipts: Arc<BlockReceipts>,
         persistent: bool,
-    )
-    {
+    ) {
         trace! {"insert_block_traces start pivot={:?}", epoch};
         let bloom =
             block_receipts
@@ -716,8 +711,7 @@ impl BlockDataManager {
     pub fn insert_block_reward_result(
         &self, hash: H256, epoch: &H256, block_reward: BlockRewardResult,
         persistent: bool,
-    )
-    {
+    ) {
         self.insert_version(
             hash,
             epoch,
@@ -735,8 +729,7 @@ impl BlockDataManager {
     pub fn block_reward_result_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch_later: &H256,
         update_pivot_assumption: bool, update_cache: bool,
-    ) -> Option<BlockRewardResult>
-    {
+    ) -> Option<BlockRewardResult> {
         self.get_version(
             hash,
             assumed_epoch_later,
@@ -1132,8 +1125,7 @@ impl BlockDataManager {
         &self, block_hash: H256,
         state_root_with_aux_info: StateRootWithAuxInfo, receipts_root: H256,
         logs_bloom_hash: H256,
-    )
-    {
+    ) {
         let commitment = EpochExecutionCommitment {
             state_root_with_aux_info,
             receipts_root,
@@ -1234,8 +1226,7 @@ impl BlockDataManager {
         on_local_pivot: bool, update_trace: bool,
         reward_execution_info: &Option<RewardExecutionInfo>,
         pos_verifier: &PosVerifier, evm_chain_id: u32,
-    ) -> bool
-    {
+    ) -> bool {
         if !self.epoch_executed(epoch_hash) {
             return false;
         }
@@ -1819,8 +1810,7 @@ impl DataManagerConfiguration {
     pub fn new(
         persist_tx_index: bool, persist_block_number_index: bool,
         tx_cache_index_maintain_timeout: Duration, db_type: DbType,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             persist_tx_index,
             persist_block_number_index,

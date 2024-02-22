@@ -56,8 +56,7 @@ impl AccountTransactions {
     pub(crate) fn insert(
         &mut self, hash: HashValue, txn: MempoolTransaction,
         is_pivot_decision: bool,
-    )
-    {
+    ) {
         if is_pivot_decision {
             self.pivot_decision_transaction.insert(hash, txn);
         } else {

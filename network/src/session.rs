@@ -107,8 +107,7 @@ impl Session {
         id: Option<&NodeId>, peer_header_version: u8, token: StreamToken,
         host: &NetworkServiceInner,
         pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    ) -> Result<Session, Error>
-    {
+    ) -> Result<Session, Error> {
         let originated = id.is_some();
 
         let mut handshake = Handshake::new(token, id, socket);
@@ -527,8 +526,7 @@ impl Session {
     pub fn check_message_protocol_version(
         &self, protocol: Option<ProtocolId>,
         min_protocol_version: ProtocolVersion, mut msg: &[u8],
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         // min_protocol_version is the version when the Message is introduced.
         // peer protocol version must be higher.
         if let Some(protocol) = protocol {
@@ -558,8 +556,7 @@ impl Session {
         &mut self, io: &IoContext<Message>, protocol: Option<ProtocolId>,
         min_proto_version: ProtocolVersion, packet_id: u8, data: Vec<u8>,
         priority: SendQueuePriority,
-    ) -> Result<SendQueueStatus, Error>
-    {
+    ) -> Result<SendQueueStatus, Error> {
         self.check_message_protocol_version(
             protocol.clone(),
             min_proto_version,
@@ -573,8 +570,7 @@ impl Session {
     pub fn send_packet_immediately(
         &mut self, protocol: Option<ProtocolId>,
         min_proto_version: ProtocolVersion, packet_id: u8, data: Vec<u8>,
-    ) -> Result<usize, Error>
-    {
+    ) -> Result<usize, Error> {
         self.check_message_protocol_version(
             protocol.clone(),
             min_proto_version,
@@ -764,8 +760,7 @@ impl SessionPacket {
     fn assemble(
         id: u8, header_version: u8, protocol: Option<ProtocolId>,
         mut data: Vec<u8>,
-    ) -> Vec<u8>
-    {
+    ) -> Vec<u8> {
         let mut protocol_flag = 0;
         if let Some(protocol) = protocol {
             data.extend_from_slice(&protocol);

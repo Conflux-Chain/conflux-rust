@@ -108,8 +108,7 @@ impl SnapshotDbManagerSqlite {
         use_isolated_db_for_mpt_table: bool,
         use_isolated_db_for_mpt_table_height: Option<u64>,
         era_epoch_count: u64,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         if !snapshot_path.exists() {
             fs::create_dir_all(snapshot_path.clone())?;
         }
@@ -201,8 +200,7 @@ impl SnapshotDbManagerSqlite {
     fn open_snapshot_readonly(
         &self, snapshot_path: PathBuf, try_open: bool,
         snapshot_epoch_id: &EpochId, read_mpt_snapshot: bool,
-    ) -> Result<Option<SnapshotDbSqlite>>
-    {
+    ) -> Result<Option<SnapshotDbSqlite>> {
         // indicate under recovery
         if self
             .snapshot_epoch_id_before_recovered
@@ -353,8 +351,7 @@ impl SnapshotDbManagerSqlite {
     fn open_snapshot_write(
         &self, snapshot_path: PathBuf, create: bool, new_epoch_height: u64,
         mpt_snapshot_path: Option<PathBuf>, new_snapshot_id: &EpochId,
-    ) -> Result<(SnapshotKvDbSqlite, Option<SnapshotMptDbSqlite>)>
-    {
+    ) -> Result<(SnapshotKvDbSqlite, Option<SnapshotMptDbSqlite>)> {
         let mut _open_lock = self.open_create_delete_lock.lock();
 
         let kv_db = self.open_kv_snapshot_write(
@@ -467,8 +464,7 @@ impl SnapshotDbManagerSqlite {
     fn open_mpt_snapshot_readonly(
         &self, snapshot_path: PathBuf, try_open: bool,
         snapshot_epoch_id: &EpochId,
-    ) -> Result<Option<Arc<SnapshotMptDbSqlite>>>
-    {
+    ) -> Result<Option<Arc<SnapshotMptDbSqlite>>> {
         debug!(
             "Open mpt snapshot with readonly {:?}, snapshot_epoch_id {:?}",
             snapshot_path, snapshot_epoch_id
@@ -570,8 +566,7 @@ impl SnapshotDbManagerSqlite {
     fn open_mpt_snapshot_write(
         &self, snapshot_path: PathBuf, create: bool, new_epoch_height: u64,
         new_snapshot_id: &EpochId,
-    ) -> Result<SnapshotMptDbSqlite>
-    {
+    ) -> Result<SnapshotMptDbSqlite> {
         debug!(
             "open mpt snapshot with write {:?}, new epoch height {}",
             snapshot_path, new_epoch_height
@@ -629,8 +624,7 @@ impl SnapshotDbManagerSqlite {
     pub fn on_close(
         already_open_snapshots: &AlreadyOpenSnapshots<SnapshotKvDbSqlite>,
         open_semaphore: &Arc<Semaphore>, path: &Path, remove_on_close: bool,
-    )
-    {
+    ) {
         // Destroy at close.
         if remove_on_close {
             // When removal fails, we can not raise the error because this
@@ -651,8 +645,7 @@ impl SnapshotDbManagerSqlite {
         already_open_snapshots: &AlreadyOpenSnapshots<SnapshotMptDbSqlite>,
         open_semaphore: &Arc<Semaphore>, path: &Path, remove_on_close: bool,
         latest_mpt_snapshot_semaphore: &Option<Arc<Semaphore>>,
-    )
-    {
+    ) {
         debug!("on_close_mpt_snapshot path {:?}", path);
         // Destroy at close.
         if remove_on_close {
@@ -882,8 +875,7 @@ impl SnapshotDbManagerSqlite {
         &self, temp_snapshot_db: &mut SnapshotKvDbSqlite,
         mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
         old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         let snapshot_path = self.get_snapshot_db_path(old_snapshot_epoch_id);
         let maybe_old_snapshot_db = Self::open_snapshot_readonly(
             self,
@@ -1255,8 +1247,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     fn get_snapshot_by_epoch_id(
         &self, snapshot_epoch_id: &EpochId, try_open: bool,
         open_mpt_snapshot: bool,
-    ) -> Result<Option<Self::SnapshotDb>>
-    {
+    ) -> Result<Option<Self::SnapshotDb>> {
         if snapshot_epoch_id.eq(&NULL_EPOCH) {
             return Ok(Some(Self::SnapshotDb::get_null_snapshot()));
         } else {
@@ -1366,8 +1357,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     fn new_temp_snapshot_for_full_sync(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
         epoch_height: u64,
-    ) -> Result<Self::SnapshotDbWrite>
-    {
+    ) -> Result<Self::SnapshotDbWrite> {
         let mpt_table_in_current_db =
             self.is_mpt_table_in_current_db_for_epoch(epoch_height);
         let temp_mpt_snapshot_path = if mpt_table_in_current_db {
@@ -1400,8 +1390,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
         snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
-    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
-    {
+    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>> {
         let temp_mpt_snapshot_path = self
             .get_full_sync_temp_mpt_snapshot_db_path(
                 snapshot_epoch_id,
@@ -1462,8 +1451,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     fn recovery_latest_mpt_snapshot_from_checkpoint(
         &self, snapshot_epoch_id: &EpochId,
         snapshot_epoch_id_before_recovered: Option<EpochId>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         info!(
             "recovery latest mpt snapshot from checkpoint {}",
             snapshot_epoch_id

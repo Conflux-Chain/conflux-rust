@@ -49,7 +49,9 @@ impl std::fmt::Debug for WriteOp {
 /// them is a `WriteOp` where `Value(val)` means that serialized representation
 /// should be updated to `val`, and `Deletion` means that we are going to delete
 /// this access path.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize,
+)]
 pub struct WriteSet(WriteSetMut);
 
 impl WriteSet {
@@ -69,7 +71,9 @@ impl WriteSet {
 ///
 /// This is separate because it goes through validation before becoming an
 /// immutable `WriteSet`.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, Default, Eq, Hash, PartialEq, Serialize, Deserialize,
+)]
 pub struct WriteSetMut {
     write_set: Vec<(AccessPath, WriteOp)>,
 }

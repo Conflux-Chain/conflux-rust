@@ -31,8 +31,7 @@ pub fn suicide(
     contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
     state: &mut State, spec: &Spec, substate: &mut Substate,
     tracer: &mut dyn TracerTrait,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     substate.suicides.insert(contract_address.clone());
     let balance = state.balance(contract_address)?;
 
@@ -79,8 +78,7 @@ pub fn suicide(
 pub fn set_admin(
     contract_address: Address, new_admin_address: Address,
     params: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     let requester = &params.sender;
     debug!(
         "set_admin requester {:?} contract {:?}, \
@@ -117,8 +115,7 @@ pub fn set_admin(
 pub fn destroy(
     contract_address: Address, params: &ActionParams, state: &mut State,
     spec: &Spec, substate: &mut Substate, tracer: &mut dyn TracerTrait,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     debug!("contract_address={:?}", contract_address);
 
     let requester = &params.sender;

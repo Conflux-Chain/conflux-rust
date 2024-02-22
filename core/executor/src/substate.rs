@@ -175,5 +175,4 @@ mod tests {
         assert_eq!(sub_state.contracts_created.len(), 2);
         assert_eq!(sub_state.suicides.len(), 1);
     }
-
 }

@@ -62,8 +62,7 @@ impl SpeculationBlock {
         block_map: Arc<
             Mutex<HashMap<HashValue, Weak<Mutex<SpeculationBlock>>>>,
         >,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             id,
             transactions,
@@ -195,8 +194,7 @@ impl SpeculationCache {
         &mut self, mut committed_trees: ExecutedTrees,
         committed_ledger_info: &LedgerInfo, committed_txns: Vec<Transaction>,
         reconfig_events: Vec<ContractEvent>,
-    )
-    {
+    ) {
         let new_root_block_id = if committed_ledger_info.ends_epoch() {
             // Update the root block id with reconfig virtual block id, to be
             // consistent with the logic of Consensus.
@@ -242,8 +240,7 @@ impl SpeculationCache {
             Vec<Transaction>,  /* block transactions */
             ProcessedVMOutput, /* block execution output */
         ),
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         // Check existence first
         let (block_id, txns, output) = block;
 
@@ -292,8 +289,7 @@ impl SpeculationCache {
     pub fn prune(
         &mut self, committed_ledger_info: &LedgerInfo,
         committed_txns: Vec<Transaction>, reconfig_events: Vec<ContractEvent>,
-    ) -> Result<HashValue, Error>
-    {
+    ) -> Result<HashValue, Error> {
         let old_committed_root = self.committed_block_id;
         let arc_latest_committed_block =
             self.get_block(&committed_ledger_info.consensus_block_id())?;

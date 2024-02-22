@@ -53,8 +53,7 @@ impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
     fn execute(
         &self, input: &[u8], params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> InternalTrapResult<GasLeft>
-    {
+    ) -> InternalTrapResult<GasLeft> {
         let (solidity_params, cost) =
             match preprocessing(self, input, params, context) {
                 Ok(res) => res,
@@ -90,8 +89,7 @@ impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
 fn preprocessing<T: SolidityFunctionConfigTrait>(
     sol_fn: &T, input: &[u8], params: &ActionParams,
     context: &InternalRefContext,
-) -> vm::Result<(T::Input, U256)>
-{
+) -> vm::Result<(T::Input, U256)> {
     sol_fn.pre_execution_check(params, context.callstack, context.spec)?;
     let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
     let cost = sol_fn.upfront_gas_payment(&solidity_params, params, context)?;
@@ -136,8 +134,7 @@ where T: SimpleExecutionTrait
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, _gas_left: U256,
         context: &mut InternalRefContext,
-    ) -> InternalTrapResult<<Self as InterfaceTrait>::Output>
-    {
+    ) -> InternalTrapResult<<Self as InterfaceTrait>::Output> {
         Return(SimpleExecutionTrait::execute_inner(
             self, input, params, context,
         ))

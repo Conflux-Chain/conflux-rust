@@ -71,8 +71,7 @@ where H: CryptoHasher
     pub fn verify(
         &self, expected_root_hash: HashValue, element_hash: HashValue,
         element_index: u64,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         ensure!(
             self.siblings.len() <= MAX_ACCUMULATOR_PROOF_DEPTH,
             "Accumulator proof has more than {} ({}) siblings.",
@@ -193,8 +192,7 @@ where V: CryptoHash
     pub fn verify(
         &self, expected_root_hash: HashValue, element_key: HashValue,
         element_value: Option<&V>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         ensure!(
             self.siblings.len() <= HashValue::LENGTH_IN_BITS,
             "Sparse Merkle Tree proof has more than {} ({}) siblings.",
@@ -368,8 +366,7 @@ where H: CryptoHasher
     pub fn verify(
         &self, expected_root_hash: HashValue, first_leaf_index: Option<u64>,
         leaf_hashes: &[HashValue],
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         if first_leaf_index.is_none() {
             ensure!(
                 leaf_hashes.is_empty(),
@@ -553,8 +550,7 @@ impl TransactionInfoWithProof {
     pub fn new(
         ledger_info_to_transaction_info_proof: TransactionAccumulatorProof,
         transaction_info: TransactionInfo,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             ledger_info_to_transaction_info_proof,
             transaction_info,
@@ -609,8 +605,7 @@ impl AccountStateProof {
     pub fn new(
         transaction_info_with_proof: TransactionInfoWithProof,
         transaction_info_to_account_proof: SparseMerkleProof<AccountStateBlob>,
-    ) -> Self
-    {
+    ) -> Self {
         AccountStateProof {
             transaction_info_with_proof,
             transaction_info_to_account_proof,
@@ -637,8 +632,7 @@ impl AccountStateProof {
         &self, ledger_info: &LedgerInfo, state_version: Version,
         account_address_hash: HashValue,
         account_state_blob: Option<&AccountStateBlob>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         self.transaction_info_to_account_proof.verify(
             self.transaction_info_with_proof
                 .transaction_info
@@ -674,8 +668,7 @@ impl EventProof {
     pub fn new(
         transaction_info_with_proof: TransactionInfoWithProof,
         transaction_info_to_event_proof: EventAccumulatorProof,
-    ) -> Self
-    {
+    ) -> Self {
         EventProof {
             transaction_info_with_proof,
             transaction_info_to_event_proof,
@@ -692,8 +685,7 @@ impl EventProof {
         &self, ledger_info: &LedgerInfo, event_hash: HashValue,
         transaction_version: Version,
         event_version_within_transaction: Version,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         self.transaction_info_to_event_proof.verify(
             self.transaction_info_with_proof
                 .transaction_info()
@@ -727,8 +719,7 @@ impl TransactionListProof {
     pub fn new(
         ledger_info_to_transaction_infos_proof: TransactionAccumulatorRangeProof,
         transaction_infos: Vec<TransactionInfo>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             ledger_info_to_transaction_infos_proof,
             transaction_infos,
@@ -765,8 +756,7 @@ impl TransactionListProof {
         &self, ledger_info: &LedgerInfo,
         first_transaction_version: Option<Version>,
         transaction_hashes: &[HashValue],
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         ensure!(
             self.transaction_infos.len() == transaction_hashes.len(),
             "The number of TransactionInfo objects ({}) does not match the number of \
@@ -821,8 +811,7 @@ impl<H: CryptoHasher> AccumulatorExtensionProof<H> {
     pub fn new(
         frozen_subtree_roots: Vec<HashValue>, num_leaves: LeafCount,
         leaves: Vec<HashValue>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             frozen_subtree_roots,
             num_leaves,

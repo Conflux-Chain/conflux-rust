@@ -64,8 +64,7 @@ impl SynchronizationPeerState {
     pub fn update(
         &mut self, node_type: Option<NodeType>,
         latest_block_hashes: HashSet<H256>, best_epoch: u64,
-    ) -> bool
-    {
+    ) -> bool {
         if let Some(node_type) = node_type {
             self.node_type = node_type;
         }
@@ -105,8 +104,7 @@ impl SynchronizationState {
         is_consortium: bool, node_type: NodeType,
         allow_phase_change_without_peer: bool,
         min_phase_change_normal_peer_count: usize,
-    ) -> Self
-    {
+    ) -> Self {
         SynchronizationState {
             is_consortium,
             node_type,

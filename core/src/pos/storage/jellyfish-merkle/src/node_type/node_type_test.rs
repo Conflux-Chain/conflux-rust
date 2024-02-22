@@ -727,8 +727,7 @@ impl BinaryTreeNode {
     fn new_internal(
         first_child_index: u8, num_children: u8, left: BinaryTreeNode,
         right: BinaryTreeNode,
-    ) -> Self
-    {
+    ) -> Self {
         let hash =
             SparseMerkleInternalNode::new(left.hash(), right.hash()).hash();
 

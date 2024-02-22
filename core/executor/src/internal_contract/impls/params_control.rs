@@ -26,8 +26,7 @@ pub use system_storage_key::storage_point_prop;
 pub fn cast_vote(
     address: Address, version: u64, votes: Vec<Vote>, params: &ActionParams,
     context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     // If this is called, `env.number` must be larger than the activation
     // number. And version starts from 1 to tell if an account has ever voted in
     // the first version.

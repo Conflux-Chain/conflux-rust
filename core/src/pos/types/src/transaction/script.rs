@@ -114,8 +114,7 @@ impl TransactionScriptABI {
     pub fn new(
         name: String, doc: String, code: Vec<u8>,
         ty_args: Vec<TypeArgumentABI>, args: Vec<ArgumentABI>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             name,
             doc,
@@ -140,8 +139,7 @@ impl ScriptFunctionABI {
     pub fn new(
         name: String, module_name: ModuleId, doc: String,
         ty_args: Vec<TypeArgumentABI>, args: Vec<ArgumentABI>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             name,
             module_name,
@@ -230,8 +228,7 @@ impl ScriptFunction {
     pub fn new(
         module: ModuleId, function: Identifier, ty_args: Vec<TypeTag>,
         args: Vec<Vec<u8>>,
-    ) -> Self
-    {
+    ) -> Self {
         ScriptFunction {
             module,
             function,

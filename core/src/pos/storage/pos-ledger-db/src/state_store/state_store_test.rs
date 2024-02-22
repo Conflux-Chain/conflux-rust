@@ -20,8 +20,7 @@ fn put_account_state_set(
     account_state_set: Vec<(AccountAddress, AccountStateBlob)>,
     version: Version, expected_new_nodes: usize, expected_stale_nodes: usize,
     expected_stale_leaves: usize,
-) -> HashValue
-{
+) -> HashValue {
     let mut cs = ChangeSet::new();
     let expected_new_leaves = account_state_set.len();
     let root = store
@@ -53,8 +52,7 @@ fn put_account_state_set(
 fn prune_stale_indices(
     store: &StateStore, least_readable_version: Version,
     target_least_readable_version: Version, limit: usize,
-)
-{
+) {
     pruner::prune_state(
         Arc::clone(&store.db),
         least_readable_version,
@@ -68,8 +66,7 @@ fn verify_state_in_store(
     store: &StateStore, address: AccountAddress,
     expected_value: Option<&AccountStateBlob>, version: Version,
     root: HashValue,
-)
-{
+) {
     let (value, proof) = store
         .get_account_state_with_proof_by_version(address, version)
         .unwrap();
@@ -367,8 +364,7 @@ proptest! {
 fn init_store(
     store: &StateStore,
     input: impl Iterator<Item = (AccountAddress, AccountStateBlob)>,
-)
-{
+) {
     for (i, (key, value)) in input.enumerate() {
         let mut cs = ChangeSet::new();
         let account_state_set: HashMap<_, _> =

@@ -77,8 +77,7 @@ impl TxInfos {
     pub fn new(
         consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>, witnesses: Arc<Witnesses>,
-    ) -> Self
-    {
+    ) -> Self {
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_TX_INFOS);
 
@@ -133,8 +132,7 @@ impl TxInfos {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         infos: impl Iterator<Item = TxInfo>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         for info in infos {
             trace!("Validating tx_info {:?}", info);
 

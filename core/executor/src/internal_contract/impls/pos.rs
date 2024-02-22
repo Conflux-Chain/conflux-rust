@@ -98,8 +98,7 @@ fn verify_bls_pubkey(
 fn update_vote_power(
     identifier: H256, sender: Address, vote_power: u64, initialize_mode: bool,
     params: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     let status: IndexStatus = context
         .storage_at(params, &index_entry(&identifier))?
         .into();
@@ -147,8 +146,7 @@ pub fn register(
     identifier: H256, sender: Address, vote_power: u64, bls_pubkey: Bytes,
     vrf_pubkey: Bytes, bls_proof: [Bytes; 2], param: &ActionParams,
     context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     if vote_power == 0 {
         internal_bail!("vote_power should be none zero");
     }
@@ -202,8 +200,7 @@ pub fn register(
 pub fn increase_stake(
     sender: Address, vote_power: u64, params: &ActionParams,
     context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     if vote_power == 0 {
         internal_bail!("vote_power should be none zero");
     }
@@ -223,8 +220,7 @@ pub fn increase_stake(
 pub fn retire(
     sender: Address, votes: u64, params: &ActionParams,
     context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     let identifier = address_to_identifier(sender, params, context)?;
 
     if identifier.is_zero() {

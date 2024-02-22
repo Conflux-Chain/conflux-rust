@@ -50,8 +50,7 @@ fn verify_transaction_info(
     ledger_info: &LedgerInfo, transaction_version: Version,
     transaction_info: &TransactionInfo,
     ledger_info_to_transaction_info_proof: &TransactionAccumulatorProof,
-) -> Result<()>
-{
+) -> Result<()> {
     ensure!(
         transaction_version <= ledger_info.version(),
         "Transaction version {} is newer than LedgerInfo version {}.",

@@ -72,8 +72,7 @@ impl State {
     pub fn add_pos_interest(
         &mut self, address: &Address, interest: &U256,
         cleanup_mode: CleanupMode,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         let address = address.with_native_space();
         self.add_total_issued(*interest);
         self.add_balance(&address, interest, cleanup_mode)?;

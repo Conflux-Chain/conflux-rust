@@ -193,8 +193,7 @@ pub fn impl_enum_privatekey(
 pub fn impl_enum_verifyingkey(
     name: &Ident, private_key_type: syn::LitStr, signature_type: syn::LitStr,
     _variants: &DataEnum,
-) -> TokenStream
-{
+) -> TokenStream {
     let pkt: syn::Type = private_key_type.parse().unwrap();
     let st: syn::Type = signature_type.parse().unwrap();
     let res = quote! {
@@ -210,8 +209,7 @@ pub fn impl_enum_verifyingkey(
 pub fn impl_enum_signingkey(
     name: &Ident, public_key_type: syn::LitStr, signature_type: syn::LitStr,
     variants: &DataEnum,
-) -> TokenStream
-{
+) -> TokenStream {
     let pkt: syn::Type = public_key_type.parse().unwrap();
     let st: syn::Type = signature_type.parse().unwrap();
 
@@ -253,8 +251,7 @@ pub fn impl_enum_signingkey(
 pub fn impl_enum_signature(
     name: &Ident, public_key_type: syn::LitStr, private_key_type: syn::LitStr,
     variants: &DataEnum,
-) -> TokenStream
-{
+) -> TokenStream {
     let priv_kt: syn::Type = private_key_type.parse().unwrap();
     let pub_kt: syn::Type = public_key_type.parse().unwrap();
     let mut res = impl_enum_tryfrom(name, variants);

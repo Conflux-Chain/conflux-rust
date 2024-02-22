@@ -145,8 +145,7 @@ impl Context for MockContext {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address: CreateContractAddress,
-    ) -> DbResult<::std::result::Result<ContractCreateResult, TrapKind>>
-    {
+    ) -> DbResult<::std::result::Result<ContractCreateResult, TrapKind>> {
         self.calls.insert(MockCall {
             call_type: MockCallType::Create,
             create_scheme: Some(address),
@@ -167,8 +166,7 @@ impl Context for MockContext {
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, _call_type: CallType,
-    ) -> DbResult<::std::result::Result<MessageCallResult, TrapKind>>
-    {
+    ) -> DbResult<::std::result::Result<MessageCallResult, TrapKind>> {
         self.calls.insert(MockCall {
             call_type: MockCallType::Call,
             create_scheme: None,

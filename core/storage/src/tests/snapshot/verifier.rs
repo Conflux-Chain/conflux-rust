@@ -441,8 +441,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         _snapshot_path: &Path, _readonly: bool,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         unreachable!()
     }
 
@@ -450,8 +449,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         _snapshot_path: &Path,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>, _old_version: bool,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         unreachable!()
     }
 
@@ -460,8 +458,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         _mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
         _recover_mpt_with_kv_snapshot_exist: bool,
         _in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         unreachable!()
     }
 
@@ -469,8 +466,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         &mut self, _old_snapshot_db: &Arc<Self>,
         _mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
         _in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         unreachable!()
     }
 
@@ -518,8 +514,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     fn recovery_latest_mpt_snapshot_from_checkpoint(
         &self, _snapshot_epoch_id: &EpochId,
         _snapshot_epoch_id_before_recovered: Option<EpochId>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         unreachable!()
     }
 
@@ -576,16 +571,14 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     fn new_temp_snapshot_for_full_sync(
         &self, _snapshot_epoch_id: &EpochId, _merkle_root: &EpochId,
         _epoch_height: u64,
-    ) -> Result<Self::SnapshotDbWrite>
-    {
+    ) -> Result<Self::SnapshotDbWrite> {
         Ok(self.temp_snapshot.clone())
     }
 
     fn finalize_full_sync_snapshot<'m>(
         &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
         _snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
-    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
-    {
+    ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>> {
         unreachable!()
     }
 }

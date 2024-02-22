@@ -93,8 +93,7 @@ impl Transaction {
         t: &SignedTransaction,
         block_info: (Option<H256>, Option<U256>, Option<U256>),
         exec_info: (Option<U64>, Option<H160>),
-    ) -> Transaction
-    {
+    ) -> Transaction {
         let signature = t.signature();
         // We only support EIP-155
         // let access_list = match t.as_unsigned() {

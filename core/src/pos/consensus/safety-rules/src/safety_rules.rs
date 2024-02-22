@@ -66,8 +66,7 @@ impl SafetyRules {
         _verify_vote_proposal_signature: bool, export_consensus_key: bool,
         vrf_private_key: Option<ConsensusVRFPrivateKey>,
         author: AccountAddress,
-    ) -> Self
-    {
+    ) -> Self {
         let execution_public_key = None;
         if let Ok(storage_author) = persistent_storage.author() {
             if storage_author != author {

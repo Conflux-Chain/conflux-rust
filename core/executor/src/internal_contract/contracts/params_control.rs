@@ -47,8 +47,7 @@ impl UpfrontPaymentTrait for CastVote {
     fn upfront_gas_payment(
         &self, (_, votes): &(u64, Vec<Vote>), _params: &ActionParams,
         context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         let spec = context.spec;
         Ok(cast_vote_gas(votes.len(), spec).into())
     }
@@ -58,8 +57,7 @@ impl SimpleExecutionTrait for CastVote {
     fn execute_inner(
         &self, inputs: (u64, Vec<Vote>), params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         cast_vote(params.sender, inputs.0, inputs.1, params, context)
     }
 }
@@ -74,8 +72,7 @@ impl SimpleExecutionTrait for ReadVote {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<Vec<Vote>>
-    {
+    ) -> vm::Result<Vec<Vote>> {
         read_vote(input, params, context)
     }
 }
@@ -88,8 +85,7 @@ impl SimpleExecutionTrait for CurrentRound {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<u64>
-    {
+    ) -> vm::Result<u64> {
         Ok(
             (context.env.number - context.spec.cip94_activation_block_number)
                 / context.spec.params_dao_vote_period
@@ -107,8 +103,7 @@ impl SimpleExecutionTrait for TotalVotes {
     fn execute_inner(
         &self, input: u64, _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<Vec<Vote>>
-    {
+    ) -> vm::Result<Vec<Vote>> {
         total_votes(input, context)
     }
 }
@@ -122,8 +117,7 @@ impl SimpleExecutionTrait for PosStakeForVotes {
     fn execute_inner(
         &self, input: u64, _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         pos_stake_for_votes(input, context)
     }
 }

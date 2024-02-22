@@ -35,8 +35,7 @@ impl SingleMptStorageManager {
     pub fn new_arc(
         db_path: PathBuf, space: Option<Space>, available_height: u64,
         cache_start_size: u32, cache_size: u32, idle_size: u32,
-    ) -> Arc<Self>
-    {
+    ) -> Arc<Self> {
         if !db_path.exists() {
             fs::create_dir_all(&db_path).expect("db path create error");
         }

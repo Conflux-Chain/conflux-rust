@@ -27,8 +27,7 @@ impl MetricsSafetyRules {
     pub fn new(
         inner: Box<dyn TSafetyRules + Send + Sync>,
         storage: Arc<dyn PersistentLivenessStorage>,
-    ) -> Self
-    {
+    ) -> Self {
         Self { inner, storage }
     }
 

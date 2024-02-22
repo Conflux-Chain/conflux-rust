@@ -409,8 +409,8 @@ impl Default for ConsensusGraphPivotData {
 /// 1. the block correctly chooses its parent;
 /// 2. the block correctly blames the blocks in the intersection of pivot chain
 ///    blocks and all its previous blocks following parent edges. (This is to
-///    encourage the node generating the off-pivot block to keep verifying
-///    pivot chain blocks.)
+///    encourage the node generating the off-pivot block to keep verifying pivot
+///    chain blocks.)
 ///
 /// To provide proof of state root to light node (or a full node when it tries
 /// to recover from a checkpoint), the protocol goes through the following
@@ -598,8 +598,7 @@ impl ConsensusGraphInner {
         pos_verifier: Arc<PosVerifier>, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
         cur_era_stable_block_hash: &H256,
-    ) -> Self
-    {
+    ) -> Self {
         let genesis_block_header = data_man
             .block_header_by_hash(cur_era_genesis_block_hash)
             .expect("genesis block header should exist here");
@@ -1066,8 +1065,7 @@ impl ConsensusGraphInner {
     pub fn find_first_index_with_correct_state_of(
         &self, pivot_index: usize, blame_bound: Option<u32>,
         min_vote_count: usize,
-    ) -> Option<usize>
-    {
+    ) -> Option<usize> {
         // this is the earliest block we need to consider; blocks before `from`
         // cannot have any information about the state root of `pivot_index`
         let from = pivot_index + DEFERRED_STATE_EPOCH_COUNT as usize;
@@ -1107,8 +1105,7 @@ impl ConsensusGraphInner {
     fn find_first_with_trusted_blame_starting_from(
         &self, pivot_index: usize, blame_bound: Option<u32>,
         min_vote_count: usize,
-    ) -> Option<usize>
-    {
+    ) -> Option<usize> {
         trace!(
             "find_first_with_trusted_blame_starting_from pivot_index={:?}",
             pivot_index
@@ -1139,8 +1136,7 @@ impl ConsensusGraphInner {
     fn compute_blame_ratio(
         &self, arena_index: usize, blame_bound: Option<u32>,
         min_vote_count: usize,
-    ) -> f64
-    {
+    ) -> f64 {
         let blame_bound = if let Some(bound) = blame_bound {
             bound
         } else {
@@ -1199,8 +1195,7 @@ impl ConsensusGraphInner {
     pub fn check_mining_adaptive_block(
         &mut self, parent_arena_index: usize, referee_indices: Vec<usize>,
         difficulty: U256, pos_reference: Option<PosBlockId>,
-    ) -> bool
-    {
+    ) -> bool {
         // We first compute anticone barrier for newly mined block
         let parent_anticone_opt = self.anticone_cache.get(parent_arena_index);
         let mut anticone;
@@ -1325,8 +1320,7 @@ impl ConsensusGraphInner {
     fn get_best_timer_tick(
         &self,
         timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
-    ) -> u64
-    {
+    ) -> u64 {
         let (fork_at, _, _, c) = timer_chain_tuple;
         *fork_at + c.len() as u64
     }
@@ -1334,8 +1328,7 @@ impl ConsensusGraphInner {
     fn get_timer_tick(
         &self, me: usize,
         timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
-    ) -> u64
-    {
+    ) -> u64 {
         let (fork_at, m, _, _) = timer_chain_tuple;
         if let Some(t) = m.get(&me) {
             return *t;
@@ -1351,8 +1344,7 @@ impl ConsensusGraphInner {
         &self, parent_0: usize, subtree_weight: &Vec<i128>,
         timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
         force_confirm: usize, difficulty: i128,
-    ) -> bool
-    {
+    ) -> bool {
         let mut parent = parent_0;
 
         let force_confirm_height = self.arena[force_confirm].height;
@@ -1386,8 +1378,7 @@ impl ConsensusGraphInner {
         weight_tuple: Option<&Vec<i128>>,
         timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
         difficulty: i128, pos_reference: Option<PosBlockId>,
-    ) -> bool
-    {
+    ) -> bool {
         let mut parent = parent_0;
         let force_confirm =
             self.compute_block_force_confirm(timer_chain_tuple, pos_reference);
@@ -1484,8 +1475,7 @@ impl ConsensusGraphInner {
         &mut self, me: usize, anticone_barrier: &BitSet,
         weight_tuple: Option<&Vec<i128>>,
         timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
-    ) -> bool
-    {
+    ) -> bool {
         let parent = self.arena[me].parent;
         assert!(parent != NULL);
 
@@ -1682,8 +1672,7 @@ impl ConsensusGraphInner {
         &self,
         timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
         pos_reference: Option<PosBlockId>,
-    ) -> usize
-    {
+    ) -> usize {
         let (fork_at, _, extra_lca, tmp_chain) = timer_chain_tuple;
         let fork_end_index =
             (*fork_at - self.cur_era_genesis_timer_chain_height) as usize
@@ -2515,8 +2504,7 @@ impl ConsensusGraphInner {
     fn compute_blame_and_state_with_execution_result(
         &mut self, parent: usize, state_root_hash: H256,
         receipts_root_hash: H256, logs_bloom_hash: H256,
-    ) -> Result<StateBlameInfo, String>
-    {
+    ) -> Result<StateBlameInfo, String> {
         let mut cur = parent;
         let mut blame_cnt: u32 = 0;
         let mut state_blame_vec = Vec::new();
@@ -2908,10 +2896,10 @@ impl ConsensusGraphInner {
                         }
                         if vote_valid
                             && !self.arena[cur].data.state_valid.expect(
-                            "state_valid for me has been computed in \
+                                "state_valid for me has been computed in \
                             wait_and_compute_state_valid_locked by the caller, \
                             so the precedents should have state_valid",
-                        )
+                            )
                         {
                             vote_valid = false;
                         }
@@ -3102,8 +3090,7 @@ impl ConsensusGraphInner {
     fn compute_timer_chain_tuple(
         &self, parent: usize, referees: &Vec<usize>,
         anticone_opt: Option<&BitSet>,
-    ) -> (u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>)
-    {
+    ) -> (u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>) {
         let empty_set = BitSet::new();
         let anticone = if let Some(a) = anticone_opt {
             a
@@ -3989,8 +3976,7 @@ impl ConsensusGraphInner {
     pub fn choose_correct_parent(
         &mut self, parent_arena_index: usize, referee_indices: Vec<usize>,
         pos_reference: Option<PosBlockId>,
-    ) -> usize
-    {
+    ) -> usize {
         // We first compute anticone barrier for newly mined block
         let parent_anticone_opt = self.anticone_cache.get(parent_arena_index);
         let mut anticone;
@@ -4065,8 +4051,7 @@ impl ConsensusGraphInner {
         &mut self, parent: usize, anticone_barrier: &BitSet,
         timer_chain_tuple: &(u64, HashMap<usize, u64>, Vec<usize>, Vec<usize>),
         pos_reference: Option<PosBlockId>,
-    ) -> usize
-    {
+    ) -> usize {
         let force_confirm =
             self.compute_block_force_confirm(timer_chain_tuple, pos_reference);
         let force_confirm_height = self.arena[force_confirm].height;

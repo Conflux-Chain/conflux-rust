@@ -12,8 +12,7 @@ impl OverlayAccount {
     pub fn commit(
         mut self, db: &mut StateDb, address: &AddressWithSpace,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         // When committing an overlay account, the execution of an epoch has
         // finished. In this case, all the checkpoints except the bottom one
         // must be removed. (Each checkpoint is a mapping from addresses to

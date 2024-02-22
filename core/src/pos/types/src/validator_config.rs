@@ -59,8 +59,7 @@ impl ValidatorConfig {
         vrf_public_key: Option<ConsensusVRFPublicKey>,
         validator_network_addresses: Vec<u8>,
         fullnode_network_addresses: Vec<u8>,
-    ) -> Self
-    {
+    ) -> Self {
         ValidatorConfig {
             consensus_public_key,
             vrf_public_key,

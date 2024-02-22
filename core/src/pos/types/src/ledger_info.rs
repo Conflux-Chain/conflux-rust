@@ -154,8 +154,7 @@ impl LedgerInfoWithSignatures {
     pub fn new(
         ledger_info: LedgerInfo,
         signatures: BTreeMap<AccountAddress, ConsensusSignature>,
-    ) -> Self
-    {
+    ) -> Self {
         LedgerInfoWithSignatures::V0(LedgerInfoWithV0::new(
             ledger_info,
             signatures,
@@ -216,8 +215,7 @@ impl LedgerInfoWithV0 {
     pub fn new(
         ledger_info: LedgerInfo,
         signatures: BTreeMap<AccountAddress, ConsensusSignature>,
-    ) -> Self
-    {
+    ) -> Self {
         LedgerInfoWithV0 {
             ledger_info,
             signatures,

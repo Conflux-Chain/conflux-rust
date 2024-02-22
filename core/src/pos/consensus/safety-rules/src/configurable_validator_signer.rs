@@ -34,8 +34,7 @@ impl ConfigurableValidatorSigner {
     pub fn new_signer(
         author: AccountAddress, consensus_key: ConsensusPrivateKey,
         vrf_private_key: Option<ConsensusVRFPrivateKey>,
-    ) -> Self
-    {
+    ) -> Self {
         let signer =
             ValidatorSigner::new(author, consensus_key, vrf_private_key);
         ConfigurableValidatorSigner::Signer(signer)

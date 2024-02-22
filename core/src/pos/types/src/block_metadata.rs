@@ -42,8 +42,7 @@ impl BlockMetadata {
     pub fn new(
         id: HashValue, round: u64, timestamp_usecs: u64,
         previous_block_votes: Vec<AccountAddress>, proposer: AccountAddress,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             id,
             round,
@@ -110,8 +109,7 @@ impl NewBlockEvent {
     pub fn new(
         round: u64, proposer: AccountAddress, votes: Vec<AccountAddress>,
         timestamp: u64,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             round,
             proposer,

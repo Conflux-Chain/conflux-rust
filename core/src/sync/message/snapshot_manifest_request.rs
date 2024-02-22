@@ -102,8 +102,7 @@ impl SnapshotManifestRequest {
     pub fn new(
         snapshot_sync_candidate: SnapshotSyncCandidate,
         trusted_blame_block: Option<H256>, start_chunk: Option<Vec<u8>>,
-    ) -> Self
-    {
+    ) -> Self {
         SnapshotManifestRequest {
             request_id: 0,
             snapshot_to_sync: snapshot_sync_candidate,

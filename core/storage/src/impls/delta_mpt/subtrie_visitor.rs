@@ -20,8 +20,7 @@ impl<'trie> SubTrieVisitor<'trie, 'trie> {
     pub fn new(
         trie_ref: &'trie MerklePatriciaTrie, root: NodeRefDeltaMpt,
         owned_node_set: &'trie mut Option<OwnedNodeSet>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         Ok(Self {
             trie_ref,
             db: ReturnAfterUse::new_from_value(trie_ref.get_arc_db()?),
