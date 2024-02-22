@@ -31,7 +31,7 @@ use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
 use primitives::{
-    Receipt, SignedTransaction, TransactionIndex, TransactionOutcome,
+    Receipt, SignedTransaction, TransactionIndex, TransactionStatus,
 };
 use std::{future::Future, sync::Arc};
 
@@ -217,8 +217,8 @@ impl TxInfos {
 
         // only executed instances of the transaction are acceptable;
         // receipts belonging to non-executed instances should not be sent
-        if receipt.outcome_status != TransactionOutcome::Success
-            && receipt.outcome_status != TransactionOutcome::Failure
+        if receipt.outcome_status != TransactionStatus::Success
+            && receipt.outcome_status != TransactionStatus::Failure
         {
             bail!(ErrorKind::InvalidTxInfo {
                 reason: format!(

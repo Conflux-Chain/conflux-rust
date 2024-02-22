@@ -5,20 +5,17 @@
 use super::{eth::LocalizedTrace as EthLocalizedTrace, RpcAddress};
 use crate::rpc::types::Bytes;
 use cfx_addr::Network;
+use cfx_execute_helper::exec_tracer::{
+    Action as VmAction, ActionType as VmActionType, BlockExecTraces,
+    Call as VmCall, CallResult as VmCallResult, Create as VmCreate,
+    CreateResult as VmCreateResult, ExecTrace,
+    InternalTransferAction as VmInternalTransferAction,
+    LocalizedTrace as PrimitiveLocalizedTrace, Outcome, TransactionExecTraces,
+};
+use cfx_executor::internal_contract::evm_map;
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_types::{Space, H160, H256, U256, U64};
-use cfxcore::{
-    executive::internal_contract::evm_map,
-    observer::trace::{
-        Action as VmAction, ActionType as VmActionType, BlockExecTraces,
-        Call as VmCall, CallResult as VmCallResult, Create as VmCreate,
-        CreateResult as VmCreateResult, ExecTrace,
-        InternalTransferAction as VmInternalTransferAction,
-        LocalizedTrace as PrimitiveLocalizedTrace, Outcome,
-        TransactionExecTraces,
-    },
-    vm::{CallType, CreateType},
-};
+use cfx_vm_types::{CallType, CreateType};
 use primitives::SignedTransaction;
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use std::{collections::HashMap, sync::Arc};

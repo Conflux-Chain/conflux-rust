@@ -17,6 +17,7 @@ use primitives::pos::{NodeId, PosBlockId};
 use storage_interface::{DBReaderForPoW, DbReader};
 
 use crate::{
+    genesis_block::GenesisPosState,
     pos::{
         consensus::{
             network::{
@@ -32,10 +33,10 @@ use crate::{
         pos::{start_pos_consensus, PosDropHandle},
         protocol::sync_protocol::HotStuffSynchronizationProtocol,
     },
-    spec::genesis::GenesisPosState,
     sync::ProtocolConfiguration,
     ConsensusGraph,
 };
+
 use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::block::Block;
 use diem_config::config::SafetyRulesTestConfig;

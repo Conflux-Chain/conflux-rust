@@ -19,9 +19,11 @@ cfxkey = { path = "../accounts/cfxkey" }
 cfxcore-accounts = { path = "../accounts" }
 cfxstore = { path = "../accounts/cfxstore" }
 cfx-internal-common = { path = "../core/internal_common" }
-cfx-state = { path = "../core/state" }
+cfx-executor = { path = "../core/executor" }
+cfx-execute-helper = { path = "../core/execute-helper" }
 cfx-statedb = { path = "../core/statedb" }
 cfx-storage = { path = "../core/storage" }
+cfx-vm-types = { path = "../core/vm-types" }
 app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
@@ -102,7 +104,7 @@ bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", r
 [dev-dependencies]
 criterion = "0.3"
 cfx-parameters = { path = "../core/parameters" }
-cfxcore = { path = "../core", features = ["testonly_code"] }
+cfx-executor = { path = "../core/executor", features = ["testonly_code"] }
 serial_test = "0.5.1"
 
 [features]

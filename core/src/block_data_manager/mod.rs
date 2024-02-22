@@ -9,6 +9,7 @@ use crate::{
     ext_db::SystemDB,
     pow::{PowComputer, TargetDifficultyManager},
 };
+use cfx_executor::internal_contract::make_staking_events;
 use cfx_storage::{
     state_manager::StateIndex, utils::guarded_value::*, StorageManager,
     StorageManagerTrait,
@@ -19,7 +20,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
-    receipt::{BlockReceipts, TransactionOutcome},
+    receipt::{BlockReceipts, TransactionStatus},
     Block, BlockHeader, EpochId, Receipt, SignedTransaction, TransactionIndex,
     TransactionWithSignature, NULL_EPOCH,
 };
@@ -38,12 +39,12 @@ use crate::{
         db_manager::DBManager, tx_data_manager::TransactionDataManager,
     },
     consensus::pos_handler::PosVerifier,
-    executive::internal_contract::{
-        build_bloom_and_recover_phantom, decode_register_info,
-    },
-    observer::trace::{BlockExecTraces, TransactionExecTraces},
 };
 pub use block_data_types::*;
+use cfx_execute_helper::{
+    exec_tracer::{BlockExecTraces, TransactionExecTraces},
+    phantom_tx::build_bloom_and_recover_phantom,
+};
 use cfx_internal_common::{
     EpochExecutionCommitment, StateAvailabilityBoundary, StateRootWithAuxInfo,
 };
@@ -1293,7 +1294,7 @@ impl BlockDataManager {
                         }
                         Space::Ethereum
                             if *outcome_status
-                                != TransactionOutcome::Skipped =>
+                                != TransactionStatus::Skipped =>
                         {
                             let rpc_index = evm_tx_index;
                             evm_tx_index += 1;
@@ -1306,8 +1307,8 @@ impl BlockDataManager {
                         build_bloom_and_recover_phantom(logs, tx.hash());
 
                     match outcome_status {
-                        TransactionOutcome::Success
-                        | TransactionOutcome::Failure => {
+                        TransactionStatus::Success
+                        | TransactionStatus::Failure => {
                             self.insert_transaction_index(
                                 &tx.hash,
                                 &TransactionIndex {
@@ -1332,11 +1333,8 @@ impl BlockDataManager {
                                 evm_tx_index += 1;
                             }
 
-                            for log in logs {
-                                if let Some(event) = decode_register_info(log) {
-                                    epoch_staking_events.push(event);
-                                }
-                            }
+                            epoch_staking_events
+                                .extend(make_staking_events(logs));
                         }
                         _ => {}
                     }

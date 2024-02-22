@@ -20,18 +20,18 @@ use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
 
 use blockgen::BlockGenerator;
+use cfx_executor::machine::{new_machine_with_builtin, Machine, VmFactory};
+use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
 pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{PosConfiguration, PosVerifier},
-    machine::{new_machine_with_builtin, Machine},
+    genesis_block::{self as genesis, genesis_block},
     pow::PowComputer,
-    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
     sync::SyncPhaseType,
-    vm_factory::VmFactory,
     ConsensusGraph, LightProvider, NodeType, Notifications, Stopable,
     SynchronizationGraph, SynchronizationService, TransactionPool,
     WORKER_COMPUTATION_PARALLELISM,

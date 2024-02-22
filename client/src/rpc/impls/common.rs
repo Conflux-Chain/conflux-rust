@@ -40,8 +40,8 @@ use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
-    spec::genesis::register_transaction, BlockDataManager, ConsensusGraph,
+    consensus::pos_handler::PosVerifier, genesis_block::register_transaction,
+    rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
     ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;

@@ -27,12 +27,12 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_execute_helper::estimation::{EstimateExt, EstimateRequest};
+use cfx_executor::executive::ExecutionOutcome;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_types::{hexstr_to_h256, Address, H256, U64};
 use cfxcore::{
-    consensus::pos_handler::PosVerifier,
-    executive::{EstimateRequest, ExecutionOutcome},
-    rpc_errors::invalid_params_check,
+    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph,
 };
@@ -198,7 +198,8 @@ impl PosHandler {
             None => None,
         };
 
-        let execution_outcome = self.exec_transaction(call_request, epoch)?;
+        let (execution_outcome, _estimation) =
+            self.exec_transaction(call_request, epoch)?;
         let executed = match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(e) => {
                 bail!(call_execution_error(
@@ -239,7 +240,7 @@ impl PosHandler {
 
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<ExecutionOutcome> {
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
         let rpc_request_network = invalid_params_check(
             "request",
             rpc_call_request_network(

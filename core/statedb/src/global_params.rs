@@ -1,5 +1,9 @@
 use cfx_parameters::{
-    internal_contract_addresses::*, staking::BLOCKS_PER_YEAR,
+    internal_contract_addresses::*,
+    staking::{
+        ACCUMULATED_INTEREST_RATE_SCALE, BLOCKS_PER_YEAR,
+        INITIAL_INTEREST_RATE_PER_BLOCK,
+    },
 };
 use cfx_types::{Address, Space, U256};
 use primitives::{StorageKey, StorageKeyWithSpace};
@@ -13,7 +17,13 @@ pub trait GlobalParamKey {
         StorageKey::new_storage_key(&Self::ADDRESS, Self::KEY)
             .with_space(Self::SPACE);
 
+    /// How to initialize such a variable in the executor
+    fn init_vm_value() -> U256 { U256::zero() }
+    /// How to convert such a variable from the executor representing to the db
+    /// representing
     fn from_vm_value(val: U256) -> U256 { val }
+    /// How to convert such a variable from the db representing to the executor
+    /// representing
     fn into_vm_value(val: U256) -> U256 { val }
 }
 
@@ -54,6 +64,8 @@ impl GlobalParamKey for InterestRate {
     const ID: usize = 0;
     const KEY: &'static [u8] = b"interest_rate";
 
+    fn init_vm_value() -> U256 { *INITIAL_INTEREST_RATE_PER_BLOCK }
+
     fn from_vm_value(val: U256) -> U256 { val * U256::from(BLOCKS_PER_YEAR) }
 
     fn into_vm_value(val: U256) -> U256 { val / U256::from(BLOCKS_PER_YEAR) }
@@ -63,6 +75,8 @@ pub struct AccumulateInterestRate;
 impl GlobalParamKey for AccumulateInterestRate {
     const ID: usize = InterestRate::ID + 1;
     const KEY: &'static [u8] = b"accumulate_interest_rate";
+
+    fn init_vm_value() -> U256 { *ACCUMULATED_INTEREST_RATE_SCALE }
 }
 
 pub struct TotalIssued;

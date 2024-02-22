@@ -3,12 +3,12 @@ use super::{
     garbage_collector::GarbageCollector,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
-use crate::{
-    machine::Machine,
-    verification::{PackingCheckResult, VerificationConfig},
-};
+
+use crate::verification::{PackingCheckResult, VerificationConfig};
+use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
     address_util::AddressUtil, AddressWithSpace, Space, SpaceMap, H256, U128,

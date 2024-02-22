@@ -20,12 +20,11 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_execute_helper::exec_tracer::TraceFilter as PrimitiveTraceFilter;
 use cfx_types::{Space, H256};
 use cfxcore::{
-    block_data_manager::DataVersionTuple,
-    observer::trace_filter::TraceFilter as PrimitiveTraceFilter,
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
-    SharedConsensusGraph,
+    block_data_manager::DataVersionTuple, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, SharedConsensusGraph,
 };
 use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
 use primitives::EpochNumber;
@@ -302,11 +301,10 @@ impl EthTrace for EthTraceHandler {
         for (idx, tx_traces) in phantom_block.traces.into_iter().enumerate() {
             let tx_hash = phantom_block.transactions[idx].hash();
 
-            for (action, result, subtraces) in tx_traces
-                .filter_trace_pairs(&PrimitiveTraceFilter::space_filter(
-                    Space::Ethereum,
-                ))
-                .map_err(|_| JsonRpcError::internal_error())?
+            for (action, result, subtraces) in
+                PrimitiveTraceFilter::space_filter(Space::Ethereum)
+                    .filter_trace_pairs(tx_traces)
+                    .map_err(|_| JsonRpcError::internal_error())?
             {
                 let mut eth_trace = EthLocalizedTrace {
                     action: RpcAction::try_from(
@@ -399,10 +397,8 @@ impl EthTrace for EthTraceHandler {
         let tx_traces = phantom_block.traces[id].clone();
 
         // convert traces
-        let trace_pairs = tx_traces
-            .filter_trace_pairs(&PrimitiveTraceFilter::space_filter(
-                Space::Ethereum,
-            ))
+        let trace_pairs = PrimitiveTraceFilter::space_filter(Space::Ethereum)
+            .filter_trace_pairs(tx_traces)
             .map_err(JsonRpcError::invalid_params)?;
 
         let mut eth_traces = Vec::new();
