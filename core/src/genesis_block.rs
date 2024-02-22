@@ -51,10 +51,7 @@ use cfx_vm_types::{CreateContractAddress, Env};
 use diem_types::account_address::AccountAddress;
 use primitives::transaction::NativeTransaction;
 
-pub fn default(dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
-    if !dev_or_test_mode {
-        return HashMap::new();
-    }
+pub fn default(_dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
     let mut accounts: HashMap<AddressWithSpace, U256> = HashMap::new();
     // FIXME: Decide the genesis initialization for mainnet.
     let balance = U256::from_dec_str("5000000000000000000000000000000000")
@@ -63,12 +60,6 @@ pub fn default(dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
         .insert(DEV_GENESIS_KEY_PAIR.address().with_native_space(), balance);
     accounts.insert(
         DEV_GENESIS_KEY_PAIR_2.address().with_native_space(),
-        balance,
-    );
-    accounts
-        .insert(DEV_GENESIS_KEY_PAIR.evm_address().with_evm_space(), balance);
-    accounts.insert(
-        DEV_GENESIS_KEY_PAIR_2.evm_address().with_evm_space(),
         balance,
     );
     accounts
