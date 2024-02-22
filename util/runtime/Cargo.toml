@@ -10,4 +10,4 @@ edition = "2018"
 
 [dependencies]
 futures = "0.1"
-tokio = "~0.1.9"
+tokio = "~1.26.0"
