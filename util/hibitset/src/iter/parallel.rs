@@ -77,22 +77,20 @@ where T: BitSetLike
 
     /// How the splitting is done:
     ///
-    /// 1) First the highest layer that has at least one set bit
-    ///    is searched.
+    /// 1) First the highest layer that has at least one set bit is searched.
     ///
-    /// 2) If the layer that was found, has only one bit that's set,
-    ///    it's cleared. After that the correct prefix for the cleared
-    ///    bit is figured out and the descending is continued.
+    /// 2) If the layer that was found, has only one bit that's set, it's
+    ///    cleared. After that the correct prefix for the cleared bit is figured
+    ///    out and the descending is continued.
     ///
-    /// 3) If the layer that was found, has more than one bit that's set,
-    ///    a mask is created that splits it's set bits as close to half
-    ///    as possible.
-    ///    After creating the mask the layer is masked by either the mask
-    ///    or it's complement constructing two distinct producers which
-    ///    are then returned.
+    /// 3) If the layer that was found, has more than one bit that's set, a mask
+    ///    is created that splits it's set bits as close to half as possible.
+    ///    After creating the mask the layer is masked by either the mask or
+    ///    it's complement constructing two distinct producers which are then
+    ///    returned.
     ///
-    /// 4) If there isn't any layers that have more than one set bit,
-    ///    splitting doesn't happen.
+    /// 4) If there isn't any layers that have more than one set bit, splitting
+    ///    doesn't happen.
     ///
     /// The actual iteration is performed by the sequential iterator
     /// `BitIter` which internals are modified by this splitting

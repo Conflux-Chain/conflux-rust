@@ -67,8 +67,7 @@ impl NetworkSender {
     pub fn send_to_many(
         &mut self, recipients: impl Iterator<Item = AccountAddress>,
         msg: &dyn Message,
-    ) -> Result<(), anyhow::Error>
-    {
+    ) -> Result<(), anyhow::Error> {
         for recipient in recipients {
             self.send_to(recipient, msg)?;
         }

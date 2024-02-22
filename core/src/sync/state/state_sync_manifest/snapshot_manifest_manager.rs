@@ -68,8 +68,7 @@ impl SnapshotManifestManager {
         snapshot_candidate: SnapshotSyncCandidate, trusted_blame_block: H256,
         active_peers: HashSet<NodeId>, config: SnapshotManifestConfig,
         io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
-    ) -> Self
-    {
+    ) -> Self {
         let mut manager = Self {
             manifest_request_status: None,
             snapshot_candidate,
@@ -87,8 +86,7 @@ impl SnapshotManifestManager {
     pub fn handle_snapshot_manifest_response(
         &mut self, ctx: &Context, response: SnapshotManifestResponse,
         request: &SnapshotManifestRequest,
-    ) -> Result<Option<RelatedData>, Error>
-    {
+    ) -> Result<Option<RelatedData>, Error> {
         match self
             .handle_snapshot_manifest_response_impl(ctx, response, request)
         {
@@ -103,8 +101,7 @@ impl SnapshotManifestManager {
     fn handle_snapshot_manifest_response_impl(
         &mut self, ctx: &Context, response: SnapshotManifestResponse,
         request: &SnapshotManifestRequest,
-    ) -> Result<Option<RelatedData>, Error>
-    {
+    ) -> Result<Option<RelatedData>, Error> {
         // new era started
         if request.snapshot_to_sync != self.snapshot_candidate {
             info!(
@@ -234,8 +231,7 @@ impl SnapshotManifestManager {
         &mut self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
         start_chunk: Option<Vec<u8>>,
-    )
-    {
+    ) {
         let maybe_trusted_blame_block = if start_chunk.is_none() {
             Some(self.trusted_blame_block.clone())
         } else {
@@ -295,8 +291,7 @@ impl SnapshotManifestManager {
         StateRootWithAuxInfo,
         SnapshotInfo,
         Option<SnapshotInfo>,
-    )>
-    {
+    )> {
         let mut state_blame_vec = vec![];
 
         // these two header must exist in disk, it's safe to unwrap
@@ -529,8 +524,7 @@ impl SnapshotManifestManager {
         ctx: &Context, blame_vec_offset: usize, snapshot_epoch_id: &EpochId,
         receipt_blame_vec: &Vec<H256>, bloom_blame_vec: &Vec<H256>,
         block_receipts: &Vec<BlockExecutionResult>,
-    ) -> Option<Vec<(H256, H256, Arc<BlockReceipts>)>>
-    {
+    ) -> Option<Vec<(H256, H256, Arc<BlockReceipts>)>> {
         let mut epoch_hash = snapshot_epoch_id.clone();
         let checkpoint = ctx
             .manager

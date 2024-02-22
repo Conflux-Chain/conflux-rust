@@ -69,10 +69,9 @@ impl RequestHandler {
 
     // Match request for given response.
     // Could return the following error:
-    // 1. Error return from peer.match_request():
-    //      No need to let caller handle request resending;
-    // 2. UnknownPeer:
-    //      No need to let caller handle request resending;
+    // 1. Error return from peer.match_request(): No need to let caller handle
+    //    request resending;
+    // 2. UnknownPeer: No need to let caller handle request resending;
     pub fn match_request(
         &self, peer_id: &NodeId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
@@ -101,8 +100,7 @@ impl RequestHandler {
     pub fn send_request(
         &self, io: &dyn NetworkContext, peer: Option<NodeId>,
         request: Box<dyn Request>, delay: Option<Duration>,
-    ) -> Result<(), Box<dyn Request>>
-    {
+    ) -> Result<(), Box<dyn Request>> {
         let peer = match peer {
             Some(peer) => peer,
             None => return Err(request),
@@ -276,8 +274,7 @@ impl RequestContainer {
     pub fn append_inflight_request(
         &mut self, request_id: u64, message: RequestMessage,
         timed_req: Arc<TimedSyncRequests>,
-    )
-    {
+    ) {
         self.inflight_requests.insert(
             request_id,
             SynchronizationPeerRequest { message, timed_req },
@@ -315,8 +312,7 @@ impl RequestContainer {
         mut request_message: RequestMessage,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
         protocol_config: &ProtocolConfiguration,
-    )
-    {
+    ) {
         request_message.request.set_request_id(request_id);
         let res = request_message.request.send(io, &self.peer_id);
         let is_send_error = if let Err(e) = res {
@@ -353,8 +349,7 @@ impl RequestContainer {
         &mut self, io: &dyn NetworkContext,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
         protocol_config: &ProtocolConfiguration,
-    )
-    {
+    ) {
         trace!("send_pending_requests: len={}", self.pending_requests.len());
         while self.has_pending_requests() {
             if let Some(new_request_id) = self.get_next_request_id() {
@@ -375,9 +370,8 @@ impl RequestContainer {
 
     // Match request with given response.
     // Could return the following error:
-    // 1. RequestNotFound:
-    //      In this case, no request is matched, so NO need to
-    //      handle the resending of the request for caller;
+    // 1. RequestNotFound: In this case, no request is matched, so NO need to
+    //    handle the resending of the request for caller;
     pub fn match_request(
         &mut self, request_id: u64,
     ) -> Result<RequestMessage, Error> {
@@ -533,8 +527,7 @@ impl TimedSyncRequests {
     pub fn from_request(
         peer_id: NodeId, request_id: u64, msg: &RequestMessage,
         conf: &ProtocolConfiguration, is_send_error: bool,
-    ) -> TimedSyncRequests
-    {
+    ) -> TimedSyncRequests {
         let timeout = if is_send_error {
             FAILED_REQUEST_RESEND_WAIT.clone()
         } else {

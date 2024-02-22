@@ -40,8 +40,7 @@ impl RestoreHandler {
         db: Arc<DB>, diemdb: Arc<PosLedgerDB>, ledger_store: Arc<LedgerStore>,
         transaction_store: Arc<TransactionStore>, state_store: Arc<StateStore>,
         event_store: Arc<EventStore>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             db,
             diemdb,
@@ -125,8 +124,7 @@ impl RestoreHandler {
     pub fn save_transactions(
         &self, first_version: Version, txns: &[Transaction],
         txn_infos: &[TransactionInfo], events: &[Vec<ContractEvent>],
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let mut cs = ChangeSet::new();
         for (idx, txn) in txns.iter().enumerate() {
             self.transaction_store.put_transaction(

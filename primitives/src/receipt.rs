@@ -17,61 +17,61 @@ pub const EVM_SPACE_SUCCESS: u8 = 1;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransactionOutcome {
+pub enum TransactionStatus {
     Success = 0,
     Failure = 1,
     Skipped = 2,
 }
 
-impl TransactionOutcome {
+impl TransactionStatus {
     fn into_u8(&self) -> u8 {
         match self {
-            TransactionOutcome::Success => 0,
-            TransactionOutcome::Failure => 1,
-            TransactionOutcome::Skipped => 2,
+            TransactionStatus::Success => 0,
+            TransactionStatus::Failure => 1,
+            TransactionStatus::Skipped => 2,
         }
     }
 }
 
-impl Encodable for TransactionOutcome {
+impl Encodable for TransactionStatus {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.append_internal(&self.into_u8());
     }
 }
 
-impl Decodable for TransactionOutcome {
+impl Decodable for TransactionStatus {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         match rlp.as_val::<u8>()? {
-            0 => Ok(TransactionOutcome::Success),
-            1 => Ok(TransactionOutcome::Failure),
-            2 => Ok(TransactionOutcome::Skipped),
+            0 => Ok(TransactionStatus::Success),
+            1 => Ok(TransactionStatus::Failure),
+            2 => Ok(TransactionStatus::Skipped),
             _ => Err(DecoderError::Custom("Unrecognized outcome status")),
         }
     }
 }
 
-impl Default for TransactionOutcome {
-    fn default() -> Self { TransactionOutcome::Success }
+impl Default for TransactionStatus {
+    fn default() -> Self { TransactionStatus::Success }
 }
 
-impl TransactionOutcome {
+impl TransactionStatus {
     pub fn in_space(&self, space: Space) -> u8 {
         match (space, self) {
             // Conflux
-            (Space::Native, TransactionOutcome::Success) => {
+            (Space::Native, TransactionStatus::Success) => {
                 TRANSACTION_OUTCOME_SUCCESS
             }
-            (Space::Native, TransactionOutcome::Failure) => {
+            (Space::Native, TransactionStatus::Failure) => {
                 TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING
             }
-            (Space::Native, TransactionOutcome::Skipped) => {
+            (Space::Native, TransactionStatus::Skipped) => {
                 TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING
             }
 
             // EVM
-            (Space::Ethereum, TransactionOutcome::Success) => EVM_SPACE_SUCCESS,
-            (Space::Ethereum, TransactionOutcome::Failure) => EVM_SPACE_FAIL,
-            (Space::Ethereum, TransactionOutcome::Skipped) => 0xff,
+            (Space::Ethereum, TransactionStatus::Success) => EVM_SPACE_SUCCESS,
+            (Space::Ethereum, TransactionStatus::Failure) => EVM_SPACE_FAIL,
+            (Space::Ethereum, TransactionStatus::Skipped) => 0xff,
         }
     }
 }
@@ -82,6 +82,12 @@ pub struct StorageChange {
     /// Number of storage collateral units to deposit / refund (absolute
     /// value).
     pub collaterals: U64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SortedStorageChanges {
+    pub storage_collateralized: Vec<StorageChange>,
+    pub storage_released: Vec<StorageChange>,
 }
 
 /// Information describing execution of a transaction.
@@ -99,7 +105,7 @@ pub struct Receipt {
     /// The logs stemming from this transaction.
     pub logs: Vec<LogEntry>,
     /// Transaction outcome.
-    pub outcome_status: TransactionOutcome,
+    pub outcome_status: TransactionStatus,
     /// The designated account to bear the storage fee, if any.
     pub storage_sponsor_paid: bool,
     pub storage_collateralized: Vec<StorageChange>,
@@ -108,12 +114,11 @@ pub struct Receipt {
 
 impl Receipt {
     pub fn new(
-        outcome: TransactionOutcome, accumulated_gas_used: U256, gas_fee: U256,
+        outcome: TransactionStatus, accumulated_gas_used: U256, gas_fee: U256,
         gas_sponsor_paid: bool, logs: Vec<LogEntry>, log_bloom: Bloom,
         storage_sponsor_paid: bool, storage_collateralized: Vec<StorageChange>,
         storage_released: Vec<StorageChange>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             accumulated_gas_used,
             gas_fee,
@@ -126,6 +131,18 @@ impl Receipt {
             storage_released,
         }
     }
+
+    pub fn tx_skipped(&self) -> bool {
+        self.outcome_status == TransactionStatus::Skipped
+    }
+
+    pub fn tx_success(&self) -> bool {
+        self.outcome_status == TransactionStatus::Success
+    }
+
+    pub fn accumulated_gas_used(&self) -> U256 { self.accumulated_gas_used }
+
+    pub fn logs(&self) -> &[LogEntry] { &self.logs }
 }
 
 impl MallocSizeOf for StorageChange {
@@ -163,7 +180,7 @@ impl MallocSizeOf for BlockReceipts {
 
 #[test]
 fn test_transaction_outcome_rlp() {
-    assert_eq!(rlp::encode(&TransactionOutcome::Success), rlp::encode(&0u8));
-    assert_eq!(rlp::encode(&TransactionOutcome::Failure), rlp::encode(&1u8));
-    assert_eq!(rlp::encode(&TransactionOutcome::Skipped), rlp::encode(&2u8));
+    assert_eq!(rlp::encode(&TransactionStatus::Success), rlp::encode(&0u8));
+    assert_eq!(rlp::encode(&TransactionStatus::Failure), rlp::encode(&1u8));
+    assert_eq!(rlp::encode(&TransactionStatus::Skipped), rlp::encode(&2u8));
 }

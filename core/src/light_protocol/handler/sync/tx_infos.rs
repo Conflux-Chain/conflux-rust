@@ -31,7 +31,7 @@ use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
 use primitives::{
-    Receipt, SignedTransaction, TransactionIndex, TransactionOutcome,
+    Receipt, SignedTransaction, TransactionIndex, TransactionStatus,
 };
 use std::{future::Future, sync::Arc};
 
@@ -77,8 +77,7 @@ impl TxInfos {
     pub fn new(
         consensus: SharedConsensusGraph, peers: Arc<Peers<FullPeerState>>,
         request_id_allocator: Arc<UniqueId>, witnesses: Arc<Witnesses>,
-    ) -> Self
-    {
+    ) -> Self {
         let ledger = LedgerInfo::new(consensus.clone());
         let sync_manager = SyncManager::new(peers.clone(), msgid::GET_TX_INFOS);
 
@@ -133,8 +132,7 @@ impl TxInfos {
     pub fn receive(
         &self, peer: &NodeId, id: RequestId,
         infos: impl Iterator<Item = TxInfo>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         for info in infos {
             trace!("Validating tx_info {:?}", info);
 
@@ -217,8 +215,8 @@ impl TxInfos {
 
         // only executed instances of the transaction are acceptable;
         // receipts belonging to non-executed instances should not be sent
-        if receipt.outcome_status != TransactionOutcome::Success
-            && receipt.outcome_status != TransactionOutcome::Failure
+        if receipt.outcome_status != TransactionStatus::Success
+            && receipt.outcome_status != TransactionStatus::Failure
         {
             bail!(ErrorKind::InvalidTxInfo {
                 reason: format!(

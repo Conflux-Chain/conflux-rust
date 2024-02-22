@@ -637,7 +637,7 @@ mod tests {
     use crate::{
         hash::keccak,
         receipt::{BlockReceipts, Receipt},
-        TransactionOutcome,
+        TransactionStatus,
     };
     use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM, U256};
     use std::{str::FromStr, sync::Arc};
@@ -669,7 +669,7 @@ mod tests {
             gas_fee: U256::zero(),
             gas_sponsor_paid: false,
             logs: vec![],
-            outcome_status: TransactionOutcome::Success,
+            outcome_status: TransactionStatus::Success,
             log_bloom: Bloom::zero(),
             storage_sponsor_paid: false,
             storage_collateralized: vec![],
@@ -700,7 +700,7 @@ mod tests {
                     gas_fee: 0.into(),
                     gas_sponsor_paid: false,
                     logs: vec![],
-                    outcome_status: TransactionOutcome::Success,
+                    outcome_status: TransactionStatus::Success,
                     log_bloom: Bloom::from_str(
                         "11111111111111111111111111111111\
                          00000000000000000000000000000000\
@@ -729,7 +729,7 @@ mod tests {
                     gas_fee: U256::zero(),
                     gas_sponsor_paid: false,
                     logs: vec![],
-                    outcome_status: TransactionOutcome::Success,
+                    outcome_status: TransactionStatus::Success,
                     log_bloom: Bloom::from_str(
                         "00000000000000000000000000000000\
                          22222222222222222222222222222222\
@@ -765,7 +765,7 @@ mod tests {
                 gas_fee: U256::zero(),
                 gas_sponsor_paid: false,
                 logs: vec![],
-                outcome_status: TransactionOutcome::Success,
+                outcome_status: TransactionStatus::Success,
                 log_bloom: Bloom::from_str(
                     "44444444444444440000000000000000\
                      44444444444444440000000000000000\

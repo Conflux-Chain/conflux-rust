@@ -69,8 +69,6 @@ pub trait WrappedLifetimeFamily<'a, Constrain: ?Sized> {
 
 pub trait WrappedTrait<Constrain: ?Sized>:
     for<'a> WrappedLifetimeFamily<'a, Constrain>
-// This is unnecessary and troublesome since rustc 1.49.0.
-//where for<'a> <Self as WrappedLifetimeFamily<'a, Constrain>>::Out: Sized
 {
 }
 

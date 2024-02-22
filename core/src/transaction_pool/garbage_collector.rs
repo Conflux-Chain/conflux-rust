@@ -67,8 +67,7 @@ impl GarbageCollector {
     pub fn insert(
         &mut self, sender: &AddressWithSpace, count: usize, timestamp: u64,
         has_ready_tx: bool, first_tx_gas_price: U256,
-    )
-    {
+    ) {
         let value = GarbageCollectorValue {
             count,
             has_ready_tx,

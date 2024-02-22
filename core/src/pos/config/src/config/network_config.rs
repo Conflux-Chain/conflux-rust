@@ -436,8 +436,7 @@ impl Peer {
     pub fn new(
         addresses: Vec<NetworkAddress>, mut keys: HashSet<x25519::PublicKey>,
         role: PeerRole,
-    ) -> Peer
-    {
+    ) -> Peer {
         let addr_keys = addresses
             .iter()
             .filter_map(NetworkAddress::find_noise_proto);

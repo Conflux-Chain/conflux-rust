@@ -215,8 +215,7 @@ where V: Clone + CryptoHash
     pub fn batch_update(
         &self, update_batch: Vec<Vec<(HashValue, &V)>>,
         proof_reader: &impl ProofRead<V>,
-    ) -> Result<(Vec<HashValue>, Self), UpdateError>
-    {
+    ) -> Result<(Vec<HashValue>, Self), UpdateError> {
         let mut current_state_tree = self.clone();
 
         let mut result_hashes = Vec::with_capacity(update_batch.len());
@@ -301,8 +300,7 @@ where V: Clone + CryptoHash
     fn construct_subtree_at_bottom(
         current_subtree: &SubTree<V>, key: HashValue, new_value: V,
         remaining_bits: HashValueBitIterator, proof_reader: &impl ProofRead<V>,
-    ) -> Result<SubTree<V>, UpdateError>
-    {
+    ) -> Result<SubTree<V>, UpdateError> {
         match current_subtree {
             SubTree::Empty => {
                 // When we reach an empty node, we just place the leaf node at
@@ -433,8 +431,7 @@ where V: Clone + CryptoHash
         key: HashValue, new_value: V, existing_leaf: SubTree<V>,
         existing_leaf_key: HashValue,
         distance_from_root_to_existing_leaf: usize,
-    ) -> SubTree<V>
-    {
+    ) -> SubTree<V> {
         let new_leaf = SubTree::new_leaf_with_value(key, new_value);
         if key == existing_leaf_key {
             // This implies that `key` already existed and the proof is an
@@ -484,8 +481,7 @@ where V: Clone + CryptoHash
     fn construct_subtree(
         bits: impl Iterator<Item = bool>,
         siblings: impl Iterator<Item = SubTree<V>>, leaf: SubTree<V>,
-    ) -> SubTree<V>
-    {
+    ) -> SubTree<V> {
         itertools::zip_eq(bits, siblings).fold(
             leaf,
             |previous_node, (bit, sibling)| {

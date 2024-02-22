@@ -22,10 +22,7 @@ use rustc_hex::ToHex;
 use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
-use cfx_parameters::{
-    consensus::*, consensus_internal::CIP107_STORAGE_POINT_PROP_INIT,
-};
-use cfx_state::CleanupMode;
+use cfx_parameters::consensus::*;
 use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
@@ -37,9 +34,8 @@ use cfx_types::{
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
-    compute_block_number,
-    receipt::{BlockReceipts, Receipt, TransactionOutcome},
-    Action, Block, BlockHeaderBuilder, BlockNumber, EpochId, SignedTransaction,
+    compute_block_number, receipt::BlockReceipts, Action, Block,
+    BlockHeaderBuilder, BlockNumber, EpochId, SignedTransaction,
     TransactionIndex, MERKLE_NULL_NODE,
 };
 
@@ -53,33 +49,35 @@ use crate::{
         pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
-    evm::Spec,
-    executive::{
-        internal_contract::{
-            build_bloom_and_recover_phantom, decode_register_info,
-            storage_point_prop,
-        },
-        revert_reason_decode, EstimateRequest, ExecutionError,
-        ExecutionOutcome, Executive, TransactOptions,
-    },
-    machine::Machine,
-    observer::trace::{ExecTrace, TransactionExecTraces},
     rpc_errors::{invalid_params_check, Result as RpcResult},
-    spec::genesis::initialize_internal_contract_accounts,
-    state::{
-        distribute_pos_interest, initialize_or_update_dao_voted_params,
-        prefetcher::{
-            prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
-        },
-        update_pos_status, State,
+    state_prefetcher::{
+        prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
     },
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
     },
-    vm::{Env, Error as VmErr},
     SharedTransactionPool,
 };
+use cfx_execute_helper::{
+    estimation::{EstimateExt, EstimateRequest, EstimationContext},
+    exec_tracer::TransactionExecTraces,
+    observer::Observer,
+    tx_outcome::make_process_tx_outcome,
+};
+use cfx_executor::{
+    executive::{
+        ExecutionOutcome, ExecutiveContext, TransactOptions, TransactSettings,
+    },
+    internal_contract::initialize_internal_contract_accounts,
+    machine::Machine,
+    state::{
+        distribute_pos_interest, initialize_cip107,
+        initialize_or_update_dao_voted_params, update_pos_status, CleanupMode,
+        State,
+    },
+};
+use cfx_vm_types::{Env, Spec};
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
@@ -150,8 +148,7 @@ impl EpochExecutionTask {
         epoch_arena_index: usize, inner: &ConsensusGraphInner,
         reward_execution_info: Option<RewardExecutionInfo>,
         on_local_pivot: bool, force_recompute: bool,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             epoch_hash: inner.arena[epoch_arena_index].hash,
             epoch_block_hashes: inner.get_epoch_block_hashes(epoch_arena_index),
@@ -198,8 +195,7 @@ impl ConsensusExecutor {
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, bench_mode: bool,
         pos_verifier: Arc<PosVerifier>,
-    ) -> Arc<Self>
-    {
+    ) -> Arc<Self> {
         let machine = tx_pool.machine();
         let handler = Arc::new(ConsensusExecutionHandler::new(
             tx_pool,
@@ -383,8 +379,7 @@ impl ConsensusExecutor {
     pub fn get_reward_execution_info_from_index(
         &self, inner: &mut ConsensusGraphInner,
         reward_index: Option<(usize, usize)>,
-    ) -> Option<RewardExecutionInfo>
-    {
+    ) -> Option<RewardExecutionInfo> {
         reward_index.map(
             |(pivot_arena_index, anticone_penalty_cutoff_epoch_arena_index)| {
                 // We have to wait here because blame information will determine the reward of each block.
@@ -557,8 +552,7 @@ impl ConsensusExecutor {
     pub fn get_blame_and_deferred_state_for_generation(
         &self, parent_block_hash: &H256,
         inner_lock: &RwLock<ConsensusGraphInner>,
-    ) -> Result<StateBlameInfo, String>
-    {
+    ) -> Result<StateBlameInfo, String> {
         let (parent_arena_index, last_state_block) = {
             let inner = inner_lock.read();
             let parent_opt = inner.hash_to_arena_indices.get(parent_block_hash);
@@ -621,8 +615,7 @@ impl ConsensusExecutor {
         &self, task: EpochExecutionTask,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
         recover_mpt_during_construct_pivot_state: bool,
-    )
-    {
+    ) {
         if !self.consensus_graph_bench_mode {
             self.handler.handle_epoch_execution(
                 task,
@@ -636,8 +629,7 @@ impl ConsensusExecutor {
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         on_local_pivot: bool,
         reward_execution_info: &Option<RewardExecutionInfo>, epoch_height: u64,
-    ) -> bool
-    {
+    ) -> bool {
         self.handler.epoch_executed_and_recovered(
             epoch_hash,
             epoch_block_hashes,
@@ -650,8 +642,7 @@ impl ConsensusExecutor {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
         request: EstimateRequest,
-    ) -> RpcResult<ExecutionOutcome>
-    {
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
         self.handler.call_virtual(tx, epoch_id, epoch_size, request)
     }
 
@@ -841,8 +832,7 @@ impl ConsensusExecutionHandler {
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, machine: Arc<Machine>,
         pos_verifier: Arc<PosVerifier>,
-    ) -> Self
-    {
+    ) -> Self {
         ConsensusExecutionHandler {
             tx_pool,
             data_man,
@@ -885,8 +875,7 @@ impl ConsensusExecutionHandler {
         &self, task: EpochExecutionTask,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
         recover_mpt_during_construct_pivot_state: bool,
-    )
-    {
+    ) {
         let _timer = MeterTimer::time_func(CONSENSIS_EXECUTION_TIMER.as_ref());
         self.compute_epoch(
             &task.epoch_hash,
@@ -922,8 +911,7 @@ impl ConsensusExecutionHandler {
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         on_local_pivot: bool,
         reward_execution_info: &Option<RewardExecutionInfo>, epoch_height: u64,
-    ) -> bool
-    {
+    ) -> bool {
         // note: the lock on chain_id is never held so this should be OK.
         let evm_chain_id = self
             .machine
@@ -963,8 +951,7 @@ impl ConsensusExecutionHandler {
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         force_recompute: bool,
         recover_mpt_during_construct_pivot_state: bool,
-    )
-    {
+    ) {
         // FIXME: Question: where to calculate if we should make a snapshot?
         // FIXME: Currently we make the snapshotting decision when committing
         // FIXME: a new state.
@@ -1158,15 +1145,16 @@ impl ConsensusExecutionHandler {
         // FIXME: We may want to propagate the error up.
         let state_root;
         if on_local_pivot {
-            state_root = state
+            let commit_result = state
                 .commit(*epoch_hash, debug_record.as_deref_mut())
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
+            state_root = commit_result.state_root;
+            let accounts_for_txpool = commit_result.accounts_for_txpool;
             {
                 debug!("Notify epoch[{}]", epoch_hash);
 
                 // TODO: use channel to deliver the message.
                 let txpool_clone = self.tx_pool.clone();
-                let accounts_for_txpool = state.accounts_for_txpool();
                 std::thread::Builder::new()
                     .name("txpool_update_state".into())
                     .spawn(move || {
@@ -1175,6 +1163,7 @@ impl ConsensusExecutionHandler {
                     })
                     .expect("can not notify tx pool to start state");
             }
+
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
@@ -1182,9 +1171,10 @@ impl ConsensusExecutionHandler {
                 ))
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         } else {
-            state_root = state
+            let commit_result = state
                 .commit(*epoch_hash, debug_record)
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
+            state_root = commit_result.state_root;
         };
 
         self.data_man.insert_epoch_execution_commitment(
@@ -1212,8 +1202,7 @@ impl ConsensusExecutionHandler {
         &self, epoch_id: EpochId, state: &mut State,
         epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
         on_local_pivot: bool,
-    ) -> DbResult<Vec<Arc<BlockReceipts>>>
-    {
+    ) -> DbResult<Vec<Arc<BlockReceipts>>> {
         // Prefetch accounts for transactions.
         // The return value _prefetch_join_handles is used to join all threads
         // before the exit of this function.
@@ -1286,7 +1275,10 @@ impl ConsensusExecutionHandler {
                 .and_then(|hash| self.data_man.block_header_by_hash(&hash))
                 .map(|header| header.height());
 
+            let epoch_height = pivot_block.block_header.height();
+            let chain_id = self.machine.params().chain_id_map(epoch_height);
             let mut env = Env {
+                chain_id,
                 number: block_number,
                 author: block.block_header.author().clone(),
                 timestamp: pivot_block.block_header.timestamp(),
@@ -1294,7 +1286,7 @@ impl ConsensusExecutionHandler {
                 accumulated_gas_used: U256::zero(),
                 last_hash: last_block_hash,
                 gas_limit: U256::from(block.block_header.gas_limit()),
-                epoch_height: pivot_block.block_header.height(),
+                epoch_height,
                 pos_view: pos_view_number,
                 finalized_epoch: pivot_decision_epoch,
                 transaction_epoch_bound: self
@@ -1305,6 +1297,8 @@ impl ConsensusExecutionHandler {
             if !spec.cip43_contract {
                 state.bump_block_number_accumulate_interest();
             }
+            let machine = self.machine.as_ref();
+
             let secondary_reward = state.secondary_reward();
             state.inc_distributable_pos_interest(env.number)?;
             initialize_internal_contract_accounts(
@@ -1317,164 +1311,57 @@ impl ConsensusExecutionHandler {
             let mut block_traces: Vec<TransactionExecTraces> =
                 Default::default();
             for (idx, transaction) in block.transactions.iter().enumerate() {
-                let tx_outcome_status;
-                let mut transaction_logs = Vec::new();
-                let mut storage_released = Vec::new();
-                let mut storage_collateralized = Vec::new();
-
-                let options = if self.config.executive_trace {
-                    TransactOptions::exec_with_tracing()
+                let observer = if self.config.executive_trace {
+                    Observer::with_tracing()
                 } else {
-                    TransactOptions::exec_with_no_tracing()
+                    Observer::with_no_tracing()
                 };
-                let r =
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
+                let options = TransactOptions {
+                    observer,
+                    settings: TransactSettings::all_checks(),
+                };
+                let execution_outcome =
+                    ExecutiveContext::new(state, &env, machine, &spec)
                         .transact(transaction, options)?;
-
-                let gas_fee;
-                let mut gas_sponsor_paid = false;
-                let mut storage_sponsor_paid = false;
-                let tx_exec_error_msg: String;
-                match r {
-                    ExecutionOutcome::NotExecutedDrop(e) => {
-                        tx_outcome_status = TransactionOutcome::Skipped;
-                        tx_exec_error_msg = "tx not executed".into();
-                        trace!(
-                            "tx not executed, not to reconsider packing: \
-                             transaction={:?},err={:?}",
-                            transaction,
-                            e
-                        );
-                        gas_fee = U256::zero();
-                        if self.config.executive_trace {
-                            block_traces.push(Vec::<ExecTrace>::new().into());
-                        }
-                    }
-                    ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                        tx_outcome_status = TransactionOutcome::Skipped;
-                        tx_exec_error_msg = "tx not executed".into();
-                        trace!(
-                            "tx not executed, to reconsider packing: \
-                             transaction={:?}, err={:?}",
-                            transaction,
-                            e
-                        );
-                        if on_local_pivot {
-                            trace!(
-                                "To re-add transaction to transaction pool. \
-                                 transaction={:?}",
-                                transaction
-                            );
-                            to_pending.push(transaction.clone())
-                        }
-                        gas_fee = U256::zero();
-                        if self.config.executive_trace {
-                            block_traces.push(Vec::<ExecTrace>::new().into());
-                        }
-                    }
-                    ExecutionOutcome::ExecutionErrorBumpNonce(
-                        error,
-                        executed,
-                    ) => {
-                        tx_outcome_status = TransactionOutcome::Failure;
-                        tx_exec_error_msg = if error
-                            == ExecutionError::VmError(VmErr::Reverted)
-                        {
-                            format!(
-                                "Vm reverted, {}",
-                                revert_reason_decode(&executed.output)
-                            )
-                        } else {
-                            format!("{:?}", error)
-                        };
-                        env.accumulated_gas_used += executed.gas_used;
-                        gas_fee = executed.fee;
-                        if self.config.executive_trace {
-                            block_traces.push(executed.trace.into());
-                        }
-                        if spec.cip78a {
-                            gas_sponsor_paid = executed.gas_sponsor_paid;
-                            storage_sponsor_paid =
-                                executed.storage_sponsor_paid;
-                        }
-                        debug!(
-                            "tx execution error: err={:?}, transaction={:?}",
-                            error, transaction
-                        );
-                    }
-                    ExecutionOutcome::Finished(executed) => {
-                        tx_outcome_status = TransactionOutcome::Success;
-                        tx_exec_error_msg = String::default();
-                        GOOD_TPS_METER.mark(1);
-
-                        env.accumulated_gas_used += executed.gas_used;
-                        gas_fee = executed.fee;
-                        transaction_logs = executed.logs.clone();
-                        storage_collateralized =
-                            executed.storage_collateralized.clone();
-                        storage_released = executed.storage_released.clone();
-
-                        gas_sponsor_paid = executed.gas_sponsor_paid;
-                        storage_sponsor_paid = executed.storage_sponsor_paid;
-
-                        trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, transaction, block.hash());
-
-                        if self.config.executive_trace {
-                            block_traces.push(executed.trace.into());
-                        }
-
-                        if self.pos_verifier.pos_option().is_some() {
-                            trace!("Check {} events", transaction_logs.len());
-                            for log in &transaction_logs {
-                                if let Some(staking_event) =
-                                    decode_register_info(log)
-                                {
-                                    epoch_staking_events.push(staking_event);
-                                }
-                            }
-                            trace!("Check events ends");
-                        }
-                    }
-                }
-
-                let (phantom_txs, log_bloom) = build_bloom_and_recover_phantom(
-                    &transaction_logs,
+                execution_outcome.log(transaction, &block.hash());
+                let r = make_process_tx_outcome(
+                    execution_outcome,
+                    &mut env.accumulated_gas_used,
                     transaction.hash,
                 );
 
-                let receipt = Receipt::new(
-                    tx_outcome_status,
-                    env.accumulated_gas_used,
-                    gas_fee,
-                    gas_sponsor_paid,
-                    transaction_logs,
-                    log_bloom,
-                    storage_sponsor_paid,
-                    storage_collateralized,
-                    storage_released,
-                );
-                receipts.push(receipt);
-                tx_exec_error_messages.push(tx_exec_error_msg);
+                if r.receipt.tx_success() {
+                    GOOD_TPS_METER.mark(1);
+                }
 
+                if on_local_pivot && r.consider_repacked {
+                    to_pending.push(transaction.clone())
+                }
+
+                let not_skipped = !r.receipt.tx_skipped();
+
+                if self.config.executive_trace {
+                    block_traces.push(r.tx_traces.into());
+                }
+
+                receipts.push(r.receipt);
+                tx_exec_error_messages.push(r.tx_exec_error_msg);
+                epoch_staking_events.extend(r.tx_staking_events);
+
+                let get_and_bump = |index: &mut usize| {
+                    let output = *index;
+                    *index += 1;
+                    output
+                };
                 let rpc_index = match transaction.space() {
-                    Space::Native => {
-                        let rpc_index = cfx_tx_index;
-                        cfx_tx_index += 1;
-                        rpc_index
-                    }
-                    Space::Ethereum
-                        if tx_outcome_status != TransactionOutcome::Skipped =>
-                    {
-                        let rpc_index = evm_tx_index;
-                        evm_tx_index += 1;
-                        rpc_index
+                    Space::Native => get_and_bump(&mut cfx_tx_index),
+                    Space::Ethereum if not_skipped => {
+                        get_and_bump(&mut evm_tx_index)
                     }
                     _ => usize::MAX, // this will not be used
                 };
 
-                if on_local_pivot
-                    && tx_outcome_status != TransactionOutcome::Skipped
-                {
+                if on_local_pivot && not_skipped {
                     let hash = transaction.hash();
 
                     self.data_man.insert_transaction_index(
@@ -1487,15 +1374,7 @@ impl ConsensusExecutionHandler {
                         },
                     );
 
-                    // note: the lock on chain_id is never held
-                    // so this should be OK.
-                    let evm_chain_id = self
-                        .machine
-                        .params()
-                        .chain_id
-                        .read()
-                        .get_chain_id(env.epoch_height)
-                        .in_evm_space();
+                    let evm_chain_id = env.chain_id[&Space::Ethereum];
 
                     // persist tx index for phantom transactions.
                     // note: in some cases, pivot chain reorgs will result in
@@ -1503,7 +1382,7 @@ impl ConsensusExecutionHandler {
                     // same Conflux space tx. we do not remove invalidated
                     // hashes here, but leave it up to the RPC layer to handle
                     // this instead.
-                    for ptx in phantom_txs {
+                    for ptx in r.phantom_txs {
                         self.data_man.insert_transaction_index(
                             &ptx.into_eip155(evm_chain_id).hash(),
                             &TransactionIndex {
@@ -1586,8 +1465,7 @@ impl ConsensusExecutionHandler {
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
         epoch_later: &H256, on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>, spec: Spec,
-    )
-    {
+    ) {
         /// (Fee, SetOfPackingBlockHash)
         struct TxExecutionInfo(U256, BTreeSet<H256>);
 
@@ -1894,8 +1772,7 @@ impl ConsensusExecutionHandler {
     fn recompute_states(
         &self, pivot_hash: &H256, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64,
-    ) -> DbResult<Vec<Arc<BlockReceipts>>>
-    {
+    ) -> DbResult<Vec<Arc<BlockReceipts>>> {
         debug!(
             "Recompute receipts epoch_id={}, block_count={}",
             pivot_hash,
@@ -1937,8 +1814,7 @@ impl ConsensusExecutionHandler {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
         request: EstimateRequest,
-    ) -> RpcResult<ExecutionOutcome>
-    {
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
             bail!("invalid epoch id");
@@ -2012,6 +1888,7 @@ impl ConsensusExecutionHandler {
         };
 
         let env = Env {
+            chain_id: self.machine.params().chain_id_map(block_height),
             number: start_block_number,
             author: miner,
             timestamp: time_stamp,
@@ -2027,8 +1904,12 @@ impl ConsensusExecutionHandler {
                 .transaction_epoch_bound,
         };
         let spec = self.machine.spec(env.number);
-        let mut ex =
-            Executive::new(&mut state, &env, self.machine.as_ref(), &spec);
+        let mut ex = EstimationContext::new(
+            &mut state,
+            &env,
+            self.machine.as_ref(),
+            &spec,
+        );
 
         let r = ex.transact_virtual(tx.clone(), request);
         trace!("Execution result {:?}", r);
@@ -2055,14 +1936,7 @@ impl ConsensusExecutionHandler {
         // that function will update the value after cip107 is enabled
         // here.
         if block_number == self.machine.params().transition_numbers.cip107 {
-            debug!(
-                "set storage_point_prop to {}",
-                CIP107_STORAGE_POINT_PROP_INIT
-            );
-            state.set_system_storage(
-                storage_point_prop().to_vec(),
-                CIP107_STORAGE_POINT_PROP_INIT.into(),
-            )?;
+            initialize_cip107(state)?;
         }
         Ok(())
     }

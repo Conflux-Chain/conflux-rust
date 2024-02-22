@@ -337,8 +337,7 @@ fn prepare_state(
     accounts: usize, accounts_per_epoch: usize,
     account_map: &mut HashMap<AddressWithSpace, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
-) -> Result<(H256, MerkleHash), StorageError>
-{
+) -> Result<(H256, MerkleHash), StorageError> {
     let mut new_account_map = HashMap::new();
     for i in 0..accounts {
         let addr = Address::random().with_native_space();
@@ -364,8 +363,7 @@ fn add_accounts(
     accounts_per_epoch: usize,
     new_account_map: &HashMap<AddressWithSpace, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
-) -> Result<(H256, MerkleHash), StorageError>
-{
+) -> Result<(H256, MerkleHash), StorageError> {
     let accounts = new_account_map.len();
     println!("begin to add {} accounts for snapshot...", accounts);
     let start = Instant::now();

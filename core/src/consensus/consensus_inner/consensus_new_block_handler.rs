@@ -60,8 +60,7 @@ impl ConsensusNewBlockHandler {
         data_man: Arc<BlockDataManager>, executor: Arc<ConsensusExecutor>,
         statistics: SharedStatistics, notifications: Arc<Notifications>,
         node_type: NodeType, pos_verifier: Arc<PosVerifier>,
-    ) -> Self
-    {
+    ) -> Self {
         let epochs_sender = notifications.epochs_ordered.clone();
         let blame_verifier =
             Mutex::new(BlameVerifier::new(data_man.clone(), notifications));
@@ -474,8 +473,7 @@ impl ConsensusNewBlockHandler {
     fn check_correct_parent_brutal(
         inner: &ConsensusGraphInner, me: usize, subtree_weight: &Vec<i128>,
         checking_candidate: Iter<usize>,
-    ) -> bool
-    {
+    ) -> bool {
         let mut valid = true;
         let parent = inner.arena[me].parent;
         let force_confirm = inner.arena[me].data.force_confirm;
@@ -518,8 +516,7 @@ impl ConsensusNewBlockHandler {
     fn check_correct_parent(
         inner: &mut ConsensusGraphInner, me: usize, anticone_barrier: &BitSet,
         weight_tuple: Option<&Vec<i128>>,
-    ) -> bool
-    {
+    ) -> bool {
         let parent = inner.arena[me].parent;
         // FIXME: Because now we allow partial invalid blocks as parent, we need
         // to consider more for block candidates. This may cause a
@@ -636,8 +633,7 @@ impl ConsensusNewBlockHandler {
     fn check_block_full_validity(
         &self, new: usize, inner: &mut ConsensusGraphInner, adaptive: bool,
         anticone_barrier: &BitSet, weight_tuple: Option<&Vec<i128>>,
-    ) -> bool
-    {
+    ) -> bool {
         let parent = inner.arena[new].parent;
         let force_confirm = inner.arena[new].data.force_confirm;
 
@@ -1109,8 +1105,7 @@ impl ConsensusNewBlockHandler {
     fn activate_block(
         &self, inner: &mut ConsensusGraphInner, me: usize,
         meter: &ConfirmationMeter, queue: &mut VecDeque<usize>,
-    )
-    {
+    ) {
         inner.arena[me].data.activated = true;
         self.statistics.inc_consensus_graph_activated_block_count();
         let mut succ_list = inner.arena[me].children.clone();
@@ -1710,8 +1705,7 @@ impl ConsensusNewBlockHandler {
     pub fn on_new_block(
         &self, inner: &mut ConsensusGraphInner, meter: &ConfirmationMeter,
         hash: &H256,
-    )
-    {
+    ) {
         let block_header = self
             .data_man
             .block_header_by_hash(hash)
@@ -1852,8 +1846,7 @@ impl ConsensusNewBlockHandler {
     fn persist_block_info(
         &self, inner: &mut ConsensusGraphInner, me: usize,
         block_status: BlockStatus,
-    )
-    {
+    ) {
         let block_info = LocalBlockInfo::new(
             block_status,
             inner.arena[me].data.sequence_number,
@@ -2101,8 +2094,7 @@ impl ConsensusNewBlockHandler {
     fn get_force_compute_index(
         &self, inner: &mut ConsensusGraphInner, start_pivot_index: usize,
         end_index: usize,
-    ) -> usize
-    {
+    ) -> usize {
         let mut force_compute_index = start_pivot_index + 1;
         let mut epoch_count = 0;
         for pivot_index in (start_pivot_index + 1..end_index).rev() {
@@ -2189,8 +2181,7 @@ impl ConsensusNewBlockHandler {
         start_compute_epoch_pivot_index: &mut usize, start_pivot_index: usize,
         end_index: usize, need_set_intermediate_trie_root_merkle: &mut bool,
         snapshot_epoch_count: u64,
-    ) -> Option<usize>
-    {
+    ) -> Option<usize> {
         if !self.conf.inner_conf.use_isolated_db_for_mpt_table {
             return Some(end_index);
         }
@@ -2430,8 +2421,7 @@ impl ConsensusNewBlockHandler {
         start_compute_epoch_pivot_index: usize,
         need_set_intermediate_trie_root_merkle: bool,
         snapshot_epoch_count: u64,
-    )
-    {
+    ) {
         let storage_manager =
             inner.data_man.storage_manager.get_storage_manager();
         if !storage_manager

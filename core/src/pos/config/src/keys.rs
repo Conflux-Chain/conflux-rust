@@ -14,7 +14,6 @@
 //!
 //! The public key part is dynamically derived during deserialization,
 //! while ignored during serialization.
-//!
 
 use diem_crypto::PrivateKey;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};

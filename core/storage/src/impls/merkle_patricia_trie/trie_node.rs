@@ -52,8 +52,7 @@ pub trait TrieNodeTrait: Default {
     fn compute_merkle(
         &self, children_merkles: MaybeMerkleTableRef,
         path_without_first_nibble: bool,
-    ) -> MerkleHash
-    {
+    ) -> MerkleHash {
         compute_merkle(
             self.compressed_path_ref(),
             path_without_first_nibble,
@@ -187,8 +186,7 @@ impl<NodeRefT: NodeRefTrait> VanillaTrieNode<NodeRefT> {
     pub fn new(
         merkle: MerkleHash, children_table: VanillaChildrenTable<NodeRefT>,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
-    ) -> Self
-    {
+    ) -> Self {
         let mpt_value = match maybe_value {
             None => MptValue::None,
             Some(v) => {

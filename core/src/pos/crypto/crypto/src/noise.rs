@@ -60,7 +60,6 @@
 //! # Ok(())
 //! # }
 //! ```
-//!
 #![allow(clippy::integer_arithmetic)]
 
 use crate::{hash::HashValue, hkdf::Hkdf, traits::Uniform as _, x25519};
@@ -283,8 +282,7 @@ impl NoiseConfig {
         &self, rng: &mut (impl rand::RngCore + rand::CryptoRng),
         prologue: &[u8], remote_public: x25519::PublicKey,
         payload: Option<&[u8]>, response_buffer: &mut [u8],
-    ) -> Result<InitiatorHandshakeState, NoiseError>
-    {
+    ) -> Result<InitiatorHandshakeState, NoiseError> {
         // checks
         let payload_len = payload.map(<[u8]>::len).unwrap_or(0);
         let buffer_size_required = handshake_init_msg_len(payload_len);
@@ -364,8 +362,7 @@ impl NoiseConfig {
     pub fn finalize_connection(
         &self, handshake_state: InitiatorHandshakeState,
         received_message: &[u8],
-    ) -> Result<(Vec<u8>, NoiseSession), NoiseError>
-    {
+    ) -> Result<(Vec<u8>, NoiseSession), NoiseError> {
         // checks
         if received_message.len() > MAX_SIZE_NOISE_MSG {
             return Err(NoiseError::ReceivedMsgTooLarge);
@@ -520,8 +517,7 @@ impl NoiseConfig {
         &self, rng: &mut (impl rand::RngCore + rand::CryptoRng),
         handshake_state: ResponderHandshakeState, payload: Option<&[u8]>,
         response_buffer: &mut [u8],
-    ) -> Result<NoiseSession, NoiseError>
-    {
+    ) -> Result<NoiseSession, NoiseError> {
         // checks
         let payload_len = payload.map(<[u8]>::len).unwrap_or(0);
         let buffer_size_required = handshake_resp_msg_len(payload_len);
@@ -594,8 +590,7 @@ impl NoiseConfig {
             NoiseSession, // The created session
         ),
         NoiseError,
-    >
-    {
+    > {
         let (_, handshake_state, received_payload) =
             self.parse_client_init_message(prologue, received_message)?;
         let session = self.respond_to_client(
@@ -634,8 +629,7 @@ impl NoiseSession {
     fn new(
         write_key: Vec<u8>, read_key: Vec<u8>,
         remote_public_key: x25519::PublicKey,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             valid: true,
             remote_public_key,

@@ -11,23 +11,22 @@ extern crate rand;
 
 pub use self::transaction_pool_inner::TransactionStatus;
 use crate::{
-    block_data_manager::BlockDataManager, consensus::BestInformation,
-    machine::Machine, state::State, verification::VerificationConfig,
-};
-
-use crate::{
-    spec::TransitionsEpochHeight,
+    block_data_manager::BlockDataManager,
+    consensus::BestInformation,
     transaction_pool::{
         nonce_pool::TxWithReadyInfo, transaction_pool_inner::PendingReason,
     },
-    verification::{VerifyTxLocalMode, VerifyTxMode},
-    vm::Spec,
+    verification::{VerificationConfig, VerifyTxLocalMode, VerifyTxMode},
 };
 use account_cache::AccountCache;
+use cfx_executor::{
+    machine::Machine, spec::TransitionsEpochHeight, state::State,
+};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::{AddressWithSpace as Address, AllChainID, Space, H256, U256};
+use cfx_vm_types::Spec;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -161,8 +160,7 @@ impl TransactionPool {
     pub fn new(
         config: TxPoolConfig, verification_config: VerificationConfig,
         data_man: Arc<BlockDataManager>, machine: Arc<Machine>,
-    ) -> Self
-    {
+    ) -> Self {
         let genesis_hash = data_man.true_genesis.hash();
         let inner = TransactionPoolInner::new(
             config.capacity,
@@ -241,8 +239,7 @@ impl TransactionPool {
         Vec<Arc<SignedTransaction>>,
         Option<TransactionStatus>,
         usize,
-    )
-    {
+    ) {
         let inner = self.inner.read();
         let (txs, mut first_tx_status, pending_count) = inner
             .get_account_pending_transactions(
@@ -589,8 +586,7 @@ impl TransactionPool {
         &self, transaction: &TransactionWithSignature, basic_check: bool,
         chain_id: AllChainID, best_height: u64,
         transitions: &TransitionsEpochHeight, spec: &Spec,
-    ) -> Result<(), String>
-    {
+    ) -> Result<(), String> {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
         let mode = VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
 
@@ -652,8 +648,7 @@ impl TransactionPool {
     pub fn add_transaction_with_readiness_check(
         &self, inner: &mut TransactionPoolInner, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
-    ) -> Result<(), String>
-    {
+    ) -> Result<(), String> {
         inner.insert_transaction_with_readiness_check(
             account_cache,
             transaction,
@@ -688,6 +683,11 @@ impl TransactionPool {
     pub fn recycle_transactions(
         &self, transactions: Vec<Arc<SignedTransaction>>,
     ) {
+        trace!(
+            "To re-add transactions to transaction pool. \
+             transactions={:?}",
+            &transactions
+        );
         if transactions.is_empty() || !self.ready_for_mining() {
             // Fast return.
             return;
@@ -714,8 +714,7 @@ impl TransactionPool {
         &self, num_txs: usize, block_gas_limit: U256, evm_gas_limit: U256,
         block_size_limit: usize, mut best_epoch_height: u64,
         mut best_block_number: u64,
-    ) -> Vec<Arc<SignedTransaction>>
-    {
+    ) -> Vec<Arc<SignedTransaction>> {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         best_epoch_height += 1;
         // The best block number is not necessary an exact number.
@@ -866,8 +865,7 @@ impl TransactionPool {
     pub fn get_best_info_with_packed_transactions(
         &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,
-    ) -> (Arc<BestInformation>, U256, Vec<Arc<SignedTransaction>>)
-    {
+    ) -> (Arc<BestInformation>, U256, Vec<Arc<SignedTransaction>>) {
         // We do not need to hold the lock because it is fine for us to generate
         // blocks that are slightly behind the best state.
         // We do not want to stall the consensus thread.

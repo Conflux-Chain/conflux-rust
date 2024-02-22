@@ -13,7 +13,7 @@ use cfxcore::{
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
-    BlockHeaderBuilder, TransactionIndex, TransactionOutcome,
+    BlockHeaderBuilder, TransactionIndex, TransactionStatus,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -143,8 +143,7 @@ impl Block {
         consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
         tx_space_filter: Option<Space>,
-    ) -> Result<Self, String>
-    {
+    ) -> Result<Self, String> {
         let block_hash = b.block_header.hash();
 
         let epoch_number = consensus_inner
@@ -224,7 +223,7 @@ impl Block {
                                         execution_result.block_receipts.receipts[original_index - 1].accumulated_gas_used
                                     };
                                     match receipt.outcome_status {
-                                        TransactionOutcome::Success | TransactionOutcome::Failure => {
+                                        TransactionStatus::Success | TransactionStatus::Failure => {
                                             let tx_index = TransactionIndex {
                                                 block_hash: b.hash(),
                                                 real_index: original_index,
@@ -254,7 +253,7 @@ impl Block {
                                                 network,
                                             )
                                         }
-                                        TransactionOutcome::Skipped => {
+                                        TransactionStatus::Skipped => {
                                             Transaction::from_signed(tx, None, network)
                                         }
                                     }
@@ -437,8 +436,7 @@ impl Header {
     pub fn new(
         h: &PrimitiveBlockHeader, network: Network,
         consensus: SharedConsensusGraph,
-    ) -> Result<Self, String>
-    {
+    ) -> Result<Self, String> {
         let hash = h.hash();
 
         let epoch_number = consensus

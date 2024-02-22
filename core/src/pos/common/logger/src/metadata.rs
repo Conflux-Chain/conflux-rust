@@ -35,8 +35,7 @@ impl Metadata {
     pub const fn new(
         level: Level, target: &'static str, module_path: &'static str,
         file: &'static str, line: u32, location: &'static str,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             level,
             target,

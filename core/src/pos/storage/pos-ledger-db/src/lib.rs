@@ -283,8 +283,7 @@ impl PosLedgerDB {
     pub fn open<P: AsRef<Path> + Clone>(
         db_root_path: P, readonly: bool, prune_window: Option<u64>,
         rocksdb_config: RocksdbConfig,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         ensure!(
             prune_window.is_none() || !readonly,
             "Do not set prune_window when opening readonly.",
@@ -476,8 +475,7 @@ impl PosLedgerDB {
     fn save_transactions_impl(
         &self, txns_to_commit: &[TransactionToCommit], first_version: u64,
         mut cs: &mut ChangeSet,
-    ) -> Result<HashValue>
-    {
+    ) -> Result<HashValue> {
         let last_version = first_version + txns_to_commit.len() as u64 - 1;
 
         // Account state updates. Gather account state root hashes
@@ -594,8 +592,7 @@ impl DbReader for PosLedgerDB {
     fn get_transactions(
         &self, start_version: Version, limit: u64, ledger_version: Version,
         fetch_events: bool,
-    ) -> Result<TransactionListWithProof>
-    {
+    ) -> Result<TransactionListWithProof> {
         gauged_api("get_transactions", || {
             error_if_too_many_requested(limit, MAX_LIMIT)?;
 
@@ -686,8 +683,7 @@ impl DbReader for PosLedgerDB {
     fn get_txn_by_account(
         &self, address: AccountAddress, seq_num: u64, ledger_version: Version,
         fetch_events: bool,
-    ) -> Result<Option<TransactionWithProof>>
-    {
+    ) -> Result<Option<TransactionWithProof>> {
         gauged_api("get_txn_by_account", || {
             self.transaction_store
                 .lookup_transaction_by_account(
@@ -709,8 +705,7 @@ impl DbReader for PosLedgerDB {
     fn get_state_proof_with_ledger_info(
         &self, known_version: u64,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
-    ) -> Result<(EpochChangeProof, AccumulatorConsistencyProof)>
-    {
+    ) -> Result<(EpochChangeProof, AccumulatorConsistencyProof)> {
         gauged_api("get_state_proof_with_ledger_info", || {
             let ledger_info = ledger_info_with_sigs.ledger_info();
             ensure!(
@@ -768,8 +763,7 @@ impl DbReader for PosLedgerDB {
     fn get_account_state_with_proof(
         &self, address: AccountAddress, version: Version,
         ledger_version: Version,
-    ) -> Result<AccountStateWithProof>
-    {
+    ) -> Result<AccountStateWithProof> {
         gauged_api("get_account_state_with_proof", || {
             ensure!(
                 version <= ledger_version,
@@ -900,8 +894,7 @@ impl DbWriter for PosLedgerDB {
             HashValue,
             LedgerInfoWithSignatures,
         )>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         gauged_api("save_transactions", || {
             let num_txns = txns_to_commit.len() as u64;
             // ledger_info_with_sigs could be None if we are doing state

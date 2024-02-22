@@ -3,12 +3,12 @@ use super::{
     garbage_collector::GarbageCollector,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
-use crate::{
-    machine::Machine,
-    verification::{PackingCheckResult, VerificationConfig},
-};
+
+use crate::verification::{PackingCheckResult, VerificationConfig};
+use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
     address_util::AddressUtil, AddressWithSpace, Space, SpaceMap, H256, U128,
@@ -108,8 +108,7 @@ impl DeferredPool {
     fn packing_sampler<'a, F: Fn(&SignedTransaction) -> PackingCheckResult>(
         &'a mut self, space: Space, block_gas_limit: U256,
         block_size_limit: usize, tx_num_limit: usize, validity: F,
-    ) -> (Vec<Arc<SignedTransaction>>, U256, usize)
-    {
+    ) -> (Vec<Arc<SignedTransaction>>, U256, usize) {
         if block_gas_limit.is_zero()
             || block_size_limit == 0
             || tx_num_limit == 0
@@ -373,8 +372,7 @@ impl DeferredPool {
     fn get_pending_transactions<'a>(
         &'a self, addr: &AddressWithSpace, start_nonce: &U256,
         local_nonce: &U256, local_balance: &U256,
-    ) -> (Vec<&'a TxWithReadyInfo>, Option<PendingReason>)
-    {
+    ) -> (Vec<&'a TxWithReadyInfo>, Option<PendingReason>) {
         match self.buckets.get(addr) {
             Some(bucket) => {
                 let pending_txs = bucket.get_pending_transactions(start_nonce);
@@ -571,8 +569,7 @@ impl TransactionPoolInner {
     pub fn new(
         capacity: usize, max_packing_batch_gas_limit: usize,
         max_packing_batch_size: usize, packing_pool_degree: u8,
-    ) -> Self
-    {
+    ) -> Self {
         let config = PackingPoolConfig::new(
             max_packing_batch_gas_limit.into(),
             max_packing_batch_size,
@@ -795,8 +792,7 @@ impl TransactionPoolInner {
         &mut self, transaction: Arc<SignedTransaction>, packed: bool,
         force: bool, state_nonce_and_balance: (U256, U256),
         (sponsored_gas, sponsored_storage): (U256, u64),
-    ) -> InsertResult
-    {
+    ) -> InsertResult {
         let _timer = MeterTimer::time_func(
             TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER.as_ref(),
         );
@@ -903,8 +899,7 @@ impl TransactionPoolInner {
         Vec<Arc<SignedTransaction>>,
         Option<TransactionStatus>,
         usize,
-    )
-    {
+    ) {
         let (local_nonce, local_balance) = self
             .get_local_nonce_and_balance(address)
             .unwrap_or((U256::from(0), U256::from(0)));
@@ -1065,8 +1060,7 @@ impl TransactionPoolInner {
         block_size_limit: usize, best_epoch_height: u64,
         best_block_number: u64, verification_config: &VerificationConfig,
         machine: &Machine,
-    ) -> Vec<Arc<SignedTransaction>>
-    {
+    ) -> Vec<Arc<SignedTransaction>> {
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         if num_txs == 0 {
             return packed_transactions;
@@ -1162,8 +1156,7 @@ impl TransactionPoolInner {
     pub fn insert_transaction_with_readiness_check(
         &mut self, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
-    ) -> Result<(), String>
-    {
+    ) -> Result<(), String> {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let (sponsored_gas, sponsored_storage) =
             self.get_sponsored_gas_and_storage(account_cache, &transaction)?;
@@ -1363,8 +1356,7 @@ mod test_transaction_pool_inner {
     fn new_test_tx_with_read_info(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
         packed: bool,
-    ) -> TxWithReadyInfo
-    {
+    ) -> TxWithReadyInfo {
         let transaction = new_test_tx(sender, nonce, gas_price, value);
         TxWithReadyInfo::new(transaction, packed, U256::from(0), 0)
     }

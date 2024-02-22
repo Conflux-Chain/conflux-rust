@@ -3,17 +3,16 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_bytes::Bytes;
+use cfx_executor::{
+    executive::{ExecutiveContext, TransactOptions},
+    machine::{new_machine_with_builtin, VmFactory},
+    state::State,
+};
 use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
 use cfx_statedb::StateDb;
 use cfx_storage::{state_manager::StateIndex, StorageManagerTrait};
 use cfx_types::{H256, U256};
-use cfxcore::{
-    executive::{Executive, TransactOptions},
-    machine::new_machine_with_builtin,
-    state::State,
-    vm::Env,
-    vm_factory::VmFactory,
-};
+use cfx_vm_types::Env;
 use cfxkey::{Generator, KeyPair, Random};
 use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -49,6 +48,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     let machine =
         new_machine_with_builtin(Default::default(), VmFactory::new(1024 * 32));
     let env = Env {
+        chain_id: machine.params().chain_id_map(0),
         number: 0,
         author: Default::default(),
         timestamp: Default::default(),
@@ -89,8 +89,9 @@ fn txexe_benchmark(c: &mut Criterion) {
 
             b.iter(|| {
                 state.clear();
-                let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-                let options = TransactOptions::exec_with_no_tracing();
+                let ex =
+                    ExecutiveContext::new(&mut state, &env, &machine, &spec);
+                let options = TransactOptions::default();
                 ex.transact(&tx, options).unwrap();
             })
         })

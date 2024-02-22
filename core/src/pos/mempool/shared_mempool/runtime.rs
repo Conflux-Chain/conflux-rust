@@ -55,8 +55,7 @@ pub(crate) fn start_shared_mempool(
     db_with_cache: Arc<CachedPosLedgerDB>,
     validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
-)
-{
+) {
     let peer_manager =
         Arc::new(PeerManager::new(config.base.role, config.mempool.clone()));
 
@@ -97,8 +96,7 @@ pub fn bootstrap(
     consensus_requests: Receiver<ConsensusRequest>,
     state_sync_requests: Receiver<CommitNotification>,
     mempool_reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-) -> Runtime
-{
+) -> Runtime {
     let runtime = Builder::new_multi_thread()
         .thread_name("shared-mem")
         .enable_all()

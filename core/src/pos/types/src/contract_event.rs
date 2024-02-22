@@ -113,8 +113,7 @@ impl EventWithProof {
     pub fn new(
         transaction_version: Version, event_index: u64, event: ContractEvent,
         proof: EventProof,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             transaction_version,
             event_index,
@@ -136,8 +135,7 @@ impl EventWithProof {
     pub fn verify(
         &self, ledger_info: &LedgerInfo, event_key: &EventKey,
         _sequence_number: u64, transaction_version: Version, event_index: u64,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         ensure!(
             self.event.key() == event_key,
             "Event key ({}) not expected ({}).",

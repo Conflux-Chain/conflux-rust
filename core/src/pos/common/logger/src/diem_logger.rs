@@ -112,7 +112,8 @@ impl LogEntry {
                 let mut backtrace = Backtrace::new();
                 let mut frames = backtrace.frames().to_vec();
                 if frames.len() > 3 {
-                    frames.drain(0..3); // Remove the first 3 unnecessary frames to simplify
+                    frames.drain(0..3); // Remove the first 3 unnecessary frames
+                                        // to simplify
                                         // backtrace
                 }
                 backtrace = frames.into();

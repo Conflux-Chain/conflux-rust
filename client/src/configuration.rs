@@ -9,6 +9,7 @@ use parking_lot::RwLock;
 use rand::Rng;
 
 use cfx_addr::{cfx_addr_decode, Network};
+use cfx_executor::{machine::Machine, spec::CommonParams};
 use cfx_internal_common::{
     ChainIdParams, ChainIdParamsInner, ChainIdParamsOneChainInner,
 };
@@ -35,8 +36,6 @@ use cfxcore::{
     consensus_internal_parameters::*,
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
-    machine::Machine,
-    spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,

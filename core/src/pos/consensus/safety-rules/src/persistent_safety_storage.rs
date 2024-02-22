@@ -52,8 +52,7 @@ impl PersistentSafetyStorage {
         mut internal_store: Storage, author: Author,
         private_key: ConsensusPrivateKey, waypoint: Waypoint,
         enable_cached_safety_data: bool,
-    ) -> Self
-    {
+    ) -> Self {
         let geneisis_safety_data = SafetyData::new(1, 0, 0, None);
         let safety_data = Self::initialize_(
             &mut internal_store,
@@ -132,8 +131,7 @@ impl PersistentSafetyStorage {
     fn initialize_(
         internal_store: &mut Storage, safety_data: SafetyData, author: Author,
         waypoint: Waypoint,
-    ) -> Result<SafetyData, Error>
-    {
+    ) -> Result<SafetyData, Error> {
         // Attempting to re-initialize existing storage. This can happen in
         // environments like cluster test. Rather than be rigid here,
         // leave it up to the developer to detect inconsistencies or why

@@ -17,6 +17,7 @@ use primitives::pos::{NodeId, PosBlockId};
 use storage_interface::{DBReaderForPoW, DbReader};
 
 use crate::{
+    genesis_block::GenesisPosState,
     pos::{
         consensus::{
             network::{
@@ -32,10 +33,10 @@ use crate::{
         pos::{start_pos_consensus, PosDropHandle},
         protocol::sync_protocol::HotStuffSynchronizationProtocol,
     },
-    spec::genesis::GenesisPosState,
     sync::ProtocolConfiguration,
     ConsensusGraph,
 };
+
 use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::block::Block;
 use diem_config::config::SafetyRulesTestConfig;
@@ -122,8 +123,7 @@ impl PosHandler {
     pub fn new(
         network: Option<Arc<NetworkService>>, conf: PosConfiguration,
         enable_height: u64,
-    ) -> Self
-    {
+    ) -> Self {
         let mut pos = Self {
             pos: OnceCell::new(),
             network: Mutex::new(network.clone()),
@@ -405,8 +405,7 @@ impl PosHandler {
     pub fn force_propose(
         &self, round: U64, parent_block_id: H256,
         payload: Vec<TransactionPayload>,
-    ) -> anyhow::Result<()>
-    {
+    ) -> anyhow::Result<()> {
         self.test_command_sender
             .lock()
             .as_mut()
@@ -511,8 +510,7 @@ impl PosConnection {
     pub fn new(
         pos_storage: Arc<PosLedgerDB>, consensus_db: Arc<ConsensusDB>,
         pos_cache_db: Arc<CachedPosLedgerDB>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             pos_storage,
             consensus_db,

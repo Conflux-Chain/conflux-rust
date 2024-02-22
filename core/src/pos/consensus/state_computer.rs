@@ -56,8 +56,7 @@ impl StateComputer for ExecutionProxy {
         // The parent block id.
         parent_block_id: HashValue,
         catch_up_mode: bool,
-    ) -> Result<StateComputeResult, ExecutionError>
-    {
+    ) -> Result<StateComputeResult, ExecutionError> {
         fail_point!("consensus::compute", |_| {
             Err(ExecutionError::InternalError {
                 error: "Injected error in compute".into(),
@@ -85,8 +84,7 @@ impl StateComputer for ExecutionProxy {
     async fn commit(
         &self, block_ids: Vec<HashValue>,
         finality_proof: LedgerInfoWithSignatures,
-    ) -> Result<(), ExecutionError>
-    {
+    ) -> Result<(), ExecutionError> {
         let (committed_txns, reconfig_events) = monitor!(
             "commit_block",
             self.executor

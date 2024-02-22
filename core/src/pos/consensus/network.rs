@@ -98,8 +98,7 @@ impl ConsensusNetworkSender {
     pub fn new(
         author: Author, network_sender: NetworkSender,
         validators: ValidatorVerifier,
-    ) -> Self
-    {
+    ) -> Self {
         ConsensusNetworkSender {
             author,
             network_sender,
@@ -115,8 +114,7 @@ impl ConsensusNetworkSender {
     pub async fn request_block(
         &mut self, retrieval_request: BlockRetrievalRequest, from: Author,
         timeout: Duration,
-    ) -> anyhow::Result<BlockRetrievalResponse>
-    {
+    ) -> anyhow::Result<BlockRetrievalResponse> {
         ensure!(from != self.author, "Retrieve block from self");
 
         let peer_hash = self

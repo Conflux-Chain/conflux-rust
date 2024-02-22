@@ -187,8 +187,7 @@ proptest! {
 fn set_up(
     path: &impl AsRef<Path>,
     ledger_infos_with_sigs: &[LedgerInfoWithSignatures],
-) -> PosLedgerDB
-{
+) -> PosLedgerDB {
     let db = PosLedgerDB::new_for_test(path);
     let store = &db.ledger_store;
 

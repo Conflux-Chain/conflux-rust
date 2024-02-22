@@ -20,8 +20,7 @@ pub fn create_unsigned_txn(
     txn_expiration_duration_secs: i64, /* for compatibility with UTC's
                                         * timestamp. */
     chain_id: ChainId,
-) -> RawTransaction
-{
+) -> RawTransaction {
     RawTransaction::new(
         sender_address,
         payload,
@@ -40,8 +39,7 @@ pub fn create_user_txn<T: TransactionSigner + ?Sized>(
     txn_expiration_duration_secs: i64, /* for compatibility with UTC's
                                         * timestamp. */
     chain_id: ChainId,
-) -> Result<SignedTransaction>
-{
+) -> Result<SignedTransaction> {
     let raw_txn = create_unsigned_txn(
         payload,
         sender_address,

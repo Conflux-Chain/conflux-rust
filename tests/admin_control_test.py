@@ -7,6 +7,7 @@ from web3.contract import Contract
 
 class AdminControlTest(ConfluxTestFrameworkForContract):
     def set_test_params(self):
+        super().set_test_params()
         self.num_nodes = 1
 
     def run_test(self):

@@ -101,8 +101,7 @@ impl StateManager {
         maybe_delta_mpt_key_padding: Option<&DeltaMptKeyPadding>,
         epoch_id: &EpochId, delta_root: Option<NodeRefDeltaMpt>,
         maybe_height: Option<u64>, maybe_delta_trie_height: Option<u32>,
-    ) -> Result<Option<StateTrees>>
-    {
+    ) -> Result<Option<StateTrees>> {
         let intermediate_trie_root = match &maybe_intermediate_trie {
             None => None,
             Some(mpt) => {
@@ -154,8 +153,7 @@ impl StateManager {
     pub fn get_state_trees(
         &self, state_index: &StateIndex, try_open: bool,
         open_mpt_snapshot: bool,
-    ) -> Result<Option<StateTrees>>
-    {
+    ) -> Result<Option<StateTrees>> {
         let maybe_intermediate_mpt;
         let maybe_intermediate_mpt_key_padding;
         let delta_mpt;
@@ -256,8 +254,7 @@ impl StateManager {
     pub fn get_state_trees_for_next_epoch(
         &self, parent_state_index: &StateIndex, try_open: bool,
         open_mpt_snapshot: bool,
-    ) -> Result<Option<StateTrees>>
-    {
+    ) -> Result<Option<StateTrees>> {
         let maybe_height = parent_state_index.maybe_height.map(|x| x + 1);
 
         let snapshot;
@@ -614,8 +611,7 @@ impl StateManager {
         intermediate_trie_root: Option<NodeRefDeltaMpt>,
         intermediate_epoch_id: &EpochId, new_height: u64,
         recover_mpt_during_construct_pivot_state: bool,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         StorageManager::check_make_register_snapshot_background(
             self.storage_manager.clone(),
             intermediate_epoch_id.clone(),
@@ -631,8 +627,7 @@ impl StateManager {
     pub fn get_state_no_commit_inner(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
         open_mpt_snapshot: bool,
-    ) -> Result<Option<State>>
-    {
+    ) -> Result<Option<State>> {
         let maybe_state_trees =
             self.get_state_trees(&state_index, try_open, open_mpt_snapshot)?;
         match maybe_state_trees {
@@ -696,8 +691,7 @@ impl StateManager {
     pub fn get_state_for_next_epoch_inner(
         self: &Arc<Self>, parent_epoch_id: StateIndex, open_mpt_snapshot: bool,
         recover_mpt_during_construct_pivot_state: bool,
-    ) -> Result<Option<State>>
-    {
+    ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees_for_next_epoch(
             &parent_epoch_id,
             /* try_open = */ false,
@@ -728,8 +722,7 @@ impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
         space: Option<Space>,
-    ) -> Result<Option<Box<dyn StateTrait>>>
-    {
+    ) -> Result<Option<Box<dyn StateTrait>>> {
         let maybe_state_trees =
             self.get_state_trees(&state_index, try_open, false);
         // If there is an error, we will continue to search for an available
@@ -801,8 +794,7 @@ impl StateManagerTrait for StateManager {
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
         recover_mpt_during_construct_pivot_state: bool,
-    ) -> Result<Option<Box<dyn StateTrait>>>
-    {
+    ) -> Result<Option<Box<dyn StateTrait>>> {
         let mut parent_epoch = parent_epoch_id.epoch_id;
         let parent_height = parent_epoch_id.maybe_height;
         let state = self.get_state_for_next_epoch_inner(

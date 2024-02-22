@@ -6,6 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    genesis_block::GenesisPosState,
     pos::{
         consensus::{
             consensus_provider::start_consensus,
@@ -26,9 +27,9 @@ use crate::{
         },
         state_sync::bootstrapper::StateSyncBootstrapper,
     },
-    spec::genesis::GenesisPosState,
     sync::ProtocolConfiguration,
 };
+
 use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::db::FakeLedgerBlockDB;
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
@@ -93,8 +94,7 @@ pub fn start_pos_consensus(
     mempool_network_receiver: MemPoolNetworkReceivers,
     test_command_receiver: channel::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
-) -> PosDropHandle
-{
+) -> PosDropHandle {
     crash_handler::setup_panic_handler();
 
     let mut logger = diem_logger::Logger::new();
@@ -189,8 +189,7 @@ pub fn setup_pos_environment(
     mempool_network_receiver: MemPoolNetworkReceivers,
     test_command_receiver: channel::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
-) -> PosDropHandle
-{
+) -> PosDropHandle {
     // TODO(lpl): Handle port conflict.
     // let metrics_port = node_config.debug_interface.metrics_server_port;
     // let metric_host = node_config.debug_interface.address.clone();

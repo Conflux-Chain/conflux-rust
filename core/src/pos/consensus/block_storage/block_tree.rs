@@ -88,8 +88,7 @@ impl BlockTree {
         root: ExecutedBlock, root_quorum_cert: QuorumCert,
         root_ledger_info: QuorumCert, max_pruned_blocks_in_mem: usize,
         highest_timeout_cert: Option<Arc<TimeoutCertificate>>,
-    ) -> Self
-    {
+    ) -> Self {
         assert_eq!(
             root.id(),
             root_ledger_info.commit_info().id(),
@@ -320,8 +319,7 @@ impl BlockTree {
     pub(super) fn process_pruned_blocks(
         &mut self, root_id: HashValue,
         mut newly_pruned_blocks: VecDeque<HashValue>,
-    )
-    {
+    ) {
         assert!(self.block_exists(&root_id));
         // Update the next root
         self.root_id = root_id;

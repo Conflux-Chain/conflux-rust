@@ -138,16 +138,14 @@ impl<PosT: PrimitiveNum, ValueType: Ord + Clone>
     fn set_handle(
         &mut self, value: &mut TrivialValueWithHeapHandle<ValueType, PosT>,
         pos: PosT,
-    )
-    {
+    ) {
         value.set_handle(pos);
     }
 
     fn set_handle_final(
         &mut self, value: &mut TrivialValueWithHeapHandle<ValueType, PosT>,
         pos: PosT,
-    )
-    {
+    ) {
         value.set_handle(pos);
     }
 
@@ -221,8 +219,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, pos: PosT, hole: &mut Hole<ValueType>,
         value_util: &mut ValueUtilT,
-    ) -> PosT
-    {
+    ) -> PosT {
         let array_pos = self.array.len();
 
         self.array.set_len(array_pos + 1);
@@ -310,8 +307,7 @@ impl<
     fn new(
         heap_base: *mut ValueType, pos: PosT, _heap_size: PosT,
         key_comparison: KeyType, _value_util: &mut ValueUtilT,
-    ) -> Self
-    {
+    ) -> Self {
         let pointer_pos = unsafe { heap_base.offset(pos.into()) };
 
         Self {
@@ -379,8 +375,7 @@ impl<
     fn new(
         heap_base: *mut ValueType, pos: PosT, heap_size: PosT,
         key_comparison: KeyType, _value_util: &mut ValueUtilT,
-    ) -> Self
-    {
+    ) -> Self {
         let pointer_pos = unsafe { heap_base.offset(pos.into()) };
 
         Self {
@@ -488,8 +483,7 @@ impl<ValueType> Hole<ValueType> {
     >(
         &mut self, pointer_new_pos: *mut ValueType, pos: PosT,
         value_updater: &mut ValueUtilT,
-    )
-    {
+    ) {
         unsafe {
             value_updater.set_handle(&mut *pointer_new_pos, pos);
             ptr::copy_nonoverlapping(
@@ -547,8 +541,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, hole: Hole<ValueType>, replaced: *mut ValueType,
         value_util: &mut ValueUtilT,
-    )
-    {
+    ) {
         ptr::copy_nonoverlapping(
             self.get_unchecked_mut(PosT::from(0)),
             replaced,
@@ -637,8 +630,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, pos: PosT, hole: Hole<ValueType>, replaced: *mut ValueType,
         value_util: &mut ValueUtilT,
-    )
-    {
+    ) {
         ptr::copy_nonoverlapping(self.get_unchecked_mut(pos), replaced, 1);
 
         if value_util.get_key_for_comparison(self.get_unchecked_mut(pos))
@@ -658,8 +650,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, pos: PosT, value: &mut ValueType,
         value_util: &mut ValueUtilT,
-    )
-    {
+    ) {
         let hole = {
             let replaced = self.get_unchecked_mut(pos);
             let hole = Hole::new_from_value_ptr_read(replaced, value);
@@ -750,8 +741,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     pub fn sift_up_with_hole<ValueUtilT: HeapValueUtil<ValueType, PosT>>(
         &mut self, pos: PosT, hole: Hole<ValueType>,
         value_util: &mut ValueUtilT,
-    )
-    {
+    ) {
         let up_order_checker = UpOrderChecker::new(
             self.array.as_mut_ptr(),
             pos,
@@ -765,8 +755,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     pub fn sift_down_with_hole<ValueUtilT: HeapValueUtil<ValueType, PosT>>(
         &mut self, pos: PosT, hole: Hole<ValueType>,
         value_util: &mut ValueUtilT,
-    )
-    {
+    ) {
         let down_order_checker = DownOrderChecker::new(
             self.array.as_mut_ptr(),
             pos,
@@ -784,8 +773,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
     >(
         &mut self, mut pos: PosT, mut hole: Hole<ValueType>,
         mut order_checker: OrderCheckerT, value_util: &mut ValueUtilT,
-    )
-    {
+    ) {
         while let Some(pointer_new_pos) =
             order_checker.calculate_next(value_util)
         {
@@ -840,8 +828,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         &mut self, pos: PosT,
         maybe_order_checker: Option<(OrderCheckerT, *mut ValueType)>,
         value_util: &mut ValueUtilT,
-    ) -> bool
-    {
+    ) -> bool {
         match maybe_order_checker {
             None => false,
             Some((order_checker, pointer_new_pos)) => {

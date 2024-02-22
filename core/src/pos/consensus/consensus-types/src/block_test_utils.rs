@@ -186,8 +186,7 @@ pub fn placeholder_ledger_info() -> LedgerInfo {
 pub fn gen_test_certificate(
     signers: Vec<&ValidatorSigner>, block: BlockInfo, parent_block: BlockInfo,
     committed_block: Option<BlockInfo>,
-) -> QuorumCert
-{
+) -> QuorumCert {
     let vote_data = VoteData::new(block, parent_block);
     let ledger_info = match committed_block {
         Some(info) => LedgerInfo::new(info, vote_data.hash()),
@@ -214,8 +213,7 @@ pub fn placeholder_certificate_for_block(
     signers: Vec<&ValidatorSigner>, certified_block_id: HashValue,
     certified_block_round: u64, certified_parent_block_id: HashValue,
     certified_parent_block_round: u64,
-) -> QuorumCert
-{
+) -> QuorumCert {
     // Assuming executed state to be Genesis state.
     let genesis_ledger_info = LedgerInfo::mock_genesis(None);
     let vote_data = VoteData::new(

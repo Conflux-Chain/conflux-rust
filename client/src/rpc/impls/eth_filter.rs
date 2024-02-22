@@ -99,8 +99,7 @@ impl EthFilterClient {
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
         epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Executor,
         poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
-    ) -> Self
-    {
+    ) -> Self {
         let filter_client = EthFilterClient {
             consensus,
             tx_pool,
@@ -117,8 +116,7 @@ impl EthFilterClient {
     fn start_epochs_loop(
         &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
         executor: Executor,
-    )
-    {
+    ) {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
         let consensus = self.consensus.clone();
@@ -252,8 +250,7 @@ impl Filterable for EthFilterClient {
     fn epochs_since_last_request(
         &self, last_epoch_number: u64,
         recent_reported_epochs: &VecDeque<(u64, Vec<H256>)>,
-    ) -> RpcResult<(u64, Vec<(u64, Vec<H256>)>)>
-    {
+    ) -> RpcResult<(u64, Vec<(u64, Vec<H256>)>)> {
         let last_block = if let Some((num, hash)) =
             recent_reported_epochs.front().cloned()
         {

@@ -67,8 +67,7 @@ pub fn compute_node_merkle(
 fn compute_path_merkle(
     compressed_path: CompressedPathRef, without_first_nibble: bool,
     node_merkle: &MerkleHash,
-) -> MerkleHash
-{
+) -> MerkleHash {
     assert_eq!(
         without_first_nibble,
         CompressedPathRaw::second_nibble(compressed_path.path_mask())
@@ -111,8 +110,7 @@ fn compute_path_merkle(
 pub fn compute_merkle(
     compressed_path: CompressedPathRef, path_without_first_nibble: bool,
     children_merkles: MaybeMerkleTableRef, maybe_value: Option<&[u8]>,
-) -> MerkleHash
-{
+) -> MerkleHash {
     let node_merkle = compute_node_merkle(children_merkles, maybe_value);
     let path_merkle = compute_path_merkle(
         compressed_path,

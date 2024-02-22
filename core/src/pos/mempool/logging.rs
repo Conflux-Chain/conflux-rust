@@ -51,8 +51,7 @@ impl TxnsLog {
     pub fn add_full_metadata(
         &mut self, account: AccountAddress, hash: HashValue, status: &str,
         timestamp: Option<SystemTime>,
-    )
-    {
+    ) {
         self.txns
             .push((account, hash, Some(status.to_string()), timestamp));
     }

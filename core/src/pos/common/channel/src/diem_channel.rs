@@ -100,8 +100,7 @@ impl<K: Eq + Hash + Clone, M> Sender<K, M> {
     pub fn push_with_feedback(
         &self, key: K, message: M,
         status_ch: Option<oneshot::Sender<ElementStatus<M>>>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let mut shared_state = self.shared_state.lock();
         ensure!(!shared_state.receiver_dropped, "Channel is closed");
         debug_assert!(shared_state.num_senders > 0);
@@ -210,8 +209,7 @@ impl<K: Eq + Hash + Clone, M> FusedStream for Receiver<K, M> {
 pub fn new<K: Eq + Hash + Clone, M>(
     queue_style: QueueStyle, max_queue_size_per_key: usize,
     counters: Option<&'static IntCounterVec>,
-) -> (Sender<K, M>, Receiver<K, M>)
-{
+) -> (Sender<K, M>, Receiver<K, M>) {
     let max_queue_size_per_key = NonZeroUsize!(
         max_queue_size_per_key,
         "diem_channel cannot be of size 0"

@@ -13,8 +13,7 @@ use proptest::{collection::vec, prelude::*};
 fn verify(
     store: &LedgerStore, txn_infos: &[TransactionInfo], first_version: Version,
     ledger_version: Version, root_hash: HashValue,
-)
-{
+) {
     txn_infos
         .iter()
         .enumerate()

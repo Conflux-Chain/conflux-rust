@@ -14,8 +14,8 @@ static ALLOWED_CURRENCY_IDENTIFIERS: &str = r"[A-Z][A-Z0-9]*";
 fn simple_allowed_currency_codes() {
     let acceptable_names = vec!["A", "AB", "ABC", "A1B", "AB1", "A"];
     let unacceptable_names = vec![
-        "a", "Ab", "AbC", "A1b", "aB1", "1AB", "1", "", "´t", "©", "AB†",
-        "ƒA", "AB_1", "A_B", "_A", "_a", "_A_1", "0",
+        "a", "Ab", "AbC", "A1b", "aB1", "1AB", "1", "", "´t", "©", "AB†", "ƒA",
+        "AB_1", "A_B", "_A", "_a", "_A_1", "0",
     ];
 
     assert!(

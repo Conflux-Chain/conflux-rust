@@ -29,7 +29,7 @@ use tempdir::TempDir;
 use cfx_types::H256;
 use cfxcore::{
     consensus::pos_handler::save_initial_nodes_to_file,
-    spec::genesis::{
+    genesis_block::{
         register_transaction, GenesisPosNodeInfo, GenesisPosState,
     },
 };

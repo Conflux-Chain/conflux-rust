@@ -41,8 +41,7 @@ impl VMExecutor for FakeVM {
     fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
         catch_up_mode: bool,
-    ) -> Result<Vec<TransactionOutput>, VMStatus>
-    {
+    ) -> Result<Vec<TransactionOutput>, VMStatus> {
         let mut vm_outputs = Vec::new();
         for transaction in transactions {
             // Execute the transaction

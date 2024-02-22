@@ -157,8 +157,7 @@ impl RecoveryManager {
         epoch_state: EpochState, network: ConsensusNetworkSender,
         storage: Arc<dyn PersistentLivenessStorage>,
         state_computer: Arc<dyn StateComputer>, last_committed_round: Round,
-    ) -> Self
-    {
+    ) -> Self {
         RecoveryManager {
             epoch_state,
             network,
@@ -258,8 +257,7 @@ impl RoundManager {
         chain_id: ChainId, is_voting: bool, election_control: Arc<AtomicBool>,
         consensus_private_key: Option<ConfigKey<ConsensusPrivateKey>>,
         vrf_private_key: Option<ConfigKey<ConsensusVRFPrivateKey>>,
-    ) -> Self
-    {
+    ) -> Self {
         counters::OP_COUNTERS
             .gauge("sync_only")
             .set(sync_only as i64);
@@ -639,8 +637,7 @@ impl RoundManager {
     pub async fn sync_to_ledger_info(
         &mut self, ledger_info: &LedgerInfoWithSignatures,
         peer_id: AccountAddress,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         diem_debug!("sync_to_ledger_info: {:?}", ledger_info);
         let mut retriever = self.create_block_retriever(peer_id);
         if !self
@@ -680,8 +677,7 @@ impl RoundManager {
     pub async fn ensure_round_and_sync_up(
         &mut self, message_round: Round, sync_info: &SyncInfo, author: Author,
         help_remote: bool,
-    ) -> anyhow::Result<bool>
-    {
+    ) -> anyhow::Result<bool> {
         if message_round < self.round_state.current_round() {
             return Ok(false);
         }
@@ -1319,8 +1315,7 @@ impl RoundManager {
     pub async fn force_vote_proposal(
         &mut self, block_id: HashValue, author: Author,
         private_key: &ConsensusPrivateKey,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let proposal = self
             .block_store
             .get_block(block_id)
@@ -1352,8 +1347,7 @@ impl RoundManager {
     pub async fn force_propose(
         &mut self, round: Round, parent_block_id: HashValue,
         payload: Vec<TransactionPayload>, private_key: &ConsensusPrivateKey,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let parent_qc = self
             .block_store
             .get_quorum_cert_for_block(parent_block_id)

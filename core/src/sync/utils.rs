@@ -34,22 +34,20 @@ use crate::{
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
-    machine::new_machine_with_builtin,
+    genesis_block::{genesis_block, GenesisPosState},
     pow::{self, PowComputer, ProofOfWorkConfig},
-    spec::genesis::{genesis_block, GenesisPosState},
     statistics::Statistics,
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::TxPoolConfig,
     verification::VerificationConfig,
-    vm_factory::VmFactory,
     ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
+use cfx_executor::machine::{new_machine_with_builtin, VmFactory};
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
     diff: U256, block_weight: u32, adaptive: bool,
-) -> (H256, Block)
-{
+) -> (H256, Block) {
     let mut b = BlockHeaderBuilder::new();
     let mut author = Address::zero();
     author.set_user_account_type_bits();
@@ -83,8 +81,7 @@ pub fn create_simple_block_impl(
 pub fn create_simple_block(
     sync: Arc<SynchronizationGraph>, parent_hash: H256, ref_hashes: Vec<H256>,
     height: u64, block_weight: u32, adaptive: bool,
-) -> (H256, Block)
-{
+) -> (H256, Block) {
     //    sync.consensus.wait_for_generation(&parent_hash);
     // let parent_header = sync.block_header_by_hash(&parent_hash).unwrap();
     //    let exp_diff = sync.expected_difficulty(&parent_hash);
@@ -183,8 +180,7 @@ pub fn initialize_data_manager(
 pub fn initialize_synchronization_graph_with_data_manager(
     data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
     era_epoch_count: u64, pow: Arc<PowComputer>, vm: VmFactory,
-) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
-{
+) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>) {
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
     let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_verifier = Arc::new(PosVerifier::new(
@@ -305,8 +301,7 @@ pub fn initialize_synchronization_graph(
     Arc<ConsensusGraph>,
     Arc<BlockDataManager>,
     Arc<Block>,
-)
-{
+) {
     let vm = VmFactory::new(1024 * 32);
     let pow = Arc::new(PowComputer::new(true));
 

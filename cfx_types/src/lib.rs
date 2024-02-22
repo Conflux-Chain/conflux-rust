@@ -193,6 +193,14 @@ pub mod space_util {
     }
 }
 
+pub fn maybe_address(address: &Address) -> Option<Address> {
+    if address.is_zero() {
+        None
+    } else {
+        Some(*address)
+    }
+}
+
 /// The KECCAK hash of an empty bloom filter (0x00 * 256)
 pub const KECCAK_EMPTY_BLOOM: H256 = H256([
     0xd3, 0x97, 0xb3, 0xb0, 0x43, 0xd8, 0x7f, 0xcd, 0x6f, 0xad, 0x12, 0x91,

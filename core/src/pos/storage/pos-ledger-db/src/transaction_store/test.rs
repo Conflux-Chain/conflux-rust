@@ -160,8 +160,7 @@ fn init_store(
     mut universe: AccountInfoUniverse,
     gens: Vec<(Index, SignatureCheckedTransactionGen)>,
     store: &TransactionStore,
-) -> Vec<Transaction>
-{
+) -> Vec<Transaction> {
     let txns = gens
         .into_iter()
         .map(|(index, gen)| {

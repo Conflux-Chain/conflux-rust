@@ -199,8 +199,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 fn make_apply_outcome<TX: PackingPoolTransaction, T>(
     old_info: PackInfo, new_info: PackInfo,
     node: &mut Node<PackingPoolMap<TX>>, config: &PackingPoolConfig, out: T,
-) -> ApplyOpOutcome<T>
-{
+) -> ApplyOpOutcome<T> {
     let change_gas_price = old_info.first_gas_price != new_info.first_gas_price;
     let change_gas_limit = old_info.total_gas_limit != new_info.total_gas_limit;
 

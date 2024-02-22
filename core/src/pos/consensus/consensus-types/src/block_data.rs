@@ -218,8 +218,7 @@ impl BlockData {
     pub fn new_for_testing(
         epoch: u64, round: Round, timestamp_usecs: u64,
         quorum_cert: QuorumCert, block_type: BlockType,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             epoch,
             round,
@@ -261,8 +260,7 @@ impl BlockData {
     pub fn new_proposal(
         payload: Payload, author: Author, round: Round, timestamp_usecs: u64,
         quorum_cert: QuorumCert,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             epoch: quorum_cert.certified_block().epoch(),
             round,

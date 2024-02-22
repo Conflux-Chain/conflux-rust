@@ -78,8 +78,7 @@ impl GetChunkResponse {
     pub fn new(
         response_li: ResponseLedgerInfo,
         txn_list_with_proof: TransactionListWithProof,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             response_li,
             txn_list_with_proof,

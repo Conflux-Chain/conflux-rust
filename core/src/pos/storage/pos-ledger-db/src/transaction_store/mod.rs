@@ -38,8 +38,7 @@ impl TransactionStore {
     pub fn lookup_transaction_by_account(
         &self, address: AccountAddress, sequence_number: u64,
         ledger_version: Version,
-    ) -> Result<Option<Version>>
-    {
+    ) -> Result<Option<Version>> {
         if let Some(version) = self
             .db
             .get::<TransactionByAccountSchema>(&(address, sequence_number))?

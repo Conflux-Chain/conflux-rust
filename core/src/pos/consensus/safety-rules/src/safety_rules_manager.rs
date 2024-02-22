@@ -113,8 +113,7 @@ impl SafetyRulesManager {
         export_consensus_key: bool,
         vrf_private_key: Option<ConsensusVRFPrivateKey>,
         author: AccountAddress,
-    ) -> Self
-    {
+    ) -> Self {
         let safety_rules = SafetyRules::new(
             storage,
             verify_vote_proposal_signature,
@@ -139,8 +138,7 @@ impl SafetyRulesManager {
     pub fn new_serializer(
         storage: PersistentSafetyStorage, verify_vote_proposal_signature: bool,
         export_consensus_key: bool, author: AccountAddress,
-    ) -> Self
-    {
+    ) -> Self {
         let safety_rules = SafetyRules::new(
             storage,
             verify_vote_proposal_signature,
@@ -160,8 +158,7 @@ impl SafetyRulesManager {
     pub fn new_thread(
         storage: PersistentSafetyStorage, verify_vote_proposal_signature: bool,
         export_consensus_key: bool, timeout_ms: u64,
-    ) -> Self
-    {
+    ) -> Self {
         let thread = ThreadService::new(
             storage,
             verify_vote_proposal_signature,

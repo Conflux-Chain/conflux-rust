@@ -59,8 +59,7 @@ impl PeerState {
     pub fn new(
         id: NodeId, peer_hash: H256,
         pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             id,
             peer_hash,
@@ -71,8 +70,7 @@ impl PeerState {
     pub fn set_pos_public_key(
         &mut self,
         pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    )
-    {
+    ) {
         self.pos_public_key = pos_public_key
     }
 
@@ -92,8 +90,7 @@ impl Peers {
     pub fn insert(
         &self, peer: H256, id: NodeId,
         pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    )
-    {
+    ) {
         self.0.write().entry(peer).or_insert(Arc::new(RwLock::new(
             PeerState::new(id, peer, pos_public_key),
         )));
@@ -188,8 +185,7 @@ impl HotStuffSynchronizationProtocol {
         own_node_hash: H256, consensus_network_task: ConsensusNetworkTask,
         mempool_network_task: MempoolNetworkTask,
         protocol_config: ProtocolConfiguration,
-    ) -> Self
-    {
+    ) -> Self {
         let request_manager = Arc::new(RequestManager::new(&protocol_config));
         HotStuffSynchronizationProtocol {
             protocol_config,
@@ -206,8 +202,7 @@ impl HotStuffSynchronizationProtocol {
         protocol_config: ProtocolConfiguration, own_node_hash: H256,
         consensus_network_task: ConsensusNetworkTask,
         mempool_network_task: MempoolNetworkTask, peers: Arc<Peers>,
-    ) -> Self
-    {
+    ) -> Self {
         let request_manager = Arc::new(RequestManager::new(&protocol_config));
         HotStuffSynchronizationProtocol {
             protocol_config,
@@ -250,8 +245,7 @@ impl HotStuffSynchronizationProtocol {
     fn simultaneous_dial_tie_breaking(
         own_peer_id: H256, remote_peer_id: H256, existing_origin: bool,
         new_origin: bool,
-    ) -> bool
-    {
+    ) -> bool {
         match (existing_origin, new_origin) {
             // If the remote dials while an existing connection is open, the
             // older connection is dropped.
@@ -396,8 +390,7 @@ impl HotStuffSynchronizationProtocol {
     fn dispatch_message(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId,
         msg: &[u8],
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         let peer_hash = if !io.is_peer_self(peer) {
             if *peer == NodeId::default() {
@@ -521,8 +514,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         &self, io: &dyn NetworkContext, node_id: &NodeId,
         _peer_protocol_version: ProtocolVersion,
         pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    )
-    {
+    ) {
         // TODO(linxi): maintain peer protocol version
         let new_originated = io.get_peer_connection_origin(node_id);
         if new_originated.is_none() {

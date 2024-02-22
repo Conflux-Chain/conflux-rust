@@ -42,8 +42,7 @@ impl MempoolProxy {
         consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
         poll_count: u64, mempool_txn_pull_timeout_ms: u64,
         mempool_executed_txn_timeout_ms: u64,
-    ) -> Self
-    {
+    ) -> Self {
         assert!(
             poll_count > 0,
             "poll_count = 0 won't pull any txns from mempool"
@@ -59,8 +58,7 @@ impl MempoolProxy {
     async fn pull_internal(
         &self, max_size: u64, exclude_txns: Vec<TransactionExclusion>,
         parent_block_id: HashValue, validators: ValidatorVerifier,
-    ) -> Result<Payload, MempoolError>
-    {
+    ) -> Result<Payload, MempoolError> {
         let (callback, callback_rcv) = oneshot::channel();
         let req = ConsensusRequest::GetBlockRequest(
             max_size,
@@ -105,8 +103,7 @@ impl TxnManager for MempoolProxy {
     async fn pull_txns(
         &self, max_size: u64, exclude_payloads: Vec<&Payload>,
         parent_block_id: HashValue, validators: ValidatorVerifier,
-    ) -> Result<Payload, MempoolError>
-    {
+    ) -> Result<Payload, MempoolError> {
         fail_point!("consensus::pull_txns", |_| {
             Err(anyhow::anyhow!("Injected error in pull_txns").into())
         });

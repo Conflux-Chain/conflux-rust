@@ -53,8 +53,7 @@ pub(crate) fn execute_broadcast(
     peer: NodeId, backoff: bool, smp: &mut SharedMempool,
     scheduled_broadcasts: &mut FuturesUnordered<ScheduledBroadcast>,
     broadcasting_peers: &mut HashSet<NodeId>, executor: Handle,
-)
-{
+) {
     diem_trace!("execute_broadcast starts: peer={}", peer);
     let peer_manager = &smp.peer_manager.clone();
     peer_manager.execute_broadcast(peer.clone(), backoff, smp);
@@ -91,8 +90,7 @@ pub(crate) fn execute_broadcast(
 pub(crate) async fn process_client_transaction_submission(
     smp: SharedMempool, transaction: SignedTransaction,
     callback: oneshot::Sender<Result<SubmissionStatus>>, timer: HistogramTimer,
-)
-{
+) {
     timer.stop_and_record();
     let _timer = counters::process_txn_submit_latency_timer(
         counters::CLIENT_LABEL,
@@ -122,8 +120,7 @@ pub(crate) async fn process_transaction_broadcast(
     smp: SharedMempool, transactions: Vec<SignedTransaction>,
     request_id: Vec<u8>, timeline_state: TimelineState, peer: NodeId,
     timer: HistogramTimer,
-)
-{
+) {
     diem_trace!("process_transaction_broadcast starts: peer={}", peer);
     timer.stop_and_record();
     /*let _timer = counters::process_txn_submit_latency_timer(
@@ -219,8 +216,7 @@ fn is_txn_retryable(result: SubmissionStatus) -> bool {
 pub(crate) async fn process_incoming_transactions(
     smp: &SharedMempool, transactions: Vec<SignedTransaction>,
     timeline_state: TimelineState,
-) -> Vec<SubmissionStatusBundle>
-{
+) -> Vec<SubmissionStatusBundle> {
     let mut statuses = vec![];
 
     let start_storage_read = Instant::now();
@@ -373,8 +369,7 @@ pub(crate) async fn process_state_sync_request(
 pub(crate) async fn process_consensus_request(
     db: Arc<CachedPosLedgerDB>, mempool: &Mutex<CoreMempool>,
     req: ConsensusRequest,
-)
-{
+) {
     // Start latency timer
     let start_time = Instant::now();
     diem_debug!(
@@ -458,8 +453,7 @@ pub(crate) async fn process_consensus_request(
 async fn commit_txns(
     mempool: &Mutex<CoreMempool>, transactions: Vec<CommittedTransaction>,
     block_timestamp_usecs: u64, is_rejected: bool,
-)
-{
+) {
     let mut pool = mempool.lock();
 
     for transaction in transactions {
@@ -481,8 +475,7 @@ async fn commit_txns(
 pub(crate) async fn process_config_update(
     config_update: OnChainConfigPayload,
     _validator: Arc<RwLock<TransactionValidator>>,
-)
-{
+) {
     diem_trace!(LogSchema::event_log(
         LogEntry::ReconfigUpdate,
         LogEvent::Process

@@ -53,8 +53,7 @@ impl<C: TreapMapConfig> Node<C> {
     pub fn new(
         key: C::SearchKey, value: C::Value, sort_key: C::SortKey,
         weight: C::Weight, priority: u64,
-    ) -> Node<C>
-    {
+    ) -> Node<C> {
         Node {
             key,
             value,
@@ -137,8 +136,7 @@ impl<C: TreapMapConfig> Node<C> {
     fn process_update_result<U: TreapNodeUpdate<C>>(
         maybe_node: &mut Option<Box<Node<C>>>,
         result: OpResult<C, U::Ret, U::DeleteRet>,
-    ) -> (U::Ret, bool, bool)
-    {
+    ) -> (U::Ret, bool, bool) {
         match result {
             OpResult::Noop(ret) => (ret, false, false),
             OpResult::Updated { update_weight, ret } => {

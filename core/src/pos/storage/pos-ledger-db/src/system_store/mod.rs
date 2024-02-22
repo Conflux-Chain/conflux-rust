@@ -34,8 +34,7 @@ impl SystemStore {
     pub fn bump_ledger_counters(
         &self, first_version: Version, last_version: Version,
         cs: &mut ChangeSet,
-    ) -> Result<LedgerCounters>
-    {
+    ) -> Result<LedgerCounters> {
         assert!(first_version <= last_version);
 
         let mut counters = if first_version > 0 {

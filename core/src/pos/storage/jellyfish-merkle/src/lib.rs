@@ -305,8 +305,7 @@ where
     fn put(
         key: HashValue, value: V, version: Version,
         tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let nibble_path = NibblePath::new(key.to_vec());
 
         // Get the root node. If this is the first operation, it would get the
@@ -336,8 +335,7 @@ where
     fn insert_at(
         node_key: NodeKey, version: Version, nibble_iter: &mut NibbleIterator,
         value: V, tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<(NodeKey, Node<V>)>
-    {
+    ) -> Result<(NodeKey, Node<V>)> {
         let node = tree_cache.get_node(&node_key)?;
         match node {
             Node::Internal(internal_node) => Self::insert_at_internal_node(
@@ -384,8 +382,7 @@ where
         mut node_key: NodeKey, internal_node: InternalNode, version: Version,
         nibble_iter: &mut NibbleIterator, value: V,
         tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<(NodeKey, Node<V>)>
-    {
+    ) -> Result<(NodeKey, Node<V>)> {
         // We always delete the existing internal node here because it will not
         // be referenced anyway since this version.
         tree_cache.delete_node(&node_key, false /* is_leaf */);
@@ -447,8 +444,7 @@ where
         mut node_key: NodeKey, existing_leaf_node: LeafNode<V>,
         version: Version, nibble_iter: &mut NibbleIterator, value: V,
         tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<(NodeKey, Node<V>)>
-    {
+    ) -> Result<(NodeKey, Node<V>)> {
         // We are on a leaf node but trying to insert another node, so we may
         // diverge. We always delete the existing leaf node here because
         // it will not be referenced anyway since this version.
@@ -574,8 +570,7 @@ where
     fn create_leaf_node(
         node_key: NodeKey, nibble_iter: &NibbleIterator, value: V,
         tree_cache: &mut TreeCache<R, V>,
-    ) -> Result<(NodeKey, Node<V>)>
-    {
+    ) -> Result<(NodeKey, Node<V>)> {
         // Get the underlying bytes of nibble_iter which must be a key, i.e.,
         // hashed account address with `HashValue::LENGTH` bytes.
         let new_leaf_node = Node::new_leaf(

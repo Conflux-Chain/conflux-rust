@@ -142,8 +142,7 @@ impl ReceivedTransactionContainer {
     pub fn contains_short_id(
         &self, fixed_bytes: TxPropagateId, random_byte: u8, key1: u64,
         key2: u64,
-    ) -> bool
-    {
+    ) -> bool {
         let inner = &self.inner;
         TX_FOR_COMPARE_METER.mark(1);
 
@@ -325,8 +324,7 @@ impl InflightPendingTransactionItem {
         fixed_byte_part: TxPropagateId, random_byte_part: u8,
         window_index: usize, key1: u64, key2: u64, index: usize,
         peer_id: NodeId,
-    ) -> Self
-    {
+    ) -> Self {
         InflightPendingTransactionItem {
             fixed_byte_part,
             random_byte_part,
