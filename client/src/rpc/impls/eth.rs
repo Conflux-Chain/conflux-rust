@@ -60,8 +60,7 @@ impl EthHandler {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-    ) -> Self
-    {
+    ) -> Self {
         EthHandler {
             config,
             consensus,
@@ -1067,8 +1066,7 @@ impl Eth for EthHandler {
     fn account_pending_transactions(
         &self, address: H160, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
-    ) -> jsonrpc_core::Result<AccountPendingTransactions>
-    {
+    ) -> jsonrpc_core::Result<AccountPendingTransactions> {
         info!("RPC Request: eth_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
               address, maybe_start_nonce, maybe_limit);
 

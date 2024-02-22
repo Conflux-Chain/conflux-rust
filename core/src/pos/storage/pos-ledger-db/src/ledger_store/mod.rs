@@ -382,8 +382,7 @@ impl LedgerStore {
     pub fn get_transaction_range_proof(
         &self, start_version: Option<Version>, num_txns: u64,
         ledger_version: Version,
-    ) -> Result<TransactionAccumulatorRangeProof>
-    {
+    ) -> Result<TransactionAccumulatorRangeProof> {
         Accumulator::get_range_proof(
             self,
             ledger_version + 1, /* num_leaves */
@@ -409,8 +408,7 @@ impl LedgerStore {
     pub fn put_transaction_infos(
         &self, first_version: u64, txn_infos: &[TransactionInfo],
         cs: &mut ChangeSet,
-    ) -> Result<HashValue>
-    {
+    ) -> Result<HashValue> {
         // write txn_info
         (first_version..first_version + txn_infos.len() as u64)
             .zip_eq(txn_infos.iter())
@@ -436,8 +434,7 @@ impl LedgerStore {
     pub fn put_ledger_info(
         &self, ledger_info_with_sigs: &LedgerInfoWithSignatures,
         cs: &mut ChangeSet,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         let ledger_info = ledger_info_with_sigs.ledger_info();
         diem_debug!("put_ledger_info: {:?}", ledger_info);
 
@@ -553,8 +550,7 @@ impl LedgerStore {
     pub fn put_ledger_info_by_voted_block(
         &self, voted_block_id: &HashValue,
         ledger_info: &LedgerInfoWithSignatures, cs: &mut ChangeSet,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         cs.batch
             .put::<LedgerInfoByVotedBlockSchema>(voted_block_id, ledger_info)?;
         Ok(())

@@ -39,8 +39,7 @@ pub fn execute(
     storage: PersistentSafetyStorage, listen_addr: SocketAddr,
     verify_vote_proposal_signature: bool, export_consensus_key: bool,
     network_timeout_ms: u64, vrf_private_key: Option<ConsensusVRFPrivateKey>,
-)
-{
+) {
     let mut safety_rules = SafetyRules::new(
         storage,
         verify_vote_proposal_signature,
@@ -68,8 +67,7 @@ pub fn execute(
 fn process_one_message(
     network_server: &mut NetworkServer,
     serializer_service: &mut SerializerService,
-) -> Result<(), Error>
-{
+) -> Result<(), Error> {
     let request = network_server.read()?;
     let response = serializer_service.handle_message(request)?;
     network_server.write(&response)?;

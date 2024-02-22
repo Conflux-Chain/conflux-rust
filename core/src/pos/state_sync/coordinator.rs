@@ -106,8 +106,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
         /* network_senders: HashMap<NodeNetworkId, StateSyncSender>, */
         node_config: &NodeConfig, waypoint: Waypoint, executor_proxy: T,
         initial_state: SyncState,
-    ) -> Result<Self, Error>
-    {
+    ) -> Result<Self, Error> {
         diem_info!(LogSchema::event_log(
             LogEntry::Waypoint,
             LogEvent::Initialize
@@ -161,8 +160,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
         mut self,
         /* network_handles: Vec<(NodeNetworkId, StateSyncSender,
          * StateSyncEvents)>, */
-    )
-    {
+    ) {
         diem_info!(LogSchema::new(LogEntry::RuntimeStart));
         let mut interval = IntervalStream::new(interval(
             Duration::from_millis(self.config.tick_interval_ms),
@@ -426,8 +424,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     fn notify_consensus_of_commit_response(
         &self, commit_response: CommitResponse,
         callback: Option<oneshot::Sender<Result<CommitResponse, Error>>>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         if let Some(callback) = callback {
             if let Err(error) = callback.send(Ok(commit_response)) {
                 counters::COMMIT_FLOW_FAIL
@@ -453,8 +450,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
         commit_callback: Option<oneshot::Sender<Result<CommitResponse, Error>>>,
         reconfiguration_events: Vec<ContractEvent>,
         chunk_sender: Option<&PeerNetworkId>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         diem_debug!(
             "process_commit_notification: {} events",
             reconfiguration_events.len()
@@ -837,8 +833,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     ) -> Result<
         (LedgerInfoWithSignatures, Option<LedgerInfoWithSignatures>),
         Error,
-    >
-    {
+    > {
         // If the request's epoch is in the past, `target_li` will be set to the
         // end-of-epoch LI for that epoch
         let target_li =
@@ -862,8 +857,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     fn process_request_for_waypoint(
         &mut self, peer: PeerNetworkId, request: GetChunkRequest,
         waypoint_version: Version,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let mut limit =
             std::cmp::min(request.limit, self.config.max_chunk_limit);
         if self.local_state.committed_version() < waypoint_version {
@@ -926,8 +920,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     fn deliver_chunk(
         &mut self, peer: PeerNetworkId, known_version: u64,
         response_li: ResponseLedgerInfo, limit: u64,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         /*
         let txns = self.executor_proxy.get_chunk(
             known_version,
@@ -1222,8 +1215,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     fn verify_response_with_target_and_highest(
         &mut self, target_li: &LedgerInfoWithSignatures,
         highest_li: &Option<LedgerInfoWithSignatures>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         if !self.is_initialized() {
             return Err(Error::ReceivedWrongChunkType(
                 "Received a progressive ledger info, but we're not initialized!".into(),
@@ -1263,8 +1255,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     fn verify_response_with_waypoint_li(
         &mut self, waypoint_li: &LedgerInfoWithSignatures,
         end_of_epoch_li: &Option<LedgerInfoWithSignatures>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         if self.is_initialized() || self.sync_request.is_some() {
             return Err(Error::ReceivedWrongChunkType(
                 "Received a waypoint ledger info, but we're already initialized!".into(),
@@ -1320,8 +1311,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     fn calculate_new_known_version_and_epoch(
         &mut self, txn_list_with_proof: TransactionListWithProof,
         ledger_info: Option<LedgerInfoWithSignatures>,
-    ) -> Result<(u64, u64), Error>
-    {
+    ) -> Result<(u64, u64), Error> {
         let new_version = self
             .local_state
             .synced_version()
@@ -1558,8 +1548,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
         &mut self, txn_list_with_proof: TransactionListWithProof,
         target: LedgerInfoWithSignatures,
         intermediate_end_of_epoch_li: Option<LedgerInfoWithSignatures>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let target_epoch = target.ledger_info().epoch();
         let target_version = target.ledger_info().version();
         let local_epoch = self.local_state.committed_epoch();
@@ -1601,8 +1590,8 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     ///   request was sent.
     fn check_progress(&mut self) -> Result<(), Error> {
         if self.is_consensus_executing() {
-            return Ok(()); // No need to check progress or issue any requests (consensus is
-                           // running).
+            return Ok(()); // No need to check progress or issue any requests
+                           // (consensus is running).
         }
 
         // Check if the sync request has timed out (i.e., if we aren't
@@ -1736,8 +1725,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     fn deliver_subscription(
         &mut self, peer: PeerNetworkId, request_info: PendingRequestInfo,
         local_version: u64,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let (target_li, highest_li) = self.calculate_target_and_highest_li(
             request_info.request_epoch,
             request_info.target_li,

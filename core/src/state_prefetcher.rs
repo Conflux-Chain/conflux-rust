@@ -5,8 +5,7 @@
 pub fn prefetch_accounts<'a>(
     prefetcher: &'a ExecutionStatePrefetcher, task_epoch_id: EpochId,
     state: &State, account_vec: Vec<&'a Address>,
-) -> PrefetchTaskHandle<'a>
-{
+) -> PrefetchTaskHandle<'a> {
     // transmute the references so that they can be passed into threads.
     let state = unsafe { std::mem::transmute::<&State, &'static State>(state) };
     let accounts = unsafe {
@@ -50,8 +49,7 @@ impl PrefetcherThreadWorker {
         task_queue_sender: mpsc::Sender<
             Option<(EpochId, u64, &'static State, &'static [&'static Address])>,
         >,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             task_queue_sender: Mutex::new(task_queue_sender),
             cancel_task_id: Default::default(),
@@ -71,8 +69,7 @@ impl PrefetcherThreadWorker {
     fn send_new_task(
         &self, task_epoch_id: EpochId, task_id: u64, state: &'static State,
         addresses: &'static [&'static Address],
-    )
-    {
+    ) {
         self.task_queue_sender
             .lock()
             .send(Some((task_epoch_id, task_id, state, addresses)))
@@ -87,8 +84,7 @@ impl PrefetcherThreadWorker {
     fn prefetch_accounts(
         &self, task_id: u64, state: &'static State,
         accounts: &'static [&'static Address],
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         self.cancel_task_id.store(0, Ordering::Relaxed);
         for address in accounts {
             let cancel_task_id = self.cancel_task_id.load(Ordering::Relaxed);
@@ -110,8 +106,7 @@ impl PrefetcherThreadWorker {
             Option<(EpochId, u64, &'static State, &'static [&'static Address])>,
         >,
         task_finish_signal: mpsc::Sender<()>,
-    )
-    {
+    ) {
         while let Ok(task) = task_queue.recv() {
             match task {
                 None => {
@@ -189,8 +184,7 @@ impl ExecutionStatePrefetcher {
     pub fn add_task(
         &self, task_epoch_id: EpochId, state: &'static State,
         accounts: &'static [&'static Address],
-    ) -> Result<(), SendError<bool>>
-    {
+    ) -> Result<(), SendError<bool>> {
         self.task_sender.lock().send(PrefetchTaskKey(
             task_epoch_id,
             state,
@@ -236,8 +230,7 @@ impl ExecutionStatePrefetcher {
     fn run(
         &self, mut finish_signal_receivers: Vec<mpsc::Receiver<()>>,
         task_receiver: CancelableTaskReceiver<PrefetchTaskKey>,
-    )
-    {
+    ) {
         let mut current_task_id = 0u64;
         loop {
             match task_receiver.recv() {

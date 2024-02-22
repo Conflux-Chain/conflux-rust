@@ -47,8 +47,7 @@ impl<'a> EstimationContext<'a> {
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec,
-    ) -> Self
-    {
+    ) -> Self {
         EstimationContext {
             state,
             env,
@@ -269,8 +268,7 @@ impl<'a> EstimationContext<'a> {
     fn enact_executed_by_estimation_request(
         &self, tx: SignedTransaction, mut executed: Executed,
         overwrite_storage_limit: Option<u64>, request: &EstimateRequest,
-    ) -> DbResult<(ExecutionOutcome, EstimateExt)>
-    {
+    ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         let estimated_storage_limit =
             overwrite_storage_limit.unwrap_or(storage_limit(&executed));
         let estimated_gas_limit = estimated_gas_limit(&executed);

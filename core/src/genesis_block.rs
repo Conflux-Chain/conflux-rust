@@ -106,8 +106,7 @@ pub fn genesis_block(
     test_net_version: Address, initial_difficulty: U256, machine: Arc<Machine>,
     need_to_execute: bool, genesis_chain_id: Option<u32>,
     initial_nodes: &Option<GenesisPosState>,
-) -> Block
-{
+) -> Block {
     let mut state =
         State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
             .expect("Failed to initialize state");
@@ -410,8 +409,7 @@ pub fn genesis_block(
 pub fn register_transaction(
     bls_priv_key: BLSPrivateKey, vrf_pub_key: EcVrfPublicKey, power: u64,
     genesis_chain_id: u32, legacy: bool,
-) -> NativeTransaction
-{
+) -> NativeTransaction {
     /// TODO: test this function with new internal contracts.
     use bls_signatures::{
         sigma_protocol, PrivateKey as BlsPrivKey, PublicKey as BlsPubKey,

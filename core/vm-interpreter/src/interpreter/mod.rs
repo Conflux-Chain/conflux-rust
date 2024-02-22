@@ -308,8 +308,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     pub fn new(
         mut params: ActionParams, cache: Arc<SharedCache>, spec: &Spec,
         depth: usize,
-    ) -> Interpreter<Cost>
-    {
+    ) -> Interpreter<Cost> {
         let reader = CodeReader::new(
             params.code.take().expect("VM always called with code; qed"),
         );
@@ -604,8 +603,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn verify_instruction(
         &self, context: &dyn vm::Context, _instruction: Instruction,
         info: &InstructionInfo,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         let spec = context.spec();
 
         // Mark: this is the place to check if opcode activated. If not, here
@@ -670,8 +668,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn exec_instruction(
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
-    ) -> vm::Result<InstructionResult<Cost>>
-    {
+    ) -> vm::Result<InstructionResult<Cost>> {
         trace!("exec instruction: {:?}", instruction);
         match instruction {
             instructions::JUMP => {

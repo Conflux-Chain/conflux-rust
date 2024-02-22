@@ -55,8 +55,7 @@ pub(crate) async fn coordinator(
         (),
         OnChainConfigPayload,
     >,
-)
-{
+) {
     diem_info!(LogSchema::event_log(
         LogEntry::CoordinatorRuntime,
         LogEvent::Start
@@ -123,8 +122,7 @@ async fn handle_client_event(
     callback: oneshot::Sender<
         anyhow::Result<(MempoolStatus, Option<DiscardedVMStatus>)>,
     >,
-)
-{
+) {
     diem_debug!("handle_client_event");
     // This timer measures how long it took for the bounded executor to
     // *schedule* the task.
@@ -160,8 +158,7 @@ fn handle_state_sync_request(smp: &mut SharedMempool, msg: CommitNotification) {
 async fn handle_mempool_reconfig_event(
     smp: &mut SharedMempool, bounded_executor: &BoundedExecutor,
     config_update: OnChainConfigPayload,
-)
-{
+) {
     diem_info!(LogSchema::event_log(
         LogEntry::ReconfigUpdate,
         LogEvent::Received
@@ -182,8 +179,7 @@ async fn handle_mempool_reconfig_event(
 async fn handle_mempool_sync_msg(
     bounded_executor: &BoundedExecutor, smp: &mut SharedMempool, peer: NodeId,
     msg: MempoolSyncMsg,
-)
-{
+) {
     counters::shared_mempool_event_inc("message");
     match msg {
         MempoolSyncMsg::BroadcastTransactionsRequest {

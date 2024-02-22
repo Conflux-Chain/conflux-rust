@@ -152,8 +152,7 @@ impl NoncePoolMap {
     pub fn continous_ready_nonce(
         &self, start_nonce: &U256, start_weight: NoncePoolWeight,
         rest_balance: U256,
-    ) -> U256
-    {
+    ) -> U256 {
         let ret = self.0.search(|left_weight, node| {
             let weight =
                 NoncePoolWeight::consolidate(left_weight, &node.weight);

@@ -26,8 +26,7 @@ fn to_blocks_to_commit(
         LedgerInfo,
         Vec<ValidatorSigner>,
     )>,
-) -> Result<Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>>
-{
+) -> Result<Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>> {
     // Use temporary DiemDB and STORE LEVEL APIs to calculate hashes on a per
     // transaction basis. Result is used to test the batch PUBLIC API for
     // saving everything, i.e. `save_transactions()`

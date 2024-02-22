@@ -109,8 +109,7 @@ impl SynchronizationPhaseManager {
         sync_state: Arc<SynchronizationState>,
         sync_graph: SharedSynchronizationGraph,
         state_sync: Arc<SnapshotChunkSync>, consensus: Arc<ConsensusGraph>,
-    ) -> Self
-    {
+    ) -> Self {
         let sync_manager = SynchronizationPhaseManager {
             inner: RwLock::new(SynchronizationPhaseManagerInner::new(
                 initial_phase_type,
@@ -157,8 +156,7 @@ impl SynchronizationPhaseManager {
     pub fn change_phase_to(
         &self, phase_type: SyncPhaseType, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         self.inner.write().change_phase_to(phase_type);
         let current_phase = self.get_current_phase();
         current_phase.start(io, sync_handler);
@@ -167,8 +165,7 @@ impl SynchronizationPhaseManager {
     pub fn try_initialize(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         if !self.inner.write().try_initialize() {
             // if not initialized
             let current_phase = self.get_current_phase();
@@ -201,8 +198,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
     fn next(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    ) -> SyncPhaseType
-    {
+    ) -> SyncPhaseType {
         if self.recovered.load(AtomicOrdering::SeqCst) == false {
             return self.phase_type();
         }
@@ -214,8 +210,7 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
     fn start(
         &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         info!("start phase {:?}", self.name());
         self.recovered.store(false, AtomicOrdering::SeqCst);
         let recovered = self.recovered.clone();
@@ -251,8 +246,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
     fn next(
         &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
-    ) -> SyncPhaseType
-    {
+    ) -> SyncPhaseType {
         let median_epoch = match self.syn.median_epoch_from_normal_peers() {
             None => {
                 return if self.syn.allow_phase_change_without_peer() {
@@ -280,8 +274,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
     fn start(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         info!("start phase {:?}", self.name());
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
@@ -318,8 +311,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     fn next(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    ) -> SyncPhaseType
-    {
+    ) -> SyncPhaseType {
         if self.has_state.load(AtomicOrdering::SeqCst) {
             return SyncPhaseType::CatchUpFillBlockBodyPhase;
         }
@@ -346,8 +338,7 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
     fn start(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         info!("start phase {:?}", self.name());
         sync_handler.graph.inner.write().locked_for_catchup = true;
         while sync_handler.graph.is_consensus_worker_busy() {
@@ -411,8 +402,7 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
     fn next(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    ) -> SyncPhaseType
-    {
+    ) -> SyncPhaseType {
         if self.graph.is_fill_block_completed() {
             if self.graph.complete_filling_block_bodies() {
                 return SyncPhaseType::CatchUpSyncBlock;
@@ -428,8 +418,7 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
     fn start(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         info!("start phase {:?}", self.name());
         {
             let full_state_start_height = self
@@ -513,8 +502,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     fn next(
         &self, _io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    ) -> SyncPhaseType
-    {
+    ) -> SyncPhaseType {
         // FIXME: use target_height instead.
         let median_epoch = match self.syn.median_epoch_from_normal_peers() {
             None => {
@@ -543,8 +531,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     fn start(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         info!("start phase {:?}", self.name());
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
@@ -575,8 +562,7 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     fn next(
         &self, _io: &dyn NetworkContext,
         _sync_handler: &SynchronizationProtocolHandler,
-    ) -> SyncPhaseType
-    {
+    ) -> SyncPhaseType {
         // FIXME: handle the case where we need to switch back phase
         self.phase_type()
     }
@@ -584,8 +570,7 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     fn start(
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         info!("start phase {:?}", self.name());
         sync_handler.request_missing_terminals(io);
     }

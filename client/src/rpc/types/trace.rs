@@ -308,8 +308,7 @@ impl LocalizedTransactionTrace {
     pub fn from(
         traces: TransactionExecTraces, transaction_hash: H256,
         transaction_position: usize, network: Network,
-    ) -> Result<Self, String>
-    {
+    ) -> Result<Self, String> {
         let traces: Vec<ExecTrace> = traces.into();
 
         Ok(LocalizedTransactionTrace {
@@ -344,8 +343,7 @@ impl LocalizedBlockTrace {
         traces: BlockExecTraces, block_hash: H256, epoch_hash: H256,
         epoch_number: u64, transactions: &Vec<Arc<SignedTransaction>>,
         network: Network,
-    ) -> Result<Self, String>
-    {
+    ) -> Result<Self, String> {
         let traces: Vec<TransactionExecTraces> = traces.into();
         if traces.len() != transactions.len() {
             bail!("trace and tx hash list length unmatch!");

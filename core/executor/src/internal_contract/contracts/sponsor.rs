@@ -58,8 +58,7 @@ impl SimpleExecutionTrait for SetSponsorForGas {
     fn execute_inner(
         &self, inputs: (Address, U256), params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         set_sponsor_for_gas(inputs.0, inputs.1, params, context)
     }
 }
@@ -73,8 +72,7 @@ impl SimpleExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         set_sponsor_for_collateral(input, params, context)
     }
 }
@@ -88,8 +86,7 @@ impl UpfrontPaymentTrait for AddPrivilege {
     fn upfront_gas_payment(
         &self, input: &Vec<Address>, _: &ActionParams,
         context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         Ok(U256::from(context.spec.sstore_reset_gas) * input.len())
     }
 }
@@ -98,8 +95,7 @@ impl SimpleExecutionTrait for AddPrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if !context.is_contract_address(&params.sender)? {
             return Err(vm::Error::InternalContract(
                 "normal account is not allowed to set commission_privilege"
@@ -125,8 +121,7 @@ impl UpfrontPaymentTrait for RemovePrivilege {
     fn upfront_gas_payment(
         &self, input: &Vec<Address>, _: &ActionParams,
         context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         Ok(U256::from(context.spec.sstore_reset_gas) * input.len())
     }
 }
@@ -135,8 +130,7 @@ impl SimpleExecutionTrait for RemovePrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if !context.is_contract_address(&params.sender)? {
             return Err(vm::Error::InternalContract(
                 "normal account is not allowed to set commission_privilege"
@@ -163,8 +157,7 @@ impl SimpleExecutionTrait for GetSponsorForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<Address>
-    {
+    ) -> vm::Result<Address> {
         Ok(context.state.sponsor_for_gas(&input)?.unwrap_or_default())
     }
 }
@@ -178,8 +171,7 @@ impl SimpleExecutionTrait for GetSponsoredBalanceForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(context.state.sponsor_balance_for_gas(&input)?)
     }
 }
@@ -193,8 +185,7 @@ impl SimpleExecutionTrait for GetSponsoredGasFeeUpperBound {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(context.state.sponsor_gas_bound(&input)?)
     }
 }
@@ -208,8 +199,7 @@ impl SimpleExecutionTrait for GetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<Address>
-    {
+    ) -> vm::Result<Address> {
         Ok(context
             .state
             .sponsor_for_collateral(&input)?
@@ -226,8 +216,7 @@ impl SimpleExecutionTrait for GetSponsoredBalanceForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(context.state.sponsor_balance_for_collateral(&input)?)
     }
 }
@@ -241,8 +230,7 @@ impl SimpleExecutionTrait for IsWhitelisted {
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<bool>
-    {
+    ) -> vm::Result<bool> {
         if context.is_contract_address(&contract)? {
             Ok(context.state.check_contract_whitelist(&contract, &user)?)
         } else {
@@ -260,8 +248,7 @@ impl SimpleExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
         &self, contract: Address, _: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<bool>
-    {
+    ) -> vm::Result<bool> {
         if context.is_contract_address(&contract)? {
             Ok(context
                 .state
@@ -281,8 +268,7 @@ impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
         _: &ActionParams, context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         Ok(U256::from(context.spec.sstore_reset_gas) * addresses.len())
     }
 }
@@ -291,8 +277,7 @@ impl SimpleExecutionTrait for AddPrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if context.is_contract_address(&contract)?
             && &params.sender == &context.state.admin(&contract)?
         {
@@ -317,8 +302,7 @@ impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
         _: &ActionParams, context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         Ok(U256::from(context.spec.sstore_reset_gas) * addresses.len())
     }
 }
@@ -327,8 +311,7 @@ impl SimpleExecutionTrait for RemovePrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if context.is_contract_address(&contract)?
             && &params.sender == &context.state.admin(&contract)?
         {
@@ -353,8 +336,7 @@ impl SimpleExecutionTrait for AvailableStoragePoints {
     fn execute_inner(
         &self, contract: Address, _: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         if context.is_contract_address(&contract)? {
             Ok(context
                 .state

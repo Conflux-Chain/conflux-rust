@@ -307,7 +307,7 @@ impl<'a> StorageKeyWithSpace<'a> {
     pub fn from_key_bytes<ShouldCheckInput: StaticBool>(
         bytes: &'a [u8],
     ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
-where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
+    where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
         let key = if bytes.len() <= Self::ACCOUNT_BYTES {
             StorageKey::AccountKey(bytes).with_native_space()
         } else if bytes.len() == Self::ACCOUNT_BYTES + 1 {
@@ -496,8 +496,7 @@ mod delta_mpt_storage_key {
     fn extend_key_with_prefix(
         key: &mut Vec<u8>, address: &[u8], padding: &DeltaMptKeyPadding,
         prefix: &[u8],
-    )
-    {
+    ) {
         extend_address(key, address, padding);
         key.extend_from_slice(prefix);
     }

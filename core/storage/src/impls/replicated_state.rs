@@ -30,8 +30,7 @@ impl<Main: StateTrait> ReplicatedState<Main> {
     pub fn new<Replicate: StateTrait + Send + 'static>(
         main_state: Main, replicated_state: Replicate,
         filter: Option<Box<dyn StateFilter>>,
-    ) -> ReplicatedState<Main>
-    {
+    ) -> ReplicatedState<Main> {
         let replication_handler =
             ReplicationHandler::new(replicated_state, filter);
         Self {

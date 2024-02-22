@@ -168,8 +168,7 @@ impl Worker {
     fn new(
         db: Arc<DB>, command_receiver: Receiver<Command>,
         least_readable_version: Arc<AtomicU64>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             db,
             command_receiver,
@@ -361,8 +360,7 @@ impl<'a> StaleNodeIndicesByVersionIterator<'a> {
     fn new(
         db: &'a DB, least_readable_version: Version,
         target_least_readable_version: Version,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let mut iter =
             db.iter::<StaleNodeIndexSchema>(ReadOptions::default())?;
         iter.seek(&least_readable_version)?;
@@ -413,8 +411,7 @@ impl<'a> Iterator for StaleNodeIndicesByVersionIterator<'a> {
 pub fn prune_state(
     db: Arc<DB>, least_readable_version: Version,
     target_least_readable_version: Version, max_versions: usize,
-) -> Result<Version>
-{
+) -> Result<Version> {
     let indices = StaleNodeIndicesByVersionIterator::new(
         &db,
         least_readable_version,

@@ -181,8 +181,7 @@ impl NodeLockStatus {
     pub(super) fn new_lock(
         &mut self, view: View, votes: u64, initialize_mode: bool,
         update_views: &mut Vec<View>,
-    )
-    {
+    ) {
         if votes == 0 {
             return;
         }
@@ -210,8 +209,7 @@ impl NodeLockStatus {
     pub(super) fn new_unlock(
         &mut self, view: View, to_unlock_votes: u64,
         update_views: &mut Vec<View>,
-    )
-    {
+    ) {
         if to_unlock_votes == 0 {
             return;
         }

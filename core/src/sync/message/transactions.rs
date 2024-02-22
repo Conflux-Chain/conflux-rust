@@ -224,8 +224,7 @@ impl TransactionDigests {
     pub fn new(
         window_index: usize, key1: u64, key2: u64, short_ids: Vec<u8>,
         tx_hashes: Vec<H256>,
-    ) -> TransactionDigests
-    {
+    ) -> TransactionDigests {
         TransactionDigests {
             window_index,
             key1,

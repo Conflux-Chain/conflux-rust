@@ -105,8 +105,7 @@ impl Mempool {
     pub(crate) fn add_txn(
         &mut self, txn: SignedTransaction, ranking_score: u64,
         timeline_state: TimelineState, governance_role: GovernanceRole,
-    ) -> MempoolStatus
-    {
+    ) -> MempoolStatus {
         diem_trace!(LogSchema::new(LogEntry::AddTxn)
             .txns(TxnsLog::new_txn(txn.sender(), txn.hash())),);
 
@@ -136,8 +135,7 @@ impl Mempool {
     pub(crate) fn get_block(
         &mut self, _batch_size: u64, mut seen: HashSet<TxnPointer>,
         pos_state: &PosState, validators: ValidatorVerifier,
-    ) -> Vec<SignedTransaction>
-    {
+    ) -> Vec<SignedTransaction> {
         let mut block = vec![];
         let mut block_log = TxnsLog::new();
         // Helper DS. Helps to mitigate scenarios where account submits several

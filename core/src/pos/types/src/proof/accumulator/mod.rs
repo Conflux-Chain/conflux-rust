@@ -113,8 +113,7 @@ where H: CryptoHasher
     fn append_one(
         frozen_subtree_roots: &mut Vec<HashValue>,
         num_existing_leaves: LeafCount, leaf: HashValue,
-    )
-    {
+    ) {
         // For example, this accumulator originally had N = 7 leaves. Appending
         // a leaf is like adding one to this number N: 0b0111 + 1 =
         // 0b1000. Every time we carry a bit to the left we merge the

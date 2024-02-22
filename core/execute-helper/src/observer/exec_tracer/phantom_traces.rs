@@ -78,8 +78,7 @@ pub fn recover_phantom_trace_for_withdraw(
 pub fn recover_phantom_trace_for_call(
     tx_traces: &mut impl Iterator<Item = ExecTrace>, original_tx_hash: H256,
     cross_space_nonce: u32,
-) -> Result<Vec<TransactionExecTraces>, String>
-{
+) -> Result<Vec<TransactionExecTraces>, String> {
     let mut traces = vec![];
 
     let trace = match tx_traces.next() {

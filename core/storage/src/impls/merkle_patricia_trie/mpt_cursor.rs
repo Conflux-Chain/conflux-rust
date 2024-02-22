@@ -698,8 +698,7 @@ impl<Mpt> BasicPathNode<Mpt> {
         trie_node: SnapshotMptNode, mpt: Option<Mpt>,
         parent_path: &CompressedPathRaw, child_index: u8,
         in_reconstruct_snapshot_state: bool,
-    ) -> Self
-    {
+    ) -> Self {
         let full_path_to_node = CompressedPathRaw::join_connected_paths(
             parent_path,
             child_index,
@@ -854,8 +853,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
     fn load_into(
         parent_node: &Self, mpt: &mut Option<Mpt>, node_child_index: u8,
         supposed_merkle_root: &MerkleHash, in_reconstruct_snapshot_state: bool,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let parent_path = &parent_node.get_basic_path_node().full_path_to_node;
 
         let path_db_key =
@@ -1112,8 +1110,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for ReadWritePathNode<Mpt> {
     fn unmatched_child_node_for_path_diversion(
         mut self, new_path_db_key: CompressedPathRaw,
         new_compressed_path: CompressedPathRaw,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let mut child_node;
         if self.is_loaded {
             child_node = Self {
@@ -1260,8 +1257,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
         maybe_compressed_path_split_child_index: u8,
         maybe_compressed_path_split_child_node: &mut Option<Box<Self>>,
         child_index: u8,
-    ) -> Result<Option<Box<Self>>>
-    {
+    ) -> Result<Option<Box<Self>>> {
         if child_index == maybe_compressed_path_split_child_index {
             Ok(maybe_compressed_path_split_child_node.take())
         } else {
@@ -1437,8 +1433,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
     fn write_out_pending_child(
         mpt: &mut Option<Mpt>,
         the_first_child: &mut Option<Box<ReadWritePathNode<Mpt>>>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         if the_first_child.is_some() {
             let mut child = the_first_child.take().unwrap();
             child.mpt = mpt.take();

@@ -77,8 +77,7 @@ impl ProposalGenerator {
         private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
         vrf_private_key: ConsensusVRFPrivateKey,
         vrf_public_key: ConsensusVRFPublicKey,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             author,
             block_store,
@@ -298,8 +297,7 @@ impl ProposalGenerator {
     pub fn force_propose(
         &self, round: Round, parent_qc: Arc<QuorumCert>,
         payload: Vec<TransactionPayload>,
-    ) -> anyhow::Result<BlockData>
-    {
+    ) -> anyhow::Result<BlockData> {
         let payload = payload
             .into_iter()
             .map(|p| {

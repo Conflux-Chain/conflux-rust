@@ -253,8 +253,7 @@ pub trait Signature:
     fn batch_verify<T: CryptoHash + Serialize>(
         message: &T,
         keys_and_signatures: Vec<(Self::VerifyingKeyMaterial, Self)>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         for (key, signature) in keys_and_signatures {
             signature.verify(message, &key)?
         }

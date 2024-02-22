@@ -42,8 +42,7 @@ impl TreapMapConfig for ComplexTreapMapConfig {
     fn next_node_dir(
         me: (&Self::SortKey, &Self::SearchKey),
         other: (&Self::SortKey, &Self::SearchKey),
-    ) -> Option<crate::Direction>
-    {
+    ) -> Option<crate::Direction> {
         match me.0.cmp(other.0) {
             Ordering::Less => Some(crate::Direction::Left),
             Ordering::Equal => None,

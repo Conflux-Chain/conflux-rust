@@ -16,8 +16,7 @@ impl State {
     pub fn commit(
         mut self, epoch_id: EpochId,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<StateCommitResult>
-    {
+    ) -> DbResult<StateCommitResult> {
         debug!("Commit epoch[{}]", epoch_id);
 
         let accounts_for_txpool =
@@ -87,8 +86,7 @@ impl State {
     fn recycle_storage(
         &mut self, killed_addresses: Vec<AddressWithSpace>,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         // TODO: Think about kill_dust and collateral refund.
         for address in &killed_addresses {
             self.db.delete_all::<access_mode::Write>(

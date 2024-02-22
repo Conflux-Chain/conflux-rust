@@ -36,8 +36,7 @@ impl MptSliceVerifier {
         maybe_left_proof: Option<&TrieProof>, left_key_bound: &[u8],
         maybe_right_proof: Option<&TrieProof>,
         maybe_right_key_bound_excl: Option<&[u8]>, merkle_root: MerkleHash,
-    ) -> Self
-    {
+    ) -> Self {
         let mut boundary_nodes = HashMap::default();
 
         if let Some(left_proof) = maybe_left_proof {
@@ -131,8 +130,7 @@ impl MptSliceVerifier {
             CompressedPathRaw,
             VanillaTrieNode<MerkleHash>,
         >,
-    ) -> HashMap<CompressedPathRaw, SnapshotMptNode>
-    {
+    ) -> HashMap<CompressedPathRaw, SnapshotMptNode> {
         let mut index_open_left_bounds =
             HashMap::<CompressedPathRaw, u8, RandomState>::default();
         let mut index_open_right_bounds_excl =
@@ -235,8 +233,7 @@ impl MptSliceVerifier {
             VanillaTrieNode<MerkleHash>,
         >,
         proof: &TrieProof, key: &[u8],
-    )
-    {
+    ) {
         let keys_and_nodes = proof.compute_snapshot_mpt_path_for_proof(key);
         for (snapshot_mpt_key, _child_index, trie_node) in keys_and_nodes {
             boundary_nodes.insert(snapshot_mpt_key, trie_node.clone());

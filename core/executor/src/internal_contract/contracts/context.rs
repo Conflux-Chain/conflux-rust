@@ -34,8 +34,7 @@ impl SimpleExecutionTrait for EpochNumber {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(U256::from(context.env.epoch_height))
     }
 }
@@ -51,8 +50,7 @@ impl SimpleExecutionTrait for PoSHeight {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(context.env.pos_view.unwrap_or(0).into())
     }
 }
@@ -68,8 +66,7 @@ impl SimpleExecutionTrait for FinalizedEpoch {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<U256>
-    {
+    ) -> vm::Result<U256> {
         Ok(context.env.finalized_epoch.unwrap_or(0).into())
     }
 }

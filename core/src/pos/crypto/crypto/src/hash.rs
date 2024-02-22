@@ -21,11 +21,11 @@
 //! Alice signed the message she    needed to be aware of how other applications
 //! might interpret that message.
 //!
-//! 2. **Format Ambiguity**: imagine a program that hashes a pair of strings.
-//!    To hash the strings `a` and `b` it hashes `a + "||" + b`. The pair of
+//! 2. **Format Ambiguity**: imagine a program that hashes a pair of strings. To
+//!    hash the strings `a` and `b` it hashes `a + "||" + b`. The pair of
 //!    strings `a="foo||", b = "bar"` and `a="foo", b = "||bar"` result in the
-//!    same input to the hash function and therefore the same hash. This
-//!    creates a collision.
+//!    same input to the hash function and therefore the same hash. This creates
+//!    a collision.
 //!
 //! Regarding (1), this library makes it easy for Diem developers to create as
 //! many new "hashable" Rust types as needed so that each Rust type hashed and

@@ -23,8 +23,7 @@ impl<TX: PackingPoolTransaction> TreapMapConfig for PackingPoolMap<TX> {
     fn next_node_dir(
         me: (&Self::SortKey, &Self::SearchKey),
         other: (&Self::SortKey, &Self::SearchKey),
-    ) -> Option<Direction>
-    {
+    ) -> Option<Direction> {
         match me.0.cmp(other.0) {
             Ordering::Greater => {
                 return Some(Direction::Left);

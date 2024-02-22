@@ -381,8 +381,7 @@ impl InternalNode {
     fn merkle_hash(
         &self, start: u8, width: u8,
         (existence_bitmap, leaf_bitmap): (u16, u16),
-    ) -> HashValue
-    {
+    ) -> HashValue {
         // Given a bit [start, 1 << nibble_height], return the value of that
         // range.
         let (range_existence_bitmap, range_leaf_bitmap) =

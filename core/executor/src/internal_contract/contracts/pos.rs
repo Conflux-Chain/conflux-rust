@@ -55,8 +55,7 @@ impl UpfrontPaymentTrait for Register {
     fn upfront_gas_payment(
         &self, inputs: &(H256, u64, BlsPubKey, VrfPubKey, BlsProof),
         _params: &ActionParams, context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         let (_identifier, _vote_power, bls_pubkey, vrf_pubkey, _bls_proof) =
             inputs;
         let spec = context.spec;
@@ -86,8 +85,7 @@ impl SimpleExecutionTrait for Register {
     fn execute_inner(
         &self, inputs: (H256, u64, BlsPubKey, VrfPubKey, BlsProof),
         params: &ActionParams, context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if !context.spec.cip43_init && context.env.pos_view.is_none() {
             return Err(vm::Error::InternalContract(
                 "Cannot register after initialization stage and before the PoS chain launched".into(),
@@ -116,8 +114,7 @@ impl UpfrontPaymentTrait for IncreaseStake {
     fn upfront_gas_payment(
         &self, _: &Self::Input, _params: &ActionParams,
         context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
+    ) -> DbResult<U256> {
         let spec = context.spec;
         let log_gas =
             32 * spec.log_data_gas + spec.log_gas + spec.log_topic_gas;
@@ -131,8 +128,7 @@ impl SimpleExecutionTrait for IncreaseStake {
     fn execute_inner(
         &self, inputs: u64, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if !context.spec.cip43_init && context.env.pos_view.is_none() {
             return Err(vm::Error::InternalContract(
                 "Cannot increase stake after initialization stage and before the PoS chain launched".into(),
@@ -150,8 +146,7 @@ impl SimpleExecutionTrait for Retire {
     fn execute_inner(
         &self, votes: u64, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if context.env.pos_view.is_none() {
             return Err(vm::Error::InternalContract(
                 "Cannot retire before the PoS chain launched".into(),
@@ -169,8 +164,7 @@ impl SimpleExecutionTrait for GetStatus {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<(u64, u64)>
-    {
+    ) -> vm::Result<(u64, u64)> {
         let status = get_status(inputs, params, context)?;
         Ok((status.registered, status.unlocked))
     }
@@ -184,8 +178,7 @@ impl SimpleExecutionTrait for IdentifierToAddress {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<Address>
-    {
+    ) -> vm::Result<Address> {
         Ok(identifier_to_address(inputs, params, context)?)
     }
 }
@@ -198,8 +191,7 @@ impl SimpleExecutionTrait for AddressToIdentifier {
     fn execute_inner(
         &self, inputs: Address, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<H256>
-    {
+    ) -> vm::Result<H256> {
         Ok(address_to_identifier(inputs, params, context)?)
     }
 }

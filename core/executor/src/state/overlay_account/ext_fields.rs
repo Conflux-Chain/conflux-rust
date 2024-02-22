@@ -47,8 +47,7 @@ impl OverlayAccount {
     pub fn cache_ext_fields(
         &mut self, cache_deposit_list: bool, cache_vote_list: bool,
         db: &StateDbGeneric,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         self.address.assert_native();
         if cache_deposit_list && self.deposit_list.is_none() {
             let deposit_list_opt = if self.fresh_storage() {

@@ -206,8 +206,7 @@ impl RecoverPublicTask {
     pub fn new(
         blocks: Vec<Block>, requested: HashSet<H256>, failed_peer: NodeId,
         compact: bool, delay: Option<Duration>,
-    ) -> Self
-    {
+    ) -> Self {
         RecoverPublicTask {
             blocks,
             requested,
@@ -436,8 +435,7 @@ impl SynchronizationProtocolHandler {
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
         light_provider: Arc<LightProvider>, consensus: Arc<ConsensusGraph>,
-    ) -> Self
-    {
+    ) -> Self {
         let sync_state = Arc::new(SynchronizationState::new(
             protocol_config.is_consortium,
             node_type,
@@ -972,8 +970,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_block_headers(
         &self, io: &dyn NetworkContext, peer: Option<NodeId>,
         mut header_hashes: Vec<H256>, ignore_db: bool,
-    )
-    {
+    ) {
         if !ignore_db {
             header_hashes
                 .retain(|hash| !self.try_request_header_from_db(io, hash));
@@ -1281,8 +1278,7 @@ impl SynchronizationProtocolHandler {
     fn send_status(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         peer_protocol_version: ProtocolVersion,
-    ) -> Result<(), NetworkError>
-    {
+    ) -> Result<(), NetworkError> {
         if peer_protocol_version == SYNC_PROTO_V2 {
             let status_message = self.produce_status_message_v2();
             debug!("Sending status message to {}: {:?}", peer, status_message);
@@ -1676,8 +1672,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_missing_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>,
-    )
-    {
+    ) {
         let catch_up_mode = self.catch_up_mode();
         if catch_up_mode {
             self.request_blocks(io, peer_id, hashes);
@@ -1690,8 +1685,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_blocks(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         mut hashes: Vec<H256>,
-    )
-    {
+    ) {
         hashes.retain(|hash| !self.already_processed(hash));
         self.request_blocks_without_check(io, peer_id, hashes)
     }
@@ -1699,8 +1693,7 @@ impl SynchronizationProtocolHandler {
     pub fn request_blocks_without_check(
         &self, io: &dyn NetworkContext, peer_id: Option<NodeId>,
         hashes: Vec<H256>,
-    )
-    {
+    ) {
         let preferred_node_type = self.preferred_peer_node_type_for_get_block();
         self.request_manager.request_blocks(
             io,
@@ -1753,8 +1746,7 @@ impl SynchronizationProtocolHandler {
         returned_blocks: HashSet<H256>, ask_full_block: bool,
         peer: Option<NodeId>, delay: Option<Duration>,
         preferred_node_type_for_block_request: Option<NodeType>,
-    )
-    {
+    ) {
         self.request_manager.blocks_received(
             io,
             requested_hashes,
@@ -1892,8 +1884,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
         &self, io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
         _pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    )
-    {
+    ) {
         debug!(
             "Peer connected: peer={:?}, version={}",
             node_id, peer_protocol_version

@@ -35,8 +35,7 @@ impl DbReader for MockDbReader {
     fn get_transactions(
         &self, _start_version: Version, _batch_size: u64,
         _ledger_version: Version, _fetch_events: bool,
-    ) -> Result<TransactionListWithProof>
-    {
+    ) -> Result<TransactionListWithProof> {
         unimplemented!()
     }
 
@@ -64,8 +63,7 @@ impl DbReader for MockDbReader {
     fn get_txn_by_account(
         &self, _address: AccountAddress, _seq_num: u64,
         _ledger_version: Version, _fetch_events: bool,
-    ) -> Result<Option<TransactionWithProof>>
-    {
+    ) -> Result<Option<TransactionWithProof>> {
         unimplemented!()
     }
 
@@ -88,8 +86,7 @@ impl DbReader for MockDbReader {
     fn get_account_state_with_proof(
         &self, _address: AccountAddress, _version: Version,
         _ledger_version: Version,
-    ) -> Result<AccountStateWithProof>
-    {
+    ) -> Result<AccountStateWithProof> {
         unimplemented!()
     }
 

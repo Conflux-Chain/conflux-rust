@@ -63,8 +63,7 @@ impl SessionManager {
             ConsensusPublicKey,
             ConsensusVRFPublicKey,
         )>,
-    ) -> Self
-    {
+    ) -> Self {
         SessionManager {
             sessions: RwLock::new(Slab::with_capacity(capacity)),
             offset,
@@ -155,8 +154,7 @@ impl SessionManager {
     pub fn create(
         &self, socket: TcpStream, address: SocketAddr, id: Option<&NodeId>,
         io: &IoContext<NetworkIoMessage>, host: &NetworkServiceInner,
-    ) -> Result<usize, String>
-    {
+    ) -> Result<usize, String> {
         debug!(
             "SessionManager.create: enter, address = {:?}, id = {:?}",
             address, id

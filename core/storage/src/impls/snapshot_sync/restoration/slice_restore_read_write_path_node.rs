@@ -101,8 +101,7 @@ impl<Mpt: GetRwMpt> RwPathNodeTrait<Mpt> for SliceVerifyReadWritePathNode<Mpt> {
     fn unmatched_child_node_for_path_diversion(
         self, new_path_db_key: CompressedPathRaw,
         new_compressed_path: CompressedPathRaw,
-    ) -> Result<ReadWritePathNode<Mpt>>
-    {
+    ) -> Result<ReadWritePathNode<Mpt>> {
         self.take().unmatched_child_node_for_path_diversion(
             new_path_db_key,
             new_compressed_path,

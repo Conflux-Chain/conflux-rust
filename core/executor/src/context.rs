@@ -77,8 +77,7 @@ impl<'a> Context<'a> {
     pub fn new<'b, 'c>(
         frame_local: &'a mut FrameLocal<'b>,
         runtime_resources: &'a mut RuntimeRes<'c>,
-    ) -> Self
-    {
+    ) -> Self {
         let space = frame_local.space;
         let env = &frame_local.env;
         let depth = frame_local.depth;
@@ -189,8 +188,7 @@ impl<'a> ContextTrait for Context<'a> {
         address_scheme: CreateContractAddress,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
-    >
-    {
+    > {
         let caller = AddressWithSpace {
             address: self.origin.address,
             space: self.space,
@@ -439,8 +437,7 @@ impl<'a> ContextTrait for Context<'a> {
         &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
         _mem_written: Option<(usize, usize)>,
         _store_written: Option<(U256, U256)>,
-    )
-    {
+    ) {
         // TODO
     }
 

@@ -32,8 +32,7 @@ impl MockStateComputer {
         state_sync_client: mpsc::UnboundedSender<Payload>,
         commit_callback: mpsc::UnboundedSender<LedgerInfoWithSignatures>,
         consensus_db: Arc<MockStorage>,
-    ) -> Self
-    {
+    ) -> Self {
         MockStateComputer {
             state_sync_client,
             commit_callback,
@@ -111,8 +110,7 @@ impl StateComputer for EmptyStateComputer {
     fn compute(
         &self, _block: &Block, _parent_block_id: HashValue,
         _catch_up_mode: bool,
-    ) -> Result<StateComputeResult, Error>
-    {
+    ) -> Result<StateComputeResult, Error> {
         Ok(StateComputeResult::new(
             *ACCUMULATOR_PLACEHOLDER_HASH,
             vec![],

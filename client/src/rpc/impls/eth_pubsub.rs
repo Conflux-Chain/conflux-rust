@@ -60,8 +60,7 @@ impl PubSubClient {
     pub fn new(
         executor: Executor, consensus: SharedConsensusGraph,
         notifications: Arc<Notifications>,
-    ) -> Self
-    {
+    ) -> Self {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
         let logs_subscribers = Arc::new(RwLock::new(Subscribers::default()));
 
@@ -328,8 +327,7 @@ impl ChainNotificationHandler {
     async fn notify_logs(
         &self, subscriber: &Client, filter: LogFilter, epoch: (u64, Vec<H256>),
         removed: bool,
-    ) -> Vec<Log>
-    {
+    ) -> Vec<Log> {
         debug!("notify_logs({:?})", epoch);
 
         // NOTE: calls to DbManager are supposed to be cached
@@ -539,8 +537,7 @@ impl PubSub for PubSubClient {
     fn subscribe(
         &self, _meta: Metadata, subscriber: Subscriber<pubsub::Result>,
         kind: pubsub::Kind, params: Option<pubsub::Params>,
-    )
-    {
+    ) {
         let error = match (kind, params) {
             // --------- newHeads ---------
             (pubsub::Kind::NewHeads, None) => {

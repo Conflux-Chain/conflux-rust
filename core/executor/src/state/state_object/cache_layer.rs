@@ -183,8 +183,7 @@ impl State {
     fn fetch_account_mut<'a>(
         cache: &'a mut HashMap<AddressWithSpace, AccountEntry>, db: &StateDb,
         address: &AddressWithSpace, require: RequireFields,
-    ) -> DbResult<&'a mut AccountEntry>
-    {
+    ) -> DbResult<&'a mut AccountEntry> {
         let account_entry = match cache.entry(*address) {
             Occupied(e) => e.into_mut(),
             Vacant(e) => {

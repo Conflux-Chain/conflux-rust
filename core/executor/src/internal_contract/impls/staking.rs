@@ -18,8 +18,7 @@ use cfx_vm_types::{self as vm, ActionParams, Env, Spec};
 pub fn deposit(
     amount: U256, params: &ActionParams, env: &Env, spec: &Spec,
     state: &mut State, tracer: &mut dyn TracerTrait,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
         internal_bail!("invalid deposit amount");
     }
@@ -41,8 +40,7 @@ pub fn deposit(
 pub fn withdraw(
     amount: U256, params: &ActionParams, env: &Env, spec: &Spec,
     state: &mut State, tracer: &mut dyn TracerTrait,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;
     if state.withdrawable_staking_balance(&params.sender, env.number)? < amount
     {
@@ -74,8 +72,7 @@ pub fn withdraw(
 pub fn vote_lock(
     amount: U256, unlock_block_number: U256, params: &ActionParams, env: &Env,
     state: &mut State,
-) -> vm::Result<()>
-{
+) -> vm::Result<()> {
     let unlock_block_number = unlock_block_number.low_u64();
     if unlock_block_number <= env.number {
         internal_bail!("invalid unlock_block_number");
@@ -93,8 +90,7 @@ pub fn vote_lock(
 pub fn get_locked_staking(
     address: Address, block_number: U256, current_block_number: u64,
     state: &mut State,
-) -> vm::Result<U256>
-{
+) -> vm::Result<U256> {
     let mut block_number = block_number.low_u64();
     if block_number < current_block_number {
         block_number = current_block_number;
@@ -106,8 +102,7 @@ pub fn get_locked_staking(
 pub fn get_vote_power(
     address: Address, block_number: U256, current_block_number: u64,
     state: &mut State,
-) -> vm::Result<U256>
-{
+) -> vm::Result<U256> {
     let mut block_number = block_number.low_u64();
     if block_number < current_block_number {
         block_number = current_block_number;

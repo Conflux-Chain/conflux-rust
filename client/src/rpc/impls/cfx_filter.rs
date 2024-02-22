@@ -102,8 +102,7 @@ impl CfxFilterClient {
         epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Executor,
         poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
         network: Network,
-    ) -> Self
-    {
+    ) -> Self {
         let filter_client = CfxFilterClient {
             consensus,
             tx_pool,
@@ -121,8 +120,7 @@ impl CfxFilterClient {
     fn start_epochs_loop(
         &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
         executor: Executor,
-    )
-    {
+    ) {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
         let consensus = self.consensus.clone();
@@ -212,8 +210,7 @@ impl Filterable for CfxFilterClient {
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>),
         data_man: &Arc<BlockDataManager>,
-    ) -> JsonRpcResult<Vec<Log>>
-    {
+    ) -> JsonRpcResult<Vec<Log>> {
         let mut result = vec![];
         let logs = match retrieve_epoch_logs(data_man, epoch) {
             Some(logs) => logs,
@@ -260,8 +257,7 @@ impl Filterable for CfxFilterClient {
     fn epochs_since_last_request(
         &self, last_epoch_number: u64,
         recent_reported_epochs: &VecDeque<(u64, Vec<H256>)>,
-    ) -> JsonRpcResult<(u64, Vec<(u64, Vec<H256>)>)>
-    {
+    ) -> JsonRpcResult<(u64, Vec<(u64, Vec<H256>)>)> {
         let last_block = if let Some((num, hash)) =
             recent_reported_epochs.front().cloned()
         {

@@ -59,8 +59,7 @@ impl PowInterface for FakePowHandler {
     fn get_staking_events(
         &self, _parent_height: u64, _me_height: u64, _parent_decision: H256,
         _me_decision: H256,
-    ) -> Result<Vec<StakingEvent>>
-    {
+    ) -> Result<Vec<StakingEvent>> {
         todo!()
     }
 

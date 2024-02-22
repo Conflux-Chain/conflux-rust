@@ -501,8 +501,7 @@ impl PosState {
         initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID, u64)>,
         initial_committee: Vec<(AccountAddress, u64)>,
         genesis_pivot_decision: PivotBlockDecision,
-    ) -> Self
-    {
+    ) -> Self {
         let mut node_map = HashMap::new();
         let mut node_list = BTreeMap::default();
         for (node_id, total_voting_power) in initial_nodes {
@@ -738,8 +737,7 @@ impl PosState {
     pub fn validate_pivot_decision(
         &self, pivot_decision_tx: &PivotBlockDecision,
         signature: MultiConsensusSignature,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         if pivot_decision_tx.height <= self.pivot_decision.height {
             return Err(anyhow!(format!(
                 "Pivot Decision height too small, found[{}], expect[{}]",
@@ -1123,8 +1121,7 @@ impl ElectionEvent {
     pub fn new(
         public_key: ConsensusPublicKey, vrf_public_key: ConsensusVRFPublicKey,
         vrf_output: HashValue, start_term: u64,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             node_id: NodeID::new(public_key, vrf_public_key),
             vrf_output,

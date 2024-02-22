@@ -118,8 +118,7 @@ impl State {
         &mut self, storage_owner: &Address, storage_limit: &U256,
         substate: &mut Substate, tracer: &mut dyn TracerTrait, spec: &Spec,
         dry_run: bool,
-    ) -> DbResult<CollateralCheckResult>
-    {
+    ) -> DbResult<CollateralCheckResult> {
         let res =
             settle_collateral_for_all(self, substate, tracer, spec, dry_run)?;
         Ok(if res.is_ok() {
@@ -133,8 +132,7 @@ impl State {
     pub fn settle_collateral_and_assert(
         &mut self, storage_owner: &Address, substate: &mut Substate,
         should_success: bool,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         let res = self.settle_collateral_and_check(
             storage_owner,
             &U256::MAX,
@@ -158,8 +156,7 @@ impl State {
 fn settle_collateral_for_address(
     state: &mut State, addr: &Address, substate: &Substate,
     tracer: &mut dyn TracerTrait, spec: &Spec, dry_run: bool,
-) -> DbResult<CollateralCheckResult>
-{
+) -> DbResult<CollateralCheckResult> {
     let addr_with_space = addr.with_native_space();
     let (inc_collaterals, sub_collaterals) =
         substate.get_collateral_change(addr);
@@ -217,8 +214,7 @@ fn settle_collateral_for_address(
 pub fn settle_collateral_for_all(
     state: &mut State, substate: &Substate, tracer: &mut dyn TracerTrait,
     spec: &Spec, dry_run: bool,
-) -> DbResult<CollateralCheckResult>
-{
+) -> DbResult<CollateralCheckResult> {
     for address in substate.keys_for_collateral_changed().iter() {
         let res = settle_collateral_for_address(
             state, &address, substate, tracer, spec, dry_run,

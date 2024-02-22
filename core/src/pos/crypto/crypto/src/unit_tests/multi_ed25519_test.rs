@@ -50,8 +50,7 @@ fn test_successful_public_key_serialization(
 fn test_failed_public_key_serialization(
     result: std::result::Result<MultiEd25519PublicKey, CryptoMaterialError>,
     expected_error: CryptoMaterialError,
-)
-{
+) {
     assert!(result.is_err());
     assert_eq!(result.err().unwrap(), expected_error);
 }

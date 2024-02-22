@@ -84,13 +84,11 @@ impl GlobalStat {
     pub fn commit(
         &self, db: &mut StateDb,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         fn commit_param<T: GlobalParamKey>(
             ans: &[U256; TOTAL_GLOBAL_PARAMS], db: &mut StateDb,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> DbResult<()>
-        {
+        ) -> DbResult<()> {
             let value = T::from_vm_value(ans[T::ID]);
             db.set_global_param::<T>(&value, debug_record)?;
             Ok(())

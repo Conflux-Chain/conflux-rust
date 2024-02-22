@@ -143,8 +143,7 @@ impl Block {
         consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
         tx_space_filter: Option<Space>,
-    ) -> Result<Self, String>
-    {
+    ) -> Result<Self, String> {
         let block_hash = b.block_header.hash();
 
         let epoch_number = consensus_inner
@@ -437,8 +436,7 @@ impl Header {
     pub fn new(
         h: &PrimitiveBlockHeader, network: Network,
         consensus: SharedConsensusGraph,
-    ) -> Result<Self, String>
-    {
+    ) -> Result<Self, String> {
         let hash = h.hash();
 
         let epoch_number = consensus

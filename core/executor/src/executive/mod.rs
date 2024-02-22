@@ -42,8 +42,7 @@ impl<'a> ExecutiveContext<'a> {
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec,
-    ) -> Self
-    {
+    ) -> Self {
         ExecutiveContext {
             state,
             env,
@@ -85,8 +84,7 @@ pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
 pub fn contract_address(
     address_scheme: CreateContractAddress, block_number: u64,
     sender: &AddressWithSpace, nonce: &U256, code: &[u8],
-) -> (AddressWithSpace, H256)
-{
+) -> (AddressWithSpace, H256) {
     let (mut address, code_hash) = cfx_vm_types::contract_address(
         address_scheme,
         block_number,
@@ -116,8 +114,7 @@ pub mod test_util {
         pub fn call_for_test(
             &mut self, params: ActionParams, substate: &mut Substate,
             tracer: &mut dyn TracerTrait,
-        ) -> DbResult<vm::Result<FinalizationResult>>
-        {
+        ) -> DbResult<vm::Result<FinalizationResult>> {
             let mut frame_result = exec_vm(self, params, tracer)?;
             accrue_substate(substate, &mut frame_result);
 

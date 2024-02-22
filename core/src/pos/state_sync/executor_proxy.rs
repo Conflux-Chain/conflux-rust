@@ -74,8 +74,7 @@ impl ExecutorProxy {
     pub(crate) fn new(
         storage: Arc<dyn DbReader>, executor: Box<dyn ChunkExecutor>,
         mut reconfig_subscriptions: Vec<ReconfigSubscription>,
-    ) -> Self
-    {
+    ) -> Self {
         // TODO(lpl): Double check the `None` case here.
         let on_chain_configs = if let Ok(Some(startup_info)) =
             storage.get_startup_info(false)
@@ -227,8 +226,7 @@ impl ExecutorProxyTrait for ExecutorProxy {
         &mut self, txn_list_with_proof: TransactionListWithProof,
         verified_target_li: LedgerInfoWithSignatures,
         intermediate_end_of_epoch_li: Option<LedgerInfoWithSignatures>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         // track chunk execution time
         let timer = counters::EXECUTE_CHUNK_DURATION.start_timer();
         let reconfig_events = self

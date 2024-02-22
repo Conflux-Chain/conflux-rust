@@ -42,8 +42,7 @@ impl VoteProposal {
         >,
         block: Block, next_epoch_state: Option<EpochState>,
         pivot_decision: Option<PivotBlockDecision>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             accumulator_extension_proof,
             block,

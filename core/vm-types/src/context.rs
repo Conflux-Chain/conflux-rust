@@ -83,8 +83,7 @@ pub enum CreateContractAddress {
 pub fn contract_address(
     address_scheme: CreateContractAddress, _block_number: u64,
     sender: &Address, nonce: &U256, code: &[u8],
-) -> (Address, H256)
-{
+) -> (Address, H256) {
     let code_hash = keccak(code);
     let (address, code_hash) = match address_scheme {
         CreateContractAddress::FromSenderNonce => {
@@ -245,8 +244,7 @@ pub trait Context {
         &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
         _mem_written: Option<(usize, usize)>,
         _store_written: Option<(U256, U256)>,
-    )
-    {
+    ) {
     }
 
     /// Trace the finalised execution of a single instruction.
