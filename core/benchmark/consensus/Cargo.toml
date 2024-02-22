@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 cfxcore = { path = "../../../core" }
 cfx-types = { path = "../../../crates/cfx_types" }
-primitives = { path = "../../../primitives" }
-db = { path = "../../../db" }
+primitives = { path = "../../../crates/primitives" }
+db = { path = "../../../crates/db" }
 threadpool = "1.0"
 parking_lot = "0.11"
 log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }

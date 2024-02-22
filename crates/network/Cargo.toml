@@ -4,15 +4,15 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-cfx-addr = { path = "../crates/cfx_addr" }
-cfx-bytes = { path = "../crates/cfx_bytes" }
-cfx-types = { path = "../crates/cfx_types" }
-cfxkey = { path = "../accounts/cfxkey" }
+cfx-addr = { path = "../cfx_addr" }
+cfx-bytes = { path = "../cfx_bytes" }
+cfx-types = { path = "../cfx_types" }
+cfxkey = { path = "../cfx_key" }
 mio = "0.6.8"
 parking_lot = "0.11"
 log = "0.4"
 slab = "0.4"
-io = { path = "../util/io" }
+io = { path = "../../util/io" }
 error-chain = { version = "0.12", default-features = false }
 bytes = "0.4"
 rlp = "0.4.0"
@@ -32,10 +32,10 @@ strum = "0.11.0"
 strum_macros = "0.11.0"
 lazy_static = "1.4"
 byte-unit = "1.1.0"
-priority-send-queue = { path = "../util/priority-send-queue" }
-metrics = { path = "../util/metrics" }
-throttling = { path = "../util/throttling" }
+priority-send-queue = { path = "../../util/priority-send-queue" }
+metrics = { path = "../../util/metrics" }
+throttling = { path = "../../util/throttling" }
 natpmp = "0.2"
-malloc_size_of = { path = "../util/malloc_size_of" }
-diem-crypto = { path="../core/src/pos/crypto/crypto" }
-diem-types = { path="../core/src/pos/types" }
+malloc_size_of = { path = "../../util/malloc_size_of" }
+diem-crypto = { path= "../../core/src/pos/crypto/crypto" }
+diem-types = { path= "../../core/src/pos/types" }

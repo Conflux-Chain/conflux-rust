@@ -16,13 +16,13 @@ error-chain = { version = "0.12", default-features = false }
 hashbrown = "0.7.1"
 log = "0.4"
 parking_lot = "0.11"
-primitives = { path = "../../primitives", optional = true }
+primitives = { path = "../../crates/primitives", optional = true }
 rlp = "0.4.0"
 tiny-keccak = "2.0.2"
 lazy_static = "1.4.0"
 
 [dev-dependencies]
-primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }
+primitives = { path = "../../crates/primitives", features = ["test_no_account_length_check"] }
 
 [features]
 default = ["primitives"]
