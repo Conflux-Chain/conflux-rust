@@ -7,9 +7,9 @@ version = "2.0.2"
 edition = "2018"
 
 [dependencies]
-cfx-bytes = { path = "../../cfx_bytes" }
+cfx-bytes = { path = "../../crates/cfx_bytes" }
 cfx-db-errors = { path = "../db-errors" }
-cfx-types = { path = "../../cfx_types" }
+cfx-types = { path = "../../crates/cfx_types" }
 keccak-hash = "0.5"
 primitives = { path = "../../primitives" }
 rlp = "0.4.0"

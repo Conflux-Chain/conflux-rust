@@ -28,7 +28,7 @@ diem-secure-storage = { path = "../secure/storage" }
 diem-temppath = { path = "../common/temppath" }
 diem-types = { path = "../types" }
 short-hex-str = { path = "../common/short-hex-str" }
-cfx-types = {path = "../../../../cfx_types"}
+cfx-types = {path = "../../../../crates/cfx_types" }
 
 [dev-dependencies]
 diem-crypto = { path = "../crypto/crypto", features = ["fuzzing"] }

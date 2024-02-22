@@ -11,16 +11,16 @@ bit-set = "0.4"
 substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
 byteorder = "1.0"
 cfxkey = { path = "../accounts/cfxkey" }
-cfx-addr = { path = "../cfx_addr/rust" }
-cfx-bytes = { path = "../cfx_bytes" }
-cfx-math = { path = "../cfx_math"}
+cfx-addr = { path = "../crates/cfx_addr" }
+cfx-bytes = { path = "../crates/cfx_bytes" }
+cfx-math = { path = "../crates/cfx_math" }
 cfx-internal-common = { path = "internal_common" }
 cfx-parameters = { path = "parameters" }
 cfx-statedb = { path = "statedb" }
 cfx-storage = { path = "storage", optional = true }
 cfx-vm-tracer-derive = {path="../util/cfx-vm-tracer-derive"}
-cfx-types = { path = "../cfx_types" }
-cfx-utils = { path = "../cfx_utils" }
+cfx-types = { path = "../crates/cfx_types" }
+cfx-utils = { path = "../crates/cfx_utils" }
 cfx-vm-types = { path = "vm-types" }
 cfx-vm-interpreter = { path = "vm-interpreter" }
 cfx-executor = { path = "executor" }

@@ -8,8 +8,8 @@ edition = "2018"
 
 [dependencies]
 bit-set = "0.4"
-cfx-bytes = { path = "../../cfx_bytes" }
-cfx-types = { path = "../../cfx_types" }
+cfx-bytes = { path = "../../crates/cfx_bytes" }
+cfx-types = { path = "../../crates/cfx_types" }
 cfx-vm-types = { path = "../vm-types" }
 keccak-hash = "0.5"
 lazy_static = "1.4"

@@ -7,8 +7,8 @@ version = "1.0.0"
 edition = "2018"
 
 [dependencies]
-cfx-bytes = { path = "../../cfx_bytes" }
-cfx-types = { path = "../../cfx_types" }
+cfx-bytes = { path = "../../crates/cfx_bytes" }
+cfx-types = { path = "../../crates/cfx_types" }
 cfx-parameters = { path = "../parameters" }
 derivative = "2.0.2"
 lazy_static = "1.4"

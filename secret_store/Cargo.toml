@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-cfx-types = { path = "../cfx_types" }
+cfx-types = { path = "../crates/cfx_types" }
 parking_lot = "0.11"
 rlp = "0.4.0"
 rand = "0.7"

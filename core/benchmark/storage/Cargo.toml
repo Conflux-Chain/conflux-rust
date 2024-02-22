@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 cfxcore = { path = "../../../core", features = ["bls-blst"] }
-cfx-types = { path = "../../../cfx_types", features=["storage_benchmark_no_account_space_check"] }
+cfx-types = { path = "../../../crates/cfx_types", features=["storage_benchmark_no_account_space_check"] }
 cfx-statedb = { path = "../../../core/statedb" }
 cfx-storage = { path = "../../../core/storage" }
 cfx-internal-common = { path = "../../../core/internal_common" }

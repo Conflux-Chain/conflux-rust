@@ -10,7 +10,7 @@ edition = "2018"
 [dependencies]
 cfxkey = { path = "cfxkey" }
 cfxstore = { path = "cfxstore" }
-cfx-types = { path = "../cfx_types" }
+cfx-types = { path = "../crates/cfx_types" }
 log = "0.4"
 parking_lot = "0.11"
 serde = "1.0"

@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 cfxcore = { path = "../../../core" }
-cfx-types = { path = "../../../cfx_types" }
+cfx-types = { path = "../../../crates/cfx_types" }
 primitives = { path = "../../../primitives" }
 db = { path = "../../../db" }
 threadpool = "1.0"

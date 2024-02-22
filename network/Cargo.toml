@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-cfx-addr = { path = "../cfx_addr/rust" }
-cfx-bytes = { path = "../cfx_bytes" }
-cfx-types = { path = "../cfx_types" }
+cfx-addr = { path = "../crates/cfx_addr" }
+cfx-bytes = { path = "../crates/cfx_bytes" }
+cfx-types = { path = "../crates/cfx_types" }
 cfxkey = { path = "../accounts/cfxkey" }
 mio = "0.6.8"
 parking_lot = "0.11"

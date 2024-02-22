@@ -43,7 +43,7 @@ keccak-hash = "0.5"
 rand = "0.8.3"
 kvdb-rocksdb = {path="db/src/kvdb-rocksdb"}
 client = { path = "client" }
-cfx-types = { path = "cfx_types" }
+cfx-types = { path = "crates/cfx_types" }
 threadpool = "1.7"
 futures = "0.1.29"
 docopt = "1.0"
@@ -79,7 +79,7 @@ path = "tools/cfx-gen-dot/main.rs"
 
 [[bin]]
 name = "cfxkey"
-path = "accounts/cfxkey/cli/src/main.rs"
+path = "accounts/cfxkey/src/main.rs"
 
 [[bin]]
 name = "pos-genesis-tool"
@@ -87,6 +87,13 @@ path = "tools/pos-genesis-tool/main.rs"
 
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
+members = [
+    "crates/cfx_bytes",
+    "crates/cfx_types",
+    "crates/cfx_addr",
+    "crates/cfx_math",
+    "crates/cfx_utils"
+]
 
 [features]
 default = ["jemalloc-global", "bls-blst"]

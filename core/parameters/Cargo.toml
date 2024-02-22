@@ -7,10 +7,10 @@ version = "1.0.0"
 edition = "2018"
 
 [dependencies]
-cfx-types = { path = "../../cfx_types" }
+cfx-types = { path = "../../crates/cfx_types" }
 cfx-vm-types = { path = "../vm-types" }
 cfxkey = { path = "../../accounts/cfxkey" }
-cfx-bytes = { path = "../../cfx_bytes" }
+cfx-bytes = { path = "../../crates/cfx_bytes" }
 
 lazy_static = "1.4"
 hex-literal = "0.4.1"

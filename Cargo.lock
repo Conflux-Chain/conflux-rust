@@ -1173,11 +1173,14 @@ name = "cfxkey"
 version = "0.3.0"
 dependencies = [
  "cfx-types",
+ "docopt",
  "edit-distance",
+ "env_logger",
  "lazy_static",
  "log",
  "malloc_size_of",
  "malloc_size_of_derive",
+ "panic_hook",
  "parity-crypto",
  "parity-secp256k1",
  "parity-wordlist",
@@ -1186,6 +1189,7 @@ dependencies = [
  "rustc-hex",
  "serde",
  "serde_derive",
+ "threadpool",
  "tiny-keccak 1.5.0",
  "zeroize",
 ]

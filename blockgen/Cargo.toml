@@ -11,8 +11,8 @@ clap = "2"
 cfxcore = { path = "../core" }
 cfxkey = { path = "../accounts/cfxkey" }
 cfx-parameters = { path = "../core/parameters" }
-cfx-stratum = { path = "stratum" }
-cfx-types = { path = "../cfx_types" }
+cfx-stratum = { path = "../crates/stratum" }
+cfx-types = { path = "../crates/cfx_types" }
 db = { path = "../db" }
 lazy_static = "1.4"
 log = "0.4"

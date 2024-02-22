@@ -37,9 +37,9 @@ jsonrpc-ws-server = "15.1.0"
 error-chain = { version = "0.12" }
 lazy_static = "1.4"
 log = "0.4"
-cfx-types = { path = "../cfx_types" }
-cfx-addr = { path = "../cfx_addr/rust" }
-cfx-bytes = { path = "../cfx_bytes" }
+cfx-types = { path = "../crates/cfx_types" }
+cfx-addr = { path = "../crates/cfx_addr" }
+cfx-bytes = { path = "../crates/cfx_bytes" }
 runtime = { path = "../util/runtime" }
 slab = "0.4"
 cfxcore = { path = "../core" }

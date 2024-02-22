@@ -7,7 +7,7 @@ license = "GPL-3.0"
 edition = "2018"
 
 [dependencies]
-cfx-types = { path = "../../cfx_types" }
+cfx-types = { path = "../cfx_types" }
 keccak-hash = "0.5"
 jsonrpc-core = "15.1.0"
 jsonrpc-tcp-server = "15.1.0"

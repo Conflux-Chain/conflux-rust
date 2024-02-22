@@ -10,13 +10,13 @@ edition = "2018"
 substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
 byteorder = "1.0"
 cfxkey = { path = "../../accounts/cfxkey" }
-cfx-bytes = { path = "../../cfx_bytes" }
-cfx-math = { path = "../../cfx_math"}
+cfx-bytes = { path = "../../crates/cfx_bytes" }
+cfx-math = { path = "../../crates/cfx_math" }
 cfx-internal-common = { path = "../internal_common" }
 cfx-parameters = { path = "../parameters" }
 cfx-statedb = { path = "../statedb" }
 cfx-vm-tracer-derive = { path="../../util/cfx-vm-tracer-derive" }
-cfx-types = { path = "../../cfx_types" }
+cfx-types = { path = "../../crates/cfx_types" }
 cfx-vm-types = { path = "../vm-types" }
 cfx-vm-interpreter = { path = "../vm-interpreter" }
 error-chain = { version = "0.12", default-features = false }
