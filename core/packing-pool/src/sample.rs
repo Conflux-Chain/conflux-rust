@@ -57,8 +57,7 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> TxSampler<'a, 'b, TX, R> {
     pub(crate) fn new(
         iter: treap_map::Iter<'a, PackingPoolMap<TX>>, loss_base: U256,
         rng: &'b mut R,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             iter,
             random_sample_phase: true,

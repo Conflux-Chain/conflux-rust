@@ -223,8 +223,7 @@ impl NetworkAddress {
     pub fn encrypt(
         self, shared_val_netaddr_key: &Key, key_version: KeyVersion,
         account: &AccountAddress, seq_num: u64, addr_idx: u32,
-    ) -> Result<EncNetworkAddress, ParseError>
-    {
+    ) -> Result<EncNetworkAddress, ParseError> {
         EncNetworkAddress::encrypt(
             self,
             shared_val_netaddr_key,
@@ -315,8 +314,7 @@ impl NetworkAddress {
     pub fn rotate_noise_public_key(
         &mut self, to_replace: &x25519::PublicKey,
         new_public_key: &x25519::PublicKey,
-    )
-    {
+    ) {
         for protocol in self.0.iter_mut() {
             // Replace the public key in any Noise protocols that match the key
             if let Protocol::NoiseIK(public_key) = protocol {

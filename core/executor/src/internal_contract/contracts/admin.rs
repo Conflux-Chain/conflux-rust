@@ -25,8 +25,7 @@ impl SimpleExecutionTrait for SetAdmin {
     fn execute_inner(
         &self, inputs: (Address, Address), params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         set_admin(inputs.0, inputs.1, params, context)
     }
 }
@@ -40,8 +39,7 @@ impl SimpleExecutionTrait for Destroy {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         destroy(
             input,
             params,
@@ -62,8 +60,7 @@ impl SimpleExecutionTrait for GetAdmin {
     fn execute_inner(
         &self, input: Address, _params: &ActionParams,
         context: &mut InternalRefContext,
-    ) -> vm::Result<Address>
-    {
+    ) -> vm::Result<Address> {
         Ok(context.state.admin(&input)?)
     }
 }

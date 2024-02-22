@@ -59,8 +59,7 @@ impl ValidatorInfo {
     pub fn new(
         account_address: AccountAddress, consensus_voting_power: u64,
         config: ValidatorConfig,
-    ) -> Self
-    {
+    ) -> Self {
         ValidatorInfo {
             account_address,
             consensus_voting_power,
@@ -75,8 +74,7 @@ impl ValidatorInfo {
         consensus_public_key: ConsensusPublicKey,
         vrf_public_key: Option<ConsensusVRFPublicKey>,
         consensus_voting_power: u64,
-    ) -> Self
-    {
+    ) -> Self {
         let addr = NetworkAddress::mock();
         let enc_addr = addr.clone().encrypt(
             &TEST_SHARED_VAL_NETADDR_KEY,

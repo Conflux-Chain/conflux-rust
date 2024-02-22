@@ -56,8 +56,7 @@ impl State {
     pub fn set_storage(
         &mut self, address: &AddressWithSpace, key: Vec<u8>, value: U256,
         owner: Address, substate: &mut Substate,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         let old_value = self.storage_entry_at(address, &key)?;
         return_if!(
             old_value.value == value && !Self::force_reset_owner(address)
@@ -93,8 +92,7 @@ impl State {
     pub fn checkpoint_storage_at(
         &self, start_checkpoint_index: usize, address: &AddressWithSpace,
         key: &Vec<u8>,
-    ) -> DbResult<Option<U256>>
-    {
+    ) -> DbResult<Option<U256>> {
         use super::{checkpoints::CheckpointEntry::*, AccountEntry};
         use cfx_statedb::StateDbExt;
         use primitives::StorageKey;

@@ -37,8 +37,7 @@ impl CacheConfig {
     pub fn new(
         ledger: usize, invalid_block_hashes_cache_size_in_count: usize,
         target_difficulties_cache_size_in_count: usize,
-    ) -> Self
-    {
+    ) -> Self {
         CacheConfig {
             ledger,
             invalid_block_hashes_cache_size_in_count,

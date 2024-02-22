@@ -240,7 +240,9 @@ impl DbValueType for i64 {
 /// KeyValueDbTraitOwnedRead is naturally read without explicit locking.
 impl<
         T: OwnedReadImplFamily
-            + OwnedReadImplByFamily<<T as OwnedReadImplFamily>::FamilyRepresentative>,
+            + OwnedReadImplByFamily<
+                <T as OwnedReadImplFamily>::FamilyRepresentative,
+            >,
     > KeyValueDbTraitOwnedRead for T
 {
     fn get_mut(&mut self, key: &[u8]) -> Result<Option<Self::ValueType>> {

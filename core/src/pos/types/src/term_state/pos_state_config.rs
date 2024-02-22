@@ -48,8 +48,7 @@ impl PosStateConfig {
         cip99_transition_view: u64, cip99_in_queue_locked_views: u64,
         cip99_out_queue_locked_views: u64, nonce_limit_transition_view: u64,
         max_nonce_per_account: u64,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             round_per_term,
             term_max_size,

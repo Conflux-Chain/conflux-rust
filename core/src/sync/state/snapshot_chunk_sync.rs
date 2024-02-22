@@ -106,8 +106,7 @@ impl Inner {
         active_peers: HashSet<NodeId>, trusted_blame_block: H256,
         io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
         manifest_config: SnapshotManifestConfig,
-    )
-    {
+    ) {
         if let Some(chunk_manager) = &mut self.chunk_manager {
             if chunk_manager.snapshot_candidate == sync_candidate {
                 // TODO If the chunk manager does not make progress for a long
@@ -142,8 +141,7 @@ impl Inner {
         &mut self, current_era_genesis: EpochId,
         candidates: Vec<SnapshotSyncCandidate>, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         let peers = PeerFilter::new(msgid::STATE_SYNC_CANDIDATE_REQUEST)
             .select_all(&sync_handler.syn);
         if peers.is_empty() {
@@ -163,8 +161,7 @@ impl Inner {
         &self, io: &dyn NetworkContext,
         sync_handler: &SynchronizationProtocolHandler,
         candidates: Vec<SnapshotSyncCandidate>, peers: Vec<NodeId>,
-    )
-    {
+    ) {
         let request = StateSyncCandidateRequest {
             request_id: 0,
             candidates,
@@ -211,8 +208,7 @@ impl SnapshotChunkSync {
     pub fn handle_snapshot_manifest_response(
         &self, ctx: &Context, response: SnapshotManifestResponse,
         request: &SnapshotManifestRequest,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let inner = &mut *self.inner.write();
 
         // status mismatch
@@ -345,8 +341,7 @@ impl SnapshotChunkSync {
         &self, peer: &NodeId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
         requested_candidates: &Vec<SnapshotSyncCandidate>,
-    )
-    {
+    ) {
         self.inner.write().sync_candidate_manager.on_peer_response(
             peer,
             supported_candidates,
@@ -370,8 +365,7 @@ impl SnapshotChunkSync {
     pub fn update_status(
         &self, current_era_genesis: EpochId, epoch_to_sync: EpochId,
         io: &dyn NetworkContext, sync_handler: &SynchronizationProtocolHandler,
-    )
-    {
+    ) {
         let mut inner = self.inner.write();
         if inner.manifest_attempts
             >= self.config.max_downloading_manifest_attempts

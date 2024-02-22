@@ -102,8 +102,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     >(
         &mut self, cache_index: CacheIndexT,
         cache_store_util: &mut CacheStoreUtilT,
-    ) -> CacheAccessResult<CacheIndexT>
-    {
+    ) -> CacheAccessResult<CacheIndexT> {
         // Not using get_mut because it borrows cache_store_util which conflicts
         // with later CacheAlgoDataAdapter calls.
         let lru_handle =
@@ -255,8 +254,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     >(
         &mut self, cache_index: CacheIndexT,
         cache_store_util: &mut CacheStoreUtilT,
-    )
-    {
+    ) {
         let lru_handle = cache_store_util.get(cache_index);
 
         if lru_handle.is_hit() {

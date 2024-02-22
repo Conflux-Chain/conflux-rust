@@ -60,10 +60,9 @@ impl RequestHandler {
 
     // Match request for given response.
     // Could return the following error:
-    // 1. Error return from peer.match_request():
-    //      No need to let caller handle request resending;
-    // 2. UnknownPeer:
-    //      No need to let caller handle request resending;
+    // 1. Error return from peer.match_request(): No need to let caller handle
+    //    request resending;
+    // 2. UnknownPeer: No need to let caller handle request resending;
     pub fn match_request(
         &self, io: &dyn NetworkContext, peer_id: &NodeId, request_id: u64,
     ) -> Result<RequestMessage, Error> {
@@ -86,8 +85,7 @@ impl RequestHandler {
     pub fn send_request(
         &self, io: &dyn NetworkContext, peer: Option<NodeId>,
         mut request: Box<dyn Request>, delay: Option<Duration>,
-    ) -> Result<(), Box<dyn Request>>
-    {
+    ) -> Result<(), Box<dyn Request>> {
         let peer = match peer {
             Some(peer) => peer,
             None => return Err(request),
@@ -274,8 +272,7 @@ impl RequestContainer {
     pub fn append_inflight_request(
         &mut self, request_id: u64, message: RequestMessage,
         timed_req: Arc<TimedSyncRequests>,
-    )
-    {
+    ) {
         self.inflight_requests.insert(
             request_id,
             SynchronizationPeerRequest { message, timed_req },
@@ -310,18 +307,15 @@ impl RequestContainer {
 
     // Match request with given response.
     // Could return the following error:
-    // 1. RequestNotFound:
-    //      In this case, no request is matched, so NO need to
-    //      handle the resending of the request for caller;
-    // 2. Error from send_message():
-    //      This also does NOT introduce needs to handle request
-    //      resending for caller;
+    // 1. RequestNotFound: In this case, no request is matched, so NO need to
+    //    handle the resending of the request for caller;
+    // 2. Error from send_message(): This also does NOT introduce needs to
+    //    handle request resending for caller;
     pub fn match_request(
         &mut self, io: &dyn NetworkContext, request_id: u64,
         requests_queue: &mut BinaryHeap<Arc<TimedSyncRequests>>,
         protocol_config: &ProtocolConfiguration,
-    ) -> Result<RequestMessage, Error>
-    {
+    ) -> Result<RequestMessage, Error> {
         let removed_req = self.remove_inflight_request(request_id);
         if let Some(removed_req) = removed_req {
             removed_req
@@ -461,8 +455,7 @@ impl TimedSyncRequests {
     pub fn from_request(
         peer_id: NodeId, request_id: u64, msg: &RequestMessage,
         conf: &ProtocolConfiguration, is_send_error: bool,
-    ) -> TimedSyncRequests
-    {
+    ) -> TimedSyncRequests {
         let timeout = if is_send_error {
             Duration::from_secs(1)
         } else {

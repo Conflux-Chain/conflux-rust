@@ -169,8 +169,7 @@ impl RootMetadata {
         num_leaves: u64, accu_hash: HashValue,
         frozen_root_hashes: Vec<HashValue>,
         pivot_decision: Option<PivotBlockDecision>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             num_leaves,
             accu_hash,
@@ -216,8 +215,7 @@ impl RecoveryData {
         mut blocks: Vec<Block>, root_metadata: RootMetadata,
         mut quorum_certs: Vec<QuorumCert>,
         highest_timeout_certificate: Option<TimeoutCertificate>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let root = ledger_recovery_data
             .find_root(&mut blocks, &mut quorum_certs)
             .with_context(|| {
@@ -288,8 +286,7 @@ impl RecoveryData {
     fn find_blocks_to_prune(
         root_id: HashValue, blocks: &mut Vec<Block>,
         quorum_certs: &mut Vec<QuorumCert>,
-    ) -> Vec<HashValue>
-    {
+    ) -> Vec<HashValue> {
         // prune all the blocks that don't have root as ancestor
         let mut tree = HashSet::new();
         let mut to_remove = vec![];

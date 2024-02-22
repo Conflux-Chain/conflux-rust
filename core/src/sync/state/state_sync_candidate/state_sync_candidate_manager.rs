@@ -6,26 +6,24 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// 1. Send CandidateRequest to all peers and set them to `pending_peers`.
-///     1.1: All peers respond before timeout, we choose one candidate and start
-///         state sync.
-///     1.2: Some peers timeout.
-///         1.2.1: Have available candidates, we choose one and enter step 2.
-///             `pending_peers` is cleared before entering step 2.
-///         1.2.2: No available candidates, reset the status and restart step 1.
-/// 2. Send ManifestRequest to some random peer in `active_peers`.
-///     2.1: Valid manifest received, move on to step 3.
-///     2.2: Timeout/invalid/empty response. Remove from `active_peers`.
-///         2.2.1: Have more available `active_peers`, restart step 2.
-///         2.2.2: `active_peers` is empty, reset and restart step 1.
-/// 3. Send ChunkRequest to multiple peers in `active_peers`.
-///     3.1: Valid chunks received.
-///         3.1.1: All chunks received, set state_sync.status to Completed.
-///         3.1.2: More chunks to request. Request from `active_peers`.
-///     3.2: Timeout/invalid/empty response. Remove from `active_peers`.
-///         3.2.1: Have more available `active_peers`, push this chunk key
-///             back into the `pending_chunks` for later requesting.
-///         3.2.2: `active_peers` is empty, reset and restart step 1.
+/// 1. Send CandidateRequest to all peers and set them to `pending_peers`. 1.1:
+///    All peers respond before timeout, we choose one candidate and start state
+///    sync. 1.2: Some peers timeout. 1.2.1: Have available candidates, we
+///    choose one and enter step 2. `pending_peers` is cleared before entering
+///    step 2. 1.2.2: No available candidates, reset the status and restart step
+///    1.
+/// 2. Send ManifestRequest to some random peer in `active_peers`. 2.1: Valid
+///    manifest received, move on to step 3. 2.2: Timeout/invalid/empty
+///    response. Remove from `active_peers`. 2.2.1: Have more available
+///    `active_peers`, restart step 2. 2.2.2: `active_peers` is empty, reset and
+///    restart step 1.
+/// 3. Send ChunkRequest to multiple peers in `active_peers`. 3.1: Valid chunks
+///    received. 3.1.1: All chunks received, set state_sync.status to Completed.
+///    3.1.2: More chunks to request. Request from `active_peers`. 3.2:
+///    Timeout/invalid/empty response. Remove from `active_peers`. 3.2.1: Have
+///    more available `active_peers`, push this chunk key back into the
+///    `pending_chunks` for later requesting. 3.2.2: `active_peers` is empty,
+///    reset and restart step 1.
 ///
 /// All step start/restart are triggered by the periodic check of phase change.
 pub struct StateSyncCandidateManager {
@@ -62,8 +60,7 @@ impl StateSyncCandidateManager {
     pub fn reset(
         &mut self, current_era_genesis: EpochId,
         candidates: Vec<SnapshotSyncCandidate>, peers: Vec<NodeId>,
-    )
-    {
+    ) {
         let mut candidates_map = BTreeMap::new();
         for candidate in &candidates {
             candidates_map.insert(candidate.clone(), HashSet::new());
@@ -82,8 +79,7 @@ impl StateSyncCandidateManager {
         &mut self, peer: &NodeId,
         supported_candidates: &Vec<SnapshotSyncCandidate>,
         requested_candidates: &Vec<SnapshotSyncCandidate>,
-    )
-    {
+    ) {
         if !self.pending_peers.remove(peer) {
             debug!("Receive response from unexpected peer {:?}, possibly from old requests", peer);
             return;

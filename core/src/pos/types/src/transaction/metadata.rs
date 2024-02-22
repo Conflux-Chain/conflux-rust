@@ -52,8 +52,7 @@ impl GeneralMetadataV0 {
     pub fn new(
         to_subaddress: Option<Vec<u8>>, from_subaddress: Option<Vec<u8>>,
         referenced_event: Option<u64>,
-    ) -> Self
-    {
+    ) -> Self {
         GeneralMetadataV0 {
             to_subaddress,
             from_subaddress,

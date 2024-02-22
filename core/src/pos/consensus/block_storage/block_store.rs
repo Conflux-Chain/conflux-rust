@@ -115,8 +115,7 @@ impl BlockStore {
         initial_data: RecoveryData, state_computer: Arc<dyn StateComputer>,
         max_pruned_blocks_in_mem: usize, time_service: Arc<dyn TimeService>,
         pow_handler: Arc<dyn PowInterface>,
-    ) -> Self
-    {
+    ) -> Self {
         let highest_tc = initial_data.highest_timeout_certificate();
         let (root, root_metadata, blocks, quorum_certs) = initial_data.take();
         Self::build(
@@ -141,8 +140,7 @@ impl BlockStore {
         storage: Arc<dyn PersistentLivenessStorage>,
         max_pruned_blocks_in_mem: usize, time_service: Arc<dyn TimeService>,
         pow_handler: Arc<dyn PowInterface>,
-    ) -> Self
-    {
+    ) -> Self {
         let RootInfo(root_block, root_qc, root_li) = root;
         //verify root is correct
         assert_eq!(

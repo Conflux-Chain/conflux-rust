@@ -97,8 +97,7 @@ impl CachedPosLedgerDB {
         initial_nodes: Vec<(NodeID, u64)>,
         initial_committee: Vec<(AccountAddress, u64)>,
         genesis_pivot_decision: Option<PivotBlockDecision>,
-    ) -> Self
-    {
+    ) -> Self {
         // if initial_nodes.is_empty() {
         //     let access_paths = ON_CHAIN_CONFIG_REGISTRY
         //         .iter()
@@ -157,8 +156,7 @@ impl CachedPosLedgerDB {
         &self, committed_trees: ExecutedTrees,
         committed_ledger_info: &LedgerInfo, committed_txns: Vec<Transaction>,
         reconfig_events: Vec<ContractEvent>,
-    )
-    {
+    ) {
         self.cache.lock().update_block_tree_root(
             committed_trees,
             committed_ledger_info,
@@ -178,8 +176,7 @@ impl CachedPosLedgerDB {
             Vec<Transaction>,  /* block transactions */
             ProcessedVMOutput, /* block execution output */
         ),
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         self.cache.lock().add_block(parent_block_id, block)
     }
 
@@ -188,8 +185,7 @@ impl CachedPosLedgerDB {
     pub fn prune(
         &self, committed_ledger_info: &LedgerInfo,
         committed_txns: Vec<Transaction>, reconfig_events: Vec<ContractEvent>,
-    ) -> Result<HashValue, Error>
-    {
+    ) -> Result<HashValue, Error> {
         self.cache.lock().prune(
             committed_ledger_info,
             committed_txns,

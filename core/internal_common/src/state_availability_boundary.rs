@@ -36,8 +36,7 @@ impl StateAvailabilityBoundary {
     pub fn new(
         epoch_hash: H256, epoch_height: u64,
         full_state_start_height: Option<u64>, full_state_space: Option<Space>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             pivot_chain: vec![epoch_hash],
             synced_state_height: 0,

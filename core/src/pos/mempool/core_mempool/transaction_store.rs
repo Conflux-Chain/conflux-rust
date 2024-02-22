@@ -259,8 +259,7 @@ impl TransactionStore {
     pub(crate) fn gc_by_system_ttl(
         &mut self,
         metrics_cache: &TtlCache<(AccountAddress, HashValue), SystemTime>,
-    )
-    {
+    ) {
         let now = diem_infallible::duration_since_epoch();
 
         self.gc(now, true, metrics_cache);
@@ -271,16 +270,14 @@ impl TransactionStore {
     pub(crate) fn gc_by_expiration_time(
         &mut self, block_time: Duration,
         metrics_cache: &TtlCache<(AccountAddress, HashValue), SystemTime>,
-    )
-    {
+    ) {
         self.gc(block_time, false, metrics_cache);
     }
 
     fn gc(
         &mut self, now: Duration, by_system_ttl: bool,
         _metrics_cache: &TtlCache<(AccountAddress, HashValue), SystemTime>,
-    )
-    {
+    ) {
         let (metric_label, index, log_event) = if by_system_ttl {
             (
                 counters::GC_SYSTEM_TTL_LABEL,

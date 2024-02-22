@@ -124,8 +124,7 @@ impl PeerManager {
     pub fn add_peer(
         &self,
         peer: NodeId, //metadata: ConnectionMetadata,
-    ) -> bool
-    {
+    ) -> bool {
         diem_debug!("PeerManager::add_peer [{:?}]", peer);
         let mut peer_states = self.peer_states.lock();
         let is_new_peer = !peer_states.contains_key(&peer);
@@ -377,8 +376,7 @@ impl PeerManager {
     pub fn process_broadcast_ack(
         &self, peer: NodeId, request_id_bytes: Vec<u8>, retry: bool,
         backoff: bool, timestamp: SystemTime,
-    )
-    {
+    ) {
         let batch_id = if let Ok(id) =
             bcs::from_bytes::<BatchId>(&request_id_bytes)
         {

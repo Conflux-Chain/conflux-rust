@@ -75,8 +75,7 @@ impl ValidatorConsensusInfo {
     pub fn new(
         public_key: ConsensusPublicKey,
         vrf_public_key: Option<ConsensusVRFPublicKey>, voting_power: u64,
-    ) -> Self
-    {
+    ) -> Self {
         ValidatorConsensusInfo {
             public_key,
             vrf_public_key,
@@ -118,8 +117,7 @@ impl ValidatorVerifier {
             AccountAddress,
             ValidatorConsensusInfo,
         >,
-    ) -> Self
-    {
+    ) -> Self {
         let total_voting_power = sum_voting_power(&address_to_validator_info);
         let quorum_voting_power = if address_to_validator_info.is_empty() {
             0
@@ -141,8 +139,7 @@ impl ValidatorVerifier {
             ValidatorConsensusInfo,
         >,
         quorum_voting_power: u64,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let total_voting_power = sum_voting_power(&address_to_validator_info);
         ensure!(
             quorum_voting_power <= total_voting_power,
@@ -169,8 +166,7 @@ impl ValidatorVerifier {
             ValidatorConsensusInfo,
         >,
         quorum_voting_power: u64, total_voting_power: u64,
-    ) -> Self
-    {
+    ) -> Self {
         ValidatorVerifier {
             address_to_validator_info,
             quorum_voting_power,
@@ -183,8 +179,7 @@ impl ValidatorVerifier {
     pub fn new_single(
         author: AccountAddress, public_key: ConsensusPublicKey,
         vrf_public_key: Option<ConsensusVRFPublicKey>,
-    ) -> Self
-    {
+    ) -> Self {
         let mut author_to_validator_info = BTreeMap::new();
         author_to_validator_info.insert(
             author,
@@ -197,8 +192,7 @@ impl ValidatorVerifier {
     pub fn verify<T: Serialize + CryptoHash>(
         &self, author: AccountAddress, message: &T,
         signature: &ConsensusSignature,
-    ) -> std::result::Result<(), VerifyError>
-    {
+    ) -> std::result::Result<(), VerifyError> {
         match self.get_public_key(&author) {
             Some(public_key) => {
                 if public_key
@@ -239,8 +233,7 @@ impl ValidatorVerifier {
     pub fn verify_aggregated_struct_signature<T: CryptoHash + Serialize>(
         &self, message: &T,
         aggregated_signature: &BTreeMap<AccountAddress, ConsensusSignature>,
-    ) -> std::result::Result<(), VerifyError>
-    {
+    ) -> std::result::Result<(), VerifyError> {
         self.check_num_of_signatures(aggregated_signature)?;
         self.check_voting_power(aggregated_signature.keys())?;
         for (author, signature) in aggregated_signature {
@@ -254,8 +247,7 @@ impl ValidatorVerifier {
     pub fn batch_verify_aggregated_signatures<T: CryptoHash + Serialize>(
         &self, message: &T,
         aggregated_signature: &BTreeMap<AccountAddress, ConsensusSignature>,
-    ) -> std::result::Result<(), VerifyError>
-    {
+    ) -> std::result::Result<(), VerifyError> {
         self.check_num_of_signatures(aggregated_signature)?;
         self.check_voting_power(aggregated_signature.keys())?;
         let keys_and_signatures: Vec<(ConsensusPublicKey, ConsensusSignature)> =
@@ -284,8 +276,7 @@ impl ValidatorVerifier {
     fn check_num_of_signatures(
         &self,
         aggregated_signature: &BTreeMap<AccountAddress, ConsensusSignature>,
-    ) -> std::result::Result<(), VerifyError>
-    {
+    ) -> std::result::Result<(), VerifyError> {
         let num_of_signatures = aggregated_signature.len();
         if num_of_signatures > self.len() {
             return Err(VerifyError::TooManySignatures {
@@ -400,8 +391,7 @@ fn sum_voting_power(
         AccountAddress,
         ValidatorConsensusInfo,
     >,
-) -> u64
-{
+) -> u64 {
     address_to_validator_info.values().fold(0, |sum, x| {
         sum.checked_add(x.voting_power)
             .expect("sum of all voting power is greater than u64::max")
@@ -472,8 +462,7 @@ pub fn random_validator_verifier(
 ) -> (
     Vec<crate::validator_signer::ValidatorSigner>,
     ValidatorVerifier,
-)
-{
+) {
     let mut signers = Vec::new();
     let mut account_address_to_validator_info = BTreeMap::new();
     for i in 0..count {

@@ -30,8 +30,7 @@ impl<'a> MptMerger<'a> {
     pub fn new(
         maybe_readonly_mpt: Option<&'a mut dyn SnapshotMptTraitReadAndIterate>,
         out_mpt: &'a mut dyn SnapshotMptTraitRw,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             rw_cursor: MptCursorRw::new(MergeMptsInRequest {
                 maybe_readonly_mpt,
@@ -79,8 +78,7 @@ impl<'a> MptMerger<'a> {
         >,
         mut set_keys_iter: impl FallibleIterator<Item = MptKeyValue, Error = Error>,
         in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         self.rw_cursor.load_root(in_reconstruct_snapshot_state)?;
 
         let mut key_to_delete = delete_keys_iter.next()?;

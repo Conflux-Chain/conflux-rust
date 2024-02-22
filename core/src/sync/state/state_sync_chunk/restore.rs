@@ -65,8 +65,7 @@ impl Restorer {
         snapshot_info: SnapshotInfo,
         parent_snapshot_info: Option<SnapshotInfo>,
         intermediate_trie_root_merkle: MerkleHash,
-    ) -> StorageResult<()>
-    {
+    ) -> StorageResult<()> {
         // Release temp snapshot db so it can be renamed on Windows.
         // `self.verifier()` is never unwrapped, so it's safe to set it to None,
         self.verifier = None;

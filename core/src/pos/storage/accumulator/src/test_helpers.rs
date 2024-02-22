@@ -175,8 +175,7 @@ impl MockHashStore {
 pub(crate) fn verify(
     store: &MockHashStore, num_leaves: u64, root_hash: HashValue,
     leaves: &[HashValue], first_leaf_idx: u64,
-)
-{
+) {
     leaves.iter().enumerate().for_each(|(i, hash)| {
         let leaf_index = first_leaf_idx + i as u64;
         let proof =

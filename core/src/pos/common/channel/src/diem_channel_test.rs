@@ -98,8 +98,7 @@ fn test_sender_clone() {
 fn test_multiple_validators_helper(
     queue_style: QueueStyle, num_messages_per_validator: usize,
     expected_last_message: usize,
-)
-{
+) {
     let (sender, mut receiver) = diem_channel::new(queue_style, 1, None);
     let num_validators = 128;
     for message in 0..num_messages_per_validator {

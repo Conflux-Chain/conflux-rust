@@ -21,8 +21,7 @@ impl<'a> Event<'a> {
     fn new(
         metadata: &'a Metadata, message: Option<fmt::Arguments<'a>>,
         keys_and_values: &'a [&'a dyn Schema],
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             metadata,
             message,
@@ -33,8 +32,7 @@ impl<'a> Event<'a> {
     pub fn dispatch(
         metadata: &'a Metadata, message: Option<fmt::Arguments<'a>>,
         keys_and_values: &'a [&'a dyn Schema],
-    )
-    {
+    ) {
         let event = Event::new(metadata, message, keys_and_values);
         crate::logger::dispatch(&event)
     }

@@ -32,8 +32,7 @@ pub(super) struct SuspendedFrame<'a> {
 pub(super) fn process_invoke<'a>(
     frame_local: FrameLocal<'a>, params: ActionParams,
     resumer: Box<dyn Resumable>,
-) -> InvokeInfo<'a>
-{
+) -> InvokeInfo<'a> {
     let callee = FreshFrame::new(
         params,
         frame_local.env,

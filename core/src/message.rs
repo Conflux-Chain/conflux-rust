@@ -87,8 +87,7 @@ pub trait Message:
     fn send_with_throttling(
         &self, io: &dyn NetworkContext, node_id: &NodeId,
         throttling_disabled: bool,
-    ) -> Result<(), NetworkError>
-    {
+    ) -> Result<(), NetworkError> {
         if !throttling_disabled && self.is_size_sensitive() {
             if let Err(e) = THROTTLING_SERVICE.read().check_throttling() {
                 debug!("Throttling failure: {:?}", e);

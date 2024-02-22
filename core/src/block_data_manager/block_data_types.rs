@@ -50,7 +50,9 @@ impl Decodable for BlockExecutionResult {
     }
 }
 
-#[derive(RlpEncodable, RlpDecodable, Clone, Copy, Debug, DeriveMallocSizeOf)]
+#[derive(
+    RlpEncodable, RlpDecodable, Clone, Copy, Debug, DeriveMallocSizeOf,
+)]
 pub struct BlockRewardResult {
     pub total_reward: U256,
     pub base_reward: U256,
@@ -343,8 +345,7 @@ impl PosRewardInfo {
     pub fn new(
         account_reward_list: Vec<(Address, H256, U256)>,
         execution_epoch_hash: H256,
-    ) -> Self
-    {
+    ) -> Self {
         let account_rewards = account_reward_list
             .into_iter()
             .map(|(address, pos_identifier, reward)| PosRewardForAccount {

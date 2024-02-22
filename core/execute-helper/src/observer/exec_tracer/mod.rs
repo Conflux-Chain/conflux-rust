@@ -94,7 +94,8 @@ impl CallTracer for ExecTracer {
         let success = matches!(
             result,
             Ok(FrameReturn {
-                apply_state: true, ..
+                apply_state: true,
+                ..
             })
         );
 
@@ -120,7 +121,8 @@ impl CallTracer for ExecTracer {
         let success = matches!(
             result,
             Ok(FrameReturn {
-                apply_state: true, ..
+                apply_state: true,
+                ..
             })
         );
 

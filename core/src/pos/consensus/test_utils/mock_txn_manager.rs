@@ -70,8 +70,7 @@ impl TxnManager for MockTransactionManager {
     async fn pull_txns(
         &self, _max_size: u64, _exclude_txns: Vec<&Payload>, _hash: HashValue,
         _validators: ValidatorVerifier,
-    ) -> Result<Payload, MempoolError>
-    {
+    ) -> Result<Payload, MempoolError> {
         // generate 1k txn is too slow with coverage instrumentation
         Ok(random_payload(10))
     }

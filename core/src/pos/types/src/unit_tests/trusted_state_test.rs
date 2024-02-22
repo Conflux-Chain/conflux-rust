@@ -40,8 +40,7 @@ fn arb_length(
 fn arb_validator_sets(
     epoch_changes: impl Into<SizeRange>,
     validators_per_epoch: impl Into<SizeRange>,
-) -> impl Strategy<Value = Vec<Vec<ValidatorSigner>>>
-{
+) -> impl Strategy<Value = Vec<Vec<ValidatorSigner>>> {
     vec(arb_length(validators_per_epoch), epoch_changes.into() + 1).prop_map(
         |validators_per_epoch_vec| {
             validators_per_epoch_vec
@@ -138,8 +137,7 @@ fn arb_update_proof(
         // The latest ledger info inside the last epoch
         LedgerInfoWithSignatures,
     ),
->
-{
+> {
     // helpful diagram:
     //
     // input:

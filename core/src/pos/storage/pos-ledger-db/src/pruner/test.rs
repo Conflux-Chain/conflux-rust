@@ -18,8 +18,7 @@ fn put_account_state_set(
     db: &DB, state_store: &StateStore,
     account_state_set: Vec<(AccountAddress, AccountStateBlob)>,
     version: Version,
-) -> HashValue
-{
+) -> HashValue {
     let mut cs = ChangeSet::new();
     let root = state_store
         .put_account_state_sets(
@@ -36,8 +35,7 @@ fn put_account_state_set(
 fn verify_state_in_store(
     state_store: &StateStore, address: AccountAddress,
     expected_value: Option<&AccountStateBlob>, version: Version,
-)
-{
+) {
     let (value, _proof) = state_store
         .get_account_state_with_proof_by_version(address, version)
         .unwrap();

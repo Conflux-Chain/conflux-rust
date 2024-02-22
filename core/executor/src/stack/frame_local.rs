@@ -52,8 +52,7 @@ impl<'a> FrameLocal<'a> {
         space: Space, env: &'a Env, machine: &'a Machine, spec: &'a Spec,
         depth: usize, origin: OriginInfo, substate: Substate,
         create_address: Option<Address>, static_flag: bool,
-    ) -> Self
-    {
+    ) -> Self {
         FrameLocal {
             space,
             env,

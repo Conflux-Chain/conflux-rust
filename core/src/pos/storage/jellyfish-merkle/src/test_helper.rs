@@ -172,8 +172,7 @@ pub fn test_get_range_proof<V: crate::TestValue>(
 fn test_existent_keys_impl<'a, V: crate::TestValue>(
     tree: &JellyfishMerkleTree<'a, MockTreeStore<V>, V>, version: Version,
     existent_kvs: &HashMap<HashValue, V>,
-)
-{
+) {
     let root_hash = tree.get_root_hash(version).unwrap();
 
     for (key, value) in existent_kvs {
@@ -186,8 +185,7 @@ fn test_existent_keys_impl<'a, V: crate::TestValue>(
 fn test_nonexistent_keys_impl<'a, V: crate::TestValue>(
     tree: &JellyfishMerkleTree<'a, MockTreeStore<V>, V>, version: Version,
     nonexistent_keys: &[HashValue],
-)
-{
+) {
     let root_hash = tree.get_root_hash(version).unwrap();
 
     for key in nonexistent_keys {
@@ -202,8 +200,7 @@ fn test_nonexistent_keys_impl<'a, V: crate::TestValue>(
 fn verify_range_proof<V: crate::TestValue>(
     expected_root_hash: HashValue, btree: BTreeMap<HashValue, V>,
     proof: SparseMerkleRangeProof,
-)
-{
+) {
     // For example, given the following sparse Merkle tree:
     //
     //                   root

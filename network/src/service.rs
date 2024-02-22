@@ -279,8 +279,7 @@ impl NetworkService {
     pub fn register_protocol(
         &self, handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId, version: ProtocolVersion,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let (tx, rx) = std::sync::mpsc::sync_channel(0);
         self.io_service.as_ref().unwrap().send_message(
             NetworkIoMessage::AddHandler {
@@ -519,8 +518,7 @@ impl NetworkServiceInner {
     pub fn new(
         config: &NetworkConfiguration,
         pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
-    ) -> Result<NetworkServiceInner, Error>
-    {
+    ) -> Result<NetworkServiceInner, Error> {
         let mut listen_address = match config.listen_address {
             None => SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
@@ -670,8 +668,7 @@ impl NetworkServiceInner {
     pub fn new_with_latency(
         config: &NetworkConfiguration,
         pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
-    ) -> Result<NetworkServiceInner, Error>
-    {
+    ) -> Result<NetworkServiceInner, Error> {
         let r = NetworkServiceInner::new(config, pos_pub_keys);
         if r.is_err() {
             return r;
@@ -1024,8 +1021,7 @@ impl NetworkServiceInner {
     fn create_connection(
         &self, socket: TcpStream, address: SocketAddr, id: Option<&NodeId>,
         io: &IoContext<NetworkIoMessage>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         match self.sessions.create(socket, address, id, io, self) {
             Ok(token) => {
                 debug!("new session created, token = {}, address = {:?}, id = {:?}", token, address, id);
@@ -1247,8 +1243,7 @@ impl NetworkServiceInner {
     fn kill_connection_by_token(
         &self, token: StreamToken, io: &IoContext<NetworkIoMessage>,
         remote: bool, op: Option<UpdateNodeOperation>, reason: &str,
-    )
-    {
+    ) {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
         let mut failure_id = None;
         let mut deregister = false;
@@ -1322,8 +1317,7 @@ impl NetworkServiceInner {
     fn kill_connection(
         &self, node_id: &NodeId, io: &IoContext<NetworkIoMessage>,
         remote: bool, op: Option<UpdateNodeOperation>, reason: &str,
-    ) -> bool
-    {
+    ) -> bool {
         let mut to_disconnect: Vec<ProtocolId> = Vec::new();
         let mut deregister = false;
         let mut token = 0;
@@ -1892,8 +1886,7 @@ impl DelayMessageContext {
         ts: Instant, io: IoContext<NetworkIoMessage>, protocol: ProtocolId,
         session: SharedSession, peer: NodeId, msg: Vec<u8>,
         min_protocol_version: ProtocolVersion, priority: SendQueuePriority,
-    ) -> Self
-    {
+    ) -> Self {
         DelayMessageContext {
             ts,
             io,
@@ -1937,8 +1930,7 @@ impl<'a> NetworkContext<'a> {
         io: &'a IoContext<NetworkIoMessage>,
         handler: Arc<dyn NetworkProtocolHandler + Sync>, protocol: ProtocolId,
         network_service: &'a NetworkServiceInner,
-    ) -> NetworkContext<'a>
-    {
+    ) -> NetworkContext<'a> {
         let min_supported_version = handler.minimum_supported_version();
         NetworkContext {
             io,
@@ -1972,8 +1964,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         &self, node_id: &NodeId, msg: Vec<u8>,
         min_protocol_version: ProtocolVersion,
         version_valid_till: ProtocolVersion, priority: SendQueuePriority,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         if version_valid_till < self.min_supported_version {
             bail!(ErrorKind::SendUnsupportedMessage {
                 protocol: self.protocol,

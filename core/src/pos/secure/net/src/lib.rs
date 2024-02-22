@@ -132,8 +132,7 @@ impl MethodResult {
 fn increment_counter(
     service: &'static str, mode: NetworkMode, method: Method,
     result: MethodResult,
-)
-{
+) {
     EVENT_COUNTER
         .with_label_values(&[
             service,

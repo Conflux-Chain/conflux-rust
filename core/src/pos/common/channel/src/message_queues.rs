@@ -77,8 +77,7 @@ impl<K: Eq + Hash + Clone, T> PerKeyQueue<K, T> {
     pub(crate) fn new(
         queue_style: QueueStyle, max_queue_size_per_key: NonZeroUsize,
         counters: Option<&'static IntCounterVec>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             queue_style,
             max_queue_size: max_queue_size_per_key,

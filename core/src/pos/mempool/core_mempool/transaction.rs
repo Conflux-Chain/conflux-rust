@@ -28,8 +28,7 @@ impl MempoolTransaction {
     pub(crate) fn new(
         txn: SignedTransaction, expiration_time: Duration, ranking_score: u64,
         timeline_state: TimelineState, governance_role: GovernanceRole,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             txn,
             ranking_score,

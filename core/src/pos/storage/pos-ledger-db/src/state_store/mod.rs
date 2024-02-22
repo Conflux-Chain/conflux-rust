@@ -70,8 +70,7 @@ impl StateStore {
         &self,
         account_state_sets: Vec<HashMap<AccountAddress, AccountStateBlob>>,
         first_version: Version, cs: &mut ChangeSet,
-    ) -> Result<Vec<HashValue>>
-    {
+    ) -> Result<Vec<HashValue>> {
         let blob_sets = account_state_sets
             .into_iter()
             .map(|account_states| {

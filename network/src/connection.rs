@@ -333,8 +333,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
     pub fn send<Message: Sync + Send + Clone + 'static>(
         &mut self, io: &IoContext<Message>, data: Vec<u8>,
         priority: SendQueuePriority,
-    ) -> Result<SendQueueStatus, Error>
-    {
+    ) -> Result<SendQueueStatus, Error> {
         if !data.is_empty() {
             let size = data.len();
             if self.assembler.is_oversized(size) {

@@ -118,8 +118,7 @@ impl Receipt {
         gas_sponsor_paid: bool, logs: Vec<LogEntry>, log_bloom: Bloom,
         storage_sponsor_paid: bool, storage_collateralized: Vec<StorageChange>,
         storage_released: Vec<StorageChange>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             accumulated_gas_used,
             gas_fee,

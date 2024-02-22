@@ -437,8 +437,8 @@ impl From<Eip155Transaction> for Transaction {
 }
 
 macro_rules! access_common_ref {
-    ($field: ident, $ty: ident) => {
-        pub fn $field(&self) -> &$ty{
+    ($field:ident, $ty:ident) => {
+        pub fn $field(&self) -> &$ty {
             match self {
                 Transaction::Native(tx) => &tx.$field,
                 Transaction::Ethereum(tx) => &tx.$field,
@@ -449,8 +449,8 @@ macro_rules! access_common_ref {
 
 #[allow(unused)]
 macro_rules! access_common {
-    ($field: ident, $ty: ident) => {
-        pub fn $field(&self) -> $ty{
+    ($field:ident, $ty:ident) => {
+        pub fn $field(&self) -> $ty {
             match self {
                 Transaction::Native(tx) => tx.$field,
                 Transaction::Ethereum(tx) => tx.$field,

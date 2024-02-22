@@ -392,8 +392,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn new(
         merkle: MerkleHash, children_table: ChildrenTableDeltaMpt,
         maybe_value: Option<Box<[u8]>>, compressed_path: CompressedPathRaw,
-    ) -> MemOptimizedTrieNode<CacheAlgoDataT>
-    {
+    ) -> MemOptimizedTrieNode<CacheAlgoDataT> {
         let mut ret = MemOptimizedTrieNode::default();
 
         ret.merkle_hash = merkle;
@@ -420,8 +419,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
         &self, new_value: Option<Option<Box<[u8]>>>,
         new_path: Option<CompressedPathRaw>,
         children_table: Option<ChildrenTableDeltaMpt>,
-    ) -> MemOptimizedTrieNode<CacheAlgoDataT>
-    {
+    ) -> MemOptimizedTrieNode<CacheAlgoDataT> {
         let mut ret = MemOptimizedTrieNode::default();
 
         match new_value {

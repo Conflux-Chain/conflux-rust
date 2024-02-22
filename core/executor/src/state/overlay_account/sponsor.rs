@@ -10,8 +10,7 @@ impl OverlayAccount {
     pub fn set_sponsor_for_gas(
         &mut self, sponsor: &Address, sponsor_balance: &U256,
         upper_bound: &U256,
-    )
-    {
+    ) {
         self.address.assert_native();
         self.sponsor_info.sponsor_for_gas = *sponsor;
         self.sponsor_info.sponsor_balance_for_gas = *sponsor_balance;

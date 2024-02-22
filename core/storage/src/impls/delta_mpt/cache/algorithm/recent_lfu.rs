@@ -208,8 +208,7 @@ impl<'a, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheStoreUtil
     fn set(
         &mut self, element_index: Self::ElementIndex,
         algo_data: &LRUHandle<PosT>,
-    )
-    {
+    ) {
         self[MyInto::<usize>::into(element_index.get_handle())].lru_handle =
             *algo_data
     }
@@ -232,8 +231,7 @@ impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
     fn new(
         metadata: CacheStoreUtilLRUHit<'a, PosT, CacheIndexT>,
         new_metadata: &'b mut RecentLFUMetadata<PosT, CacheIndexT>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             new_metadata,
             metadata,
@@ -260,16 +258,14 @@ impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheStoreUtil
     fn set(
         &mut self, element_index: Self::ElementIndex,
         algo_data: &LRUHandle<PosT>,
-    )
-    {
+    ) {
         self.metadata.set(element_index, algo_data);
     }
 
     fn set_most_recently_accessed(
         &mut self, _element_index: Self::ElementIndex,
         algo_data: &LRUHandle<PosT>,
-    )
-    {
+    ) {
         self.new_metadata.lru_handle = *algo_data;
     }
 }
@@ -288,8 +284,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     >(
         &mut self, cache_index: CacheIndexT,
         cache_store_util: &mut CacheStoreUtilT,
-    ) -> CacheAccessResult<CacheIndexT>
-    {
+    ) -> CacheAccessResult<CacheIndexT> {
         let r_lfu_handle =
             cache_store_util.get_most_recently_accessed(cache_index);
         let is_lru_hit = r_lfu_handle.is_lru_hit();
@@ -511,8 +506,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
     >(
         &mut self, cache_index: CacheIndexT,
         cache_store_util: &mut CacheStoreUtilT,
-    )
-    {
+    ) {
         let r_lfu_handle = cache_store_util.get(cache_index);
         self.frequency_lru
             .delete(r_lfu_handle, &mut self.frequency_heap.get_array_mut());

@@ -60,8 +60,7 @@ impl StateSyncClient {
     pub fn new(
         coordinator_sender: mpsc::UnboundedSender<CoordinatorMessage>,
         commit_timeout_ms: u64,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             coordinator_sender,
             commit_timeout_ms,
@@ -94,8 +93,7 @@ impl StateSyncClient {
     pub fn commit(
         &self, committed_txns: Vec<Transaction>,
         reconfig_events: Vec<ContractEvent>,
-    ) -> impl Future<Output = Result<(), Error>>
-    {
+    ) -> impl Future<Output = Result<(), Error>> {
         let mut sender = self.coordinator_sender.clone();
         let (cb_sender, cb_receiver) = oneshot::channel();
 

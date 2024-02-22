@@ -132,8 +132,7 @@ impl HttpConfiguration {
     pub fn new(
         ip: Option<(u8, u8, u8, u8)>, port: Option<u16>, cors: Option<String>,
         keep_alive: bool, threads: Option<usize>,
-    ) -> Self
-    {
+    ) -> Self {
         let ipv4 = match ip {
             Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
             None => Ipv4Addr::new(0, 0, 0, 0),
@@ -170,8 +169,7 @@ impl WsConfiguration {
     pub fn new(
         ip: Option<(u8, u8, u8, u8)>, port: Option<u16>,
         max_payload_bytes: usize,
-    ) -> Self
-    {
+    ) -> Self {
         let ipv4 = match ip {
             Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
             None => Ipv4Addr::new(0, 0, 0, 0),
@@ -187,8 +185,7 @@ impl WsConfiguration {
 pub fn setup_public_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, conf: &Configuration,
-) -> MetaIoHandler<Metadata>
-{
+) -> MetaIoHandler<Metadata> {
     setup_rpc_apis(
         common,
         rpc,
@@ -203,8 +200,7 @@ pub fn setup_public_rpc_apis(
 pub fn setup_public_eth_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, conf: &Configuration,
-) -> MetaIoHandler<Metadata>
-{
+) -> MetaIoHandler<Metadata> {
     setup_rpc_apis(
         common,
         rpc,
@@ -219,8 +215,7 @@ pub fn setup_public_eth_rpc_apis(
 pub fn setup_debug_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, conf: &Configuration,
-) -> MetaIoHandler<Metadata>
-{
+) -> MetaIoHandler<Metadata> {
     setup_rpc_apis(
         common,
         rpc,
@@ -236,8 +231,7 @@ fn setup_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, throttling_conf: &Option<String>,
     throttling_section: &str, apis: HashSet<Api>,
-) -> MetaIoHandler<Metadata>
-{
+) -> MetaIoHandler<Metadata> {
     let mut handler = MetaIoHandler::default();
     for api in &apis {
         match api {
@@ -404,8 +398,7 @@ pub fn extend_with_interceptor<
 >(
     handler: &mut MetaIoHandler<Metadata>, rpc_conf: &RpcImplConfiguration,
     rpc_impl: T, throttling_conf: &Option<String>, throttling_section: &str,
-)
-{
+) {
     let interceptor =
         ThrottleInterceptor::new(throttling_conf, throttling_section);
     if rpc_conf.enable_metrics {
@@ -451,8 +444,7 @@ fn add_meta_rpc_methods(
 pub fn setup_public_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, conf: &Configuration,
-) -> MetaIoHandler<Metadata>
-{
+) -> MetaIoHandler<Metadata> {
     setup_rpc_apis_light(
         common,
         rpc,
@@ -467,8 +459,7 @@ pub fn setup_public_rpc_apis_light(
 pub fn setup_debug_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, conf: &Configuration,
-) -> MetaIoHandler<Metadata>
-{
+) -> MetaIoHandler<Metadata> {
     let mut light_debug_apis = ApiSet::All.list_apis();
     light_debug_apis.remove(&Api::Trace);
     setup_rpc_apis_light(
@@ -486,8 +477,7 @@ fn setup_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, throttling_conf: &Option<String>,
     throttling_section: &str, apis: HashSet<Api>,
-) -> MetaIoHandler<Metadata>
-{
+) -> MetaIoHandler<Metadata> {
     let mut handler = MetaIoHandler::default();
     for api in apis {
         match api {

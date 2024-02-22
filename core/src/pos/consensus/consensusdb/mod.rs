@@ -221,8 +221,7 @@ impl ConsensusDB {
     pub fn put_staking_events(
         &self, pow_epoch_number: u64, pow_epoch_hash: H256,
         events: Vec<StakingEvent>,
-    ) -> Result<(), DbError>
-    {
+    ) -> Result<(), DbError> {
         let mut batch = SchemaBatch::new();
         batch.put::<StakingEventsSchema>(
             &pow_epoch_number,
@@ -235,8 +234,7 @@ impl ConsensusDB {
     pub fn get_staking_events(
         &self, parent_decision: PivotBlockDecision,
         me_decision: PivotBlockDecision,
-    ) -> Result<Vec<StakingEvent>, DbError>
-    {
+    ) -> Result<Vec<StakingEvent>, DbError> {
         diem_debug!(
             "consensusdb::get_staking_events: parent={:?} me={:?}",
             parent_decision,

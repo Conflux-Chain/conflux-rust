@@ -20,8 +20,7 @@ impl OverlayAccount {
     pub fn set_storage(
         &mut self, key: Vec<u8>, value: U256, old_value: StorageValue,
         owner: Address, substate: &mut Substate,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         // Refund the collateral of old value
         if let Some(old_owner) = old_value.owner {
             substate.record_storage_release(
@@ -60,8 +59,7 @@ impl OverlayAccount {
     pub fn delete_storage_range(
         &mut self, db_deletion_log: impl Iterator<Item = (Vec<u8>, Box<[u8]>)>,
         key_prefix: &[u8], substate: &mut Substate,
-    ) -> DbResult<()>
-    {
+    ) -> DbResult<()> {
         assert_eq!(self.address.space, Space::Native);
         let delete_all = key_prefix.is_empty();
 

@@ -73,8 +73,7 @@ impl Executed {
     pub(super) fn not_enough_balance_fee_charged(
         tx: &TransactionWithSignature, fee: &U256, cost: CostInfo,
         ext_result: ExecutedExt, spec: &Spec,
-    ) -> Self
-    {
+    ) -> Self {
         let gas_charged = if *tx.gas_price() == U256::zero() {
             U256::zero()
         } else {
@@ -105,8 +104,7 @@ impl Executed {
     pub(super) fn execution_error_fully_charged(
         tx: &TransactionWithSignature, cost: CostInfo, ext_result: ExecutedExt,
         spec: &Spec,
-    ) -> Self
-    {
+    ) -> Self {
         let mut storage_sponsor_paid = cost.storage_sponsored;
         let mut gas_sponsor_paid = cost.gas_sponsored;
 
@@ -133,8 +131,7 @@ impl Executed {
     pub(super) fn from_executive_return(
         r: &ExecutiveReturn, refund_info: RefundInfo, cost: CostInfo,
         substate: Substate, ext_result: ExecutedExt, spec: &Spec,
-    ) -> Self
-    {
+    ) -> Self {
         let output = r.return_data.to_vec();
 
         let SortedStorageChanges {
@@ -218,8 +215,7 @@ use rustc_hex::FromHex;
 
 #[test]
 fn test_decode_result() {
-    let input_hex =
-        "08c379a0\
+    let input_hex = "08c379a0\
          0000000000000000000000000000000000000000000000000000000000000020\
          0000000000000000000000000000000000000000000000000000000000000018\
          e699bae59586e4b88de8b6b3efbc8ce8afb7e58585e580bc0000000000000000";

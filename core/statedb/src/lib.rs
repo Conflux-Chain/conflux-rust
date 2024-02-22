@@ -169,8 +169,7 @@ mod impls {
         pub(crate) fn set_raw(
             &mut self, key: StorageKeyWithSpace, value: Box<[u8]>,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
                     op_name: "set".into(),
@@ -185,8 +184,7 @@ mod impls {
         pub fn delete(
             &mut self, key: StorageKeyWithSpace,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
                     op_name: "delete".into(),
@@ -201,8 +199,7 @@ mod impls {
         pub fn delete_all<AM: access_mode::AccessMode>(
             &mut self, key_prefix: StorageKeyWithSpace,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<Vec<MptKeyValue>>
-        {
+        ) -> Result<Vec<MptKeyValue>> {
             let key_bytes = key_prefix.to_key_bytes();
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
@@ -296,8 +293,7 @@ mod impls {
             accept_account_deletion: bool, address: &[u8], space: Space,
             storage: &dyn StorageStateTrait,
             accessed_entries: &AccessedEntries,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             if !storage_layouts_to_rewrite
                 .contains_key(&(address.to_vec(), space))
             {
@@ -344,8 +340,7 @@ mod impls {
             &mut self, address: &AddressWithSpace,
             storage_layout: StorageLayout,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             self.set_raw(
                 StorageKey::new_storage_root_key(&address.address)
                     .with_space(address.space),
@@ -359,8 +354,7 @@ mod impls {
         fn commit_storage_layout(
             &mut self, address: &[u8], space: Space, layout: &StorageLayout,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             let key = StorageKey::StorageRootKey(address).with_space(space);
             let value = layout.to_bytes().into_boxed_slice();
             if let Some(record) = debug_record {
@@ -482,8 +476,7 @@ mod impls {
         pub fn commit(
             &mut self, epoch_id: EpochId,
             mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<StateRootWithAuxInfo>
-        {
+        ) -> Result<StateRootWithAuxInfo> {
             self.apply_changes_to_storage(debug_record.as_deref_mut())?;
             if !self.checkpoints.is_empty() {
                 panic!("Active checkpoints during state-db commit");
