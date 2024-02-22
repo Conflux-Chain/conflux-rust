@@ -171,12 +171,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bddcadddf5e9015d310179a59bb28c4d4b9920ad0f11e8e14dbadf654890c9a6"
 
 [[package]]
-name = "array-macro"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06e97b4e522f9e55523001238ac59d13a8603af57f69980de5d8de4bbbe8ada6"
-
-[[package]]
 name = "arrayvec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2391,13 +2385,11 @@ dependencies = [
 
 [[package]]
 name = "enum-map"
-version = "0.4.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caa1769f019df7ccd8f9a741d2d608309688d0f1bd8a8747c14ac993660c761c"
+checksum = "7848397e7221a27d81cb7f07498d563f09b23fcd52ce9f74a6a110ed28f7cd4f"
 dependencies = [
- "array-macro",
- "enum-map-derive",
- "reexport-proc-macro",
+ "enum-map-derive 0.8.0",
 ]
 
 [[package]]
@@ -2409,6 +2401,17 @@ dependencies = [
  "proc-macro2 1.0.71",
  "quote 1.0.33",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "enum-map-derive"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a63b7a0ddec6f38dcec5e36257750b7a8fcaf4227e12ceb306e341d63634da05"
+dependencies = [
+ "proc-macro2 1.0.36",
+ "quote 1.0.15",
+ "syn 1.0.87",
 ]
 
 [[package]]
@@ -4403,7 +4406,7 @@ dependencies = [
  "diem-crypto",
  "diem-types",
  "enum-map",
- "enum-map-derive",
+ "enum-map-derive 0.4.6",
  "error-chain",
  "igd",
  "io",
@@ -5637,12 +5640,6 @@ dependencies = [
  "redox_syscall 0.2.16",
  "thiserror",
 ]
-
-[[package]]
-name = "reexport-proc-macro"
-version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6fd6195683d528242d8b017810909f8aaf91f111fdc4dbe8b10e4dd50e0c7f4"
 
 [[package]]
 name = "ref-cast"
