@@ -194,8 +194,7 @@ impl BlockStore {
         highest_commit_cert: &'a QuorumCert, retriever: &'a mut BlockRetriever,
         storage: Arc<dyn PersistentLivenessStorage>,
         state_computer: Arc<dyn StateComputer>,
-    ) -> anyhow::Result<RecoveryData>
-    {
+    ) -> anyhow::Result<RecoveryData> {
         diem_debug!(
             LogSchema::new(LogEvent::StateSync)
                 .remote_peer(retriever.preferred_peer),

@@ -144,8 +144,7 @@ impl EpochManager {
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
         started_as_voter: bool,
-    ) -> Self
-    {
+    ) -> Self {
         let config = node_config.consensus.clone();
         let sr_config = &node_config.consensus.safety_rules;
         let safety_rules_manager = SafetyRulesManager::new(sr_config);
@@ -190,8 +189,7 @@ impl EpochManager {
         timeout_sender: channel::Sender<(u64, Round)>,
         proposal_timeout_sender: channel::Sender<(u64, Round)>,
         new_round_timeout_sender: channel::Sender<(u64, Round)>, epoch: u64,
-    ) -> RoundState
-    {
+    ) -> RoundState {
         // 1.5^6 ~= 11
         // Timeout goes from initial_timeout to initial_timeout*11 in 6 steps
         let base_interval = Duration::from_millis(
@@ -503,8 +501,7 @@ impl EpochManager {
     async fn start_recovery_manager(
         &mut self, ledger_recovery_data: LedgerRecoveryData,
         epoch_state: EpochState,
-    )
-    {
+    ) {
         let epoch = epoch_state.epoch;
         let network_sender = ConsensusNetworkSender::new(
             self.author,
@@ -774,8 +771,7 @@ impl EpochManager {
         mut network_receivers: NetworkReceivers,
         mut test_command_receiver: channel::Receiver<TestCommand>,
         stopped: Arc<AtomicBool>,
-    )
-    {
+    ) {
         // initial start of the processor
         self.expect_new_epoch().await;
         diem_debug!("EpochManager main_loop starts");
@@ -937,8 +933,7 @@ impl EpochManager {
     async fn force_propose(
         &mut self, round: Round, parent_block_id: HashValue,
         payload: Vec<TransactionPayload>,
-    ) -> anyhow::Result<()>
-    {
+    ) -> anyhow::Result<()> {
         let bls_key = self
             .config
             .safety_rules

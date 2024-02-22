@@ -61,8 +61,7 @@ where T: Eq + Hash
     pub fn new(
         pref_cache_size: usize, max_cache_size: usize,
         bytes_per_cache_entry: usize,
-    ) -> Self
-    {
+    ) -> Self {
         CacheManager {
             pref_cache_size,
             max_cache_size,

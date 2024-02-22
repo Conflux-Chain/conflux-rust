@@ -32,8 +32,7 @@ impl TxWithReadyInfo {
     pub fn new(
         transaction: Arc<SignedTransaction>, packed: bool, sponsored_gas: U256,
         sponsored_storage: u64,
-    ) -> Self
-    {
+    ) -> Self {
         let tx_cost =
             Self::make_tx_cost(&*transaction, sponsored_gas, sponsored_storage);
         Self {
@@ -117,8 +116,7 @@ impl TxWithReadyInfo {
     pub fn make_tx_cost(
         transaction: &SignedTransaction, sponsored_gas: U256,
         sponsored_storage: u64,
-    ) -> U256
-    {
+    ) -> U256 {
         let estimate_gas_u512 = (transaction.gas() - sponsored_gas)
             .full_mul(*transaction.gas_price());
         // normally, the value <= 2^128
@@ -258,7 +256,7 @@ impl NoncePool {
     ///   2. tx.packed is false and tx.nonce() is minimum
     /// Then, find a sequential of transactions started at the first transaction
     /// such that   
-    ///   1. the nonce is continous and all transactions are not packed   
+    ///   1. the nonce is continous and all transactions are not packed
     ///   2. the balance is enough.
     ///
     /// The first return value is the transaction in the first step.
@@ -301,8 +299,7 @@ impl NoncePool {
     pub fn make_packing_batch(
         &self, first_tx: &TxWithReadyInfo, config: &PackingPoolConfig,
         last_valid_nonce: U256,
-    ) -> PackingBatch<Arc<SignedTransaction>>
-    {
+    ) -> PackingBatch<Arc<SignedTransaction>> {
         let start_nonce = *first_tx.transaction.nonce();
         let mut batch = PackingBatch::new(first_tx.transaction.clone());
 
@@ -402,8 +399,7 @@ mod nonce_pool_test {
     fn new_test_tx(
         sender: &KeyPair, nonce: U256, gas: U256, gas_price: U256, value: U256,
         storage_limit: u64,
-    ) -> Arc<SignedTransaction>
-    {
+    ) -> Arc<SignedTransaction> {
         Arc::new(
             Transaction::from(NativeTransaction {
                 nonce,
@@ -423,8 +419,7 @@ mod nonce_pool_test {
     fn new_test_tx_with_ready_info(
         sender: &KeyPair, nonce: U256, gas: U256, gas_price: U256, value: U256,
         storage_limit: u64, packed: bool,
-    ) -> TxWithReadyInfo
-    {
+    ) -> TxWithReadyInfo {
         let transaction =
             new_test_tx(sender, nonce, gas, gas_price, value, storage_limit);
         TxWithReadyInfo::new(
@@ -759,8 +754,7 @@ mod nonce_pool_test {
     fn recalculate_readiness_with_local_info(
         nonce_pool: &BTreeMap<U256, TxWithReadyInfo>, nonce: U256,
         balance: U256,
-    ) -> Option<(Arc<SignedTransaction>, U256)>
-    {
+    ) -> Option<(Arc<SignedTransaction>, U256)> {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
 

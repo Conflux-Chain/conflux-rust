@@ -28,25 +28,23 @@ use crate::{
         },
         pos_handler::PosVerifier,
     },
-    executive::{
-        internal_contract::build_bloom_and_recover_phantom, EstimateRequest,
-        ExecutionOutcome,
-    },
-    observer::{
-        trace::{
-            recover_phantom_traces, ActionType, BlockExecTraces,
-            LocalizedTrace, TransactionExecTraces,
-        },
-        trace_filter::TraceFilter,
-    },
     pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::{invalid_params, invalid_params_check, Result as RpcResult},
-    state::State,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
     NodeType, Notifications,
 };
+use cfx_execute_helper::{
+    estimation::{EstimateExt, EstimateRequest},
+    exec_tracer::{
+        recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
+        TraceFilter, TransactionExecTraces,
+    },
+    phantom_tx::build_bloom_and_recover_phantom,
+};
+use cfx_executor::{executive::ExecutionOutcome, state::State};
+
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
@@ -77,7 +75,7 @@ use primitives::{
     pos::PosBlockId,
     receipt::Receipt,
     BlockHeader, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-    TransactionOutcome,
+    TransactionStatus,
 };
 use rayon::prelude::*;
 use std::{
@@ -256,8 +254,7 @@ impl ConsensusGraph {
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
         pos_verifier: Arc<PosVerifier>,
-    ) -> Self
-    {
+    ) -> Self {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
@@ -321,8 +318,7 @@ impl ConsensusGraph {
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
         pos_verifier: Arc<PosVerifier>,
-    ) -> Self
-    {
+    ) -> Self {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let stable_hash = data_man.get_cur_consensus_era_stable_hash();
         ConsensusGraph::with_era_genesis(
@@ -379,8 +375,7 @@ impl ConsensusGraph {
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
         referees: &Vec<H256>, difficulty: &U256,
         pos_reference: Option<PosBlockId>,
-    ) -> bool
-    {
+    ) -> bool {
         let parent_index =
             *inner.hash_to_arena_indices.get(parent_hash).expect(
                 "parent_hash is the pivot chain tip,\
@@ -409,8 +404,7 @@ impl ConsensusGraph {
     pub fn choose_correct_parent(
         &self, parent_hash: &mut H256, referees: &mut Vec<H256>,
         blame_info: &mut StateBlameInfo, pos_reference: Option<PosBlockId>,
-    )
-    {
+    ) {
         let correct_parent_hash = {
             if let Some(pos_ref) = &pos_reference {
                 loop {
@@ -732,8 +726,7 @@ impl ConsensusGraph {
         &self, address: AddressWithSpace,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
         rpc_param_name: &str,
-    ) -> RpcResult<U256>
-    {
+    ) -> RpcResult<U256> {
         let epoch_number = match block_hash_or_epoch_number {
             BlockHashOrEpochNumber::BlockHashWithOption {
                 hash,
@@ -767,8 +760,7 @@ impl ConsensusGraph {
     fn filter_block_receipts<'a>(
         &self, filter: &'a LogFilter, epoch_number: u64, block_hash: H256,
         mut receipts: Vec<Receipt>, mut tx_hashes: Vec<H256>,
-    ) -> impl Iterator<Item = LocalizedLogEntry> + 'a
-    {
+    ) -> impl Iterator<Item = LocalizedLogEntry> + 'a {
         // sanity check
         if receipts.len() != tx_hashes.len() {
             warn!("Block ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", block_hash, receipts.len(), tx_hashes.len());
@@ -822,8 +814,7 @@ impl ConsensusGraph {
     fn filter_block<'a>(
         &self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64, pivot_hash: H256, block_hash: H256,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError>
-    {
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError> {
         // special case for genesis (for now, genesis has no logs)
         if epoch == 0 {
             return Ok(Either::Left(std::iter::empty()));
@@ -886,8 +877,7 @@ impl ConsensusGraph {
     fn filter_phantom_block<'a>(
         &self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64, pivot_hash: H256,
-    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError>
-    {
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError> {
         // special case for genesis (for now, genesis has no logs)
         if epoch == 0 {
             return Ok(Either::Left(std::iter::empty()));
@@ -946,8 +936,7 @@ impl ConsensusGraph {
     fn filter_single_epoch<'a>(
         &'a self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
         epoch: u64,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
-    {
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         // retrieve epoch hashes and pivot hash
         let mut epoch_hashes =
             self.inner.read_recursive().block_hashes_by_epoch(epoch)?;
@@ -991,8 +980,7 @@ impl ConsensusGraph {
     fn filter_epoch_batch(
         &self, filter: &LogFilter, bloom_possibilities: &Vec<Bloom>,
         epochs: Vec<u64>, consistency_check_data: &mut Option<(u64, H256)>,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
-    {
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         // lock so that we have a consistent view during this batch
         let inner = self.inner.read();
 
@@ -1030,8 +1018,7 @@ impl ConsensusGraph {
     pub fn get_log_filter_epoch_range(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
         check_range: bool,
-    ) -> Result<impl Iterator<Item = u64>, FilterError>
-    {
+    ) -> Result<impl Iterator<Item = u64>, FilterError> {
         // lock so that we have a consistent view
         let _inner = self.inner.read_recursive();
 
@@ -1099,8 +1086,7 @@ impl ConsensusGraph {
     fn filter_logs_by_epochs(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
         filter: &LogFilter, blocks_to_skip: HashSet<H256>, check_range: bool,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
-    {
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
         let bloom_possibilities = filter.bloom_possibilities();
 
         // we store the last epoch processed and the corresponding pivot hash so
@@ -1435,8 +1421,7 @@ impl ConsensusGraph {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
         request: EstimateRequest,
-    ) -> RpcResult<ExecutionOutcome>
-    {
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let (epoch_id, epoch_size) = if let Ok(v) =
@@ -1718,8 +1703,7 @@ impl ConsensusGraph {
             BlockExecTraces,
             Vec<Arc<SignedTransaction>>,
         )>,
-    ) -> Result<Vec<LocalizedTrace>, FilterError>
-    {
+    ) -> Result<Vec<LocalizedTrace>, FilterError> {
         let mut traces = Vec::new();
         for (pivot_hash, block_hash, block_trace, block_txs) in block_traces {
             if block_txs.len() != block_trace.0.len() {
@@ -1747,8 +1731,8 @@ impl ConsensusGraph {
                 {
                     continue;
                 }
-                for trace in tx_trace
-                    .filter_traces(&filter)
+                for trace in filter
+                    .filter_traces(tx_trace)
                     .map_err(|e| FilterError::Custom(e))?
                 {
                     if !filter
@@ -1810,7 +1794,7 @@ impl ConsensusGraph {
             };
 
             for receipt in exec_info.block_receipts.receipts.iter() {
-                if receipt.outcome_status == TransactionOutcome::Skipped {
+                if receipt.outcome_status == TransactionStatus::Skipped {
                     continue;
                 }
 
@@ -1830,8 +1814,7 @@ impl ConsensusGraph {
     pub fn get_phantom_block_by_number(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool,
-    ) -> Result<Option<PhantomBlock>, String>
-    {
+    ) -> Result<Option<PhantomBlock>, String> {
         let hashes = self.get_block_hashes_by_epoch(block_num)?;
 
         // special handling for genesis block
@@ -1937,7 +1920,7 @@ impl ConsensusGraph {
                         let receipt = &block_receipts[id];
 
                         // we do not return non-executed transaction
-                        if receipt.outcome_status == TransactionOutcome::Skipped
+                        if receipt.outcome_status == TransactionStatus::Skipped
                         {
                             continue;
                         }
@@ -1969,7 +1952,7 @@ impl ConsensusGraph {
                         // note: failing transactions will not produce any
                         // phantom txs or traces
                         if block_receipts[id].outcome_status
-                            != TransactionOutcome::Success
+                            != TransactionStatus::Success
                         {
                             continue;
                         }
@@ -2037,8 +2020,7 @@ impl ConsensusGraph {
     fn get_state_db_by_epoch_number_with_space(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
         space: Option<Space>,
-    ) -> RpcResult<StateDb>
-    {
+    ) -> RpcResult<StateDb> {
         invalid_params_check(
             rpc_param_name,
             self.validate_stated_epoch(&epoch_number),
@@ -2211,8 +2193,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let inner = self.inner.read();
         if let Some(tx_info) = inner.get_transaction_info(hash) {
             if let Some(executed) = &tx_info.maybe_executed_extra_info {
-                if executed.receipt.outcome_status
-                    == TransactionOutcome::Skipped
+                if executed.receipt.outcome_status == TransactionStatus::Skipped
                 {
                     // A skipped transaction is not visible to clients if
                     // accessed by its hash.

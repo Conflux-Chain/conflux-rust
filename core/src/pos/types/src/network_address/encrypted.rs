@@ -161,8 +161,7 @@ impl EncNetworkAddress {
         addr: NetworkAddress, shared_val_netaddr_key: &Key,
         key_version: KeyVersion, account: &AccountAddress, seq_num: u64,
         addr_idx: u32,
-    ) -> Result<Self, ParseError>
-    {
+    ) -> Result<Self, ParseError> {
         // unpack the NetworkAddress into its base Vec<u8>
         let mut addr_vec: Vec<u8> = bcs::to_bytes(&addr)?;
 
@@ -206,8 +205,7 @@ impl EncNetworkAddress {
     pub fn decrypt(
         self, shared_val_netaddr_key: &Key, account: &AccountAddress,
         addr_idx: u32,
-    ) -> Result<NetworkAddress, ParseError>
-    {
+    ) -> Result<NetworkAddress, ParseError> {
         let key_version = self.key_version;
         let seq_num = self.seq_num;
         let mut enc_addr = self.enc_addr;

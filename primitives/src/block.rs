@@ -48,8 +48,7 @@ impl Block {
     pub fn new_with_rlp_size(
         block_header: BlockHeader, transactions: Vec<Arc<SignedTransaction>>,
         rlp_size: Option<usize>, rlp_size_with_public: Option<usize>,
-    ) -> Self
-    {
+    ) -> Self {
         let approximated_rlp_size = match rlp_size {
             Some(size) => size,
             None => transactions

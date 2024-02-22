@@ -27,8 +27,7 @@ type Proof = test_utils::Proof;
 fn make_proposal_with_qc_and_proof(
     round: Round, proof: Proof, qc: QuorumCert, signer: &ValidatorSigner,
     exec_key: Option<&BLSPrivateKey>,
-) -> MaybeSignedVoteProposal
-{
+) -> MaybeSignedVoteProposal {
     test_utils::make_proposal_with_qc_and_proof(
         vec![],
         round,
@@ -43,8 +42,7 @@ fn make_proposal_with_parent(
     round: Round, parent: &MaybeSignedVoteProposal,
     committed: Option<&MaybeSignedVoteProposal>, signer: &ValidatorSigner,
     exec_key: Option<&BLSPrivateKey>,
-) -> MaybeSignedVoteProposal
-{
+) -> MaybeSignedVoteProposal {
     test_utils::make_proposal_with_parent(
         vec![],
         round,
@@ -56,9 +54,7 @@ fn make_proposal_with_parent(
 }
 
 pub type Callback = Box<
-    dyn Fn(
-        /* prevent cargo format failing */
-    ) -> (
+    dyn Fn(/* prevent cargo format failing */) -> (
         Box<dyn TSafetyRules + Send + Sync>,
         ValidatorSigner,
         Option<BLSPrivateKey>,

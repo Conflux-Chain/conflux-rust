@@ -18,22 +18,24 @@ use crate::rpc::{
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
 };
+use cfx_execute_helper::estimation::{
+    decode_error, EstimateExt, EstimateRequest,
+};
+use cfx_executor::executive::{
+    revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
+};
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
 };
+use cfx_vm_types::Error as VmError;
 use cfxcore::{
     consensus::PhantomBlock,
-    executive::{
-        revert_reason_decode, EstimateRequest, ExecutionError,
-        ExecutionOutcome, TxDropError,
-    },
-    observer::ErrorUnwind,
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    vm, ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
+    ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use clap::crate_version;
@@ -41,7 +43,7 @@ use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionOutcome, TransactionWithSignature,
+    StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
 };
 use rlp::Rlp;
 use rustc_hex::ToHex;
@@ -58,8 +60,7 @@ impl EthHandler {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-    ) -> Self
-    {
+    ) -> Self {
         EthHandler {
             config,
             consensus,
@@ -127,7 +128,7 @@ fn block_tx_by_index(
 impl EthHandler {
     fn exec_transaction(
         &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
-    ) -> CfxRpcResult<ExecutionOutcome> {
+    ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
 
         let epoch = match block_number_or_hash.unwrap_or_default() {
@@ -228,7 +229,7 @@ impl EthHandler {
         }
 
         let contract_address = match receipt.outcome_status {
-            TransactionOutcome::Success => {
+            TransactionStatus::Success => {
                 Transaction::deployed_contract_address(tx)
             }
             _ => None,
@@ -692,7 +693,9 @@ impl Eth for EthHandler {
         );
         // TODO: EVM core: Check the EVM error message. To make the
         // assert_error_eq test case in solidity project compatible.
-        match self.exec_transaction(request, block_number_or_hash)? {
+        let (execution_outcome, _estimation) =
+            self.exec_transaction(request, block_number_or_hash)?;
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -713,7 +716,7 @@ impl Eth for EthHandler {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(vm::Error::Reverted),
+                ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => bail!(call_execution_error(
                 format!(
@@ -740,9 +743,9 @@ impl Eth for EthHandler {
             request, block_number_or_hash
         );
         // TODO: EVM core: same as call
-        let executed = match self
-            .exec_transaction(request, block_number_or_hash)?
-        {
+        let (execution_outcome, estimation) =
+            self.exec_transaction(request, block_number_or_hash)?;
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -763,32 +766,11 @@ impl Eth for EthHandler {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(vm::Error::Reverted),
+                ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => {
-                // When a revert exception happens, there is usually an error in
-                // the sub-calls. So we return the trace
-                // information for debugging contract.
-                let errors = ErrorUnwind::from_traces(executed.trace)
-                    .errors
-                    .iter()
-                    .map(|(addr, error)| format!("{}: {}", addr, error))
-                    .collect::<Vec<String>>();
-
-                // Decode revert error
-                let revert_error = revert_reason_decode(&executed.output);
-                let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.", revert_error)
-                } else {
-                    format!(".")
-                };
-
-                // Try to fetch the innermost error.
-                let innermost_error = if errors.len() > 0 {
-                    format!(" Innermost error is at {}.", errors[0])
-                } else {
-                    String::default()
-                };
+                let (revert_error, innermost_error, errors) =
+                    decode_error(&executed, |addr| *addr);
 
                 bail!(call_execution_error(
                     format!(
@@ -809,9 +791,7 @@ impl Eth for EthHandler {
             ExecutionOutcome::Finished(executed) => executed,
         };
 
-        let estimated_gas_limit =
-            executed.estimated_gas_limit.unwrap_or(U256::zero());
-        Ok(estimated_gas_limit)
+        Ok(estimation.estimated_gas_limit)
     }
 
     fn transaction_by_hash(
@@ -854,7 +834,7 @@ impl Eth for EthHandler {
                 if let Some(tx_ref) = &tx {
                     if tx_ref.status
                         == Some(
-                            TransactionOutcome::Skipped
+                            TransactionStatus::Skipped
                                 .in_space(Space::Ethereum)
                                 .into(),
                         )
@@ -965,7 +945,7 @@ impl Eth for EthHandler {
                 // A skipped transaction is not available to clients if accessed
                 // by its hash.
                 if receipt.status_code
-                    == TransactionOutcome::Skipped
+                    == TransactionStatus::Skipped
                         .in_space(Space::Ethereum)
                         .into()
                 {
@@ -1086,8 +1066,7 @@ impl Eth for EthHandler {
     fn account_pending_transactions(
         &self, address: H160, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
-    ) -> jsonrpc_core::Result<AccountPendingTransactions>
-    {
+    ) -> jsonrpc_core::Result<AccountPendingTransactions> {
         info!("RPC Request: eth_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
               address, maybe_start_nonce, maybe_limit);
 

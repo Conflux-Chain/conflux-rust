@@ -1,0 +1,51 @@
+[package]
+description = "Conflux execution helper"
+homepage = "https://www.confluxnetwork.org"
+license = "GPL-3.0"
+name = "cfx-execute-helper"
+version = "2.0.2"
+edition = "2018"
+
+[dependencies]
+# substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
+# byteorder = "1.0"
+# cfxkey = { path = "../../accounts/cfxkey" }
+cfx-bytes = { path = "../../cfx_bytes" }
+# cfx-math = { path = "../../cfx_math"}
+cfx-internal-common = { path = "../internal_common" }
+cfx-parameters = { path = "../parameters" }
+cfx-statedb = { path = "../statedb" }
+cfx-vm-tracer-derive = { path="../../util/cfx-vm-tracer-derive" }
+cfx-types = { path = "../../cfx_types" }
+cfx-vm-types = { path = "../vm-types" }
+# cfx-vm-interpreter = { path = "../vm-interpreter" }
+cfx-executor = { path = "../executor" }
+error-chain = { version = "0.12", default-features = false }
+# keccak-hash = "0.5"
+# lazy_static = "1.4"
+log = "0.4"
+malloc_size_of = {path = "../../util/malloc_size_of"}
+malloc_size_of_derive = {path = "../../util/malloc_size_of_derive"}
+# num = "0.2"
+# parity-crypto = "0.9.0"
+# parking_lot = "0.11"
+primitives = { path = "../../primitives" }
+rlp = "0.4.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+# rustc-hex = "2.1"
+serde = { version = "1.0", features = ["rc"] }
+serde_derive = "1.0"
+# serde_json = "1.0"
+solidity-abi = { path="../../util/solidity-abi" }
+# solidity-abi-derive = { path="../../util/solidity-abi-derive" }
+# sha3-macro = {path="../../util/sha3-macro"}
+# strum = "0.20"
+strum_macros = "0.20"
+# bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "e7d9119eb285607d5134d40efd89555c41d73160", default-features = false, features = ["multicore"]}
+# tiny-keccak = {version = "2.0",  features = ["keccak"]}
+# diem-crypto = { path = "../src/pos/crypto/crypto" }
+# diem-types = { path = "../src/pos/types" }
+pow-types = {path = "../src/pos/types/pow-types"}
+# impl-trait-for-tuples = "^0.2"
+# impl-tools = "^0.10"
+typemap = "0.3"

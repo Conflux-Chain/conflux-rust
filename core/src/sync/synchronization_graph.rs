@@ -20,6 +20,7 @@ use slab::Slab;
 use tokio02::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
 
+use cfx_executor::machine::Machine;
 use cfx_types::{H256, U256};
 use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -37,7 +38,6 @@ use crate::{
     channel::Channel,
     consensus::{pos_handler::PosVerifier, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
-    machine::Machine,
     pow::{PowComputer, ProofOfWorkConfig},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
@@ -205,8 +205,7 @@ impl SynchronizationGraphInner {
         pow: Arc<PowComputer>, config: SyncGraphConfig,
         data_man: Arc<BlockDataManager>, machine: Arc<Machine>,
         pos_verifier: Arc<PosVerifier>,
-    ) -> Self
-    {
+    ) -> Self {
         let mut inner = SynchronizationGraphInner {
             arena: Slab::new(),
             hash_to_arena_indices: HashMap::new(),
@@ -938,8 +937,7 @@ impl SynchronizationGraphInner {
     fn set_and_propagate_invalid(
         &mut self, queue: &mut VecDeque<usize>,
         invalid_set: &mut HashSet<usize>, index: usize,
-    )
-    {
+    ) {
         let children =
             mem::replace(&mut self.arena[index].children, Vec::new());
         for child in &children {
@@ -1016,8 +1014,7 @@ impl SynchronizationGraph {
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
         notifications: Arc<Notifications>, machine: Arc<Machine>,
         pos_verifier: Arc<PosVerifier>,
-    ) -> Self
-    {
+    ) -> Self {
         let data_man = consensus.get_data_manager().clone();
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let genesis_block_header = data_man
@@ -1354,8 +1351,7 @@ impl SynchronizationGraph {
         frontier_index_list: Vec<usize>, need_to_verify: bool,
         header_index_to_insert: usize, insert_to_consensus: bool,
         persistent: bool,
-    ) -> (HashSet<usize>, Vec<H256>)
-    {
+    ) -> (HashSet<usize>, Vec<H256>) {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -1484,8 +1480,7 @@ impl SynchronizationGraph {
     pub fn insert_block_header(
         &self, header: &mut BlockHeader, need_to_verify: bool,
         bench_mode: bool, insert_to_consensus: bool, persistent: bool,
-    ) -> (BlockHeaderInsertionResult, Vec<H256>)
-    {
+    ) -> (BlockHeaderInsertionResult, Vec<H256>) {
         let _timer = MeterTimer::time_func(SYNC_INSERT_HEADER.as_ref());
         self.statistics.inc_sync_graph_inserted_header_count();
         let inner = &mut *self.inner.write();
@@ -1684,8 +1679,7 @@ impl SynchronizationGraph {
     fn propagate_graph_status(
         &self, inner: &mut SynchronizationGraphInner,
         frontier_index_list: Vec<usize>,
-    ) -> HashSet<usize>
-    {
+    ) -> HashSet<usize> {
         let mut queue = VecDeque::new();
         let mut invalid_set = HashSet::new();
         for index in frontier_index_list {
@@ -1727,8 +1721,7 @@ impl SynchronizationGraph {
     pub fn insert_block(
         &self, block: Block, need_to_verify: bool, persistent: bool,
         recover_from_db: bool,
-    ) -> BlockInsertionResult
-    {
+    ) -> BlockInsertionResult {
         let _timer = MeterTimer::time_func(SYNC_INSERT_BLOCK.as_ref());
         let hash = block.hash();
 

@@ -40,8 +40,8 @@ use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
-    spec::genesis::register_transaction, BlockDataManager, ConsensusGraph,
+    consensus::pos_handler::PosVerifier, genesis_block::register_transaction,
+    rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
     ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
@@ -85,8 +85,7 @@ where F: Fn(Arc<SignedTransaction>) -> T {
 pub fn check_balance_against_transaction(
     user_account: Option<Account>, contract_account: Option<Account>,
     is_sponsored: bool, gas_limit: U256, gas_price: U256, storage_limit: U256,
-) -> CheckBalanceAgainstTransactionResponse
-{
+) -> CheckBalanceAgainstTransactionResponse {
     let sponsor_for_gas = contract_account
         .as_ref()
         .map(|a| a.sponsor_info.sponsor_for_gas)
@@ -166,8 +165,7 @@ impl RpcImpl {
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
-    ) -> Self
-    {
+    ) -> Self {
         let data_man = consensus.get_data_manager().clone();
 
         RpcImpl {
@@ -837,8 +835,7 @@ impl RpcImpl {
     pub fn pos_force_propose(
         &self, round: U64, parent_block_id: H256,
         payload: Vec<TransactionPayload>,
-    ) -> RpcResult<()>
-    {
+    ) -> RpcResult<()> {
         if !self.network.is_test_mode() {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
@@ -1317,8 +1314,7 @@ impl RpcImpl {
     pub fn account_pending_transactions(
         &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
-    ) -> RpcResult<AccountPendingTransactions>
-    {
+    ) -> RpcResult<AccountPendingTransactions> {
         info!("RPC Request: cfx_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
               address, maybe_start_nonce, maybe_limit);
         self.check_address_network(address.network)?;

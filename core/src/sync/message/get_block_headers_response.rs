@@ -126,8 +126,7 @@ impl GetBlockHeadersResponse {
         &self, ctx: &Context, block_headers: &Vec<BlockHeader>,
         requested: HashSet<H256>, chosen_peer: Option<NodeId>,
         delay: Option<Duration>,
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         // This stores the block hashes for blocks without block body.
         let mut hashes = Vec::new();
         let mut dependent_hashes_bounded = HashSet::new();

@@ -42,8 +42,7 @@ impl SnapshotChunkManager {
         chunk_boundaries: Vec<Vec<u8>>, chunk_boundary_proofs: Vec<TrieProof>,
         active_peers: HashSet<NodeId>, config: SnapshotChunkConfig,
         intermediate_trie_root_merkle: MerkleHash,
-    ) -> StorageResult<Self>
-    {
+    ) -> StorageResult<Self> {
         let mut restorer = Restorer::new(
             *snapshot_candidate.get_snapshot_epoch_id(),
             snapshot_info.merkle_root,

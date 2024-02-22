@@ -34,8 +34,7 @@ impl<TX: PackingPoolTransaction> KeyMngTrait<PackingPoolMap<TX>>
     fn view_update(
         &mut self, key: &TX::Sender, value: Option<&PackingBatch<TX>>,
         old_value: Option<&PackingBatch<TX>>,
-    )
-    {
+    ) {
         match (value, old_value) {
             (Some(v), _) => {
                 self.insert(*key, v.first_gas_price());

@@ -12,11 +12,11 @@ use crate::{
         LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     rpc_errors::{account_result_to_rpc_result, Error as RpcError},
-    state::COMMISSION_PRIVILEGE_SPECIAL_KEY,
     sync::SynchronizationGraph,
     ConsensusGraph, Notifications,
 };
 use cfx_addr::Network;
+use cfx_executor::state::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
@@ -63,8 +63,7 @@ pub struct TxInfo {
 async fn with_timeout<T>(
     d: Duration, msg: String,
     fut: impl Future<Output = Result<T, Error>> + Send + Sync,
-) -> Result<T, Error>
-{
+) -> Result<T, Error> {
     // convert `fut` into futures@0.1
     let fut = fut.unit_error().boxed().compat();
 
@@ -102,8 +101,7 @@ impl QueryService {
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Arc<NetworkService>, throttling_config_file: Option<String>,
         notifications: Arc<Notifications>, config: LightNodeConfiguration,
-    ) -> Self
-    {
+    ) -> Self {
         let handler = Arc::new(LightHandler::new(
             consensus.clone(),
             graph,
@@ -309,8 +307,8 @@ impl QueryService {
 
         // retrieve blocks in batches
         let mut stream = stream::iter(hashes)
-            .map(|h| {
-                async move { self.retrieve_block(h).await.map(move |b| (h, b)) }
+            .map(|h| async move {
+                self.retrieve_block(h).await.map(move |b| (h, b))
             })
             .buffered(GAS_PRICE_BATCH_SIZE);
 
@@ -699,8 +697,7 @@ impl QueryService {
         epoch: u64, block_hash: H256, transaction_index: usize,
         num_logs_remaining: &mut usize, mut logs: Vec<LogEntry>,
         filter: LogFilter,
-    ) -> impl Iterator<Item = LocalizedLogEntry>
-    {
+    ) -> impl Iterator<Item = LocalizedLogEntry> {
         let num_logs = logs.len();
 
         let log_base_index = *num_logs_remaining;
@@ -727,8 +724,7 @@ impl QueryService {
     fn filter_block_receipts(
         epoch: u64, hash: H256, block_receipts: BlockReceipts,
         filter: LogFilter,
-    ) -> impl Iterator<Item = LocalizedLogEntry>
-    {
+    ) -> impl Iterator<Item = LocalizedLogEntry> {
         let mut receipts = block_receipts.receipts;
         // number of receipts in this block
         let num_receipts = receipts.len();

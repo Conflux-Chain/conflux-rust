@@ -103,8 +103,7 @@ impl<'a> VerifiedStateView<'a> {
         latest_persistent_state_root: HashValue,
         speculative_state: &'a SparseMerkleTree<AccountStateBlob>,
         pos_state: PosState,
-    ) -> Self
-    {
+    ) -> Self {
         // Hack: When there's no transaction in the db but state tree root hash
         // is not the placeholder hash, it implies that there's
         // pre-genesis state present.

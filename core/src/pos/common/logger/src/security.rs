@@ -19,7 +19,6 @@
 //!     "some_key" = "some data",
 //! );
 //! ```
-//!
 
 use crate::{Key, Schema, Value, Visitor};
 use serde::{Deserialize, Serialize};

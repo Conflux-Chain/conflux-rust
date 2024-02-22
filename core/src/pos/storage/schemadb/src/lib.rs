@@ -212,8 +212,7 @@ impl DB {
     pub fn open(
         path: impl AsRef<Path>, name: &'static str,
         column_families: Vec<ColumnFamilyName>, db_opts: Options,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         {
             let cfs_set: HashSet<_> = column_families.iter().collect();
             ensure!(
@@ -236,16 +235,14 @@ impl DB {
     pub fn open_readonly(
         path: impl AsRef<Path>, name: &'static str,
         column_families: Vec<ColumnFamilyName>, db_opts: Options,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         DB::open_cf_readonly(db_opts, path, name, column_families)
     }
 
     fn open_cf(
         db_opts: Options, path: impl AsRef<Path>, name: &'static str,
         column_families: Vec<ColumnFamilyName>,
-    ) -> Result<DB>
-    {
+    ) -> Result<DB> {
         let inner = rocksdb::DB::open_cf(
             db_opts,
             path.as_ref().to_str().ok_or_else(|| {
@@ -271,8 +268,7 @@ impl DB {
     fn open_cf_readonly(
         opts: Options, path: impl AsRef<Path>, name: &'static str,
         column_families: Vec<ColumnFamilyName>,
-    ) -> Result<DB>
-    {
+    ) -> Result<DB> {
         let error_if_log_file_exists = false;
         let inner = rocksdb::DB::open_cf_for_read_only(
             opts,

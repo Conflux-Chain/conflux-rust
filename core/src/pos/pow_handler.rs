@@ -2,12 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    executive::internal_contract::decode_register_info,
-    pos::consensus::ConsensusDB, ConsensusGraph,
-};
+use crate::{pos::consensus::ConsensusDB, ConsensusGraph};
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
+use cfx_executor::internal_contract::decode_register_info;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_types::H256;
 use diem_types::block_info::PivotBlockDecision;
@@ -66,8 +64,7 @@ impl PowHandler {
     fn validate_proposal_pivot_decision_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,
         me_decision: &H256,
-    ) -> bool
-    {
+    ) -> bool {
         pow_consensus
             .inner
             .read()
@@ -77,8 +74,7 @@ impl PowHandler {
     fn get_staking_events_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: H256,
         me_decision: H256,
-    ) -> Result<Vec<StakingEvent>>
-    {
+    ) -> Result<Vec<StakingEvent>> {
         // We only call this for committed blocks, so it is guaranteed that
         // `parent_decision` is an ancestor of `me_decision`.
         if parent_decision == me_decision {
@@ -171,8 +167,7 @@ impl PowInterface for PowHandler {
     fn get_staking_events(
         &self, parent_height: u64, me_height: u64, parent_decision: H256,
         me_decision: H256,
-    ) -> Result<Vec<StakingEvent>>
-    {
+    ) -> Result<Vec<StakingEvent>> {
         let pow_consensus =
             self.pow_consensus.read().clone().and_then(|c| c.upgrade());
         if pow_consensus.is_none() {

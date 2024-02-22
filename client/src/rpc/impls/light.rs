@@ -101,8 +101,7 @@ impl RpcImpl {
     pub fn new(
         light: Arc<LightQueryService>, accounts: Arc<AccountProvider>,
         consensus: SharedConsensusGraph, data_man: Arc<BlockDataManager>,
-    ) -> Self
-    {
+    ) -> Self {
         RpcImpl {
             accounts,
             consensus,
@@ -123,8 +122,7 @@ impl RpcImpl {
     fn get_epoch_number_with_pivot_check(
         consensus_graph: SharedConsensusGraph,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<EpochNumber>
-    {
+    ) -> RpcResult<EpochNumber> {
         match block_hash_or_epoch_number {
             Some(BlockHashOrEpochNumber::BlockHashWithOption {
                 hash,
@@ -187,8 +185,7 @@ impl RpcImpl {
     fn balance(
         &self, address: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcBoxFuture<U256>
-    {
+    ) -> RpcBoxFuture<U256> {
         info!(
             "RPC Request: cfx_getBalance address={:?} epoch={:?}",
             address,
@@ -421,8 +418,7 @@ impl RpcImpl {
     fn code(
         &self, address: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcBoxFuture<Bytes>
-    {
+    ) -> RpcBoxFuture<Bytes> {
         info!(
             "RPC Request: cfx_getCode address={:?} epoch={:?}",
             address,
@@ -606,8 +602,7 @@ impl RpcImpl {
     fn storage_at(
         &self, address: RpcAddress, position: U256,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcBoxFuture<Option<H256>>
-    {
+    ) -> RpcBoxFuture<Option<H256>> {
         let position: H256 = H256::from_uint(&position);
         // let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -1041,8 +1036,7 @@ impl RpcImpl {
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
         epoch: Option<EpochNumber>,
-    ) -> RpcBoxFuture<CheckBalanceAgainstTransactionResponse>
-    {
+    ) -> RpcBoxFuture<CheckBalanceAgainstTransactionResponse> {
         let epoch: primitives::EpochNumber =
             epoch.unwrap_or(EpochNumber::LatestState).into();
 

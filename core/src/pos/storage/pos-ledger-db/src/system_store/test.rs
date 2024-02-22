@@ -17,8 +17,7 @@ use std::collections::HashMap;
 fn bump_ledger_counters(
     store: &SystemStore, first_version: Version, last_version: Version,
     counter_bumps: HashMap<Version, LedgerCounterBumps>,
-) -> LedgerCounters
-{
+) -> LedgerCounters {
     let mut cs = ChangeSet::new_with_bumps(counter_bumps);
     let counters = store
         .bump_ledger_counters(first_version, last_version, &mut cs)

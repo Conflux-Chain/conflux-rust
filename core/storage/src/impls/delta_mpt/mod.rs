@@ -108,8 +108,7 @@ impl MultiVersionMerklePatriciaTrie {
         snapshot_epoch_id: EpochId, storage_manager: Arc<StorageManager>,
         mpt_id: DeltaMptId,
         node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let row_number = Self::parse_row_number(
             db_manager.open(mpt_id)?.get("last_row_number".as_bytes()),
         )
@@ -140,8 +139,7 @@ impl MultiVersionMerklePatriciaTrie {
     pub fn new_single_mpt(
         db_manager: Arc<dyn OpenableOnDemandOpenDeltaDbTrait>,
         node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         let mpt_id = 0;
         let row_number = Self::parse_row_number(
             db_manager.open(mpt_id)?.get("last_row_number".as_bytes()),
@@ -178,8 +176,7 @@ impl MultiVersionMerklePatriciaTrie {
     pub(super) fn state_root_committed(
         &self, epoch_id: EpochId, merkle_root: &MerkleHash,
         parent_epoch_id: EpochId, root_node: Option<NodeRefDeltaMpt>,
-    )
-    {
+    ) {
         self.set_parent_epoch(epoch_id, parent_epoch_id.clone());
         if root_node.is_some() {
             self.set_root_node_ref(

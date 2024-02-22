@@ -144,8 +144,7 @@ impl Block {
         &self, executed_state_id: HashValue, version: Version,
         next_epoch_state: Option<EpochState>,
         pivot: Option<PivotBlockDecision>,
-    ) -> BlockInfo
-    {
+    ) -> BlockInfo {
         BlockInfo::new(
             self.epoch(),
             self.round(),
@@ -195,8 +194,7 @@ impl Block {
         id: HashValue, block_data: BlockData,
         signature: Option<ConsensusSignature>,
         vrf_proof: Option<(u64, ConsensusVRFProof)>,
-    ) -> Self
-    {
+    ) -> Self {
         Block {
             id,
             block_data,
@@ -223,8 +221,7 @@ impl Block {
     pub fn new_proposal(
         payload: Payload, round: Round, timestamp_usecs: u64,
         quorum_cert: QuorumCert, validator_signer: &ValidatorSigner,
-    ) -> Self
-    {
+    ) -> Self {
         let block_data = BlockData::new_proposal(
             payload,
             validator_signer.author(),
@@ -249,8 +246,7 @@ impl Block {
     pub fn new_proposal_from_block_data_and_signature(
         block_data: BlockData, signature: ConsensusSignature,
         vrf_nonce_and_proof: Option<(u64, ConsensusVRFProof)>,
-    ) -> Self
-    {
+    ) -> Self {
         Block {
             id: block_data.hash(),
             block_data,

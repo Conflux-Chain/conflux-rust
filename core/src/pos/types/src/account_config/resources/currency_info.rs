@@ -51,8 +51,7 @@ impl CurrencyInfoResource {
         burn_events: EventHandle, preburn_events: EventHandle,
         cancel_burn_events: EventHandle,
         exchange_rate_update_events: EventHandle,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             total_value,
             preburn_value,

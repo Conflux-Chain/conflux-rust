@@ -7,9 +7,10 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
-mod error;
 pub mod global_params;
 mod statedb_ext;
+
+use cfx_db_errors::statedb as error;
 
 #[cfg(test)]
 mod tests;
@@ -19,6 +20,7 @@ pub use self::{
     impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
     statedb_ext::StateDbExt,
 };
+pub use cfx_storage::utils::access_mode;
 pub type StateDb = StateDbGeneric;
 
 // Put StateDb in mod to make sure that methods from statedb_ext don't access
@@ -49,6 +51,7 @@ mod impls {
         checkpoints: Vec<Checkpoint>,
     }
 
+    // Note: Not used currently.
     pub trait StateDbCheckpointMethods {
         /// Create a new checkpoint. Returns the index of the checkpoint.
         fn checkpoint(&mut self) -> usize;
@@ -90,7 +93,7 @@ mod impls {
         }
 
         /// Update the accessed_entries while getting the value.
-        pub fn get_raw(
+        pub(crate) fn get_raw(
             &self, key: StorageKeyWithSpace,
         ) -> Result<Option<Arc<[u8]>>> {
             let key_bytes = key.to_key_bytes();
@@ -115,6 +118,13 @@ mod impls {
             };
             trace!("get_raw key={:?}, value={:?}", key, r);
             Ok(r)
+        }
+
+        #[cfg(feature = "testonly_code")]
+        pub fn get_raw_test(
+            &self, key: StorageKeyWithSpace,
+        ) -> Result<Option<Arc<[u8]>>> {
+            self.get_raw(key)
         }
 
         /// Set the value under `key` to `value` in `accessed_entries`.
@@ -156,11 +166,10 @@ mod impls {
             Ok(())
         }
 
-        pub fn set_raw(
+        pub(crate) fn set_raw(
             &mut self, key: StorageKeyWithSpace, value: Box<[u8]>,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
                     op_name: "set".into(),
@@ -175,8 +184,7 @@ mod impls {
         pub fn delete(
             &mut self, key: StorageKeyWithSpace,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
                     op_name: "delete".into(),
@@ -191,8 +199,7 @@ mod impls {
         pub fn delete_all<AM: access_mode::AccessMode>(
             &mut self, key_prefix: StorageKeyWithSpace,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<Vec<MptKeyValue>>
-        {
+        ) -> Result<Vec<MptKeyValue>> {
             let key_bytes = key_prefix.to_key_bytes();
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
@@ -286,8 +293,7 @@ mod impls {
             accept_account_deletion: bool, address: &[u8], space: Space,
             storage: &dyn StorageStateTrait,
             accessed_entries: &AccessedEntries,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             if !storage_layouts_to_rewrite
                 .contains_key(&(address.to_vec(), space))
             {
@@ -334,8 +340,7 @@ mod impls {
             &mut self, address: &AddressWithSpace,
             storage_layout: StorageLayout,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             self.set_raw(
                 StorageKey::new_storage_root_key(&address.address)
                     .with_space(address.space),
@@ -349,8 +354,7 @@ mod impls {
         fn commit_storage_layout(
             &mut self, address: &[u8], space: Space, layout: &StorageLayout,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<()>
-        {
+        ) -> Result<()> {
             let key = StorageKey::StorageRootKey(address).with_space(space);
             let value = layout.to_bytes().into_boxed_slice();
             if let Some(record) = debug_record {
@@ -471,9 +475,9 @@ mod impls {
 
         pub fn commit(
             &mut self, epoch_id: EpochId,
-            debug_record: Option<&mut ComputeEpochDebugRecord>,
-        ) -> Result<StateRootWithAuxInfo>
-        {
+            mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+        ) -> Result<StateRootWithAuxInfo> {
+            self.apply_changes_to_storage(debug_record.as_deref_mut())?;
             if !self.checkpoints.is_empty() {
                 panic!("Active checkpoints during state-db commit");
             }

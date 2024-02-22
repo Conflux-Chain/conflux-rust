@@ -51,8 +51,7 @@ impl VaultStorage {
         certificate: Option<String>, renew_ttl_secs: Option<u32>,
         use_cas: bool, connection_timeout_ms: Option<u64>,
         response_timeout_ms: Option<u64>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             client: Client::new(
                 host,
@@ -173,8 +172,7 @@ impl VaultStorage {
     pub fn set_policy(
         &self, policy_name: &str, engine: &VaultEngine, key: &str,
         capabilities: &[Capability],
-    ) -> Result<(), Error>
-    {
+    ) -> Result<(), Error> {
         let policy_name = self.name(policy_name, engine);
 
         let mut vault_policy =

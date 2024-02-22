@@ -60,8 +60,7 @@ impl MetricsPusher {
     fn worker(
         quit_receiver: mpsc::Receiver<()>, push_metrics_endpoint: String,
         push_metrics_frequency_secs: u64,
-    )
-    {
+    ) {
         while quit_receiver
             .recv_timeout(Duration::from_secs(push_metrics_frequency_secs))
             .is_err()

@@ -20,18 +20,18 @@ use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
 
 use blockgen::BlockGenerator;
+use cfx_executor::machine::{new_machine_with_builtin, Machine, VmFactory};
+use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
 pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{PosConfiguration, PosVerifier},
-    machine::{new_machine_with_builtin, Machine},
+    genesis_block::{self as genesis, genesis_block},
     pow::PowComputer,
-    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
     sync::SyncPhaseType,
-    vm_factory::VmFactory,
     ConsensusGraph, LightProvider, NodeType, Notifications, Stopable,
     SynchronizationGraph, SynchronizationService, TransactionPool,
     WORKER_COMPUTATION_PARALLELISM,
@@ -233,8 +233,7 @@ pub fn initialize_common_modules(
         EthPubSubClient,
     ),
     String,
->
-{
+> {
     info!("Working directory: {:?}", std::env::current_dir());
 
     // TODO(lpl): Keep it properly and allow not running pos.
@@ -553,8 +552,7 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
     ),
     String,
->
-{
+> {
     let (
         _machine,
         secret_store,
@@ -826,8 +824,7 @@ pub fn initialize_txgens(
 ) -> (
     Option<Arc<TransactionGenerator>>,
     Option<Arc<Mutex<DirectTransactionGenerator>>>,
-)
-{
+) {
     // This tx generator directly push simple transactions and erc20
     // transactions into blocks.
     let maybe_direct_txgen_with_contract = if conf.is_test_or_dev_mode() {

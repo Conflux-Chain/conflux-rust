@@ -10,6 +10,7 @@ edition = "2018"
 clap = "2"
 cfxcore = { path = "../core" }
 cfx-types = { path = "../cfx_types" }
+cfx-vm-types = { path = "../core/vm-types" }
 cfx-bytes = { path = "../cfx_bytes" }
 primitives = { path = "../primitives" }
 parking_lot = "0.11"

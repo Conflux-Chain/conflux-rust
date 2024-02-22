@@ -5,7 +5,7 @@ from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS
 from test_framework.blocktools import create_transaction, encode_hex_0x
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.contracts import ConfluxTestFrameworkForContract, Account
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.mininode import *
 from test_framework.util import *
@@ -29,22 +29,22 @@ class VoteTokenTest(ConfluxTestFrameworkForContract):
         self.tx_conf = {"gas":int_to_hex(self.gas), "gasPrice":int_to_hex(self.gas_price)}
 
     def set_test_params(self):
+        super().set_test_params()
         self.num_nodes = 1
 
     def setup_contract(self):
         self.token_contract = self.cfx_contract("DummyErc20").deploy()
         self.vote_contract = self.cfx_contract("AdvancedTokenVote1202").deploy()
         self.log.info("Initializing contract")
-        self.accounts = [a[0] for a in self.new_address_and_transfer(5)]
 
     def run_test(self):
         self.token_contract = self.cfx_contract("DummyErc20").deploy()
         self.vote_contract = self.cfx_contract("AdvancedTokenVote1202").deploy()
         self.log.info("Initializing contract")
-        self.accounts = self.initialize_accounts(5)
+        self.accounts: List[Account] = self.initialize_accounts(5)
 
         for i in range(1):
-            self.vote_contract.functions.createIssue(i, self.token_contract.address, list(range(self.num_of_options)), [acc[0] for acc in self.accounts], "v").cfx_transact(storage_limit = 5120)
+            self.vote_contract.functions.createIssue(i, self.token_contract.address, list(range(self.num_of_options)), [acc.address for acc in self.accounts], "v").cfx_transact(storage_limit = 5120)
             for _ in range(self.num_of_options):
                 vote_choice = random.randint(0, self.num_of_options - 1)
                 self.vote_contract.functions.vote(i, vote_choice).cfx_transact(storage_limit = 5120)

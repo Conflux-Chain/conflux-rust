@@ -128,8 +128,7 @@ where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
     pub fn import(
         &self, snapshot_epoch_id: &EpochId, mpt_id: DeltaMptId,
         opened_db: T::DeltaDb,
-    ) -> Result<ArcDeltaDbWrapper>
-    {
+    ) -> Result<ArcDeltaDbWrapper> {
         let mut arc_db = self
             .inner
             .lock()
@@ -235,8 +234,7 @@ where T::DeltaDb: 'static + Send + Sync + DeltaDbTrait
     fn create(
         &mut self, snapshot_epoch_id: &EpochId, mpt_id: DeltaMptId,
         opened_db: Option<Arc<dyn DeltaDbTrait + Send + Sync>>,
-    ) -> Result<ArcDeltaDbWrapper>
-    {
+    ) -> Result<ArcDeltaDbWrapper> {
         match self.mpt_id_to_snapshot_epoch_id.get(&mpt_id) {
             Some(epoch_id) => {
                 debug_assert!(snapshot_epoch_id == epoch_id);

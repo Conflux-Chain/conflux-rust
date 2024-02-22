@@ -52,7 +52,7 @@ function check_fmt_and_clippy {
     export RUSTFLAGS="-g"
     export CARGO_TARGET_DIR="$ROOT_DIR/build_clippy"
     result=$(
-        ./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings | tee /dev/stderr
+        ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings | tee /dev/stderr
     )
     export RUSTFLAGS=$SAVED_RUSTFLAGS
     export CARGO_TARGET_DIR=$SAVED_CARGO_DIR

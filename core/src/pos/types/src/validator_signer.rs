@@ -34,8 +34,7 @@ impl ValidatorSigner {
     pub fn new(
         author: AccountAddress, private_key: ConsensusPrivateKey,
         vrf_private_key: Option<ConsensusVRFPrivateKey>,
-    ) -> Self
-    {
+    ) -> Self {
         ValidatorSigner {
             author,
             private_key,

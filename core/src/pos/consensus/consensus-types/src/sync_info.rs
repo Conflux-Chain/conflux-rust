@@ -54,8 +54,7 @@ impl SyncInfo {
     pub fn new(
         highest_quorum_cert: QuorumCert, highest_commit_cert: QuorumCert,
         highest_timeout_cert: Option<TimeoutCertificate>,
-    ) -> Self
-    {
+    ) -> Self {
         let commit_cert = if highest_quorum_cert == highest_commit_cert {
             None
         } else {

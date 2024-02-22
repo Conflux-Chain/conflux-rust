@@ -50,8 +50,7 @@ pub trait CacheStoreUtil {
     fn set_most_recently_accessed(
         &mut self, element_index: Self::ElementIndex,
         algo_data: &Self::CacheAlgoData,
-    )
-    {
+    ) {
         self.set(element_index, algo_data);
     }
 }

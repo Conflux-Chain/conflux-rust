@@ -67,8 +67,7 @@ impl BlockInfo {
         version: Version, timestamp_usecs: u64,
         next_epoch_state: Option<EpochState>,
         pivot: Option<PivotBlockDecision>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             epoch,
             round,

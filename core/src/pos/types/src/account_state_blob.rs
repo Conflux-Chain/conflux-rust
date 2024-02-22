@@ -95,8 +95,7 @@ impl TryFrom<(&AccountResource, &BalanceResource)> for AccountStateBlob {
             &AccountResource,
             &BalanceResource,
         ),
-    ) -> Result<Self>
-    {
+    ) -> Result<Self> {
         Self::try_from(&AccountState::try_from((
             account_resource,
             balance_resource,
@@ -158,8 +157,7 @@ impl AccountStateWithProof {
     pub fn new(
         version: Version, blob: Option<AccountStateBlob>,
         proof: AccountStateProof,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             version,
             blob,
@@ -179,8 +177,7 @@ impl AccountStateWithProof {
     pub fn verify(
         &self, ledger_info: &LedgerInfo, version: Version,
         address: AccountAddress,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         ensure!(
             self.version == version,
             "State version ({}) is not expected ({}).",

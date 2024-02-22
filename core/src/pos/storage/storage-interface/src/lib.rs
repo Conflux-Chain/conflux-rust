@@ -64,8 +64,7 @@ impl StartupInfo {
         latest_epoch_state: Option<EpochState>,
         committed_tree_state: TreeState, synced_tree_state: Option<TreeState>,
         committed_pos_state: PosState,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             latest_ledger_info,
             latest_epoch_state,
@@ -123,8 +122,7 @@ impl TreeState {
         num_transactions: LeafCount,
         ledger_frozen_subtree_hashes: Vec<HashValue>,
         account_state_root_hash: HashValue,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             num_transactions,
             ledger_frozen_subtree_hashes,
@@ -505,8 +503,7 @@ impl SaveTransactionsRequest {
     pub fn new(
         txns_to_commit: Vec<TransactionToCommit>, first_version: Version,
         ledger_info_with_signatures: Option<LedgerInfoWithSignatures>,
-    ) -> Self
-    {
+    ) -> Self {
         SaveTransactionsRequest {
             txns_to_commit,
             first_version,

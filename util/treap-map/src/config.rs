@@ -159,8 +159,7 @@ impl<C: TreapMapConfig<SortKey = ()>> KeyMngTrait<C> for Counter {
     fn view_update(
         &mut self, _key: &C::SearchKey, value: Option<&C::Value>,
         old_value: Option<&C::Value>,
-    )
-    {
+    ) {
         if value.is_some() {
             self.0 += 1;
         }

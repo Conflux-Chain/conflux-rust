@@ -104,8 +104,7 @@ where V: VMExecutor
         db_with_cache: Arc<CachedPosLedgerDB>,
         pow_handler: Arc<dyn PowInterface>,
         consensus_db: Arc<dyn LedgerBlockRW>,
-    ) -> Self
-    {
+    ) -> Self {
         Self {
             db_with_cache,
             consensus_db,
@@ -120,8 +119,7 @@ where V: VMExecutor
         verified_target_li: LedgerInfoWithSignatures,
         epoch_change_li: Option<LedgerInfoWithSignatures>,
         new_output: &ProcessedVMOutput,
-    ) -> Result<Option<LedgerInfoWithSignatures>>
-    {
+    ) -> Result<Option<LedgerInfoWithSignatures>> {
         // If the chunk corresponds to the target LI, the target LI can be added
         // to storage.
         if verified_target_li.ledger_info().version()
@@ -177,8 +175,7 @@ where V: VMExecutor
     fn verify_chunk(
         &self, txn_list_with_proof: TransactionListWithProof,
         verified_target_li: &LedgerInfoWithSignatures,
-    ) -> Result<(Vec<Transaction>, Vec<TransactionInfo>)>
-    {
+    ) -> Result<(Vec<Transaction>, Vec<TransactionInfo>)> {
         // 1. Verify that input transactions belongs to the ledger represented
         // by the ledger info.
         txn_list_with_proof.verify(
@@ -281,8 +278,7 @@ where V: VMExecutor
         transactions: &[Transaction], vm_outputs: Vec<TransactionOutput>,
         parent_trees: &ExecutedTrees, parent_block_id: &HashValue,
         catch_up_mode: bool,
-    ) -> Result<ProcessedVMOutput>
-    {
+    ) -> Result<ProcessedVMOutput> {
         // The data of each individual transaction. For convenience purpose,
         // even for the transactions that will be discarded, we will
         // compute its in-memory Sparse Merkle Tree (it will be
@@ -684,8 +680,7 @@ where V: VMExecutor
         Vec<ContractEvent>,
         Vec<Transaction>,
         Vec<TransactionInfo>,
-    )>
-    {
+    )> {
         // Construct a StateView and pass the transactions to VM.
         let cache = self.db_with_cache.cache.lock();
         let state_view = VerifiedStateView::new(
@@ -793,8 +788,7 @@ where V: VMExecutor
         ProcessedVMOutput,
         Vec<TransactionToCommit>,
         Vec<ContractEvent>,
-    )>
-    {
+    )> {
         let num_txns = transactions.len();
 
         let (
@@ -833,8 +827,7 @@ impl<V: VMExecutor> ChunkExecutor for Executor<V> {
         // An optional end of epoch LedgerInfo. We do not allow chunks that end
         // epoch without carrying any epoch change LI.
         epoch_change_li: Option<LedgerInfoWithSignatures>,
-    ) -> Result<Vec<ContractEvent>>
-    {
+    ) -> Result<Vec<ContractEvent>> {
         let _timer =
             DIEM_EXECUTOR_EXECUTE_AND_COMMIT_CHUNK_SECONDS.start_timer();
         // 1. Update the cache in executor to be consistent with latest synced
@@ -928,8 +921,7 @@ impl<V: VMExecutor> TransactionReplayer for Executor<V> {
     fn replay_chunk(
         &self, mut first_version: Version, mut txns: Vec<Transaction>,
         mut txn_infos: Vec<TransactionInfo>,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         ensure!(
             first_version
                 == self
@@ -992,8 +984,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
     fn execute_block(
         &self, block: (HashValue, Vec<Transaction>),
         parent_block_id: HashValue, catch_up_mode: bool,
-    ) -> Result<StateComputeResult, Error>
-    {
+    ) -> Result<StateComputeResult, Error> {
         let (block_id, mut transactions) = block;
 
         // Reconfiguration rule - if a block is a child of pending
@@ -1122,8 +1113,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
     fn commit_blocks(
         &self, block_ids: Vec<HashValue>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
-    ) -> Result<(Vec<Transaction>, Vec<ContractEvent>), Error>
-    {
+    ) -> Result<(Vec<Transaction>, Vec<ContractEvent>), Error> {
         let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
         let mut pos_state_to_commit = self
             .get_executed_trees(
@@ -1511,8 +1501,7 @@ pub fn process_write_set(
     transaction: &Transaction,
     account_to_state: &mut HashMap<AccountAddress, AccountState>,
     write_set: WriteSet,
-) -> Result<HashMap<AccountAddress, AccountStateBlob>>
-{
+) -> Result<HashMap<AccountAddress, AccountStateBlob>> {
     let mut updated_blobs = HashMap::new();
 
     // Find all addresses this transaction touches while processing each write

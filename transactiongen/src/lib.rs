@@ -16,10 +16,11 @@ extern crate secret_store;
 
 use crate::bytes::Bytes;
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, H256, H512, U256, U512,
+    address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, H256,
+    H512, U256, U512,
 };
+use cfx_vm_types::{contract_address, CreateContractAddress};
 use cfxcore::{
-    executive::contract_address, vm::CreateContractAddress,
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
 use keylib::{public_to_address, Generator, KeyPair, Random, Secret};
@@ -89,8 +90,7 @@ impl TransactionGenerator {
     pub fn new(
         consensus: SharedConsensusGraph, txpool: SharedTransactionPool,
         sync: SharedSynchronizationService, secret_store: SharedSecretStore,
-    ) -> Self
-    {
+    ) -> Self {
         TransactionGenerator {
             consensus,
             txpool,
@@ -122,8 +122,7 @@ impl TransactionGenerator {
         txgen: Arc<TransactionGenerator>,
         tx_config: TransactionGeneratorConfig,
         genesis_accounts: HashMap<Address, U256>,
-    )
-    {
+    ) {
         loop {
             let account_start = txgen.account_start_index.read();
             if account_start.is_some() {
@@ -295,8 +294,7 @@ impl DirectTransactionGenerator {
     pub fn new(
         start_key_pair: KeyPair, contract_creator: &Address,
         start_balance: U256, start_erc20_balance: U256,
-    ) -> DirectTransactionGenerator
-    {
+    ) -> DirectTransactionGenerator {
         let start_address = public_to_address(start_key_pair.public(), true);
         let info = (
             start_key_pair,
@@ -311,17 +309,18 @@ impl DirectTransactionGenerator {
         accounts.insert(start_address.clone(), info);
         let address_by_index = vec![start_address.clone()];
 
-        let erc20_address = contract_address(
+        let mut erc20_address = contract_address(
             CreateContractAddress::FromSenderNonceAndCodeHash,
             // A fake block_number. There field is unnecessary in Ethereum
             // replay test.
-            0.into(),
-            &contract_creator.with_native_space(),
+            0,
+            &contract_creator,
             &0.into(),
             // A fake code. There field is unnecessary in Ethereum replay test.
             &[],
         )
         .0;
+        erc20_address.set_contract_type_bits();
 
         debug!(
             "Special Transaction Generator: erc20 contract address: {:?}",
@@ -331,15 +330,14 @@ impl DirectTransactionGenerator {
         DirectTransactionGenerator {
             accounts,
             address_by_index,
-            erc20_address: erc20_address.address,
+            erc20_address,
         }
     }
 
     pub fn generate_transactions(
         &mut self, block_size_limit: &mut usize, mut num_txs_simple: usize,
         mut num_txs_erc20: usize, chain_id: u32,
-    ) -> Vec<Arc<SignedTransaction>>
-    {
+    ) -> Vec<Arc<SignedTransaction>> {
         let mut result = vec![];
         // Generate new address with 10% probability
         while num_txs_simple > 0 {

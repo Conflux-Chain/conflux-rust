@@ -267,8 +267,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
-    ) -> Result<SnapshotKvDbSqlite>
-    {
+    ) -> Result<SnapshotKvDbSqlite> {
         let kvdb_sqlite_sharded = KvdbSqliteSharded::<Box<[u8]>>::open(
             Self::DB_SHARDS,
             snapshot_path,
@@ -298,8 +297,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_snapshots_semaphore: &Arc<Semaphore>,
         mpt_table_in_current_db: bool,
-    ) -> Result<SnapshotKvDbSqlite>
-    {
+    ) -> Result<SnapshotKvDbSqlite> {
         fs::create_dir_all(snapshot_path)?;
         let create_result = (|| -> Result<Box<[SqliteConnection]>> {
             let kvdb_sqlite_sharded =
@@ -344,8 +342,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
         recover_mpt_with_kv_snapshot_exist: bool,
         in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         debug!("direct_merge begins.");
 
         if !recover_mpt_with_kv_snapshot_exist {
@@ -403,8 +400,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         &mut self, old_snapshot_db: &Arc<SnapshotKvDbSqlite>,
         mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
         in_reconstruct_snapshot_state: bool,
-    ) -> Result<MerkleHash>
-    {
+    ) -> Result<MerkleHash> {
         debug!("copy_and_merge begins.");
         let mut kv_iter = old_snapshot_db.snapshot_kv_iterator()?.take();
         let mut iter = kv_iter.iter_range(&[], None)?.take();

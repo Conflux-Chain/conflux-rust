@@ -12,6 +12,11 @@ use crate::rpc::{
     },
 };
 use blockgen::BlockGenerator;
+use cfx_execute_helper::estimation::{decode_error, EstimateExt};
+use cfx_executor::{
+    executive::{ExecutionError, ExecutionOutcome, TxDropError},
+    internal_contract::storage_point_prop,
+};
 use cfx_statedb::{
     global_params::{
         AccumulateInterestRate, DistributablePoSInterest, InterestRate,
@@ -23,15 +28,12 @@ use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
     U64,
 };
+use cfx_vm_types::Error as VmError;
 use cfxcore::{
-    executive::{
-        internal_contract::storage_point_prop, ExecutionError,
-        ExecutionOutcome, TxDropError,
-    },
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
-    vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
@@ -46,7 +48,7 @@ use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block,
     BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
-    StorageValue, Transaction, TransactionIndex, TransactionOutcome,
+    StorageValue, Transaction, TransactionIndex, TransactionStatus,
     TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
@@ -85,20 +87,19 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_execute_helper::estimation::EstimateRequest;
+use cfx_executor::state::State;
 use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
+    genesis::{
+        genesis_contract_address_four_year, genesis_contract_address_two_year,
+    },
     staking::{BLOCKS_PER_YEAR, DRIPS_PER_STORAGE_COLLATERAL_UNIT},
 };
 use cfx_storage::state::StateDbGetOriginalMethods;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
-    executive::{revert_reason_decode, EstimateRequest},
-    observer::ErrorUnwind,
-    spec::genesis::{
-        genesis_contract_address_four_year, genesis_contract_address_two_year,
-    },
-    state::State,
 };
 use diem_types::account_address::AccountAddress;
 use serde::Serialize;
@@ -130,8 +131,7 @@ impl RpcImpl {
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
         config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
-    ) -> Self
-    {
+    ) -> Self {
         RpcImpl {
             consensus,
             sync,
@@ -192,8 +192,7 @@ impl RpcImpl {
     fn code(
         &self, address: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<Bytes>
-    {
+    ) -> RpcResult<Bytes> {
         self.check_address_network(address.network)?;
         let epoch_num = self
             .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
@@ -224,8 +223,7 @@ impl RpcImpl {
     fn balance(
         &self, address: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<U256>
-    {
+    ) -> RpcResult<U256> {
         self.check_address_network(address.network)?;
         let epoch_num = self
             .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
@@ -502,8 +500,7 @@ impl RpcImpl {
     fn storage_at(
         &self, address: RpcAddress, position: U256,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<Option<H256>>
-    {
+    ) -> RpcResult<Option<H256>> {
         self.check_address_network(address.network)?;
         let epoch_num = self
             .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
@@ -789,8 +786,7 @@ impl RpcImpl {
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
         include_eth_receipt: bool, include_accumulated_gas_used: bool,
-    ) -> RpcResult<Option<RpcReceipt>>
-    {
+    ) -> RpcResult<Option<RpcReceipt>> {
         let id = tx_index.real_index;
 
         if id >= exec_info.block.transactions.len()
@@ -869,7 +865,7 @@ impl RpcImpl {
             // A skipped transaction is not available to clients if accessed by
             // its hash.
             if r.outcome_status
-                == TransactionOutcome::Skipped.in_space(Space::Native).into()
+                == TransactionStatus::Skipped.in_space(Space::Native).into()
             {
                 return Ok(None);
             }
@@ -880,8 +876,7 @@ impl RpcImpl {
     fn prepare_block_receipts(
         &self, block_hash: H256, pivot_assumption: H256,
         include_eth_receipt: bool,
-    ) -> RpcResult<Option<Vec<RpcReceipt>>>
-    {
+    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
         let exec_info = match self.get_block_execution_info(&block_hash)? {
             None => return Ok(None), // not executed
             Some(res) => res,
@@ -959,8 +954,7 @@ impl RpcImpl {
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>,
-    ) -> RpcResult<H256>
-    {
+    ) -> RpcResult<H256> {
         info!(
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty, pos_reference,
@@ -987,8 +981,7 @@ impl RpcImpl {
     fn generate_one_block_with_direct_txgen(
         &self, num_txs: usize, mut block_size_limit: usize,
         num_txs_simple: usize, num_txs_erc20: usize,
-    ) -> RpcResult<H256>
-    {
+    ) -> RpcResult<H256> {
         info!("RPC Request: generate_one_block_with_direct_txgen()");
 
         let block_gen = &self.block_gen;
@@ -1020,8 +1013,7 @@ impl RpcImpl {
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
         adaptive: Option<bool>, custom: Option<Vec<Bytes>>,
-    ) -> RpcResult<H256>
-    {
+    ) -> RpcResult<H256> {
         info!("RPC Request: generate_custom_block()");
 
         let transactions = self.decode_raw_txs(raw_txs, 0)?;
@@ -1038,8 +1030,7 @@ impl RpcImpl {
     fn generate_block_with_nonce_and_timestamp(
         &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256,
         timestamp: u64, adaptive: bool,
-    ) -> RpcResult<H256>
-    {
+    ) -> RpcResult<H256> {
         let transactions = self.decode_raw_txs(raw, 0)?;
         Ok(self.block_gen.generate_block_with_nonce_and_timestamp(
             parent,
@@ -1094,8 +1085,7 @@ impl RpcImpl {
     fn generate_block_with_fake_txs(
         &self, raw_txs_without_data: Bytes, adaptive: Option<bool>,
         tx_data_len: Option<usize>,
-    ) -> RpcResult<H256>
-    {
+    ) -> RpcResult<H256> {
         let transactions = self
             .decode_raw_txs(raw_txs_without_data, tx_data_len.unwrap_or(0))?;
         Ok(self.block_gen.generate_custom_block(transactions, adaptive))
@@ -1214,12 +1204,13 @@ impl RpcImpl {
     fn call(
         &self, request: CallRequest,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<Bytes>
-    {
+    ) -> RpcResult<Bytes> {
         let epoch = Some(
             self.get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?,
         );
-        match self.exec_transaction(request, epoch)? {
+        let (execution_outcome, _estimation) =
+            self.exec_transaction(request, epoch)?;
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -1240,7 +1231,7 @@ impl RpcImpl {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(vm::Error::Reverted),
+                ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => bail!(call_execution_error(
                 "Transaction reverted".into(),
@@ -1262,7 +1253,9 @@ impl RpcImpl {
         info!(
             "RPC Request: cfx_estimateGasAndCollateral request={:?}, epoch={:?}",request,epoch
         );
-        let executed = match self.exec_transaction(request, epoch)? {
+        let (execution_outcome, estimation) =
+            self.exec_transaction(request, epoch)?;
+        match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
@@ -1283,42 +1276,16 @@ impl RpcImpl {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(vm::Error::Reverted),
+                ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => {
                 let network_type = *self.sync.network.get_network_type();
-
-                // When a revert exception happens, there is usually an error in
-                // the sub-calls. So we return the trace
-                // information for debugging contract.
-                let errors = ErrorUnwind::from_traces(executed.trace)
-                    .errors
-                    .iter()
-                    .map(|(addr, error)| {
-                        let cip37_addr = RpcAddress::try_from_h160(
-                            addr.clone(),
-                            network_type,
-                        )
-                        .unwrap()
-                        .base32_address;
-                        format!("{}: {}", cip37_addr, error)
-                    })
-                    .collect::<Vec<String>>();
-
-                // Decode revert error
-                let revert_error = revert_reason_decode(&executed.output);
-                let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.", revert_error)
-                } else {
-                    format!(".")
-                };
-
-                // Try to fetch the innermost error.
-                let innermost_error = if errors.len() > 0 {
-                    format!(" Innermost error is at {}.", errors[0])
-                } else {
-                    String::default()
-                };
+                let (revert_error, innermost_error, errors) =
+                    decode_error(&executed, |addr| {
+                        RpcAddress::try_from_h160(addr.clone(), network_type)
+                            .unwrap()
+                            .base32_address
+                    });
 
                 bail!(call_execution_error(
                     format!("Estimation isn't accurate: transaction is reverted{}{}",
@@ -1337,9 +1304,8 @@ impl RpcImpl {
             ExecutionOutcome::Finished(executed) => executed,
         };
         let storage_collateralized =
-            U64::from(executed.estimated_storage_limit);
-        let estimated_gas_limit =
-            executed.estimated_gas_limit.unwrap_or(U256::zero());
+            U64::from(estimation.estimated_storage_limit);
+        let estimated_gas_limit = estimation.estimated_gas_limit;
         let response = EstimateGasAndCollateralResponse {
             // We multiply the gas_used for 2 reasons:
             // 1. In each EVM call, the gas passed is at most 63/64 of the
@@ -1349,7 +1315,7 @@ impl RpcImpl {
             // 2. In Conflux, we recommend setting the gas_limit to (gas_used *
             // 4) / 3, because the extra gas will be refunded up to
             // 1/4 of the gas limit.
-            gas_limit: executed.estimated_gas_limit.unwrap(),
+            gas_limit: estimation.estimated_gas_limit,
             gas_used: estimated_gas_limit,
             storage_collateralized,
         };
@@ -1360,8 +1326,7 @@ impl RpcImpl {
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
         epoch: Option<EpochNumber>,
-    ) -> RpcResult<CheckBalanceAgainstTransactionResponse>
-    {
+    ) -> RpcResult<CheckBalanceAgainstTransactionResponse> {
         self.check_address_network(account_addr.network)?;
         self.check_address_network(contract_addr.network)?;
 
@@ -1404,7 +1369,7 @@ impl RpcImpl {
 
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<ExecutionOutcome> {
+    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
         let rpc_request_network = invalid_params_check(
             "request",
             rpc_call_request_network(
@@ -1902,7 +1867,7 @@ impl RpcImpl {
                     .zip(&b.transactions)
                 {
                     let space = tx.space();
-                    if receipt.outcome_status == TransactionOutcome::Skipped {
+                    if receipt.outcome_status == TransactionStatus::Skipped {
                         *stat.skipped_tx_count.in_space_mut(space) += 1.into();
                         *stat.skipped_tx_gas_limit.in_space_mut(space) +=
                             *tx.gas_limit();
@@ -2115,8 +2080,8 @@ impl RpcImpl {
                             };
 
                             match receipt.outcome_status {
-                                TransactionOutcome::Success
-                                | TransactionOutcome::Failure => {
+                                TransactionStatus::Success
+                                | TransactionStatus::Failure => {
                                     let tx_index = TransactionIndex {
                                         block_hash: b.hash(),
                                         real_index: id,
@@ -2163,7 +2128,7 @@ impl RpcImpl {
                                         ),
                                     );
                                 }
-                                TransactionOutcome::Skipped => {
+                                TransactionStatus::Skipped => {
                                     res.push(
                                         WrapTransaction::NativeTransaction(
                                             RpcTransaction::from_signed(

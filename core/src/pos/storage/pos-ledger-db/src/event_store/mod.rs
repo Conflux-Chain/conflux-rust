@@ -225,8 +225,7 @@ impl EventStore {
     pub(crate) fn put_events_multiple_versions(
         &self, first_version: u64, event_vecs: &[Vec<ContractEvent>],
         cs: &mut ChangeSet,
-    ) -> Result<Vec<HashValue>>
-    {
+    ) -> Result<Vec<HashValue>> {
         event_vecs
             .iter()
             .enumerate()

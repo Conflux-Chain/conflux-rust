@@ -102,8 +102,7 @@ impl Provider {
         consensus: SharedConsensusGraph, graph: Arc<SynchronizationGraph>,
         network: Weak<NetworkService>, tx_pool: Arc<TransactionPool>,
         throttling_config_file: Option<String>, node_type: NodeType,
-    ) -> Self
-    {
+    ) -> Self {
         let ledger = LedgerInfo::new(consensus.clone());
         let peers = Peers::new();
 
@@ -460,8 +459,7 @@ impl Provider {
     fn on_status_deprecated(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         status: StatusPingDeprecatedV1,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!("on_status (v1) peer={:?} status={:?}", peer, status);
 
         self.on_status_v2(
@@ -571,8 +569,7 @@ impl Provider {
     fn on_get_block_hashes_by_epoch(
         &self, io: &dyn NetworkContext, peer: &NodeId,
         req: GetBlockHashesByEpoch,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!("on_get_block_hashes_by_epoch req={:?}", req);
         self.throttle(peer, &req)?;
         let request_id = req.request_id;
@@ -917,8 +914,7 @@ impl Provider {
     fn broadcast(
         &self, io: &dyn NetworkContext, mut peers: Vec<NodeId>,
         msg: &dyn Message,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         debug!("broadcast peers={:?}", peers);
 
         let throttle_ratio = THROTTLING_SERVICE.read().get_throttling_ratio();
@@ -1053,8 +1049,7 @@ impl NetworkProtocolHandler for Provider {
         &self, _io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
         _pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    )
-    {
+    ) {
         debug!(
             "on_peer_connected: peer={:?} version={}",
             node_id, peer_protocol_version

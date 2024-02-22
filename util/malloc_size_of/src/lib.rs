@@ -57,8 +57,7 @@ impl MallocSizeOfOps {
     pub fn new(
         size_of: VoidPtrToSizeFn,
         malloc_enclosing_size_of: Option<VoidPtrToSizeFn>,
-    ) -> Self
-    {
+    ) -> Self {
         MallocSizeOfOps {
             size_of_op: size_of,
             enclosing_size_of_op: malloc_enclosing_size_of,
