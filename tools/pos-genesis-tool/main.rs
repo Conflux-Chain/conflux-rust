@@ -54,7 +54,7 @@ use diem_types::{
     waypoint::Waypoint,
     write_set::WriteSet,
 };
-use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
+use executor::{db_bootstrapper::generate_waypoint, vm::PosVM};
 use pos_ledger_db::PosLedgerDB;
 use std::{
     collections::{BTreeMap, BinaryHeap, HashMap},
@@ -162,7 +162,7 @@ fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
         )
         .expect("DB should open."),
     );
-    generate_waypoint::<FakeVM>(&db, &genesis_txn).unwrap()
+    generate_waypoint::<PosVM>(&db, &genesis_txn).unwrap()
 }
 
 fn generate_genesis_from_public_keys(public_keys: Vec<(NodeID, u64)>) {
