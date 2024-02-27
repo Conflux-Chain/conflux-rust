@@ -100,6 +100,7 @@ impl State {
         let prop: U256 = self.storage_point_prop()?;
         let mut account =
             self.write_account_or_new_lock(&address.with_native_space())?;
+        return_if!(!account.is_contract());
         return_if!(account.is_cip_107_initialized());
 
         let (from_balance, from_collateral) = account.initialize_cip107(prop);
