@@ -42,7 +42,7 @@ use diem_types::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
-use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
+use executor::{db_bootstrapper::maybe_bootstrap, vm::PosVM, Executor};
 use executor_types::ChunkExecutor;
 use futures::{
     channel::{
@@ -173,7 +173,7 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
 }
 
 fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
-    Box::new(Executor::<FakeVM>::new(
+    Box::new(Executor::<PosVM>::new(
         Arc::new(CachedPosLedgerDB::new(db)),
         Arc::new(FakePowHandler {}),
         Arc::new(FakeLedgerBlockDB {}),
@@ -221,7 +221,7 @@ pub fn setup_pos_environment(
     let genesis_waypoint = node_config.base.waypoint.genesis_waypoint();
     // if there's genesis txn and waypoint, commit it if the result matches.
     if let Some(genesis) = get_genesis_txn(&node_config) {
-        maybe_bootstrap::<FakeVM>(
+        maybe_bootstrap::<PosVM>(
             &db_rw,
             genesis,
             genesis_waypoint,

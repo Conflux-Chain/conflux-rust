@@ -30,7 +30,7 @@ use diem_types::{
     },
     validator_verifier::ValidatorVerifier,
 };
-use executor::vm::FakeVM;
+use executor::vm::verify_dispute;
 use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
@@ -164,8 +164,8 @@ impl Mempool {
                 TransactionPayload::Dispute(dispute_payload) => {
                     // TODO(lpl): Only dispute a node once.
                     pos_state.validate_dispute(dispute_payload).and(
-                        FakeVM::verify_dispute(dispute_payload)
-                            .then(|| ())
+                        verify_dispute(dispute_payload)
+                            .then_some(())
                             .ok_or(anyhow::anyhow!("invalid dispute")),
                     )
                 }
