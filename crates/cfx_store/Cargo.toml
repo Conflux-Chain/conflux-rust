@@ -25,5 +25,3 @@ tempdir = "0.3"
 
 [dev-dependencies]
 matches = "0.1"
-
-[lib]
