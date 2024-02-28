@@ -27,6 +27,7 @@ mod key_file;
 mod vault_file;
 mod vault_key_file;
 mod version;
+mod presale;
 
 pub use self::{
     bytes::Bytes,
@@ -43,4 +44,5 @@ pub use self::{
         VaultKeyFile, VaultKeyMeta,
     },
     version::Version,
+    presale::PresaleWallet
 };

@@ -17,6 +17,7 @@
 use cfxkey::{self, DerivationError, Error as EthKeyError};
 use crypto::{self, Error as EthCryptoError};
 use std::{fmt, io::Error as IoError};
+use crypto::publickey::Error as CryptoPublicKeyError;
 
 /// Account-related errors.
 #[derive(Debug)]
@@ -119,4 +120,8 @@ impl From<crypto::error::SymmError> for Error {
 
 impl From<DerivationError> for Error {
     fn from(err: DerivationError) -> Self { Error::Derivation(err) }
+}
+
+impl From<CryptoPublicKeyError> for Error {
+    fn from(err: CryptoPublicKeyError) -> Self { Error::Custom(err.into()) }
 }

@@ -51,6 +51,7 @@ mod import;
 mod json;
 mod random;
 mod secret_store;
+mod presale;
 
 pub use self::{
     account::{Crypto, SafeAccount},
@@ -64,6 +65,7 @@ pub use self::{
         Derivation, IndexDerivation, SecretStore, SecretVaultRef,
         SimpleSecretStore, StoreAccountRef,
     },
+    presale::PresaleWallet
 };
 
 /// An opaque wrapper for secret.

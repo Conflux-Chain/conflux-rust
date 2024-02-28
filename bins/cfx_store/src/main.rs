@@ -38,8 +38,8 @@ use std::{env, process, fs, fmt};
 
 use docopt::Docopt;
 use cfxstore::accounts_dir::{KeyDirectory, RootDiskDirectory};
-use cfxstore::cfxkey::{Address, Password};
-use cfxstore::{EthStore, SimpleSecretStore, SecretStore, import_accounts, PresaleWallet, SecretVaultRef, StoreAccountRef};
+use cfxstore::cfxkey::{Address, Password, Secret};
+use cfxstore::{CfxStore, SimpleSecretStore, SecretStore, import_accounts, PresaleWallet, SecretVaultRef, StoreAccountRef};
 
 mod crack;
 
@@ -166,7 +166,7 @@ fn main() {
 	}
 }
 
-fn key_dir(location: &str, password: Option<Password>) -> Result<Box<KeyDirectory>, Error> {
+fn key_dir(location: &str, password: Option<Password>) -> Result<Box<dyn KeyDirectory>, Error> {
 	let dir: RootDiskDirectory = match location {
 		"geth" => RootDiskDirectory::create(dir::geth(false))?,
 		"geth-test" => RootDiskDirectory::create(dir::geth(true))?,
@@ -181,7 +181,7 @@ fn key_dir(location: &str, password: Option<Password>) -> Result<Box<KeyDirector
 	Ok(Box::new(dir.with_password(password)))
 }
 
-fn open_args_vault(store: &EthStore, args: &Args) -> Result<SecretVaultRef, Error> {
+fn open_args_vault(store: &CfxStore, args: &Args) -> Result<SecretVaultRef, Error> {
 	if args.flag_vault.is_empty() {
 		return Ok(SecretVaultRef::Root);
 	}
@@ -191,7 +191,7 @@ fn open_args_vault(store: &EthStore, args: &Args) -> Result<SecretVaultRef, Erro
 	Ok(SecretVaultRef::Vault(args.flag_vault.clone()))
 }
 
-fn open_args_vault_account(store: &EthStore, address: Address, args: &Args) -> Result<StoreAccountRef, Error> {
+fn open_args_vault_account(store: &CfxStore, address: Address, args: &Args) -> Result<StoreAccountRef, Error> {
 	match open_args_vault(store, args)? {
 		SecretVaultRef::Root => Ok(StoreAccountRef::root(address)),
 		SecretVaultRef::Vault(name) => Ok(StoreAccountRef::vault(&name, address)),
@@ -223,7 +223,7 @@ fn execute<S, I>(command: I) -> Result<String, Error> where I: IntoIterator<Item
 	let args: Args = Docopt::new(USAGE)
 		.and_then(|d| d.argv(command).deserialize())?;
 
-	let store = EthStore::open(key_dir(&args.flag_dir, None)?)?;
+	let store = CfxStore::open(key_dir(&args.flag_dir, None)?)?;
 
 	return if args.cmd_insert {
 		let secret = args.arg_secret.parse().map_err(|_| cfxstore::Error::InvalidSecret)?;
@@ -262,7 +262,8 @@ fn execute<S, I>(command: I) -> Result<String, Error> where I: IntoIterator<Item
 		let password = load_password(&args.arg_password)?;
 		let kp = wallet.decrypt(&password)?;
 		let vault_ref = open_args_vault(&store, &args)?;
-		let account_ref = store.insert_account(vault_ref, kp.secret().clone(), &password)?;
+		let secret = Secret::from(kp.secret().to_fixed_bytes());
+		let account_ref = store.insert_account(vault_ref, secret, &password)?;
 		Ok(format!("0x{:x}", account_ref.address))
 	} else if args.cmd_find_wallet_pass {
 		let passwords = load_password(&args.arg_password)?;

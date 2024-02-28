@@ -75,15 +75,15 @@ path = "core/benchmark/consensus/src/main.rs"
 
 [[bin]]
 name = "cfx-gen-dot"
-path = "tools/cfx-gen-dot/main.rs"
+path = "bins/cfx-gen-dot/main.rs"
 
 [[bin]]
 name = "cfxkey"
-path = "crates/cfx_key/src/main.rs"
+path = "bins/cfx_key/src/main.rs"
 
 [[bin]]
 name = "pos-genesis-tool"
-path = "tools/pos-genesis-tool/main.rs"
+path = "bins/pos-genesis-tool/main.rs"
 
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
@@ -103,7 +103,9 @@ members = [
     "crates/network",
     "crates/primitives",
     "crates/secret_store",
-    "crates/transactiongen"
+    "crates/transactiongen",
+    "bins/cfx_store",
+    "bins/cfx_key"
 ]
 
 [features]
