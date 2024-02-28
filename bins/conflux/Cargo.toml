@@ -1,8 +1,11 @@
 [package]
 name = "conflux"
-version = "2.0.2"
-edition = "2018"
 build = "build.rs"
+edition = "2018"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
 
 [dependencies]
 mio = "0.6.8"

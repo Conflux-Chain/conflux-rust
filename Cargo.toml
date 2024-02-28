@@ -54,6 +54,17 @@ members = [
     "crates/util/version"
 ]
 
+[workspace.package]
+version = "2.0.2"
+authors = ["peilun-conflux", "ChenxingLi"]
+description = "A rust implementation of the Conflux-Protocol"
+documentation = "https://doc.confluxnetwork.org"
+#edition = "2018"
+homepage = "https://confluxnetwork.org/"
+keywords = ["Conflux"]
+repository = "https://github.com/conflux-chain/conflux-rust"
+license-file = "LICENSE"
+
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
 
