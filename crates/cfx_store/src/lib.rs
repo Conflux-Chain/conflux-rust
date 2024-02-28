@@ -49,9 +49,9 @@ mod cfxstore;
 mod error;
 mod import;
 mod json;
+mod presale;
 mod random;
 mod secret_store;
-mod presale;
 
 pub use self::{
     account::{Crypto, SafeAccount},
@@ -60,12 +60,12 @@ pub use self::{
     import::{import_account, import_accounts, read_geth_accounts},
     json::OpaqueKeyFile as KeyFile,
     parity_wordlist::random_phrase,
+    presale::PresaleWallet,
     random::random_string,
     secret_store::{
         Derivation, IndexDerivation, SecretStore, SecretVaultRef,
         SimpleSecretStore, StoreAccountRef,
     },
-    presale::PresaleWallet
 };
 
 /// An opaque wrapper for secret.

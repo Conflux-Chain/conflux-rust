@@ -183,9 +183,9 @@ fn display(result: (KeyPair, Option<String>), mode: DisplayMode) -> String {
 }
 
 fn execute<S, I>(command: I) -> Result<String, Error>
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
 {
     let args: Args =
         Docopt::new(USAGE).and_then(|d| d.argv(command).deserialize())?;
@@ -295,7 +295,7 @@ fn execute<S, I>(command: I) -> Result<String, Error>
                 &known_phrase,
                 BRAIN_WORDS,
             )
-                .enumerate();
+            .enumerate();
             move || {
                 for (i, phrase) in &mut it {
                     let keypair =
@@ -330,11 +330,11 @@ fn validate_phrase(phrase: &str) -> String {
 }
 
 fn in_threads<F, X, O>(prepare: F) -> Result<O, EthkeyError>
-    where
-        O: Send + 'static,
-        X: Send + 'static,
-        F: Fn() -> X,
-        X: FnMut() -> Result<Option<O>, EthkeyError>,
+where
+    O: Send + 'static,
+    X: Send + 'static,
+    F: Fn() -> X,
+    X: FnMut() -> Result<Option<O>, EthkeyError>,
 {
     let pool = threadpool::Builder::new().build();
 
@@ -382,9 +382,9 @@ mod tests {
             "info",
             "17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55",
         ]
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<String>>();
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<String>>();
 
         let expected =
             "secret:  17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55
@@ -455,9 +455,9 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
             "17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55",
             "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987",
         ]
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<String>>();
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<String>>();
 
         let expected = "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200".to_owned();
         assert_eq!(execute(command).unwrap(), expected);

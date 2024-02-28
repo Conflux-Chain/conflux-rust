@@ -15,9 +15,10 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use cfxkey::{self, DerivationError, Error as EthKeyError};
-use crypto::{self, Error as EthCryptoError};
+use crypto::{
+    self, publickey::Error as CryptoPublicKeyError, Error as EthCryptoError,
+};
 use std::{fmt, io::Error as IoError};
-use crypto::publickey::Error as CryptoPublicKeyError;
 
 /// Account-related errors.
 #[derive(Debug)]

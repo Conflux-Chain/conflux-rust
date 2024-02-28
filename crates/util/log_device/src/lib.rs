@@ -461,8 +461,7 @@ mod tests {
     fn gen_random_and_append(
         log_device: Arc<LogDevice>, stripes: &mut Vec<Vec<u8>>,
         stripe_refs: &mut Vec<StripeReference>, start: usize, end: usize,
-    )
-    {
+    ) {
         for i in start..end {
             let mut stripe: Vec<u8> = Vec::new();
             let stripe_size = rand::thread_rng().gen_range(4, 1024 * 64);
@@ -478,8 +477,7 @@ mod tests {
     fn read_and_check(
         log_device: Arc<LogDevice>, stripes: &Vec<Vec<u8>>,
         stripe_refs: &Vec<StripeReference>, start: usize, end: usize,
-    )
-    {
+    ) {
         for i in start..end {
             let stripe = &stripes[i];
             let stripe_ref = &stripe_refs[i];

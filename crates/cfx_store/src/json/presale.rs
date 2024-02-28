@@ -29,9 +29,7 @@ pub struct PresaleWallet {
 
 impl PresaleWallet {
     pub fn load<R>(reader: R) -> Result<Self, serde_json::Error>
-        where
-            R: Read,
-    {
+    where R: Read {
         serde_json::from_reader(reader)
     }
 }
