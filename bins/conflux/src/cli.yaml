@@ -1,0 +1,923 @@
+name: conflux
+about: Conflux client.
+author: The Conflux Team
+
+args:
+    - mode:
+        help: Use the preset testing configurations.
+        long: mode
+        value_name: MODE
+        takes_value: true
+        possible_values: [dev, test]
+    - port:
+        help: Specify the port for P2P connections.
+        short: p
+        long: port
+        value_name: PORT
+        takes_value: true
+    - udp-port:
+        help: Specify the UDP port for peer discovery.
+        long: udp-port
+        value_name: PORT
+        takes_value: true
+    - jsonrpc-ws-port:
+        help: Specify the port for the WebSocket JSON-RPC API server.
+        long: jsonrpc-ws-port
+        value_name: PORT
+        takes_value: true
+    - jsonrpc-tcp-port:
+        help: Specify the port for the TCP JSON-RPC API server.
+        long: jsonrpc-tcp-port
+        value_name: PORT
+        takes_value: true
+    - jsonrpc-http-port:
+        help: Specify the port for the HTTP JSON-RPC API server.
+        long: jsonrpc-http-port
+        value_name: PORT
+        takes_value: true
+    - jsonrpc-cors:
+        help: Specify CORS header for HTTP JSON-RPC API responses.
+        long: jsonrpc-cors
+        value_name: URL
+        takes_value: true
+    - jsonrpc-http-keep-alive:
+        help: Enable HTTP/1.1 keep alive header. Enabling keep alive will re-use the same TCP connection to fire multiple requests.
+        long: jsonrpc-http-keep-alive
+        value_name: BOOL
+        takes_value: true
+    - log-file:
+        help: Specify the filename for the log. Stdout will be used by default if omitted.
+        long: log-file
+        value_name: FILE
+        takes_value: true
+    - log-level:
+        help: Can be error/warn/info/debug/trace. Default is the info level.
+        long: log-level
+        value_name: LEVEL
+        takes_value: true
+    - log-conf:
+        help: Sets a custom log config file.
+        long: log-conf
+        value_name: FILE
+        takes_value: true
+    - config:
+        help: Sets a custom config file.
+        short: c
+        long: config
+        value_name: FILE
+        takes_value: true
+    - bootnodes:
+        help: Sets a custom list of bootnodes.
+        long: bootnodes
+        value_name: NODES
+        takes_value: true
+    - netconf-dir:
+        help: Sets a custom directory for network configurations.
+        long: netconf-dir
+        value_name: DIR
+        takes_value: true
+    - public-address:
+        help: Sets a custom public address to be connected by others.
+        long: public-address
+        value_name: IP ADDRESS
+        takes_value: true
+    - net-key:
+        help: Sets a custom secret key to generate unique node ID.
+        long: net-key
+        value_name: KEY
+        takes_value: true
+    - start-mining:
+        help: Start mining if set to true. Ensure that mining-author is set.
+        long: start-mining
+        value_name: BOOL
+        takes_value: true
+    - mining-author:
+        help: Set the address to receive mining rewards.
+        long: mining-author
+        value_name: ADDRESS
+        takes_value: true
+    - ledger-cache-size:
+        help: Sets the ledger cache size.
+        short: lcs
+        long: ledger-cache-size
+        value_name: SIZE
+        takes_value: true
+    - db-cache-size:
+        help: Sets the db cache size.
+        short: dcs
+        long: db-cache-size
+        value_name: SIZE
+        takes_value: true
+    - enable-discovery:
+        help: Enable discovery protocol.
+        long: enable-discovery
+        value_name: BOOL
+        takes_value: true
+    - node-table-timeout-s:
+        help: How often Conflux updates its peer table (default 300).
+        long: node-table-timeout-s
+        value_name: SEC
+        takes_value: true
+    - node-table-promotion-timeout-s:
+        help: How long Conflux waits for promoting a peer to trustworthy (default 3 * 24 * 3600).
+        long: node-table-promotion-timeout-s
+        value_name: SEC
+        takes_value: true
+    - test-mode:
+        help: Sets test mode for adding latency
+        long: test-mode
+        value_name: BOOL
+        takes_value: true
+    - db-compact-profile:
+        help: Sets the compaction profile of RocksDB.
+        long: db-compact-profile
+        value_name: ENUM
+        takes_value: true
+    - block-db-dir:
+        help: Sets the root path of db.
+        long: block-db-dir
+        value_name: DIR
+        takes_value: true
+    - load-test-chain:
+        help: Sets the test chain json file.
+        long: load-test-chain
+        value_name: FILE
+        takes_value: true
+    - egress-queue-capacity:
+        help: Sets egress queue capacity of P2P network.
+        long: egress-queue-capacity
+        value_name: MB
+        takes_value: true
+    - egress-min-throttle:
+        help: Sets minimum throttling queue size of egress.
+        long: egress-min-throttle
+        value_name: MB
+        takes_value: true
+    - egress-max-throttle:
+        help: Sets maximum throttling queue size of egress.
+        long: egress-max-throttle
+        value_name: MB
+        takes_value: true
+    - get-logs-epoch-batch-size:
+        help: Sets the size of the epoch batches used during log filtering.
+        long: get-logs-epoch-batch-size
+        value_name: SIZE
+        takes_value: true
+    - get-logs-filter-max-epoch-range:
+          help: Sets the maximum number of allowed epochs during log filtering.
+          long: get-logs-filter-max-epoch-range
+          value_name: SIZE
+          takes_value: true
+    - get-logs-filter-max-limit:
+          help: Sets the maximum number of log entries returned during log filtering.
+          long: get-logs-filter-max-limit
+          value_name: SIZE
+          takes_value: true
+    - get-logs-filter-max-block-number-range:
+          help: Sets the maximum number of allowed blocks during log filtering.
+          long: get-logs-filter-max-block-number-range
+          value_name: SIZE
+          takes_value: true
+    - account-provider-refresh-time-ms:
+        help: Sets the time after which accounts are re-read from disk.
+        long: account-provider-refresh-time-ms
+        value_name: MS
+        takes_value: true
+    - dev-pos-private-key-encryption-password:
+        help: Sets the encryption password for the pos private key file. It's used to encrypt a new generated key or to decrypt an existing key file.
+        long: dev-pos-private-key-encryption-password
+        value_name: PASSWD
+        takes_value: true
+    - pos-started-as-voter:
+        help: If true, the node will start PoS election and voting if it's available.
+        long: pos-started-as-voter
+        value_name: BOOL
+        takes_value: true
+    - light:
+        long: light
+    - archive:
+        long: archive
+    - tg_archive:
+        long: tg_archive
+    - full:
+        long: full
+subcommands:
+    - account:
+        about: Manage accounts
+        setting: SubcommandRequiredElseHelp
+        subcommands:
+            - new:
+                about: Create a new account (and its associated key) for the given --chain (default conflux).
+                args:
+                    - keys-iterations:
+                        help: Specify the number of iterations to use when deriving key from the password (bigger is more secure).
+                        long: keys-iterations
+                        value_name: NUM
+                        default_value: "10240"
+                        takes_value: true
+                    - password:
+                        help: Provide a file containing a password for unlocking an account. Leading and trailing whitespace is trimmed.
+                        long: password
+                        value_name: FILE
+                        takes_value: true
+            - list:
+                about: List existing accounts of the given --chain (default conflux).
+            - import:
+                about: Import accounts from JSON UTC keystore files to the specified --chain (default conflux)
+                args:
+                    - import-path: 
+                        help: A list of file paths to import.
+                        long: import-path
+                        multiple: true
+                        value_name: PATH
+                        takes_value: true
+                        required: true
+    - rpc:
+        about: RPC based subcommands to query blockchain information and send transactions
+        setting: SubcommandRequiredElseHelp
+        args:
+            - url:
+                help: URL of RPC server
+                long: url
+                takes_value: true
+                default_value: http://localhost:12539
+                global: true
+        subcommands:
+            - price:
+                about: Get recent mean gas price
+                args:
+                    - rpc-method:
+                        default_value: cfx_gasPrice
+                        hidden: true
+            - epoch:
+                about: Get epoch number
+                args:
+                    - rpc-method:
+                        default_value: cfx_epochNumber
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: epoch
+                        hidden: true
+                    - epoch:
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        long: epoch
+                        takes_value: true
+            - balance:
+                about: Get balance of specified account
+                args:
+                    - rpc-method:
+                        default_value: cfx_getBalance
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: address,epoch
+                        hidden: true
+                    - address:
+                        help: Account address
+                        long: address
+                        required: true
+                        takes_value: true
+                    - epoch:
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        long: epoch
+                        takes_value: true
+            - code:
+                about: Get bytecode of specified contract
+                args:
+                    - rpc-method:
+                        default_value: cfx_getCode
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: address,epoch
+                        hidden: true
+                    - address:
+                        help: Contract address
+                        long: address
+                        required: true
+                        takes_value: true
+                    - epoch:
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        long: epoch
+                        takes_value: true
+            - block-by-hash:
+                about: Get block by hash
+                args:
+                    - rpc-method:
+                        default_value: cfx_getBlockByHash
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: hash,include-txs:bool
+                        hidden: true
+                    - hash:
+                        help: Block hash
+                        long: hash
+                        required: true
+                        takes_value: true
+                    - include-txs:
+                        help: Whether to return detailed transactions in block
+                        long: include-txs
+            - block-with-assumption:
+                about: Get block by hash with pivot chain assumption
+                args:
+                    - rpc-method:
+                        default_value: cfx_getBlockByHashWithPivotAssumption
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: block-hash,pivot-hash,epoch-number:u64
+                        hidden: true
+                    - block-hash:
+                        help: Block hash
+                        long: block-hash
+                        required: true
+                        takes_value: true
+                        value_name: HASH
+                    - pivot-hash:
+                        help: Pivot block hash
+                        long: pivot-hash
+                        required: true
+                        takes_value: true
+                        value_name: HASH
+                    - epoch-number:
+                        help: Epoch number
+                        long: epoch-number
+                        required: true
+                        takes_value: true
+                        value_name: NUMBER
+            - block-by-epoch:
+                about: Get block by epoch
+                args:
+                    - rpc-method:
+                        default_value: cfx_getBlockByEpochNumber
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: epoch,include-txs:bool
+                        hidden: true
+                    - epoch:
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        long: epoch
+                        required: true
+                        takes_value: true
+                    - include-txs:
+                        help: Whether to return detailed transactions in block
+                        long: include-txs
+            - best-block-hash:
+                about: Get the best block hash
+                args:
+                    - rpc-method:
+                        default_value: cfx_getBestBlockHash
+                        hidden: true
+            - nonce:
+                about: Get nonce of specified account
+                args:
+                    - rpc-method:
+                        default_value: cfx_getNextNonce
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: address,epoch
+                        hidden: true
+                    - address:
+                        help: Account address
+                        long: address
+                        required: true
+                        takes_value: true
+                    - epoch:
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        long: epoch
+                        takes_value: true
+            - send:
+                about: Send a signed transaction and return its hash
+                args:
+                    - rpc-method:
+                        default_value: cfx_sendRawTransaction
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: raw-bytes
+                        hidden: true
+                    - raw-bytes:
+                        help: Signed transaction data
+                        long: raw-bytes
+                        required: true
+                        takes_value: true
+                        value_name: HEX
+            - tx:
+                about: Get transaction by hash
+                args:
+                    - rpc-method:
+                        default_value: cfx_getTransactionByHash
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: hash
+                        hidden: true
+                    - hash:
+                        help: Transaction hash
+                        long: hash
+                        required: true
+                        takes_value: true
+            - blocks:
+                about: Get blocks of specified epoch
+                args:
+                    - rpc-method:
+                        default_value: cfx_getBlocksByEpoch
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: epoch
+                        hidden: true
+                    - epoch:
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        long: epoch
+                        required: true
+                        takes_value: true
+            - skipped-blocks:
+                  about: Get skipped blocks of specified epoch
+                  args:
+                      - rpc-method:
+                            default_value: cfx_getSkippedBlocksByEpoch
+                            hidden: true
+                      - rpc-args:
+                            multiple: true
+                            use_delimiter: true
+                            default_value: epoch
+                            hidden: true
+                      - epoch:
+                            help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                            long: epoch
+                            required: true
+                            takes_value: true
+            - receipt:
+                about: Get receipt by transaction hash
+                args:
+                    - rpc-method:
+                        default_value: cfx_getTransactionReceipt
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: hash
+                        hidden: true
+                    - hash:
+                        help: Transaction hash
+                        long: hash
+                        required: true
+                        takes_value: true
+            - call:
+                about: Executes a new message call immediately without creating a transaction
+                args:
+                    - rpc-method:
+                        default_value: cfx_call
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: tx:map(from;to;gasPrice;gas;value;data;nonce),epoch
+                        hidden: true
+                    - from:
+                        help: Transaction from address
+                        long: from
+                        takes_value: true
+                        value_name: ADDRESS
+                    - to:
+                        help: Transaction to address
+                        long: to
+                        takes_value: true
+                        value_name: ADDRESS
+                    - gasPrice:
+                        help: Transaction gas price
+                        long: gas-price
+                        takes_value: true
+                        value_name: HEX
+                    - gas:
+                        help: Gas provided for transaction execution
+                        long: gas
+                        takes_value: true
+                        value_name: HEX
+                    - value:
+                        help: value sent with this transaction
+                        long: value
+                        takes_value: true
+                        value_name: HEX
+                    - data:
+                        help: Hash of the method signature and encoded parameters
+                        long: data
+                        takes_value: true
+                        value_name: HEX
+                    - nonce:
+                        help: Transaction nonce
+                        long: nonce
+                        takes_value: true
+                        value_name: HEX
+                    - epoch:
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        long: epoch
+                        takes_value: true
+                        value_name: EPOCH
+            - estimate-gas:
+                about: Executes a call request immediately without creating a transaction and returns the gas used
+                args:
+                    - rpc-method:
+                        default_value: cfx_estimateGas
+                        hidden: true
+                    - rpc-args:
+                        multiple: true
+                        use_delimiter: true
+                        default_value: tx:map(from;to;gasPrice;gas;value;data;nonce),epoch
+                        hidden: true
+                    - from:
+                        help: Transaction from address
+                        long: from
+                        takes_value: true
+                        value_name: ADDRESS
+                    - to:
+                        help: Transaction to address
+                        long: to
+                        takes_value: true
+                        value_name: ADDRESS
+                    - gasPrice:
+                        help: Transaction gas price
+                        long: gas-price
+                        takes_value: true
+                        value_name: HEX
+                    - gas:
+                        help: Gas provided for transaction execution
+                        long: gas
+                        takes_value: true
+                        value_name: HEX
+                    - value:
+                        help: value sent with this transaction
+                        long: value
+                        takes_value: true
+                        value_name: HEX
+                    - data:
+                        help: Hash of the method signature and encoded parameters
+                        long: data
+                        takes_value: true
+                        value_name: HEX
+                    - nonce:
+                        help: Transaction nonce
+                        long: nonce
+                        takes_value: true
+                        value_name: HEX
+                    - epoch:
+                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        long: epoch
+                        takes_value: true
+                        value_name: EPOCH
+            - local:
+                about: Local subcommands (requires jsonrpc_local_http_port configured)
+                setting: SubcommandRequiredElseHelp
+                subcommands:
+                    - send:
+                        about: Send a transaction and return its hash
+                        args:
+                            - rpc-method:
+                                default_value: cfx_sendTransaction
+                                hidden: true
+                            - rpc-args:
+                                multiple: true
+                                use_delimiter: true
+                                default_value: tx:map(from;to;gasPrice;gas;value;data;nonce;storageLimit),password:password
+                                hidden: true
+                            - from:
+                                help: Transaction from address
+                                long: from
+                                required: true
+                                takes_value: true
+                                value_name: ADDRESS
+                            - to:
+                                help: Transaction to address (empty to create contract)
+                                long: to
+                                takes_value: true
+                                value_name: ADDRESS
+                            - gasPrice:
+                                help: Transaction gas price
+                                long: gas-price
+                                takes_value: true
+                                value_name: HEX
+                                default_value: "0x2540BE400" # 10 GDrip
+                            - gas:
+                                help: Gas provided for transaction execution
+                                long: gas
+                                takes_value: true
+                                value_name: HEX
+                                default_value: "0x5208" # 21000
+                            - value:
+                                help: value sent with this transaction
+                                long: value
+                                required: true
+                                takes_value: true
+                                value_name: HEX
+                            - data:
+                                help: Hash of the method signature and encoded parameters
+                                long: data
+                                takes_value: true
+                                value_name: HEX
+                            - nonce:
+                                help: Transaction nonce
+                                long: nonce
+                                takes_value: true
+                                value_name: HEX
+                            - storageLimit:
+                                help: Storage limit for the transaction
+                                long: storage-limit
+                                takes_value: true
+                                value_name: HEX
+                                default_value: "0x0"
+                    - account:
+                        about: Account related subcommands
+                        setting: SubcommandRequiredElseHelp
+                        subcommands:
+                            - list:
+                                about: List all accounts
+                                args:
+                                    - rpc-method:
+                                        default_value: accounts
+                                        hidden: true
+                            - new:
+                                about: Create a new account
+                                args:
+                                    - rpc-method:
+                                        default_value: new_account
+                                        hidden: true
+                                    - rpc-args:
+                                        multiple: true
+                                        use_delimiter: true
+                                        default_value: password:password2
+                                        hidden: true
+                            - unlock:
+                                about: Unlock an account
+                                args:
+                                    - rpc-method:
+                                        default_value: unlock_account
+                                        hidden: true
+                                    - rpc-args:
+                                        multiple: true
+                                        use_delimiter: true
+                                        default_value: address,password:password,duration
+                                        hidden: true
+                                    - address:
+                                        help: Address of the account
+                                        long: address
+                                        required: true
+                                        takes_value: true
+                                    - duration:
+                                        help: Duration to unlock the account, use 0x0 to unlock permanently (strongly not recommended!).
+                                        long: duration
+                                        default_value: "0x3c"
+                                        takes_value: true
+                            - lock:
+                                about: Lock an unlocked account
+                                args:
+                                    - rpc-method:
+                                        default_value: lock_account
+                                        hidden: true
+                                    - rpc-args:
+                                        multiple: true
+                                        use_delimiter: true
+                                        default_value: address
+                                        hidden: true
+                                    - address:
+                                        help: Address of the account
+                                        long: address
+                                        required: true
+                                        takes_value: true
+                    - txpool:
+                        about: Transaction pool subcommands
+                        setting: SubcommandRequiredElseHelp
+                        subcommands:
+                            - status:
+                                about: Get the number of transactions for different status
+                                args:
+                                    - rpc-method:
+                                        default_value: txpool_status
+                                        hidden: true
+                            - inspect-one:
+                                about: Get the detailed status of specified transaction
+                                args:
+                                    - rpc-method:
+                                        default_value: txpool_txWithPoolInfo
+                                        hidden: true
+                                    - rpc-args:
+                                        multiple: true
+                                        use_delimiter: true
+                                        default_value: hash
+                                        hidden: true
+                                    - hash:
+                                        help: Transaction hash
+                                        long: hash
+                                        required: true
+                                        takes_value: true
+                            - inspect:
+                                about: List textual summary of all transactions
+                                args:
+                                    - rpc-method:
+                                        default_value: txpool_inspect
+                                        hidden: true
+                                    - rpc-args:
+                                          multiple: true
+                                          use_delimiter: true
+                                          default_value: address
+                                          hidden: true
+                                    - address:
+                                          help: Account address
+                                          long: address
+                                          required: false
+                                          takes_value: true
+                            - content:
+                                about: List exact details of all transactions
+                                args:
+                                    - rpc-method:
+                                        default_value: txpool_content
+                                        hidden: true
+                                    - rpc-args:
+                                          multiple: true
+                                          use_delimiter: true
+                                          default_value: address
+                                          hidden: true
+                                    - address:
+                                          help: Account address
+                                          long: address
+                                          required: false
+                                          takes_value: true
+                            - clear:
+                                about: Remove all transactions
+                                args:
+                                    - rpc-method:
+                                        default_value: txpool_clear
+                                        hidden: true
+                    - net:
+                        about: Network subcommands
+                        setting: SubcommandRequiredElseHelp
+                        subcommands:
+                            - throttling:
+                                about: Get the current throttling information
+                                args:
+                                    - rpc-method:
+                                        default_value: net_throttling
+                                        hidden: true
+                            - node:
+                                about: Get node information by ID
+                                args:
+                                    - rpc-method:
+                                        default_value: net_node
+                                        hidden: true
+                                    - rpc-args:
+                                        multiple: true
+                                        use_delimiter: true
+                                        default_value: id
+                                        hidden: true
+                                    - id:
+                                        help: Node ID
+                                        long: id
+                                        required: true
+                                        takes_value: true
+                            - disconnect:
+                                about: Disconnect a node
+                                args:
+                                    - rpc-method:
+                                        default_value: net_disconnect_node
+                                        hidden: true
+                                    - rpc-args:
+                                        multiple: true
+                                        use_delimiter: true
+                                        default_value: id,operation
+                                        hidden: true
+                                    - id:
+                                        help: Node ID
+                                        long: id
+                                        required: true
+                                        takes_value: true
+                                    - operation:
+                                        help: Operation to update node database
+                                        long: operation
+                                        takes_value: true
+                                        possible_values: [Failure, Demotion, Remove]
+                            - session:
+                                about: Get active session(s)
+                                args:
+                                    - rpc-method:
+                                        default_value: net_sessions
+                                        hidden: true
+                                    - rpc-args:
+                                        multiple: true
+                                        use_delimiter: true
+                                        default_value: id
+                                        hidden: true
+                                    - id:
+                                        help: Node ID
+                                        long: id
+                                        takes_value: true
+                    - sync-phase:
+                        about: Get the current synchronization phase
+                        args:
+                            - rpc-method:
+                                default_value: current_sync_phase
+                                hidden: true
+                    - consensus-graph-state:
+                        about: Get the consensus graph state
+                        args:
+                            - rpc-method:
+                                default_value: consensus_graph_state
+                                hidden: true
+                    - test:
+                        about: Test subcommands (used for test purpose only)
+                        setting: SubcommandRequiredElseHelp
+                        subcommands:
+                            - block-count:
+                                about: Get the total block count
+                                args:
+                                    - rpc-method:
+                                        default_value: getblockcount
+                                        hidden: true
+                            - goodput:
+                                about: Get the recent transaction good TPS
+                                args:
+                                    - rpc-method:
+                                        default_value: getgoodput
+                                        hidden: true
+                            - chain:
+                                about: List "ALL" blocks in topological order
+                                args:
+                                    - rpc-method:
+                                        default_value: cfx_getChain
+                                        hidden: true
+                            - stop:
+                                about: Stop the conflux program
+                                args:
+                                    - rpc-method:
+                                        default_value: stop
+                                        hidden: true
+                            - status:
+                                about: Get the current status of Conflux
+                                args:
+                                    - rpc-method:
+                                        default_value: cfx_getStatus
+                                        hidden: true
+                    - pos:
+                        about: PoS subcommands
+                        setting: SubcommandRequiredElseHelp
+                        subcommands:
+                            - register:
+                                about: Return the transaction data needed to register the PoS keys used by this Conflux node.
+                                args:
+                                    - rpc-method:
+                                          default_value: pos_register
+                                          hidden: true
+                                    - rpc-args:
+                                          multiple: true
+                                          use_delimiter: true
+                                          default_value: power:u64
+                                          hidden: true
+                                    - power:
+                                        help: The voting power to register (one voting power is 100 staked CFX)
+                                        long: power
+                                        required: true
+                                        takes_value: true
+                            - stop_election:
+                                  about: Stop sending PoS election transactions.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_stop_election
+                                            hidden: true
+                            - start_voting:
+                                  about: Start PoS voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_start_voting
+                                            hidden: true
+                                      - rpc-args:
+                                            default_value: initialize:bool
+                                            hidden: true
+                                      - initialize:
+                                            help: set this means the node uses its local safety data instead of a saved data file from another primary node
+                                            long: initialize
+                                            takes_value: false
+                            - stop_voting:
+                                  about: Stop PoS voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_stop_voting
+                                            hidden: true
+                            - voting_status:
+                                  about: Show if the node is voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_voting_status
+                                            hidden: true
