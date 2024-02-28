@@ -42,7 +42,7 @@ rlp = "0.4.0"
 keccak-hash = "0.5"
 rand = "0.8.3"
 kvdb-rocksdb = {path= "crates/kvdb-rocksdb" }
-client = { path = "client" }
+client = { path = "crates/client" }
 cfx-types = { path = "crates/cfx_types" }
 threadpool = "1.7"
 futures = "0.1.29"
