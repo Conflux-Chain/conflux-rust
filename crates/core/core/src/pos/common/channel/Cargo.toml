@@ -16,5 +16,5 @@ diem-metrics = { path = "../metrics" }
 diem-infallible = { path = "../infallible" }
 
 [dev-dependencies]
-diem-types = { path = "../../types"  }
+diem-types = { path = "../../types" }
 tokio = { version = "1.3.0", features = ["full"] }

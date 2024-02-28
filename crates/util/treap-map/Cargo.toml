@@ -7,15 +7,15 @@ edition = "2018"
 
 [dependencies]
 # malloc_size_of_derive = {path = "../malloc_size_of_derive"}
-malloc_size_of = {path = "../malloc_size_of"}
-primitives = { path = "../../crates/primitives" }
+malloc_size_of = {path = "../malloc_size_of" }
+primitives = { path = "../../primitives" }
 rand = "0.7"
 rand_xorshift = "0.2"
 
 [dev-dependencies]
 rand_chacha = "0.2.1"
-cfx-types = { path = "../../crates/cfx_types" }
-cfxkey = { path = "../../crates/cfx_key" }
+cfx-types = { path = "../../cfx_types" }
+cfxkey = { path = "../../cfx_key" }
 criterion = "0.3.0"
 
 [features]

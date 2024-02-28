@@ -6,8 +6,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-malloc_size_of_derive = {path = "../malloc_size_of_derive"}
-malloc_size_of = {path = "../malloc_size_of"}
+malloc_size_of_derive = {path = "../malloc_size_of_derive" }
+malloc_size_of = {path = "../malloc_size_of" }
 
 [dev-dependencies]
 rand = "0.8.0"

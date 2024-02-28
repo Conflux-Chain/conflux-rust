@@ -8,15 +8,15 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
-cfxcore = { path = "../../core" }
+cfxcore = { path = "../core/core" }
 cfxkey = { path = "../cfx_key" }
-cfx-parameters = { path = "../../core/parameters" }
+cfx-parameters = { path = "../core/parameters" }
 cfx-stratum = { path = "../stratum" }
 cfx-types = { path = "../cfx_types" }
-db = { path = "../db" }
+db = { path = "../dbs/db" }
 lazy_static = "1.4"
 log = "0.4"
-metrics = { path = "../../util/metrics" }
+metrics = { path = "../util/metrics" }
 network = { path = "../network" }
 primitives = { path = "../primitives" }
 parking_lot = "0.11"

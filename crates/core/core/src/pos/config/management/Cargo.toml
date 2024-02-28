@@ -19,10 +19,10 @@ thiserror = "1.0.24"
 toml = { version = "0.5.8", default-features = false }
 
 bcs = "0.1.2"
-diem-config = { path = ".."}
+diem-config = { path = ".." }
 diem-crypto = { path = "../../crypto/crypto" }
-diem-global-constants = { path = "../global-constants"}
-diem-network-address-encryption = {path = "network-address-encryption"}
+diem-global-constants = { path = "../global-constants" }
+diem-network-address-encryption = {path = "network-address-encryption" }
 diem-secure-storage = { path = "../../secure/storage" }
 diem-time-service = { path = "../../common/time-service" }
 diem-types = { path = "../../types" }

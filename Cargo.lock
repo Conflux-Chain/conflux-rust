@@ -4188,6 +4188,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "log-device"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "db",
+ "kvdb",
+ "parking_lot 0.11.2",
+ "rand 0.7.3",
+ "rlp 0.4.6",
+ "rlp_derive",
+]
+
+[[package]]
 name = "log-mdc"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

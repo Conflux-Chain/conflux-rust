@@ -7,22 +7,22 @@ version = "1.0.0"
 edition = "2018"
 
 [dependencies]
-cfx-internal-common = { path = "../../crates/core/internal_common" }
-cfx-parameters = { path = "../../crates/core/parameters" }
-cfx-db-errors = { path = "../../crates/db-errors" }
+cfx-internal-common = { path = "../internal_common" }
+cfx-parameters = { path = "../parameters" }
+cfx-db-errors = { path = "../../dbs/db-errors" }
 cfx-storage = { path = "../storage" }
-cfx-types = { path = "../../crates/cfx_types" }
+cfx-types = { path = "../../cfx_types" }
 error-chain = { version = "0.12", default-features = false }
 hashbrown = "0.7.1"
 log = "0.4"
 parking_lot = "0.11"
-primitives = { path = "../../crates/primitives", optional = true }
+primitives = { path = "../../primitives", optional = true }
 rlp = "0.4.0"
 tiny-keccak = "2.0.2"
 lazy_static = "1.4.0"
 
 [dev-dependencies]
-primitives = { path = "../../crates/primitives", features = ["test_no_account_length_check"] }
+primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }
 
 [features]
 default = ["primitives"]

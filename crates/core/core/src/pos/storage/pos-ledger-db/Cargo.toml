@@ -36,8 +36,8 @@ diem-types = { path = "../../types" }
 num-variants = { path = "../../common/num-variants" }
 schemadb = { path = "../schemadb" }
 storage-interface = { path = "../storage-interface" }
-consensus-types = {path = "../../consensus/consensus-types"}
-executor-types = {path = "../../types/executor-types"}
+consensus-types = {path = "../../consensus/consensus-types" }
+executor-types = {path = "../../types/executor-types" }
 
 [dev-dependencies]
 proptest = "1.0.0"
@@ -48,7 +48,7 @@ diem-jellyfish-merkle = { path = "../jellyfish-merkle", features = ["fuzzing"] }
 diem-proptest-helpers = { path = "../../common/proptest-helpers" }
 diem-temppath = { path = "../../common/temppath" }
 diem-types = { path = "../../types", features = ["fuzzing"] }
-move-core-types = { path = "../../types/move-core-types"}
+move-core-types = { path = "../../types/move-core-types" }
 
 [features]
 default = []

@@ -26,7 +26,7 @@ diem-logger = { path = "../../common/logger" }
 diem-temppath = { path = "../../common/temppath" }
 diem-time-service = { path = "../../common/time-service" }
 diem-vault-client = { path = "vault" }
-diem-types = {path = "../../types"}
+diem-types = {path = "../../types" }
 
 [dev-dependencies]
 diem-crypto = { path = "../../crypto/crypto", features = ["fuzzing"] }

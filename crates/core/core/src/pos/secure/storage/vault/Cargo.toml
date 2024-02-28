@@ -22,7 +22,7 @@ ureq = { version = "1.5.4", features = ["json", "native-tls"], default-features 
 
 diem-crypto = { path = "../../../crypto/crypto" }
 diem-proptest-helpers = { path = "../../../common/proptest-helpers", optional = true }
-diem-types = { path = "../../../types"}
+diem-types = { path = "../../../types" }
 
 [dev-dependencies]
 proptest = "1.0.0"

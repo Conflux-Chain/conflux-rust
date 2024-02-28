@@ -34,14 +34,14 @@ x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-featu
 aes-gcm = "0.8.0"
 diem-crypto-derive = { path = "../crypto-derive", version = "0.1.0" }
 bcs = "0.1.2"
-cfxkey = { path = "../../../../../crates/cfx_key" }
-cfx-types = { path = "../../../../../crates/cfx_types" }
+cfxkey = { path = "../../../../../../cfx_key" }
+cfx-types = { path = "../../../../../../cfx_types" }
 bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
 vrf = "0.2.2"
 lazy_static = "1.4"
 parking_lot = "0.11"
 openssl = "0.10"
-diem-logger = {path = "../../common/logger"}
+diem-logger = {path = "../../common/logger" }
 pkcs8 = {version = "0.7.5", features = ["encryption", "std"]}
 
 

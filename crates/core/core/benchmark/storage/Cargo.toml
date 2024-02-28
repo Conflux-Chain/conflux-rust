@@ -7,13 +7,13 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-cfxcore = { path = "../../../core", features = ["bls-blst"] }
-cfx-types = { path = "../../../crates/cfx_types", features=["storage_benchmark_no_account_space_check"] }
-cfx-statedb = { path = "../../../crates/core/statedb" }
-cfx-storage = { path = "../../../crates/core/storage" }
-cfx-internal-common = { path = "../../../crates/core/internal_common" }
+cfxcore = { path = "../..", features = ["bls-blst"] }
+cfx-types = { path = "../../../../cfx_types", features=["storage_benchmark_no_account_space_check"] }
+cfx-statedb = { path = "../../../statedb" }
+cfx-storage = { path = "../../../storage" }
+cfx-internal-common = { path = "../../../internal_common" }
 clap = "2.32"
-db = { path = "../../../crates/db" }
+db = { path = "../../../../dbs/db" }
 env_logger = "0.7"
 error-chain = "0.12"
 ethcore = { package = "ethcore", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
@@ -26,7 +26,7 @@ kvdb = "0.4"
 lazy_static = "1.4"
 log = "0.4"
 parking_lot = "0.11"
-primitives = { path = "../../../crates/primitives" }
+primitives = { path = "../../../../primitives" }
 rlp = { version = "0.3.0", feature = ["ethereum"] }
 serde_json = "1.0"
 base64ct = "=1.1.1"
