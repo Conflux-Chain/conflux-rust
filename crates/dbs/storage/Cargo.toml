@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 cfg-if = "0.1"
 cfx-bytes = { path = "../../cfx_bytes" }
-cfx-db-errors = { path = "../../dbs/db-errors" }
-cfx-internal-common = { path = "../internal_common" }
+cfx-db-errors = { path = "../db-errors" }
+cfx-internal-common = { path = "../../cfxcore/internal_common" }
 cfx-types = { path = "../../cfx_types" }
 delegate = "0.5.0"
 derivative = "2.0.2"
@@ -21,7 +21,7 @@ futures = { version = "0.3.3", features = ["compat"] }
 hashbrown = "0.7.1"
 keccak-hash = "0.5"
 kvdb = "0.4"
-kvdb-rocksdb = {path= "../../dbs/kvdb-rocksdb" }
+kvdb-rocksdb = {path= "../kvdb-rocksdb" }
 lazy_static = "1.4"
 log = "0.4"
 log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }

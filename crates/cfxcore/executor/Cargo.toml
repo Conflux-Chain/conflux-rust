@@ -14,7 +14,7 @@ cfx-bytes = { path = "../../cfx_bytes" }
 cfx-math = { path = "../../cfx_math" }
 cfx-internal-common = { path = "../internal_common" }
 cfx-parameters = { path = "../parameters" }
-cfx-statedb = { path = "../statedb" }
+cfx-statedb = { path = "../../dbs/statedb" }
 cfx-vm-tracer-derive = { path= "../../util/cfx-vm-tracer-derive" }
 cfx-types = { path = "../../cfx_types" }
 cfx-vm-types = { path = "../vm-types" }
@@ -50,8 +50,8 @@ impl-tools = "^0.10"
 typemap = "0.3"
 
 [dev-dependencies]
-cfx-statedb = { path = "../statedb", features = ["testonly_code"]}
-cfx-storage = { path = "../storage", features = ["testonly_code"]}
+cfx-statedb = { path = "../../dbs/statedb", features = ["testonly_code"]}
+cfx-storage = { path = "../../dbs/storage", features = ["testonly_code"]}
 cfx-vm-types = { path = "../vm-types", features = ["testonly_code"]}
 
 [features]

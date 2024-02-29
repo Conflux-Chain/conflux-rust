@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 cfxcore = { path = "../..", features = ["bls-blst"] }
 cfx-types = { path = "../../../../cfx_types", features=["storage_benchmark_no_account_space_check"] }
-cfx-statedb = { path = "../../../statedb" }
-cfx-storage = { path = "../../../storage" }
+cfx-statedb = { path = "../../../../dbs/statedb" }
+cfx-storage = { path = "../../../../dbs/storage" }
 cfx-internal-common = { path = "../../../internal_common" }
 clap = "2.32"
 db = { path = "../../../../dbs/db" }

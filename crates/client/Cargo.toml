@@ -21,8 +21,8 @@ cfxstore = { path = "../cfx_store" }
 cfx-internal-common = { path = "../cfxcore/internal_common" }
 cfx-executor = { path = "../cfxcore/executor" }
 cfx-execute-helper = { path = "../cfxcore/execute-helper" }
-cfx-statedb = { path = "../cfxcore/statedb" }
-cfx-storage = { path = "../cfxcore/storage" }
+cfx-statedb = { path = "../dbs/statedb" }
+cfx-storage = { path = "../dbs/storage" }
 cfx-vm-types = { path = "../cfxcore/vm-types" }
 app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
