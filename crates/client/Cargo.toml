@@ -18,12 +18,12 @@ io = { path = "../util/io" }
 cfxkey = { path = "../cfx_key" }
 cfxcore-accounts = { path = "../accounts" }
 cfxstore = { path = "../cfx_store" }
-cfx-internal-common = { path = "../core/internal_common" }
-cfx-executor = { path = "../core/executor" }
-cfx-execute-helper = { path = "../core/execute-helper" }
-cfx-statedb = { path = "../core/statedb" }
-cfx-storage = { path = "../core/storage" }
-cfx-vm-types = { path = "../core/vm-types" }
+cfx-internal-common = { path = "../cfxcore/internal_common" }
+cfx-executor = { path = "../cfxcore/executor" }
+cfx-execute-helper = { path = "../cfxcore/execute-helper" }
+cfx-statedb = { path = "../cfxcore/statedb" }
+cfx-storage = { path = "../cfxcore/storage" }
+cfx-vm-types = { path = "../cfxcore/vm-types" }
 app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
@@ -42,7 +42,7 @@ cfx-addr = { path = "../cfx_addr" }
 cfx-bytes = { path = "../cfx_bytes" }
 runtime = { path = "../util/runtime" }
 slab = "0.4"
-cfxcore = { path = "../core/core" }
+cfxcore = { path = "../cfxcore/core" }
 network = { path = "../network" }
 db = { path = "../dbs/db" }
 blockgen = { path = "../blockgen" }
@@ -73,27 +73,27 @@ tokio-stream = "0.1.4"
 tokio-timer = "0.2.13"
 malloc_size_of = {path = "../util/malloc_size_of" }
 random-crash = { path = "../util/random_crash" }
-cfx-parameters = { path = "../core/parameters" }
+cfx-parameters = { path = "../cfxcore/parameters" }
 strum = "0.20"
 strum_macros = "0.20"
-crash-handler = { path = "../core/core/src/pos/common/crash-handler" }
-cached-pos-ledger-db = { path = "../core/core/src/pos/storage/cached-pos-ledger-db" }
-pos-ledger-db = { path = "../core/core/src/pos/storage/pos-ledger-db" }
-diem-channel = {path = "../core/core/src/pos/common/channel", package = "channel"}
-diem-config = { path = "../core/core/src/pos/config" }
-diem-crypto = { path = "../core/core/src/pos/crypto/crypto" }
-diem-logger = { path = "../core/core/src/pos/common/logger" }
-diem-metrics = { path = "../core/core/src/pos/common/metrics" }
-diem-secure-storage = { path = "../core/core/src/pos/secure/storage" }
-diem-temppath = { path = "../core/core/src/pos/common/temppath" }
-diem-time-service = { path = "../core/core/src/pos/common/time-service" }
-diem-types = { path = "../core/core/src/pos/types" }
-pow-types = {path = "../core/core/src/pos/types/pow-types" }
-executor-types = { path = "../core/core/src/pos/types/executor-types" }
-executor = { path = "../core/core/src/pos/consensus/executor" }
+crash-handler = { path = "../cfxcore/core/src/pos/common/crash-handler" }
+cached-pos-ledger-db = { path = "../cfxcore/core/src/pos/storage/cached-pos-ledger-db" }
+pos-ledger-db = { path = "../cfxcore/core/src/pos/storage/pos-ledger-db" }
+diem-channel = {path = "../cfxcore/core/src/pos/common/channel", package = "channel"}
+diem-config = { path = "../cfxcore/core/src/pos/config" }
+diem-crypto = { path = "../cfxcore/core/src/pos/crypto/crypto" }
+diem-logger = { path = "../cfxcore/core/src/pos/common/logger" }
+diem-metrics = { path = "../cfxcore/core/src/pos/common/metrics" }
+diem-secure-storage = { path = "../cfxcore/core/src/pos/secure/storage" }
+diem-temppath = { path = "../cfxcore/core/src/pos/common/temppath" }
+diem-time-service = { path = "../cfxcore/core/src/pos/common/time-service" }
+diem-types = { path = "../cfxcore/core/src/pos/types" }
+pow-types = {path = "../cfxcore/core/src/pos/types/pow-types" }
+executor-types = { path = "../cfxcore/core/src/pos/types/executor-types" }
+executor = { path = "../cfxcore/core/src/pos/consensus/executor" }
 fail = "0.4.0"
-storage-interface = { path = "../core/core/src/pos/storage/storage-interface" }
-consensus-types = {path = "../core/core/src/pos/consensus/consensus-types" }
+storage-interface = { path = "../cfxcore/core/src/pos/storage/storage-interface" }
+consensus-types = {path = "../cfxcore/core/src/pos/consensus/consensus-types" }
 anyhow = "1.0.38"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
@@ -103,8 +103,8 @@ bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", r
 
 [dev-dependencies]
 criterion = "0.3"
-cfx-parameters = { path = "../core/parameters" }
-cfx-executor = { path = "../core/executor", features = ["testonly_code"] }
+cfx-parameters = { path = "../cfxcore/parameters" }
+cfx-executor = { path = "../cfxcore/executor", features = ["testonly_code"] }
 serial_test = "0.5.1"
 
 [features]

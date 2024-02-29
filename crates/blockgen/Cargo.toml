@@ -8,9 +8,9 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
-cfxcore = { path = "../core/core" }
+cfxcore = { path = "../cfxcore/core" }
 cfxkey = { path = "../cfx_key" }
-cfx-parameters = { path = "../core/parameters" }
+cfx-parameters = { path = "../cfxcore/parameters" }
 cfx-stratum = { path = "../stratum" }
 cfx-types = { path = "../cfx_types" }
 db = { path = "../dbs/db" }

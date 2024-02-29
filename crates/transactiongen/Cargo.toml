@@ -8,9 +8,9 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
-cfxcore = { path = "../core/core" }
+cfxcore = { path = "../cfxcore/core" }
 cfx-types = { path = "../cfx_types" }
-cfx-vm-types = { path = "../core/vm-types" }
+cfx-vm-types = { path = "../cfxcore/vm-types" }
 cfx-bytes = { path = "../cfx_bytes" }
 primitives = { path = "../primitives" }
 parking_lot = "0.11"
