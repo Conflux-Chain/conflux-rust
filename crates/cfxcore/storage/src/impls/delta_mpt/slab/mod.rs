@@ -167,8 +167,8 @@ struct AllocRelatedFields {
     next: usize,
 }
 
-/// Slab physically stores a concrete type which implements EntryTrait<T> for
-/// value type T. The EntryTrait<T> is responsible to hold the value type and
+/// Slab physically stores a concrete type which implements `EntryTrait<T>` for
+/// value type T. The `EntryTrait<T>` is responsible to hold the value type and
 /// the next vacant link list for slab.
 pub trait EntryTrait: Sized + Default {
     type EntryType;
@@ -321,7 +321,7 @@ impl<'x, T: Clone> WrappedCreateFrom<&'x T, Entry<UnsafeCell<T>>>
 /// assigned to.
 ///
 /// # Examples
-///
+/// ```
 /// # use cfx_storage::Slab;
 /// let mut slab = Slab::with_capacity(10);
 ///
@@ -335,6 +335,7 @@ impl<'x, T: Clone> WrappedCreateFrom<&'x T, Entry<UnsafeCell<T>>>
 ///
 /// assert_eq!(hello, slab[hello].0);
 /// assert_eq!("hello", slab[hello].1);
+/// ```
 #[derive(Debug)]
 pub struct VacantEntry<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> {
     slab: &'a Slab<T, E>,
@@ -961,6 +962,7 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     /// # Examples
     ///
     /// # use cfx_storage::Slab;
+    /// ```
     /// let mut slab = Slab::with_capacity(10);
     ///
     /// let hello = {
@@ -973,6 +975,7 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     ///
     /// assert_eq!(hello, slab[hello].0);
     /// assert_eq!("hello", slab[hello].1);
+    /// ```
     pub fn insert<U>(mut self, val: U) -> &'a mut T
     where E: WrappedCreateFrom<U, E> {
         self.inserted = true;
@@ -986,6 +989,7 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     /// # Examples
     ///
     /// # use cfx_storage::Slab;
+    /// ```
     /// let mut slab = Slab::with_capacity(10);
     ///
     /// let hello = {
@@ -998,6 +1002,7 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     ///
     /// assert_eq!(hello, slab[hello].0);
     /// assert_eq!("hello", slab[hello].1);
+    /// ```
     pub fn key(&self) -> usize { self.key }
 }
 
