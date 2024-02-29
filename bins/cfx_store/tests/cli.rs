@@ -76,7 +76,7 @@ fn cli_cmd() {
         "--vault-pwd",
         test_password,
     ]);
-    assert_eq!(output, " 0: 0xa8fa5dd30a87bb9e3288d604eb74949c515ab66e\n");
+    assert_eq!(output, " 0: 0x18fa5dd30a87bb9e3288d604eb74949c515ab66e\n");
 
     let output = run(&[
         "sign",
