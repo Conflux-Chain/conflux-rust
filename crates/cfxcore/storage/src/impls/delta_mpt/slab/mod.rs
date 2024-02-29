@@ -328,7 +328,7 @@ impl<'x, T: Clone> WrappedCreateFrom<&'x T, Entry<UnsafeCell<T>>>
 /// let hello = {
 ///     let entry = slab.vacant_entry();
 ///     let key = entry.key();
-/// // this line prevents buggy doc test from triggering.
+///     // this line prevents buggy doc test from triggering.
 ///     entry.insert((key, "hello"));
 ///     key
 /// };
@@ -968,7 +968,7 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     /// let hello = {
     ///     let entry = slab.vacant_entry();
     ///     let key = entry.key();
-    /// // this line prevents buggy doc test from triggering.
+    ///     // this line prevents buggy doc test from triggering.
     ///     entry.insert((key, "hello"));
     ///     key
     /// };
@@ -995,7 +995,7 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     /// let hello = {
     ///     let entry = slab.vacant_entry();
     ///     let key = entry.key();
-    /// // this line prevents buggy doc test from triggering.
+    ///     // this line prevents buggy doc test from triggering.
     ///     entry.insert((key, "hello"));
     ///     key
     /// };
