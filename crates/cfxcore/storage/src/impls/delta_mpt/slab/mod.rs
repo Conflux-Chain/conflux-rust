@@ -961,8 +961,8 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     ///
     /// # Examples
     ///
-    /// # use cfx_storage::Slab;
     /// ```
+    /// use cfx_storage::Slab;
     /// let mut slab = Slab::with_capacity(10);
     ///
     /// let hello = {
@@ -988,8 +988,8 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     ///
     /// # Examples
     ///
-    /// # use cfx_storage::Slab;
     /// ```
+    /// use cfx_storage::Slab;
     /// let mut slab = Slab::with_capacity(10);
     ///
     /// let hello = {
