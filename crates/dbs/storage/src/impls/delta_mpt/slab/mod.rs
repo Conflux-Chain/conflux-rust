@@ -323,10 +323,10 @@ impl<'x, T: Clone> WrappedCreateFrom<&'x T, Entry<UnsafeCell<T>>>
 /// # Examples
 /// ```
 /// # use cfx_storage::Slab;
-/// let mut slab = Slab::with_capacity(10);
+/// let mut slab: Slab<(usize, &str)> = Slab::with_capacity(10);
 ///
 /// let hello = {
-///     let entry = slab.vacant_entry();
+///     let entry = slab.vacant_entry().unwrap();
 ///     let key = entry.key();
 ///     // this line prevents buggy doc test from triggering.
 ///     entry.insert((key, "hello"));
@@ -963,10 +963,10 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     ///
     /// ```
     /// use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
+    /// let mut slab: Slab<(usize, &str)> = Slab::with_capacity(10);
     ///
     /// let hello = {
-    ///     let entry = slab.vacant_entry();
+    ///     let entry = slab.vacant_entry().unwrap();
     ///     let key = entry.key();
     ///     // this line prevents buggy doc test from triggering.
     ///     entry.insert((key, "hello"));
@@ -990,10 +990,10 @@ impl<'a, T, E: EntryTrait<EntryType = T>> VacantEntry<'a, T, E> {
     ///
     /// ```
     /// use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
+    /// let mut slab: Slab<(usize, &str)> = Slab::with_capacity(10);
     ///
     /// let hello = {
-    ///     let entry = slab.vacant_entry();
+    ///     let entry = slab.vacant_entry().unwrap();
     ///     let key = entry.key();
     ///     // this line prevents buggy doc test from triggering.
     ///     entry.insert((key, "hello"));
