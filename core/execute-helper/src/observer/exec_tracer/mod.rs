@@ -28,6 +28,7 @@ use cfx_executor::{
         AddressPocket, CallTracer, CheckpointTracer, DrainTrace,
         InternalTransferTracer,
     },
+    observer::{OpcodeTracer, StorageTracer},
     stack::{FrameResult, FrameReturn},
 };
 use cfx_types::U256;
@@ -135,6 +136,9 @@ impl CallTracer for ExecTracer {
         }
     }
 }
+
+impl OpcodeTracer for ExecTracer {}
+impl StorageTracer for ExecTracer {}
 
 impl ExecTracer {
     pub fn drain(self) -> Vec<ExecTrace> {
