@@ -72,6 +72,18 @@ parity-version = {path = "../../crates/util/version" }
 version = "0.3.2"
 optional = true
 
+[[bin]]
+name = "consensus_bench"
+path = "../../crates/cfxcore/core/benchmark/consensus/src/main.rs"
+
+[[bin]]
+name = "cfx-gen-dot"
+path = "../cfx-gen-dot/main.rs"
+
+[[bin]]
+name = "pos-genesis-tool"
+path = "../pos-genesis-tool/main.rs"
+
 [features]
 default = ["jemalloc-global", "bls-blst"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
