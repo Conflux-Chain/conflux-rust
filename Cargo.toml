@@ -1,102 +1,69 @@
-[package]
-name = "conflux"
-version = "2.0.2"
-edition = "2018"
-build = "build.rs"
-
-[dependencies]
-mio = "0.6.8"
-clap = { version = "2", features = ["yaml"] }
-textwrap = "0.9"
-toml = "0.5.8"
-serde = "1.0"
-serde_json = "1.0"
-serde_derive = "1.0"
-parking_lot = "0.11"
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-app_dirs = "1.2.1"
-dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-cfxstore = { path = "accounts/cfxstore" }
-cfxcore-accounts = { path = "accounts" }
-home = "0.5.0"
-rpassword = "4.0.1"
-io = { path = "util/io" }
-runtime = { path = "util/runtime" }
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
-jsonrpc-core = "15.1.0"
-jsonrpc-tcp-server = "15.1.0"
-jsonrpc-http-server = "15.1.0"
-jsonrpc-core-client = { version = "15.1.0", features = ["http"] }
-error-chain = { version = "0.12" }
-log = "0.4"
-slab = "0.4"
-cfxcore = { path = "core" }
-network = { path = "network" }
-db = { path = "db" }
-blockgen = { path = "blockgen" }
-txgen = { path = "transactiongen" }
-secret-store = { path = "secret_store" }
-primitives = { path = "primitives" }
-log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
-rlp = "0.4.0"
-keccak-hash = "0.5"
-rand = "0.8.3"
-kvdb-rocksdb = {path="db/src/kvdb-rocksdb"}
-client = { path = "client" }
-cfx-types = { path = "cfx_types" }
-threadpool = "1.7"
-futures = "0.1.29"
-docopt = "1.0"
-cfxkey = { path = "accounts/cfxkey" }
-parity-wordlist = "1.3.0"
-rustc-hex = "2.1"
-env_logger = "0.5"
-malloc_size_of = {path="util/malloc_size_of"}
-diem-crypto = { path="core/src/pos/crypto/crypto" }
-diem-types = { path="core/src/pos/types" }
-pos-ledger-db = { path = "core/src/pos/storage/pos-ledger-db" }
-executor-types = { path = "core/src/pos/types/executor-types" }
-executor = { path = "core/src/pos/consensus/executor" }
-storage-interface = { path = "core/src/pos/storage/storage-interface" }
-move-core-types = { path = "core/src/pos/types/move-core-types"}
-bcs = "0.1.3"
-tempdir = "0.3.7"
-hex = "0.3.0"
-base64ct = "=1.1.1"
-parity-version = {path = "./util/version"}
-
-[target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
-version = "0.3.2"
-optional = true
-
-[[bin]]
-name = "consensus_bench"
-path = "core/benchmark/consensus/src/main.rs"
-
-[[bin]]
-name = "cfx-gen-dot"
-path = "tools/cfx-gen-dot/main.rs"
-
-[[bin]]
-name = "cfxkey"
-path = "accounts/cfxkey/cli/src/main.rs"
-
-[[bin]]
-name = "pos-genesis-tool"
-path = "tools/pos-genesis-tool/main.rs"
-
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
+members = [
+    "crates/cfx_bytes",
+    "crates/cfx_types",
+    "crates/cfx_addr",
+    "crates/cfx_math",
+    "crates/cfx_utils",
+    "crates/stratum",
+    "crates/accounts",
+    "crates/blockgen",
+    "crates/cfx_key",
+    "crates/cfx_store",
+    "crates/dbs/db",
+    "crates/dbs/kvdb-rocksdb",
+    "crates/dbs/db-errors",
+    "crates/network",
+    "crates/primitives",
+    "crates/secret_store",
+    "crates/transactiongen",
+    "bins/cfx_store",
+    "bins/cfx_key",
+    "bins/conflux",
+    "crates/cfxcore/core",
+    "crates/cfxcore/execute-helper",
+    "crates/cfxcore/executor",
+    "crates/cfxcore/internal_common",
+    "crates/cfxcore/packing-pool",
+    "crates/cfxcore/parameters",
+    "crates/dbs/statedb",
+    "crates/dbs/storage",
+    "crates/cfxcore/vm-interpreter",
+    "crates/cfxcore/vm-types",
+    "crates/util/cfx-vm-tracer-derive",
+    "crates/util/dag",
+    "crates/util/delegate",
+    "crates/util/heap-map",
+    "crates/util/hibitset",
+    "crates/util/io",
+    "crates/util/link-cut-tree",
+    "crates/util/log_device",
+    "crates/util/malloc_size_of",
+    "crates/util/malloc_size_of_derive",
+    "crates/util/memory-cache",
+    "crates/util/metrics",
+    "crates/util/priority-send-queue",
+    "crates/util/random_crash",
+    "crates/util/runtime",
+    "crates/util/sha3-macro",
+    "crates/util/solidity-abi",
+    "crates/util/solidity-abi-derive",
+    "crates/util/throttling",
+    "crates/util/treap-map",
+    "crates/util/version"
+]
 
-[features]
-default = ["jemalloc-global", "bls-blst"]
-deadlock-detection = ["parking_lot/deadlock_detection"]
-jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
-bls-blst = ["cfxcore/bls-blst", "diem-crypto/bls-blst"]
-bls-pairing = ["cfxcore/bls-pairing", "diem-crypto/bls-pairing"]
-blst-portable = ["cfxcore/blst-portable", "diem-crypto/blst-portable"]
-u64-mpt-db-key = ["client/u64_mpt_db_key"]
-
+[workspace.package]
+version = "2.0.2"
+authors = ["peilun-conflux", "ChenxingLi"]
+description = "A rust implementation of the Conflux-Protocol"
+documentation = "https://doc.confluxnetwork.org"
+#edition = "2018"
+homepage = "https://confluxnetwork.org/"
+keywords = ["Conflux"]
+repository = "https://github.com/conflux-chain/conflux-rust"
+license-file = "LICENSE"
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
