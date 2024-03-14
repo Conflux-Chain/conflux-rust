@@ -185,6 +185,7 @@ pub struct Interpreter<Cost: CostType> {
     reader: CodeReader,
     return_data: ReturnData,
     informant: informant::EvmInformant,
+    #[allow(dead_code)]
     do_trace: bool,
     done: bool,
     valid_jump_destinations: Option<Arc<BitSet>>,
@@ -202,6 +203,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
     ) -> vm::ExecTrapResult<GasLeft> {
+        self.do_trace = context.opcode_trace_enabled();
         loop {
             let result = self.step(context);
             match result {
@@ -386,16 +388,16 @@ impl<Cost: CostType> Interpreter<Cost> {
 
                 // TODO: make compile-time removable if too much of a
                 // performance hit.
-                self.do_trace = self.do_trace
-                    && context.trace_next_instruction(
-                        self.reader.position - 1,
-                        opcode,
-                        self.gasometer
-                            .as_mut()
-                            .expect(GASOMETER_PROOF)
-                            .current_gas
-                            .as_u256(),
-                    );
+                // self.do_trace = self.do_trace
+                //     && context.trace_next_instruction(
+                //         self.reader.position - 1,
+                //         opcode,
+                //         self.gasometer
+                //             .as_mut()
+                //             .expect(GASOMETER_PROOF)
+                //             .current_gas
+                //             .as_u256(),
+                //     );
 
                 let instruction = match instruction {
                     Some(i) => i,
@@ -431,15 +433,15 @@ impl<Cost: CostType> Interpreter<Cost> {
                     Ok(t) => t,
                     Err(e) => return InterpreterResult::Done(Err(e)),
                 };
-                if self.do_trace {
-                    context.trace_prepare_execute(
-                        self.reader.position - 1,
-                        opcode,
-                        requirements.gas_cost.as_u256(),
-                        Self::mem_written(instruction, &self.stack),
-                        Self::store_written(instruction, &self.stack),
-                    );
-                }
+                // if self.do_trace {
+                //     context.trace_prepare_execute(
+                //         self.reader.position - 1,
+                //         opcode,
+                //         requirements.gas_cost.as_u256(),
+                //         Self::mem_written(instruction, &self.stack),
+                //         Self::store_written(instruction, &self.stack),
+                //     );
+                // }
 
                 if let Err(e) = self
                     .gasometer
@@ -503,17 +505,17 @@ impl<Cost: CostType> Interpreter<Cost> {
                     + *gas;
         }
 
-        if self.do_trace {
-            context.trace_executed(
-                self.gasometer
-                    .as_mut()
-                    .expect(GASOMETER_PROOF)
-                    .current_gas
-                    .as_u256(),
-                self.stack.peek_top(self.last_stack_ret_len),
-                &self.mem,
-            );
-        }
+        // if self.do_trace {
+        //     context.trace_executed(
+        //         self.gasometer
+        //             .as_mut()
+        //             .expect(GASOMETER_PROOF)
+        //             .current_gas
+        //             .as_u256(),
+        //         self.stack.peek_top(self.last_stack_ret_len),
+        //         &self.mem,
+        //     );
+        // }
 
         // Advance
         match result {
@@ -626,6 +628,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         }
     }
 
+    #[allow(dead_code)]
     fn mem_written(
         instruction: Instruction, stack: &dyn Stack<U256>,
     ) -> Option<(usize, usize)> {
@@ -654,6 +657,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         }
     }
 
+    #[allow(dead_code)]
     fn store_written(
         instruction: Instruction, stack: &dyn Stack<U256>,
     ) -> Option<(U256, U256)> {

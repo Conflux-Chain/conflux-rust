@@ -231,27 +231,31 @@ pub trait Context {
     /// then A depth is 0, B is 1, C is 2 and so on.
     fn depth(&self) -> usize;
 
-    /// Decide if any more operations should be traced. Passthrough for the VM
-    /// trace.
-    fn trace_next_instruction(
-        &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
-    ) -> bool {
-        false
-    }
+    // /// Decide if any more operations should be traced. Passthrough for the
+    // VM /// trace.
+    // fn trace_next_instruction(
+    //     &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
+    // ) -> bool {
+    //     false
+    // }
 
-    /// Prepare to trace an operation. Passthrough for the VM trace.
-    fn trace_prepare_execute(
-        &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
-        _mem_written: Option<(usize, usize)>,
-        _store_written: Option<(U256, U256)>,
-    ) {
-    }
+    // /// Prepare to trace an operation. Passthrough for the VM trace.
+    // fn trace_prepare_execute(
+    //     &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
+    //     _mem_written: Option<(usize, usize)>,
+    //     _store_written: Option<(U256, U256)>,
+    // ) {
+    // }
 
-    /// Trace the finalised execution of a single instruction.
-    fn trace_executed(
-        &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
-    ) {
-    }
+    // /// Trace the finalised execution of a single instruction.
+    // fn trace_executed(
+    //     &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
+    // ) {
+    // }
+
+    fn opcode_trace_enabled(&self) -> bool { false }
+
+    // TODO[geth-tracer]: customize your tracer hook.
 
     /// Check if running in static context.
     fn is_static(&self) -> bool;

@@ -2,6 +2,7 @@ use cfx_executor::{
     executive_observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
     },
+    observer::{OpcodeTracer, StorageTracer},
     stack::FrameResult,
 };
 use cfx_parameters::{
@@ -125,3 +126,5 @@ impl CallTracer for GasMan {
 
 impl CheckpointTracer for GasMan {}
 impl InternalTransferTracer for GasMan {}
+impl StorageTracer for GasMan {}
+impl OpcodeTracer for GasMan {}
