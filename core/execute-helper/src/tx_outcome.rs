@@ -5,6 +5,8 @@ use cfx_types::{H256, U256};
 use pow_types::StakingEvent;
 use primitives::Receipt;
 
+use crate::observer::geth_tracer::GethTracerKey;
+
 use super::{
     observer::exec_tracer::{ExecTrace, ExecTraceKey},
     phantom_tx::{recover_phantom, PhantomTransaction},
@@ -29,6 +31,11 @@ fn tx_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
 pub fn make_process_tx_outcome(
     outcome: ExecutionOutcome, accumulated_gas_used: &mut U256, tx_hash: H256,
 ) -> ProcessTxOutcome {
+    // TODO[geth-tracer]: extract your trace result here.
+    let _maybe_geth_trace = outcome
+        .try_as_executed()
+        .and_then(|executed| executed.ext_result.get::<GethTracerKey>());
+
     let tx_traces = tx_traces(&outcome);
     let tx_exec_error_msg = outcome.error_message();
     let consider_repacked = outcome.consider_repacked();

@@ -426,25 +426,31 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn depth(&self) -> usize { self.depth }
 
-    fn trace_next_instruction(
-        &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
-    ) -> bool {
-        // TODO
-        false
-    }
+    // fn trace_next_instruction(
+    //     &mut self, _pc: usize, _instruction: u8, _current_gas: U256,
+    // ) -> bool {
+    //     // TODO
+    //     false
+    // }
 
-    fn trace_prepare_execute(
-        &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
-        _mem_written: Option<(usize, usize)>,
-        _store_written: Option<(U256, U256)>,
-    ) {
-        // TODO
-    }
+    // fn trace_prepare_execute(
+    //     &mut self, _pc: usize, _instruction: u8, _gas_cost: U256,
+    //     _mem_written: Option<(usize, usize)>,
+    //     _store_written: Option<(U256, U256)>,
+    // ) {
+    //     // TODO
+    // }
 
-    fn trace_executed(
-        &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
-    ) {
-        // TODO
+    // fn trace_executed(
+    //     &mut self, _gas_used: U256, _stack_push: &[U256], _mem: &[u8],
+    // ) {
+    //     // TODO
+    // }
+
+    fn opcode_trace_enabled(&self) -> bool {
+        let mut enabled = false;
+        self.tracer.do_trace_opcode(&mut enabled);
+        enabled
     }
 
     fn is_static(&self) -> bool { self.static_flag }
