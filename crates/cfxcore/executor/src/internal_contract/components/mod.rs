@@ -14,6 +14,7 @@ pub use contract::{InternalContractTrait, SolFnTable};
 pub use contract_map::InternalContractMap;
 pub use event::SolidityEventTrait;
 pub use executable::InternalContractExec;
+#[allow(unused_imports)]
 pub use function::{
     ExecutionTrait, InterfaceTrait, SimpleExecutionTrait,
     SolidityFunctionTrait, UpfrontPaymentTrait,

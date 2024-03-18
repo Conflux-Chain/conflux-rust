@@ -73,7 +73,7 @@ impl Decodable for CallType {
 }
 
 /// The type of the create-like instruction.
-#[derive(Clone, Eq, PartialEq, Debug, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CreateType {
     /// Not a create

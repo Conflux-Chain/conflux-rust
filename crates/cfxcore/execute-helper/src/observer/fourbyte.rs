@@ -21,15 +21,15 @@
 //! }
 //! ```
 
-use alloy_primitives::Selector;
-use cfx_executor::{
-    executive_observer::{
-        CallTracer, CheckpointTracer, InternalTransferTracer,
-    },
-    observer::{OpcodeTracer, StorageTracer},
+use super::geth_tracer::GethTraceKey;
+use alloy_primitives::{hex, Selector};
+use alloy_rpc_trace_types::geth::{FourByteFrame, GethTrace};
+use cfx_executor::observer::{
+    CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
+    OpcodeTracer, StorageTracer,
 };
 use cfx_vm_types::ActionParams;
-use std::{collections::HashMap, convert::TryFrom};
+use std::collections::HashMap;
 
 /// Fourbyte tracing inspector that records all function selectors and their
 /// calldata sizes.
@@ -40,10 +40,14 @@ pub struct FourByteInspector {
 }
 
 impl FourByteInspector {
+    pub fn new() -> Self { Self::default() }
+
     /// Returns the map of SELECTOR to number of occurrences entries
     pub const fn inner(&self) -> &HashMap<(Selector, usize), u64> {
         &self.inner
     }
+
+    pub fn drain(self) -> FourByteFrame { FourByteFrame::from(self) }
 }
 
 impl CallTracer for FourByteInspector {
@@ -63,3 +67,34 @@ impl CheckpointTracer for FourByteInspector {}
 impl InternalTransferTracer for FourByteInspector {}
 impl StorageTracer for FourByteInspector {}
 impl OpcodeTracer for FourByteInspector {}
+
+impl DrainTrace for FourByteInspector {
+    fn drain_trace(self, map: &mut typemap::ShareDebugMap) {
+        map.insert::<GethTraceKey>(GethTrace::FourByteTracer(self.drain()));
+    }
+}
+
+// impl AsTracer for FourByteInspector {
+//     fn as_tracer<'a>(&'a mut self) -> Box<dyn 'a + TracerTrait> {
+//         Box::new(self)
+//     }
+// }
+
+impl From<FourByteInspector> for FourByteFrame {
+    fn from(value: FourByteInspector) -> Self {
+        Self(
+            value
+                .inner
+                .into_iter()
+                .map(|((selector, calldata_size), count)| {
+                    let key = format!(
+                        "0x{}-{}",
+                        hex::encode(&selector[..]),
+                        calldata_size
+                    );
+                    (key, count)
+                })
+                .collect(),
+        )
+    }
+}

@@ -344,6 +344,8 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
+        self.tracer.log(&self.origin.address, topics.clone(), data);
+
         let address = self.origin.address.clone();
         self.substate.logs.push(LogEntry {
             address,
@@ -406,8 +408,15 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
+        let contract_address = self.origin.address;
+        let contract_address_with_space =
+            self.origin.address.with_space(self.space);
+        let balance = self.state.balance(&contract_address_with_space)?;
+        self.tracer
+            .selfdestruct(&contract_address, refund_address, balance);
+
         suicide_impl(
-            &self.origin.address.with_space(self.space),
+            &contract_address_with_space,
             &refund_address.with_space(self.space),
             self.state,
             &self.spec,
@@ -446,6 +455,14 @@ impl<'a> ContextTrait for Context<'a> {
     // ) {
     //     // TODO
     // }
+
+    fn trace_step(&mut self, interpreter: &dyn vm::InterpreterInfo) {
+        self.tracer.step(interpreter, self.depth);
+    }
+
+    fn trace_step_end(&mut self, interpreter: &dyn vm::InterpreterInfo) {
+        self.tracer.step_end(interpreter);
+    }
 
     fn opcode_trace_enabled(&self) -> bool {
         let mut enabled = false;

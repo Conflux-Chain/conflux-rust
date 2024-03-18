@@ -46,8 +46,8 @@ use cfx_bytes::Bytes;
 use cfx_types::{Address, BigEndianHash, Space, H256, U256, U512};
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, ContractCreateResult,
-    CreateContractAddress, GasLeft, MessageCallResult, ParamsType, ReturnData,
-    Spec, TrapError, TrapKind,
+    CreateContractAddress, GasLeft, InstructionResult, InterpreterInfo,
+    MessageCallResult, ParamsType, ReturnData, Spec, TrapError, TrapKind,
 };
 use keccak_hash::keccak;
 use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
@@ -90,26 +90,6 @@ impl CodeReader {
     }
 
     fn len(&self) -> usize { self.code.len() }
-}
-
-enum InstructionResult<Gas> {
-    Ok,
-    UnusedGas(Gas),
-    JumpToPosition(U256),
-    JumpToSubroutine(U256),
-    ReturnFromSubroutine(usize),
-    StopExecutionNeedsReturn {
-        /// Gas left.
-        gas: Gas,
-        /// Return data offset.
-        init_off: U256,
-        /// Return data size.
-        init_size: U256,
-        /// Apply or revert state changes.
-        apply: bool,
-    },
-    StopExecution,
-    Trap(TrapKind),
 }
 
 /// ActionParams without code, so that it can be feed into CodeReader.
@@ -196,6 +176,7 @@ pub struct Interpreter<Cost: CostType> {
     resume_output_range: Option<(U256, U256)>,
     resume_result: Option<InstructionResult<Cost>>,
     last_stack_ret_len: usize,
+    instruction_result: Option<InstructionResult<Cost>>,
     _type: PhantomData<Cost>,
 }
 
@@ -305,7 +286,7 @@ impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
     }
 }
 
-impl<Cost: CostType> Interpreter<Cost> {
+impl<Cost: 'static + CostType> Interpreter<Cost> {
     /// Create a new `Interpreter` instance with shared cache.
     pub fn new(
         mut params: ActionParams, cache: Arc<SharedCache>, spec: &Spec,
@@ -341,11 +322,13 @@ impl<Cost: CostType> Interpreter<Cost> {
             last_stack_ret_len: 0,
             resume_output_range: None,
             resume_result: None,
+            instruction_result: None,
             _type: PhantomData,
         }
     }
 
     /// Execute a single step on the VM.
+    /// First check gas and reader is ok, then will call step_inner
     #[inline(always)]
     pub fn step(&mut self, context: &mut dyn vm::Context) -> InterpreterResult {
         if self.done {
@@ -381,6 +364,11 @@ impl<Cost: CostType> Interpreter<Cost> {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
+                // invoke tracer step hook
+                if self.do_trace {
+                    context.trace_step(self);
+                }
+
                 let opcode = self.reader.code[self.reader.position];
                 let instruction =
                     Instruction::from_u8_versioned(opcode, context.spec());
@@ -489,6 +477,8 @@ impl<Cost: CostType> Interpreter<Cost> {
                     Ok(x) => x,
                 };
 
+                self.instruction_result = Some(result.clone());
+
                 evm_debug!({ self.informant.after_instruction(instruction) });
 
                 result
@@ -516,6 +506,11 @@ impl<Cost: CostType> Interpreter<Cost> {
         //         &self.mem,
         //     );
         // }
+
+        // invoke trace step_end hook
+        if self.do_trace {
+            context.trace_step_end(self);
+        }
 
         // Advance
         match result {
@@ -1595,6 +1590,68 @@ impl<Cost: CostType> Interpreter<Cost> {
         } else {
             U256::zero()
         }
+    }
+}
+
+impl<Cost: 'static + CostType> InterpreterInfo for Interpreter<Cost> {
+    fn gas_remainning(&self) -> U256 {
+        self.gasometer
+            .as_ref()
+            .map(|gm| gm.current_gas.as_u256())
+            .unwrap_or_default()
+    }
+
+    fn opcode(&self, pc: u64) -> Option<u8> {
+        let pc = pc as usize;
+        if pc >= self.reader.len() {
+            return None;
+        }
+        Some(self.reader.code[pc])
+    }
+
+    fn current_opcode(&self) -> u8 { self.reader.code[self.reader.position] }
+
+    fn program_counter(&self) -> u64 { self.reader.position as u64 }
+
+    fn mem(&self) -> &Vec<u8> { &self.mem }
+
+    fn return_stack(&self) -> &Vec<usize> { &self.return_stack }
+
+    fn stack(&self) -> Vec<U256> { self.stack.content() }
+
+    fn contract_address(&self) -> Address { self.params.address }
+
+    fn instruction_result(&self) -> Option<InstructionResult<U256>> {
+        self.instruction_result.clone().map(|v| match v {
+            InstructionResult::Ok => InstructionResult::Ok,
+            InstructionResult::UnusedGas(gas) => {
+                InstructionResult::UnusedGas(gas.as_u256())
+            }
+            InstructionResult::JumpToPosition(v) => {
+                InstructionResult::JumpToPosition(v)
+            }
+            InstructionResult::JumpToSubroutine(v) => {
+                InstructionResult::JumpToSubroutine(v)
+            }
+            InstructionResult::ReturnFromSubroutine(v) => {
+                InstructionResult::ReturnFromSubroutine(v)
+            }
+            InstructionResult::StopExecutionNeedsReturn {
+                gas,
+                init_off,
+                init_size,
+                apply,
+            } => InstructionResult::StopExecutionNeedsReturn {
+                gas: gas.as_u256(),
+                init_off,
+                init_size,
+                apply,
+            },
+            InstructionResult::StopExecution => {
+                InstructionResult::StopExecution
+            }
+            InstructionResult::Trap(v) => InstructionResult::Trap(v),
+        })
     }
 }
 

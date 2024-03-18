@@ -45,6 +45,7 @@ use cfx_execute_helper::{
 };
 use cfx_executor::{executive::ExecutionOutcome, state::State};
 
+use alloy_rpc_trace_types::geth::{GethDebugTracingOptions, GethTrace};
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
@@ -1433,6 +1434,30 @@ impl ConsensusGraph {
         };
         self.executor
             .call_virtual(tx, &epoch_id, epoch_size, request)
+    }
+
+    pub fn collect_epoch_geth_trace(
+        &self, epoch_num: u64, tx_hash: Option<H256>,
+        opts: GethDebugTracingOptions,
+    ) -> RpcResult<Vec<(H256, GethTrace)>> {
+        // only allow to call against stated epoch
+        let epoch = EpochNumber::Number(epoch_num);
+        self.validate_stated_epoch(&epoch)?;
+
+        let epoch_block_hashes = if let Ok(v) =
+            self.get_block_hashes_by_epoch(epoch)
+        {
+            v
+        } else {
+            bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
+        };
+
+        self.executor.collect_epoch_geth_trace(
+            epoch_num,
+            epoch_block_hashes,
+            tx_hash,
+            opts,
+        )
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to

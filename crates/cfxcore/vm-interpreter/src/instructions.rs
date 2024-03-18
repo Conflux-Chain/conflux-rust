@@ -160,6 +160,10 @@ enum_with_from_u8! {
         #[doc = "get balance of own account"]
         SELFBALANCE = 0x47,
 
+        // BASEFEE=0x48
+        // BLOBHASH=0x49
+        // BLOBBASEFEE=0x4A
+
         #[doc = "remove item from stack"]
         POP = 0x50,
         #[doc = "load word from memory"]
@@ -347,10 +351,13 @@ enum_with_from_u8! {
         DELEGATECALL = 0xf4,
         #[doc = "create a new account and set creation address to sha3(sender + sha3(init code)) % 2**160"]
         CREATE2 = 0xf5,
-        #[doc = "stop execution and revert state changes. Return output data."]
-        REVERT = 0xfd,
         #[doc = "like CALL but it does not take value, nor modify the state"]
         STATICCALL = 0xfa,
+        #[doc = "stop execution and revert state changes. Return output data."]
+        REVERT = 0xfd,
+
+        // INVALID = 0xfe
+
         #[doc = "halt execution and register account for later deletion"]
         SUICIDE = 0xff,
     }
@@ -367,6 +374,8 @@ impl Instruction {
         }
         return instruction;
     }
+
+    pub fn u8(self) -> u8 { self as u8 }
 
     /// Returns number of bytes to read for `PUSHN` instruction
     /// PUSH1 -> 1

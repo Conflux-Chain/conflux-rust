@@ -19,13 +19,13 @@
 // See http://www.gnu.org/licenses/
 
 use cfxkey::Password;
+#[allow(unused_imports)]
+pub use dir::helpers::{replace_home, replace_home_and_local};
 use rpassword::read_password;
 use std::{
     fs::File,
     io::{self, BufRead, BufReader, Write},
 };
-
-pub use dir::helpers::{replace_home, replace_home_and_local};
 
 const PASSWORD_STDIN_ERROR: &str =
     "Unable to ask for password on non-interactive terminal.";

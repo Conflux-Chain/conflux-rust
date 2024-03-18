@@ -24,11 +24,10 @@ pub use trace_types::{
 use super::utils::CheckpointLog;
 
 use cfx_executor::{
-    executive_observer::{
+    observer::{
         AddressPocket, CallTracer, CheckpointTracer, DrainTrace,
-        InternalTransferTracer,
+        InternalTransferTracer, OpcodeTracer, StorageTracer,
     },
-    observer::{OpcodeTracer, StorageTracer},
     stack::{FrameResult, FrameReturn},
 };
 use cfx_types::U256;
@@ -152,6 +151,5 @@ impl CallTracer for ExecTracer {
     }
 }
 
-impl OpcodeTracer for ExecTracer {}
-
 impl StorageTracer for ExecTracer {}
+impl OpcodeTracer for ExecTracer {}

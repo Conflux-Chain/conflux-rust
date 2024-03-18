@@ -981,6 +981,7 @@ impl TransactionPoolInner {
             .unwrap_or(state_nonce)
     }
 
+    #[allow(dead_code)]
     fn recalculate_readiness_with_local_info(
         &mut self, addr: &AddressWithSpace,
     ) {

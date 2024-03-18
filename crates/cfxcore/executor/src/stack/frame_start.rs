@@ -113,7 +113,7 @@ impl<'a> FreshFrame<'a> {
             )?
         };
 
-        let executable = make_executable(&frame_local, params);
+        let executable = make_executable(&frame_local, params, resources);
         run_executable(executable, frame_local, resources)
     }
 }

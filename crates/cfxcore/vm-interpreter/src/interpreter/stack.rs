@@ -54,6 +54,8 @@ impl<S: Copy> VecStack<S> {
             logs: [zero; instructions::MAX_NO_OF_TOPICS],
         }
     }
+
+    pub fn content(&self) -> Vec<S> { self.stack.clone() }
 }
 
 impl<S: fmt::Display> Stack<S> for VecStack<S> {

@@ -62,7 +62,7 @@ use crate::{
 use cfx_execute_helper::{
     estimation::{EstimateExt, EstimateRequest, EstimationContext},
     exec_tracer::TransactionExecTraces,
-    observer::Observer,
+    observer::{geth_tracer::TracingInspectorConfig, Observer},
     tx_outcome::make_process_tx_outcome,
 };
 use cfx_executor::{
@@ -78,6 +78,11 @@ use cfx_executor::{
     },
 };
 use cfx_vm_types::{Env, Spec};
+
+use alloy_rpc_trace_types::geth::{
+    GethDebugBuiltInTracerType, GethDebugTracerType, GethDebugTracingOptions,
+    GethTrace,
+};
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
@@ -644,6 +649,18 @@ impl ConsensusExecutor {
         request: EstimateRequest,
     ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
         self.handler.call_virtual(tx, epoch_id, epoch_size, request)
+    }
+
+    pub fn collect_epoch_geth_trace(
+        &self, epoch_num: u64, epoch_block_hashes: Vec<H256>,
+        tx_hash: Option<H256>, opts: GethDebugTracingOptions,
+    ) -> RpcResult<Vec<(H256, GethTrace)>> {
+        self.handler.collect_epoch_geth_trace(
+            epoch_num,
+            epoch_block_hashes,
+            tx_hash,
+            opts,
+        )
     }
 
     pub fn stop(&self) {
@@ -1914,6 +1931,261 @@ impl ConsensusExecutionHandler {
         let r = ex.transact_virtual(tx.clone(), request);
         trace!("Execution result {:?}", r);
         Ok(r?)
+    }
+
+    pub fn collect_epoch_geth_trace(
+        &self, epoch_num: u64, epoch_block_hashes: Vec<H256>,
+        tx_hash: Option<H256>, opts: GethDebugTracingOptions,
+    ) -> RpcResult<Vec<(H256, GethTrace)>> {
+        let epoch_id = epoch_block_hashes.last().expect("Not empty");
+        let _ = epoch_num;
+        // let epoch_size = epoch_block_hashes.len();
+        // let _ = epoch_size;
+
+        // Get blocks in this epoch after skip checking
+        let epoch_blocks = self
+            .data_man
+            .blocks_by_hash_list(
+                &epoch_block_hashes,
+                true, /* update_cache */
+            )
+            .expect("blocks exist");
+        let pivot_block = epoch_blocks.last().expect("Not empty");
+
+        let recover_mpt_during_construct_pivot_state = false;
+        let mut state = State::new(StateDb::new(
+            self.data_man
+                .storage_manager
+                .get_state_for_next_epoch(
+                    StateIndex::new_for_next_epoch(
+                        pivot_block.block_header.parent_hash(),
+                        &self
+                            .data_man
+                            .get_epoch_execution_commitment(
+                                pivot_block.block_header.parent_hash(),
+                            )
+                            // Unwrapping is safe because the state exists.
+                            .unwrap()
+                            .state_root_with_aux_info,
+                        pivot_block.block_header.height() - 1,
+                        self.data_man.get_snapshot_epoch_count(),
+                    ),
+                    recover_mpt_during_construct_pivot_state,
+                )
+                .expect("No db error")
+                // Unwrapping is safe because the state exists.
+                .expect("State exists"),
+        ))
+        .expect("Failed to initialize state");
+
+        let start_block_number = self
+            .data_man
+            .get_epoch_execution_context(&epoch_id)
+            .map(|v| v.start_block_number)
+            .expect("should exist");
+
+        self.execute_epoch_tx_to_collect_trace(
+            *epoch_id,
+            &mut state,
+            &epoch_blocks,
+            start_block_number,
+            tx_hash,
+            opts,
+        )
+        .map_err(|err| err.into())
+    }
+
+    fn execute_epoch_tx_to_collect_trace(
+        &self, epoch_id: EpochId, state: &mut State,
+        epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
+        tx_hash: Option<H256>, opts: GethDebugTracingOptions,
+    ) -> DbResult<Vec<(H256, GethTrace)>> {
+        // Prefetch accounts for transactions.
+        // The return value _prefetch_join_handles is used to join all threads
+        // before the exit of this function.
+        let prefetch_join_handles = match self
+            .execution_state_prefetcher
+            .as_ref()
+        {
+            Some(prefetcher) => {
+                let mut accounts = vec![];
+                for block in epoch_blocks.iter() {
+                    for transaction in block.transactions.iter() {
+                        accounts.push(&transaction.sender);
+                        match transaction.action() {
+                            Action::Call(ref address) => accounts.push(address),
+                            _ => {}
+                        }
+                    }
+                }
+
+                prefetch_accounts(prefetcher, epoch_id, state, accounts)
+            }
+            None => PrefetchTaskHandle {
+                task_epoch_id: epoch_id,
+                state,
+                prefetcher: None,
+                accounts: vec![],
+            },
+        };
+
+        prefetch_join_handles.wait_for_task();
+        drop(prefetch_join_handles);
+
+        // TODO whether need to revert the state change after the execution
+
+        let pivot_block = epoch_blocks.last().expect("Epoch not empty");
+
+        let mut block_number = start_block_number;
+        let mut last_block_hash =
+            pivot_block.block_header.parent_hash().clone();
+        let last_block_header =
+            &self.data_man.block_header_by_hash(&last_block_hash);
+
+        let mut traces = Vec::new();
+
+        for block in epoch_blocks.iter() {
+            self.maybe_update_state(state, block_number)?;
+
+            let pos_id = last_block_header
+                .as_ref()
+                .and_then(|header| header.pos_reference().as_ref());
+            let pos_view_number =
+                pos_id.and_then(|id| self.pos_verifier.get_pos_view(id));
+            let pivot_decision_epoch = pos_id
+                .and_then(|id| self.pos_verifier.get_pivot_decision(id))
+                .and_then(|hash| self.data_man.block_header_by_hash(&hash))
+                .map(|header| header.height());
+
+            let epoch_height = pivot_block.block_header.height();
+            let chain_id = self.machine.params().chain_id_map(epoch_height);
+            let mut env = Env {
+                chain_id,
+                number: block_number,
+                author: block.block_header.author().clone(),
+                timestamp: pivot_block.block_header.timestamp(),
+                difficulty: block.block_header.difficulty().clone(),
+                accumulated_gas_used: U256::zero(),
+                last_hash: last_block_hash,
+                gas_limit: U256::from(block.block_header.gas_limit()),
+                epoch_height,
+                pos_view: pos_view_number,
+                finalized_epoch: pivot_decision_epoch,
+                transaction_epoch_bound: self
+                    .verification_config
+                    .transaction_epoch_bound,
+            };
+            let spec = self.machine.spec(env.number);
+            if !spec.cip43_contract {
+                state.bump_block_number_accumulate_interest();
+            }
+            let machine = self.machine.as_ref();
+
+            state.inc_distributable_pos_interest(env.number)?;
+            initialize_internal_contract_accounts(
+                state,
+                self.machine.internal_contracts().initialized_at(env.number),
+            );
+            block_number += 1;
+
+            last_block_hash = block.hash();
+
+            for (_idx, transaction) in block.transactions.iter().enumerate() {
+                let need_trace = match tx_hash {
+                    Some(ref hash) => transaction.hash() == *hash,
+                    None => true, // trace all tx
+                };
+
+                let (observer, supported) = if need_trace {
+                    match &opts.tracer {
+                        Some(t) => match t {
+                            GethDebugTracerType::BuiltInTracer(bt) => match bt {
+                                GethDebugBuiltInTracerType::FourByteTracer => {
+                                    (Observer::with_no_tracing(), false)
+                                }
+                                GethDebugBuiltInTracerType::CallTracer => {
+                                    let call_config = opts
+                                        .tracer_config
+                                        .clone()
+                                        .into_call_config()
+                                        .map_err(|e| format!("{e}"))?;
+                                    (Observer::geth_tracer(
+                                            TracingInspectorConfig::from_geth_call_config(&call_config),
+                                        ),
+                                        true,
+                                    )
+                                }
+                                GethDebugBuiltInTracerType::PreStateTracer => {
+                                    (Observer::with_no_tracing(), false)
+                                }
+                                GethDebugBuiltInTracerType::NoopTracer => {
+                                    (Observer::with_no_tracing(), false)
+                                }
+                                GethDebugBuiltInTracerType::MuxTracer => {
+                                    (Observer::with_no_tracing(), false)
+                                }
+                            },
+                            GethDebugTracerType::JsTracer(_) => {
+                                (Observer::with_no_tracing(), false)
+                            }
+                        },
+                        None => (
+                            Observer::geth_tracer(
+                                TracingInspectorConfig::from_geth_config(
+                                    &opts.config,
+                                ),
+                            ),
+                            true,
+                        ),
+                    }
+                } else {
+                    (Observer::with_no_tracing(), false)
+                };
+
+                let options = TransactOptions {
+                    observer,
+                    settings: TransactSettings::all_checks(),
+                };
+                let execution_outcome =
+                    ExecutiveContext::new(state, &env, machine, &spec)
+                        .transact(transaction, options)?;
+                let r = make_process_tx_outcome(
+                    execution_outcome,
+                    &mut env.accumulated_gas_used,
+                    transaction.hash,
+                );
+
+                if need_trace && supported {
+                    if let Some(t) = &opts.tracer {
+                        if t == &GethDebugTracerType::BuiltInTracer(
+                            GethDebugBuiltInTracerType::CallTracer,
+                        ) {
+                            if r.geth_trace.is_some() {
+                                traces.push((
+                                    transaction.hash(),
+                                    r.geth_trace.unwrap(),
+                                ));
+                            }
+                        }
+                    } else {
+                        if r.geth_trace.is_some() {
+                            traces.push((
+                                transaction.hash(),
+                                r.geth_trace.unwrap(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        // dummy trace for the block
+        // traces.push((
+        //     H256::default(),
+        //     GethTrace::NoopTracer(NoopFrame::default()),
+        // ));
+
+        Ok(traces)
     }
 
     fn maybe_update_state(

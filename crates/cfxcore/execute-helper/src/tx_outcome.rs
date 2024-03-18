@@ -5,7 +5,8 @@ use cfx_types::{H256, U256};
 use pow_types::StakingEvent;
 use primitives::Receipt;
 
-use crate::observer::geth_tracer::GethTracerKey;
+use crate::observer::geth_tracer::GethTraceKey;
+use alloy_rpc_trace_types::geth::GethTrace;
 
 use super::{
     observer::exec_tracer::{ExecTrace, ExecTraceKey},
@@ -19,6 +20,7 @@ pub struct ProcessTxOutcome {
     pub tx_staking_events: Vec<StakingEvent>,
     pub tx_exec_error_msg: String,
     pub consider_repacked: bool,
+    pub geth_trace: Option<GethTrace>,
 }
 
 fn tx_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
@@ -28,15 +30,17 @@ fn tx_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
         .unwrap_or_default()
 }
 
+fn geth_traces(outcome: &ExecutionOutcome) -> Option<GethTrace> {
+    outcome
+        .try_as_executed()
+        .and_then(|executed| executed.ext_result.get::<GethTraceKey>().cloned())
+}
+
 pub fn make_process_tx_outcome(
     outcome: ExecutionOutcome, accumulated_gas_used: &mut U256, tx_hash: H256,
 ) -> ProcessTxOutcome {
-    // TODO[geth-tracer]: extract your trace result here.
-    let _maybe_geth_trace = outcome
-        .try_as_executed()
-        .and_then(|executed| executed.ext_result.get::<GethTracerKey>());
-
     let tx_traces = tx_traces(&outcome);
+    let geth_trace = geth_traces(&outcome);
     let tx_exec_error_msg = outcome.error_message();
     let consider_repacked = outcome.consider_repacked();
     let receipt = outcome.make_receipt(accumulated_gas_used);
@@ -52,5 +56,6 @@ pub fn make_process_tx_outcome(
         tx_staking_events,
         tx_exec_error_msg,
         consider_repacked,
+        geth_trace,
     }
 }

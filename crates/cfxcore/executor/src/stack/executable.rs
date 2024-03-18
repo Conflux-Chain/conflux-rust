@@ -1,7 +1,7 @@
 use super::{FrameLocal, Resumable};
 use crate::{
     builtin::BuiltinExec, context::Context,
-    internal_contract::InternalContractExec,
+    internal_contract::InternalContractExec, stack::RuntimeRes,
 };
 use cfx_statedb::Result as DbResult;
 use cfx_types::{AddressSpaceUtil, U256};
@@ -46,6 +46,7 @@ use ExecutableOutcome::*;
 /// contracts, simple transfers, or the execution of EVM bytecode.
 pub fn make_executable<'a>(
     frame_local: &FrameLocal<'a>, params: ActionParams,
+    resources: &mut RuntimeRes<'a>,
 ) -> Box<dyn 'a + Executable> {
     let is_create = frame_local.create_address.is_some();
     let code_address = params.code_address.with_space(params.space);
@@ -73,6 +74,10 @@ pub fn make_executable<'a>(
 
     if is_create || params.code.is_some() {
         trace!("CallCreate");
+
+        // call the initialize_interp hook to log gas_limit
+        resources.tracer.initialize_interp(params.gas.clone());
+
         let factory = frame_local.machine.vm_factory_ref();
         Box::new(factory.create(params, frame_local.spec, frame_local.depth))
     } else {

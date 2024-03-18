@@ -1,4 +1,5 @@
 use cfx_vm_types::Spec;
+#[allow(unused_imports)]
 pub use primitives::BlockNumber;
 
 pub trait IsActive {

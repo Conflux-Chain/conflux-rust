@@ -20,6 +20,7 @@ mod kdf;
 mod safe_account;
 mod version;
 
+#[allow(unused_imports)]
 pub use self::{
     cipher::{Aes128Ctr, Cipher},
     crypto::Crypto,
