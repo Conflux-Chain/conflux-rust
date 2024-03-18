@@ -59,6 +59,7 @@ impl DrainTrace for GasMan {
 }
 
 pub struct GasLimitEstimation;
+
 impl typemap::Key for GasLimitEstimation {
     type Value = U256;
 }

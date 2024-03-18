@@ -1,4 +1,5 @@
 pub mod exec_tracer;
+pub mod fourbyte;
 pub mod gasman;
 pub mod geth_tracer;
 mod utils;

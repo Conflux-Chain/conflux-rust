@@ -49,3 +49,4 @@ pow-types = {path = "../core/src/pos/types/pow-types" }
 # impl-trait-for-tuples = "^0.2"
 # impl-tools = "^0.10"
 typemap = "0.3"
+alloy-primitives.workspace = true

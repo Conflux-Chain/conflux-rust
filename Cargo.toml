@@ -82,3 +82,6 @@ overflow-checks = true
 overflow-checks = true
 # Temporarily run with debug assertion before main-net release.
 debug-assertions = true
+
+[workspace.dependencies]
+alloy-primitives = "0.6"
