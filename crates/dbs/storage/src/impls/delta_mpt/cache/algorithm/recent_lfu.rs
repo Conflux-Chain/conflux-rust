@@ -436,7 +436,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
                                 evicted_r_lfu_metadata.cache_index;
                             hole.pointer_pos.write(evicted_r_lfu_metadata);
 
-                            // The caller should read the the returned
+                            // The caller should read the returned
                             // CacheAccessResult and
                             // removes the evicted keys.
                             // set_removed isn't necessary but prevent
