@@ -106,8 +106,9 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> TxSampler<'a, 'b, TX, R> {
                 return None;
             };
 
+            let target_quality = (u64::MAX - loss_threshold).saturating_add(1);
             let sampled = self.rng.next_u64();
-            if sampled >= loss_threshold {
+            if sampled < target_quality {
                 return Some((
                     node.key,
                     &node.value.txs,
@@ -118,7 +119,8 @@ impl<'a, 'b, TX: PackingPoolTransaction, R: RngCore> TxSampler<'a, 'b, TX, R> {
                     &node.key,
                     CandidateAddress {
                         node,
-                        priority: (sampled as f64) / (loss_threshold as f64),
+                        priority: (target_quality as f64)
+                            / ((sampled + 1) as f64),
                     },
                 );
             }

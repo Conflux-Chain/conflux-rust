@@ -169,13 +169,15 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
                 return SearchDirection::Right(right_weight);
             }
         });
-        if let Some(SearchResult::Found { base_weight, .. }) = ret {
+        match ret {
             Some(
+                SearchResult::Found { base_weight, .. }
+                | SearchResult::RightMost(base_weight),
+            ) => Some(
                 base_weight.weighted_loss_ratio
                     / (base_weight.gas_limit - block_gas_limit),
-            )
-        } else {
-            None
+            ),
+            _ => None,
         }
     }
 
@@ -253,11 +255,14 @@ where
 
 #[cfg(test)]
 mod pool_tests {
-    use std::sync::atomic::AtomicUsize;
+    use std::{collections::HashSet, sync::atomic::AtomicUsize};
+
+    use rand_xorshift::XorShiftRng;
 
     use crate::{
-        mock_tx::MockTransaction, transaction::PackingPoolTransaction,
-        PackingBatch, PackingPool, PackingPoolConfig,
+        mock_tx::MockTransaction, rand::SeedableRng,
+        transaction::PackingPoolTransaction, PackingBatch, PackingPool,
+        PackingPoolConfig, SampleTag,
     };
 
     fn default_pool(
@@ -381,6 +386,42 @@ mod pool_tests {
         pool.assert_consistency();
         assert_eq!(pool.treap_map.len(), 10);
         assert_eq!(pool.iter().into_iter().flatten().count(), 51);
+    }
+
+    #[test]
+    fn test_same_price() {
+        let pool = default_pool(5, 100000);
+
+        let pack_txs = || {
+            let mut rng = XorShiftRng::from_entropy();
+
+            let mut packed = HashSet::new();
+            for (_, txs, tag) in pool.tx_sampler(&mut rng, 40000.into()) {
+                if packed.len() < 8000 {
+                    // This assertation may fails with a small probability
+                    // (~2^-64) even if every thing is correct.
+                    assert_eq!(tag, SampleTag::RandomPick);
+                }
+
+                for tx in txs {
+                    packed.insert(tx.clone());
+                }
+                if packed.len() >= 10000 {
+                    break;
+                }
+            }
+            packed
+        };
+
+        let base_pack = pack_txs();
+        let mut total_same_set = 0usize;
+
+        for _ in 0..5 {
+            total_same_set += pack_txs().intersection(&base_pack).count();
+        }
+        // This assertation may fails with a small probability (~2^-110) even if
+        // every thing is correct.
+        assert!(total_same_set < 2000);
     }
 }
 
