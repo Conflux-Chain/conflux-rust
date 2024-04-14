@@ -173,7 +173,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             Some(
                 SearchResult::Found { base_weight, .. }
                 | SearchResult::RightMost(base_weight),
-            ) => Some(
+            ) if base_weight.gas_limit > block_gas_limit => Some(
                 base_weight.weighted_loss_ratio
                     / (base_weight.gas_limit - block_gas_limit),
             ),
@@ -460,7 +460,7 @@ mod sample_tests {
                     }
                 }
             }
-            None
+            last_ans
         }
     }
 
