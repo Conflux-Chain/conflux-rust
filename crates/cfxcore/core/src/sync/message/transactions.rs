@@ -20,7 +20,9 @@ use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::MeterTimer;
 use network::service::ProtocolVersion;
-use primitives::{transaction::TxPropagateId, TransactionWithSignature};
+use primitives::{
+    transaction::TxPropagateId, SignedTransaction, TransactionWithSignature,
+};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
@@ -29,7 +31,7 @@ use std::{any::Any, collections::HashSet, hash::Hasher, time::Duration};
 
 #[derive(Debug, PartialEq)]
 pub struct Transactions {
-    pub transactions: Vec<TransactionWithSignature>,
+    pub transactions: Vec<SignedTransaction>,
 }
 
 impl Encodable for Transactions {
@@ -559,7 +561,7 @@ impl Decodable for GetTransactionsFromTxHashes {
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct GetTransactionsResponse {
     pub request_id: RequestId,
-    pub transactions: Vec<TransactionWithSignature>,
+    pub transactions: Vec<SignedTransaction>,
     pub tx_hashes: Vec<H256>,
 }
 
@@ -637,7 +639,7 @@ impl Handleable for GetTransactionsResponse {
 #[derive(Debug, PartialEq, RlpDecodable, RlpEncodable)]
 pub struct GetTransactionsFromTxHashesResponse {
     pub request_id: RequestId,
-    pub transactions: Vec<TransactionWithSignature>,
+    pub transactions: Vec<SignedTransaction>,
 }
 
 impl Handleable for GetTransactionsFromTxHashesResponse {

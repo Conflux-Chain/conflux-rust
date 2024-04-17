@@ -13,15 +13,15 @@ use crate::{
 };
 use cfx_types::H256;
 use metrics::MeterTimer;
-use primitives::{Block, TransactionWithSignature};
+use primitives::{Block, SignedTransaction, TransactionWithSignature};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
 #[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
 pub struct GetBlockTxnResponse {
     pub request_id: RequestId,
     pub block_hash: H256,
-    pub block_txn: Vec<TransactionWithSignature>,
+    pub block_txn: Vec<SignedTransaction>,
 }
 
 impl Handleable for GetBlockTxnResponse {
@@ -53,11 +53,11 @@ impl Handleable for GetBlockTxnResponse {
             ctx.manager.graph.block_header_by_hash(&resp_hash)
         {
             debug!("Process blocktxn hash={:?}", resp_hash);
-            let signed_txns = ctx
-                .manager
-                .graph
-                .data_man
-                .recover_unsigned_tx_with_order(&self.block_txn)?;
+            let signed_txns = self
+                .block_txn
+                .iter()
+                .map(|tx| Arc::new(tx.clone()))
+                .collect();
             match ctx.manager.graph.data_man.compact_block_by_hash(&resp_hash) {
                 Some(cmpct) => {
                     let mut trans =

@@ -176,7 +176,7 @@ impl EthHandler {
             bail!(request_rejected_in_catch_up_mode(None));
         }
         let (signed_trans, failed_trans) =
-            self.tx_pool.insert_new_transactions(vec![tx]);
+            self.tx_pool.insert_new_transactions(vec![]);
         // FIXME: how is it possible?
         if signed_trans.len() + failed_trans.len() > 1 {
             // This should never happen

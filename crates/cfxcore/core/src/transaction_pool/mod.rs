@@ -364,7 +364,7 @@ impl TransactionPool {
     /// cannot be inserted to the tx pool, it will be included in the returned
     /// `failure` and will not be propagated.
     pub fn insert_new_transactions(
-        &self, mut transactions: Vec<TransactionWithSignature>,
+        &self, mut transactions: Vec<SignedTransaction>,
     ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
         INSERT_TPS.mark(1);
         INSERT_TXS_TPS.mark(transactions.len());
@@ -392,7 +392,7 @@ impl TransactionPool {
 
         while let Some(tx) = transactions.get(index) {
             match self.verify_transaction_tx_pool(
-                tx,
+                &tx.transaction,
                 /* basic_check = */ true,
                 chain_id,
                 best_height,
@@ -418,43 +418,32 @@ impl TransactionPool {
         // Note, the workload of recovering public key is very heavy, especially
         // in case of high TPS (e.g. > 8000). So, it's better to recover public
         // key after basic verification.
-        match self.data_man.recover_unsigned_tx(&transactions) {
-            Ok(signed_trans) => {
-                let account_cache = self.get_best_state_account_cache();
-                let mut inner =
-                    self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
-                let mut to_prop = self.to_propagate_trans.write();
+        let account_cache = self.get_best_state_account_cache();
+        let mut inner = self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
+        let mut to_prop = self.to_propagate_trans.write();
 
-                for tx in signed_trans {
-                    if inner.get(&tx.hash).is_none() {
-                        if let Err(e) = self
-                            .add_transaction_with_readiness_check(
-                                &mut *inner,
-                                &account_cache,
-                                tx.clone(),
-                                false,
-                                false,
-                            )
-                        {
-                            debug!(
-                            "tx {:?} fails to be inserted to pool, err={:?}",
-                            &tx.hash, e
-                        );
-                            failure.insert(tx.hash(), e);
-                            continue;
-                        }
-                        passed_transactions.push(tx.clone());
-                        if !to_prop.contains_key(&tx.hash)
-                            && to_prop.len() < inner.capacity()
-                        {
-                            to_prop.insert(tx.hash, tx);
-                        }
-                    }
+        for tx in transactions {
+            let tx = Arc::new(tx);
+            if inner.get(&tx.hash).is_none() {
+                if let Err(e) = self.add_transaction_with_readiness_check(
+                    &mut *inner,
+                    &account_cache,
+                    tx.clone(),
+                    false,
+                    false,
+                ) {
+                    debug!(
+                        "tx {:?} fails to be inserted to pool, err={:?}",
+                        &tx.hash, e
+                    );
+                    failure.insert(tx.hash(), e);
+                    continue;
                 }
-            }
-            Err(e) => {
-                for tx in transactions {
-                    failure.insert(tx.hash(), format!("{:?}", e).into());
+                passed_transactions.push(tx.clone());
+                if !to_prop.contains_key(&tx.hash)
+                    && to_prop.len() < inner.capacity()
+                {
+                    to_prop.insert(tx.hash, tx);
                 }
             }
         }

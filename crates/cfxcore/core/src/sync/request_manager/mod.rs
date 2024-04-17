@@ -829,14 +829,14 @@ impl RequestManager {
 
     pub fn get_sent_transactions(
         &self, window_index: usize, indices: &Vec<usize>,
-    ) -> Vec<TransactionWithSignature> {
+    ) -> Vec<SignedTransaction> {
         let sent_transactions = self.sent_transactions.read();
         let mut txs = Vec::with_capacity(indices.len());
         for index in indices {
             if let Some(tx) =
                 sent_transactions.get_transaction(window_index, *index)
             {
-                txs.push(tx.transaction.clone());
+                txs.push(tx.as_ref().clone());
             }
         }
         txs

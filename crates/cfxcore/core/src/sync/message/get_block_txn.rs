@@ -90,7 +90,7 @@ impl Handleable for GetBlockTxn {
                         )
                         .into());
                     }
-                    tx_resp.push(block.transactions[last].transaction.clone());
+                    tx_resp.push(block.transactions[last].as_ref().clone());
                     last += 1;
                 }
                 let response = GetBlockTxnResponse {

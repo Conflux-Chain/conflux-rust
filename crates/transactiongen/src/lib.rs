@@ -229,7 +229,7 @@ impl TransactionGenerator {
 
             let signed_tx = tx.sign(&address_secret_pair[&sender_address]);
             let mut tx_to_insert = Vec::new();
-            tx_to_insert.push(signed_tx.transaction);
+            tx_to_insert.push(signed_tx);
             let (txs, fail) =
                 txgen.txpool.insert_new_transactions(tx_to_insert);
             if fail.is_empty() {
