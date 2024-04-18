@@ -53,7 +53,7 @@ impl Handleable for GetBlockTxnResponse {
             ctx.manager.graph.block_header_by_hash(&resp_hash)
         {
             debug!("Process blocktxn hash={:?}", resp_hash);
-            let signed_txns = self
+            let signed_txns: Vec<Arc<SignedTransaction>> = self
                 .block_txn
                 .iter()
                 .map(|tx| Arc::new(tx.clone()))
