@@ -1474,7 +1474,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.0.2"
+version = "2.3.5"
 dependencies = [
  "app_dirs",
  "base64ct",
