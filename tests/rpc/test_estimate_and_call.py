@@ -19,7 +19,7 @@ class TestEstimateAndCall(RpcClient):
 
         call_request["from"] = hex_to_b32_address(self.rand_addr())
 
-        assert_raises_rpc_error(-32015, "Can not estimate: transaction execution failed, all gas will be charged", self.node.cfx_estimateGasAndCollateral, call_request)
+        assert_raises_rpc_error(-32015, "Can not estimate: transaction can not be executed", self.node.cfx_estimateGasAndCollateral, call_request)
 
     def test_call(self):
         to = self.rand_addr()

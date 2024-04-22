@@ -1,0 +1,17 @@
+[package]
+name = "cached-pos-ledger-db"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+serde = { version = "1.0.124", features = ["derive"] }
+
+consensus-types = { path = "../../consensus/consensus-types" }
+pos-ledger-db = { path = "../pos-ledger-db" }
+diem-crypto = { path = "../../crypto/crypto" }
+diem-infallible = { path = "../../common/infallible" }
+diem-logger = { path = "../../common/logger" }
+diem-types = { path = "../../types" }
+executor-types = { path = "../../types/executor-types" }
+storage-interface = { path = "../storage-interface" }

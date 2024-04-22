@@ -1,0 +1,43 @@
+[package]
+name = "diem-genesis-tool"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "A tool to manage genesis"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+rand = "0.8.3"
+serde = { version = "1.0.124", features = ["rc"], default-features = false }
+structopt = "0.3.21"
+thiserror = "1.0.24"
+toml = { version = "0.5.8", default-features = false }
+
+consensus-types = { path = "../../../consensus/consensus-types" }
+executor = { path = "../../../execution/executor" }
+generate-key = { path = "../../generate-key" }
+bcs = "0.1.2"
+diem-config = { path = "../.." }
+diem-crypto = { path = "../../../crypto/crypto" }
+diem-global-constants = { path = "../../global-constants" }
+diem-management = { path = ".." }
+diem-network-address-encryption = {path = "../network-address-encryption" }
+diem-secure-storage = { path = "../../../secure/storage" }
+diem-types = { path = "../../../types" }
+diem-temppath = { path = "../../../common/temppath" }
+diem-vm = { path = "../../../language/diem-vm" }
+pos-ledger-db = { path = "../../../storage/pos-ledger-db" }
+storage-interface = { path = "../../../storage/storage-interface" }
+transaction-builder = { path = "../../../language/transaction-builder" }
+vm-genesis = { path = "../../../language/tools/vm-genesis" }
+
+[dev-dependencies]
+diem-config = { path = "../..", features = ["fuzzing"]}
+
+[features]
+testing = []
+fuzzing = ["diem-config/fuzzing"]
