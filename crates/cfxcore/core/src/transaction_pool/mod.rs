@@ -414,36 +414,38 @@ impl TransactionPool {
             return (passed_transactions, failure);
         }
 
-        // Recover public key and insert into pool with readiness check.
-        // Note, the workload of recovering public key is very heavy, especially
-        // in case of high TPS (e.g. > 8000). So, it's better to recover public
-        // key after basic verification.
-        let account_cache = self.get_best_state_account_cache();
-        let mut inner = self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
-        let mut to_prop = self.to_propagate_trans.write();
+        {
+            // Recover public key and insert into pool with readiness check.
+            // Note, the workload of recovering public key is very heavy, especially
+            // in case of high TPS (e.g. > 8000). So, it's better to recover public
+            // key after basic verification.
+            let account_cache = self.get_best_state_account_cache();
+            let mut inner = self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
+            let mut to_prop = self.to_propagate_trans.write();
 
-        for tx in transactions {
-            let tx = Arc::new(tx);
-            if inner.get(&tx.hash).is_none() {
-                if let Err(e) = self.add_transaction_with_readiness_check(
-                    &mut *inner,
-                    &account_cache,
-                    tx.clone(),
-                    false,
-                    false,
-                ) {
-                    debug!(
+            for tx in transactions {
+                let tx = Arc::new(tx);
+                if inner.get(&tx.hash).is_none() {
+                    if let Err(e) = self.add_transaction_with_readiness_check(
+                        &mut *inner,
+                        &account_cache,
+                        tx.clone(),
+                        false,
+                        false,
+                    ) {
+                        debug!(
                         "tx {:?} fails to be inserted to pool, err={:?}",
                         &tx.hash, e
                     );
-                    failure.insert(tx.hash(), e);
-                    continue;
-                }
-                passed_transactions.push(tx.clone());
-                if !to_prop.contains_key(&tx.hash)
-                    && to_prop.len() < inner.capacity()
-                {
-                    to_prop.insert(tx.hash, tx);
+                        failure.insert(tx.hash(), e);
+                        continue;
+                    }
+                    passed_transactions.push(tx.clone());
+                    if !to_prop.contains_key(&tx.hash)
+                        && to_prop.len() < inner.capacity()
+                    {
+                        to_prop.insert(tx.hash, tx);
+                    }
                 }
             }
         }
