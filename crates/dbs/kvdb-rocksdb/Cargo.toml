@@ -1,0 +1,30 @@
+[package]
+name = "kvdb-rocksdb"
+version = "0.1.6"
+authors = ["Parity Technologies <admin@parity.io>"]
+repository = "https://github.com/paritytech/parity-common"
+description = "kvdb implementation backed by rocksDB"
+license = "GPL-3.0"
+edition = "2018"
+
+[dependencies]
+cfx-types = { path = "../../cfx_types" }
+fs-swap = "0.2.4"
+kvdb = "0.4"
+log = "0.4.8"
+num_cpus = "1.10.1"
+parking_lot = "0.11"
+regex = "1.3.1"
+malloc_size_of = {path = "../../util/malloc_size_of" }
+malloc_size_of_derive = {path = "../../util/malloc_size_of_derive" }
+
+[dependencies.parity-util-mem]
+version = "0.5"
+default-features = false
+
+[dev-dependencies]
+tempdir = "0.3.7"
+
+[dependencies.rocksdb]
+git = "https://github.com/Conflux-Chain/rust-rocksdb.git"
+rev = "a1ce5bd3322a7b732dfb300c2571dc4d99f1edae"
