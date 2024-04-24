@@ -1217,7 +1217,7 @@ impl TransactionPoolInner {
                     }
                 }
                 Transaction::Ethereum(ref utx) => {
-                    need_balance += utx.value.clone();
+                    need_balance += utx.value().clone();
                     need_balance += estimate_gas_fee;
                 }
             }

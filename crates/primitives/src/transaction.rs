@@ -314,7 +314,9 @@ impl Eip155Transaction {
         SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
-                    unsigned: Transaction::Ethereum(self),
+                    unsigned: Transaction::Ethereum(
+                        EthereumTransaction::Eip155(self),
+                    ),
                     // we use sender address for `r` and `s` so that phantom
                     // transactions with matching fields from different senders
                     // will have different hashes
@@ -338,7 +340,9 @@ impl Eip155Transaction {
         SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
-                    unsigned: Transaction::Ethereum(self),
+                    unsigned: Transaction::Ethereum(
+                        EthereumTransaction::Eip155(self),
+                    ),
                     r: U256::one(),
                     s: U256::one(),
                     v: 0,
@@ -419,9 +423,43 @@ impl Encodable for Eip155Transaction {
 // }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Eip2930Transaction {
+    /// Nonce.
+    pub nonce: U256,
+    /// Gas price.
+    pub gas_price: U256,
+    /// Gas paid up front for transaction execution.
+    pub gas: U256,
+    /// Action, can be either call or contract create.
+    pub action: Action,
+    /// Transferred value.
+    pub value: U256,
+    /// The chain id of the transaction
+    pub chain_id: Option<u32>,
+    /// Transaction data.
+    pub data: Bytes,
+    pub max_priority_fee_per_gas: U256,
+    pub max_fee_per_gas: U256,
+    pub access_list: AccessList,
+}
+
+impl Encodable for Eip2930Transaction {
+    fn rlp_append(&self, s: &mut RlpStream) { todo!() }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccessList {}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EthereumTransaction {
+    Eip155(Eip155Transaction),
+    Eip2930(Eip2930Transaction),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Transaction {
     Native(NativeTransaction),
-    Ethereum(Eip155Transaction),
+    Ethereum(EthereumTransaction),
 }
 
 impl Default for Transaction {
@@ -433,18 +471,47 @@ impl From<NativeTransaction> for Transaction {
 }
 
 impl From<Eip155Transaction> for Transaction {
-    fn from(tx: Eip155Transaction) -> Self { Self::Ethereum(tx) }
+    fn from(tx: Eip155Transaction) -> Self {
+        Self::Ethereum(EthereumTransaction::Eip155(tx))
+    }
 }
 
 macro_rules! access_common_ref {
-    ($field:ident, $ty:ident) => {
+    ($field:ident, $ty:ty) => {
         pub fn $field(&self) -> &$ty {
             match self {
                 Transaction::Native(tx) => &tx.$field,
-                Transaction::Ethereum(tx) => &tx.$field,
+                Transaction::Ethereum(tx) => &tx.$field(),
             }
         }
     };
+}
+
+macro_rules! eth_access_common_ref {
+    ($field:ident, $ty:ty) => {
+        pub fn $field(&self) -> &$ty {
+            match self {
+                EthereumTransaction::Eip155(tx) => &tx.$field,
+                EthereumTransaction::Eip2930(tx) => &tx.$field,
+            }
+        }
+    };
+}
+
+impl EthereumTransaction {
+    eth_access_common_ref!(gas, U256);
+
+    eth_access_common_ref!(gas_price, U256);
+
+    eth_access_common_ref!(data, Bytes);
+
+    eth_access_common_ref!(nonce, U256);
+
+    eth_access_common_ref!(action, Action);
+
+    eth_access_common_ref!(value, U256);
+
+    eth_access_common_ref!(chain_id, Option<u32>);
 }
 
 #[allow(unused)]
@@ -474,7 +541,7 @@ impl Transaction {
     pub fn chain_id(&self) -> Option<u32> {
         match self {
             Transaction::Native(tx) => Some(tx.chain_id),
-            Transaction::Ethereum(tx) => tx.chain_id,
+            Transaction::Ethereum(tx) => tx.chain_id().clone(),
         }
     }
 
@@ -488,7 +555,12 @@ impl Transaction {
     pub fn nonce_mut(&mut self) -> &mut U256 {
         match self {
             Transaction::Native(tx) => &mut tx.nonce,
-            Transaction::Ethereum(tx) => &mut tx.nonce,
+            Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
+                &mut tx.nonce
+            }
+            Transaction::Ethereum(EthereumTransaction::Eip2930(tx)) => {
+                &mut tx.nonce
+            }
         }
     }
 }
@@ -503,7 +575,10 @@ impl Transaction {
             Transaction::Native(tx) => {
                 s.append(tx);
             }
-            Transaction::Ethereum(tx) => {
+            Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
+                s.append(tx);
+            }
+            Transaction::Ethereum(EthereumTransaction::Eip2930(tx)) => {
                 s.append(tx);
             }
         }
@@ -573,7 +648,7 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 s.append(&self.r);
                 s.append(&self.s);
             }
-            Transaction::Ethereum(ref tx) => {
+            Transaction::Ethereum(EthereumTransaction::Eip155(ref tx)) => {
                 let Eip155Transaction {
                     nonce,
                     gas_price,
@@ -597,6 +672,9 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 s.append(&legacy_v);
                 s.append(&self.r);
                 s.append(&self.s);
+            }
+            Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => {
+                todo!()
             }
         }
     }
@@ -642,15 +720,17 @@ impl Decodable for TransactionWithSignatureSerializePart {
                     };
 
                 Ok(TransactionWithSignatureSerializePart {
-                    unsigned: Transaction::Ethereum(Eip155Transaction {
-                        nonce,
-                        gas_price,
-                        gas,
-                        action,
-                        value,
-                        chain_id,
-                        data,
-                    }),
+                    unsigned: Transaction::Ethereum(
+                        EthereumTransaction::Eip155(Eip155Transaction {
+                            nonce,
+                            gas_price,
+                            gas,
+                            action,
+                            value,
+                            chain_id,
+                            data,
+                        }),
+                    ),
                     v,
                     r,
                     s,

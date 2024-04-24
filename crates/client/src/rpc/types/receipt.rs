@@ -129,23 +129,23 @@ impl Receipt {
             }
             Transaction::Ethereum(ref unsigned) => {
                 if include_eth_receipt {
-                    if Action::Create == unsigned.action
+                    if Action::Create == *unsigned.action()
                         && outcome_status == TransactionStatus::Success
                     {
                         let (created_address, _) = contract_address(
                             CreateContractAddress::FromSenderNonce,
                             0,
                             &transaction.sender,
-                            &unsigned.nonce,
-                            &unsigned.data,
+                            unsigned.nonce(),
+                            unsigned.data(),
                         );
                         let address = Some(RpcAddress::try_from_h160(
                             created_address,
                             network,
                         )?);
-                        (address, unsigned.action.clone(), Space::Ethereum)
+                        (address, unsigned.action().clone(), Space::Ethereum)
                     } else {
-                        (None, unsigned.action.clone(), Space::Ethereum)
+                        (None, unsigned.action().clone(), Space::Ethereum)
                     }
                 } else {
                     bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));

@@ -102,6 +102,7 @@ use cfxcore::{
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
 };
 use diem_types::account_address::AccountAddress;
+use primitives::transaction::EthereumTransaction;
 use serde::Serialize;
 
 #[derive(Debug)]
@@ -1070,7 +1071,14 @@ impl RpcImpl {
                 Transaction::Native(ref mut unsigned) if tx_data_len > 0 => {
                     unsigned.data = vec![0; tx_data_len];
                 }
-                Transaction::Ethereum(ref mut unsigned) if tx_data_len > 0 => {
+                Transaction::Ethereum(EthereumTransaction::Eip155(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(EthereumTransaction::Eip2930(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
                     unsigned.data = vec![0; tx_data_len];
                 }
                 _ => {}
