@@ -424,35 +424,87 @@ impl Encodable for Eip155Transaction {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Eip2930Transaction {
-    /// Nonce.
+    pub chain_id: u32,
     pub nonce: U256,
-    /// Gas price.
     pub gas_price: U256,
-    /// Gas paid up front for transaction execution.
     pub gas: U256,
-    /// Action, can be either call or contract create.
     pub action: Action,
-    /// Transferred value.
     pub value: U256,
-    /// The chain id of the transaction
-    pub chain_id: Option<u32>,
-    /// Transaction data.
     pub data: Bytes,
-    pub max_priority_fee_per_gas: U256,
-    pub max_fee_per_gas: U256,
     pub access_list: AccessList,
 }
 
 impl Encodable for Eip2930Transaction {
-    fn rlp_append(&self, s: &mut RlpStream) { todo!() }
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(8);
+        s.append(&self.chain_id);
+        s.append(&self.nonce);
+        s.append(&self.gas_price);
+        s.append(&self.gas);
+        s.append(&self.action);
+        s.append(&self.value);
+        s.append(&self.data);
+        s.append_list(&self.access_list);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AccessList {}
+pub struct Eip1559Transaction {
+    pub chain_id: u32,
+    pub nonce: U256,
+    pub max_priority_fee_per_gas: U256,
+    pub max_fee_per_gas: U256,
+    pub gas: U256,
+    pub action: Action,
+    pub value: U256,
+    pub data: Bytes,
+    pub access_list: AccessList,
+}
+
+impl Encodable for Eip1559Transaction {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(9);
+        s.append(&self.chain_id);
+        s.append(&self.nonce);
+        s.append(&self.max_priority_fee_per_gas);
+        s.append(&self.max_fee_per_gas);
+        s.append(&self.gas);
+        s.append(&self.action);
+        s.append(&self.value);
+        s.append(&self.data);
+        s.append_list(&self.access_list);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccessListItem {
+    pub address: Address,
+    pub storage_keys: Vec<H256>,
+}
+
+impl Encodable for AccessListItem {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(2);
+        s.append(&self.address);
+        s.append_list(&self.storage_keys);
+    }
+}
+
+impl Decodable for AccessListItem {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        Ok(Self {
+            address: rlp.val_at(0)?,
+            storage_keys: rlp.list_at(1)?,
+        })
+    }
+}
+
+pub type AccessList = Vec<AccessListItem>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EthereumTransaction {
     Eip155(Eip155Transaction),
+    Eip1559(Eip1559Transaction),
     Eip2930(Eip2930Transaction),
 }
 
@@ -493,6 +545,7 @@ macro_rules! eth_access_common_ref {
             match self {
                 EthereumTransaction::Eip155(tx) => &tx.$field,
                 EthereumTransaction::Eip2930(tx) => &tx.$field,
+                EthereumTransaction::Eip1559(tx) => &tx.$field,
             }
         }
     };
@@ -500,8 +553,6 @@ macro_rules! eth_access_common_ref {
 
 impl EthereumTransaction {
     eth_access_common_ref!(gas, U256);
-
-    eth_access_common_ref!(gas_price, U256);
 
     eth_access_common_ref!(data, Bytes);
 
@@ -511,7 +562,21 @@ impl EthereumTransaction {
 
     eth_access_common_ref!(value, U256);
 
-    eth_access_common_ref!(chain_id, Option<u32>);
+    pub fn gas_price(&self) -> &U256 {
+        match self {
+            EthereumTransaction::Eip155(tx) => &tx.gas_price,
+            EthereumTransaction::Eip1559(tx) => &tx.max_fee_per_gas,
+            EthereumTransaction::Eip2930(tx) => &tx.gas_price,
+        }
+    }
+
+    pub fn chain_id(&self) -> Option<u32> {
+        match self {
+            EthereumTransaction::Eip155(tx) => tx.chain_id,
+            EthereumTransaction::Eip1559(tx) => Some(tx.chain_id),
+            EthereumTransaction::Eip2930(tx) => Some(tx.chain_id),
+        }
+    }
 }
 
 #[allow(unused)]
@@ -558,9 +623,21 @@ impl Transaction {
             Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
                 &mut tx.nonce
             }
+            Transaction::Ethereum(EthereumTransaction::Eip1559(tx)) => {
+                &mut tx.nonce
+            }
             Transaction::Ethereum(EthereumTransaction::Eip2930(tx)) => {
                 &mut tx.nonce
             }
+        }
+    }
+
+    pub fn type_id(&self) -> Option<u32> {
+        match self {
+            Transaction::Native(_)
+            | Transaction::Ethereum(EthereumTransaction::Eip155(_)) => None,
+            Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => Some(1),
+            Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => Some(2),
         }
     }
 }
@@ -576,6 +653,9 @@ impl Transaction {
                 s.append(tx);
             }
             Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
+                s.append(tx);
+            }
+            Transaction::Ethereum(EthereumTransaction::Eip1559(tx)) => {
                 s.append(tx);
             }
             Transaction::Ethereum(EthereumTransaction::Eip2930(tx)) => {
@@ -674,6 +754,9 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 s.append(&self.s);
             }
             Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => {
+                todo!()
+            }
+            Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => {
                 todo!()
             }
         }

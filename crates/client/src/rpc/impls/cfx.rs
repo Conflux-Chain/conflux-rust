@@ -1076,6 +1076,11 @@ impl RpcImpl {
                 )) if tx_data_len > 0 => {
                     unsigned.data = vec![0; tx_data_len];
                 }
+                Transaction::Ethereum(EthereumTransaction::Eip1559(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
                 Transaction::Ethereum(EthereumTransaction::Eip2930(
                     ref mut unsigned,
                 )) if tx_data_len > 0 => {
