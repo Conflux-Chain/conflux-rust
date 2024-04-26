@@ -45,7 +45,7 @@ use cfx_execute_helper::{
 };
 use cfx_executor::{executive::ExecutionOutcome, state::State};
 
-use alloy_rpc_trace_types::geth::{GethDebugTracingOptions, GethTrace};
+use alloy_rpc_types_trace::geth::{GethDebugTracingOptions, GethTrace};
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,

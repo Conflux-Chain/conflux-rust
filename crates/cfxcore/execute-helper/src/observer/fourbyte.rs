@@ -23,7 +23,7 @@
 
 use super::geth_tracer::GethTraceKey;
 use alloy_primitives::{hex, Selector};
-use alloy_rpc_trace_types::geth::{FourByteFrame, GethTrace};
+use alloy_rpc_types_trace::geth::{FourByteFrame, GethTrace};
 use cfx_executor::observer::{
     CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
     OpcodeTracer, StorageTracer,

@@ -5,7 +5,7 @@ use crate::observer::geth_tracer::{
     TracingInspectorConfig,
 };
 use alloy_primitives::{Address, Bytes, B256, U256};
-use alloy_rpc_trace_types::geth::{
+use alloy_rpc_types_trace::geth::{
     AccountChangeKind, AccountState, CallConfig, CallFrame, DefaultFrame,
     DiffMode, GethDefaultTracingOptions, PreStateConfig, PreStateFrame,
     PreStateMode, StructLog,

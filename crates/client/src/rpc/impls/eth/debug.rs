@@ -1,5 +1,5 @@
 use crate::rpc::traits::eth_space::debug::Debug;
-use alloy_rpc_trace_types::geth::{
+use alloy_rpc_types_trace::geth::{
     GethDebugBuiltInTracerType,
     GethDebugTracerType::{BuiltInTracer, JsTracer},
     GethDebugTracingOptions, GethTrace, NoopFrame,

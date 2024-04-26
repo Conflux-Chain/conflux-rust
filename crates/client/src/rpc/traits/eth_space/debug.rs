@@ -1,4 +1,4 @@
-use alloy_rpc_trace_types::geth::{GethDebugTracingOptions, GethTrace};
+use alloy_rpc_types_trace::geth::{GethDebugTracingOptions, GethTrace};
 use cfx_types::H256;
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;

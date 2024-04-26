@@ -6,7 +6,7 @@ use pow_types::StakingEvent;
 use primitives::Receipt;
 
 use crate::observer::geth_tracer::GethTraceKey;
-use alloy_rpc_trace_types::geth::GethTrace;
+use alloy_rpc_types_trace::geth::GethTrace;
 
 use super::{
     observer::exec_tracer::{ExecTrace, ExecTraceKey},

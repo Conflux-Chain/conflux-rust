@@ -79,7 +79,7 @@ use cfx_executor::{
 };
 use cfx_vm_types::{Env, Spec};
 
-use alloy_rpc_trace_types::geth::{
+use alloy_rpc_types_trace::geth::{
     GethDebugBuiltInTracerType, GethDebugTracerType, GethDebugTracingOptions,
     GethTrace,
 };

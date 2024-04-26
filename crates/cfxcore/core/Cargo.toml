@@ -137,7 +137,7 @@ impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
 treap-map = {path = "../../util/treap-map" }
 cfx-packing-pool = { path = "../packing-pool" }
-alloy-rpc-trace-types.workspace = true
+alloy-rpc-types-trace.workspace = true
 
 
 [dev-dependencies]

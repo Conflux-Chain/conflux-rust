@@ -35,7 +35,7 @@ use cfx_executor::{
 
 use cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
 
-use alloy_rpc_trace_types::geth::{
+use alloy_rpc_types_trace::geth::{
     CallFrame, DefaultFrame, GethTrace, NoopFrame,
 };
 

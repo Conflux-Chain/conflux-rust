@@ -54,6 +54,6 @@ pow-types = {path = "../core/src/pos/types/pow-types" }
 typemap = "0.3"
 
 alloy-primitives.workspace = true
-alloy-rpc-trace-types.workspace = true
-alloy-sol-types = "0.6"
-revm = { version = "7.2", default-features = false, features = ["std"] } # TODO need to be removed
+alloy-sol-types = "0.7.1"
+revm = { version = "8.0", default-features = false, features = ["std"] } # TODO need to be removed
+alloy-rpc-types-trace.workspace = true

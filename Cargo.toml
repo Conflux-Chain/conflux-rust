@@ -91,5 +91,6 @@ debug-assertions = true
 serde_derive = "1.0"
 serde = { version = "1.0", features = ["derive", "alloc"] }
 serde_json = "1.0"
-alloy-primitives = "0.6"
-alloy-rpc-trace-types = { git = "https://github.com/alloy-rs/alloy", rev = "410850b" }
+
+alloy-primitives = "0.7.1"
+alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }

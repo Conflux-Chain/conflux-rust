@@ -1,4 +1,4 @@
-use alloy_rpc_trace_types::{
+use alloy_rpc_types_trace::{
     geth::{CallConfig, GethDefaultTracingOptions, PreStateConfig},
     parity::TraceType,
 };
