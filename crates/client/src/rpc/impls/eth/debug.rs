@@ -1,4 +1,6 @@
-use crate::rpc::traits::eth_space::debug::Debug;
+use crate::rpc::{
+    error_codes::invalid_params_msg, traits::eth_space::debug::Debug,
+};
 use alloy_rpc_types_trace::geth::{
     GethDebugBuiltInTracerType,
     GethDebugTracerType::{BuiltInTracer, JsTracer},
@@ -7,7 +9,6 @@ use alloy_rpc_types_trace::geth::{
 use cfx_types::H256;
 use cfxcore::{ConsensusGraph, SharedConsensusGraph};
 use jsonrpc_core::{Error as RpcError, Result as JsonRpcResult};
-// use primitives::EpochNumber;
 
 pub struct GethDebugHandler {
     consensus: SharedConsensusGraph,
@@ -44,9 +45,7 @@ impl Debug for GethDebugHandler {
                         return Err(RpcError::invalid_params("not supported"))
                     }
                     GethDebugBuiltInTracerType::CallTracer => (),
-                    GethDebugBuiltInTracerType::PreStateTracer => {
-                        return Err(RpcError::invalid_params("not supported"))
-                    }
+                    GethDebugBuiltInTracerType::PreStateTracer => (),
                     GethDebugBuiltInTracerType::NoopTracer => {
                         return Ok(GethTrace::NoopTracer(NoopFrame::default()))
                     }
@@ -64,24 +63,26 @@ impl Debug for GethDebugHandler {
             .consensus
             .get_data_manager()
             .transaction_index_by_hash(&hash, false /* update_cache */)
-            .ok_or(RpcError::invalid_params("invalid tx hash"))?;
+            .ok_or(invalid_params_msg("invalid tx hash"))?;
 
         let epoch_num = self
             .consensus
             .get_block_epoch_number(&tx_index.block_hash)
-            .ok_or(RpcError::invalid_params("invalid tx hash"))?;
+            .ok_or(invalid_params_msg("invalid tx hash"))?;
 
         let epoch_traces = self
             .consensus_graph()
             .collect_epoch_geth_trace(epoch_num, Some(hash), opts)
-            .map_err(|_e| RpcError::invalid_params("invalid tx hash"))?;
+            .map_err(|e| {
+                invalid_params_msg(&format!("invalid tx hash: {e}"))
+            })?;
 
         // filter by tx hash
         let trace = epoch_traces
             .into_iter()
             .find(|(tx_hash, _)| tx_hash == &hash)
             .map(|(_, trace)| trace)
-            .ok_or(RpcError::invalid_params("invalid tx hash"));
+            .ok_or(invalid_params_msg("trace generation failed"));
 
         trace
     }

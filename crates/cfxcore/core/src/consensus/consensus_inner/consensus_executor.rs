@@ -2096,12 +2096,14 @@ impl ConsensusExecutionHandler {
                     None => true, // trace all tx
                 };
 
-                let (observer, supported) = if need_trace {
+                // choose the observer according to the options
+                let observer = if need_trace {
+                    let tx_gas_limit = transaction.gas_limit().as_u64();
                     match &opts.tracer {
                         Some(t) => match t {
                             GethDebugTracerType::BuiltInTracer(bt) => match bt {
                                 GethDebugBuiltInTracerType::FourByteTracer => {
-                                    (Observer::with_no_tracing(), false)
+                                    Observer::with_no_tracing()
                                 }
                                 GethDebugBuiltInTracerType::CallTracer => {
                                     let call_config = opts
@@ -2109,37 +2111,49 @@ impl ConsensusExecutionHandler {
                                         .clone()
                                         .into_call_config()
                                         .map_err(|e| format!("{e}"))?;
-                                    (Observer::geth_tracer(
+                                    Observer::geth_tracer(
                                             TracingInspectorConfig::from_geth_call_config(&call_config),
-                                        ),
-                                        true,
-                                    )
+                                            tx_gas_limit,
+                                            Arc::clone(&self.machine),
+                                        )
                                 }
                                 GethDebugBuiltInTracerType::PreStateTracer => {
-                                    (Observer::with_no_tracing(), false)
+                                    let pre_state_config = opts
+                                        .tracer_config
+                                        .clone()
+                                        .into_pre_state_config()
+                                        .map_err(|e| format!("{e}"))?;
+                                    Observer::geth_tracer(
+                                            TracingInspectorConfig::from_geth_prestate_config(&pre_state_config),
+                                             tx_gas_limit,
+                                             Arc::clone(&self.machine),
+                                        )
                                 }
                                 GethDebugBuiltInTracerType::NoopTracer => {
-                                    (Observer::with_no_tracing(), false)
+                                    Observer::with_no_tracing()
                                 }
                                 GethDebugBuiltInTracerType::MuxTracer => {
-                                    (Observer::with_no_tracing(), false)
+                                    Observer::with_no_tracing()
                                 }
                             },
                             GethDebugTracerType::JsTracer(_) => {
-                                (Observer::with_no_tracing(), false)
+                                Observer::with_no_tracing()
                             }
                         },
-                        None => (
+                        None =>
+                        // default is opcode tracer
+                        {
                             Observer::geth_tracer(
                                 TracingInspectorConfig::from_geth_config(
                                     &opts.config,
                                 ),
-                            ),
-                            true,
-                        ),
+                                tx_gas_limit,
+                                Arc::clone(&self.machine),
+                            )
+                        }
                     }
                 } else {
-                    (Observer::with_no_tracing(), false)
+                    Observer::with_no_tracing()
                 };
 
                 let options = TransactOptions {
@@ -2149,41 +2163,18 @@ impl ConsensusExecutionHandler {
                 let execution_outcome =
                     ExecutiveContext::new(state, &env, machine, &spec)
                         .transact(transaction, options)?;
+
                 let r = make_process_tx_outcome(
                     execution_outcome,
                     &mut env.accumulated_gas_used,
                     transaction.hash,
                 );
 
-                if need_trace && supported {
-                    if let Some(t) = &opts.tracer {
-                        if t == &GethDebugTracerType::BuiltInTracer(
-                            GethDebugBuiltInTracerType::CallTracer,
-                        ) {
-                            if r.geth_trace.is_some() {
-                                traces.push((
-                                    transaction.hash(),
-                                    r.geth_trace.unwrap(),
-                                ));
-                            }
-                        }
-                    } else {
-                        if r.geth_trace.is_some() {
-                            traces.push((
-                                transaction.hash(),
-                                r.geth_trace.unwrap(),
-                            ));
-                        }
-                    }
+                if need_trace && r.geth_trace.is_some() {
+                    traces.push((transaction.hash(), r.geth_trace.unwrap()));
                 }
             }
         }
-
-        // dummy trace for the block
-        // traces.push((
-        //     H256::default(),
-        //     GethTrace::NoopTracer(NoopFrame::default()),
-        // ));
 
         Ok(traces)
     }

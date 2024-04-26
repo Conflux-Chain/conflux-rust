@@ -9,7 +9,7 @@ mod utils;
 
 pub use arena::CallTraceArena;
 pub use builder::geth::{self, GethTraceBuilder};
-use cfx_types::H160;
+use cfx_types::{Space, H160};
 pub use config::{StackSnapshotType, TracingInspectorConfig};
 
 use arena::PushTraceKind;
@@ -23,9 +23,14 @@ use utils::{
 };
 
 use alloy_primitives::{Address, Bytes, LogData, U256};
-use revm::interpreter::{Gas, InstructionResult, InterpreterResult, OpCode};
+use revm::{
+    db::InMemoryDB,
+    interpreter::{Gas, InstructionResult, InterpreterResult, OpCode},
+    primitives::{ExecutionResult, ResultAndState, State},
+};
 
 use cfx_executor::{
+    machine::Machine,
     observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
         OpcodeTracer, StorageTracer,
@@ -36,10 +41,13 @@ use cfx_executor::{
 use cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
 
 use alloy_rpc_types_trace::geth::{
-    CallFrame, DefaultFrame, GethTrace, NoopFrame,
+    CallConfig, CallFrame, DefaultFrame, GethDebugBuiltInTracerType,
+    GethDefaultTracingOptions, GethTrace, NoopFrame, PreStateConfig,
 };
 
-#[derive(Clone, Debug)]
+use std::{convert, sync::Arc};
+
+#[derive(Clone)]
 pub struct TracingInspector {
     /// Configures what and how the inspector records traces.
     config: TracingInspectorConfig,
@@ -57,11 +65,18 @@ pub struct TracingInspector {
     depth: usize,
     // gas stack, used to trace gas_spent in call_result/create_result
     gas_stack: Vec<cfx_types::U256>,
+    //
+    tx_gas_limit: u64,
+    //
+    machine: Arc<Machine>,
 }
 
 impl TracingInspector {
     /// Returns a new instance for the given config
-    pub fn new(config: TracingInspectorConfig) -> Self {
+    pub fn new(
+        config: TracingInspectorConfig, tx_gas_limit: u64,
+        machine: Arc<Machine>,
+    ) -> Self {
         Self {
             config,
             traces: Default::default(),
@@ -71,6 +86,8 @@ impl TracingInspector {
             gas_inspector: Default::default(),
             depth: 0,
             gas_stack: vec![],
+            tx_gas_limit,
+            machine,
         }
     }
 
@@ -91,6 +108,8 @@ impl TracingInspector {
             config: _,
             depth,
             gas_stack,
+            tx_gas_limit,
+            machine,
         } = self;
         traces.clear();
         trace_stack.clear();
@@ -99,6 +118,7 @@ impl TracingInspector {
         last_call_return_data.take();
         *gas_inspector = Default::default();
         *depth = 0;
+        *tx_gas_limit = 0;
     }
 
     /// Resets the inspector to it's initial state of [Self::new].
@@ -162,10 +182,14 @@ impl TracingInspector {
     /// Returns true if the `to` address is a precompile contract and the value
     /// is zero.
     #[inline]
-    fn is_precompile_call(&self, _to: &Address, value: U256) -> bool {
-        // TODO(pana) check to is in precompile list
-        // precompile list is in Machine object
-        if false {
+    fn is_precompile_call(&self, to: &H160, value: U256, space: Space) -> bool {
+        // TODO: check according block height
+        let is_precompile = match space {
+            Space::Native => self.machine.builtins().contains_key(&to),
+            Space::Ethereum => self.machine.builtins_evm().contains_key(&to),
+        };
+
+        if is_precompile {
             // only if this is _not_ the root call
             return self.is_deep() && value.is_zero();
         }
@@ -399,7 +423,7 @@ impl TracingInspector {
         // The gas cost is the difference between the recorded gas remaining at
         // the start of the step the remaining gas here, at the end of
         // the step.
-        // todo: Figure out why this can overflow. https://github.com/paradigmxyz/evm-inspectors/pull/38
+        // todo(evm-inspector): Figure out why this can overflow. https://github.com/paradigmxyz/evm-inspectors/pull/38
         step.gas_cost = step
             .gas_remaining
             .saturating_sub(self.gas_inspector.gas_remaining());
@@ -411,18 +435,75 @@ impl TracingInspector {
 
 pub struct GethTracer {
     inner: TracingInspector,
+    tracer_type: Option<GethDebugBuiltInTracerType>,
 }
 
 impl GethTracer {
-    pub fn new(config: TracingInspectorConfig) -> Self {
+    pub fn new(
+        config: TracingInspectorConfig, tx_gas_limit: u64,
+        machine: Arc<Machine>,
+    ) -> Self {
         Self {
-            inner: TracingInspector::new(config),
+            inner: TracingInspector::new(config, tx_gas_limit, machine),
+            tracer_type: None,
         }
     }
 
     pub fn drain(self) -> GethTrace {
-        // TODO return the right kind of frame according to the config
-        GethTrace::NoopTracer(NoopFrame::default())
+        let trace = match self.tracer_type {
+            Some(t) => match t {
+                GethDebugBuiltInTracerType::FourByteTracer => todo!(),
+                GethDebugBuiltInTracerType::CallTracer => {
+                    // TODO
+                    let gas_used = 1000000u64;
+                    let opts = CallConfig::default();
+                    let frame = self
+                        .inner
+                        .into_geth_builder()
+                        .geth_call_traces(opts, gas_used);
+                    GethTrace::CallTracer(frame)
+                }
+                GethDebugBuiltInTracerType::PreStateTracer => {
+                    // TODO replace the empty state with a real state
+                    let gas_used = 1000000u64;
+                    let opts = PreStateConfig::default();
+                    let result = ResultAndState {
+                        result: ExecutionResult::Revert {
+                            gas_used,
+                            output: Bytes::default(),
+                        },
+                        state: State::default(),
+                    };
+                    let db = InMemoryDB::default();
+                    let frame = self
+                        .inner
+                        .into_geth_builder()
+                        .geth_prestate_traces(&result, opts, db)
+                        .unwrap();
+                    GethTrace::PreStateTracer(frame)
+                }
+                GethDebugBuiltInTracerType::NoopTracer => {
+                    GethTrace::NoopTracer(NoopFrame::default())
+                }
+                GethDebugBuiltInTracerType::MuxTracer => {
+                    GethTrace::NoopTracer(NoopFrame::default())
+                } // not supported
+            },
+            None => {
+                // TODO
+                let gas_used = 1000000u64;
+                let return_value = Bytes::default();
+                let opts = GethDefaultTracingOptions::default();
+                let frame = self.inner.into_geth_builder().geth_traces(
+                    gas_used,
+                    return_value,
+                    opts,
+                );
+                GethTrace::Default(frame)
+            }
+        };
+
+        trace
     }
 }
 
@@ -451,32 +532,31 @@ impl CallTracer for GethTracer {
 
         // determine correct `from` and `to` based on the call scheme
         let (from, to) = match params.call_type {
-            CallType::DelegateCall | CallType::CallCode => (
-                convert_h160(params.address),
-                convert_h160(params.code_address),
-            ),
-            _ => (convert_h160(params.sender), convert_h160(params.address)),
+            CallType::DelegateCall | CallType::CallCode => {
+                (params.address, params.code_address)
+            }
+            _ => (params.sender, params.address),
         };
 
-        let value = if matches!(params.call_type, CallType::DelegateCall) {
+        let value = if matches!(params.call_type, CallType::DelegateCall)
+            && self.inner.active_trace().is_some()
+        {
             // for delegate calls we need to use the value of the top trace
-            if let Some(parent) = self.inner.active_trace() {
-                parent.trace.value
-            } else {
-                convert_u256(params.value.value())
-            }
+            let parent = self.inner.active_trace().unwrap();
+            parent.trace.value
         } else {
             convert_u256(params.value.value())
         };
 
         // if calls to precompiles should be excluded, check whether this is a
         // call to a precompile
-        let maybe_precompile = self
-            .inner
-            .config
-            .exclude_precompile_calls
-            .then(|| self.inner.is_precompile_call(&to, value));
+        let maybe_precompile =
+            self.inner.config.exclude_precompile_calls.then(|| {
+                self.inner.is_precompile_call(&to, value, params.space)
+            });
 
+        let to = convert_h160(to);
+        let from = convert_h160(from);
         self.inner.start_trace_on_call(
             to,
             params.data.clone().unwrap_or_default().into(),
@@ -485,8 +565,7 @@ impl CallTracer for GethTracer {
             from,
             params.gas.as_u64(),
             maybe_precompile,
-            params.gas.as_u64(), /* TODO should use tx gas_limit not frame
-                                  * gas_limit */
+            self.inner.tx_gas_limit,
             self.inner.depth,
         );
     }

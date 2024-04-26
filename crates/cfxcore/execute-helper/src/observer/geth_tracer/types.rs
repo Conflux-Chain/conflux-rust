@@ -467,7 +467,7 @@ impl From<CreateScheme> for CallKind {
 impl From<CfxCallType> for CallKind {
     fn from(ct: CfxCallType) -> Self {
         match ct {
-            CfxCallType::None => Self::Create, // TODO(pana) check this
+            CfxCallType::None => Self::CallCode, /* TODO(pana) check this is appropriate, or add a None variant to CallKind */
             CfxCallType::Call => Self::Call,
             CfxCallType::CallCode => Self::CallCode,
             CfxCallType::DelegateCall => Self::DelegateCall,

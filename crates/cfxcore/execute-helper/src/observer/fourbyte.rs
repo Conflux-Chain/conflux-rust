@@ -47,7 +47,9 @@ impl FourByteInspector {
         &self.inner
     }
 
-    pub fn drain(self) -> FourByteFrame { FourByteFrame::from(self) }
+    pub fn drain(self) -> GethTrace {
+        GethTrace::FourByteTracer(FourByteFrame::from(self))
+    }
 }
 
 impl CallTracer for FourByteInspector {
@@ -70,15 +72,9 @@ impl OpcodeTracer for FourByteInspector {}
 
 impl DrainTrace for FourByteInspector {
     fn drain_trace(self, map: &mut typemap::ShareDebugMap) {
-        map.insert::<GethTraceKey>(GethTrace::FourByteTracer(self.drain()));
+        map.insert::<GethTraceKey>(self.drain());
     }
 }
-
-// impl AsTracer for FourByteInspector {
-//     fn as_tracer<'a>(&'a mut self) -> Box<dyn 'a + TracerTrait> {
-//         Box::new(self)
-//     }
-// }
 
 impl From<FourByteInspector> for FourByteFrame {
     fn from(value: FourByteInspector) -> Self {

@@ -7,8 +7,12 @@ mod utils;
 use exec_tracer::ExecTracer;
 use gasman::GasMan;
 
-use cfx_executor::executive_observer::{AsTracer, DrainTrace, TracerTrait};
+use cfx_executor::{
+    executive_observer::{AsTracer, DrainTrace, TracerTrait},
+    machine::Machine,
+};
 use cfx_vm_tracer_derive::{AsTracer, DrainTrace};
+use std::sync::Arc;
 
 use self::geth_tracer::{GethTracer, TracingInspectorConfig};
 
@@ -44,11 +48,14 @@ impl Observer {
         }
     }
 
-    pub fn geth_tracer(config: TracingInspectorConfig) -> Self {
+    pub fn geth_tracer(
+        config: TracingInspectorConfig, tx_gas_limit: u64,
+        machine: Arc<Machine>,
+    ) -> Self {
         Observer {
             tracer: None,
             gas_man: None,
-            geth_tracer: Some(GethTracer::new(config)),
+            geth_tracer: Some(GethTracer::new(config, tx_gas_limit, machine)),
         }
     }
 }

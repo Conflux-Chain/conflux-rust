@@ -233,7 +233,6 @@ impl GethTraceBuilder {
     /// * `state` - The state post-transaction execution.
     /// * `diff_mode` - if prestate is in diff or prestate mode.
     /// * `db` - The database to fetch state pre-transaction execution.
-    /// TODO(pana): adapt the DatabaseRef and ResultAndState's State
     pub fn geth_prestate_traces<DB: DatabaseRef>(
         &self, ResultAndState { state, .. }: &ResultAndState,
         prestate_config: PreStateConfig, db: DB,

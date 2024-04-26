@@ -66,6 +66,10 @@ impl Machine {
     /// Builtin-contracts for the core space
     pub fn builtins(&self) -> &BTreeMap<Address, Builtin> { &*self.builtins }
 
+    pub fn builtins_evm(&self) -> &BTreeMap<Address, Builtin> {
+        &*self.builtins_evm
+    }
+
     /// Builtin-contracts for the chain..
     pub fn internal_contracts(&self) -> &InternalContractMap {
         &*self.internal_contracts
