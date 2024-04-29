@@ -109,7 +109,7 @@ impl Transaction {
         }
         let (storage_limit, epoch_height) =
             if let PrimitiveTransaction::Native(ref tx) = t.unsigned {
-                (tx.storage_limit, tx.epoch_height)
+                (*tx.storage_limit(), *tx.epoch_height())
             } else {
                 (0, 0)
             };

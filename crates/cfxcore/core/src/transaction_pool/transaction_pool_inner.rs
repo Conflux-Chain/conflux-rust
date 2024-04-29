@@ -1207,12 +1207,12 @@ impl TransactionPoolInner {
             );
             match transaction.unsigned {
                 Transaction::Native(ref utx) => {
-                    need_balance += utx.value.clone();
+                    need_balance += utx.value().clone();
                     if sponsored_gas == U256::from(0) {
                         need_balance += estimate_gas_fee;
                     }
                     if sponsored_storage == 0 {
-                        need_balance += U256::from(utx.storage_limit)
+                        need_balance += U256::from(*utx.storage_limit())
                             * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
                     }
                 }
@@ -1277,7 +1277,7 @@ impl TransactionPoolInner {
 
         // Compute sponsored_gas for `transaction`
         if let Transaction::Native(ref utx) = transaction.unsigned {
-            if let Action::Call(ref callee) = utx.action {
+            if let Action::Call(ref callee) = utx.action().clone() {
                 // FIXME: This is a quick fix for performance issue.
                 if callee.is_contract_address() {
                     if let Some(sponsor_info) =
@@ -1305,15 +1305,15 @@ impl TransactionPoolInner {
                                 && estimated_gas
                                 <= sponsor_info.sponsor_balance_for_gas
                             {
-                                sponsored_gas = utx.gas;
+                                sponsored_gas = utx.gas().clone();
                             }
                             let estimated_collateral =
-                                U256::from(utx.storage_limit)
+                                U256::from(*utx.storage_limit())
                                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
                             if estimated_collateral
                                 <= sponsor_info.sponsor_balance_for_collateral + sponsor_info.unused_storage_points()
                             {
-                                sponsored_storage = utx.storage_limit;
+                                sponsored_storage = *utx.storage_limit();
                             }
                         }
                     }

@@ -107,24 +107,24 @@ impl Receipt {
 
         let (address, action, space) = match transaction.unsigned {
             Transaction::Native(ref unsigned) => {
-                if Action::Create == unsigned.action
+                if Action::Create == *unsigned.action()
                     && outcome_status == TransactionStatus::Success
                 {
                     let (mut created_address, _) = contract_address(
                         CreateContractAddress::FromSenderNonceAndCodeHash,
                         block_number.into(),
                         &transaction.sender,
-                        &unsigned.nonce,
-                        &unsigned.data,
+                        unsigned.nonce(),
+                        unsigned.data(),
                     );
                     created_address.set_contract_type_bits();
                     let address = Some(RpcAddress::try_from_h160(
                         created_address,
                         network,
                     )?);
-                    (address, unsigned.action.clone(), Space::Native)
+                    (address, unsigned.action().clone(), Space::Native)
                 } else {
-                    (None, unsigned.action.clone(), Space::Native)
+                    (None, unsigned.action().clone(), Space::Native)
                 }
             }
             Transaction::Ethereum(ref unsigned) => {

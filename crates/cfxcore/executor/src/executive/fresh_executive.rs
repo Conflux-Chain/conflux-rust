@@ -126,13 +126,13 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
 
         let env = self.context.env;
 
-        if tx.epoch_height.abs_diff(env.epoch_height)
+        if tx.epoch_height().abs_diff(env.epoch_height)
             > env.transaction_epoch_bound
         {
             Ok(Err(ExecutionOutcome::NotExecutedToReconsiderPacking(
                 ToRepackError::EpochHeightOutOfBound {
                     block_height: env.epoch_height,
-                    set: tx.epoch_height,
+                    set: *tx.epoch_height(),
                     transaction_epoch_bound: env.transaction_epoch_bound,
                 },
             )))
@@ -177,7 +177,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
                 &tx.transaction.transaction.unsigned,
                 settings.charge_collateral,
             ) {
-                U256::from(tx.storage_limit)
+                U256::from(*tx.storage_limit())
                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
             } else {
                 U256::zero()

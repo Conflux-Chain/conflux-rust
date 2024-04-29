@@ -78,8 +78,8 @@ impl TxWithReadyInfo {
                 if let Transaction::Native(ref other) = x.unsigned {
                     // FIXME: Use epoch_bound in spec. It's still a part of
                     // normal config.
-                    if tx.epoch_height
-                        > other.epoch_height.saturating_add(
+                    if *tx.epoch_height()
+                        > other.epoch_height().saturating_add(
                             TRANSACTION_DEFAULT_EPOCH_BOUND.saturating_mul(2),
                         )
                     {
@@ -91,7 +91,7 @@ impl TxWithReadyInfo {
                         // verification anymore and should be dropped.
                         return true;
                     }
-                    tx.epoch_height > other.epoch_height
+                    tx.epoch_height() > other.epoch_height()
                 } else {
                     // Should be unreachable. But I'm not very sure about this.
                     // Return false is safe.
@@ -128,7 +128,7 @@ impl TxWithReadyInfo {
         };
         let storage_collateral_requirement =
             if let Transaction::Native(ref tx) = transaction.unsigned {
-                U256::from(tx.storage_limit - sponsored_storage)
+                U256::from(*tx.storage_limit() - sponsored_storage)
                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
             } else {
                 U256::zero()

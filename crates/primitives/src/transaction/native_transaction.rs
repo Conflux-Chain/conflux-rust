@@ -49,7 +49,9 @@ impl NativeTransaction {
         SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
-                    unsigned: Transaction::Native(self),
+                    unsigned: Transaction::Native(
+                        TypedNativeTransaction::Cip155(self),
+                    ),
                     r: U256::one(),
                     s: U256::one(),
                     v: 0,
@@ -128,6 +130,44 @@ impl Decodable for NativeAccessList {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let inner = rlp.list_at(0)?;
         Ok(Self { inner })
+    }
+}
+
+macro_rules! access_common_ref {
+    ($field:ident, $ty:ty) => {
+        pub fn $field(&self) -> &$ty {
+            match self {
+                TypedNativeTransaction::Cip155(tx) => &tx.$field,
+                TypedNativeTransaction::Cip2930(tx) => &tx.$field,
+                TypedNativeTransaction::Cip1559(tx) => &tx.$field,
+            }
+        }
+    };
+}
+
+impl TypedNativeTransaction {
+    access_common_ref!(gas, U256);
+
+    access_common_ref!(data, Bytes);
+
+    access_common_ref!(nonce, U256);
+
+    access_common_ref!(action, Action);
+
+    access_common_ref!(value, U256);
+
+    access_common_ref!(chain_id, u32);
+
+    access_common_ref!(epoch_height, u64);
+
+    access_common_ref!(storage_limit, u64);
+
+    pub fn gas_price(&self) -> &U256 {
+        match self {
+            TypedNativeTransaction::Cip155(tx) => &tx.gas_price,
+            TypedNativeTransaction::Cip1559(tx) => &tx.max_fee_per_gas,
+            TypedNativeTransaction::Cip2930(tx) => &tx.gas_price,
+        }
     }
 }
 

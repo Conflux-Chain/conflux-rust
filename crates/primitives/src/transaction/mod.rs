@@ -5,7 +5,10 @@
 pub mod eth_transaction;
 pub mod native_transaction;
 
-use crate::{bytes::Bytes, hash::keccak};
+use crate::{
+    bytes::Bytes, hash::keccak,
+    transaction::native_transaction::TypedNativeTransaction,
+};
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
     H256, U256,
@@ -247,16 +250,20 @@ pub type AccessList = Vec<AccessListItem>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Transaction {
-    Native(NativeTransaction),
+    Native(TypedNativeTransaction),
     Ethereum(EthereumTransaction),
 }
 
 impl Default for Transaction {
-    fn default() -> Self { Transaction::Native(Default::default()) }
+    fn default() -> Self {
+        Transaction::Native(TypedNativeTransaction::Cip155(Default::default()))
+    }
 }
 
 impl From<NativeTransaction> for Transaction {
-    fn from(tx: NativeTransaction) -> Self { Self::Native(tx) }
+    fn from(tx: NativeTransaction) -> Self {
+        Self::Native(TypedNativeTransaction::Cip155(tx))
+    }
 }
 
 impl From<Eip155Transaction> for Transaction {
@@ -269,7 +276,7 @@ macro_rules! access_common_ref {
     ($field:ident, $ty:ty) => {
         pub fn $field(&self) -> &$ty {
             match self {
-                Transaction::Native(tx) => &tx.$field,
+                Transaction::Native(tx) => &tx.$field(),
                 Transaction::Ethereum(tx) => &tx.$field(),
             }
         }
@@ -302,21 +309,29 @@ impl Transaction {
 
     pub fn chain_id(&self) -> Option<u32> {
         match self {
-            Transaction::Native(tx) => Some(tx.chain_id),
+            Transaction::Native(tx) => Some(*tx.chain_id()),
             Transaction::Ethereum(tx) => tx.chain_id().clone(),
         }
     }
 
     pub fn storage_limit(&self) -> Option<u64> {
         match self {
-            Transaction::Native(tx) => Some(tx.storage_limit),
+            Transaction::Native(tx) => Some(*tx.storage_limit()),
             Transaction::Ethereum(_tx) => None,
         }
     }
 
     pub fn nonce_mut(&mut self) -> &mut U256 {
         match self {
-            Transaction::Native(tx) => &mut tx.nonce,
+            Transaction::Native(TypedNativeTransaction::Cip155(tx)) => {
+                &mut tx.nonce
+            }
+            Transaction::Native(TypedNativeTransaction::Cip1559(tx)) => {
+                &mut tx.nonce
+            }
+            Transaction::Native(TypedNativeTransaction::Cip2930(tx)) => {
+                &mut tx.nonce
+            }
             Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
                 &mut tx.nonce
             }
@@ -346,7 +361,13 @@ impl Transaction {
     pub fn signature_hash(&self) -> H256 {
         let mut s = RlpStream::new();
         match self {
-            Transaction::Native(tx) => {
+            Transaction::Native(TypedNativeTransaction::Cip155(tx)) => {
+                s.append(tx);
+            }
+            Transaction::Native(TypedNativeTransaction::Cip1559(tx)) => {
+                s.append(tx);
+            }
+            Transaction::Native(TypedNativeTransaction::Cip2930(tx)) => {
                 s.append(tx);
             }
             Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
@@ -418,7 +439,7 @@ pub struct TransactionWithSignatureSerializePart {
 impl Encodable for TransactionWithSignatureSerializePart {
     fn rlp_append(&self, s: &mut RlpStream) {
         match self.unsigned {
-            Transaction::Native(ref tx) => {
+            Transaction::Native(TypedNativeTransaction::Cip155(ref tx)) => {
                 s.begin_list(4);
                 s.append(tx);
                 s.append(&self.v);
@@ -456,6 +477,12 @@ impl Encodable for TransactionWithSignatureSerializePart {
             Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => {
                 todo!()
             }
+            Transaction::Native(TypedNativeTransaction::Cip2930(_)) => {
+                todo!()
+            }
+            Transaction::Native(TypedNativeTransaction::Cip1559(_)) => {
+                todo!()
+            }
         }
     }
 }
@@ -469,7 +496,9 @@ impl Decodable for TransactionWithSignatureSerializePart {
                 let r: U256 = rlp.val_at(2)?;
                 let s: U256 = rlp.val_at(3)?;
                 Ok(TransactionWithSignatureSerializePart {
-                    unsigned: Transaction::Native(unsigned),
+                    unsigned: Transaction::Native(
+                        TypedNativeTransaction::Cip155(unsigned),
+                    ),
                     v,
                     r,
                     s,
