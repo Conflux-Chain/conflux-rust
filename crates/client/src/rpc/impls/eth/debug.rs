@@ -42,8 +42,26 @@ impl Debug for GethDebugHandler {
             match tracer_type {
                 BuiltInTracer(builtin_tracer) => match builtin_tracer {
                     GethDebugBuiltInTracerType::FourByteTracer => (),
-                    GethDebugBuiltInTracerType::CallTracer => (),
-                    GethDebugBuiltInTracerType::PreStateTracer => (),
+                    GethDebugBuiltInTracerType::CallTracer => {
+                        // pre check config
+                        let _ = opts
+                            .tracer_config
+                            .clone()
+                            .into_call_config()
+                            .map_err(|e| {
+                            invalid_params_msg(&e.to_string())
+                        })?;
+                        ()
+                    }
+                    GethDebugBuiltInTracerType::PreStateTracer => {
+                        // pre check config
+                        let _ = opts
+                            .tracer_config
+                            .clone()
+                            .into_pre_state_config()
+                            .map_err(|e| invalid_params_msg(&e.to_string()))?;
+                        ()
+                    }
                     GethDebugBuiltInTracerType::NoopTracer => {
                         return Ok(GethTrace::NoopTracer(NoopFrame::default()))
                     }

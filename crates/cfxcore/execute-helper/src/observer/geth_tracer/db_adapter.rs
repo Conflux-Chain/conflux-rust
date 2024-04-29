@@ -1,4 +1,4 @@
-use super::utils::{convert_h256, convert_u256, to_h160};
+use super::utils::{from_alloy_address, to_alloy_h256, to_alloy_u256};
 use cfx_executor::state::State;
 use cfx_statedb::Error as StateDbError;
 use cfx_types::{AddressWithSpace, Space};
@@ -56,7 +56,7 @@ impl<'a> DatabaseRef for RevmDbAdapter<'a> {
         &self, address: Address,
     ) -> Result<Option<AccountInfo>, Self::Error> {
         let space_address = AddressWithSpace {
-            address: to_h160(address),
+            address: from_alloy_address(address),
             space: self.space,
         };
         let exist = self.state.exists(&space_address);
@@ -64,14 +64,14 @@ impl<'a> DatabaseRef for RevmDbAdapter<'a> {
             let balance = self
                 .state
                 .balance(&space_address)
-                .map(|v| convert_u256(v))?;
+                .map(|v| to_alloy_u256(v))?;
 
             let nonce = self.state.nonce(&space_address).map(|v| v.as_u64())?;
 
             let code_hash = self
                 .state
                 .code_hash(&space_address)
-                .map(|v| convert_h256(v))?;
+                .map(|v| to_alloy_h256(v))?;
 
             // TODO code and code_hash need consider internal_contracts
             let _code = self.state.code(&space_address).map(|v| {
@@ -104,7 +104,7 @@ impl<'a> DatabaseRef for RevmDbAdapter<'a> {
         &self, address: Address, index: U256,
     ) -> Result<U256, Self::Error> {
         let space_address = AddressWithSpace {
-            address: to_h160(address),
+            address: from_alloy_address(address),
             space: self.space,
         };
 
@@ -112,7 +112,7 @@ impl<'a> DatabaseRef for RevmDbAdapter<'a> {
         let result = self
             .state
             .storage_at(&space_address, &key)
-            .map(|v| convert_u256(v))?;
+            .map(|v| to_alloy_u256(v))?;
 
         return Ok(result);
     }

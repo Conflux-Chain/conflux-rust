@@ -14,7 +14,7 @@ use cfx_types::H160;
 pub use config::{StackSnapshotType, TracingInspectorConfig};
 
 use types::LogCallOrder;
-use utils::{convert_h160, convert_h256, convert_u256};
+use utils::{to_alloy_address, to_alloy_h256, to_alloy_u256};
 
 use super::fourbyte::FourByteInspector;
 use alloy_primitives::{Address, Bytes, LogData};
@@ -36,8 +36,9 @@ use cfx_executor::{
 use cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
 
 use alloy_rpc_types_trace::geth::{
-    CallConfig, GethDebugBuiltInTracerType, GethDefaultTracingOptions,
-    GethTrace, NoopFrame, PreStateConfig,
+    CallConfig, GethDebugBuiltInTracerType, GethDebugBuiltInTracerType::*,
+    GethDebugTracerType, GethDebugTracingOptions, GethTrace, NoopFrame,
+    PreStateConfig,
 };
 use tracing_inspector::TracingInspector;
 
@@ -45,8 +46,6 @@ use std::sync::Arc;
 
 pub struct GethTracer {
     inner: TracingInspector,
-    //
-    tracer_type: Option<GethDebugBuiltInTracerType>,
     //
     fourbyte_inspector: FourByteInspector,
     //
@@ -58,61 +57,101 @@ pub struct GethTracer {
     //
     return_data: Bytes,
     //
-    call_config: Option<CallConfig>,
-    //
-    prestate_config: Option<PreStateConfig>,
-    //
-    opcode_config: Option<GethDefaultTracingOptions>,
+    opts: GethDebugTracingOptions,
 }
 
 impl GethTracer {
     pub fn new(
-        config: TracingInspectorConfig, tx_gas_limit: u64,
-        machine: Arc<Machine>, tracer_type: Option<GethDebugBuiltInTracerType>,
-        call_config: Option<CallConfig>,
-        prestate_config: Option<PreStateConfig>,
-        opcode_config: Option<GethDefaultTracingOptions>,
+        tx_gas_limit: u64, machine: Arc<Machine>, opts: GethDebugTracingOptions,
     ) -> Self {
+        let config = match opts.tracer {
+            Some(GethDebugTracerType::BuiltInTracer(builtin_tracer)) => {
+                match builtin_tracer {
+                    FourByteTracer | NoopTracer | MuxTracer => {
+                        TracingInspectorConfig::none()
+                    }
+                    CallTracer => {
+                        let c = opts
+                            .tracer_config
+                            .clone()
+                            .into_call_config()
+                            .expect("should success");
+                        TracingInspectorConfig::from_geth_call_config(&c)
+                    }
+                    PreStateTracer => {
+                        let c = opts
+                            .tracer_config
+                            .clone()
+                            .into_pre_state_config()
+                            .expect("should success");
+                        TracingInspectorConfig::from_geth_prestate_config(&c)
+                    }
+                }
+            }
+            Some(GethDebugTracerType::JsTracer(_)) => {
+                TracingInspectorConfig::none()
+            }
+            None => TracingInspectorConfig::from_geth_config(&opts.config),
+        };
+
         Self {
             inner: TracingInspector::new(config, machine),
-            tracer_type,
             fourbyte_inspector: FourByteInspector::new(),
             tx_gas_limit,
             depth: 0,
             gas_left: tx_gas_limit,
             return_data: Bytes::default(),
-            call_config,
-            prestate_config,
-            opcode_config,
+            opts,
         }
     }
 
+    fn tracer_type(&self) -> Option<GethDebugBuiltInTracerType> {
+        match self.opts.tracer.clone() {
+            Some(t) => match t {
+                GethDebugTracerType::BuiltInTracer(builtin_tracer) => {
+                    Some(builtin_tracer)
+                }
+                GethDebugTracerType::JsTracer(_) => {
+                    // not supported
+                    Some(NoopTracer)
+                }
+            },
+            None => None,
+        }
+    }
+
+    fn call_config(&self) -> Option<CallConfig> {
+        self.opts.tracer_config.clone().into_call_config().ok()
+    }
+
+    fn prestate_config(&self) -> Option<PreStateConfig> {
+        self.opts.tracer_config.clone().into_pre_state_config().ok()
+    }
+
     pub fn is_fourbyte_tracer(&self) -> bool {
-        self.tracer_type == Some(GethDebugBuiltInTracerType::FourByteTracer)
+        self.tracer_type() == Some(FourByteTracer)
     }
 
     pub fn gas_used(&self) -> u64 { self.tx_gas_limit - self.gas_left }
 
     pub fn drain(self) -> GethTrace {
-        let trace = match self.tracer_type {
+        let trace = match self.tracer_type() {
             Some(t) => match t {
-                GethDebugBuiltInTracerType::FourByteTracer => {
-                    self.fourbyte_inspector.drain()
-                }
-                GethDebugBuiltInTracerType::CallTracer => {
+                FourByteTracer => self.fourbyte_inspector.drain(),
+                CallTracer => {
                     let gas_used = self.gas_used();
-                    let opts = self.call_config.expect("should have config");
+                    let opts = self.call_config().expect("should have config");
                     let frame = self
                         .inner
                         .into_geth_builder()
                         .geth_call_traces(opts, gas_used);
                     GethTrace::CallTracer(frame)
                 }
-                GethDebugBuiltInTracerType::PreStateTracer => {
+                PreStateTracer => {
                     // TODO replace the empty state and db with a real state
                     let gas_used = self.gas_used();
                     let opts =
-                        self.prestate_config.expect("should have config");
+                        self.prestate_config().expect("should have config");
                     let result = ResultAndState {
                         result: ExecutionResult::Revert {
                             gas_used,
@@ -128,18 +167,14 @@ impl GethTracer {
                         .unwrap();
                     GethTrace::PreStateTracer(frame)
                 }
-                GethDebugBuiltInTracerType::NoopTracer => {
-                    GethTrace::NoopTracer(NoopFrame::default())
-                }
-                GethDebugBuiltInTracerType::MuxTracer => {
-                    // not supported
+                NoopTracer | MuxTracer => {
                     GethTrace::NoopTracer(NoopFrame::default())
                 }
             },
             None => {
                 let gas_used = self.gas_used();
                 let return_value = self.return_data;
-                let opts = self.opcode_config.expect("should have config");
+                let opts = self.opts.config;
                 let frame = self.inner.into_geth_builder().geth_traces(
                     gas_used,
                     return_value,
@@ -196,7 +231,7 @@ impl CallTracer for GethTracer {
             let parent = self.inner.active_trace().unwrap();
             parent.trace.value
         } else {
-            convert_u256(params.value.value())
+            to_alloy_u256(params.value.value())
         };
 
         // if calls to precompiles should be excluded, check whether this is a
@@ -206,8 +241,8 @@ impl CallTracer for GethTracer {
                 self.inner.is_precompile_call(&to, value, params.space)
             });
 
-        let to = convert_h160(to);
-        let from = convert_h160(from);
+        let to = to_alloy_address(to);
+        let from = to_alloy_address(from);
         self.inner.start_trace_on_call(
             to,
             params.data.clone().unwrap_or_default().into(),
@@ -270,10 +305,10 @@ impl CallTracer for GethTracer {
             if let Some(parent) = self.inner.active_trace() {
                 parent.trace.value
             } else {
-                convert_u256(params.value.value())
+                to_alloy_u256(params.value.value())
             }
         } else {
-            convert_u256(params.value.value())
+            to_alloy_u256(params.value.value())
         };
 
         self.inner.start_trace_on_call(
@@ -281,7 +316,7 @@ impl CallTracer for GethTracer {
             params.data.clone().unwrap_or_default().into(),
             value,
             params.call_type.into(),
-            convert_h160(params.sender),
+            to_alloy_address(params.sender),
             params.gas.as_u64(),
             Some(false),
             params.gas.as_u64(),
@@ -323,7 +358,7 @@ impl CallTracer for GethTracer {
 
         let create_address =
             if let Ok(FrameReturn { create_address, .. }) = result {
-                create_address.as_ref().map(|h| convert_h160(*h))
+                create_address.as_ref().map(|h| to_alloy_address(*h))
             } else {
                 None
             };
@@ -384,7 +419,7 @@ impl OpcodeTracer for GethTracer {
             let trace = &mut self.inner.traces.arena[trace_idx];
             trace.ordering.push(LogCallOrder::Log(trace.logs.len()));
             trace.logs.push(LogData::new_unchecked(
-                topics.iter().map(|f| convert_h256(*f)).collect(),
+                topics.iter().map(|f| to_alloy_h256(*f)).collect(),
                 Bytes::from(data.to_vec()),
             ));
         }
@@ -400,7 +435,8 @@ impl OpcodeTracer for GethTracer {
 
         let trace_idx = self.inner.last_trace_idx();
         let trace = &mut self.inner.traces.arena[trace_idx].trace;
-        trace.selfdestruct_refund_target = Some(convert_h160(*target as H160))
+        trace.selfdestruct_refund_target =
+            Some(to_alloy_address(*target as H160))
     }
 }
 

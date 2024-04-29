@@ -14,11 +14,8 @@ use cfx_executor::{
 use cfx_vm_tracer_derive::{AsTracer, DrainTrace};
 use std::sync::Arc;
 
-use self::geth_tracer::{GethTracer, TracingInspectorConfig};
-use alloy_rpc_types_trace::geth::{
-    CallConfig, GethDebugBuiltInTracerType, GethDefaultTracingOptions,
-    PreStateConfig,
-};
+use self::geth_tracer::GethTracer;
+use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
 
 #[derive(AsTracer, DrainTrace)]
 pub struct Observer {
@@ -53,24 +50,12 @@ impl Observer {
     }
 
     pub fn geth_tracer(
-        config: TracingInspectorConfig, tx_gas_limit: u64,
-        machine: Arc<Machine>, tracer_type: Option<GethDebugBuiltInTracerType>,
-        call_config: Option<CallConfig>,
-        prestate_config: Option<PreStateConfig>,
-        opcode_config: Option<GethDefaultTracingOptions>,
+        tx_gas_limit: u64, machine: Arc<Machine>, opts: GethDebugTracingOptions,
     ) -> Self {
         Observer {
             tracer: None,
             gas_man: None,
-            geth_tracer: Some(GethTracer::new(
-                config,
-                tx_gas_limit,
-                machine,
-                tracer_type,
-                call_config,
-                prestate_config,
-                opcode_config,
-            )),
+            geth_tracer: Some(GethTracer::new(tx_gas_limit, machine, opts)),
         }
     }
 }

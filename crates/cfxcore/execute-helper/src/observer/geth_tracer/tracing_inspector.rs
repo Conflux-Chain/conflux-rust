@@ -4,7 +4,7 @@ use super::{
     types::{
         CallKind, CallTrace, CallTraceNode, CallTraceStep, RecordedMemory,
     },
-    utils::{convert_h160, convert_u256, gas_used, stack_push_count},
+    utils::{gas_used, stack_push_count, to_alloy_address, to_alloy_u256},
     CallTraceArena, GethTraceBuilder, StackStep, TracingInspectorConfig,
 };
 use cfx_types::{Space, H160};
@@ -309,7 +309,7 @@ impl TracingInspector {
                 interp
                     .stack()
                     .into_iter()
-                    .map(|v| convert_u256(v))
+                    .map(|v| to_alloy_u256(v))
                     .collect(),
             )
         } else {
@@ -331,7 +331,7 @@ impl TracingInspector {
             depth,
             pc: interp.program_counter() as usize,
             op,
-            contract: convert_h160(interp.contract_address()),
+            contract: to_alloy_address(interp.contract_address()),
             stack,
             push_stack: None,
             memory_size: memory.len(),
@@ -363,8 +363,9 @@ impl TracingInspector {
             let num_pushed = stack_push_count(step.op.get());
             let start = interp.stack().len() - num_pushed;
             let push_stack = interp.stack()[start..].to_vec();
-            step.push_stack =
-                Some(push_stack.into_iter().map(|v| convert_u256(v)).collect());
+            step.push_stack = Some(
+                push_stack.into_iter().map(|v| to_alloy_u256(v)).collect(),
+            );
         }
 
         if self.config.record_memory_snapshots {

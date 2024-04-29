@@ -62,7 +62,7 @@ use crate::{
 use cfx_execute_helper::{
     estimation::{EstimateExt, EstimateRequest, EstimationContext},
     exec_tracer::TransactionExecTraces,
-    observer::{geth_tracer::TracingInspectorConfig, Observer},
+    observer::Observer,
     tx_outcome::make_process_tx_outcome,
 };
 use cfx_executor::{
@@ -80,8 +80,8 @@ use cfx_executor::{
 use cfx_vm_types::{Env, Spec};
 
 use alloy_rpc_types_trace::geth::{
-    GethDebugBuiltInTracerType, GethDebugTracerType, GethDebugTracingOptions,
-    GethTrace,
+    GethDebugBuiltInTracerType::*, GethDebugTracerType,
+    GethDebugTracingOptions, GethTrace,
 };
 
 lazy_static! {
@@ -2101,57 +2101,19 @@ impl ConsensusExecutionHandler {
                     let tx_gas_limit = transaction.gas_limit().as_u64();
                     match &opts.tracer {
                         Some(t) => match t {
-                            GethDebugTracerType::BuiltInTracer(bt) => match bt {
-                                GethDebugBuiltInTracerType::FourByteTracer => {
-                                    Observer::geth_tracer(
-                                        TracingInspectorConfig::none(),
+                            GethDebugTracerType::BuiltInTracer(bt) => {
+                                match bt {
+                                    FourByteTracer | CallTracer
+                                    | PreStateTracer => Observer::geth_tracer(
                                         tx_gas_limit,
                                         Arc::clone(&self.machine),
-                                        Some(GethDebugBuiltInTracerType::FourByteTracer),
-                                        None,
-                                        None,
-                                        None,
-                                    )
+                                        opts.clone(),
+                                    ),
+                                    NoopTracer | MuxTracer => {
+                                        Observer::with_no_tracing()
+                                    }
                                 }
-                                GethDebugBuiltInTracerType::CallTracer => {
-                                    let call_config = opts
-                                        .tracer_config
-                                        .clone()
-                                        .into_call_config()
-                                        .map_err(|e| format!("{e}"))?;
-                                    Observer::geth_tracer(
-                                            TracingInspectorConfig::from_geth_call_config(&call_config),
-                                            tx_gas_limit,
-                                            Arc::clone(&self.machine),
-                                            Some(GethDebugBuiltInTracerType::CallTracer),
-                                            Some(call_config),
-                                            None,
-                                            None,
-                                        )
-                                }
-                                GethDebugBuiltInTracerType::PreStateTracer => {
-                                    let pre_state_config = opts
-                                        .tracer_config
-                                        .clone()
-                                        .into_pre_state_config()
-                                        .map_err(|e| format!("{e}"))?;
-                                    Observer::geth_tracer(
-                                            TracingInspectorConfig::from_geth_prestate_config(&pre_state_config),
-                                             tx_gas_limit,
-                                             Arc::clone(&self.machine),
-                                             Some(GethDebugBuiltInTracerType::PreStateTracer),
-                                             None,
-                                             Some(pre_state_config),
-                                             None,
-                                        )
-                                }
-                                GethDebugBuiltInTracerType::NoopTracer => {
-                                    Observer::with_no_tracing()
-                                }
-                                GethDebugBuiltInTracerType::MuxTracer => {
-                                    Observer::with_no_tracing()
-                                }
-                            },
+                            }
                             GethDebugTracerType::JsTracer(_) => {
                                 Observer::with_no_tracing()
                             }
@@ -2160,15 +2122,9 @@ impl ConsensusExecutionHandler {
                         // default is opcode tracer
                         {
                             Observer::geth_tracer(
-                                TracingInspectorConfig::from_geth_config(
-                                    &opts.config,
-                                ),
                                 tx_gas_limit,
                                 Arc::clone(&self.machine),
-                                None,
-                                None,
-                                None,
-                                Some(opts.config)
+                                opts.clone(),
                             )
                         }
                     }

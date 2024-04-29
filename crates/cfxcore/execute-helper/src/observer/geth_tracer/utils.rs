@@ -116,18 +116,20 @@ pub(crate) const fn stack_push_count(step_op: u8) -> usize {
     }
 }
 
-// convert from cfx U256 to Revm U256
-pub fn convert_u256(u: U256) -> RU256 {
+// convert from cfx U256 to alloy U256
+pub fn to_alloy_u256(u: U256) -> RU256 {
     let mut be_bytes: [u8; 32] = [0; 32];
     u.to_big_endian(&mut be_bytes);
     RU256::from_be_bytes(be_bytes)
 }
 
-pub fn convert_h160(h: H160) -> RAddress { RAddress::from_slice(h.as_bytes()) }
+pub fn to_alloy_address(h: H160) -> RAddress {
+    RAddress::from_slice(h.as_bytes())
+}
 
-pub fn convert_h256(h: H256) -> B256 { B256::from(h.0) }
+pub fn to_alloy_h256(h: H256) -> B256 { B256::from(h.0) }
 
-pub fn to_h160(address: RAddress) -> Address {
+pub fn from_alloy_address(address: RAddress) -> Address {
     Address::from_slice(address.as_slice())
 }
 
