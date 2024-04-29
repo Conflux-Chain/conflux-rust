@@ -6,8 +6,12 @@ pub mod eth_transaction;
 pub mod native_transaction;
 
 use crate::{
-    bytes::Bytes, hash::keccak,
-    transaction::native_transaction::TypedNativeTransaction,
+    bytes::Bytes,
+    hash::keccak,
+    transaction::{
+        eth_transaction::{Eip1559Transaction, Eip2930Transaction},
+        native_transaction::TypedNativeTransaction,
+    },
 };
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
@@ -31,6 +35,13 @@ use unexpected::OutOfBounds;
 
 /// Fake address for unsigned transactions.
 pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
+
+pub const TYPED_NATIVE_TX_PREFIX: &[u8; 3] = b"cfx";
+pub const TYPED_NATIVE_TX_PREFIX_BYTE: u8 = TYPED_NATIVE_TX_PREFIX[0];
+pub const EIP2930_TYPE: u8 = 0x01;
+pub const EIP1559_TYPE: u8 = 0x02;
+pub const CIP2930_TYPE: u8 = 0x01;
+pub const CIP1559_TYPE: u8 = 0x02;
 
 /// Shorter id for transactions in compact blocks
 // TODO should be u48
@@ -471,11 +482,36 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 s.append(&self.r);
                 s.append(&self.s);
             }
-            Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => {
-                todo!()
+            Transaction::Ethereum(EthereumTransaction::Eip2930(ref tx)) => {
+                s.append_raw(&[EIP2930_TYPE], 0);
+                s.begin_list(11);
+                s.append(&tx.chain_id);
+                s.append(&tx.nonce);
+                s.append(&tx.gas_price);
+                s.append(&tx.gas);
+                s.append(&tx.action);
+                s.append(&tx.value);
+                s.append(&tx.data);
+                s.append_list(&tx.access_list);
+                s.append(&self.v);
+                s.append(&self.r);
+                s.append(&self.s);
             }
-            Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => {
-                todo!()
+            Transaction::Ethereum(EthereumTransaction::Eip1559(ref tx)) => {
+                s.append_raw(&[EIP1559_TYPE], 0);
+                s.begin_list(12);
+                s.append(&tx.chain_id);
+                s.append(&tx.nonce);
+                s.append(&tx.max_priority_fee_per_gas);
+                s.append(&tx.max_fee_per_gas);
+                s.append(&tx.gas);
+                s.append(&tx.action);
+                s.append(&tx.value);
+                s.append(&tx.data);
+                s.append_list(&tx.access_list);
+                s.append(&self.v);
+                s.append(&self.r);
+                s.append(&self.s);
             }
             Transaction::Native(TypedNativeTransaction::Cip2930(_)) => {
                 todo!()
@@ -489,63 +525,132 @@ impl Encodable for TransactionWithSignatureSerializePart {
 
 impl Decodable for TransactionWithSignatureSerializePart {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        match rlp.item_count()? {
-            4 => {
-                let unsigned: NativeTransaction = rlp.val_at(0)?;
-                let v: u8 = rlp.val_at(1)?;
-                let r: U256 = rlp.val_at(2)?;
-                let s: U256 = rlp.val_at(3)?;
-                Ok(TransactionWithSignatureSerializePart {
-                    unsigned: Transaction::Native(
-                        TypedNativeTransaction::Cip155(unsigned),
-                    ),
-                    v,
-                    r,
-                    s,
-                })
-            }
-            9 => {
-                let nonce: U256 = rlp.val_at(0)?;
-                let gas_price: U256 = rlp.val_at(1)?;
-                let gas: U256 = rlp.val_at(2)?;
-                let action: Action = rlp.val_at(3)?;
-                let value: U256 = rlp.val_at(4)?;
-                let data: Vec<u8> = rlp.val_at(5)?;
-                let legacy_v: u64 = rlp.val_at(6)?;
-                let r: U256 = rlp.val_at(7)?;
-                let s: U256 = rlp.val_at(8)?;
+        if rlp.as_raw().len() == 0 {
+            return Err(DecoderError::RlpInvalidLength);
+        }
+        if rlp.is_list() {
+            match rlp.item_count()? {
+                4 => {
+                    let unsigned: NativeTransaction = rlp.val_at(0)?;
+                    let v: u8 = rlp.val_at(1)?;
+                    let r: U256 = rlp.val_at(2)?;
+                    let s: U256 = rlp.val_at(3)?;
+                    Ok(TransactionWithSignatureSerializePart {
+                        unsigned: Transaction::Native(
+                            TypedNativeTransaction::Cip155(unsigned),
+                        ),
+                        v,
+                        r,
+                        s,
+                    })
+                }
+                9 => {
+                    let nonce: U256 = rlp.val_at(0)?;
+                    let gas_price: U256 = rlp.val_at(1)?;
+                    let gas: U256 = rlp.val_at(2)?;
+                    let action: Action = rlp.val_at(3)?;
+                    let value: U256 = rlp.val_at(4)?;
+                    let data: Vec<u8> = rlp.val_at(5)?;
+                    let legacy_v: u64 = rlp.val_at(6)?;
+                    let r: U256 = rlp.val_at(7)?;
+                    let s: U256 = rlp.val_at(8)?;
 
-                let v = eip155_signature::extract_standard_v(legacy_v);
-                let chain_id =
-                    match eip155_signature::extract_chain_id_from_legacy_v(
-                        legacy_v,
-                    ) {
-                        Some(chain_id) if chain_id > (u32::MAX as u64) => {
-                            return Err(DecoderError::Custom(
-                                "Does not support chain_id >= 2^32",
-                            ));
-                        }
-                        chain_id => chain_id.map(|x| x as u32),
+                    let v = eip155_signature::extract_standard_v(legacy_v);
+                    let chain_id =
+                        match eip155_signature::extract_chain_id_from_legacy_v(
+                            legacy_v,
+                        ) {
+                            Some(chain_id) if chain_id > (u32::MAX as u64) => {
+                                return Err(DecoderError::Custom(
+                                    "Does not support chain_id >= 2^32",
+                                ));
+                            }
+                            chain_id => chain_id.map(|x| x as u32),
+                        };
+
+                    Ok(TransactionWithSignatureSerializePart {
+                        unsigned: Transaction::Ethereum(
+                            EthereumTransaction::Eip155(Eip155Transaction {
+                                nonce,
+                                gas_price,
+                                gas,
+                                action,
+                                value,
+                                chain_id,
+                                data,
+                            }),
+                        ),
+                        v,
+                        r,
+                        s,
+                    })
+                }
+                _ => Err(DecoderError::RlpInvalidLength),
+            }
+        } else {
+            match rlp.as_raw()[0] {
+                TYPED_NATIVE_TX_PREFIX_BYTE => {
+                    todo!()
+                }
+                EIP2930_TYPE => {
+                    let rlp = Rlp::new(&rlp.as_raw()[1..]);
+                    if rlp.item_count()? != 11 {
+                        return Err(DecoderError::RlpIncorrectListLen);
+                    }
+
+                    let tx = Eip2930Transaction {
+                        chain_id: rlp.val_at(0)?,
+                        nonce: rlp.val_at(1)?,
+                        gas_price: rlp.val_at(2)?,
+                        gas: rlp.val_at(3)?,
+                        action: rlp.val_at(4)?,
+                        value: rlp.val_at(5)?,
+                        data: rlp.val_at(6)?,
+                        access_list: rlp.list_at(7)?,
                     };
+                    let v = rlp.val_at(8)?;
+                    let r = rlp.val_at(9)?;
+                    let s = rlp.val_at(10)?;
+                    Ok(TransactionWithSignatureSerializePart {
+                        unsigned: Transaction::Ethereum(
+                            EthereumTransaction::Eip2930(tx),
+                        ),
+                        v,
+                        r,
+                        s,
+                    })
+                }
+                EIP1559_TYPE => {
+                    let rlp = Rlp::new(&rlp.as_raw()[1..]);
+                    if rlp.item_count()? != 12 {
+                        return Err(DecoderError::RlpIncorrectListLen);
+                    }
 
-                Ok(TransactionWithSignatureSerializePart {
-                    unsigned: Transaction::Ethereum(
-                        EthereumTransaction::Eip155(Eip155Transaction {
-                            nonce,
-                            gas_price,
-                            gas,
-                            action,
-                            value,
-                            chain_id,
-                            data,
-                        }),
-                    ),
-                    v,
-                    r,
-                    s,
-                })
+                    let tx = Eip1559Transaction {
+                        chain_id: rlp.val_at(0)?,
+                        nonce: rlp.val_at(1)?,
+                        max_priority_fee_per_gas: rlp.val_at(2)?,
+                        max_fee_per_gas: rlp.val_at(3)?,
+                        gas: rlp.val_at(4)?,
+                        action: rlp.val_at(5)?,
+                        value: rlp.val_at(6)?,
+                        data: rlp.val_at(7)?,
+                        access_list: rlp.list_at(8)?,
+                    };
+                    let v = rlp.val_at(9)?;
+                    let r = rlp.val_at(10)?;
+                    let s = rlp.val_at(11)?;
+                    Ok(TransactionWithSignatureSerializePart {
+                        unsigned: Transaction::Ethereum(
+                            EthereumTransaction::Eip1559(tx),
+                        ),
+                        v,
+                        r,
+                        s,
+                    })
+                }
+                _ => Err(DecoderError::RlpInvalidLength),
             }
-            _ => Err(DecoderError::RlpInvalidLength),
         }
     }
 }
