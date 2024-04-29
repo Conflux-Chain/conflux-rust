@@ -41,9 +41,10 @@ use cfxcore::{
 use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS,
+    transaction::eth_transaction::Eip155Transaction, Action,
+    BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
+    StorageValue, TransactionStatus, TransactionWithSignature,
 };
 use rlp::Rlp;
 use rustc_hex::ToHex;

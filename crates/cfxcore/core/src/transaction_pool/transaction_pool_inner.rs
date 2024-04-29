@@ -1330,7 +1330,8 @@ mod test_transaction_pool_inner {
     use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{
-        Action, NativeTransaction, SignedTransaction, Transaction,
+        transaction::native_transaction::NativeTransaction, Action,
+        SignedTransaction, Transaction,
     };
     use std::sync::Arc;
 

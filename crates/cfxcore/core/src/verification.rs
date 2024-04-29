@@ -22,7 +22,7 @@ use cfx_types::{
 use cfx_vm_types::Spec;
 use primitives::{
     block::BlockHeight,
-    transaction::{NativeTransaction, TransactionError},
+    transaction::{native_transaction::NativeTransaction, TransactionError},
     Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
     SignedTransaction, Transaction, TransactionWithSignature,
 };

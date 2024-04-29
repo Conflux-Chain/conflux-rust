@@ -17,7 +17,8 @@ use cfx_types::{
 };
 use cfx_vm_types::{self as vm, Env, Spec};
 use primitives::{
-    transaction::Action, NativeTransaction, SignedTransaction, Transaction,
+    transaction::{native_transaction::NativeTransaction, Action},
+    SignedTransaction, Transaction,
 };
 use std::{
     cmp::{max, min},

@@ -29,8 +29,9 @@ use cfx_vm_types::{
 };
 use cfxkey::{Generator, Random};
 use primitives::{
-    storage::STORAGE_LAYOUT_REGULAR_V0, transaction::Action, EpochId,
-    NativeTransaction, Transaction,
+    storage::STORAGE_LAYOUT_REGULAR_V0,
+    transaction::{native_transaction::NativeTransaction, Action},
+    EpochId, Transaction,
 };
 use rustc_hex::FromHex;
 use std::{

@@ -390,7 +390,8 @@ mod nonce_pool_test {
     use cfx_types::{Address, U128, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{
-        Action, NativeTransaction, SignedTransaction, Transaction,
+        transaction::native_transaction::NativeTransaction, Action,
+        SignedTransaction, Transaction,
     };
     use rand::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;

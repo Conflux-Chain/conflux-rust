@@ -102,7 +102,7 @@ use cfxcore::{
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
 };
 use diem_types::account_address::AccountAddress;
-use primitives::transaction::EthereumTransaction;
+use primitives::transaction::eth_transaction::EthereumTransaction;
 use serde::Serialize;
 
 #[derive(Debug)]
