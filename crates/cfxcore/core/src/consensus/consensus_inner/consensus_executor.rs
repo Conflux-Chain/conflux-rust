@@ -2103,7 +2103,15 @@ impl ConsensusExecutionHandler {
                         Some(t) => match t {
                             GethDebugTracerType::BuiltInTracer(bt) => match bt {
                                 GethDebugBuiltInTracerType::FourByteTracer => {
-                                    Observer::with_no_tracing()
+                                    Observer::geth_tracer(
+                                        TracingInspectorConfig::none(),
+                                        tx_gas_limit,
+                                        Arc::clone(&self.machine),
+                                        Some(GethDebugBuiltInTracerType::FourByteTracer),
+                                        None,
+                                        None,
+                                        None,
+                                    )
                                 }
                                 GethDebugBuiltInTracerType::CallTracer => {
                                     let call_config = opts
@@ -2115,6 +2123,10 @@ impl ConsensusExecutionHandler {
                                             TracingInspectorConfig::from_geth_call_config(&call_config),
                                             tx_gas_limit,
                                             Arc::clone(&self.machine),
+                                            Some(GethDebugBuiltInTracerType::CallTracer),
+                                            Some(call_config),
+                                            None,
+                                            None,
                                         )
                                 }
                                 GethDebugBuiltInTracerType::PreStateTracer => {
@@ -2127,6 +2139,10 @@ impl ConsensusExecutionHandler {
                                             TracingInspectorConfig::from_geth_prestate_config(&pre_state_config),
                                              tx_gas_limit,
                                              Arc::clone(&self.machine),
+                                             Some(GethDebugBuiltInTracerType::PreStateTracer),
+                                             None,
+                                             Some(pre_state_config),
+                                             None,
                                         )
                                 }
                                 GethDebugBuiltInTracerType::NoopTracer => {
@@ -2149,6 +2165,10 @@ impl ConsensusExecutionHandler {
                                 ),
                                 tx_gas_limit,
                                 Arc::clone(&self.machine),
+                                None,
+                                None,
+                                None,
+                                Some(opts.config)
                             )
                         }
                     }

@@ -21,13 +21,8 @@
 //! }
 //! ```
 
-use super::geth_tracer::GethTraceKey;
 use alloy_primitives::{hex, Selector};
 use alloy_rpc_types_trace::geth::{FourByteFrame, GethTrace};
-use cfx_executor::observer::{
-    CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
-    OpcodeTracer, StorageTracer,
-};
 use cfx_vm_types::ActionParams;
 use std::collections::HashMap;
 
@@ -50,10 +45,8 @@ impl FourByteInspector {
     pub fn drain(self) -> GethTrace {
         GethTrace::FourByteTracer(FourByteFrame::from(self))
     }
-}
 
-impl CallTracer for FourByteInspector {
-    fn record_call(&mut self, params: &ActionParams) {
+    pub fn record_call(&mut self, params: &ActionParams) {
         if let Some(input) = &params.data {
             if input.len() > 4 {
                 let selector = Selector::try_from(&input[..4])
@@ -62,17 +55,6 @@ impl CallTracer for FourByteInspector {
                 *self.inner.entry((selector, calldata_size)).or_default() += 1;
             }
         }
-    }
-}
-
-impl CheckpointTracer for FourByteInspector {}
-impl InternalTransferTracer for FourByteInspector {}
-impl StorageTracer for FourByteInspector {}
-impl OpcodeTracer for FourByteInspector {}
-
-impl DrainTrace for FourByteInspector {
-    fn drain_trace(self, map: &mut typemap::ShareDebugMap) {
-        map.insert::<GethTraceKey>(self.drain());
     }
 }
 

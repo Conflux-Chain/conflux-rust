@@ -8,7 +8,7 @@ use alloy_rpc_types_trace::geth::{
 };
 use cfx_types::H256;
 use cfxcore::{ConsensusGraph, SharedConsensusGraph};
-use jsonrpc_core::{Error as RpcError, Result as JsonRpcResult};
+use jsonrpc_core::Result as JsonRpcResult;
 
 pub struct GethDebugHandler {
     consensus: SharedConsensusGraph,
@@ -41,21 +41,17 @@ impl Debug for GethDebugHandler {
         if let Some(tracer_type) = &opts.tracer {
             match tracer_type {
                 BuiltInTracer(builtin_tracer) => match builtin_tracer {
-                    GethDebugBuiltInTracerType::FourByteTracer => {
-                        return Err(RpcError::invalid_params("not supported"))
-                    }
+                    GethDebugBuiltInTracerType::FourByteTracer => (),
                     GethDebugBuiltInTracerType::CallTracer => (),
                     GethDebugBuiltInTracerType::PreStateTracer => (),
                     GethDebugBuiltInTracerType::NoopTracer => {
                         return Ok(GethTrace::NoopTracer(NoopFrame::default()))
                     }
                     GethDebugBuiltInTracerType::MuxTracer => {
-                        return Err(RpcError::invalid_params("not supported"))
+                        return Err(invalid_params_msg("not supported"))
                     }
                 },
-                JsTracer(_) => {
-                    return Err(RpcError::invalid_params("not supported"))
-                }
+                JsTracer(_) => return Err(invalid_params_msg("not supported")),
             }
         }
 
