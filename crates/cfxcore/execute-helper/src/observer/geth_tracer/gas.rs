@@ -1,5 +1,4 @@
 /// Helper [Inspector] that keeps track of gas.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GasInspector {
     gas_remaining: u64,
@@ -9,6 +8,7 @@ pub struct GasInspector {
 impl GasInspector {
     pub fn gas_remaining(&self) -> u64 { self.gas_remaining }
 
+    #[allow(dead_code)]
     pub fn last_gas_cost(&self) -> u64 { self.last_gas_cost }
 
     pub fn set_gas_remainning(&mut self, remainning: u64) {

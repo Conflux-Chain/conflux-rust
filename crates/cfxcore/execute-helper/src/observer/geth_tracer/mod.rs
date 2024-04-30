@@ -2,7 +2,6 @@
 mod arena;
 mod builder;
 mod config;
-mod db_adapter;
 mod gas;
 mod tracing_inspector;
 mod types;
@@ -21,7 +20,7 @@ use alloy_primitives::{Address, Bytes, LogData};
 use revm::{
     db::InMemoryDB,
     interpreter::{Gas, InstructionResult, InterpreterResult},
-    primitives::{ExecutionResult, ResultAndState, State},
+    primitives::State,
 };
 
 use cfx_executor::{
@@ -149,21 +148,14 @@ impl GethTracer {
                 }
                 PreStateTracer => {
                     // TODO replace the empty state and db with a real state
-                    let gas_used = self.gas_used();
                     let opts =
                         self.prestate_config().expect("should have config");
-                    let result = ResultAndState {
-                        result: ExecutionResult::Revert {
-                            gas_used,
-                            output: Bytes::default(),
-                        },
-                        state: State::default(),
-                    };
+                    let state = State::default();
                     let db = InMemoryDB::default();
                     let frame = self
                         .inner
                         .into_geth_builder()
-                        .geth_prestate_traces(&result, opts, db)
+                        .geth_prestate_traces(state, opts, db)
                         .unwrap();
                     GethTrace::PreStateTracer(frame)
                 }
@@ -451,30 +443,18 @@ pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
         Ok(_r) => InstructionResult::Return, // todo check this
         Err(err) => match err {
             Error::OutOfGas => InstructionResult::OutOfGas,
-            Error::BadJumpDestination { destination: _ } => {
-                InstructionResult::InvalidJump
-            }
-            Error::BadInstruction { instruction: _ } => {
-                InstructionResult::OpcodeNotFound
-            }
-            Error::StackUnderflow {
-                instruction: _,
-                wanted: _,
-                on_stack: _,
-            } => InstructionResult::StackUnderflow,
+            Error::BadJumpDestination { .. } => InstructionResult::InvalidJump,
+            Error::BadInstruction { .. } => InstructionResult::OpcodeNotFound,
+            Error::StackUnderflow { .. } => InstructionResult::StackUnderflow,
             Error::OutOfStack { .. } => InstructionResult::StackOverflow,
             Error::SubStackUnderflow { .. } => {
                 InstructionResult::StackUnderflow
             }
-            Error::OutOfSubStack {
-                wanted: _,
-                limit: _,
-            } => InstructionResult::StackOverflow,
+            Error::OutOfSubStack { .. } => InstructionResult::StackOverflow,
             Error::InvalidSubEntry => InstructionResult::NotActivated, //
-            Error::NotEnoughBalanceForStorage {
-                required: _,
-                got: _,
-            } => InstructionResult::OutOfFunds,
+            Error::NotEnoughBalanceForStorage { .. } => {
+                InstructionResult::OutOfFunds
+            }
             Error::ExceedStorageLimit => InstructionResult::OutOfGas, /* treat storage as gas */
             Error::BuiltIn(_) => InstructionResult::PrecompileError,
             Error::InternalContract(_) => InstructionResult::PrecompileError, /* treat internalContract as builtIn */
@@ -486,8 +466,7 @@ pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
             Error::OutOfBounds => InstructionResult::OutOfOffset,
             Error::Reverted => InstructionResult::Revert,
             Error::InvalidAddress(_) => todo!(), /* when selfdestruct refund */
-            // address is invalid will
-            // emit this error
+            // address is invalid will emit this error
             Error::ConflictAddress(_) => InstructionResult::CreateCollision,
         },
     };

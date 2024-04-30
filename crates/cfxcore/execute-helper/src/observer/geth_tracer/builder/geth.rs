@@ -1,5 +1,4 @@
 //! Geth trace builder
-
 use crate::observer::geth_tracer::{
     types::{CallTraceNode, CallTraceStepStackItem},
     TracingInspectorConfig,
@@ -12,7 +11,7 @@ use alloy_rpc_types_trace::geth::{
 };
 use revm::{
     db::DatabaseRef,
-    primitives::{AccountInfo, ResultAndState, KECCAK_EMPTY},
+    primitives::{AccountInfo, State, KECCAK_EMPTY},
 };
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
@@ -234,8 +233,7 @@ impl GethTraceBuilder {
     /// * `diff_mode` - if prestate is in diff or prestate mode.
     /// * `db` - The database to fetch state pre-transaction execution.
     pub fn geth_prestate_traces<DB: DatabaseRef>(
-        &self, ResultAndState { state, .. }: &ResultAndState,
-        prestate_config: PreStateConfig, db: DB,
+        &self, state: State, prestate_config: PreStateConfig, db: DB,
     ) -> Result<PreStateFrame, DB::Error> {
         let account_diffs = state.iter().map(|(addr, acc)| (*addr, acc));
 

@@ -3,13 +3,9 @@
 use crate::observer::geth_tracer::{
     config::TraceStyle, utils, utils::convert_memory,
 };
-use alloy_primitives::{Address, Bytes, LogData, U256, U64};
-use alloy_rpc_types_trace::{
-    geth::{CallFrame, CallLogFrame, GethDefaultTracingOptions, StructLog},
-    parity::{
-        Action, ActionType, CallAction, CallOutput, CallType, CreateAction,
-        CreateOutput, SelfdestructAction, TraceOutput, TransactionTrace,
-    },
+use alloy_primitives::{Address, Bytes, LogData, U256};
+use alloy_rpc_types_trace::geth::{
+    CallFrame, CallLogFrame, GethDefaultTracingOptions, StructLog,
 };
 use cfx_vm_types::CallType as CfxCallType;
 use revm::interpreter::{
@@ -213,64 +209,6 @@ impl CallTraceNode {
         self.trace.selfdestruct_refund_target.is_some()
     }
 
-    /// Converts this node into a parity `TransactionTrace`
-    pub fn parity_transaction_trace(
-        &self, trace_address: Vec<usize>,
-    ) -> TransactionTrace {
-        let action = self.parity_action();
-        let result = if self.trace.is_error() && !self.trace.is_revert() {
-            // if the trace is a selfdestruct or an error that is not a revert,
-            // the result is None
-            None
-        } else {
-            Some(self.parity_trace_output())
-        };
-        let error = self.trace.as_error_msg(TraceStyle::Parity);
-        TransactionTrace {
-            action,
-            error,
-            result,
-            trace_address,
-            subtraces: self.children.len(),
-        }
-    }
-
-    /// Returns the `Output` for a parity trace
-    pub fn parity_trace_output(&self) -> TraceOutput {
-        match self.kind() {
-            CallKind::Call
-            | CallKind::StaticCall
-            | CallKind::CallCode
-            | CallKind::DelegateCall => TraceOutput::Call(CallOutput {
-                gas_used: U64::from(self.trace.gas_used),
-                output: self.trace.output.clone(),
-            }),
-            CallKind::Create | CallKind::Create2 => {
-                TraceOutput::Create(CreateOutput {
-                    gas_used: U64::from(self.trace.gas_used),
-                    code: self.trace.output.clone(),
-                    address: self.trace.address,
-                })
-            }
-        }
-    }
-
-    /// If the trace is a selfdestruct, returns the `Action` for a parity trace.
-    pub fn parity_selfdestruct_action(&self) -> Option<Action> {
-        if self.is_selfdestruct() {
-            Some(Action::Selfdestruct(SelfdestructAction {
-                address: self.trace.address,
-                refund_address: self
-                    .trace
-                    .selfdestruct_refund_target
-                    .unwrap_or_default(),
-                balance: self.trace.value,
-            }))
-        } else {
-            None
-        }
-    }
-
     /// If the trace is a selfdestruct, returns the `CallFrame` for a geth call
     /// trace
     pub fn geth_selfdestruct_call_trace(&self) -> Option<CallFrame> {
@@ -284,50 +222,6 @@ impl CallTraceNode {
             })
         } else {
             None
-        }
-    }
-
-    /// If the trace is a selfdestruct, returns the `TransactionTrace` for a
-    /// parity trace.
-    pub fn parity_selfdestruct_trace(
-        &self, trace_address: Vec<usize>,
-    ) -> Option<TransactionTrace> {
-        let trace = self.parity_selfdestruct_action()?;
-        Some(TransactionTrace {
-            action: trace,
-            error: None,
-            result: None,
-            trace_address,
-            subtraces: 0,
-        })
-    }
-
-    /// Returns the `Action` for a parity trace.
-    ///
-    /// Caution: This does not include the selfdestruct action, if the trace is
-    /// a selfdestruct, since those are handled in addition to the call
-    /// action.
-    pub fn parity_action(&self) -> Action {
-        match self.kind() {
-            CallKind::Call
-            | CallKind::StaticCall
-            | CallKind::CallCode
-            | CallKind::DelegateCall => Action::Call(CallAction {
-                from: self.trace.caller,
-                to: self.trace.address,
-                value: self.trace.value,
-                gas: U64::from(self.trace.gas_limit),
-                input: self.trace.data.clone(),
-                call_type: self.kind().into(),
-            }),
-            CallKind::Create | CallKind::Create2 => {
-                Action::Create(CreateAction {
-                    from: self.trace.caller,
-                    value: self.trace.value,
-                    gas: U64::from(self.trace.gas_limit),
-                    init: self.trace.data.clone(),
-                })
-            }
         }
     }
 
@@ -467,37 +361,11 @@ impl From<CreateScheme> for CallKind {
 impl From<CfxCallType> for CallKind {
     fn from(ct: CfxCallType) -> Self {
         match ct {
-            CfxCallType::None => Self::CallCode, /* TODO(pana) check this is appropriate, or add a None variant to CallKind */
+            CfxCallType::None => Self::Create,
             CfxCallType::Call => Self::Call,
             CfxCallType::CallCode => Self::CallCode,
             CfxCallType::DelegateCall => Self::DelegateCall,
             CfxCallType::StaticCall => Self::StaticCall,
-        }
-    }
-}
-
-impl From<CallKind> for ActionType {
-    fn from(kind: CallKind) -> Self {
-        match kind {
-            CallKind::Call
-            | CallKind::StaticCall
-            | CallKind::DelegateCall
-            | CallKind::CallCode => Self::Call,
-            CallKind::Create => Self::Create,
-            CallKind::Create2 => Self::Create,
-        }
-    }
-}
-
-impl From<CallKind> for CallType {
-    fn from(ty: CallKind) -> Self {
-        match ty {
-            CallKind::Call => Self::Call,
-            CallKind::StaticCall => Self::StaticCall,
-            CallKind::CallCode => Self::CallCode,
-            CallKind::DelegateCall => Self::DelegateCall,
-            CallKind::Create => Self::None,
-            CallKind::Create2 => Self::None,
         }
     }
 }
