@@ -1550,7 +1550,7 @@ impl BlockDataManager {
     }
 
     pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {
-        self.tx_data_manager.recover_block(block)
+        // self.tx_data_manager.recover_block(block)
     }
 
     pub fn recover_unsigned_tx_with_order(

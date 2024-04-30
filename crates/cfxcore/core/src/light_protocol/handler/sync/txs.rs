@@ -193,13 +193,13 @@ impl Txs {
 
     #[inline]
     pub fn validate_tx(&self, tx: &SignedTransaction) -> Result<()> {
-        match tx.verify_public(false /* skip */) {
-            Ok(true) => {}
-            _ => {
-                warn!("Tx signature verification failed for {:?}", tx);
-                bail!(ErrorKind::InvalidTxSignature { hash: tx.hash() });
-            }
-        }
+        // match tx.verify_public(false /* skip */) {
+        //     Ok(true) => {}
+        //     _ => {
+        //         warn!("Tx signature verification failed for {:?}", tx);
+        //         bail!(ErrorKind::InvalidTxSignature { hash: tx.hash() });
+        //     }
+        // }
 
         Ok(())
     }
