@@ -19,8 +19,6 @@
 // See http://www.gnu.org/licenses/
 
 use cfxkey::Password;
-#[allow(unused_imports)]
-pub use dir::helpers::{replace_home, replace_home_and_local};
 use rpassword::read_password;
 use std::{
     fs::File,

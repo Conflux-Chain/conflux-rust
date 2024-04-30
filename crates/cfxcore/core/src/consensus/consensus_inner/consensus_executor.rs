@@ -1952,31 +1952,28 @@ impl ConsensusExecutionHandler {
             .expect("blocks exist");
         let pivot_block = epoch_blocks.last().expect("Not empty");
 
-        let recover_mpt_during_construct_pivot_state = false;
+        let state_availability_boundary =
+            self.data_man.state_availability_boundary.read();
+        let state_space = None;
+        if !state_availability_boundary.check_read_availability(
+            pivot_block.block_header.height(),
+            epoch_id,
+            state_space,
+        ) {
+            bail!("state is not ready");
+        }
+        let state_index = self.data_man.get_state_readonly_index(epoch_id);
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
-                .get_state_for_next_epoch(
-                    StateIndex::new_for_next_epoch(
-                        pivot_block.block_header.parent_hash(),
-                        &self
-                            .data_man
-                            .get_epoch_execution_commitment(
-                                pivot_block.block_header.parent_hash(),
-                            )
-                            // Unwrapping is safe because the state exists.
-                            .unwrap()
-                            .state_root_with_aux_info,
-                        pivot_block.block_header.height() - 1,
-                        self.data_man.get_snapshot_epoch_count(),
-                    ),
-                    recover_mpt_during_construct_pivot_state,
-                )
-                .expect("No db error")
-                // Unwrapping is safe because the state exists.
-                .expect("State exists"),
-        ))
-        .expect("Failed to initialize state");
+                .get_state_no_commit(
+                    state_index.unwrap(),
+                    /* try_open = */ true,
+                    state_space,
+                )?
+                .ok_or("state deleted")?,
+        ))?;
+        drop(state_availability_boundary);
 
         let start_block_number = self
             .data_man
@@ -1985,7 +1982,6 @@ impl ConsensusExecutionHandler {
             .expect("should exist");
 
         self.execute_epoch_tx_to_collect_trace(
-            *epoch_id,
             &mut state,
             &epoch_blocks,
             start_block_number,
@@ -1996,44 +1992,10 @@ impl ConsensusExecutionHandler {
     }
 
     fn execute_epoch_tx_to_collect_trace(
-        &self, epoch_id: EpochId, state: &mut State,
-        epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
-        tx_hash: Option<H256>, opts: GethDebugTracingOptions,
+        &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
+        start_block_number: u64, tx_hash: Option<H256>,
+        opts: GethDebugTracingOptions,
     ) -> DbResult<Vec<(H256, GethTrace)>> {
-        // Prefetch accounts for transactions.
-        // The return value _prefetch_join_handles is used to join all threads
-        // before the exit of this function.
-        let prefetch_join_handles = match self
-            .execution_state_prefetcher
-            .as_ref()
-        {
-            Some(prefetcher) => {
-                let mut accounts = vec![];
-                for block in epoch_blocks.iter() {
-                    for transaction in block.transactions.iter() {
-                        accounts.push(&transaction.sender);
-                        match transaction.action() {
-                            Action::Call(ref address) => accounts.push(address),
-                            _ => {}
-                        }
-                    }
-                }
-
-                prefetch_accounts(prefetcher, epoch_id, state, accounts)
-            }
-            None => PrefetchTaskHandle {
-                task_epoch_id: epoch_id,
-                state,
-                prefetcher: None,
-                accounts: vec![],
-            },
-        };
-
-        prefetch_join_handles.wait_for_task();
-        drop(prefetch_join_handles);
-
-        // TODO whether need to revert the state change after the execution
-
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
         let mut block_number = start_block_number;
