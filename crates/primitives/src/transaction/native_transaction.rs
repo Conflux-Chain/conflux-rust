@@ -7,6 +7,7 @@ use cfx_types::{AddressWithSpace, H256, U256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
+use crate::transaction::AccessListItem;
 
 #[derive(
     Default,
@@ -87,7 +88,8 @@ pub struct Cip2930Transaction {
     pub epoch_height: u64,
     pub chain_id: u32,
     pub data: Bytes,
-    pub access_list: NativeAccessList,
+    // We do not use `AccessList` here because we need `Vec` for rlp derive.
+    pub access_list: Vec<AccessListItem>,
 }
 
 #[derive(
@@ -112,25 +114,8 @@ pub struct Cip1559Transaction {
     pub epoch_height: u64,
     pub chain_id: u32,
     pub data: Bytes,
-    pub access_list: NativeAccessList,
-}
-
-#[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct NativeAccessList {
-    inner: AccessList,
-}
-
-impl Encodable for NativeAccessList {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_list(self.inner.as_ref());
-    }
-}
-
-impl Decodable for NativeAccessList {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        let inner = rlp.list_at(0)?;
-        Ok(Self { inner })
-    }
+    // We do not use `AccessList` here because we need `Vec` for rlp derive.
+    pub access_list: Vec<AccessListItem>,
 }
 
 macro_rules! access_common_ref {

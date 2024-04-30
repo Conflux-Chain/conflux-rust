@@ -15,6 +15,7 @@ use std::{
     hash::Hasher,
     sync::Arc,
 };
+use log::info;
 
 pub type BlockNumber = u64;
 pub type BlockHeight = u64;
@@ -149,6 +150,7 @@ impl Block {
         if rlp.as_raw().len() != rlp.payload_info()?.total() {
             return Err(DecoderError::RlpIsTooBig);
         }
+        info!("1 {:?}", rlp.as_raw());
 
         let signed_transactions = rlp.as_list()?;
         let mut transactions = Vec::with_capacity(signed_transactions.len());

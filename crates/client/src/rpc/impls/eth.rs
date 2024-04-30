@@ -676,6 +676,7 @@ impl Eth for EthHandler {
                 "Can not recover pubkey for Ethereum like tx. Conflux eSpace only supports EIP-155 rather than EIP-1559 or other format transactions."
             ));
         }
+        info!("tx: {:?}", tx);
 
         let r = self.send_transaction_with_signature(tx)?;
         Ok(r)

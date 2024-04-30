@@ -371,27 +371,38 @@ impl Transaction {
     // signatures.
     pub fn signature_hash(&self) -> H256 {
         let mut s = RlpStream::new();
+        let mut type_prefix= vec![];
         match self {
             Transaction::Native(TypedNativeTransaction::Cip155(tx)) => {
                 s.append(tx);
             }
             Transaction::Native(TypedNativeTransaction::Cip1559(tx)) => {
                 s.append(tx);
+                type_prefix.extend_from_slice(TYPED_NATIVE_TX_PREFIX);
+                type_prefix.push(CIP1559_TYPE);
             }
             Transaction::Native(TypedNativeTransaction::Cip2930(tx)) => {
                 s.append(tx);
+                type_prefix.extend_from_slice(TYPED_NATIVE_TX_PREFIX);
+                type_prefix.push(CIP2930_TYPE);
             }
             Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
                 s.append(tx);
             }
             Transaction::Ethereum(EthereumTransaction::Eip1559(tx)) => {
                 s.append(tx);
+                type_prefix.push(EIP1559_TYPE);
             }
             Transaction::Ethereum(EthereumTransaction::Eip2930(tx)) => {
                 s.append(tx);
+                type_prefix.push(EIP2930_TYPE);
             }
-        }
-        keccak(s.as_raw())
+        };
+        let encoded = s.as_raw();
+        let mut out = vec![0; type_prefix.len() + encoded.len()];
+        out[0..type_prefix.len()].copy_from_slice(&type_prefix);
+        out[type_prefix.len()..].copy_from_slice(&encoded);
+        keccak(&out)
     }
 
     pub fn space(&self) -> Space {
@@ -692,10 +703,7 @@ impl Decodable for TransactionWithSignature {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
         let hash = keccak(d.as_raw());
         let rlp_size = Some(d.as_raw().len());
-        // Check item count of TransactionWithSignatureSerializePart
-        if d.item_count()? != 4 && d.item_count()? != 9 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
+        // The item count of TransactionWithSignatureSerializePart is checked in its decoding.
         let transaction = d.as_val()?;
         Ok(TransactionWithSignature {
             transaction,
