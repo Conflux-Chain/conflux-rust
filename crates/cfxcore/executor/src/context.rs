@@ -6,8 +6,12 @@
 use crate::{
     executive::contract_address,
     executive_observer::TracerTrait,
-    internal_contract::{suicide as suicide_impl, InternalRefContext},
+    internal_contract::{
+        block_hash_slot, epoch_hash_slot, suicide as suicide_impl,
+        InternalRefContext,
+    },
     machine::Machine,
+    return_if,
     stack::{CallStackInfo, FrameLocal, RuntimeRes},
     state::State,
     substate::Substate,
@@ -17,7 +21,8 @@ use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H256,
+    U256,
 };
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -26,6 +31,7 @@ use cfx_vm_types::{
 };
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
+use vm::BlockHashSource;
 
 /// Transaction properties that externalities need to know about.
 #[derive(Debug)]
@@ -106,6 +112,51 @@ impl<'a> Context<'a> {
             tracer,
         }
     }
+
+    fn blockhash_from_env(&self, number: &U256) -> H256 {
+        if self.space == Space::Ethereum && self.spec.cip98 {
+            return if U256::from(self.env().epoch_height) == number + 1 {
+                self.env().last_hash.clone()
+            } else {
+                H256::default()
+            };
+        }
+
+        // In Conflux, we only maintain the block hash of the previous block.
+        // For other block numbers, it always returns zero.
+        if U256::from(self.env().number) == number + 1 {
+            self.env().last_hash.clone()
+        } else {
+            H256::default()
+        }
+    }
+
+    fn blockhash_from_state(&self, number: &U256) -> vm::Result<H256> {
+        return_if!(number > &U256::from(u64::MAX));
+
+        let number = number.as_u64();
+
+        let state_res = match self.space {
+            Space::Native => {
+                return_if!(number < self.spec.cip133_b);
+                return_if!(number > self.env.number);
+                return_if!(number
+                    .checked_add(65536)
+                    .map_or(false, |n| n <= self.env.number));
+                self.state.get_system_storage(&block_hash_slot(number))?
+            }
+            Space::Ethereum => {
+                return_if!(number < self.spec.cip133_e);
+                return_if!(number > self.env.epoch_height);
+                return_if!(number
+                    .checked_add(65536)
+                    .map_or(false, |n| n <= self.env.epoch_height));
+                self.state.get_system_storage(&epoch_hash_slot(number))?
+            }
+        };
+
+        Ok(BigEndianHash::from_uint(&state_res))
+    }
 }
 
 impl<'a> ContextTrait for Context<'a> {
@@ -165,21 +216,10 @@ impl<'a> ContextTrait for Context<'a> {
         self.state.balance(&address).map_err(Into::into)
     }
 
-    fn blockhash(&mut self, number: &U256) -> H256 {
-        if self.space == Space::Ethereum && self.spec.cip98 {
-            return if U256::from(self.env().epoch_height) == number + 1 {
-                self.env().last_hash.clone()
-            } else {
-                H256::default()
-            };
-        }
-
-        // In Conflux, we only maintain the block hash of the previous block.
-        // For other block numbers, it always returns zero.
-        if U256::from(self.env().number) == number + 1 {
-            self.env().last_hash.clone()
-        } else {
-            H256::default()
+    fn blockhash(&mut self, number: &U256) -> vm::Result<H256> {
+        match self.blockhash_source() {
+            BlockHashSource::Env => Ok(self.blockhash_from_env(number)),
+            BlockHashSource::State => self.blockhash_from_state(number),
         }
     }
 
@@ -458,6 +498,18 @@ impl<'a> ContextTrait for Context<'a> {
     fn is_static_or_reentrancy(&self) -> bool {
         self.static_flag || self.callstack.in_reentrancy(self.spec)
     }
+
+    fn blockhash_source(&self) -> vm::BlockHashSource {
+        let from_state = match self.space {
+            Space::Native => self.env.number >= self.spec.cip133_b,
+            Space::Ethereum => self.env.epoch_height >= self.spec.cip133_e,
+        };
+        if from_state {
+            BlockHashSource::State
+        } else {
+            BlockHashSource::Env
+        }
+    }
 }
 
 impl<'a> Context<'a> {
@@ -632,7 +684,7 @@ mod tests {
             &"0000000000000000000000000000000000000000000000000000000000120000"
                 .parse::<U256>()
                 .unwrap(),
-        );
+        ).unwrap();
 
         assert_eq!(hash, H256::zero());
     }
