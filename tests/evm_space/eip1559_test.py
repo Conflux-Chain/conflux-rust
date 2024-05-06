@@ -7,11 +7,28 @@ from conflux.config import default_config
 from base import Web3Base
 from test_framework.blocktools import encode_hex_0x
 from conflux.address import b32_address_to_hex
+from conflux.rpc import RpcClient
+from web3 import Web3
 
 
 class Eip1559Test(Web3Base):
     def set_test_params(self):
         self.num_nodes = 2
+        self.conf_parameters["evm_chain_id"] = str(10)
+        self.conf_parameters["evm_transaction_block_ratio"] = str(1)
+        self.conf_parameters["executive_trace"] = "true"
+
+    def setup_network(self):
+        self.add_nodes(self.num_nodes)
+        self.start_node(0, ["--archive"])
+        self.start_node(1, ["--archive"])
+        connect_nodes(self.nodes, 0 , 1)
+        self.rpc = RpcClient(self.nodes[0])
+        ip = self.nodes[0].ip
+        port = self.nodes[0].ethrpcport
+        self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
+        assert_equal(self.w3.isConnected(), True)
+
 
     def run_test(self):
         self.cfxPrivkey = default_config['GENESIS_PRI_KEY']
@@ -54,6 +71,7 @@ class Eip1559Test(Web3Base):
         assert_equal(receipt["status"], 1)
 
         # Check if another node can decode EIP1559 transactions
+        sync_blocks(self.nodes)
         ret1 = self.nodes[0].debug_getTransactionsByEpoch(hex(receipt["blockNumber"]))
         ret2 = self.nodes[1].debug_getTransactionsByBlock(encode_hex_0x(tx["blockHash"]))
         assert_equal(len(ret1), 1)

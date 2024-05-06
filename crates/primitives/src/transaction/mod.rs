@@ -371,7 +371,7 @@ impl Transaction {
     // signatures.
     pub fn signature_hash(&self) -> H256 {
         let mut s = RlpStream::new();
-        let mut type_prefix= vec![];
+        let mut type_prefix = vec![];
         match self {
             Transaction::Native(TypedNativeTransaction::Cip155(tx)) => {
                 s.append(tx);
@@ -703,7 +703,8 @@ impl Decodable for TransactionWithSignature {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
         let hash = keccak(d.as_raw());
         let rlp_size = Some(d.as_raw().len());
-        // The item count of TransactionWithSignatureSerializePart is checked in its decoding.
+        // The item count of TransactionWithSignatureSerializePart is checked in
+        // its decoding.
         let transaction = d.as_val()?;
         Ok(TransactionWithSignature {
             transaction,
@@ -788,7 +789,7 @@ pub struct SignedTransaction {
 impl Encodable for SignedTransaction {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(3);
-        s.append(&self.transaction);
+        s.append(&rlp::encode(&self.transaction));
         s.append(&self.sender);
         s.append(&self.public);
     }
@@ -796,8 +797,9 @@ impl Encodable for SignedTransaction {
 
 impl Decodable for SignedTransaction {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let b: Vec<u8> = rlp.val_at(0)?;
         Ok(SignedTransaction {
-            transaction: rlp.val_at(0)?,
+            transaction: rlp::decode(&b)?,
             sender: rlp.val_at(1)?,
             public: rlp.val_at(2)?,
         })

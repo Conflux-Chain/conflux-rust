@@ -6,6 +6,7 @@ use crate::{BlockHeader, SignedTransaction, TransactionWithSignature};
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Space, H256, U256};
 use keccak_hash::keccak;
+use log::info;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rand::Rng;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -15,7 +16,6 @@ use std::{
     hash::Hasher,
     sync::Arc,
 };
-use log::info;
 
 pub type BlockNumber = u64;
 pub type BlockHeight = u64;
@@ -194,7 +194,7 @@ impl Encodable for Block {
         stream.begin_list(2).append(&self.block_header);
         stream.begin_list(self.transactions.len());
         for tx in &self.transactions {
-            stream.append(&tx.transaction);
+            stream.append(&rlp::encode(&tx.transaction));
         }
     }
 }
@@ -210,7 +210,11 @@ impl Decodable for Block {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let transactions = rlp.list_at::<TransactionWithSignature>(1)?;
+        let transactions = rlp
+            .list_at::<Vec<u8>>(1)?
+            .into_iter()
+            .map(|b| rlp::decode(&b))
+            .collect::<Result<Vec<TransactionWithSignature>, DecoderError>>()?;
 
         let mut signed_transactions = Vec::with_capacity(transactions.len());
         for tx in transactions {

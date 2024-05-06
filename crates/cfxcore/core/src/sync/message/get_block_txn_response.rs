@@ -14,10 +14,10 @@ use crate::{
 use cfx_types::H256;
 use metrics::MeterTimer;
 use primitives::{Block, TransactionWithSignature};
-use rlp_derive::{RlpDecodable, RlpEncodable};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::collections::HashSet;
 
-#[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
+#[derive(Debug, PartialEq, Default)]
 pub struct GetBlockTxnResponse {
     pub request_id: RequestId,
     pub block_hash: H256,
@@ -143,5 +143,33 @@ impl Handleable for GetBlockTxnResponse {
             None, /* preferred_node_type_for_block_request */
         );
         Ok(())
+    }
+}
+
+impl Encodable for GetBlockTxnResponse {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(3);
+        s.append(&self.request_id);
+        s.append(&self.block_hash);
+        s.begin_list(self.block_txn.len());
+        for tx in &self.block_txn {
+            s.append(&rlp::encode(tx));
+        }
+    }
+}
+
+impl Decodable for GetBlockTxnResponse {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let request_id = rlp.val_at(0)?;
+        let block_hash = rlp.val_at(1)?;
+        let mut block_txn = Vec::new();
+        for b in rlp.list_at::<Vec<u8>>(2)? {
+            block_txn.push(rlp::decode(&b)?);
+        }
+        Ok(Self {
+            request_id,
+            block_hash,
+            block_txn,
+        })
     }
 }
