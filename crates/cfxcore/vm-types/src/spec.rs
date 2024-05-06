@@ -160,6 +160,8 @@ pub struct Spec {
     pub cip119: bool,
     /// CIP-131: Retain Whitelist on Contract Deletion
     pub cip131: bool,
+    /// CIP-132: Fix Static Context Check for Internal Contracts
+    pub cip132: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -302,6 +304,7 @@ impl Spec {
             cip118: false,
             cip119: false,
             cip131: false,
+            cip132: false,
         }
     }
 
