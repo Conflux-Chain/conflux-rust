@@ -2,8 +2,8 @@ mod recover;
 
 use cfx_types::{Address, AddressSpaceUtil, Bloom, Space, U256};
 use primitives::{
-    Action, Eip155Transaction, LogEntry, Receipt, SignedTransaction,
-    TransactionStatus,
+    transaction::eth_transaction::Eip155Transaction, Action, LogEntry, Receipt,
+    SignedTransaction, TransactionStatus,
 };
 
 pub use recover::{build_bloom_and_recover_phantom, recover_phantom};

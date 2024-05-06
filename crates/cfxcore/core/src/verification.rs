@@ -22,7 +22,9 @@ use cfx_types::{
 use cfx_vm_types::Spec;
 use primitives::{
     block::BlockHeight,
-    transaction::{NativeTransaction, TransactionError},
+    transaction::{
+        native_transaction::TypedNativeTransaction, TransactionError,
+    },
     Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
     SignedTransaction, Transaction, TransactionWithSignature,
 };
@@ -516,12 +518,14 @@ impl VerificationConfig {
     }
 
     pub fn check_transaction_epoch_bound(
-        tx: &NativeTransaction, block_height: u64, transaction_epoch_bound: u64,
+        tx: &TypedNativeTransaction, block_height: u64,
+        transaction_epoch_bound: u64,
     ) -> i8 {
-        if tx.epoch_height.wrapping_add(transaction_epoch_bound) < block_height
+        if tx.epoch_height().wrapping_add(transaction_epoch_bound)
+            < block_height
         {
             -1
-        } else if tx.epoch_height > block_height + transaction_epoch_bound {
+        } else if *tx.epoch_height() > block_height + transaction_epoch_bound {
             1
         } else {
             0
@@ -529,7 +533,7 @@ impl VerificationConfig {
     }
 
     fn verify_transaction_epoch_height(
-        tx: &NativeTransaction, block_height: u64,
+        tx: &TypedNativeTransaction, block_height: u64,
         transaction_epoch_bound: u64, mode: &VerifyTxMode,
     ) -> Result<(), TransactionError> {
         let result = Self::check_transaction_epoch_bound(
@@ -543,7 +547,7 @@ impl VerificationConfig {
             Ok(())
         } else {
             bail!(TransactionError::EpochHeightOutOfBound {
-                set: tx.epoch_height,
+                set: *tx.epoch_height(),
                 block_height,
                 transaction_epoch_bound,
             });

@@ -17,7 +17,9 @@ use cfxkey::{Generator, KeyPair, Random};
 use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Criterion};
 use parking_lot::{Condvar, Mutex};
-use primitives::{Action, NativeTransaction, Transaction};
+use primitives::{
+    transaction::native_transaction::NativeTransaction, Action, Transaction,
+};
 use std::{sync::Arc, time::Duration};
 
 fn txexe_benchmark(c: &mut Criterion) {

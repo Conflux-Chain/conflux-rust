@@ -49,7 +49,7 @@ use cfx_executor::{
 };
 use cfx_vm_types::{CreateContractAddress, Env};
 use diem_types::account_address::AccountAddress;
-use primitives::transaction::NativeTransaction;
+use primitives::transaction::native_transaction::NativeTransaction;
 
 pub fn default(dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
     if !dev_or_test_mode {
