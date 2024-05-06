@@ -100,6 +100,8 @@ pub struct TransitionsBlockNumber {
     pub cip119: BlockNumber,
     /// CIP-131: Retain Whitelist on Contract Deletion
     pub cip131: BlockNumber,
+    /// CIP-132: Fix Static Context Check for Internal Contracts
+    pub cip132: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -165,6 +167,7 @@ impl CommonParams {
         spec.cip118 = number >= self.transition_numbers.cip118;
         spec.cip119 = number >= self.transition_numbers.cip119;
         spec.cip131 = number >= self.transition_numbers.cip131;
+        spec.cip132 = number >= self.transition_numbers.cip132;
         spec
     }
 
