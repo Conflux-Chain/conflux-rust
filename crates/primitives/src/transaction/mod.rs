@@ -700,12 +700,22 @@ impl DerefMut for TransactionWithSignature {
 }
 
 impl Decodable for TransactionWithSignature {
-    fn decode(d: &Rlp) -> Result<Self, DecoderError> {
-        let hash = keccak(d.as_raw());
-        let rlp_size = Some(d.as_raw().len());
+    fn decode(tx_rlp: &Rlp) -> Result<Self, DecoderError> {
+        let rlp_size = Some(tx_rlp.as_raw().len());
         // The item count of TransactionWithSignatureSerializePart is checked in
         // its decoding.
-        let transaction = d.as_val()?;
+        let hash;
+        let transaction;
+        if tx_rlp.is_list() {
+            hash = keccak(tx_rlp.as_raw());
+            // Vanilla tx encoding.
+            transaction = tx_rlp.as_val()?;
+        } else {
+            // Typed tx encoding is wrapped as an RLP string.
+            let b: Vec<u8> = tx_rlp.as_val()?;
+            hash = keccak(&b);
+            transaction = rlp::decode(&b)?;
+        };
         Ok(TransactionWithSignature {
             transaction,
             hash,
@@ -716,7 +726,16 @@ impl Decodable for TransactionWithSignature {
 
 impl Encodable for TransactionWithSignature {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_internal(&self.transaction);
+        match &self.transaction.unsigned {
+            Transaction::Native(TypedNativeTransaction::Cip155(_))
+            | Transaction::Ethereum(EthereumTransaction::Eip155(_)) => {
+                s.append_internal(&self.transaction);
+            }
+            _ => {
+                // Typed tx encoding is wrapped as an RLP string.
+                s.append_internal(&rlp::encode(&self.transaction));
+            }
+        }
     }
 }
 
@@ -770,6 +789,14 @@ impl TransactionWithSignature {
     pub fn rlp_size(&self) -> usize {
         self.rlp_size.unwrap_or_else(|| self.rlp_bytes().len())
     }
+
+    pub fn from_raw(raw: &[u8]) -> Result<Self, DecoderError> {
+        Ok(TransactionWithSignature {
+            transaction: Rlp::new(raw).as_val()?,
+            hash: keccak(raw),
+            rlp_size: Some(raw.len()),
+        })
+    }
 }
 
 impl MallocSizeOf for TransactionWithSignature {
@@ -786,10 +813,11 @@ pub struct SignedTransaction {
     pub public: Option<Public>,
 }
 
+// The default encoder for local storage.
 impl Encodable for SignedTransaction {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(3);
-        s.append(&rlp::encode(&self.transaction));
+        s.append(&self.transaction);
         s.append(&self.sender);
         s.append(&self.public);
     }
@@ -797,9 +825,8 @@ impl Encodable for SignedTransaction {
 
 impl Decodable for SignedTransaction {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        let b: Vec<u8> = rlp.val_at(0)?;
         Ok(SignedTransaction {
-            transaction: rlp::decode(&b)?,
+            transaction: rlp.val_at(0)?,
             sender: rlp.val_at(1)?,
             public: rlp.val_at(2)?,
         })

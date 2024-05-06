@@ -501,9 +501,10 @@ impl RpcImpl {
 
         // decode tx so that we have its hash
         // this way we also avoid spamming peers with invalid txs
-        let tx: TransactionWithSignature = rlp::decode(&raw.clone())
-            .map_err(|e| format!("Failed to decode tx: {:?}", e))
-            .map_err(RpcError::invalid_params)?;
+        let tx: TransactionWithSignature =
+            TransactionWithSignature::from_raw(&raw.clone())
+                .map_err(|e| format!("Failed to decode tx: {:?}", e))
+                .map_err(RpcError::invalid_params)?;
 
         debug!("Deserialized tx: {:?}", tx);
 

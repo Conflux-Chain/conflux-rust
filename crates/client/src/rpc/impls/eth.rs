@@ -46,7 +46,6 @@ use primitives::{
     BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
     StorageValue, TransactionStatus, TransactionWithSignature,
 };
-use rlp::Rlp;
 use rustc_hex::ToHex;
 use std::{cmp::min, convert::TryInto};
 
@@ -663,8 +662,10 @@ impl Eth for EthHandler {
             "RPC Request: eth_sendRawTransaction / eth_submitTransaction raw={:?}",
             raw,
         );
-        let tx: TransactionWithSignature =
-            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+        let tx: TransactionWithSignature = invalid_params_check(
+            "raw",
+            TransactionWithSignature::from_raw(&raw.into_vec()),
+        )?;
 
         if tx.space() != Space::Ethereum {
             bail!(invalid_params("tx", "Incorrect transaction space"));
@@ -676,7 +677,6 @@ impl Eth for EthHandler {
                 "Can not recover pubkey for Ethereum like tx. Conflux eSpace only supports EIP-155 rather than EIP-1559 or other format transactions."
             ));
         }
-        info!("tx: {:?}", tx);
 
         let r = self.send_transaction_with_signature(tx)?;
         Ok(r)

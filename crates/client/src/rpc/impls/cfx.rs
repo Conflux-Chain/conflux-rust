@@ -465,8 +465,10 @@ impl RpcImpl {
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
-        let tx: TransactionWithSignature =
-            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+        let tx: TransactionWithSignature = invalid_params_check(
+            "raw",
+            TransactionWithSignature::from_raw(&raw.into_vec()),
+        )?;
 
         if tx.recover_public().is_err() {
             bail!(invalid_params(

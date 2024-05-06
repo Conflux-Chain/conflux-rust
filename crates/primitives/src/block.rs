@@ -150,7 +150,6 @@ impl Block {
         if rlp.as_raw().len() != rlp.payload_info()?.total() {
             return Err(DecoderError::RlpIsTooBig);
         }
-        info!("1 {:?}", rlp.as_raw());
 
         let signed_transactions = rlp.as_list()?;
         let mut transactions = Vec::with_capacity(signed_transactions.len());
@@ -194,7 +193,7 @@ impl Encodable for Block {
         stream.begin_list(2).append(&self.block_header);
         stream.begin_list(self.transactions.len());
         for tx in &self.transactions {
-            stream.append(&rlp::encode(&tx.transaction));
+            stream.append(&tx.transaction);
         }
     }
 }
@@ -210,11 +209,7 @@ impl Decodable for Block {
             return Err(DecoderError::RlpIncorrectListLen);
         }
 
-        let transactions = rlp
-            .list_at::<Vec<u8>>(1)?
-            .into_iter()
-            .map(|b| rlp::decode(&b))
-            .collect::<Result<Vec<TransactionWithSignature>, DecoderError>>()?;
+        let transactions = rlp.list_at::<TransactionWithSignature>(1)?;
 
         let mut signed_transactions = Vec::with_capacity(transactions.len());
         for tx in transactions {
