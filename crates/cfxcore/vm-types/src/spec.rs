@@ -158,6 +158,8 @@ pub struct Spec {
     pub cip118: bool,
     /// CIP-119: PUSH0 instruction
     pub cip119: bool,
+    /// CIP-131: Retain Whitelist on Contract Deletion
+    pub cip131: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -299,6 +301,7 @@ impl Spec {
             cip107: false,
             cip118: false,
             cip119: false,
+            cip131: false,
         }
     }
 
