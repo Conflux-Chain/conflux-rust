@@ -165,7 +165,7 @@ impl AccountStateWithProof {
         }
     }
 
-    /// Verifies the the account state blob with the proof, both carried by
+    /// Verifies the account state blob with the proof, both carried by
     /// `self`.
     ///
     /// Two things are ensured if no error is raised:

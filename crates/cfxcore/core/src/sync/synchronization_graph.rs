@@ -572,7 +572,7 @@ impl SynchronizationGraphInner {
             minimal_status,
         ) {
             debug!(
-                "Block {:?} not not ready for its pos_reference: {:?}",
+                "Block {:?} not ready for its pos_reference: {:?}",
                 self.arena[index].block_header.hash(),
                 self.pos_verifier.get_pivot_decision(
                     self.arena[index]
@@ -2092,7 +2092,7 @@ pub enum BlockInsertionResult {
     // We should request again to get
     // the correct transactions for full verification.
     RequestAgain,
-    // This is only for the case the the header is removed, possibly because
+    // This is only for the case the header is removed, possibly because
     // we switch phases.
     // We ignore the block without verification.
     Ignored,
