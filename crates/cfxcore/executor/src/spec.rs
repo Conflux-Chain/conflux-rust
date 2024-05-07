@@ -118,6 +118,8 @@ pub struct TransitionsEpochHeight {
     pub cip94: BlockHeight,
     /// CIP-112: Fix Block Headers `custom` Field Serde
     pub cip112: BlockHeight,
+    /// CIP-130: Aligning Gas Limit with Transaction Size
+    pub cip130: BlockHeight,
 }
 
 impl Default for CommonParams {
