@@ -14,7 +14,7 @@ pub trait Debug {
     /// network. It will replay any transaction that may have been executed
     /// prior to this one before it will finally attempt to execute the
     /// transaction that corresponds to the given hash.
-    #[rpc(name = "traceTransaction")]
+    #[rpc(name = "debug_traceTransaction")]
     fn debug_trace_transaction(
         &self, tx_hash: H256, opts: Option<GethDebugTracingOptions>,
     ) -> JsonRpcResult<GethTrace>;

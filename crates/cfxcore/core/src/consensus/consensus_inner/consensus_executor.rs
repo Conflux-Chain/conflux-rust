@@ -652,15 +652,11 @@ impl ConsensusExecutor {
     }
 
     pub fn collect_epoch_geth_trace(
-        &self, epoch_num: u64, epoch_block_hashes: Vec<H256>,
-        tx_hash: Option<H256>, opts: GethDebugTracingOptions,
+        &self, epoch_block_hashes: Vec<H256>, tx_hash: Option<H256>,
+        opts: GethDebugTracingOptions,
     ) -> RpcResult<Vec<(H256, GethTrace)>> {
-        self.handler.collect_epoch_geth_trace(
-            epoch_num,
-            epoch_block_hashes,
-            tx_hash,
-            opts,
-        )
+        self.handler
+            .collect_epoch_geth_trace(epoch_block_hashes, tx_hash, opts)
     }
 
     pub fn stop(&self) {
@@ -1934,14 +1930,9 @@ impl ConsensusExecutionHandler {
     }
 
     pub fn collect_epoch_geth_trace(
-        &self, epoch_num: u64, epoch_block_hashes: Vec<H256>,
-        tx_hash: Option<H256>, opts: GethDebugTracingOptions,
+        &self, epoch_block_hashes: Vec<H256>, tx_hash: Option<H256>,
+        opts: GethDebugTracingOptions,
     ) -> RpcResult<Vec<(H256, GethTrace)>> {
-        let epoch_id = epoch_block_hashes.last().expect("Not empty");
-        let _ = epoch_num;
-        // let epoch_size = epoch_block_hashes.len();
-        // let _ = epoch_size;
-
         // Get blocks in this epoch after skip checking
         let epoch_blocks = self
             .data_man
@@ -1950,19 +1941,23 @@ impl ConsensusExecutionHandler {
                 true, /* update_cache */
             )
             .expect("blocks exist");
+
         let pivot_block = epoch_blocks.last().expect("Not empty");
+        let last_pivot_block_hash = pivot_block.block_header.parent_hash();
 
         let state_availability_boundary =
             self.data_man.state_availability_boundary.read();
         let state_space = None;
         if !state_availability_boundary.check_read_availability(
-            pivot_block.block_header.height(),
-            epoch_id,
+            pivot_block.block_header.height() - 1,
+            last_pivot_block_hash,
             state_space,
         ) {
             bail!("state is not ready");
         }
-        let state_index = self.data_man.get_state_readonly_index(epoch_id);
+        let state_index = self
+            .data_man
+            .get_state_readonly_index(last_pivot_block_hash);
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
@@ -1977,7 +1972,7 @@ impl ConsensusExecutionHandler {
 
         let start_block_number = self
             .data_man
-            .get_epoch_execution_context(&epoch_id)
+            .get_epoch_execution_context(&last_pivot_block_hash)
             .map(|v| v.start_block_number)
             .expect("should exist");
 

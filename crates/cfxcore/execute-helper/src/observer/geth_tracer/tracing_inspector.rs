@@ -220,7 +220,6 @@ impl TracingInspector {
             // this value should use the transaction's gas limit See <https://github.com/paradigmxyz/reth/issues/3678> and <https://github.com/ethereum/go-ethereum/pull/27029>
             gas_limit = tx_gas_limit;
         }
-
         self.trace_stack.push(self.traces.push_trace(
             0,
             push_kind,

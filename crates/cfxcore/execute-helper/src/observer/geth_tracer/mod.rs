@@ -205,7 +205,6 @@ impl CallTracer for GethTracer {
             return;
         }
 
-        self.depth += 1;
         self.inner.gas_stack.push(params.gas.clone());
 
         // determine correct `from` and `to` based on the call scheme
@@ -246,6 +245,8 @@ impl CallTracer for GethTracer {
             self.tx_gas_limit,
             self.depth,
         );
+
+        self.depth += 1;
     }
 
     fn record_call_result(&mut self, result: &FrameResult) {
@@ -289,7 +290,6 @@ impl CallTracer for GethTracer {
             return;
         }
 
-        self.depth += 1;
         self.inner.gas_stack.push(params.gas.clone());
 
         let value = if matches!(params.call_type, CallType::DelegateCall) {
@@ -314,6 +314,8 @@ impl CallTracer for GethTracer {
             params.gas.as_u64(),
             self.depth,
         );
+
+        self.depth += 1;
     }
 
     fn record_create_result(&mut self, result: &FrameResult) {
@@ -440,7 +442,7 @@ struct StackStep {
 
 pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
     let result = match frame_result {
-        Ok(_r) => InstructionResult::Return, // todo check this
+        Ok(_r) => InstructionResult::Return,
         Err(err) => match err {
             Error::OutOfGas => InstructionResult::OutOfGas,
             Error::BadJumpDestination { .. } => InstructionResult::InvalidJump,

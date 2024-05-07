@@ -12,6 +12,7 @@ mod transaction_store;
 mod ttl_cache;
 
 #[cfg(test)]
+#[allow(unused_imports)]
 pub use self::ttl_cache::TtlCache;
 pub use self::{
     index::TxnPointer, mempool::Mempool as CoreMempool,

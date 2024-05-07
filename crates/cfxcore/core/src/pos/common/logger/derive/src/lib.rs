@@ -159,6 +159,7 @@ fn extract_attr(attrs: &[Attribute]) -> Option<ValueType> {
             for segment in path.segments {
                 // Only handle schema attrs
                 if segment.ident == "schema" {
+                    #[allow(clippy::never_loop)]
                     for meta in &nested {
                         let path =
                             if let NestedMeta::Meta(Meta::Path(path)) = meta {
