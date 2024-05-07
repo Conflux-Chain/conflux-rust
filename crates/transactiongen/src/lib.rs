@@ -180,79 +180,67 @@ impl TransactionGenerator {
                 _ => {}
             }
 
-            // Randomly select sender and receiver.
-            // Sender and receiver must exist in the account list.
-            let mut receiver_index: usize = random();
-            receiver_index %= account_count;
-            let receiver_address = addresses[receiver_index];
+            let mut tx_to_insert = Vec::new();
+            for _ in 0..3 {
+                // Randomly select sender and receiver.
+                // Sender and receiver must exist in the account list.
+                let mut receiver_index: usize = random();
+                receiver_index %= account_count;
+                let receiver_address = addresses[receiver_index];
 
-            let mut sender_index: usize = random();
-            sender_index %= account_count;
-            let sender_address = addresses[sender_index];
+                let mut sender_index: usize = random();
+                sender_index %= account_count;
+                let sender_address = addresses[sender_index];
 
-            // Always send value 0
-            let balance_to_transfer = U256::from(0);
+                // Always send value 0
+                let balance_to_transfer = U256::from(0);
 
-            // Generate nonce for the transaction
-            let sender_nonce = nonce_map.get_mut(&sender_address).unwrap();
+                // Generate nonce for the transaction
+                let sender_nonce = nonce_map.get_mut(&sender_address).unwrap();
 
-            // FIXME: It's better first define what kind of Result type
-            // FIXME: to use for this function, then change unwrap() to ?.
-            let (nonce, balance) = txgen
-                .txpool
-                .get_state_account_info(&sender_address.with_native_space())
-                .unwrap();
-            if nonce.cmp(sender_nonce) != Ordering::Equal {
-                *sender_nonce = nonce.clone();
-                balance_map.insert(sender_address.clone(), balance.clone());
-            }
+                // FIXME: It's better first define what kind of Result type
+                // FIXME: to use for this function, then change unwrap() to ?.
+                let (nonce, balance) = txgen
+                    .txpool
+                    .get_state_account_info(&sender_address.with_native_space())
+                    .unwrap();
+                if nonce.cmp(sender_nonce) != Ordering::Equal {
+                    *sender_nonce = nonce.clone();
+                    balance_map.insert(sender_address.clone(), balance.clone());
+                }
             trace!(
                 "receiver={:?} value={:?} nonce={:?}",
                 receiver_address,
                 balance_to_transfer,
                 sender_nonce
             );
-            // Generate the transaction, sign it, and push into the transaction
-            // pool
-            let tx: Transaction = NativeTransaction {
-                nonce: *sender_nonce,
-                gas_price: U256::from(1u64),
-                gas: U256::from(21000u64),
-                value: balance_to_transfer,
-                action: Action::Call(receiver_address),
-                storage_limit: 0,
-                chain_id: txgen.consensus.best_chain_id().in_native_space(),
-                epoch_height: txgen.consensus.best_epoch_number(),
-                data: Bytes::new(),
-            }
-            .into();
+                // Generate the transaction, sign it, and push into the transaction
+                // pool
+                let tx: Transaction = NativeTransaction {
+                    nonce: *sender_nonce,
+                    gas_price: U256::from(1u64),
+                    gas: U256::from(21000u64),
+                    value: balance_to_transfer,
+                    action: Action::Call(receiver_address),
+                    storage_limit: 0,
+                    chain_id: txgen.consensus.best_chain_id().in_native_space(),
+                    epoch_height: txgen.consensus.best_epoch_number(),
+                    data: Bytes::new(),
+                }
+                    .into();
 
-            let signed_tx = tx.sign(&address_secret_pair[&sender_address]);
-            let mut tx_to_insert = Vec::new();
-            tx_to_insert.push(signed_tx);
+                let signed_tx = tx.sign(&address_secret_pair[&sender_address]);
+                tx_to_insert.push(signed_tx);
+            }
             let (txs, fail) =
                 txgen.txpool.insert_new_transactions(tx_to_insert);
             if fail.is_empty() {
-                txgen.sync.append_received_transactions(txs);
-                //tx successfully inserted into
-                // tx pool, so we can update our state about
-                // nonce and balance
-                {
-                    let sender_balance =
-                        balance_map.get_mut(&sender_address).unwrap();
-                    *sender_balance -= balance_to_transfer + 21000;
-                    if *sender_balance < 42000.into() {
-                        addresses.remove(sender_index);
-                        if addresses.is_empty() {
-                            break;
-                        }
-                    }
+                txgen.sync.append_received_transactions(txs.clone());
+                for tx in txs {
+                    *nonce_map.get_mut(&tx.sender).unwrap() += U256::one();
+                    tx_n += 1;
+                    TX_GEN_METER.mark(1);
                 }
-                *sender_nonce += U256::one();
-                *balance_map.entry(receiver_address).or_insert(0.into()) +=
-                    balance_to_transfer;
-                tx_n += 1;
-                TX_GEN_METER.mark(1);
             } else {
                 // The transaction pool is full and the tx is discarded, so the
                 // state should not updated. We add unconditional
