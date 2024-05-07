@@ -524,11 +524,23 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 s.append(&self.r);
                 s.append(&self.s);
             }
-            Transaction::Native(TypedNativeTransaction::Cip2930(_)) => {
-                todo!()
+            Transaction::Native(TypedNativeTransaction::Cip2930(ref tx)) => {
+                s.append_raw(TYPED_NATIVE_TX_PREFIX, 0);
+                s.append_raw(&[CIP2930_TYPE], 0);
+                s.begin_list(4);
+                s.append(tx);
+                s.append(&self.v);
+                s.append(&self.r);
+                s.append(&self.s);
             }
-            Transaction::Native(TypedNativeTransaction::Cip1559(_)) => {
-                todo!()
+            Transaction::Native(TypedNativeTransaction::Cip1559(ref tx)) => {
+                s.append_raw(TYPED_NATIVE_TX_PREFIX, 0);
+                s.append_raw(&[CIP1559_TYPE], 0);
+                s.begin_list(4);
+                s.append(tx);
+                s.append(&self.v);
+                s.append(&self.r);
+                s.append(&self.s);
             }
         }
     }
@@ -601,7 +613,52 @@ impl Decodable for TransactionWithSignatureSerializePart {
         } else {
             match rlp.as_raw()[0] {
                 TYPED_NATIVE_TX_PREFIX_BYTE => {
-                    todo!()
+                    if rlp.as_raw().len() <= 4
+                        || rlp.as_raw()[0..3] != *TYPED_NATIVE_TX_PREFIX
+                    {
+                        return Err(DecoderError::RlpInvalidLength);
+                    }
+                    match rlp.as_raw()[3] {
+                        CIP2930_TYPE => {
+                            let rlp = Rlp::new(&rlp.as_raw()[4..]);
+                            if rlp.item_count()? != 4 {
+                                return Err(DecoderError::RlpIncorrectListLen);
+                            }
+
+                            let tx = rlp.val_at(0)?;
+                            let v = rlp.val_at(1)?;
+                            let r = rlp.val_at(2)?;
+                            let s = rlp.val_at(3)?;
+                            Ok(TransactionWithSignatureSerializePart {
+                                unsigned: Transaction::Native(
+                                    TypedNativeTransaction::Cip2930(tx),
+                                ),
+                                v,
+                                r,
+                                s,
+                            })
+                        }
+                        CIP1559_TYPE => {
+                            let rlp = Rlp::new(&rlp.as_raw()[4..]);
+                            if rlp.item_count()? != 4 {
+                                return Err(DecoderError::RlpIncorrectListLen);
+                            }
+
+                            let tx = rlp.val_at(0)?;
+                            let v = rlp.val_at(1)?;
+                            let r = rlp.val_at(2)?;
+                            let s = rlp.val_at(3)?;
+                            Ok(TransactionWithSignatureSerializePart {
+                                unsigned: Transaction::Native(
+                                    TypedNativeTransaction::Cip1559(tx),
+                                ),
+                                v,
+                                r,
+                                s,
+                            })
+                        }
+                        _ => Err(DecoderError::RlpInvalidLength),
+                    }
                 }
                 EIP2930_TYPE => {
                     let rlp = Rlp::new(&rlp.as_raw()[1..]);
