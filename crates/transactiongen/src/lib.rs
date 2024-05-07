@@ -234,14 +234,13 @@ impl TransactionGenerator {
             }
             let (txs, fail) =
                 txgen.txpool.insert_new_transactions(tx_to_insert);
-            if fail.is_empty() {
-                txgen.sync.append_received_transactions(txs.clone());
-                for tx in txs {
-                    *nonce_map.get_mut(&tx.sender).unwrap() += U256::one();
-                    tx_n += 1;
-                    TX_GEN_METER.mark(1);
-                }
-            } else {
+            txgen.sync.append_received_transactions(txs.clone());
+            for tx in txs {
+                *nonce_map.get_mut(&tx.sender).unwrap() += U256::one();
+                tx_n += 1;
+                TX_GEN_METER.mark(1);
+            }
+            if !fail.is_empty() {
                 // The transaction pool is full and the tx is discarded, so the
                 // state should not updated. We add unconditional
                 // sleep to avoid busy spin if the tx pool cannot support the
