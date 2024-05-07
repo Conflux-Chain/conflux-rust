@@ -34,7 +34,7 @@ pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
     let code_length = code.len();
 
     let transaction_gas =
-        gas_required_for(/* is_create */ true, code, context.spec)
+        gas_required_for(/* is_create */ true, code, None, context.spec)
             + context.spec.tx_gas as u64;
 
     let create_gas = U256::from(context.spec.create_gas);
@@ -70,7 +70,7 @@ pub fn call_gas(
     let data_length = data.len();
 
     let transaction_gas =
-        gas_required_for(/* is_create */ false, data, context.spec)
+        gas_required_for(/* is_create */ false, data, None, context.spec)
             + context.spec.tx_gas as u64;
 
     let new_account = !context

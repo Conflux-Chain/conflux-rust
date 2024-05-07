@@ -287,8 +287,8 @@ macro_rules! access_common_ref {
     ($field:ident, $ty:ty) => {
         pub fn $field(&self) -> &$ty {
             match self {
-                Transaction::Native(tx) => &tx.$field(),
-                Transaction::Ethereum(tx) => &tx.$field(),
+                Transaction::Native(tx) => tx.$field(),
+                Transaction::Ethereum(tx) => tx.$field(),
             }
         }
     };
@@ -309,6 +309,8 @@ impl Transaction {
     access_common_ref!(gas, U256);
 
     access_common_ref!(gas_price, U256);
+
+    access_common_ref!(max_priority_gas_price, U256);
 
     access_common_ref!(data, Bytes);
 
@@ -334,24 +336,8 @@ impl Transaction {
 
     pub fn nonce_mut(&mut self) -> &mut U256 {
         match self {
-            Transaction::Native(TypedNativeTransaction::Cip155(tx)) => {
-                &mut tx.nonce
-            }
-            Transaction::Native(TypedNativeTransaction::Cip1559(tx)) => {
-                &mut tx.nonce
-            }
-            Transaction::Native(TypedNativeTransaction::Cip2930(tx)) => {
-                &mut tx.nonce
-            }
-            Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
-                &mut tx.nonce
-            }
-            Transaction::Ethereum(EthereumTransaction::Eip1559(tx)) => {
-                &mut tx.nonce
-            }
-            Transaction::Ethereum(EthereumTransaction::Eip2930(tx)) => {
-                &mut tx.nonce
-            }
+            Transaction::Native(tx) => tx.nonce_mut(),
+            Transaction::Ethereum(tx) => tx.nonce_mut(),
         }
     }
 
@@ -363,9 +349,27 @@ impl Transaction {
             Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => Some(2),
         }
     }
+
+    pub fn access_list(&self) -> Option<&AccessList> {
+        match self {
+            Transaction::Native(tx) => tx.access_list(),
+            Transaction::Ethereum(tx) => tx.access_list(),
+        }
+    }
 }
 
 impl Transaction {
+    pub fn priority_gas_price(&self, base_price: &U256) -> U256 {
+        std::cmp::min(
+            *self.max_priority_gas_price(),
+            self.gas_price() - base_price,
+        )
+    }
+
+    pub fn effective_gas_price(&self, base_price: &U256) -> U256 {
+        base_price + self.priority_gas_price(base_price)
+    }
+
     // This function returns the hash value used in transaction signature. It is
     // different from transaction hash. The transaction hash also contains
     // signatures.

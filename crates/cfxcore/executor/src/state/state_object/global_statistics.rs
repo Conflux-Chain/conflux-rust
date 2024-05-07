@@ -36,6 +36,11 @@ impl State {
         base_reward
     }
 
+    pub fn burn_by_cip1559(&mut self, by: U256) {
+        *self.global_stat.val::<TotalBurnt1559>() += by;
+        self.sub_total_issued(by);
+    }
+
     pub fn total_issued_tokens(&self) -> U256 {
         self.global_stat.get::<TotalIssued>()
     }

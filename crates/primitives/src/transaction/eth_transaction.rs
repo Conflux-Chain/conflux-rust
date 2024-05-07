@@ -167,6 +167,7 @@ pub enum EthereumTransaction {
     Eip1559(Eip1559Transaction),
     Eip2930(Eip2930Transaction),
 }
+use EthereumTransaction::*;
 
 macro_rules! eth_access_common_ref {
     ($field:ident, $ty:ty) => {
@@ -193,17 +194,41 @@ impl EthereumTransaction {
 
     pub fn gas_price(&self) -> &U256 {
         match self {
-            EthereumTransaction::Eip155(tx) => &tx.gas_price,
-            EthereumTransaction::Eip1559(tx) => &tx.max_fee_per_gas,
-            EthereumTransaction::Eip2930(tx) => &tx.gas_price,
+            Eip155(tx) => &tx.gas_price,
+            Eip1559(tx) => &tx.max_fee_per_gas,
+            Eip2930(tx) => &tx.gas_price,
+        }
+    }
+
+    pub fn max_priority_gas_price(&self) -> &U256 {
+        match self {
+            Eip155(tx) => &tx.gas_price,
+            Eip1559(tx) => &tx.max_priority_fee_per_gas,
+            Eip2930(tx) => &tx.gas_price,
         }
     }
 
     pub fn chain_id(&self) -> Option<u32> {
         match self {
-            EthereumTransaction::Eip155(tx) => tx.chain_id,
-            EthereumTransaction::Eip1559(tx) => Some(tx.chain_id),
-            EthereumTransaction::Eip2930(tx) => Some(tx.chain_id),
+            Eip155(tx) => tx.chain_id,
+            Eip1559(tx) => Some(tx.chain_id),
+            Eip2930(tx) => Some(tx.chain_id),
+        }
+    }
+
+    pub fn nonce_mut(&mut self) -> &mut U256 {
+        match self {
+            Eip155(tx) => &mut tx.nonce,
+            Eip2930(tx) => &mut tx.nonce,
+            Eip1559(tx) => &mut tx.nonce,
+        }
+    }
+
+    pub fn access_list(&self) -> Option<&AccessList> {
+        match self {
+            Eip155(_tx) => None,
+            Eip2930(tx) => Some(&tx.access_list),
+            Eip1559(tx) => Some(&tx.access_list),
         }
     }
 }

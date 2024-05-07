@@ -478,7 +478,7 @@ fn execute_genesis_transaction(
             state,
             &env,
             machine.as_ref(),
-            &machine.spec(env.number),
+            &machine.spec(env.number, env.epoch_height),
         )
         .transact(transaction, options)
         .unwrap()
