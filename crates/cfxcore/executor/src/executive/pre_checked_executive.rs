@@ -54,7 +54,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         if self.tx.space() == Space::Native
             && !self.check_create_address(&params)?
         {
-            return self.finialize_on_conflict_address(params.address);
+            return self.finalize_on_conflict_address(params.address);
         }
 
         let result = self.exec_vm(params.clone())?;
@@ -71,7 +71,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         // perform suicides
         self.kill_process()?;
 
-        self.finialize_on_executed(result, refund_info)
+        self.finalize_on_executed(result, refund_info)
     }
 }
 
@@ -176,7 +176,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                     original_sender: sender.address,
                     storage_owner: sender.address,
                     gas: init_gas,
-                    gas_price: *tx.gas_price(),
+                    gas_price: cost.gas_price,
                     value: ActionValue::Transfer(*tx.value()),
                     code: Some(Arc::new(tx.data().clone())),
                     data: None,
@@ -200,7 +200,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                     original_sender: sender.address,
                     storage_owner,
                     gas: init_gas,
-                    gas_price: *tx.gas_price(),
+                    gas_price: cost.gas_price,
                     value: ActionValue::Transfer(*tx.value()),
                     code: state.code(&receipient)?,
                     code_hash: state.code_hash(&receipient)?,
@@ -465,6 +465,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
     fn compute_refunded_gas(&self, result: &ExecutiveResult) -> RefundInfo {
         let tx = self.tx;
+        let cost = &self.cost;
         let gas_left = match result {
             Ok(ExecutiveReturn { gas_left, .. }) => *gas_left,
             _ => 0.into(),
@@ -479,14 +480,14 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             let gas_charged = tx.gas() - gas_refunded;
             (
                 gas_charged,
-                gas_charged.saturating_mul(*tx.gas_price()),
-                gas_refunded.saturating_mul(*tx.gas_price()),
+                gas_charged.saturating_mul(cost.gas_price),
+                gas_refunded.saturating_mul(cost.gas_price),
             )
         } else {
             (
                 gas_used,
-                gas_used.saturating_mul(*tx.gas_price()),
-                gas_left.saturating_mul(*tx.gas_price()),
+                gas_used.saturating_mul(cost.gas_price),
+                gas_left.saturating_mul(cost.gas_price),
             )
         };
         RefundInfo {
@@ -553,7 +554,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         ));
     }
 
-    fn finialize_on_conflict_address(
+    fn finalize_on_conflict_address(
         self, address: Address,
     ) -> DbResult<ExecutionOutcome> {
         return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -567,7 +568,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         ));
     }
 
-    fn finialize_on_executed(
+    fn finalize_on_executed(
         self, result: ExecutiveResult, refund_info: RefundInfo,
     ) -> DbResult<ExecutionOutcome> {
         let tx = self.tx;
@@ -576,14 +577,14 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         let spec = self.context.spec;
         let tx_substate = self.substate;
 
-        match result {
+        let outcome = match result {
             Err(vm::Error::StateDbError(e)) => bail!(e.0),
-            Err(exception) => Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+            Err(exception) => ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(exception),
                 Executed::execution_error_fully_charged(
                     tx, cost, ext_result, spec,
                 ),
-            )),
+            ),
             Ok(r) => {
                 let executed = Executed::from_executive_return(
                     &r,
@@ -595,16 +596,18 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 );
 
                 if r.apply_state {
-                    Ok(ExecutionOutcome::Finished(executed))
+                    ExecutionOutcome::Finished(executed)
                 } else {
                     // Transaction reverted by vm instruction.
-                    Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                    ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::VmError(vm::Error::Reverted),
                         executed,
-                    ))
+                    )
                 }
             }
-        }
+        };
+
+        Ok(outcome)
     }
 }
 

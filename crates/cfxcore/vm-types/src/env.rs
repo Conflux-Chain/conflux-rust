@@ -58,6 +58,9 @@ pub struct Env {
     /// The transaction_epoch_bound used to verify if a transaction has
     /// expired.
     pub transaction_epoch_bound: u64,
+    /// Base gas price in CIP-1559, equals to 0 if CIP-1559 has not been
+    /// activated
+    pub base_gas_price: U256,
 }
 
 #[cfg(test)]

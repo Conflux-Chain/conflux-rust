@@ -1088,7 +1088,8 @@ impl ConsensusExecutionHandler {
                 epoch_hash,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
-                self.machine.spec(current_block_number),
+                self.machine
+                    .spec(current_block_number, pivot_block_header.height()),
             );
         }
 
@@ -1292,8 +1293,10 @@ impl ConsensusExecutionHandler {
                 transaction_epoch_bound: self
                     .verification_config
                     .transaction_epoch_bound,
+                // TODO: get the actual base price
+                base_gas_price: todo_base_price(),
             };
-            let spec = self.machine.spec(env.number);
+            let spec = self.machine.spec(env.number, env.epoch_height);
             if !spec.cip43_contract {
                 state.bump_block_number_accumulate_interest();
             }
@@ -1324,6 +1327,12 @@ impl ConsensusExecutionHandler {
                     ExecutiveContext::new(state, &env, machine, &spec)
                         .transact(transaction, options)?;
                 execution_outcome.log(transaction, &block.hash());
+                execution_outcome.burn_by_cip1559(
+                    state,
+                    &transaction,
+                    &todo_base_price(),
+                );
+
                 let r = make_process_tx_outcome(
                     execution_outcome,
                     &mut env.accumulated_gas_used,
@@ -1620,8 +1629,15 @@ impl ConsensusExecutionHandler {
             debug_assert!(
                 block_receipts.receipts.len() == block.transactions.len()
             );
-            for (idx, tx) in block.transactions.iter().enumerate() {
-                let fee = block_receipts.receipts[idx].gas_fee;
+            // TODO: fill base_price.
+            let base_price = todo_base_price();
+            for (tx, receipt) in block
+                .transactions
+                .iter()
+                .zip(block_receipts.receipts.iter())
+            {
+                let fee = receipt.gas_fee;
+
                 let info = tx_fee
                     .entry(tx.hash())
                     .or_insert(TxExecutionInfo(fee, BTreeSet::default()));
@@ -1635,7 +1651,22 @@ impl ConsensusExecutionHandler {
                     info.1.insert(block_hash);
                 }
                 if !fee.is_zero() && info.0.is_zero() {
-                    info.0 = fee;
+                    // TODO: a temp implmentation, the 1559 related infomation
+                    // should be put in the `BlockReceipts`.
+
+                    // When `base_price = 0`, `effective_gas_price = gas_price`
+                    let effective_gas_price =
+                        tx.effective_gas_price(&base_price);
+                    // When gas_fee is non-zero, gas_price must be non-zero
+                    let gas_charged = if effective_gas_price.is_zero() {
+                        U256::zero()
+                    } else {
+                        fee / effective_gas_price
+                    };
+                    let miner_fee =
+                        tx.priority_gas_price(&base_price) * gas_charged;
+
+                    info.0 = miner_fee;
                 }
             }
         }
@@ -1834,7 +1865,7 @@ impl ConsensusExecutionHandler {
             Some(v) => v.start_block_number + epoch_size as u64,
             None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
         };
-        let spec = self.machine.spec(start_block_number);
+        let spec = self.machine.spec(start_block_number, block_height);
         let transitions = &self.machine.params().transition_heights;
 
         invalid_params_check(
@@ -1902,8 +1933,9 @@ impl ConsensusExecutionHandler {
             transaction_epoch_bound: self
                 .verification_config
                 .transaction_epoch_bound,
+            base_gas_price: U256::zero(),
         };
-        let spec = self.machine.spec(env.number);
+        let spec = self.machine.spec(env.number, env.epoch_height);
         let mut ex = EstimationContext::new(
             &mut state,
             &env,
@@ -1944,4 +1976,8 @@ impl ConsensusExecutionHandler {
 
 pub struct ConsensusExecutionConfiguration {
     pub executive_trace: bool,
+}
+
+fn todo_base_price() -> U256 {
+    U256::zero()
 }

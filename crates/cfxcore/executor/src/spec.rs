@@ -76,7 +76,6 @@ pub struct TransitionsBlockNumber {
     pub cip71: BlockNumber,
     /// CIP-78: Correct `is_sponsored` Fields in Receipt
     pub cip78a: BlockNumber,
-    /// CIP-78: Correct `is_sponsored` Fields in Receipt
     pub cip78b: BlockNumber,
     /// CIP-90: Introduce a Fully EVM-Compatible Space
     pub cip90b: BlockNumber,
@@ -120,6 +119,7 @@ pub struct TransitionsEpochHeight {
     pub cip112: BlockHeight,
     /// CIP-130: Aligning Gas Limit with Transaction Size
     pub cip130: BlockHeight,
+    pub cip1559: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -147,7 +147,7 @@ impl Default for CommonParams {
 }
 
 impl CommonParams {
-    pub fn spec(&self, number: BlockNumber) -> Spec {
+    pub fn spec(&self, number: BlockNumber, height: BlockHeight) -> Spec {
         let mut spec = Spec::genesis_spec();
         spec.cip43_contract = number >= self.transition_numbers.cip43a;
         spec.cip43_init = number >= self.transition_numbers.cip43a
@@ -170,7 +170,14 @@ impl CommonParams {
         spec.cip119 = number >= self.transition_numbers.cip119;
         spec.cip131 = number >= self.transition_numbers.cip131;
         spec.cip132 = number >= self.transition_numbers.cip132;
+
+        spec.cip1559 = height >= self.transition_heights.cip1559;
         spec
+    }
+
+    #[cfg(test)]
+    pub fn spec_for_test(&self, number: u64) -> Spec {
+        self.spec(number, number)
     }
 
     /// Return the base reward for a block.

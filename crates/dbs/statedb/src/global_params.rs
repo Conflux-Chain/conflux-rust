@@ -139,4 +139,10 @@ impl GlobalParamKey for PowBaseReward {
     const KEY: &'static [u8] = b"pow_base_reward";
 }
 
-pub const TOTAL_GLOBAL_PARAMS: usize = PowBaseReward::ID + 1;
+pub struct TotalBurnt1559;
+impl GlobalParamKey for TotalBurnt1559 {
+    const ID: usize = PowBaseReward::ID + 1;
+    const KEY: &'static [u8] = b"total_burnt_tokens_by_cip1559";
+}
+
+pub const TOTAL_GLOBAL_PARAMS: usize = TotalBurnt1559::ID + 1;

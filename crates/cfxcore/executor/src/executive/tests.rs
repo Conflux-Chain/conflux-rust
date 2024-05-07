@@ -117,7 +117,7 @@ fn test_sender_balance() {
     );
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
@@ -213,7 +213,7 @@ fn test_create_contract_out_of_depth() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -268,7 +268,7 @@ fn test_suicide_when_creation() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -359,7 +359,7 @@ fn test_call_to_create() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(5);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -426,7 +426,7 @@ fn test_revert() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
     let mut substate = Substate::new();
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -507,7 +507,7 @@ fn test_keccak() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -553,7 +553,7 @@ fn test_not_enough_cash() {
     let mut env = Env::default();
     env.gas_limit = U256::from(100_000);
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
@@ -597,7 +597,7 @@ fn test_deposit_withdraw_lock() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
     let mut substate = Substate::new();
     state
         .add_balance(
@@ -953,7 +953,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     let machine = make_byzantium_machine(0);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
 
     let sender = Random.generate().unwrap().address();
     let sender_with_space = sender.with_native_space();
@@ -1156,7 +1156,7 @@ fn test_commission_privilege() {
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
 
     let sender_key = Random.generate().unwrap();
     let sender = sender_key.address();
@@ -1551,7 +1551,7 @@ fn test_storage_commission_privilege() {
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
-    let spec = machine.spec(env.number);
+    let spec = machine.spec_for_test(env.number);
 
     let sender = Random.generate().unwrap();
     let sender_with_space = sender.address().with_native_space();
@@ -2186,7 +2186,7 @@ fn test_push0() {
 
     // Test case 1 in EIP-3855
     {
-        let mut spec = machine.spec(env.number);
+        let mut spec = machine.spec_for_test(env.number);
         spec.cip119 = true;
 
         // code:
@@ -2213,7 +2213,7 @@ fn test_push0() {
 
     // Test case 2 in EIP-3855
     {
-        let mut spec = machine.spec(env.number);
+        let mut spec = machine.spec_for_test(env.number);
         spec.cip119 = true;
 
         // code:
@@ -2240,7 +2240,7 @@ fn test_push0() {
 
     // Test case 2 in EIP-3855
     {
-        let mut spec = machine.spec(env.number);
+        let mut spec = machine.spec_for_test(env.number);
         spec.cip119 = true;
 
         // code:
@@ -2260,7 +2260,7 @@ fn test_push0() {
 
     // Before activation of EIP-3855 (CIP119)
     {
-        let mut spec = machine.spec(env.number);
+        let mut spec = machine.spec_for_test(env.number);
         spec.cip119 = false;
 
         // code:

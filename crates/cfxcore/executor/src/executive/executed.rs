@@ -74,10 +74,10 @@ impl Executed {
         tx: &TransactionWithSignature, fee: &U256, cost: CostInfo,
         ext_result: ExecutedExt, spec: &Spec,
     ) -> Self {
-        let gas_charged = if *tx.gas_price() == U256::zero() {
+        let gas_charged = if cost.gas_price == U256::zero() {
             U256::zero()
         } else {
-            fee / tx.gas_price()
+            fee / cost.gas_price
         };
         let mut gas_sponsor_paid = cost.gas_sponsored;
         let mut storage_sponsor_paid = cost.storage_sponsored;
@@ -115,7 +115,7 @@ impl Executed {
         Self {
             gas_used: *tx.gas(),
             gas_charged: *tx.gas(),
-            fee: tx.gas().saturating_mul(*tx.gas_price()),
+            fee: tx.gas().saturating_mul(cost.gas_price),
             gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],

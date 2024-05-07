@@ -38,6 +38,7 @@ pub(super) struct CostInfo {
     pub gas_cost: U512,
     pub storage_cost: U256,
     pub sender_intended_cost: U512,
+    pub gas_price: U256,
 
     pub gas_sponsored: bool,
     pub storage_sponsored: bool,
@@ -53,6 +54,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let base_gas = gas_required_for(
             tx.action() == &Action::Create,
             &tx.data(),
+            tx.access_list(),
             context.spec,
         );
         FreshExecutive {
@@ -164,11 +166,18 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let settings = self.settings;
         let sender = tx.sender();
         let state = &self.context.state;
+        let env = self.context.env;
         let spec = self.context.spec;
+
+        let gas_price = if spec.cip1559 {
+            tx.effective_gas_price(&env.base_gas_price)
+        } else {
+            *tx.gas_price()
+        };
 
         let sender_balance = U512::from(state.balance(&sender)?);
         let gas_cost = if settings.charge_gas {
-            tx.gas().full_mul(*tx.gas_price())
+            tx.gas().full_mul(gas_price)
         } else {
             0.into()
         };
@@ -190,6 +199,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
                 sender_balance,
                 base_gas: self.base_gas,
                 gas_cost,
+                gas_price,
                 storage_cost,
                 sender_intended_cost: sender_cost,
                 total_cost: sender_cost,
@@ -301,6 +311,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
             sender_intended_cost,
             base_gas: self.base_gas,
             gas_cost,
+            gas_price,
             storage_cost,
             sender_balance,
             total_cost,
