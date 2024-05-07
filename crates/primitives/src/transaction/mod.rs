@@ -371,27 +371,38 @@ impl Transaction {
     // signatures.
     pub fn signature_hash(&self) -> H256 {
         let mut s = RlpStream::new();
+        let mut type_prefix = vec![];
         match self {
             Transaction::Native(TypedNativeTransaction::Cip155(tx)) => {
                 s.append(tx);
             }
             Transaction::Native(TypedNativeTransaction::Cip1559(tx)) => {
                 s.append(tx);
+                type_prefix.extend_from_slice(TYPED_NATIVE_TX_PREFIX);
+                type_prefix.push(CIP1559_TYPE);
             }
             Transaction::Native(TypedNativeTransaction::Cip2930(tx)) => {
                 s.append(tx);
+                type_prefix.extend_from_slice(TYPED_NATIVE_TX_PREFIX);
+                type_prefix.push(CIP2930_TYPE);
             }
             Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
                 s.append(tx);
             }
             Transaction::Ethereum(EthereumTransaction::Eip1559(tx)) => {
                 s.append(tx);
+                type_prefix.push(EIP1559_TYPE);
             }
             Transaction::Ethereum(EthereumTransaction::Eip2930(tx)) => {
                 s.append(tx);
+                type_prefix.push(EIP2930_TYPE);
             }
-        }
-        keccak(s.as_raw())
+        };
+        let encoded = s.as_raw();
+        let mut out = vec![0; type_prefix.len() + encoded.len()];
+        out[0..type_prefix.len()].copy_from_slice(&type_prefix);
+        out[type_prefix.len()..].copy_from_slice(&encoded);
+        keccak(&out)
     }
 
     pub fn space(&self) -> Space {
@@ -689,14 +700,22 @@ impl DerefMut for TransactionWithSignature {
 }
 
 impl Decodable for TransactionWithSignature {
-    fn decode(d: &Rlp) -> Result<Self, DecoderError> {
-        let hash = keccak(d.as_raw());
-        let rlp_size = Some(d.as_raw().len());
-        // Check item count of TransactionWithSignatureSerializePart
-        if d.item_count()? != 4 && d.item_count()? != 9 {
-            return Err(DecoderError::RlpIncorrectListLen);
-        }
-        let transaction = d.as_val()?;
+    fn decode(tx_rlp: &Rlp) -> Result<Self, DecoderError> {
+        let rlp_size = Some(tx_rlp.as_raw().len());
+        // The item count of TransactionWithSignatureSerializePart is checked in
+        // its decoding.
+        let hash;
+        let transaction;
+        if tx_rlp.is_list() {
+            hash = keccak(tx_rlp.as_raw());
+            // Vanilla tx encoding.
+            transaction = tx_rlp.as_val()?;
+        } else {
+            // Typed tx encoding is wrapped as an RLP string.
+            let b: Vec<u8> = tx_rlp.as_val()?;
+            hash = keccak(&b);
+            transaction = rlp::decode(&b)?;
+        };
         Ok(TransactionWithSignature {
             transaction,
             hash,
@@ -707,7 +726,16 @@ impl Decodable for TransactionWithSignature {
 
 impl Encodable for TransactionWithSignature {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_internal(&self.transaction);
+        match &self.transaction.unsigned {
+            Transaction::Native(TypedNativeTransaction::Cip155(_))
+            | Transaction::Ethereum(EthereumTransaction::Eip155(_)) => {
+                s.append_internal(&self.transaction);
+            }
+            _ => {
+                // Typed tx encoding is wrapped as an RLP string.
+                s.append_internal(&rlp::encode(&self.transaction));
+            }
+        }
     }
 }
 
@@ -761,6 +789,14 @@ impl TransactionWithSignature {
     pub fn rlp_size(&self) -> usize {
         self.rlp_size.unwrap_or_else(|| self.rlp_bytes().len())
     }
+
+    pub fn from_raw(raw: &[u8]) -> Result<Self, DecoderError> {
+        Ok(TransactionWithSignature {
+            transaction: Rlp::new(raw).as_val()?,
+            hash: keccak(raw),
+            rlp_size: Some(raw.len()),
+        })
+    }
 }
 
 impl MallocSizeOf for TransactionWithSignature {
@@ -777,6 +813,7 @@ pub struct SignedTransaction {
     pub public: Option<Public>,
 }
 
+// The default encoder for local storage.
 impl Encodable for SignedTransaction {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(3);

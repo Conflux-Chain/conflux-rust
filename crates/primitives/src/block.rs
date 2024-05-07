@@ -6,6 +6,7 @@ use crate::{BlockHeader, SignedTransaction, TransactionWithSignature};
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Space, H256, U256};
 use keccak_hash::keccak;
+use log::info;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rand::Rng;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
