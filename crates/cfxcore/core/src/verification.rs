@@ -648,6 +648,7 @@ impl VerificationConfig {
         // ******************************************
         let cip76 = height >= transitions.cip76;
         let cip90a = height >= transitions.cip90a;
+        let cip130 = height >= transitions.cip130;
 
         if let Transaction::Native(ref tx) = tx.unsigned {
             Self::verify_transaction_epoch_height(
@@ -663,6 +664,7 @@ impl VerificationConfig {
         }
 
         Self::check_gas_limit(tx, cip76, &mode)?;
+        Self::check_gas_limit_with_calldata(tx, cip130)?;
         Ok(())
     }
 
@@ -710,6 +712,23 @@ impl VerificationConfig {
             }
         }
 
+        Ok(())
+    }
+
+    fn check_gas_limit_with_calldata(
+        tx: &TransactionWithSignature, cip130: bool,
+    ) -> Result<(), TransactionError> {
+        if !cip130 {
+            return Ok(());
+        }
+        let data_length = tx.data().len();
+        let min_gas_limit = data_length.saturating_mul(100);
+        if tx.gas() < &U256::from(min_gas_limit) {
+            bail!(TransactionError::NotEnoughBaseGas {
+                required: min_gas_limit.into(),
+                got: *tx.gas()
+            });
+        }
         Ok(())
     }
 

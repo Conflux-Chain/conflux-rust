@@ -161,6 +161,8 @@ build_config! {
         (cip112_transition_height, (Option<u64>), None)
         (cip118_transition_number, (Option<u64>), None)
         (cip119_transition_number, (Option<u64>), None)
+        (next_hardfork_transition_number, (Option<u64>), None)
+        (next_hardfork_transition_height, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -1278,6 +1280,14 @@ impl Configuration {
             .raw_conf
             .cip119_transition_number
             .unwrap_or(default_transition_time);
+        params.transition_numbers.cip131 = self
+            .raw_conf
+            .next_hardfork_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip132 = self
+            .raw_conf
+            .next_hardfork_transition_number
+            .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
                 self.raw_conf.cip43_init_end_number.unwrap_or(u64::MAX);
@@ -1337,6 +1347,10 @@ impl Configuration {
             .unwrap_or(non_genesis_default_transition_time);
         params.transition_heights.cip112 =
             *CIP112_TRANSITION_HEIGHT.get().expect("initialized");
+        params.transition_heights.cip130 = self
+            .raw_conf
+            .next_hardfork_transition_height
+            .unwrap_or(default_transition_time);
         params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
 
         let mut base_block_rewards = BTreeMap::new();

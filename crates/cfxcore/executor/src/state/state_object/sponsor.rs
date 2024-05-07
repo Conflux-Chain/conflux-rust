@@ -205,14 +205,16 @@ impl State {
     }
 
     pub fn record_storage_and_whitelist_entries_release(
-        &mut self, address: &Address, substate: &mut Substate,
+        &mut self, address: &Address, substate: &mut Substate, cip131: bool,
     ) -> DbResult<()> {
-        storage_range_deletion_for_account(
-            self,
-            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-            address.as_ref(),
-            substate,
-        )?;
+        if !cip131 {
+            storage_range_deletion_for_account(
+                self,
+                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                address.as_ref(),
+                substate,
+            )?;
+        }
         storage_range_deletion_for_account(self, address, &vec![], substate)?;
         Ok(())
     }

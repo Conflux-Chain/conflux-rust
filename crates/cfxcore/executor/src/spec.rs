@@ -98,6 +98,10 @@ pub struct TransitionsBlockNumber {
     pub cip118: BlockNumber,
     /// CIP-119: PUSH0 instruction
     pub cip119: BlockNumber,
+    /// CIP-131: Retain Whitelist on Contract Deletion
+    pub cip131: BlockNumber,
+    /// CIP-132: Fix Static Context Check for Internal Contracts
+    pub cip132: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -114,6 +118,8 @@ pub struct TransitionsEpochHeight {
     pub cip94: BlockHeight,
     /// CIP-112: Fix Block Headers `custom` Field Serde
     pub cip112: BlockHeight,
+    /// CIP-130: Aligning Gas Limit with Transaction Size
+    pub cip130: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -162,6 +168,8 @@ impl CommonParams {
         spec.cip107 = number >= self.transition_numbers.cip107;
         spec.cip118 = number >= self.transition_numbers.cip118;
         spec.cip119 = number >= self.transition_numbers.cip119;
+        spec.cip131 = number >= self.transition_numbers.cip131;
+        spec.cip132 = number >= self.transition_numbers.cip132;
         spec
     }
 
