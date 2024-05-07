@@ -26,6 +26,7 @@ use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
 use primitives::{transaction::Action, SignedTransaction};
 use std::{convert::TryInto, sync::Arc};
+use crate::executive::executed::ExecutedExt;
 
 pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
     pub context: ExecutiveContext<'a>,
@@ -40,38 +41,20 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     pub(super) fn execute_transaction(mut self) -> DbResult<ExecutionOutcome> {
         self.inc_sender_nonce()?;
 
-        let (actual_gas_cost, insufficient_sender_balance) =
-            self.charge_gas()?;
-
-        if insufficient_sender_balance {
-            if self.tx.space() == Space::Ethereum {
-                self.context.state.sub_total_evm_tokens(actual_gas_cost);
-            }
-            return self.finalize_on_insufficient_balance(actual_gas_cost);
-        }
-
-        let params = self.make_action_params()?;
-        if self.tx.space() == Space::Native
-            && !self.check_create_address(&params)?
-        {
-            return self.finialize_on_conflict_address(params.address);
-        }
-
-        let result = self.exec_vm(params.clone())?;
-
-        let refund_info = self.compute_refunded_gas(&result);
-        self.refund_gas(&params, refund_info.refund_value)?;
-
-        if self.tx.space() == Space::Ethereum {
-            self.context
-                .state
-                .sub_total_evm_tokens(refund_info.fees_value);
-        }
-
-        // perform suicides
-        self.kill_process()?;
-
-        self.finialize_on_executed(result, refund_info)
+        Ok(ExecutionOutcome::Finished(Executed{
+            base_gas: 0,
+            gas_used: Default::default(),
+            fee: Default::default(),
+            gas_charged: Default::default(),
+            gas_sponsor_paid: false,
+            logs: vec![],
+            storage_sponsor_paid: false,
+            storage_collateralized: vec![],
+            storage_released: vec![],
+            contracts_created: vec![],
+            output: vec![],
+            ext_result: ExecutedExt::custom(),
+        }))
     }
 }
 
