@@ -18,6 +18,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::BlockHashSource;
+
 use super::{
     error::TrapKind, CallType, Context, ContractCreateResult,
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
@@ -135,11 +137,12 @@ impl Context for MockContext {
         Ok(self.balances[address])
     }
 
-    fn blockhash(&mut self, number: &U256) -> H256 {
-        self.blockhashes
+    fn blockhash(&mut self, number: &U256) -> Result<H256> {
+        Ok(self
+            .blockhashes
             .get(number)
             .unwrap_or(&H256::zero())
-            .clone()
+            .clone())
     }
 
     fn create(
@@ -243,4 +246,6 @@ impl Context for MockContext {
     // }
 
     fn space(&self) -> Space { Space::Native }
+
+    fn blockhash_source(&self) -> BlockHashSource { BlockHashSource::Env }
 }
