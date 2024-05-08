@@ -101,6 +101,8 @@ pub struct TransitionsBlockNumber {
     pub cip131: BlockNumber,
     /// CIP-132: Fix Static Context Check for Internal Contracts
     pub cip132: BlockNumber,
+    /// CIP-133: Enhanced Block Hash Query
+    pub cip133_b: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -119,6 +121,8 @@ pub struct TransitionsEpochHeight {
     pub cip112: BlockHeight,
     /// CIP-130: Aligning Gas Limit with Transaction Size
     pub cip130: BlockHeight,
+    /// CIP-133: Enhanced Block Hash Query
+    pub cip133_e: BlockHeight,
     pub cip1559: BlockHeight,
 }
 
@@ -170,7 +174,9 @@ impl CommonParams {
         spec.cip119 = number >= self.transition_numbers.cip119;
         spec.cip131 = number >= self.transition_numbers.cip131;
         spec.cip132 = number >= self.transition_numbers.cip132;
-
+        spec.cip133_b = self.transition_numbers.cip133_b;
+        spec.cip133_e = self.transition_heights.cip133_e;
+        spec.cip133_core = number >= self.transition_numbers.cip133_b;
         spec.cip1559 = height >= self.transition_heights.cip1559;
         spec
     }
