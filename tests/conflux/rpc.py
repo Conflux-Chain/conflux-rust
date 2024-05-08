@@ -334,12 +334,18 @@ class RpcClient:
         convert_b32_address_field_to_hex(block, "miner")
         return block
 
-    def block_by_epoch(self, epoch: str, include_txs: bool = False) -> dict:
+    def block_by_epoch(self, epoch: Union[str, int], include_txs: bool = False) -> dict:
+        if type(epoch) is int:
+            epoch = hex(epoch)
+
         block = self.node.cfx_getBlockByEpochNumber(epoch, include_txs)
         convert_b32_address_field_to_hex(block, "miner")
         return block
 
-    def block_by_block_number(self, block_number: str, include_txs: bool = False) -> dict:
+    def block_by_block_number(self, block_number: Union[str, int], include_txs: bool = False) -> dict:
+        if type(block_number) is int:
+            block_number = hex(block_number)
+
         block = self.node.cfx_getBlockByBlockNumber(block_number, include_txs)
         convert_b32_address_field_to_hex(block, "miner")
         return block

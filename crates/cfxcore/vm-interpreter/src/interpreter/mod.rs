@@ -1187,7 +1187,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             }
             instructions::BLOCKHASH => {
                 let block_number = self.stack.pop_back();
-                let block_hash = context.blockhash(&block_number);
+                let block_hash = context.blockhash(&block_number)?;
                 self.stack.push(block_hash.into_uint());
             }
             instructions::COINBASE => {
