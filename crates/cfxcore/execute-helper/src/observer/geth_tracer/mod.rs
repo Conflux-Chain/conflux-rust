@@ -48,15 +48,17 @@ pub struct GethTracer {
     //
     fourbyte_inspector: FourByteInspector,
     //
-    tx_gas_limit: u64,
+    tx_gas_limit: u64, // tx level gas limit
     //
-    gas_left: u64,
+    gas_left: u64, // update in call_result/create_result
     // call depth
     depth: usize,
     //
-    return_data: Bytes,
+    return_data: Bytes, // update in call_result/create_result
     //
     opts: GethDebugTracingOptions,
+    // gas stack, used to trace gas_spent in call_result/create_result
+    pub gas_stack: Vec<u64>,
 }
 
 impl GethTracer {
@@ -101,6 +103,7 @@ impl GethTracer {
             gas_left: tx_gas_limit,
             return_data: Bytes::default(),
             opts,
+            gas_stack: Vec::new(),
         }
     }
 
@@ -205,7 +208,8 @@ impl CallTracer for GethTracer {
             return;
         }
 
-        self.inner.gas_stack.push(params.gas.clone());
+        let gas_limit = params.gas.as_u64();
+        self.gas_stack.push(gas_limit);
 
         // determine correct `from` and `to` based on the call scheme
         let (from, to) = match params.call_type {
@@ -255,11 +259,10 @@ impl CallTracer for GethTracer {
         }
 
         self.depth -= 1;
-        let mut gas_spent =
-            self.inner.gas_stack.pop().expect("should have value");
+        let mut gas_spent = self.gas_stack.pop().expect("should have value");
 
         if let Ok(r) = result {
-            gas_spent = gas_spent - r.gas_left;
+            gas_spent = gas_spent - r.gas_left.as_u64();
             self.gas_left = r.gas_left.as_u64();
         }
 
@@ -281,8 +284,7 @@ impl CallTracer for GethTracer {
             gas: Gas::default(),
         };
 
-        self.inner
-            .fill_trace_on_call_end(outcome, None, gas_spent.as_u64());
+        self.inner.fill_trace_on_call_end(outcome, None, gas_spent);
     }
 
     fn record_create(&mut self, params: &ActionParams) {
@@ -290,7 +292,8 @@ impl CallTracer for GethTracer {
             return;
         }
 
-        self.inner.gas_stack.push(params.gas.clone());
+        let gas_limit = params.gas.as_u64();
+        self.gas_stack.push(gas_limit);
 
         let value = if matches!(params.call_type, CallType::DelegateCall) {
             // for delegate calls we need to use the value of the top trace
@@ -324,11 +327,10 @@ impl CallTracer for GethTracer {
         }
 
         self.depth -= 1;
-        let mut gas_spent =
-            self.inner.gas_stack.pop().expect("should have value");
+        let mut gas_spent = self.gas_stack.pop().expect("should have value");
 
         if let Ok(r) = result {
-            gas_spent = gas_spent - r.gas_left;
+            gas_spent = gas_spent - r.gas_left.as_u64();
             self.gas_left = r.gas_left.as_u64();
         }
 
@@ -357,11 +359,8 @@ impl CallTracer for GethTracer {
                 None
             };
 
-        self.inner.fill_trace_on_call_end(
-            outcome,
-            create_address,
-            gas_spent.as_u64(),
-        );
+        self.inner
+            .fill_trace_on_call_end(outcome, create_address, gas_spent);
     }
 }
 
@@ -378,13 +377,13 @@ impl OpcodeTracer for GethTracer {
             .set_gas_remainning(gas_limit.as_u64());
     }
 
-    fn step(&mut self, interp: &dyn InterpreterInfo, depth: usize) {
+    fn step(&mut self, interp: &dyn InterpreterInfo, _depth: usize) {
         self.inner
             .gas_inspector
             .set_gas_remainning(interp.gas_remainning().as_u64());
 
         if self.inner.config.record_steps {
-            self.inner.start_step(interp, depth as u64);
+            self.inner.start_step(interp, self.depth as u64);
         }
     }
 

@@ -32,8 +32,6 @@ pub struct TracingInspector {
     last_call_return_data: Option<Bytes>,
     /// The gas inspector used to track remaining gas.
     pub gas_inspector: GasInspector,
-    // gas stack, used to trace gas_spent in call_result/create_result
-    pub gas_stack: Vec<cfx_types::U256>,
     //
     machine: Arc<Machine>,
 }
@@ -48,7 +46,6 @@ impl TracingInspector {
             step_stack: vec![],
             last_call_return_data: None,
             gas_inspector: Default::default(),
-            gas_stack: vec![],
             machine,
         }
     }
@@ -68,13 +65,11 @@ impl TracingInspector {
             gas_inspector,
             // kept
             config: _,
-            gas_stack,
             machine: _,
         } = self;
         traces.clear();
         trace_stack.clear();
         step_stack.clear();
-        gas_stack.clear();
         last_call_return_data.take();
         *gas_inspector = Default::default();
     }

@@ -1,10 +1,13 @@
 use crate::rpc::{
-    error_codes::invalid_params_msg, traits::eth_space::debug::Debug,
+    error_codes::invalid_params_msg,
+    traits::eth_space::debug::Debug,
+    types::eth::{BlockNumber, CallRequest},
 };
 use alloy_rpc_types_trace::geth::{
     GethDebugBuiltInTracerType,
     GethDebugTracerType::{BuiltInTracer, JsTracer},
-    GethDebugTracingOptions, GethTrace, NoopFrame,
+    GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace, NoopFrame,
+    TraceResult,
 };
 use cfx_types::H256;
 use cfxcore::{ConsensusGraph, SharedConsensusGraph};
@@ -99,5 +102,31 @@ impl Debug for GethDebugHandler {
             .ok_or(invalid_params_msg("trace generation failed"));
 
         trace
+    }
+
+    fn debug_trace_block_by_hash(
+        &self, block: H256, opts: Option<GethDebugTracingOptions>,
+    ) -> JsonRpcResult<Vec<TraceResult>> {
+        let _ = block;
+        let _ = opts;
+        todo!("not implemented yet");
+    }
+
+    fn debug_trace_block_by_number(
+        &self, block: BlockNumber, opts: Option<GethDebugTracingOptions>,
+    ) -> JsonRpcResult<Vec<TraceResult>> {
+        let _ = block;
+        let _ = opts;
+        todo!("not implemented yet");
+    }
+
+    fn debug_trace_call(
+        &self, request: CallRequest, block_number: Option<BlockNumber>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> JsonRpcResult<GethTrace> {
+        let _ = request;
+        let _ = block_number;
+        let _ = opts;
+        todo!("not implemented yet");
     }
 }

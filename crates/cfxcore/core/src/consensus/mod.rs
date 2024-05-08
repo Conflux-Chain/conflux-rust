@@ -1453,7 +1453,6 @@ impl ConsensusGraph {
         };
 
         self.executor.collect_epoch_geth_trace(
-            epoch_num,
             epoch_block_hashes,
             tx_hash,
             opts,
