@@ -1,5 +1,5 @@
 use super::executed::{revert_reason_decode, Executed};
-use crate::unwrap_or_return;
+use crate::{state::State, unwrap_or_return};
 use cfx_types::{Address, H256, U256, U512};
 use cfx_vm_types as vm;
 use primitives::{
@@ -240,5 +240,15 @@ impl ExecutionOutcome {
                 trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, tx, block_hash);
             }
         }
+    }
+
+    pub fn burn_by_cip1559(
+        &self, state: &mut State, tx: &SignedTransaction, base_gas_price: &U256,
+    ) {
+        let executed = unwrap_or_return!(self.try_as_executed());
+        let miner_fee =
+            executed.gas_charged * tx.priority_gas_price(base_gas_price);
+        let burnt_fee = executed.fee - miner_fee;
+        state.burn_by_cip1559(burnt_fee);
     }
 }

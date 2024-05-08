@@ -702,6 +702,7 @@ impl VerificationConfig {
             let tx_intrinsic_gas = gas_required_for(
                 *tx.action() == Action::Create,
                 &tx.data(),
+                tx.access_list(),
                 &spec,
             );
             if *tx.gas() < (tx_intrinsic_gas as usize).into() {

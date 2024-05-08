@@ -1066,7 +1066,7 @@ impl TransactionPoolInner {
             return packed_transactions;
         }
 
-        let spec = machine.spec(best_block_number);
+        let spec = machine.spec(best_block_number, best_epoch_height);
         let transitions = &machine.params().transition_heights;
 
         let validity = |tx: &SignedTransaction| {

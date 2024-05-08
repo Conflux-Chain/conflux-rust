@@ -387,7 +387,7 @@ impl TransactionPool {
         // FIXME: Needs further discussion here, some transactions may be valid
         // and invalid back and forth does this matters? But for the epoch
         // height check, it may also become valid and invalid back and forth.
-        let vm_spec = self.machine.spec(best_block_number);
+        let vm_spec = self.machine.spec(best_block_number, best_height);
         let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = transactions.get(index) {
@@ -498,7 +498,7 @@ impl TransactionPool {
         };
         // FIXME: Needs further discussion here, some transactions may be valid
         // and invalid back and forth does this matters?
-        let vm_spec = self.machine.spec(best_block_number);
+        let vm_spec = self.machine.spec(best_block_number, best_height);
         let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = signed_transactions.get(index) {
@@ -821,7 +821,7 @@ impl TransactionPool {
         };
         // FIXME: Needs further discussion here, some transactions may be valid
         // and invalid back and forth, does this matters?
-        let vm_spec = self.machine.spec(best_block_number);
+        let vm_spec = self.machine.spec(best_block_number, best_height);
         let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = recycle_tx_buffer.pop() {

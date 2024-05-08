@@ -1288,6 +1288,10 @@ impl Configuration {
             .raw_conf
             .next_hardfork_transition_number
             .unwrap_or(default_transition_time);
+        params.transition_numbers.cip132 = self
+            .raw_conf
+            .next_hardfork_transition_number
+            .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
                 self.raw_conf.cip43_init_end_number.unwrap_or(u64::MAX);
@@ -1348,6 +1352,10 @@ impl Configuration {
         params.transition_heights.cip112 =
             *CIP112_TRANSITION_HEIGHT.get().expect("initialized");
         params.transition_heights.cip130 = self
+            .raw_conf
+            .next_hardfork_transition_height
+            .unwrap_or(default_transition_time);
+        params.transition_heights.cip1559 = self
             .raw_conf
             .next_hardfork_transition_height
             .unwrap_or(default_transition_time);

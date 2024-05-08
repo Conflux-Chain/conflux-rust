@@ -7,6 +7,8 @@ use cfx_types::{AddressWithSpace, H256, U256};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
 
+use super::AccessList;
+
 #[derive(
     Default,
     Debug,
@@ -147,9 +149,33 @@ impl TypedNativeTransaction {
 
     pub fn gas_price(&self) -> &U256 {
         match self {
-            TypedNativeTransaction::Cip155(tx) => &tx.gas_price,
-            TypedNativeTransaction::Cip1559(tx) => &tx.max_fee_per_gas,
-            TypedNativeTransaction::Cip2930(tx) => &tx.gas_price,
+            Cip155(tx) => &tx.gas_price,
+            Cip1559(tx) => &tx.max_fee_per_gas,
+            Cip2930(tx) => &tx.gas_price,
+        }
+    }
+
+    pub fn max_priority_gas_price(&self) -> &U256 {
+        match self {
+            Cip155(tx) => &tx.gas_price,
+            Cip1559(tx) => &tx.max_priority_fee_per_gas,
+            Cip2930(tx) => &tx.gas_price,
+        }
+    }
+
+    pub fn nonce_mut(&mut self) -> &mut U256 {
+        match self {
+            Cip155(tx) => &mut tx.nonce,
+            Cip2930(tx) => &mut tx.nonce,
+            Cip1559(tx) => &mut tx.nonce,
+        }
+    }
+
+    pub fn access_list(&self) -> Option<&AccessList> {
+        match self {
+            Cip155(_tx) => None,
+            Cip2930(tx) => Some(&tx.access_list),
+            Cip1559(tx) => Some(&tx.access_list),
         }
     }
 }
@@ -160,3 +186,5 @@ pub enum TypedNativeTransaction {
     Cip2930(Cip2930Transaction),
     Cip1559(Cip1559Transaction),
 }
+
+use TypedNativeTransaction::*;
