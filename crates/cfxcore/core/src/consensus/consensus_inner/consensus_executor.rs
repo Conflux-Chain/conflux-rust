@@ -1978,6 +1978,4 @@ pub struct ConsensusExecutionConfiguration {
     pub executive_trace: bool,
 }
 
-fn todo_base_price() -> U256 {
-    U256::zero()
-}
+fn todo_base_price() -> U256 { U256::zero() }
