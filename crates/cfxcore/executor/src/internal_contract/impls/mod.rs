@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub(super) mod admin;
+pub(super) mod context;
 pub(super) mod cross_space;
 pub(super) mod params_control;
 pub(super) mod pos;

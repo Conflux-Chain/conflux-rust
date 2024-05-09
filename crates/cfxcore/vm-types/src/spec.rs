@@ -20,6 +20,7 @@
 
 //! Cost spec and other parameterisations for the EVM.
 use cfx_types::{address_util::AddressUtil, Address};
+use primitives::{block::BlockHeight, BlockNumber};
 
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
@@ -158,6 +159,14 @@ pub struct Spec {
     pub cip118: bool,
     /// CIP-119: PUSH0 instruction
     pub cip119: bool,
+    /// CIP-131: Retain Whitelist on Contract Deletion
+    pub cip131: bool,
+    /// CIP-132: Fix Static Context Check for Internal Contracts
+    pub cip132: bool,
+    /// CIP-133: Enhanced Block Hash Query
+    pub cip133_b: BlockNumber,
+    pub cip133_e: BlockHeight,
+    pub cip133_core: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -299,6 +308,11 @@ impl Spec {
             cip107: false,
             cip118: false,
             cip119: false,
+            cip131: false,
+            cip132: false,
+            cip133_b: u64::MAX,
+            cip133_e: u64::MAX,
+            cip133_core: false,
         }
     }
 

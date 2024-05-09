@@ -19,8 +19,8 @@ pub use self::{
     action_params::{ActionParams, ActionValue, ParamsType},
     call_create_type::{CallType, CreateType},
     context::{
-        contract_address, Context, ContractCreateResult, CreateContractAddress,
-        MessageCallResult,
+        contract_address, BlockHashSource, Context, ContractCreateResult,
+        CreateContractAddress, MessageCallResult,
     },
     env::Env,
     error::{

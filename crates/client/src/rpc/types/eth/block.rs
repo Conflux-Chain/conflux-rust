@@ -146,8 +146,7 @@ impl Block {
     pub fn from_phantom(pb: &PhantomBlock, full: bool) -> Self {
         let transactions = if full {
             BlockTransactions::Full(
-                pb
-                    .transactions
+                pb.transactions
                     .iter()
                     .enumerate()
                     .map(|(idx, t)| {
@@ -155,15 +154,18 @@ impl Block {
                             .outcome_status
                             .in_space(Space::Ethereum);
 
-                        let contract_address = match Transaction::deployed_contract_address(&**t) {
-                            Some(a) if status == EVM_SPACE_SUCCESS => Some(a),
-                            _ => None,
-                        };
+                        let contract_address =
+                            match Transaction::deployed_contract_address(&**t) {
+                                Some(a) if status == EVM_SPACE_SUCCESS => {
+                                    Some(a)
+                                }
+                                _ => None,
+                            };
 
                         Transaction::from_signed(
                             &**t,
                             (
-                                Some(pb.pivot_header.hash()), // block_hash
+                                Some(pb.pivot_header.hash()),          // block_hash
                                 Some(pb.pivot_header.height().into()), // block_number
                                 Some(idx.into()), // transaction_index
                             ),

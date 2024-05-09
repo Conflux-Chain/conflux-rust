@@ -79,6 +79,14 @@ pub enum CreateContractAddress {
     FromSenderSaltAndCodeHash(H256),
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub enum BlockHashSource {
+    /// Before CIP-133, block hash is read from `Env`, same as the Ethereum
+    Env,
+    /// After CIP-133, block hash is read from `State`
+    State,
+}
+
 /// Calculate new contract address.
 pub fn contract_address(
     address_scheme: CreateContractAddress, _block_number: u64,
@@ -169,7 +177,7 @@ pub trait Context {
     fn balance(&self, address: &Address) -> Result<U256>;
 
     /// Returns the hash of one of the 256 most recent complete blocks.
-    fn blockhash(&mut self, number: &U256) -> H256;
+    fn blockhash(&mut self, number: &U256) -> Result<H256>;
 
     /// Creates new contract.
     ///
@@ -268,4 +276,6 @@ pub trait Context {
 
     /// Check if running in static context or reentrancy context
     fn is_static_or_reentrancy(&self) -> bool;
+
+    fn blockhash_source(&self) -> BlockHashSource;
 }

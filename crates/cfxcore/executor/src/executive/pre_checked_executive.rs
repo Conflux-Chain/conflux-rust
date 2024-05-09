@@ -365,6 +365,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             state.record_storage_and_whitelist_entries_release(
                 &address.address,
                 &mut substate,
+                spec.cip131,
             )?;
 
             assert!(state.is_fresh_storage(address)?);

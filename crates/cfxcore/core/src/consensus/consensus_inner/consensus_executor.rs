@@ -34,8 +34,8 @@ use cfx_types::{
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
-    compute_block_number, receipt::BlockReceipts, Action, Block,
-    BlockHeaderBuilder, BlockNumber, EpochId, SignedTransaction,
+    block::BlockHeight, compute_block_number, receipt::BlockReceipts, Action,
+    Block, BlockHeaderBuilder, BlockNumber, EpochId, SignedTransaction,
     TransactionIndex, MERKLE_NULL_NODE,
 };
 
@@ -69,7 +69,9 @@ use cfx_executor::{
     executive::{
         ExecutionOutcome, ExecutiveContext, TransactOptions, TransactSettings,
     },
-    internal_contract::initialize_internal_contract_accounts,
+    internal_contract::{
+        block_hash_slot, epoch_hash_slot, initialize_internal_contract_accounts,
+    },
     machine::Machine,
     state::{
         distribute_pos_interest, initialize_cip107,
@@ -1252,6 +1254,11 @@ impl ConsensusExecutionHandler {
         drop(prefetch_join_handles);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
+        self.record_epoch_hash(
+            state,
+            pivot_block.block_header.height(),
+            pivot_block.hash(),
+        )?;
 
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut epoch_staking_events = Vec::new();
@@ -1266,6 +1273,8 @@ impl ConsensusExecutionHandler {
 
         for block in epoch_blocks.iter() {
             self.maybe_update_state(state, block_number)?;
+            self.record_block_hash(state, block_number, block.hash())?;
+
             let mut cfx_tx_index = 0;
 
             let mut tx_exec_error_messages =
@@ -2122,14 +2131,16 @@ impl ConsensusExecutionHandler {
     fn maybe_update_state(
         &self, state: &mut State, block_number: BlockNumber,
     ) -> DbResult<()> {
-        let cip94_start = self.machine.params().transition_numbers.cip94;
-        let period = self.machine.params().params_dao_vote_period;
+        let params = self.machine.params();
+        let transition_numbers = &params.transition_numbers;
+
+        let cip94_start = transition_numbers.cip94;
+        let period = params.params_dao_vote_period;
         // Update/initialize parameters before processing rewards.
         if block_number >= cip94_start
             && (block_number - cip94_start) % period == 0
         {
-            let set_pos_staking =
-                block_number > self.machine.params().transition_numbers.cip105;
+            let set_pos_staking = block_number > transition_numbers.cip105;
             initialize_or_update_dao_voted_params(state, set_pos_staking)?;
         }
 
@@ -2138,8 +2149,34 @@ impl ConsensusExecutionHandler {
         // integrated with `initialize_or_update_dao_voted_params`, but
         // that function will update the value after cip107 is enabled
         // here.
-        if block_number == self.machine.params().transition_numbers.cip107 {
+        if block_number == transition_numbers.cip107 {
             initialize_cip107(state)?;
+        }
+        Ok(())
+    }
+
+    fn record_block_hash(
+        &self, state: &mut State, block_number: BlockNumber, hash: H256,
+    ) -> DbResult<()> {
+        let params = self.machine.params();
+        if block_number >= params.transition_numbers.cip133_b {
+            state.set_system_storage(
+                block_hash_slot(block_number).into(),
+                U256::from_big_endian(&hash.0),
+            )?;
+        }
+        Ok(())
+    }
+
+    fn record_epoch_hash(
+        &self, state: &mut State, epoch_number: BlockHeight, hash: H256,
+    ) -> DbResult<()> {
+        let params = self.machine.params();
+        if epoch_number >= params.transition_heights.cip133_e {
+            state.set_system_storage(
+                epoch_hash_slot(epoch_number).into(),
+                U256::from_big_endian(&hash.0),
+            )?;
         }
         Ok(())
     }
