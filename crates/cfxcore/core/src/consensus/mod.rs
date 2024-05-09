@@ -41,11 +41,12 @@ use cfx_execute_helper::{
         recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
         TraceFilter, TransactionExecTraces,
     },
+    observer::geth_tracer::types::GethTraceWithHash,
     phantom_tx::build_bloom_and_recover_phantom,
 };
 use cfx_executor::{executive::ExecutionOutcome, state::State};
 
-use alloy_rpc_types_trace::geth::{GethDebugTracingOptions, GethTrace};
+use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
@@ -1439,7 +1440,7 @@ impl ConsensusGraph {
     pub fn collect_epoch_geth_trace(
         &self, epoch_num: u64, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
-    ) -> RpcResult<Vec<(H256, GethTrace)>> {
+    ) -> RpcResult<Vec<GethTraceWithHash>> {
         // only allow to call against stated epoch
         let epoch = EpochNumber::Number(epoch_num);
         self.validate_stated_epoch(&epoch)?;

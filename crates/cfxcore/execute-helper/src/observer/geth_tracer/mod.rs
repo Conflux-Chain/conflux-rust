@@ -4,13 +4,13 @@ mod builder;
 mod config;
 mod gas;
 mod tracing_inspector;
-mod types;
-mod utils;
+pub mod types;
+pub mod utils;
 
-pub use arena::CallTraceArena;
-pub use builder::geth::{self, GethTraceBuilder};
+use arena::CallTraceArena;
+use builder::GethTraceBuilder;
 use cfx_types::H160;
-pub use config::{StackSnapshotType, TracingInspectorConfig};
+use config::TracingInspectorConfig;
 
 use types::LogCallOrder;
 use utils::{to_alloy_address, to_alloy_h256, to_alloy_u256};
@@ -377,7 +377,7 @@ impl OpcodeTracer for GethTracer {
             .set_gas_remainning(gas_limit.as_u64());
     }
 
-    fn step(&mut self, interp: &dyn InterpreterInfo, _depth: usize) {
+    fn step(&mut self, interp: &dyn InterpreterInfo) {
         self.inner
             .gas_inspector
             .set_gas_remainning(interp.gas_remainning().as_u64());

@@ -457,7 +457,7 @@ impl<'a> ContextTrait for Context<'a> {
     // }
 
     fn trace_step(&mut self, interpreter: &dyn vm::InterpreterInfo) {
-        self.tracer.step(interpreter, self.depth);
+        self.tracer.step(interpreter);
     }
 
     fn trace_step_end(&mut self, interpreter: &dyn vm::InterpreterInfo) {

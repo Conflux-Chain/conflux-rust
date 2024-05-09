@@ -86,6 +86,13 @@ impl GethTraceBuilder {
                 let child_trace = &self.nodes[call_child_id];
                 child_trace.push_steps_on_stack(&mut step_stack);
             }
+
+            // if we reached the limit, we stop
+            if let Some(limit) = opts.limit {
+                if limit > 0 && struct_logs.len() >= limit as usize {
+                    break;
+                }
+            }
         }
     }
 

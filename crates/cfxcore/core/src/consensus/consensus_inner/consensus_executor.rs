@@ -62,7 +62,7 @@ use crate::{
 use cfx_execute_helper::{
     estimation::{EstimateExt, EstimateRequest, EstimationContext},
     exec_tracer::TransactionExecTraces,
-    observer::Observer,
+    observer::{geth_tracer::types::GethTraceWithHash, Observer},
     tx_outcome::make_process_tx_outcome,
 };
 use cfx_executor::{
@@ -80,8 +80,7 @@ use cfx_executor::{
 use cfx_vm_types::{Env, Spec};
 
 use alloy_rpc_types_trace::geth::{
-    GethDebugBuiltInTracerType::*, GethDebugTracerType,
-    GethDebugTracingOptions, GethTrace,
+    GethDebugBuiltInTracerType::*, GethDebugTracerType, GethDebugTracingOptions,
 };
 
 lazy_static! {
@@ -654,7 +653,7 @@ impl ConsensusExecutor {
     pub fn collect_epoch_geth_trace(
         &self, epoch_block_hashes: Vec<H256>, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
-    ) -> RpcResult<Vec<(H256, GethTrace)>> {
+    ) -> RpcResult<Vec<GethTraceWithHash>> {
         self.handler
             .collect_epoch_geth_trace(epoch_block_hashes, tx_hash, opts)
     }
@@ -1932,7 +1931,7 @@ impl ConsensusExecutionHandler {
     pub fn collect_epoch_geth_trace(
         &self, epoch_block_hashes: Vec<H256>, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
-    ) -> RpcResult<Vec<(H256, GethTrace)>> {
+    ) -> RpcResult<Vec<GethTraceWithHash>> {
         // Get blocks in this epoch after skip checking
         let epoch_blocks = self
             .data_man
@@ -1943,21 +1942,22 @@ impl ConsensusExecutionHandler {
             .expect("blocks exist");
 
         let pivot_block = epoch_blocks.last().expect("Not empty");
-        let last_pivot_block_hash = pivot_block.block_header.parent_hash();
+        let parent_pivot_block_hash = pivot_block.block_header.parent_hash();
 
+        // get the state of the parent pivot block
         let state_availability_boundary =
             self.data_man.state_availability_boundary.read();
-        let state_space = None;
+        let state_space = None; // None for both core and espace
         if !state_availability_boundary.check_read_availability(
             pivot_block.block_header.height() - 1,
-            last_pivot_block_hash,
+            parent_pivot_block_hash,
             state_space,
         ) {
             bail!("state is not ready");
         }
         let state_index = self
             .data_man
-            .get_state_readonly_index(last_pivot_block_hash);
+            .get_state_readonly_index(parent_pivot_block_hash);
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
@@ -1972,7 +1972,7 @@ impl ConsensusExecutionHandler {
 
         let start_block_number = self
             .data_man
-            .get_epoch_execution_context(&last_pivot_block_hash)
+            .get_epoch_execution_context(&parent_pivot_block_hash)
             .map(|v| v.start_block_number)
             .expect("should exist");
 
@@ -1986,11 +1986,14 @@ impl ConsensusExecutionHandler {
         .map_err(|err| err.into())
     }
 
+    // Execute transactions in the epoch to collect traces.
+    // The behavior is similar to `process_epoch_transactions`, but it won't
+    // persist any state or data
     fn execute_epoch_tx_to_collect_trace(
         &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
-    ) -> DbResult<Vec<(H256, GethTrace)>> {
+    ) -> DbResult<Vec<GethTraceWithHash>> {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
         let mut block_number = start_block_number;
@@ -2061,14 +2064,14 @@ impl ConsensusExecutionHandler {
                             GethDebugTracerType::BuiltInTracer(bt) => {
                                 match bt {
                                     FourByteTracer | CallTracer
-                                    | PreStateTracer => Observer::geth_tracer(
-                                        tx_gas_limit,
-                                        Arc::clone(&self.machine),
-                                        opts.clone(),
-                                    ),
-                                    NoopTracer | MuxTracer => {
-                                        Observer::with_no_tracing()
+                                    | PreStateTracer | NoopTracer => {
+                                        Observer::geth_tracer(
+                                            tx_gas_limit,
+                                            Arc::clone(&self.machine),
+                                            opts.clone(),
+                                        )
                                     }
+                                    MuxTracer => Observer::with_no_tracing(),
                                 }
                             }
                             GethDebugTracerType::JsTracer(_) => {
@@ -2104,7 +2107,11 @@ impl ConsensusExecutionHandler {
                 );
 
                 if need_trace && r.geth_trace.is_some() {
-                    traces.push((transaction.hash(), r.geth_trace.unwrap()));
+                    traces.push(GethTraceWithHash {
+                        trace: r.geth_trace.unwrap(),
+                        tx_hash: transaction.hash(),
+                        space: transaction.space(),
+                    });
                 }
             }
         }

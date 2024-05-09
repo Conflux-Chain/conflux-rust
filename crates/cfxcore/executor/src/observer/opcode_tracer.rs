@@ -17,10 +17,7 @@ pub trait OpcodeTracer {
     ///
     /// Information about the current execution, including the memory, stack and
     /// more is available on `interp` (see [Interpreter]).
-    fn step(&mut self, interp: &dyn InterpreterInfo, depth: usize) {
-        let _ = interp;
-        let _ = depth;
-    }
+    fn step(&mut self, interp: &dyn InterpreterInfo) { let _ = interp; }
 
     /// Called after `step` when the instruction has been executed.
     fn step_end(&mut self, interp: &dyn InterpreterInfo) { let _ = interp; }

@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::rpc::{
     error_codes::invalid_params_msg,
     traits::eth_space::debug::Debug,
@@ -9,7 +11,8 @@ use alloy_rpc_types_trace::geth::{
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace, NoopFrame,
     TraceResult,
 };
-use cfx_types::H256;
+use cfx_execute_helper::observer::geth_tracer::utils::to_alloy_h256;
+use cfx_types::{Space, H256};
 use cfxcore::{ConsensusGraph, SharedConsensusGraph};
 use jsonrpc_core::Result as JsonRpcResult;
 
@@ -97,27 +100,80 @@ impl Debug for GethDebugHandler {
         // filter by tx hash
         let trace = epoch_traces
             .into_iter()
-            .find(|(tx_hash, _)| tx_hash == &hash)
-            .map(|(_, trace)| trace)
+            .find(|val| val.tx_hash == hash)
+            .map(|val| val.trace)
             .ok_or(invalid_params_msg("trace generation failed"));
 
         trace
     }
 
     fn debug_trace_block_by_hash(
-        &self, block: H256, opts: Option<GethDebugTracingOptions>,
+        &self, block_hash: H256, opts: Option<GethDebugTracingOptions>,
     ) -> JsonRpcResult<Vec<TraceResult>> {
-        let _ = block;
-        let _ = opts;
-        todo!("not implemented yet");
+        let opts = opts.unwrap_or_default();
+        let epoch_num = self
+            .consensus_graph()
+            .get_block_epoch_number_with_pivot_check(&block_hash, false)?;
+
+        let epoch_traces = self
+            .consensus_graph()
+            .collect_epoch_geth_trace(epoch_num, None, opts)
+            .map_err(|e| {
+                invalid_params_msg(&format!("invalid tx hash: {e}"))
+            })?;
+
+        let result = epoch_traces
+            .into_iter()
+            .filter(|val| val.space == Space::Ethereum)
+            .map(|val| TraceResult::Success {
+                result: val.trace,
+                tx_hash: Some(to_alloy_h256(val.tx_hash)),
+            })
+            .collect();
+        Ok(result)
     }
 
     fn debug_trace_block_by_number(
         &self, block: BlockNumber, opts: Option<GethDebugTracingOptions>,
     ) -> JsonRpcResult<Vec<TraceResult>> {
-        let _ = block;
-        let _ = opts;
-        todo!("not implemented yet");
+        let opts = opts.unwrap_or_default();
+        let num = match block {
+            BlockNumber::Num(block_number) => block_number,
+            BlockNumber::Latest
+            | BlockNumber::Safe
+            | BlockNumber::Finalized => {
+                let epoch_num = block.try_into().expect("should success");
+                self.consensus_graph()
+                    .get_height_from_epoch_number(epoch_num)
+                    .map_err(|msg| invalid_params_msg(&msg))?
+            }
+            BlockNumber::Hash {
+                hash,
+                require_canonical,
+            } => self
+                .consensus_graph()
+                .get_block_epoch_number_with_pivot_check(
+                    &hash,
+                    require_canonical,
+                )?,
+            _ => return Err(invalid_params_msg("not supported")),
+        };
+        let epoch_traces = self
+            .consensus_graph()
+            .collect_epoch_geth_trace(num, None, opts)
+            .map_err(|e| {
+                invalid_params_msg(&format!("invalid tx hash: {e}"))
+            })?;
+
+        let result = epoch_traces
+            .into_iter()
+            .filter(|val| val.space == Space::Ethereum)
+            .map(|val| TraceResult::Success {
+                result: val.trace,
+                tx_hash: Some(to_alloy_h256(val.tx_hash)),
+            })
+            .collect();
+        Ok(result)
     }
 
     fn debug_trace_call(

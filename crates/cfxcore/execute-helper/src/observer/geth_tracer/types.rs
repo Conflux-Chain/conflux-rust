@@ -5,8 +5,9 @@ use crate::observer::geth_tracer::{
 };
 use alloy_primitives::{Address, Bytes, LogData, U256};
 use alloy_rpc_types_trace::geth::{
-    CallFrame, CallLogFrame, GethDefaultTracingOptions, StructLog,
+    CallFrame, CallLogFrame, GethDefaultTracingOptions, GethTrace, StructLog,
 };
+use cfx_types::{Space, H256};
 use cfx_vm_types::CallType as CfxCallType;
 use revm::interpreter::{
     opcode, CallContext, CallScheme, CreateScheme, InstructionResult, OpCode,
@@ -575,6 +576,12 @@ impl RecordedMemory {
 
 impl AsRef<[u8]> for RecordedMemory {
     fn as_ref(&self) -> &[u8] { self.as_bytes() }
+}
+
+pub struct GethTraceWithHash {
+    pub trace: GethTrace,
+    pub tx_hash: H256,
+    pub space: Space,
 }
 
 #[cfg(feature = "serde")]
