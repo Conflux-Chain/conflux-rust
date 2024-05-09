@@ -8,7 +8,8 @@ use cfx_parameters::{
     block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
     consensus::{
         CIP112_HEADER_CUSTOM_FIRST_ELEMENT,
-        DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
+        DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT,
+        NEXT_HARDFORK_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
         TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
     },
     consensus_internal::{
@@ -206,8 +207,12 @@ impl CommonParams {
             && height < self.transition_heights.cip112
         {
             Some(vec![DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
-        } else if height >= self.transition_heights.cip112 {
+        } else if height >= self.transition_heights.cip112
+            && height < self.transition_heights.cip1559
+        {
             Some(vec![CIP112_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
+        } else if height >= self.transition_heights.cip1559 {
+            Some(vec![NEXT_HARDFORK_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }

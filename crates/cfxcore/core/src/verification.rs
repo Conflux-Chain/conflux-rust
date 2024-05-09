@@ -366,6 +366,16 @@ impl VerificationConfig {
             }
         }
 
+        if header.height() >= self.machine.params().transition_heights.cip1559 {
+            if header.cip1559_data().is_none() {
+                bail!(BlockError::MissingBaseFee);
+            }
+        } else {
+            if header.cip1559_data().is_some() {
+                bail!(BlockError::UnexpectedBaseFee);
+            }
+        }
+
         // Note that this is just used to rule out deprecated blocks, so the
         // change of header struct actually happens before the change of
         // reward is reflected in the state root. The first state root
