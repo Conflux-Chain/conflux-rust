@@ -31,4 +31,38 @@ debug_traceCall method suport [state override](https://geth.ethereum.org/docs/de
 
 ## Conflux Implementation
 
+Conflux eSpace has implemented main features of geth style trace, include:
 
+- `debug_traceTransaction`
+- `debug_traceBlockByNumber`
+- `debug_traceBlockByHash`
+- `debug_traceCall` (Working)
+
+Currently supported tracers:
+
+- opcode
+- prestateTracer (Working)
+- 4byteTracer
+- noopTracer
+- callTracer
+
+We will support writing custom tracer with Js in the future.
+
+To use eSpace trace RPC methods, you need to enable `ethdebug` API module in the config file.
+
+```toml
+public_evm_rpc_apis = "eth,ethdebug"
+```
+
+### Opcode Tracer
+
+Currently the opcode trace's structLogs `error` field is not implemented.
+
+## Resources
+
+1. [Geth EVM Tracing](https://geth.ethereum.org/docs/developers/evm-tracing)
+2. [Geth Debug RPC](https://geth.ethereum.org/docs/interacting-with-geth/rpc/ns-debug)
+3. [Geth Custom Tracer](https://geth.ethereum.org/docs/developers/evm-tracing/custom-tracer)
+4. [Geth State Override](https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers#state-overrides)
+5. [Geth Tracer](https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers)
+6. [Paradigmxyz's ultimate_evm_tracing_reference](https://github.com/paradigmxyz/ultimate_evm_tracing_reference)
