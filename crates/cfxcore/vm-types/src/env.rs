@@ -61,6 +61,8 @@ pub struct Env {
     /// Base gas price in CIP-1559, equals to 0 if CIP-1559 has not been
     /// activated
     pub base_gas_price: U256,
+    /// Base gas price to miner according to in CIP-137
+    pub burnt_gas_price: U256,
 }
 
 #[cfg(test)]

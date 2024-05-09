@@ -103,6 +103,7 @@ impl Receipt {
             storage_collateralized,
             storage_released,
             storage_sponsor_paid,
+            ..
         } = receipt;
 
         let (address, action, space) = match transaction.unsigned {

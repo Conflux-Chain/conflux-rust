@@ -116,6 +116,9 @@ pub mod consensus_internal {
 
     /// The initial storage point proportion after CIP107 is enabled.
     pub const CIP107_STORAGE_POINT_PROP_INIT: u64 = ONE_CFX_IN_DRIP;
+
+    /// The initial storage point proportion after CIP1559 is enabled.
+    pub const CIP137_BASEFEE_PROP_INIT: u64 = ONE_CFX_IN_DRIP;
 }
 
 pub mod rpc {

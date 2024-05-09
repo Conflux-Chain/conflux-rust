@@ -129,7 +129,7 @@ impl State {
 }
 
 pub fn initialize_or_update_dao_voted_params(
-    state: &mut State, set_pos_staking: bool,
+    state: &mut State, cip105: bool,
 ) -> DbResult<()> {
     let vote_count = get_settled_param_vote_count(state).expect("db error");
     debug!(
@@ -139,7 +139,7 @@ pub fn initialize_or_update_dao_voted_params(
     debug!(
         "before pos interest: {} base_reward:{}",
         state.global_stat.refr::<InterestRate>(),
-        state.global_stat.refr::<PowBaseReward>()
+        state.global_stat.refr::<PowBaseReward>(),
     );
 
     // If pos_staking has not been set before, this will be zero and the
@@ -180,13 +180,22 @@ pub fn initialize_or_update_dao_voted_params(
             ),
         )?;
     }
+
+    let old_base_fee_prop = state.get_base_fee_prop();
+    if !old_base_fee_prop.is_zero() {
+        state.set_base_fee_prop(
+            vote_count
+                .base_fee_prop
+                .compute_next_params(old_base_fee_prop, pos_staking_for_votes),
+        )
+    }
     debug!(
         "pos interest: {} base_reward: {}",
         state.global_stat.refr::<InterestRate>(),
         state.global_stat.refr::<PowBaseReward>()
     );
 
-    settle_current_votes(state, set_pos_staking)?;
+    settle_current_votes(state, cip105)?;
 
     Ok(())
 }

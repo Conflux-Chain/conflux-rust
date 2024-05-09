@@ -169,6 +169,7 @@ pub struct Spec {
     pub cip133_b: BlockNumber,
     pub cip133_e: BlockHeight,
     pub cip133_core: bool,
+    pub cip137: bool,
     pub cip1559: bool,
     pub params_dao_vote_period: u64,
 }
@@ -318,6 +319,7 @@ impl Spec {
             cip133_b: u64::MAX,
             cip133_e: u64::MAX,
             cip133_core: false,
+            cip137: false,
             cip1559: false,
         }
     }

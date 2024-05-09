@@ -466,6 +466,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn compute_refunded_gas(&self, result: &ExecutiveResult) -> RefundInfo {
         let tx = self.tx;
         let cost = &self.cost;
+        let spec = self.context.spec;
         let gas_left = match result {
             Ok(ExecutiveReturn { gas_left, .. }) => *gas_left,
             _ => 0.into(),
@@ -475,25 +476,26 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
         let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
-        let (gas_charged, fees_value, refund_value) = if charge_all {
+        let (gas_charged, gas_refunded) = if charge_all {
             let gas_refunded = tx.gas() >> 2;
             let gas_charged = tx.gas() - gas_refunded;
-            (
-                gas_charged,
-                gas_charged.saturating_mul(cost.gas_price),
-                gas_refunded.saturating_mul(cost.gas_price),
-            )
+            (gas_charged, gas_refunded)
         } else {
-            (
-                gas_used,
-                gas_used.saturating_mul(cost.gas_price),
-                gas_left.saturating_mul(cost.gas_price),
-            )
+            (gas_used, gas_left)
         };
+
+        let fees_value = gas_charged.saturating_mul(cost.gas_price);
+        let burnt_fees_value = spec
+            .cip1559
+            .then(|| gas_charged.saturating_mul(cost.burnt_gas_price));
+
+        let refund_value = gas_refunded.saturating_mul(cost.gas_price);
+
         RefundInfo {
             gas_used,
             gas_charged,
             fees_value,
+            burnt_fees_value,
             refund_value,
         }
     }
@@ -616,6 +618,7 @@ pub(super) struct RefundInfo {
     pub gas_charged: U256,
 
     pub fees_value: U256,
+    pub burnt_fees_value: Option<U256>,
     pub refund_value: U256,
 }
 

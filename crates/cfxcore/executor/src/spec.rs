@@ -82,7 +82,7 @@ pub struct TransitionsBlockNumber {
     /// CIP-92: Enable Blake2F Builtin Function
     pub cip92: BlockNumber,
     /// CIP-94: On-Chain DAO Vote for Chain Parameters
-    pub cip94: BlockNumber,
+    pub cip94n: BlockNumber,
     /// CIP-97: Clear Staking Lists
     pub cip97: BlockNumber,
     /// CIP-98: Fix BLOCKHASH Opcode Bug in eSpace
@@ -102,7 +102,8 @@ pub struct TransitionsBlockNumber {
     /// CIP-132: Fix Static Context Check for Internal Contracts
     pub cip132: BlockNumber,
     /// CIP-133: Enhanced Block Hash Query
-    pub cip133_b: BlockNumber,
+    pub cip133b: BlockNumber,
+    pub cip137: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -116,13 +117,13 @@ pub struct TransitionsEpochHeight {
     /// CIP-90: Introduce a Fully EVM-Compatible Space
     pub cip90a: BlockHeight,
     /// CIP-94: On-Chain DAO Vote for Chain Parameters
-    pub cip94: BlockHeight,
+    pub cip94h: BlockHeight,
     /// CIP-112: Fix Block Headers `custom` Field Serde
     pub cip112: BlockHeight,
     /// CIP-130: Aligning Gas Limit with Transaction Size
     pub cip130: BlockHeight,
     /// CIP-133: Enhanced Block Hash Query
-    pub cip133_e: BlockHeight,
+    pub cip133e: BlockHeight,
     pub cip1559: BlockHeight,
 }
 
@@ -162,8 +163,8 @@ impl CommonParams {
         spec.cip90 = number >= self.transition_numbers.cip90b;
         spec.cip78a = number >= self.transition_numbers.cip78a;
         spec.cip78b = number >= self.transition_numbers.cip78b;
-        spec.cip94 = number >= self.transition_numbers.cip94;
-        spec.cip94_activation_block_number = self.transition_numbers.cip94;
+        spec.cip94 = number >= self.transition_numbers.cip94n;
+        spec.cip94_activation_block_number = self.transition_numbers.cip94n;
         spec.cip97 = number >= self.transition_numbers.cip97;
         spec.cip98 = number >= self.transition_numbers.cip98;
         spec.cip105 = number >= self.transition_numbers.cip105;
@@ -174,9 +175,10 @@ impl CommonParams {
         spec.cip119 = number >= self.transition_numbers.cip119;
         spec.cip131 = number >= self.transition_numbers.cip131;
         spec.cip132 = number >= self.transition_numbers.cip132;
-        spec.cip133_b = self.transition_numbers.cip133_b;
-        spec.cip133_e = self.transition_heights.cip133_e;
-        spec.cip133_core = number >= self.transition_numbers.cip133_b;
+        spec.cip133_b = self.transition_numbers.cip133b;
+        spec.cip133_e = self.transition_heights.cip133e;
+        spec.cip133_core = number >= self.transition_numbers.cip133b;
+        spec.cip137 = number >= self.transition_numbers.cip137;
         spec.cip1559 = height >= self.transition_heights.cip1559;
         spec
     }
@@ -201,10 +203,10 @@ impl CommonParams {
 
     pub fn custom_prefix(&self, height: BlockHeight) -> Option<Vec<Bytes>> {
         if height >= self.transition_heights.cip40
-            && height < self.transition_heights.cip94
+            && height < self.transition_heights.cip94h
         {
             Some(vec![TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
-        } else if height >= self.transition_heights.cip94
+        } else if height >= self.transition_heights.cip94h
             && height < self.transition_heights.cip112
         {
             Some(vec![DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])

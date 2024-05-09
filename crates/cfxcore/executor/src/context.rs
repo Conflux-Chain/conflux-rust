@@ -586,6 +586,7 @@ mod tests {
             finalized_epoch: None,
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
             base_gas_price: U256::zero(),
+            burnt_gas_price: U256::zero(),
         }
     }
 

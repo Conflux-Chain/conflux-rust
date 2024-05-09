@@ -34,8 +34,8 @@ use cfx_types::{
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
-    block::BlockHeight, compute_block_number, receipt::BlockReceipts, Action,
-    Block, BlockHeaderBuilder, BlockNumber, EpochId, SignedTransaction,
+    compute_block_number, receipt::BlockReceipts, Action, Block,
+    BlockHeaderBuilder, BlockNumber, EpochId, SignedTransaction,
     TransactionIndex, MERKLE_NULL_NODE,
 };
 
@@ -74,7 +74,7 @@ use cfx_executor::{
     },
     machine::Machine,
     state::{
-        distribute_pos_interest, initialize_cip107,
+        distribute_pos_interest, initialize_cip107, initialize_cip137,
         initialize_or_update_dao_voted_params, update_pos_status, CleanupMode,
         State,
     },
@@ -1201,11 +1201,10 @@ impl ConsensusExecutionHandler {
             .adjust_upper_bound(&pivot_block.block_header);
     }
 
-    fn process_epoch_transactions(
+    fn prefetch_storage_for_execution(
         &self, epoch_id: EpochId, state: &mut State,
-        epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
-        on_local_pivot: bool,
-    ) -> DbResult<Vec<Arc<BlockReceipts>>> {
+        epoch_blocks: &Vec<Arc<Block>>,
+    ) {
         // Prefetch accounts for transactions.
         // The return value _prefetch_join_handles is used to join all threads
         // before the exit of this function.
@@ -1234,6 +1233,7 @@ impl ConsensusExecutionHandler {
                 accounts: vec![],
             },
         };
+
         // TODO:
         //   Make the state shared ref for vm execution, then remove this drop.
         //   When the state can be made shared, prefetch can happen at the same
@@ -1241,13 +1241,19 @@ impl ConsensusExecutionHandler {
         //   for prefetching to finish.
         prefetch_join_handles.wait_for_task();
         drop(prefetch_join_handles);
+    }
+
+    fn process_epoch_transactions(
+        &self, epoch_id: EpochId, state: &mut State,
+        epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
+        on_local_pivot: bool,
+    ) -> DbResult<Vec<Arc<BlockReceipts>>> {
+        self.prefetch_storage_for_execution(epoch_id, state, epoch_blocks);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
-        self.record_epoch_hash(
-            state,
-            pivot_block.block_header.height(),
-            pivot_block.hash(),
-        )?;
+        self.before_epoch_execution(state, &*pivot_block)?;
+        let base_gas_price = todo_base_price();
+        let burnt_base_price = state.burnt_base_fee(base_gas_price);
 
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut epoch_staking_events = Vec::new();
@@ -1261,8 +1267,7 @@ impl ConsensusExecutionHandler {
         let mut evm_tx_index = 0;
 
         for block in epoch_blocks.iter() {
-            self.maybe_update_state(state, block_number)?;
-            self.record_block_hash(state, block_number, block.hash())?;
+            self.before_block_execution(state, block_number, &*block)?;
 
             let mut cfx_tx_index = 0;
 
@@ -1302,8 +1307,8 @@ impl ConsensusExecutionHandler {
                 transaction_epoch_bound: self
                     .verification_config
                     .transaction_epoch_bound,
-                // TODO: get the actual base price
-                base_gas_price: todo_base_price(),
+                base_gas_price,
+                burnt_gas_price: burnt_base_price,
             };
             let spec = self.machine.spec(env.number, env.epoch_height);
             if !spec.cip43_contract {
@@ -1336,16 +1341,19 @@ impl ConsensusExecutionHandler {
                     ExecutiveContext::new(state, &env, machine, &spec)
                         .transact(transaction, options)?;
                 execution_outcome.log(transaction, &block.hash());
-                execution_outcome.burn_by_cip1559(
-                    state,
-                    &transaction,
-                    &todo_base_price(),
-                );
+
+                if let Some(burnt_fee) = execution_outcome
+                    .try_as_executed()
+                    .and_then(|e| e.burnt_fee)
+                {
+                    state.burn_by_cip1559(burnt_fee);
+                };
 
                 let r = make_process_tx_outcome(
                     execution_outcome,
                     &mut env.accumulated_gas_used,
                     transaction.hash,
+                    &spec,
                 );
 
                 if r.receipt.tx_success() {
@@ -1639,13 +1647,13 @@ impl ConsensusExecutionHandler {
                 block_receipts.receipts.len() == block.transactions.len()
             );
             // TODO: fill base_price.
-            let base_price = todo_base_price();
             for (tx, receipt) in block
                 .transactions
                 .iter()
                 .zip(block_receipts.receipts.iter())
             {
-                let fee = receipt.gas_fee;
+                let fee =
+                    receipt.gas_fee - receipt.burnt_gas_fee.unwrap_or_default();
 
                 let info = tx_fee
                     .entry(tx.hash())
@@ -1660,22 +1668,7 @@ impl ConsensusExecutionHandler {
                     info.1.insert(block_hash);
                 }
                 if !fee.is_zero() && info.0.is_zero() {
-                    // TODO: a temp implmentation, the 1559 related infomation
-                    // should be put in the `BlockReceipts`.
-
-                    // When `base_price = 0`, `effective_gas_price = gas_price`
-                    let effective_gas_price =
-                        tx.effective_gas_price(&base_price);
-                    // When gas_fee is non-zero, gas_price must be non-zero
-                    let gas_charged = if effective_gas_price.is_zero() {
-                        U256::zero()
-                    } else {
-                        fee / effective_gas_price
-                    };
-                    let miner_fee =
-                        tx.priority_gas_price(&base_price) * gas_charged;
-
-                    info.0 = miner_fee;
+                    info.0 = fee;
                 }
             }
         }
@@ -1943,6 +1936,7 @@ impl ConsensusExecutionHandler {
                 .verification_config
                 .transaction_epoch_bound,
             base_gas_price: U256::zero(),
+            burnt_gas_price: U256::zero(),
         };
         let spec = self.machine.spec(env.number, env.epoch_height);
         let mut ex = EstimationContext::new(
@@ -1957,13 +1951,13 @@ impl ConsensusExecutionHandler {
         Ok(r?)
     }
 
-    fn maybe_update_state(
-        &self, state: &mut State, block_number: BlockNumber,
+    fn before_block_execution(
+        &self, state: &mut State, block_number: BlockNumber, block: &Block,
     ) -> DbResult<()> {
         let params = self.machine.params();
         let transition_numbers = &params.transition_numbers;
 
-        let cip94_start = transition_numbers.cip94;
+        let cip94_start = transition_numbers.cip94n;
         let period = params.params_dao_vote_period;
         // Update/initialize parameters before processing rewards.
         if block_number >= cip94_start
@@ -1981,27 +1975,29 @@ impl ConsensusExecutionHandler {
         if block_number == transition_numbers.cip107 {
             initialize_cip107(state)?;
         }
-        Ok(())
-    }
 
-    fn record_block_hash(
-        &self, state: &mut State, block_number: BlockNumber, hash: H256,
-    ) -> DbResult<()> {
-        let params = self.machine.params();
-        if block_number >= params.transition_numbers.cip133_b {
+        if block_number >= transition_numbers.cip133b {
             state.set_system_storage(
                 block_hash_slot(block_number).into(),
-                U256::from_big_endian(&hash.0),
+                U256::from_big_endian(&block.hash().0),
             )?;
+        }
+
+        if block_number == transition_numbers.cip137 {
+            initialize_cip137(state);
         }
         Ok(())
     }
 
-    fn record_epoch_hash(
-        &self, state: &mut State, epoch_number: BlockHeight, hash: H256,
+    fn before_epoch_execution(
+        &self, state: &mut State, pivot_block: &Block,
     ) -> DbResult<()> {
         let params = self.machine.params();
-        if epoch_number >= params.transition_heights.cip133_e {
+
+        let epoch_number = pivot_block.block_header.height();
+        let hash = pivot_block.hash();
+
+        if epoch_number >= params.transition_heights.cip133e {
             state.set_system_storage(
                 epoch_hash_slot(epoch_number).into(),
                 U256::from_big_endian(&hash.0),

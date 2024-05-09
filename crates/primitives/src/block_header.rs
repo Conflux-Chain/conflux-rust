@@ -674,6 +674,7 @@ mod tests {
             storage_sponsor_paid: false,
             storage_collateralized: vec![],
             storage_released: vec![],
+            burnt_gas_fee: None,
         };
 
         // 10 blocks with 10 empty receipts each
@@ -723,6 +724,7 @@ mod tests {
                     storage_sponsor_paid: false,
                     storage_collateralized: vec![],
                     storage_released: vec![],
+                    burnt_gas_fee: None,
                 },
                 Receipt {
                     accumulated_gas_used: U256::zero(),
@@ -752,6 +754,7 @@ mod tests {
                     storage_sponsor_paid: false,
                     storage_collateralized: vec![],
                     storage_released: vec![],
+                    burnt_gas_fee: None,
                 },
             ],
             block_number: 0,
@@ -788,6 +791,7 @@ mod tests {
                 storage_sponsor_paid: false,
                 storage_collateralized: vec![],
                 storage_released: vec![],
+                burnt_gas_fee: None,
             }],
             block_number: 0,
             secondary_reward: U256::zero(),

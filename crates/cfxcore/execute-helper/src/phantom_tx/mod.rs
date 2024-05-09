@@ -63,6 +63,7 @@ impl PhantomTransaction {
             storage_collateralized: vec![],
             storage_released: vec![],
             storage_sponsor_paid: false,
+            burnt_gas_fee: None,
         }
     }
 }
