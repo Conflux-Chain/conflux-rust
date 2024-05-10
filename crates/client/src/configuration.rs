@@ -1388,8 +1388,13 @@ impl Configuration {
         );
         set_conf!(
             self.raw_conf.next_hardfork_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip130, cip133e, cip1559 }
+            params.transition_heights => { cip130, cip133e }
         );
+        // TODO: disable 1559 test during dev
+        params.transition_heights.cip1559 = self
+            .raw_conf
+            .next_hardfork_transition_height
+            .unwrap_or(default_transition_time);
     }
 }
 
