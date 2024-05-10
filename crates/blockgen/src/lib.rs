@@ -279,6 +279,8 @@ impl BlockGenerator {
             .with_gas_limit(block_gas_limit)
             .with_custom(custom)
             .with_pos_reference(maybe_pos_reference)
+            // TODO: Set base fee and gas limit
+            .with_cip1559_data(None)
             .build();
 
         Block::new(block_header, transactions)

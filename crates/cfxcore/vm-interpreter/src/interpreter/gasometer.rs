@@ -21,6 +21,7 @@
 use cfx_types::{Space, U256};
 use cfx_vm_types::{self as vm, Spec};
 use std::cmp;
+use vm::BlockHashSource;
 
 use super::{
     instructions::{self, Instruction, InstructionInfo},
@@ -298,7 +299,11 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::Gas(gas)
             }
             instructions::BLOCKHASH => {
-                Request::Gas(Gas::from(spec.blockhash_gas))
+                let gas = match context.blockhash_source() {
+                    BlockHashSource::Env => spec.blockhash_gas,
+                    BlockHashSource::State => spec.sload_gas,
+                };
+                Request::Gas(Gas::from(gas))
             }
             _ => Request::Gas(default_gas),
         };
