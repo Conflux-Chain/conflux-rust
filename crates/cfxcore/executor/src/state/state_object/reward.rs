@@ -62,7 +62,7 @@ impl State {
         *self.global_stat.val::<BaseFeeProp>() = val;
     }
 
-    pub fn burnt_base_fee(&self, base_fee: U256) -> U256 {
+    pub fn burnt_gas_price(&self, base_fee: U256) -> U256 {
         if base_fee.is_zero() {
             return U256::zero();
         }
