@@ -8,6 +8,8 @@ extern crate rlp_derive;
 extern crate serde;
 extern crate serde_derive;
 
+use std::ops::{Index, IndexMut};
+
 pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
@@ -157,6 +159,18 @@ impl<T> SpaceMap<T> {
             native: f(&mut self.native),
             evm: f(&mut self.evm),
         }
+    }
+}
+
+impl<T> Index<Space> for SpaceMap<T> {
+    type Output = T;
+
+    fn index(&self, space: Space) -> &Self::Output { self.in_space(space) }
+}
+
+impl<T> IndexMut<Space> for SpaceMap<T> {
+    fn index_mut(&mut self, space: Space) -> &mut Self::Output {
+        self.in_space_mut(space)
     }
 }
 

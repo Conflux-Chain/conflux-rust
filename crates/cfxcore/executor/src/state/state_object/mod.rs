@@ -46,6 +46,7 @@ mod tests;
 
 pub use self::{
     collateral::{initialize_cip107, settle_collateral_for_all},
+    commit::StateCommitResult,
     pos::{distribute_pos_interest, update_pos_status},
     reward::initialize_cip137,
     sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY,
