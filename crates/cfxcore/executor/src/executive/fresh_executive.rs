@@ -39,6 +39,7 @@ pub(super) struct CostInfo {
     pub storage_cost: U256,
     pub sender_intended_cost: U512,
     pub gas_price: U256,
+    pub burnt_gas_price: U256,
 
     pub gas_sponsored: bool,
     pub storage_sponsored: bool,
@@ -69,6 +70,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
     pub(super) fn check_all(
         self,
     ) -> DbResult<Result<PreCheckedExecutive<'a, O>, ExecutionOutcome>> {
+        early_return_on_err!(self.check_base_price());
         // Validate transaction nonce
         early_return_on_err!(self.check_nonce()?);
 
@@ -115,6 +117,19 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         } else {
             Ok(())
         })
+    }
+
+    fn check_base_price(&self) -> Result<(), ExecutionOutcome> {
+        if self.tx.gas_price() < &self.context.env.burnt_gas_price {
+            Err(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::NotEnoughBaseFee {
+                    expected: self.context.env.burnt_gas_price,
+                    got: *self.tx.gas_price(),
+                },
+            ))
+        } else {
+            Ok(())
+        }
     }
 
     fn check_epoch_bound(&self) -> DbResult<Result<(), ExecutionOutcome>> {
@@ -169,11 +184,20 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let env = self.context.env;
         let spec = self.context.spec;
 
-        let gas_price = if spec.cip1559 {
-            tx.effective_gas_price(&env.base_gas_price)
-        } else {
+        let gas_price = if !spec.cip1559 {
             *tx.gas_price()
+        } else {
+            // actual_base_gas >= tx gas_price >= burnt_base_price
+            let actual_base_gas =
+                U256::min(*tx.gas_price(), env.base_gas_price);
+            tx.effective_gas_price(&actual_base_gas)
         };
+
+        let burnt_gas_price = env.burnt_gas_price;
+        // gas_price >= actual_base_gas >=
+        //   1. tx gas_price >= burnt_base_price
+        //   2. base_gas_price >= burnt_gas_price
+        assert!(gas_price >= burnt_gas_price);
 
         let sender_balance = U512::from(state.balance(&sender)?);
         let gas_cost = if settings.charge_gas {
@@ -200,6 +224,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
                 base_gas: self.base_gas,
                 gas_cost,
                 gas_price,
+                burnt_gas_price,
                 storage_cost,
                 sender_intended_cost: sender_cost,
                 total_cost: sender_cost,
@@ -312,6 +337,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
             base_gas: self.base_gas,
             gas_cost,
             gas_price,
+            burnt_gas_price,
             storage_cost,
             sender_balance,
             total_cost,

@@ -91,7 +91,7 @@ pub struct SortedStorageChanges {
 }
 
 /// Information describing execution of a transaction.
-#[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Receipt {
     /// The total gas used (not gas charged) in the block following execution
     /// of the transaction.
@@ -110,6 +110,51 @@ pub struct Receipt {
     pub storage_sponsor_paid: bool,
     pub storage_collateralized: Vec<StorageChange>,
     pub storage_released: Vec<StorageChange>,
+    pub burnt_gas_fee: Option<U256>,
+}
+
+impl Encodable for Receipt {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let length = if self.burnt_gas_fee.is_none() { 9 } else { 10 };
+        s.begin_list(length)
+            .append(&self.accumulated_gas_used)
+            .append(&self.gas_fee)
+            .append(&self.gas_sponsor_paid)
+            .append(&self.log_bloom)
+            .append_list(&self.logs)
+            .append(&self.outcome_status)
+            .append(&self.storage_sponsor_paid)
+            .append_list(&self.storage_collateralized)
+            .append_list(&self.storage_released);
+        if let Some(burnt_gas_fee) = self.burnt_gas_fee {
+            s.append(&burnt_gas_fee);
+        }
+    }
+}
+
+impl Decodable for Receipt {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        let item_count = rlp.item_count()?;
+        if !matches!(item_count, 9..=10) {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
+        Ok(Receipt {
+            accumulated_gas_used: rlp.val_at(0)?,
+            gas_fee: rlp.val_at(1)?,
+            gas_sponsor_paid: rlp.val_at(2)?,
+            log_bloom: rlp.val_at(3)?,
+            logs: rlp.list_at(4)?,
+            outcome_status: rlp.val_at(5)?,
+            storage_sponsor_paid: rlp.val_at(6)?,
+            storage_collateralized: rlp.list_at(7)?,
+            storage_released: rlp.list_at(8)?,
+            burnt_gas_fee: if item_count == 9 {
+                None
+            } else {
+                Some(rlp.val_at(9)?)
+            },
+        })
+    }
 }
 
 impl Receipt {
@@ -117,7 +162,7 @@ impl Receipt {
         outcome: TransactionStatus, accumulated_gas_used: U256, gas_fee: U256,
         gas_sponsor_paid: bool, logs: Vec<LogEntry>, log_bloom: Bloom,
         storage_sponsor_paid: bool, storage_collateralized: Vec<StorageChange>,
-        storage_released: Vec<StorageChange>,
+        storage_released: Vec<StorageChange>, burnt_gas_fee: Option<U256>,
     ) -> Self {
         Self {
             accumulated_gas_used,
@@ -129,6 +174,7 @@ impl Receipt {
             storage_sponsor_paid,
             storage_collateralized,
             storage_released,
+            burnt_gas_fee,
         }
     }
 

@@ -56,12 +56,10 @@ impl<'a> ExecutiveContext<'a> {
     ) -> DbResult<ExecutionOutcome> {
         let fresh_exec = FreshExecutive::new(self, tx, options);
 
-        let pre_checked_exec = match fresh_exec.check_all()? {
-            Ok(executive) => executive,
-            Err(execution_outcome) => return Ok(execution_outcome),
-        };
-
-        pre_checked_exec.execute_transaction()
+        Ok(match fresh_exec.check_all()? {
+            Ok(executive) => executive.execute_transaction()?,
+            Err(execution_outcome) => execution_outcome,
+        })
     }
 }
 
