@@ -169,9 +169,32 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
         }
     }
 
-    fn get_term_view(&self, view: u64) -> (u64, u64) { todo!() }
+    fn get_term_view(&self, view: u64) -> (u64, u64) {
+        let conf = self.get().unwrap();
+        if view < conf.cip136_transition_view {
+            (view / conf.round_per_term, view % conf.round_per_term)
+        } else {
+            let transition_term =
+                conf.cip136_transition_view / conf.round_per_term;
+            let view_after = view - conf.cip136_transition_view;
+            (
+                transition_term + view_after / conf.cip136_round_per_term,
+                view_after % conf.cip136_round_per_term,
+            )
+        }
+    }
 
-    fn get_starting_view_for_term(&self, term: u64) -> Option<u64> { todo!() }
+    fn get_starting_view_for_term(&self, term: u64) -> Option<u64> {
+        let conf = self.get().unwrap();
+        let transition_term = conf.cip136_transition_view / conf.round_per_term;
+        if term < transition_term {
+            Some(term * conf.round_per_term)
+        } else {
+            (term - transition_term)
+                .checked_mul(conf.cip136_round_per_term)
+                .map(|v| v + conf.cip136_transition_view)
+        }
+    }
 }
 
 pub static POS_STATE_CONFIG: OnceCell<PosStateConfig> = OnceCell::new();

@@ -44,6 +44,10 @@ class RetireParamHardforkTest(ConfluxTestFramework):
         self.conf_parameters["pos_cip99_transition_view"] = 72
         self.conf_parameters["pos_cip99_in_queue_locked_views"] = 66
         self.conf_parameters["pos_cip99_out_queue_locked_views"] = 6
+        self.conf_parameters["pos_cip136_transition_view"] = 144
+        self.conf_parameters["pos_cip136_round_per_term"] = 12
+        self.conf_parameters["pos_cip136_in_queue_locked_views"] = 132
+        self.conf_parameters["pos_cip136_out_queue_locked_views"] = 12
         self.rpc_timewait = 6000
 
     def run_test(self):
@@ -85,6 +89,17 @@ class RetireParamHardforkTest(ConfluxTestFramework):
         new_epoch = int(client.pos_status()["epoch"], 0)
         print(new_epoch, old_epoch)
         assert_greater_than_or_equal(new_epoch - old_epoch, 3)
+
+        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) > self.conf_parameters["pos_cip136_transition_view"], timeout=120)
+        old_epoch = int(client.pos_status()["epoch"], 0)
+        check_view = self.conf_parameters["pos_cip136_transition_view"] + self.conf_parameters["pos_cip136_round_per_term"]
+        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) > check_view, timeout=120)
+        status = client.pos_status()
+        assert_greater_than(check_view + self.conf_parameters["pos_cip136_round_per_term"], int(status["latestCommitted"], 0))
+        assert_equal(int(status["epoch"], 0), old_epoch + 1)
+        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) >= check_view + 7 * self.conf_parameters["pos_cip136_round_per_term"], timeout=240)
+        status = client.pos_status()
+        assert_equal(int(status["epoch"], 0), old_epoch + 7)
 
 
 if __name__ == '__main__':
