@@ -97,9 +97,9 @@ class RetireParamHardforkTest(ConfluxTestFramework):
         status = client.pos_status()
         assert_greater_than(check_view + self.conf_parameters["pos_cip136_round_per_term"], int(status["latestCommitted"], 0))
         assert_equal(int(status["epoch"], 0), old_epoch + 1)
-        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) >= check_view + 7 * self.conf_parameters["pos_cip136_round_per_term"], timeout=240)
+        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) > check_view + 7 * self.conf_parameters["pos_cip136_round_per_term"], timeout=240)
         status = client.pos_status()
-        assert_equal(int(status["epoch"], 0), old_epoch + 7)
+        assert_equal(int(status["epoch"], 0), old_epoch + 8)
 
 
 if __name__ == '__main__':
