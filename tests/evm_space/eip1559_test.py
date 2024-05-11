@@ -68,6 +68,7 @@ class Eip1559Test(Web3Base):
         assert_equal(receipt["txExecErrorMsg"], None)
 
         tx = self.w3.eth.get_transaction(return_tx_hash)
+        print(tx)
         assert_equal(receipt["status"], 1)
 
         # Check if another node can decode EIP1559 transactions
