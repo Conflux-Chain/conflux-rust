@@ -403,7 +403,7 @@ impl LedgerStore {
         )
     }
 
-    /// Write `txn_infos` to `batch`. Assigned `first_version` to the the
+    /// Write `txn_infos` to `batch`. Assigned `first_version` to the
     /// version number of the first transaction, and so on.
     pub fn put_transaction_infos(
         &self, first_version: u64, txn_infos: &[TransactionInfo],
