@@ -8,7 +8,6 @@ use crate::{
 use diem_crypto::_once_cell::sync::OnceCell;
 
 const CIP99_FORCE_RETIRE_EPOCH_COUNT: u64 = 3;
-const CIP136_FORCE_RETIRE_EPOCH_COUNT: u64 = 6;
 
 #[derive(Clone, Debug)]
 pub struct PosStateConfig {
@@ -147,14 +146,10 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
 
     fn force_retire_check_epoch_count(&self, view: u64) -> u64 {
         let conf = self.get().unwrap();
-        if view >= conf.cip99_transition_view
-            && view < conf.cip136_transition_view
-        {
+        if view >= conf.cip99_transition_view {
             // This is set according to the value of `TERM_LIST_LEN`.
             // Since `TERM_LIST_LEN` is hardcoded, we do not parameterize this.
             CIP99_FORCE_RETIRE_EPOCH_COUNT
-        } else if view > conf.cip136_transition_view {
-            CIP136_FORCE_RETIRE_EPOCH_COUNT
         } else {
             1
         }
