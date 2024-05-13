@@ -6,7 +6,7 @@ use crate::{
     block::BlockHeight, bytes::Bytes, hash::keccak, pos::PosBlockId,
     receipt::BlockReceipts, MERKLE_NULL_NODE, NULL_EPOCH,
 };
-use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
+use cfx_types::{Address, Bloom, SpaceMap, H256, KECCAK_EMPTY_BLOOM, U256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use once_cell::sync::OnceCell;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -59,8 +59,8 @@ pub struct BlockHeaderRlpPart {
     nonce: U256,
     /// Referred PoS block ID.
     pos_reference: Option<H256>,
-    /// `[core_space_base_fee, espace_base_fee, espace_gas_limit]`.
-    cip1559_data: Option<CIP1559Data>,
+    /// `[core_space_base_price, espace_base_price]`.
+    base_price: Option<BasePrice>,
 }
 
 impl PartialEq for BlockHeaderRlpPart {
@@ -80,7 +80,7 @@ impl PartialEq for BlockHeaderRlpPart {
             && self.referee_hashes == o.referee_hashes
             && self.custom == o.custom
             && self.pos_reference == o.pos_reference
-            && self.cip1559_data == o.cip1559_data
+            && self.base_price == o.base_price
     }
 }
 
@@ -172,18 +172,21 @@ impl BlockHeader {
     /// Get the PoS reference.
     pub fn pos_reference(&self) -> &Option<PosBlockId> { &self.pos_reference }
 
-    pub fn cip1559_data(&self) -> &Option<CIP1559Data> { &self.cip1559_data }
+    pub fn base_price(&self) -> Option<SpaceMap<U256>> {
+        self.base_price.map(
+            |BasePrice {
+                 core_base_price,
+                 espace_base_price,
+             }| SpaceMap::new(core_base_price, espace_base_price),
+        )
+    }
 
     pub fn core_base_fee(&self) -> Option<&U256> {
-        self.cip1559_data.as_ref().map(|l| &l.core_base_fee)
+        self.base_price.as_ref().map(|l| &l.core_base_price)
     }
 
     pub fn espace_base_fee(&self) -> Option<&U256> {
-        self.cip1559_data.as_ref().map(|l| &l.espace_base_fee)
-    }
-
-    pub fn espace_gas_limit(&self) -> Option<&U256> {
-        self.cip1559_data.as_ref().map(|l| &l.espace_gas_limit)
+        self.base_price.as_ref().map(|l| &l.espace_base_price)
     }
 
     /// Set the nonce field of the header.
@@ -231,7 +234,7 @@ impl BlockHeader {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         let list_len = HEADER_LIST_MIN_LEN
             + self.pos_reference.is_some() as usize
-            + self.cip1559_data.is_some() as usize
+            + self.base_price.is_some() as usize
             + self.custom.len();
         stream
             .begin_list(list_len)
@@ -251,8 +254,8 @@ impl BlockHeader {
         if self.pos_reference.is_some() {
             stream.append(&self.pos_reference);
         }
-        if self.cip1559_data.is_some() {
-            stream.append(&self.cip1559_data);
+        if self.base_price.is_some() {
+            stream.append(&self.base_price);
         }
 
         for b in &self.custom {
@@ -272,7 +275,7 @@ impl BlockHeader {
         let list_len = HEADER_LIST_MIN_LEN
             + 1
             + self.pos_reference.is_some() as usize
-            + self.cip1559_data.is_some() as usize
+            + self.base_price.is_some() as usize
             + self.custom.len();
         stream
             .begin_list(list_len)
@@ -293,8 +296,8 @@ impl BlockHeader {
         if self.pos_reference.is_some() {
             stream.append(&self.pos_reference);
         }
-        if self.cip1559_data.is_some() {
-            stream.append(&self.cip1559_data);
+        if self.base_price.is_some() {
+            stream.append(&self.base_price);
         }
         for b in &self.custom {
             if self.height
@@ -313,7 +316,7 @@ impl BlockHeader {
         let list_len = HEADER_LIST_MIN_LEN
             + 2
             + self.pos_reference.is_some() as usize
-            + self.cip1559_data.is_some() as usize
+            + self.base_price.is_some() as usize
             + self.custom.len();
         stream
             .begin_list(list_len)
@@ -337,8 +340,8 @@ impl BlockHeader {
         if self.pos_reference.is_some() {
             stream.append(&self.pos_reference);
         }
-        if self.cip1559_data.is_some() {
-            stream.append(&self.cip1559_data);
+        if self.base_price.is_some() {
+            stream.append(&self.base_price);
         }
 
         for b in &self.custom {
@@ -371,13 +374,13 @@ impl BlockHeader {
             custom: vec![],
             nonce: r.val_at(13)?,
             pos_reference: r.val_at(15).unwrap_or(None),
-            cip1559_data: r.val_at(16).unwrap_or(None),
+            base_price: r.val_at(16).unwrap_or(None),
         };
         let pow_hash = r.val_at(14)?;
 
         for i in (15
             + rlp_part.pos_reference.is_some() as usize
-            + rlp_part.cip1559_data.is_some() as usize)
+            + rlp_part.base_price.is_some() as usize)
             ..r.item_count()?
         {
             if rlp_part.height
@@ -423,7 +426,7 @@ pub struct BlockHeaderBuilder {
     custom: Vec<Bytes>,
     nonce: U256,
     pos_reference: Option<PosBlockId>,
-    cip1559_data: Option<CIP1559Data>,
+    base_price: Option<BasePrice>,
 }
 
 impl BlockHeaderBuilder {
@@ -445,7 +448,7 @@ impl BlockHeaderBuilder {
             custom: Vec::new(),
             nonce: U256::zero(),
             pos_reference: None,
-            cip1559_data: None,
+            base_price: None,
         }
     }
 
@@ -542,9 +545,9 @@ impl BlockHeaderBuilder {
     }
 
     pub fn with_cip1559_data(
-        &mut self, cip1559_data: Option<CIP1559Data>,
+        &mut self, cip1559_data: Option<BasePrice>,
     ) -> &mut Self {
-        self.cip1559_data = cip1559_data;
+        self.base_price = cip1559_data;
         self
     }
 
@@ -567,7 +570,7 @@ impl BlockHeaderBuilder {
                 custom: self.custom.clone(),
                 nonce: self.nonce,
                 pos_reference: self.pos_reference,
-                cip1559_data: self.cip1559_data.clone(),
+                base_price: self.base_price.clone(),
             },
             hash: None,
             pow_hash: None,
@@ -650,11 +653,11 @@ impl Decodable for BlockHeader {
             custom: vec![],
             nonce: r.val_at(13)?,
             pos_reference: r.val_at(14).unwrap_or(None),
-            cip1559_data: r.val_at(15).unwrap_or(None),
+            base_price: r.val_at(15).unwrap_or(None),
         };
         for i in (14
             + rlp_part.pos_reference.is_some() as usize
-            + rlp_part.cip1559_data.is_some() as usize)
+            + rlp_part.base_price.is_some() as usize)
             ..r.item_count()?
         {
             if rlp_part.height
@@ -678,11 +681,61 @@ impl Decodable for BlockHeader {
     }
 }
 
-#[derive(Clone, Debug, Eq, RlpDecodable, RlpEncodable, PartialEq)]
-pub struct CIP1559Data {
-    core_base_fee: U256,
-    espace_base_fee: U256,
-    espace_gas_limit: U256,
+#[derive(Clone, Copy, Debug, Eq, RlpDecodable, RlpEncodable, PartialEq)]
+pub struct BasePrice {
+    pub core_base_price: U256,
+    pub espace_base_price: U256,
+}
+
+const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
+
+pub fn compute_next_price(
+    gas_target: U256, gas_actual: U256, last_base_price: U256,
+    min_base_price: U256,
+) -> U256 {
+    const DENOM: usize = BASE_PRICE_CHANGE_DENOMINATOR;
+
+    let next_base_price = if gas_target.is_zero() || gas_target == gas_actual {
+        last_base_price
+    } else if gas_actual > gas_target {
+        let delta = gas_actual - gas_target;
+        let mut price_delta = last_base_price * delta / gas_target / DENOM;
+        if price_delta.is_zero() {
+            price_delta = U256::one();
+        }
+        last_base_price + price_delta
+    } else {
+        let delta = gas_target - gas_actual;
+        let mut price_delta = last_base_price * delta / gas_target / DENOM;
+        if price_delta.is_zero() {
+            price_delta = U256::one();
+        }
+        last_base_price - price_delta
+    };
+    next_base_price.min(min_base_price)
+}
+
+pub fn estimate_gas_limit(
+    gas_target: U256, current_base_price: U256, last_base_price: U256,
+) -> U256 {
+    const DENOM: usize = BASE_PRICE_CHANGE_DENOMINATOR;
+
+    let upper_base_price = last_base_price + last_base_price / DENOM;
+    let lower_base_price = last_base_price - last_base_price / DENOM;
+
+    if current_base_price > upper_base_price {
+        gas_target * 2
+    } else if current_base_price < lower_base_price {
+        U256::zero()
+    } else {
+        gas_target * 2 * (current_base_price - lower_base_price)
+            / (upper_base_price - lower_base_price)
+    }
+}
+
+/// A helper function for `compute_next_price` which takes a typle as input
+pub fn compute_next_price_tuple(x: (U256, U256, U256, U256)) -> U256 {
+    compute_next_price(x.0, x.1, x.2, x.3)
 }
 
 #[cfg(test)]

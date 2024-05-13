@@ -25,7 +25,7 @@ use cfx_executor::{
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
-use cfx_types::{AddressWithSpace as Address, AllChainID, Space, H256, U256};
+use cfx_types::{AddressWithSpace as Address, AllChainID, Space, SpaceMap, H256, U256};
 use cfx_vm_types::Spec;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
@@ -723,6 +723,27 @@ impl TransactionPool {
             num_txs,
             block_gas_limit,
             evm_gas_limit,
+            block_size_limit,
+            best_epoch_height,
+            best_block_number,
+            &self.verification_config,
+            &self.machine,
+        )
+    }
+
+    pub fn pack_transactions_1559<'a>(
+        &self, num_txs: usize, gas_limit: U256, parent_base_price: SpaceMap<U256>,
+        block_size_limit: usize, mut best_epoch_height: u64,
+        mut best_block_number: u64,
+    ) -> (Vec<Arc<SignedTransaction>>, SpaceMap<U256>) {
+        let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
+        best_epoch_height += 1;
+        // The best block number is not necessary an exact number.
+        best_block_number += 1;
+        inner.pack_transactions_1559(
+            num_txs,
+            gas_limit,
+            parent_base_price,
             block_size_limit,
             best_epoch_height,
             best_block_number,

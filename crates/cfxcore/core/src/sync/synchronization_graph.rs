@@ -14,6 +14,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use cfx_parameters::consensus_internal::ELASTICITY_MULTIPLIER;
 use futures::executor::block_on;
 use parking_lot::RwLock;
 use slab::Slab;
@@ -755,6 +756,14 @@ impl SynchronizationGraphInner {
                 },
             )));
         }
+
+        // Verify by 1559
+        let parent_gas_limit =
+            if epoch == self.machine.params().transition_heights.cip1559 {
+                parent_gas_limit * ELASTICITY_MULTIPLIER
+            } else {
+                parent_gas_limit
+            };
 
         // Verify the gas limit is respected
         let self_gas_limit = *self.arena[index].block_header.gas_limit();
@@ -1757,6 +1766,7 @@ impl SynchronizationGraph {
         if need_to_verify {
             let r = self.verification_config.verify_sync_graph_block_basic(
                 &block,
+                &inner.arena[me].block_header,
                 self.consensus.best_chain_id(),
             );
             match r {

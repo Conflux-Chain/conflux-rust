@@ -11,17 +11,25 @@ use crate::{
 use cfx_executor::{
     executive::gas_required_for, machine::Machine, spec::TransitionsEpochHeight,
 };
-use cfx_parameters::block::*;
+use cfx_parameters::{
+    block::*,
+    consensus_internal::{
+        ELASTICITY_MULTIPLIER, INITIAL_1559_CORE_BASE_PRICE,
+        INITIAL_1559_ETH_BASE_PRICE,
+    },
+};
 use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
 };
 use cfx_types::{
-    address_util::AddressUtil, AllChainID, BigEndianHash, Space, H256, U256,
+    address_util::AddressUtil, AllChainID, BigEndianHash, Space, SpaceMap,
+    H256, U256,
 };
 use cfx_vm_types::Spec;
 use primitives::{
     block::BlockHeight,
+    block_header::compute_next_price_tuple,
     transaction::{
         native_transaction::TypedNativeTransaction, TransactionError,
     },
@@ -367,11 +375,11 @@ impl VerificationConfig {
         }
 
         if header.height() >= self.machine.params().transition_heights.cip1559 {
-            if header.cip1559_data().is_none() {
+            if header.base_price().is_none() {
                 bail!(BlockError::MissingBaseFee);
             }
         } else {
-            if header.cip1559_data().is_some() {
+            if header.base_price().is_some() {
                 bail!(BlockError::UnexpectedBaseFee);
             }
         }
@@ -462,23 +470,16 @@ impl VerificationConfig {
     /// should discard this block and all its descendants.
     #[inline]
     pub fn verify_sync_graph_block_basic(
-        &self, block: &Block, chain_id: AllChainID,
+        &self, block: &Block, parent: &BlockHeader, chain_id: AllChainID,
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
-        let mut block_size = 0;
-        let mut block_total_gas = U256::zero();
-
         let block_height = block.block_header.height();
-        let evm_space_gas_limit =
-            if self.machine.params().can_pack_evm_transaction(block_height) {
-                *block.block_header.gas_limit()
-                    / self.machine.params().evm_transaction_gas_ratio
-            } else {
-                U256::zero()
-            };
-        let mut evm_total_gas = U256::zero();
+
+        let mut total_gas: SpaceMap<U256> = SpaceMap::default();
+        let mut block_size = 0;
         let transitions = &self.machine.params().transition_heights;
+
         for t in &block.transactions {
             self.verify_transaction_common(
                 t,
@@ -488,10 +489,7 @@ impl VerificationConfig {
                 VerifyTxMode::Remote,
             )?;
             block_size += t.rlp_size();
-            block_total_gas += *t.gas_limit();
-            if t.space() == Space::Ethereum {
-                evm_total_gas += *t.gas_limit();
-            }
+            total_gas[t.space()] += *t.gas_limit();
         }
 
         if block_size > self.max_block_size_in_bytes {
@@ -503,6 +501,31 @@ impl VerificationConfig {
                 },
             )));
         }
+
+        if block_height >= self.machine.params().transition_heights.cip1559 {
+            self.check_base_fee(block, parent, total_gas)?;
+        } else {
+            self.check_hard_gas_limit(block, total_gas)?;
+        }
+
+        Ok(())
+    }
+
+    fn check_hard_gas_limit(
+        &self, block: &Block, total_gas: SpaceMap<U256>,
+    ) -> Result<(), Error> {
+        let block_height = block.block_header.height();
+
+        let evm_space_gas_limit =
+            if self.machine.params().can_pack_evm_transaction(block_height) {
+                *block.block_header.gas_limit()
+                    / self.machine.params().evm_transaction_gas_ratio
+            } else {
+                U256::zero()
+            };
+
+        let evm_total_gas = total_gas[Space::Ethereum];
+        let block_total_gas = total_gas.map_sum(|x| *x);
 
         if evm_total_gas > evm_space_gas_limit {
             return Err(From::from(BlockError::InvalidBlockGasLimit(
@@ -522,6 +545,77 @@ impl VerificationConfig {
                     found: block_total_gas,
                 },
             )));
+        }
+
+        Ok(())
+    }
+
+    fn check_base_fee(
+        &self, block: &Block, parent: &BlockHeader, total_gas: SpaceMap<U256>,
+    ) -> Result<(), Error> {
+        use Space::*;
+        const INIT_BASE_PRICE: SpaceMap<u64> = SpaceMap::new(
+            INITIAL_1559_CORE_BASE_PRICE,
+            INITIAL_1559_ETH_BASE_PRICE,
+        );
+        let cip1559_init = self.machine.params().transition_heights.cip1559;
+        let block_height = block.block_header.height();
+
+        assert!(block_height >= cip1559_init);
+
+        let core_gas_limit = block.block_header.gas_limit() * 9 / 10;
+        let espace_gas_limit =
+            if self.machine.params().can_pack_evm_transaction(block_height) {
+                block.block_header.gas_limit() * 5 / 10
+            } else {
+                U256::zero()
+            };
+
+        if total_gas[Ethereum] > espace_gas_limit {
+            return Err(From::from(BlockError::InvalidBlockGasLimit(
+                OutOfBounds {
+                    min: Some(espace_gas_limit),
+                    max: Some(espace_gas_limit),
+                    found: total_gas[Ethereum],
+                },
+            )));
+        }
+
+        if total_gas[Native] > core_gas_limit {
+            return Err(From::from(BlockError::InvalidBlockGasLimit(
+                OutOfBounds {
+                    min: Some(core_gas_limit),
+                    max: Some(core_gas_limit),
+                    found: total_gas[Native],
+                },
+            )));
+        }
+
+        let parent_base_price = if block_height == cip1559_init {
+            INIT_BASE_PRICE.map_all(U256::from)
+        } else {
+            parent.base_price().unwrap()
+        };
+
+        let gas_limit = SpaceMap::new(core_gas_limit, espace_gas_limit);
+        let gas_target = gas_limit.map_all(|x| x / ELASTICITY_MULTIPLIER);
+        let min_base_price = INIT_BASE_PRICE.map_all(U256::from);
+
+        let expected_base_price = SpaceMap::zip4(
+            gas_target,
+            total_gas,
+            parent_base_price,
+            min_base_price,
+        )
+        .map_all(compute_next_price_tuple);
+
+        let actual_base_price = block.block_header.base_price().unwrap();
+
+        if actual_base_price != expected_base_price {
+            return Err(From::from(BlockError::InvalidBasePrice(Mismatch {
+                expected: expected_base_price,
+                found: actual_base_price,
+            })));
         }
 
         Ok(())

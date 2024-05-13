@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::message::Bytes;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, SpaceMap, H256, U256};
 use primitives::{filter::FilterError, transaction::TransactionError};
 use std::{error, fmt, time::SystemTime};
 use unexpected::{Mismatch, OutOfBounds};
@@ -37,6 +37,7 @@ pub enum BlockError {
     InvalidBlockGasLimit(OutOfBounds<U256>),
     /// Total rlp sizes of transactions in block is out of bound.
     InvalidBlockSize(OutOfBounds<u64>),
+    InvalidBasePrice(Mismatch<SpaceMap<U256>>),
     /// Timestamp header field is invalid.
     InvalidTimestamp(OutOfBounds<SystemTime>),
     /// Timestamp header field is too far in future.
@@ -94,6 +95,9 @@ impl fmt::Display for BlockError {
                 format!("Block has invalid PoW: {}", oob)
             }
             InvalidGasLimit(ref oob) => format!("Invalid gas limit: {}", oob),
+            InvalidBasePrice(ref mis) => {
+                format!("Invalid base price: {:?}", mis)
+            }
             InvalidBlockGasLimit(ref oob) => {
                 format!("Invalid block gas limit: {}", oob)
             }
