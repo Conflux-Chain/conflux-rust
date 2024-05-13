@@ -163,6 +163,7 @@ build_config! {
         (cip119_transition_number, (Option<u64>), None)
         (next_hardfork_transition_number, (Option<u64>), None)
         (next_hardfork_transition_height, (Option<u64>), None)
+        (cip1559_transition_height, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -1391,10 +1392,8 @@ impl Configuration {
             params.transition_heights => { cip130, cip133e }
         );
         // TODO: disable 1559 test during dev
-        params.transition_heights.cip1559 = self
-            .raw_conf
-            .next_hardfork_transition_height
-            .unwrap_or(default_transition_time);
+        params.transition_heights.cip1559 =
+            self.raw_conf.cip1559_transition_height.unwrap_or(u64::MAX);
     }
 }
 
