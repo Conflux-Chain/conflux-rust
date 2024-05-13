@@ -117,7 +117,8 @@ pub fn genesis_block(
     initialize_internal_contract_accounts(
         &mut state,
         machine.internal_contracts().initialized_at_genesis(),
-    );
+    )
+    .expect("no db error");
     trace!("genesis_accounts: {:?}", genesis_accounts);
     for (addr, balance) in genesis_accounts {
         state
