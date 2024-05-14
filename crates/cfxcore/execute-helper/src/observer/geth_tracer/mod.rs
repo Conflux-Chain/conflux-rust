@@ -54,8 +54,6 @@ pub struct GethTracer {
     // call depth
     depth: usize,
     //
-    return_data: Bytes, // update in call_result/create_result
-    //
     opts: GethDebugTracingOptions,
     // gas stack, used to trace gas_spent in call_result/create_result
     pub gas_stack: Vec<u64>,
@@ -101,7 +99,6 @@ impl GethTracer {
             tx_gas_limit,
             depth: 0,
             gas_left: tx_gas_limit,
-            return_data: Bytes::default(),
             opts,
             gas_stack: Vec::new(),
         }
@@ -168,7 +165,11 @@ impl GethTracer {
             },
             None => {
                 let gas_used = self.gas_used();
-                let return_value = self.return_data;
+                let return_value = self
+                    .inner
+                    .last_call_return_data
+                    .clone()
+                    .unwrap_or_default();
                 let opts = self.opts.config;
                 let frame = self.inner.into_geth_builder().geth_traces(
                     gas_used,
@@ -276,7 +277,6 @@ impl CallTracer for GethTracer {
             .as_ref()
             .map(|f| Bytes::from(f.return_data.to_vec()))
             .unwrap_or_default();
-        self.return_data = output.clone();
 
         let outcome = InterpreterResult {
             result: instruction_result,
@@ -344,7 +344,6 @@ impl CallTracer for GethTracer {
             .as_ref()
             .map(|f| Bytes::from(f.return_data.to_vec()))
             .unwrap_or_default();
-        self.return_data = output.clone();
 
         let outcome = InterpreterResult {
             result: instruction_result,
@@ -441,7 +440,10 @@ struct StackStep {
 
 pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
     let result = match frame_result {
-        Ok(_r) => InstructionResult::Return,
+        Ok(r) => match r.apply_state {
+            true => InstructionResult::Return,
+            false => InstructionResult::Revert,
+        },
         Err(err) => match err {
             Error::OutOfGas => InstructionResult::OutOfGas,
             Error::BadJumpDestination { .. } => InstructionResult::InvalidJump,

@@ -29,7 +29,7 @@ pub struct TracingInspector {
     /// Tracks active steps
     step_stack: Vec<StackStep>,
     /// Tracks the return value of the last call
-    last_call_return_data: Option<Bytes>,
+    pub last_call_return_data: Option<Bytes>,
     /// The gas inspector used to track remaining gas.
     pub gas_inspector: GasInspector,
     //
