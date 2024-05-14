@@ -20,7 +20,7 @@ use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{Address, AllChainID, Space, H256, U256};
+use cfx_types::{Address, AllChainID, Space, SpaceMap, H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -1219,6 +1219,14 @@ impl Configuration {
 
         if self.is_test_or_dev_mode() {
             params.early_set_internal_contracts_states = true;
+        }
+
+        if !self.is_test_or_dev_mode() {
+            params.min_base_price = SpaceMap::new(
+                INITIAL_1559_CORE_BASE_PRICE,
+                INITIAL_1559_ETH_BASE_PRICE,
+            )
+            .map_all(U256::from)
         }
 
         params.chain_id = self.chain_id_params();

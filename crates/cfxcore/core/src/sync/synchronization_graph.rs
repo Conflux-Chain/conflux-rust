@@ -757,12 +757,11 @@ impl SynchronizationGraphInner {
             )));
         }
 
-        // Verify by 1559
-        let parent_gas_limit =
-            if epoch == self.machine.params().transition_heights.cip1559 {
-                parent_gas_limit * ELASTICITY_MULTIPLIER
+        let parent_gas_limit = parent_gas_limit
+            * if epoch == self.machine.params().transition_heights.cip1559 {
+                ELASTICITY_MULTIPLIER
             } else {
-                parent_gas_limit
+                1
             };
 
         // Verify the gas limit is respected
@@ -1774,7 +1773,7 @@ impl SynchronizationGraph {
                     ErrorKind::Block(BlockError::InvalidTransactionsRoot(e)),
                     _,
                 )) => {
-                    warn ! ("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
+                    warn!("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
                     // If the transaction root does not match, it might be
                     // caused by receiving wrong
                     // transactions because of conflicting ShortId in

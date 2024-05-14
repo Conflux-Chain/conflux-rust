@@ -8,10 +8,7 @@ use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 use cfx_parameters::{
-    consensus_internal::{
-        ELASTICITY_MULTIPLIER, INITIAL_1559_CORE_BASE_PRICE,
-        INITIAL_1559_ETH_BASE_PRICE,
-    },
+    consensus_internal::ELASTICITY_MULTIPLIER,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 
@@ -111,23 +108,25 @@ impl DeferredPool {
         self.packing_pool.apply_all(|x| x.clear());
     }
 
-    fn estimate_block_gas_limit(
+    fn estimate_packing_gas_limit(
         &self, space: Space, gas_target: U256, parent_base_price: U256,
         min_base_price: U256,
     ) -> (U256, U256) {
-        let gas_limit =
-            self.packing_pool.in_space(space).estimate_block_gas_limit(
+        let packing_gas_limit = self
+            .packing_pool
+            .in_space(space)
+            .estimate_packing_gas_limit(
                 gas_target,
                 parent_base_price,
                 min_base_price,
             );
         let price_limit = compute_next_price(
             gas_target,
-            gas_limit,
+            packing_gas_limit,
             parent_base_price,
             min_base_price,
         );
-        (gas_limit, price_limit)
+        (packing_gas_limit, price_limit)
     }
 
     #[inline]
@@ -1146,7 +1145,7 @@ impl TransactionPoolInner {
     }
 
     pub fn pack_transactions_1559<'a>(
-        &mut self, num_txs: usize, gas_limit: U256,
+        &mut self, num_txs: usize, block_gas_limit: U256,
         parent_base_price: SpaceMap<U256>, block_size_limit: usize,
         best_epoch_height: u64, best_block_number: u64,
         verification_config: &VerificationConfig, machine: &Machine,
@@ -1174,12 +1173,13 @@ impl TransactionPoolInner {
             machine.params().can_pack_evm_transaction(best_epoch_height);
 
         let (evm_packed_tx_num, evm_used_size) = if can_pack_evm {
-            let gas_target = gas_limit * 5 / 10 / ELASTICITY_MULTIPLIER;
+            let gas_target = block_gas_limit * 5 / 10 / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Ethereum];
-            let min_base_price = INITIAL_1559_ETH_BASE_PRICE.into();
+            let min_base_price =
+                machine.params().min_base_price()[Space::Ethereum];
 
-            let (packed_limit, base_price) =
-                self.deferred_pool.estimate_block_gas_limit(
+            let (packing_gas_limit, base_price) =
+                self.deferred_pool.estimate_packing_gas_limit(
                     Space::Ethereum,
                     gas_target,
                     parent_base_price,
@@ -1188,7 +1188,7 @@ impl TransactionPoolInner {
             let (sampled_tx, used_gas, used_size) =
                 self.deferred_pool.packing_sampler(
                     Space::Ethereum,
-                    packed_limit,
+                    packing_gas_limit,
                     block_size_limit,
                     num_txs,
                     base_price,
@@ -1209,12 +1209,13 @@ impl TransactionPoolInner {
         };
 
         {
-            let gas_target = gas_limit * 9 / 10 / ELASTICITY_MULTIPLIER;
+            let gas_target = block_gas_limit * 9 / 10 / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Native];
-            let min_base_price = INITIAL_1559_CORE_BASE_PRICE.into();
+            let min_base_price =
+                machine.params().min_base_price()[Space::Native];
 
             let (packed_limit, tx_min_price) =
-                self.deferred_pool.estimate_block_gas_limit(
+                self.deferred_pool.estimate_packing_gas_limit(
                     Space::Native,
                     gas_target,
                     parent_base_price,

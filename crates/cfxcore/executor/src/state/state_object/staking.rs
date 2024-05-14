@@ -181,7 +181,7 @@ pub fn initialize_or_update_dao_voted_params(
         )?;
     }
 
-    let old_base_fee_prop = state.get_base_fee_prop();
+    let old_base_fee_prop = state.get_base_price_prop();
     if !old_base_fee_prop.is_zero() {
         state.set_base_fee_prop(
             vote_count

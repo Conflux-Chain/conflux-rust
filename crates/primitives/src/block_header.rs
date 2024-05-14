@@ -6,7 +6,9 @@ use crate::{
     block::BlockHeight, bytes::Bytes, hash::keccak, pos::PosBlockId,
     receipt::BlockReceipts, MERKLE_NULL_NODE, NULL_EPOCH,
 };
-use cfx_types::{Address, Bloom, SpaceMap, H256, KECCAK_EMPTY_BLOOM, U256};
+use cfx_types::{
+    Address, Bloom, Space, SpaceMap, H256, KECCAK_EMPTY_BLOOM, U256,
+};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use once_cell::sync::OnceCell;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -179,14 +181,6 @@ impl BlockHeader {
                  espace_base_price,
              }| SpaceMap::new(core_base_price, espace_base_price),
         )
-    }
-
-    pub fn core_base_fee(&self) -> Option<&U256> {
-        self.base_price.as_ref().map(|l| &l.core_base_price)
-    }
-
-    pub fn espace_base_fee(&self) -> Option<&U256> {
-        self.base_price.as_ref().map(|l| &l.espace_base_price)
     }
 
     /// Set the nonce field of the header.
@@ -544,10 +538,13 @@ impl BlockHeaderBuilder {
         self
     }
 
-    pub fn with_cip1559_data(
-        &mut self, cip1559_data: Option<BasePrice>,
+    pub fn with_base_price(
+        &mut self, maybe_base_price: Option<SpaceMap<U256>>,
     ) -> &mut Self {
-        self.base_price = cip1559_data;
+        self.base_price = maybe_base_price.map(|x| BasePrice {
+            core_base_price: x[Space::Native],
+            espace_base_price: x[Space::Ethereum],
+        });
         self
     }
 
@@ -712,16 +709,19 @@ pub fn compute_next_price(
         }
         last_base_price - price_delta
     };
-    next_base_price.min(min_base_price)
+    next_base_price.max(min_base_price)
 }
 
-pub fn estimate_gas_limit(
+pub fn estimate_gas_used(
     gas_target: U256, current_base_price: U256, last_base_price: U256,
 ) -> U256 {
+    // dbg!(gas_target, current_base_price, last_base_price);
     const DENOM: usize = BASE_PRICE_CHANGE_DENOMINATOR;
 
-    let upper_base_price = last_base_price + last_base_price / DENOM;
-    let lower_base_price = last_base_price - last_base_price / DENOM;
+    let delta = U256::max(U256::one(), last_base_price / DENOM);
+
+    let upper_base_price = last_base_price + delta;
+    let lower_base_price = last_base_price - delta;
 
     if current_base_price > upper_base_price {
         gas_target * 2

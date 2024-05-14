@@ -8,7 +8,7 @@ use crate::miner::{
     work_notify::NotifyWork,
 };
 use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, SpaceMap, H256, U256};
 use cfxcore::{
     block_parameters::*,
     consensus::{consensus_inner::StateBlameInfo, pos_handler::PosVerifier},
@@ -202,6 +202,7 @@ impl BlockGenerator {
         mut blame_info: StateBlameInfo, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
         adaptive_opt: Option<bool>, maybe_pos_reference: Option<PosBlockId>,
+        maybe_base_price: Option<SpaceMap<U256>>,
     ) -> Block {
         trace!("{} txs packed", transactions.len());
         let consensus_graph = self.consensus_graph();
@@ -279,8 +280,7 @@ impl BlockGenerator {
             .with_gas_limit(block_gas_limit)
             .with_custom(custom)
             .with_pos_reference(maybe_pos_reference)
-            // TODO: Set base fee and gas limit
-            .with_cip1559_data(None)
+            .with_base_price(maybe_base_price)
             .build();
 
         Block::new(block_header, transactions)
@@ -304,14 +304,45 @@ impl BlockGenerator {
             self.graph.verification_config.max_block_size_in_bytes;
         let best_info = consensus_graph.best_info();
 
-        let transactions = self.txpool.pack_transactions(
-            num_txs,
-            block_gas_limit,
-            U256::zero(),
-            block_size_limit,
-            best_info.best_epoch_number,
-            best_info.best_block_number,
-        );
+        let parent_block = self
+            .txpool
+            .data_man
+            .block_header_by_hash(&best_info.best_block_hash)
+            // The parent block must exists.
+            .expect("Parent block not found");
+
+        let machine = self.txpool.machine();
+        let params = machine.params();
+        let cip1559_height = params.transition_heights.cip1559;
+        let pack_height = best_info.best_epoch_number + 1;
+
+        let (transactions, maybe_base_price) = if pack_height < cip1559_height {
+            let txs = self.txpool.pack_transactions(
+                num_txs,
+                block_gas_limit,
+                U256::zero(),
+                block_size_limit,
+                best_info.best_epoch_number,
+                best_info.best_block_number,
+            );
+            (txs, None)
+        } else {
+            let parent_base_price = if cip1559_height == pack_height {
+                params.init_base_price()
+            } else {
+                parent_block.base_price().unwrap()
+            };
+
+            let (txs, base_price) = self.txpool.pack_transactions_1559(
+                num_txs,
+                block_gas_limit,
+                parent_base_price,
+                block_size_limit,
+                best_info.best_epoch_number,
+                best_info.best_block_number,
+            );
+            (txs, Some(base_price))
+        };
 
         Ok(self.assemble_new_block_impl(
             parent_hash,
@@ -322,6 +353,7 @@ impl BlockGenerator {
             difficulty,
             Some(adaptive),
             pos_reference.or_else(|| self.get_pos_reference(&parent_hash)),
+            maybe_base_price,
         ))
     }
 
@@ -332,7 +364,7 @@ impl BlockGenerator {
     ) -> Block {
         let consensus_graph = self.consensus_graph();
 
-        let (best_info, block_gas_limit, transactions) =
+        let (best_info, block_gas_limit, transactions, maybe_base_price) =
             self.txpool.get_best_info_with_packed_transactions(
                 num_txs,
                 block_size_limit,
@@ -379,6 +411,7 @@ impl BlockGenerator {
             0,
             None,
             maybe_pos_reference,
+            maybe_base_price,
         )
     }
 
@@ -394,7 +427,7 @@ impl BlockGenerator {
     ) -> Block {
         let consensus_graph = self.consensus_graph();
 
-        let (best_info, block_gas_limit, transactions) =
+        let (best_info, block_gas_limit, transactions, maybe_base_price) =
             self.txpool.get_best_info_with_packed_transactions(
                 num_txs,
                 block_size_limit,
@@ -433,6 +466,7 @@ impl BlockGenerator {
             0,
             None,
             self.get_pos_reference(&best_block_hash),
+            maybe_base_price,
         )
     }
 
@@ -526,7 +560,7 @@ impl BlockGenerator {
     ) -> H256 {
         let consensus_graph = self.consensus_graph();
         // get the best block
-        let (best_info, block_gas_limit, _) = self
+        let (best_info, block_gas_limit, _, maybe_base_price) = self
             .txpool
             .get_best_info_with_packed_transactions(0, 0, Vec::new());
         let state_blame_info = consensus_graph
@@ -548,6 +582,7 @@ impl BlockGenerator {
             0,
             adaptive,
             self.get_pos_reference(&best_block_hash),
+            maybe_base_price,
         );
 
         self.generate_block_impl(block)
@@ -573,6 +608,8 @@ impl BlockGenerator {
             0,
             Some(adaptive),
             self.get_pos_reference(&parent_hash),
+            // FIXME[1559]: check later
+            None,
         );
         if let Some(custom) = maybe_custom {
             block.block_header.set_custom(custom);
@@ -601,6 +638,8 @@ impl BlockGenerator {
             0,
             Some(adaptive),
             self.get_pos_reference(&parent_hash),
+            // FIXME[1559]
+            None,
         );
         block.block_header.set_nonce(nonce);
         block.block_header.set_timestamp(timestamp);

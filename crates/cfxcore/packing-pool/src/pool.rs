@@ -12,7 +12,7 @@ use super::{
 };
 use cfx_types::U256;
 use malloc_size_of::MallocSizeOf;
-use primitives::block_header::estimate_gas_limit;
+use primitives::block_header::estimate_gas_used;
 use rand::RngCore;
 use treap_map::{
     ApplyOpOutcome, ConsoliableWeight, Node, SearchDirection, SearchResult,
@@ -182,15 +182,14 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         }
     }
 
-    pub fn estimate_block_gas_limit(
-        &self, block_gas_target: U256, parent_base_price: U256,
-        min_base_price: U256,
+    pub fn estimate_packing_gas_limit(
+        &self, gas_target: U256, parent_base_price: U256, min_base_price: U256,
     ) -> U256 {
         let ret = self.treap_map.search(|left_weight, node| {
             let can_sample = |weight| {
                 can_sample_within_1559(
                     weight,
-                    block_gas_target,
+                    gas_target,
                     parent_base_price,
                     min_base_price,
                 )
@@ -204,7 +203,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             if !can_sample(&right_weight) {
                 return SearchDirection::Stop;
             } else {
-                return SearchDirection::RightOrStop(right_weight);
+                return SearchDirection::Right(right_weight);
             }
         });
         match ret {
@@ -286,20 +285,20 @@ fn can_sample_within_1559(
         return false;
     }
 
-    let gas_limit =
-        estimate_gas_limit(gas_target, weight.min_gas_price, parent_base_price);
+    let target_gas_used =
+        estimate_gas_used(gas_target, weight.min_gas_price, parent_base_price);
 
-    if gas_limit.is_zero() {
+    if target_gas_used.is_zero() {
         return false;
     }
 
-    if weight.gas_limit <= gas_limit {
+    if weight.gas_limit <= target_gas_used {
         return true;
     }
 
     weight
         .max_loss_ratio
-        .saturating_mul(weight.gas_limit - gas_limit)
+        .saturating_mul(weight.gas_limit - target_gas_used)
         < weight.weighted_loss_ratio
 }
 

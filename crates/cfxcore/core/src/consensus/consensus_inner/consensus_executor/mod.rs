@@ -1659,8 +1659,8 @@ impl ConsensusExecutionHandler {
             transaction_epoch_bound: self
                 .verification_config
                 .transaction_epoch_bound,
-            base_gas_price: U256::zero(),
-            burnt_gas_price: U256::zero(),
+            base_gas_price: Default::default(),
+            burnt_gas_price: Default::default(),
         };
         let spec = self.machine.spec(env.number, env.epoch_height);
         let mut ex = EstimationContext::new(

@@ -122,8 +122,8 @@ pub enum TransactionError {
     /// Invalid RLP encoding
     InvalidRlp(String),
     ZeroGasPrice,
-    /// Ethereum-like transaction with invalid storage limit.
-    InvalidEthereumLike,
+    /// Transaction types have not been activated
+    FutureTransactionType,
     /// Receiver with invalid type bit.
     InvalidReceiver,
     /// Transaction nonce exceeds local limit.
@@ -189,7 +189,7 @@ impl fmt::Display for TransactionError {
                 format!("Transaction has invalid RLP structure: {}.", err)
             }
             ZeroGasPrice => "Zero gas price is not allowed".into(),
-            InvalidEthereumLike => "Ethereum like transaction should have u64::MAX storage limit".into(),
+            FutureTransactionType => "Ethereum like transaction should have u64::MAX storage limit".into(),
             InvalidReceiver => "Sending transaction to invalid address. The first four bits of address must be 0x0, 0x1, or 0x8.".into(),
             TooLargeNonce => "Transaction nonce is too large.".into(),
         };
@@ -348,6 +348,14 @@ impl Transaction {
             Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => Some(1),
             Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => Some(2),
         }
+    }
+
+    pub fn before_1559(&self) -> bool {
+        matches!(
+            self,
+            Transaction::Native(TypedNativeTransaction::Cip155(_))
+                | Transaction::Ethereum(EthereumTransaction::Eip155(_))
+        )
     }
 
     pub fn access_list(&self) -> Option<&AccessList> {

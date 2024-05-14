@@ -12,7 +12,12 @@ pub struct PackingPoolWeight {
 
 impl ConsoliableWeight for PackingPoolWeight {
     #[inline]
-    fn empty() -> Self { Self::default() }
+    fn empty() -> Self {
+        Self {
+            min_gas_price: U256::max_value(),
+            ..Default::default()
+        }
+    }
 
     fn consolidate(a: &Self, b: &Self) -> Self {
         Self {

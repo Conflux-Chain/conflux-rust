@@ -22,10 +22,15 @@ use account_cache::AccountCache;
 use cfx_executor::{
     machine::Machine, spec::TransitionsEpochHeight, state::State,
 };
-use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
+use cfx_parameters::{
+    block::DEFAULT_TARGET_BLOCK_GAS_LIMIT,
+    consensus_internal::ELASTICITY_MULTIPLIER,
+};
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
-use cfx_types::{AddressWithSpace as Address, AllChainID, Space, SpaceMap, H256, U256};
+use cfx_types::{
+    AddressWithSpace as Address, AllChainID, Space, SpaceMap, H256, U256,
+};
 use cfx_vm_types::Spec;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
@@ -732,9 +737,9 @@ impl TransactionPool {
     }
 
     pub fn pack_transactions_1559<'a>(
-        &self, num_txs: usize, gas_limit: U256, parent_base_price: SpaceMap<U256>,
-        block_size_limit: usize, mut best_epoch_height: u64,
-        mut best_block_number: u64,
+        &self, num_txs: usize, block_gas_limit: U256,
+        parent_base_price: SpaceMap<U256>, block_size_limit: usize,
+        mut best_epoch_height: u64, mut best_block_number: u64,
     ) -> (Vec<Arc<SignedTransaction>>, SpaceMap<U256>) {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         best_epoch_height += 1;
@@ -742,7 +747,7 @@ impl TransactionPool {
         best_block_number += 1;
         inner.pack_transactions_1559(
             num_txs,
-            gas_limit,
+            block_gas_limit,
             parent_base_price,
             block_size_limit,
             best_epoch_height,
@@ -886,7 +891,12 @@ impl TransactionPool {
     pub fn get_best_info_with_packed_transactions(
         &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,
-    ) -> (Arc<BestInformation>, U256, Vec<Arc<SignedTransaction>>) {
+    ) -> (
+        Arc<BestInformation>,
+        U256,
+        Vec<Arc<SignedTransaction>>,
+        Option<SpaceMap<U256>>,
+    ) {
         // We do not need to hold the lock because it is fine for us to generate
         // blocks that are slightly behind the best state.
         // We do not want to stall the consensus thread.
@@ -896,16 +906,25 @@ impl TransactionPool {
             consensus_best_info_clone
         );
 
-        let parent_block_gas_limit = self
+        let params = self.machine.params();
+
+        let cip1559_height = params.transition_heights.cip1559;
+        let pack_height = consensus_best_info_clone.best_epoch_number + 1;
+
+        let parent_block = self
             .data_man
             .block_header_by_hash(&consensus_best_info_clone.best_block_hash)
             // The parent block must exists.
-            .expect(&concat!(file!(), ":", line!(), ":", column!()))
-            .gas_limit()
-            .clone();
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
+        let parent_block_gas_limit = *parent_block.gas_limit()
+            * if cip1559_height == pack_height {
+                ELASTICITY_MULTIPLIER
+            } else {
+                1
+            };
 
-        let gas_limit_divisor = self.machine.params().gas_limit_bound_divisor;
-        let min_gas_limit = self.machine.params().min_gas_limit;
+        let gas_limit_divisor = params.gas_limit_bound_divisor;
+        let min_gas_limit = params.min_gas_limit;
         assert!(parent_block_gas_limit >= min_gas_limit);
         let gas_lower = max(
             parent_block_gas_limit - parent_block_gas_limit / gas_limit_divisor
@@ -918,22 +937,53 @@ impl TransactionPool {
 
         let target_gas_limit = self.config.target_block_gas_limit.into();
         let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
-        let evm_gas_limit = if self.machine.params().can_pack_evm_transaction(
-            consensus_best_info_clone.best_epoch_number + 1,
-        ) {
-            self_gas_limit / self.machine.params().evm_transaction_gas_ratio
-        } else {
-            U256::zero()
-        };
 
-        let transactions_from_pool = self.pack_transactions(
-            num_txs,
-            self_gas_limit.clone(),
-            evm_gas_limit,
-            block_size_limit,
-            consensus_best_info_clone.best_epoch_number,
-            consensus_best_info_clone.best_block_number,
-        );
+        let cip1559_height = params.transition_heights.cip1559;
+        let pack_height = consensus_best_info_clone.best_epoch_number + 1;
+
+        let (transactions_from_pool, maybe_base_price) =
+            if pack_height < cip1559_height {
+                let evm_gas_limit = if self
+                    .machine
+                    .params()
+                    .can_pack_evm_transaction(pack_height)
+                {
+                    self_gas_limit / params.evm_transaction_gas_ratio
+                } else {
+                    U256::zero()
+                };
+
+                let txs = self.pack_transactions(
+                    num_txs,
+                    self_gas_limit.clone(),
+                    evm_gas_limit,
+                    block_size_limit,
+                    consensus_best_info_clone.best_epoch_number,
+                    consensus_best_info_clone.best_block_number,
+                );
+                (txs, None)
+            } else {
+                let parent_base_price = if pack_height == cip1559_height {
+                    params.init_base_price()
+                } else {
+                    parent_block.base_price().unwrap()
+                };
+
+                let (tx, base_price) = self.pack_transactions_1559(
+                    num_txs,
+                    self_gas_limit.clone(),
+                    parent_base_price,
+                    block_size_limit,
+                    consensus_best_info_clone.best_epoch_number,
+                    consensus_best_info_clone.best_block_number,
+                );
+                (tx, Some(base_price))
+            };
+
+        if cip1559_height >= pack_height && !additional_transactions.is_empty()
+        {
+            eprintln!("The current version cannot handle CIP-1559 with additional transactions. ");
+        }
 
         let transactions = [
             additional_transactions.as_slice(),
@@ -941,7 +991,12 @@ impl TransactionPool {
         ]
         .concat();
 
-        (consensus_best_info_clone, self_gas_limit, transactions)
+        (
+            consensus_best_info_clone,
+            self_gas_limit,
+            transactions,
+            maybe_base_price,
+        )
     }
 
     fn best_executed_state(

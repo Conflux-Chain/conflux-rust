@@ -62,8 +62,8 @@ fn txexe_benchmark(c: &mut Criterion) {
         pos_view: None,
         finalized_epoch: None,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
-        base_gas_price: U256::zero(),
-        burnt_gas_price: U256::zero(),
+        base_gas_price: Default::default(),
+        burnt_gas_price: Default::default(),
     };
     let mut group = c.benchmark_group("Execute 1 transaction");
     group

@@ -965,6 +965,7 @@ impl RpcImpl {
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty, pos_reference,
         );
+
         Ok(self.block_gen.generate_fixed_block(
             parent_hash,
             referee,

@@ -17,7 +17,7 @@ use cfx_parameters::{
         INITIAL_BASE_MINING_REWARD_IN_UCFX,
     },
 };
-use cfx_types::{AllChainID, Space, U256, U512};
+use cfx_types::{AllChainID, Space, SpaceMap, U256, U512};
 use cfx_vm_types::Spec;
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
@@ -54,6 +54,7 @@ pub struct CommonParams {
     /// transactions
     pub evm_transaction_gas_ratio: u64,
     pub params_dao_vote_period: u64,
+    pub min_base_price: SpaceMap<U256>,
 
     /// Set the internal contracts to state at the genesis blocks, even if it
     /// is not activated.
@@ -148,6 +149,7 @@ impl Default for CommonParams {
             early_set_internal_contracts_states: false,
             transition_numbers: Default::default(),
             transition_heights: Default::default(),
+            min_base_price: SpaceMap::new(U256::one(), U256::one()),
         }
     }
 }
@@ -242,4 +244,8 @@ impl CommonParams {
             ),
         ])
     }
+
+    pub fn init_base_price(&self) -> SpaceMap<U256> { self.min_base_price }
+
+    pub fn min_base_price(&self) -> SpaceMap<U256> { self.min_base_price }
 }
