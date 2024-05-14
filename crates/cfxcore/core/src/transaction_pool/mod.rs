@@ -1010,9 +1010,6 @@ impl TransactionPool {
         let self_gas_limit =
             min(max(target_gas_limit.into(), gas_lower), gas_upper);
 
-        let cip1559_height = params.transition_heights.cip1559;
-        let pack_height = consensus_best_info_clone.best_epoch_number + 1;
-
         let (transactions_from_pool, maybe_base_price) = if pack_height
             < cip1559_height
         {
@@ -1072,7 +1069,6 @@ impl TransactionPool {
                     }
                     Err(e) => {
                         error!("Cannot compute base price with additinal transactions: {}", e);
-                        eprintln!("Cannot compute base price with additinal transactions: {}", e);
                     }
                 }
             }
