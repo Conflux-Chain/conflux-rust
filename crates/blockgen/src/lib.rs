@@ -599,6 +599,15 @@ impl BlockGenerator {
                 &parent_hash,
             )?;
 
+        let maybe_base_price = self
+            .txpool
+            .compute_1559_base_price(
+                &parent_hash,
+                GENESIS_GAS_LIMIT.into(),
+                transactions.iter().map(|x| &**x),
+            )
+            .expect("Cannot compute base price");
+
         let mut block = self.assemble_new_block_impl(
             parent_hash,
             referee,
@@ -608,8 +617,7 @@ impl BlockGenerator {
             0,
             Some(adaptive),
             self.get_pos_reference(&parent_hash),
-            // FIXME[1559]: check later
-            None,
+            maybe_base_price,
         );
         if let Some(custom) = maybe_custom {
             block.block_header.set_custom(custom);
@@ -629,6 +637,15 @@ impl BlockGenerator {
                 &parent_hash,
             )?;
 
+        let maybe_base_price = self
+            .txpool
+            .compute_1559_base_price(
+                &parent_hash,
+                GENESIS_GAS_LIMIT.into(),
+                transactions.iter().map(|x| &**x),
+            )
+            .expect("Cannot compute base price");
+
         let mut block = self.assemble_new_block_impl(
             parent_hash,
             referee,
@@ -638,8 +655,7 @@ impl BlockGenerator {
             0,
             Some(adaptive),
             self.get_pos_reference(&parent_hash),
-            // FIXME[1559]
-            None,
+            maybe_base_price,
         );
         block.block_header.set_nonce(nonce);
         block.block_header.set_timestamp(timestamp);

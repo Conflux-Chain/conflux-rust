@@ -39,8 +39,8 @@ use metrics::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    block::BlockHeight, Account, SignedTransaction, Transaction,
-    TransactionWithSignature,
+    block::BlockHeight, block_header::compute_next_price_tuple, Account,
+    SignedTransaction, Transaction, TransactionWithSignature,
 };
 use std::{
     cmp::{max, min},
@@ -757,6 +757,71 @@ impl TransactionPool {
         )
     }
 
+    // A helper function for python test. Not intented to be used in the
+    // production mode because of its inefficiency
+    // LINT: this function should not belongs to txpool, since it does not
+    // access the pools. However, since transaction pool has context for
+    // computing the base price, it is the most proper position at this
+    // time. May be fixed in future refactoring.
+    pub fn compute_1559_base_price<'a, I>(
+        &self, parent_hash: &H256, block_gas_limit: U256, txs: I,
+    ) -> Result<Option<SpaceMap<U256>>, String>
+    where I: Iterator<Item = &'a SignedTransaction> + 'a {
+        let parent = self
+            .data_man
+            .block_header_by_hash(parent_hash)
+            .ok_or("Cannot find parent block")?;
+        let current_height = parent.height() + 1;
+
+        let params = self.machine.params();
+        let cip_1559_height = params.transition_heights.cip1559;
+        if current_height < cip_1559_height {
+            return Ok(None);
+        }
+
+        let mut gas_used = SpaceMap::default();
+        let mut min_gas_price =
+            SpaceMap::new(U256::max_value(), U256::max_value());
+        for tx in txs {
+            gas_used[tx.space()] += *tx.gas_limit();
+            min_gas_price[tx.space()] =
+                min_gas_price[tx.space()].min(*tx.gas_limit());
+        }
+
+        let core_gas_limit = block_gas_limit * 9 / 10;
+        let eth_gas_limit = if params.can_pack_evm_transaction(current_height) {
+            block_gas_limit * 5 / 10
+        } else {
+            U256::zero()
+        };
+        let gas_target =
+            SpaceMap::new(core_gas_limit, eth_gas_limit).map_all(|x| x / 2);
+
+        let parent_base_price = if current_height == cip_1559_height {
+            params.init_base_price()
+        } else {
+            parent.base_price().unwrap()
+        };
+
+        let min_base_price = params.min_base_price();
+
+        let base_price = SpaceMap::zip4(
+            gas_target,
+            gas_used,
+            parent_base_price,
+            min_base_price,
+        )
+        .map_all(compute_next_price_tuple);
+
+        for space in [Space::Native, Space::Ethereum] {
+            if base_price[space] > min_gas_price[space] {
+                return Err(format!("Not sufficient min price in space {:?}, expected {:?}, actual {:?}", space, base_price[space], min_gas_price[space]));
+            }
+        }
+
+        Ok(Some(base_price))
+    }
+
     pub fn notify_modified_accounts(
         &self, accounts_from_execution: Vec<Account>,
     ) {
@@ -941,49 +1006,71 @@ impl TransactionPool {
         let cip1559_height = params.transition_heights.cip1559;
         let pack_height = consensus_best_info_clone.best_epoch_number + 1;
 
-        let (transactions_from_pool, maybe_base_price) =
-            if pack_height < cip1559_height {
-                let evm_gas_limit = if self
-                    .machine
-                    .params()
-                    .can_pack_evm_transaction(pack_height)
-                {
-                    self_gas_limit / params.evm_transaction_gas_ratio
-                } else {
-                    U256::zero()
-                };
-
-                let txs = self.pack_transactions(
-                    num_txs,
-                    self_gas_limit.clone(),
-                    evm_gas_limit,
-                    block_size_limit,
-                    consensus_best_info_clone.best_epoch_number,
-                    consensus_best_info_clone.best_block_number,
-                );
-                (txs, None)
+        let (transactions_from_pool, maybe_base_price) = if pack_height
+            < cip1559_height
+        {
+            let evm_gas_limit = if self
+                .machine
+                .params()
+                .can_pack_evm_transaction(pack_height)
+            {
+                self_gas_limit / params.evm_transaction_gas_ratio
             } else {
-                let parent_base_price = if pack_height == cip1559_height {
-                    params.init_base_price()
-                } else {
-                    parent_block.base_price().unwrap()
-                };
-
-                let (tx, base_price) = self.pack_transactions_1559(
-                    num_txs,
-                    self_gas_limit.clone(),
-                    parent_base_price,
-                    block_size_limit,
-                    consensus_best_info_clone.best_epoch_number,
-                    consensus_best_info_clone.best_block_number,
-                );
-                (tx, Some(base_price))
+                U256::zero()
             };
 
-        if cip1559_height >= pack_height && !additional_transactions.is_empty()
-        {
-            eprintln!("The current version cannot handle CIP-1559 with additional transactions. ");
-        }
+            let txs = self.pack_transactions(
+                num_txs,
+                self_gas_limit.clone(),
+                evm_gas_limit,
+                block_size_limit,
+                consensus_best_info_clone.best_epoch_number,
+                consensus_best_info_clone.best_block_number,
+            );
+            (txs, None)
+        } else {
+            let parent_base_price = if pack_height == cip1559_height {
+                params.init_base_price()
+            } else {
+                parent_block.base_price().unwrap()
+            };
+
+            let (txs, packing_base_price) = self.pack_transactions_1559(
+                num_txs,
+                self_gas_limit.clone(),
+                parent_base_price,
+                block_size_limit,
+                consensus_best_info_clone.best_epoch_number,
+                consensus_best_info_clone.best_block_number,
+            );
+
+            let mut base_price = packing_base_price;
+
+            // May only happens in test mode
+            if !additional_transactions.is_empty() {
+                let iter = additional_transactions
+                    .iter()
+                    .chain(txs.iter())
+                    .map(|x| &**x);
+                match self.compute_1559_base_price(
+                    &parent_block.hash(),
+                    self_gas_limit,
+                    iter,
+                ) {
+                    Ok(Some(p)) => {
+                        base_price = p;
+                    }
+                    Ok(None) => {
+                        warn!("Should not happen");
+                    }
+                    Err(e) => {
+                        error!("Cannot compute base price with additinal transactions: {}", e);
+                        eprintln!("Cannot compute base price with additinal transactions: {}", e);
+                    }
+                }
+            }
+            (txs, Some(base_price))
+        };
 
         let transactions = [
             additional_transactions.as_slice(),
