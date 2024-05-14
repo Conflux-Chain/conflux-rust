@@ -58,6 +58,12 @@ public_evm_rpc_apis = "eth,ethdebug"
 
 Currently the opcode trace's structLogs `error` field is not implemented.
 
+## FAQs
+
+1. Does trace RPC methods support eSpace PhantomTransaction traces?
+    
+    Currently, no. We will support it in the future.
+
 ## Resources
 
 1. [Geth EVM Tracing](https://geth.ethereum.org/docs/developers/evm-tracing)
