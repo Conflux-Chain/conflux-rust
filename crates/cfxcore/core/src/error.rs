@@ -34,7 +34,7 @@ pub enum BlockError {
     /// Gas limit header field is invalid.
     InvalidGasLimit(OutOfBounds<U256>),
     /// Total gas limits of transactions in block is out of bound.
-    InvalidBlockGasLimit(OutOfBounds<U256>),
+    InvalidPackedGasLimit(OutOfBounds<U256>),
     /// Total rlp sizes of transactions in block is out of bound.
     InvalidBlockSize(OutOfBounds<u64>),
     InvalidBasePrice(Mismatch<SpaceMap<U256>>),
@@ -98,8 +98,8 @@ impl fmt::Display for BlockError {
             InvalidBasePrice(ref mis) => {
                 format!("Invalid base price: {:?}", mis)
             }
-            InvalidBlockGasLimit(ref oob) => {
-                format!("Invalid block gas limit: {}", oob)
+            InvalidPackedGasLimit(ref oob) => {
+                format!("Invalid packed gas limit: {}", oob)
             }
             InvalidBlockSize(ref oob) => format!("Invalid block size: {}", oob),
             InvalidTimestamp(ref oob) => {

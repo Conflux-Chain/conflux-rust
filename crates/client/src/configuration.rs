@@ -1400,8 +1400,16 @@ impl Configuration {
             params.transition_heights => { cip130, cip133e }
         );
         // TODO: disable 1559 test during dev
-        params.transition_heights.cip1559 =
-            self.raw_conf.cip1559_transition_height.unwrap_or(u64::MAX);
+        params.transition_heights.cip1559 = self
+            .raw_conf
+            .cip1559_transition_height
+            .unwrap_or(non_genesis_default_transition_time);
+
+        if params.transition_heights.cip1559
+            < self.raw_conf.pos_reference_enable_height
+        {
+            panic!("1559 can not be activated earlier than pos reference: 1559 (epoch {}), pos (epoch {})", params.transition_heights.cip1559, self.raw_conf.pos_reference_enable_height);
+        }
     }
 }
 

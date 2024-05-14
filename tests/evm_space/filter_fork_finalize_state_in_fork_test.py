@@ -36,6 +36,7 @@ class FilterForkTest(DefaultConfluxTestFramework):
         # No auto timeout.
         self.pos_parameters["round_time_ms"] = 1000000000
         self.conf_parameters["pos_reference_enable_height"] = 10
+        self.conf_parameters["cip1559_transition_height"] = 10
         self.conf_parameters["adaptive_weight_beta"] = "1"
 
     async def run_async(self):

@@ -522,9 +522,9 @@ impl VerificationConfig {
         let block_total_gas = total_gas.map_sum(|x| *x);
 
         if evm_total_gas > evm_space_gas_limit {
-            return Err(From::from(BlockError::InvalidBlockGasLimit(
+            return Err(From::from(BlockError::InvalidPackedGasLimit(
                 OutOfBounds {
-                    min: Some(evm_space_gas_limit),
+                    min: None,
                     max: Some(evm_space_gas_limit),
                     found: evm_total_gas,
                 },
@@ -532,9 +532,9 @@ impl VerificationConfig {
         }
 
         if block_total_gas > *block.block_header.gas_limit() {
-            return Err(From::from(BlockError::InvalidBlockGasLimit(
+            return Err(From::from(BlockError::InvalidPackedGasLimit(
                 OutOfBounds {
-                    min: Some(*block.block_header.gas_limit()),
+                    min: None,
                     max: Some(*block.block_header.gas_limit()),
                     found: block_total_gas,
                 },
@@ -564,9 +564,9 @@ impl VerificationConfig {
             };
 
         if total_gas[Ethereum] > espace_gas_limit {
-            return Err(From::from(BlockError::InvalidBlockGasLimit(
+            return Err(From::from(BlockError::InvalidPackedGasLimit(
                 OutOfBounds {
-                    min: Some(espace_gas_limit),
+                    min: None,
                     max: Some(espace_gas_limit),
                     found: total_gas[Ethereum],
                 },
@@ -574,9 +574,9 @@ impl VerificationConfig {
         }
 
         if total_gas[Native] > core_gas_limit {
-            return Err(From::from(BlockError::InvalidBlockGasLimit(
+            return Err(From::from(BlockError::InvalidPackedGasLimit(
                 OutOfBounds {
-                    min: Some(core_gas_limit),
+                    min: None,
                     max: Some(core_gas_limit),
                     found: total_gas[Native],
                 },

@@ -1000,8 +1000,15 @@ impl TransactionPool {
             + parent_block_gas_limit / gas_limit_divisor
             - 1;
 
-        let target_gas_limit = self.config.target_block_gas_limit.into();
-        let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
+        let target_gas_limit = self.config.target_block_gas_limit
+            * if pack_height >= cip1559_height {
+                ELASTICITY_MULTIPLIER as u64
+            } else {
+                1
+            };
+
+        let self_gas_limit =
+            min(max(target_gas_limit.into(), gas_lower), gas_upper);
 
         let cip1559_height = params.transition_heights.cip1559;
         let pack_height = consensus_best_info_clone.best_epoch_number + 1;
