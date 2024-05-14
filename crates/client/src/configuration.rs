@@ -348,6 +348,10 @@ build_config! {
         (pos_cip99_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
         (pos_cip99_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
         (nonce_limit_transition_view, (u64), u64::MAX)
+        (pos_cip136_transition_view, (u64), u64::MAX)
+        (pos_cip136_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
+        (pos_cip136_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
+        (pos_cip136_round_per_term, (u64), ROUND_PER_TERM)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 
@@ -1391,6 +1395,10 @@ impl Configuration {
             self.raw_conf.pos_cip99_out_queue_locked_views,
             self.raw_conf.nonce_limit_transition_view,
             20_000, // 2 * 10^7 CFX
+            self.raw_conf.pos_cip136_transition_view,
+            self.raw_conf.pos_cip136_in_queue_locked_views,
+            self.raw_conf.pos_cip136_out_queue_locked_views,
+            self.raw_conf.pos_cip136_round_per_term,
         )
     }
 }
