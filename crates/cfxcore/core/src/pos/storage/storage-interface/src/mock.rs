@@ -18,7 +18,7 @@ use diem_types::{
     epoch_change::EpochChangeProof,
     ledger_info::LedgerInfoWithSignatures,
     proof::{AccumulatorConsistencyProof, SparseMerkleProof},
-    reward_distribution_event::RewardDistributionEvent,
+    reward_distribution_event::RewardDistributionEventV2,
     transaction::{TransactionListWithProof, TransactionWithProof, Version},
 };
 
@@ -139,7 +139,7 @@ impl DBReaderForPoW for MockDbReader {
 
     fn get_reward_event(
         &self, _epoch: u64,
-    ) -> anyhow::Result<RewardDistributionEvent> {
+    ) -> anyhow::Result<RewardDistributionEventV2> {
         todo!()
     }
 
