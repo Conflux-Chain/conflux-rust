@@ -44,13 +44,11 @@ impl ConsensusExecutionHandler {
 
         self.before_epoch_execution(state, &*pivot_block)?;
 
-        let base_gas_price = pivot_block
-            .block_header
-            .core_base_fee()
-            .cloned()
-            .unwrap_or_default();
+        let base_gas_price =
+            pivot_block.block_header.base_price().unwrap_or_default();
 
-        let burnt_gas_price = state.burnt_gas_price(base_gas_price);
+        let burnt_gas_price =
+            base_gas_price.map_all(|x| state.burnt_gas_price(x));
         let context = EpochProcessContext {
             on_local_pivot,
             executive_trace: self.config.executive_trace,
@@ -421,8 +419,8 @@ struct EpochProcessContext<'a> {
 
     pivot_block: &'a Block,
 
-    base_gas_price: U256,
-    burnt_gas_price: U256,
+    base_gas_price: SpaceMap<U256>,
+    burnt_gas_price: SpaceMap<U256>,
 }
 
 struct BlockProcessContext<'a, 'b> {

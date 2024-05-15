@@ -120,10 +120,11 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
     }
 
     fn check_base_price(&self) -> Result<(), ExecutionOutcome> {
-        if self.tx.gas_price() < &self.context.env.burnt_gas_price {
+        let burnt_gas_price = self.context.env.burnt_gas_price[self.tx.space()];
+        if self.tx.gas_price() < &burnt_gas_price {
             Err(ExecutionOutcome::NotExecutedToReconsiderPacking(
                 ToRepackError::NotEnoughBaseFee {
-                    expected: self.context.env.burnt_gas_price,
+                    expected: burnt_gas_price,
                     got: *self.tx.gas_price(),
                 },
             ))
@@ -189,11 +190,11 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         } else {
             // actual_base_gas >= tx gas_price >= burnt_base_price
             let actual_base_gas =
-                U256::min(*tx.gas_price(), env.base_gas_price);
+                U256::min(*tx.gas_price(), env.base_gas_price[tx.space()]);
             tx.effective_gas_price(&actual_base_gas)
         };
 
-        let burnt_gas_price = env.burnt_gas_price;
+        let burnt_gas_price = env.burnt_gas_price[tx.space()];
         // gas_price >= actual_base_gas >=
         //   1. tx gas_price >= burnt_base_price
         //   2. base_gas_price >= burnt_gas_price

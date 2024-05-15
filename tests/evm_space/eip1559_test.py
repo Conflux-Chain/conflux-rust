@@ -10,13 +10,13 @@ from conflux.address import b32_address_to_hex
 from conflux.rpc import RpcClient
 from web3 import Web3
 
-
 class Eip1559Test(Web3Base):
     def set_test_params(self):
         self.num_nodes = 2
         self.conf_parameters["evm_chain_id"] = str(10)
         self.conf_parameters["evm_transaction_block_ratio"] = str(1)
         self.conf_parameters["executive_trace"] = "true"
+        self.conf_parameters["cip1559_transition_height"] = str(1)
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -56,7 +56,7 @@ class Eip1559Test(Web3Base):
             "nonce": nonce,
             "chainId": 10,
         })
-        print(signed)
+        self.log.info("Signed transaction %s", signed)
 
         return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
         self.rpc.generate_block(1)
@@ -68,7 +68,7 @@ class Eip1559Test(Web3Base):
         assert_equal(receipt["txExecErrorMsg"], None)
 
         tx = self.w3.eth.get_transaction(return_tx_hash)
-        print(tx)
+        self.log.info("Get transaction from node %s", tx)
         assert_equal(receipt["status"], 1)
 
         # Check if another node can decode EIP1559 transactions

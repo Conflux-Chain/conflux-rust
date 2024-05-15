@@ -54,7 +54,7 @@ impl State {
         self.sub_total_issued(by);
     }
 
-    pub fn get_base_fee_prop(&self) -> U256 {
+    pub fn get_base_price_prop(&self) -> U256 {
         self.global_stat.get::<BaseFeeProp>()
     }
 
@@ -62,12 +62,12 @@ impl State {
         *self.global_stat.val::<BaseFeeProp>() = val;
     }
 
-    pub fn burnt_gas_price(&self, base_fee: U256) -> U256 {
-        if base_fee.is_zero() {
+    pub fn burnt_gas_price(&self, base_price: U256) -> U256 {
+        if base_price.is_zero() {
             return U256::zero();
         }
-        let prop = self.get_base_fee_prop();
-        base_fee - base_fee * prop / (U256::from(ONE_CFX_IN_DRIP) + prop)
+        let prop = self.get_base_price_prop();
+        base_price - base_price * prop / (U256::from(ONE_CFX_IN_DRIP) + prop)
     }
 }
 

@@ -10,6 +10,8 @@ from test_framework.util import *
 class SyncTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
+        # Disable 1559 because it has hardcore execution result not compatible with 1559
+        self.conf_parameters["cip1559_transition_height"] = str(99999999)
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)

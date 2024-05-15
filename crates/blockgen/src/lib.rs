@@ -7,8 +7,10 @@ use crate::miner::{
     stratum::{Options as StratumOption, Stratum},
     work_notify::NotifyWork,
 };
-use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
-use cfx_types::{Address, H256, U256};
+use cfx_parameters::{
+    consensus::GENESIS_GAS_LIMIT, consensus_internal::ELASTICITY_MULTIPLIER,
+};
+use cfx_types::{Address, SpaceMap, H256, U256};
 use cfxcore::{
     block_parameters::*,
     consensus::{consensus_inner::StateBlameInfo, pos_handler::PosVerifier},
@@ -202,6 +204,7 @@ impl BlockGenerator {
         mut blame_info: StateBlameInfo, block_gas_limit: U256,
         transactions: Vec<Arc<SignedTransaction>>, difficulty: u64,
         adaptive_opt: Option<bool>, maybe_pos_reference: Option<PosBlockId>,
+        maybe_base_price: Option<SpaceMap<U256>>,
     ) -> Block {
         trace!("{} txs packed", transactions.len());
         let consensus_graph = self.consensus_graph();
@@ -279,8 +282,7 @@ impl BlockGenerator {
             .with_gas_limit(block_gas_limit)
             .with_custom(custom)
             .with_pos_reference(maybe_pos_reference)
-            // TODO: Set base fee and gas limit
-            .with_cip1559_data(None)
+            .with_base_price(maybe_base_price)
             .build();
 
         Block::new(block_header, transactions)
@@ -290,7 +292,7 @@ impl BlockGenerator {
     /// only
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: u64, adaptive: bool, block_gas_limit: u64,
+        difficulty: u64, adaptive: bool, block_gas_target: u64,
         pos_reference: Option<PosBlockId>,
     ) -> Result<Block, String> {
         let consensus_graph = self.consensus_graph();
@@ -299,19 +301,55 @@ impl BlockGenerator {
                 &parent_hash,
             )?;
 
-        let block_gas_limit = block_gas_limit.into();
         let block_size_limit =
             self.graph.verification_config.max_block_size_in_bytes;
         let best_info = consensus_graph.best_info();
 
-        let transactions = self.txpool.pack_transactions(
-            num_txs,
-            block_gas_limit,
-            U256::zero(),
-            block_size_limit,
-            best_info.best_epoch_number,
-            best_info.best_block_number,
-        );
+        let parent_block = self
+            .txpool
+            .data_man
+            .block_header_by_hash(&best_info.best_block_hash)
+            // The parent block must exists.
+            .expect("Parent block not found");
+
+        let machine = self.txpool.machine();
+        let params = machine.params();
+        let cip1559_height = params.transition_heights.cip1559;
+        let pack_height = best_info.best_epoch_number + 1;
+
+        let block_gas_limit = if pack_height >= cip1559_height {
+            (block_gas_target * ELASTICITY_MULTIPLIER as u64).into()
+        } else {
+            block_gas_target.into()
+        };
+
+        let (transactions, maybe_base_price) = if pack_height < cip1559_height {
+            let txs = self.txpool.pack_transactions(
+                num_txs,
+                block_gas_limit,
+                U256::zero(),
+                block_size_limit,
+                best_info.best_epoch_number,
+                best_info.best_block_number,
+            );
+            (txs, None)
+        } else {
+            let parent_base_price = if cip1559_height == pack_height {
+                params.init_base_price()
+            } else {
+                parent_block.base_price().unwrap()
+            };
+
+            let (txs, base_price) = self.txpool.pack_transactions_1559(
+                num_txs,
+                block_gas_limit,
+                parent_base_price,
+                block_size_limit,
+                best_info.best_epoch_number,
+                best_info.best_block_number,
+            );
+            (txs, Some(base_price))
+        };
 
         Ok(self.assemble_new_block_impl(
             parent_hash,
@@ -322,6 +360,7 @@ impl BlockGenerator {
             difficulty,
             Some(adaptive),
             pos_reference.or_else(|| self.get_pos_reference(&parent_hash)),
+            maybe_base_price,
         ))
     }
 
@@ -332,7 +371,7 @@ impl BlockGenerator {
     ) -> Block {
         let consensus_graph = self.consensus_graph();
 
-        let (best_info, block_gas_limit, transactions) =
+        let (best_info, block_gas_limit, transactions, maybe_base_price) =
             self.txpool.get_best_info_with_packed_transactions(
                 num_txs,
                 block_size_limit,
@@ -379,6 +418,7 @@ impl BlockGenerator {
             0,
             None,
             maybe_pos_reference,
+            maybe_base_price,
         )
     }
 
@@ -394,7 +434,7 @@ impl BlockGenerator {
     ) -> Block {
         let consensus_graph = self.consensus_graph();
 
-        let (best_info, block_gas_limit, transactions) =
+        let (best_info, block_gas_limit, transactions, maybe_base_price) =
             self.txpool.get_best_info_with_packed_transactions(
                 num_txs,
                 block_size_limit,
@@ -433,6 +473,7 @@ impl BlockGenerator {
             0,
             None,
             self.get_pos_reference(&best_block_hash),
+            maybe_base_price,
         )
     }
 
@@ -526,9 +567,26 @@ impl BlockGenerator {
     ) -> H256 {
         let consensus_graph = self.consensus_graph();
         // get the best block
-        let (best_info, block_gas_limit, _) = self
+        let (best_info, _, _, _) = self
             .txpool
             .get_best_info_with_packed_transactions(0, 0, Vec::new());
+
+        let parent_hash = best_info.best_block_hash;
+        let maybe_base_price = self
+            .txpool
+            .compute_1559_base_price(
+                &parent_hash,
+                (GENESIS_GAS_LIMIT * ELASTICITY_MULTIPLIER as u64).into(),
+                transactions.iter().map(|x| &**x),
+            )
+            .unwrap();
+        let block_gas_limit = GENESIS_GAS_LIMIT
+            * if maybe_base_price.is_some() {
+                ELASTICITY_MULTIPLIER as u64
+            } else {
+                1
+            };
+
         let state_blame_info = consensus_graph
             .get_blame_and_deferred_state_for_generation(
                 &best_info.best_block_hash,
@@ -543,11 +601,12 @@ impl BlockGenerator {
             best_block_hash,
             referee,
             state_blame_info,
-            block_gas_limit,
+            block_gas_limit.into(),
             transactions,
             0,
             adaptive,
             self.get_pos_reference(&best_block_hash),
+            maybe_base_price,
         );
 
         self.generate_block_impl(block)
@@ -564,15 +623,31 @@ impl BlockGenerator {
                 &parent_hash,
             )?;
 
+        let maybe_base_price = self
+            .txpool
+            .compute_1559_base_price(
+                &parent_hash,
+                (GENESIS_GAS_LIMIT * ELASTICITY_MULTIPLIER as u64).into(),
+                transactions.iter().map(|x| &**x),
+            )
+            .expect("Cannot compute base price");
+
+        let block_gas_limit = if maybe_base_price.is_some() {
+            GENESIS_GAS_LIMIT * ELASTICITY_MULTIPLIER as u64
+        } else {
+            GENESIS_GAS_LIMIT
+        };
+
         let mut block = self.assemble_new_block_impl(
             parent_hash,
             referee,
             state_blame_info,
-            GENESIS_GAS_LIMIT.into(),
+            block_gas_limit.into(),
             transactions,
             0,
             Some(adaptive),
             self.get_pos_reference(&parent_hash),
+            maybe_base_price,
         );
         if let Some(custom) = maybe_custom {
             block.block_header.set_custom(custom);
@@ -592,15 +667,31 @@ impl BlockGenerator {
                 &parent_hash,
             )?;
 
+        let maybe_base_price = self
+            .txpool
+            .compute_1559_base_price(
+                &parent_hash,
+                (GENESIS_GAS_LIMIT * ELASTICITY_MULTIPLIER as u64).into(),
+                transactions.iter().map(|x| &**x),
+            )
+            .expect("Cannot compute base price");
+
+        let block_gas_limit = if maybe_base_price.is_some() {
+            GENESIS_GAS_LIMIT * ELASTICITY_MULTIPLIER as u64
+        } else {
+            GENESIS_GAS_LIMIT
+        };
+
         let mut block = self.assemble_new_block_impl(
             parent_hash,
             referee,
             state_blame_info,
-            GENESIS_GAS_LIMIT.into(),
+            block_gas_limit.into(),
             transactions,
             0,
             Some(adaptive),
             self.get_pos_reference(&parent_hash),
+            maybe_base_price,
         );
         block.block_header.set_nonce(nonce);
         block.block_header.set_timestamp(timestamp);
