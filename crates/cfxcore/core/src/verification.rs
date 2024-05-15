@@ -701,6 +701,7 @@ impl VerificationConfig {
         mode: VerifyTxMode,
     ) -> Result<(), TransactionError> {
         tx.check_low_s()?;
+        tx.check_y_parity()?;
 
         // Disallow unsigned transactions
         if tx.is_unsigned() {
@@ -791,7 +792,7 @@ impl VerificationConfig {
     fn check_eip1559_transaction(
         tx: &TransactionWithSignature, cip1559: bool, mode: &VerifyTxMode,
     ) -> bool {
-        if tx.before_1559() {
+        if tx.is_legacy() {
             return true;
         }
 

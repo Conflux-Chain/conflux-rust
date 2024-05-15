@@ -50,6 +50,8 @@ impl State {
     }
 
     pub fn burn_by_cip1559(&mut self, by: U256) {
+        // This function is called after transaction exeuction. At this time,
+        // the paid transaction fee has already been in the core space.
         *self.global_stat.val::<TotalBurnt1559>() += by;
         self.sub_total_issued(by);
     }

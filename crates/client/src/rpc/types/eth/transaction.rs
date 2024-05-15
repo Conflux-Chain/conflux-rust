@@ -22,7 +22,8 @@ use crate::rpc::types::Bytes;
 use cfx_types::{H160, H256, H512, U256, U64};
 use cfx_vm_types::{contract_address, CreateContractAddress};
 use primitives::{
-    transaction::eth_transaction::eip155_signature, Action, SignedTransaction,
+    transaction::eth_transaction::eip155_signature, AccessList, Action,
+    SignedTransaction,
 };
 use rlp::Encodable;
 use serde::Serialize;
@@ -79,6 +80,16 @@ pub struct Transaction {
     pub s: U256,
     // Whether tx is success
     pub status: Option<U64>,
+    /// Optional access list
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_list: Option<AccessList>,
+    /// miner bribe
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_priority_fee_per_gas: Option<U256>,
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub transaction_type: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub y_parity: Option<u8>,
     /* /// Transaction activates at specified block.
      * pub condition: Option<TransactionCondition>,
      * /// optional access list
@@ -97,21 +108,6 @@ impl Transaction {
         exec_info: (Option<U64>, Option<H160>),
     ) -> Transaction {
         let signature = t.signature();
-        // We only support EIP-155
-        // let access_list = match t.as_unsigned() {
-        //     TypedTransaction::AccessList(tx) => {
-        //         Some(tx.access_list.clone().into_iter().map(Into::into).
-        // collect())     }
-        //     TypedTransaction::EIP1559Transaction(tx) => Some(
-        //         tx.transaction
-        //             .access_list
-        //             .clone()
-        //             .into_iter()
-        //             .map(Into::into)
-        //             .collect(),
-        //     ),
-        //     TypedTransaction::Legacy(_) => None,
-        // };
 
         Transaction {
             hash: t.hash(),
@@ -126,7 +122,6 @@ impl Transaction {
             },
             value: *t.value(),
             gas_price: *t.gas_price(),
-            max_fee_per_gas: None,
             gas: *t.gas(),
             input: Bytes::new(t.data().clone()),
             creates: exec_info.1,
@@ -142,6 +137,13 @@ impl Transaction {
             r: signature.r().into(),
             s: signature.s().into(),
             status: exec_info.0,
+            access_list: t.access_list().cloned(),
+            max_fee_per_gas: t.after_1559().then_some(*t.gas_price()),
+            max_priority_fee_per_gas: t
+                .after_1559()
+                .then_some(*t.max_priority_gas_price()),
+            y_parity: t.is_2718().then_some(signature.v()),
+            transaction_type: Some(t.type_id()),
         }
     }
 

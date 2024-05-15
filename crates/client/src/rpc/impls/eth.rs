@@ -238,7 +238,7 @@ impl EthHandler {
         let transaction_hash = tx.hash();
         let transaction_index: U256 = idx.into();
         let block_hash = b.pivot_header.hash();
-        let block_number: U256 = b.pivot_header.height().into();
+        let block_height: U256 = b.pivot_header.height().into();
 
         let logs: Vec<_> = receipt
             .logs
@@ -250,7 +250,7 @@ impl EthHandler {
                 topics: log.topics,
                 data: Bytes(log.data),
                 block_hash,
-                block_number,
+                block_number: block_height,
                 transaction_hash,
                 transaction_index,
                 log_index: Some((*prior_log_index + idx).into()),
@@ -275,6 +275,18 @@ impl EthHandler {
             Some(b.errors[idx].clone())
         };
 
+        let effective_gas_price =
+            if let Some(base_price) = b.pivot_header.base_price() {
+                let base_price = base_price[tx.space()];
+                if *tx.gas_price() < base_price {
+                    *tx.gas_price()
+                } else {
+                    tx.effective_gas_price(&base_price)
+                }
+            } else {
+                *tx.gas_price()
+            };
+
         Ok(Receipt {
             transaction_hash,
             transaction_index,
@@ -284,7 +296,7 @@ impl EthHandler {
                 Action::Create => None,
                 Action::Call(addr) => Some(*addr),
             },
-            block_number,
+            block_number: block_height,
             cumulative_gas_used: receipt.accumulated_gas_used,
             gas_used,
             contract_address,
@@ -294,8 +306,10 @@ impl EthHandler {
                 .outcome_status
                 .in_space(Space::Ethereum)
                 .into(),
-            effective_gas_price: *tx.gas_price(),
+            effective_gas_price,
             tx_exec_error_msg,
+            type_id: receipt.burnt_gas_fee.is_some().then_some(tx.type_id()),
+            burnt_gas_fee: receipt.burnt_gas_fee,
         })
     }
 
@@ -377,6 +391,12 @@ impl Eth for EthHandler {
 
     fn gas_price(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_gasPrice");
+        let (_, maybe_base_price) =
+            self.tx_pool.get_best_info_with_parent_base_price();
+        if let Some(base_price) = maybe_base_price {
+            return Ok(base_price[Space::Ethereum]);
+        }
+
         let consensus_gas_price = self
             .consensus_graph()
             .gas_price(Space::Ethereum)
@@ -389,8 +409,11 @@ impl Eth for EthHandler {
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_maxPriorityFeePerGas");
-        // TODO: Change this
-        Ok(U256::from(20000000000u64))
+        let (_, maybe_base_price) =
+            self.tx_pool.get_best_info_with_parent_base_price();
+        let answer = maybe_base_price
+            .map_or(U256::from(20000000000u64), |x| x[Space::Ethereum]);
+        Ok(answer)
     }
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
