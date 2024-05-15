@@ -62,7 +62,7 @@ impl GethTraceBuilder {
         {
             let mut log = step.convert_to_geth_struct_log(opts);
 
-            // Fill in memory and storage depending on the options
+            // Fill in storage depending on the options
             if opts.is_storage_enabled() {
                 let contract_storage =
                     storage.entry(step.contract).or_default();

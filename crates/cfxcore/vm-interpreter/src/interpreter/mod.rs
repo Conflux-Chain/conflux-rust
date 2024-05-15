@@ -176,7 +176,6 @@ pub struct Interpreter<Cost: CostType> {
     resume_output_range: Option<(U256, U256)>,
     resume_result: Option<InstructionResult<Cost>>,
     last_stack_ret_len: usize,
-    instruction_result: Option<InstructionResult<Cost>>,
     _type: PhantomData<Cost>,
 }
 
@@ -322,7 +321,6 @@ impl<Cost: 'static + CostType> Interpreter<Cost> {
             last_stack_ret_len: 0,
             resume_output_range: None,
             resume_result: None,
-            instruction_result: None,
             _type: PhantomData,
         }
     }
@@ -476,8 +474,6 @@ impl<Cost: 'static + CostType> Interpreter<Cost> {
                     }
                     Ok(x) => x,
                 };
-
-                self.instruction_result = Some(result.clone());
 
                 evm_debug!({ self.informant.after_instruction(instruction) });
 
@@ -1620,39 +1616,6 @@ impl<Cost: 'static + CostType> InterpreterInfo for Interpreter<Cost> {
     fn stack(&self) -> Vec<U256> { self.stack.content() }
 
     fn contract_address(&self) -> Address { self.params.address }
-
-    fn instruction_result(&self) -> Option<InstructionResult<U256>> {
-        self.instruction_result.clone().map(|v| match v {
-            InstructionResult::Ok => InstructionResult::Ok,
-            InstructionResult::UnusedGas(gas) => {
-                InstructionResult::UnusedGas(gas.as_u256())
-            }
-            InstructionResult::JumpToPosition(v) => {
-                InstructionResult::JumpToPosition(v)
-            }
-            InstructionResult::JumpToSubroutine(v) => {
-                InstructionResult::JumpToSubroutine(v)
-            }
-            InstructionResult::ReturnFromSubroutine(v) => {
-                InstructionResult::ReturnFromSubroutine(v)
-            }
-            InstructionResult::StopExecutionNeedsReturn {
-                gas,
-                init_off,
-                init_size,
-                apply,
-            } => InstructionResult::StopExecutionNeedsReturn {
-                gas: gas.as_u256(),
-                init_off,
-                init_size,
-                apply,
-            },
-            InstructionResult::StopExecution => {
-                InstructionResult::StopExecution
-            }
-            InstructionResult::Trap(v) => InstructionResult::Trap(v),
-        })
-    }
 }
 
 fn get_and_reset_sign(value: U256) -> (U256, bool) {

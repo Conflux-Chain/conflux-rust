@@ -1,4 +1,3 @@
-use super::InstructionResult;
 use cfx_types::{Address, U256};
 
 pub trait InterpreterInfo {
@@ -17,6 +16,4 @@ pub trait InterpreterInfo {
     fn return_stack(&self) -> &Vec<usize>;
 
     fn contract_address(&self) -> Address;
-
-    fn instruction_result(&self) -> Option<InstructionResult<U256>>;
 }

@@ -3,6 +3,7 @@ use super::{
     gas::GasInspector,
     types::{
         CallKind, CallTrace, CallTraceNode, CallTraceStep, RecordedMemory,
+        StorageChange, StorageChangeReason,
     },
     utils::{gas_used, stack_push_count, to_alloy_address, to_alloy_u256},
     CallTraceArena, GethTraceBuilder, StackStep, TracingInspectorConfig,
@@ -10,7 +11,7 @@ use super::{
 use cfx_types::{Space, H160};
 
 use alloy_primitives::{Address, Bytes, U256};
-use revm::interpreter::{InstructionResult, InterpreterResult, OpCode};
+use revm::interpreter::{opcode, InstructionResult, InterpreterResult, OpCode};
 
 use cfx_executor::machine::Machine;
 
@@ -298,17 +299,18 @@ impl TracingInspector {
             .then(|| RecordedMemory::new(interp.mem().to_vec()))
             .unwrap_or_default();
 
-        let stack = if self.config.record_stack_snapshots.is_full() {
-            Some(
-                interp
-                    .stack()
-                    .into_iter()
-                    .map(|v| to_alloy_u256(v))
-                    .collect(),
-            )
-        } else {
-            None
-        };
+        let stack: Option<Vec<U256>> =
+            if self.config.record_stack_snapshots.is_full() {
+                Some(
+                    interp
+                        .stack()
+                        .into_iter()
+                        .map(|v| to_alloy_u256(v))
+                        .collect(),
+                )
+            } else {
+                None
+            };
 
         let op = OpCode::new(interp.current_opcode())
             .or_else(|| {
@@ -320,6 +322,32 @@ impl TracingInspector {
                 OpCode::new(invalid_opcode)
             })
             .expect("is valid opcode;");
+
+        // if op is SLOAD or SSTORE, we need to record the storage change
+        let storage_change = match (op.get(), stack.clone()) {
+            (opcode::SLOAD, Some(s)) if s.len() >= 1 => {
+                let key = s[s.len() - 1];
+                let change = StorageChange {
+                    key,
+                    value: U256::ZERO,
+                    had_value: None, // not used for now
+                    reason: StorageChangeReason::SLOAD,
+                };
+                Some(change)
+            }
+            (opcode::SSTORE, Some(s)) if s.len() >= 2 => {
+                let key = s[s.len() - 1];
+                let value = s[s.len() - 2];
+                let change = StorageChange {
+                    key,
+                    value,
+                    had_value: None, // not used for now
+                    reason: StorageChangeReason::SSTORE,
+                };
+                Some(change)
+            }
+            _ => None,
+        };
 
         trace.trace.steps.push(CallTraceStep {
             depth,
@@ -335,7 +363,7 @@ impl TracingInspector {
 
             // fields will be populated end of call
             gas_cost: 0,
-            storage_change: None,
+            storage_change,
             status: InstructionResult::Continue,
         });
     }
@@ -369,10 +397,23 @@ impl TracingInspector {
                 step.memory.resize(interp.mem().len());
             }
         }
-        if self.config.record_state_diff {
-            let _op = step.op.get();
 
-            // TODO setup the storage_change
+        if self.config.record_state_diff {
+            let op = step.op.get();
+
+            // update value if it's a SLOAD
+            match (op, step.push_stack.clone(), step.storage_change) {
+                (opcode::SLOAD, Some(s), Some(change)) if s.len() >= 1 => {
+                    let val = s.last().unwrap();
+                    step.storage_change = Some(StorageChange {
+                        key: change.key,
+                        value: *val,
+                        had_value: None, // not used for now
+                        reason: StorageChangeReason::SLOAD,
+                    });
+                }
+                _ => {}
+            }
         }
 
         // The gas cost is the difference between the recorded gas remaining at
