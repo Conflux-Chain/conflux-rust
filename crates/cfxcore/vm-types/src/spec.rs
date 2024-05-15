@@ -49,6 +49,10 @@ pub struct Spec {
     pub sstore_reset_gas: usize,
     /// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`)
     pub sstore_refund_gas: usize,
+    /// Gas price for `TLOAD`
+    pub tload_gas: usize,
+    /// Gas price for `TSTORE`
+    pub tstore_gas: usize,
     /// Gas price for `JUMPDEST` opcode
     pub jumpdest_gas: usize,
     /// Gas price for `LOG*`
@@ -169,8 +173,13 @@ pub struct Spec {
     pub cip133_b: BlockNumber,
     pub cip133_e: BlockHeight,
     pub cip133_core: bool,
+    /// CIP-137: Base Fee Sharing in CIP-1559
     pub cip137: bool,
     pub cip1559: bool,
+    /// CIP-141: Disable Subroutine Opcodes
+    /// CIP-142: Transient Storage Opcodes
+    /// CIP-143: MCOPY (0x5e) Opcode for Efficient Memory Copy
+    pub cancun_opcodes: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -255,10 +264,13 @@ impl Spec {
             exp_byte_gas: 50,
             sha3_gas: 30,
             sha3_word_gas: 6,
+            // Become 800 after CIP-142
             sload_gas: 200,
             sstore_set_gas: 20000,
             sstore_reset_gas: 5000,
             sstore_refund_gas: 15000,
+            tload_gas: 100,
+            tstore_gas: 100,
             jumpdest_gas: 1,
             log_gas: 375,
             log_data_gas: 8,
@@ -321,6 +333,7 @@ impl Spec {
             cip133_core: false,
             cip137: false,
             cip1559: false,
+            cancun_opcodes: false,
         }
     }
 

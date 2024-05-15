@@ -105,7 +105,12 @@ pub struct TransitionsBlockNumber {
     pub cip132: BlockNumber,
     /// CIP-133: Enhanced Block Hash Query
     pub cip133b: BlockNumber,
+    /// CIP-137: Base Fee Sharing in CIP-1559
     pub cip137: BlockNumber,
+    /// CIP-141: Disable Subroutine Opcodes
+    /// CIP-142: Transient Storage Opcodes
+    /// CIP-143: MCOPY (0x5e) Opcode for Efficient Memory Copy
+    pub cancun_opcodes: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -183,6 +188,10 @@ impl CommonParams {
         spec.cip133_core = number >= self.transition_numbers.cip133b;
         spec.cip137 = number >= self.transition_numbers.cip137;
         spec.cip1559 = height >= self.transition_heights.cip1559;
+        spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
+        if spec.cancun_opcodes {
+            spec.sload_gas = 800;
+        }
         spec
     }
 

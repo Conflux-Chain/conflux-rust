@@ -188,6 +188,32 @@ impl<'a> ContextTrait for Context<'a> {
         }
     }
 
+    fn transient_storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        self.state
+            .transient_storage_at(&receiver, key)
+            .map_err(Into::into)
+    }
+
+    fn transient_set_storage(
+        &mut self, key: Vec<u8>, value: U256,
+    ) -> vm::Result<()> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        if self.is_static_or_reentrancy() {
+            Err(vm::Error::MutableCallInStaticContext)
+        } else {
+            self.state
+                .transient_set_storage(&receiver, key, value)
+                .map_err(Into::into)
+        }
+    }
+
     fn exists(&self, address: &Address) -> vm::Result<bool> {
         let address = AddressWithSpace {
             address: *address,
