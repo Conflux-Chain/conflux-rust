@@ -70,20 +70,15 @@ use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 
 pub fn initialize_internal_contract_accounts(
     state: &mut State, addresses: &[Address],
-) {
-    || -> DbResult<()> {
-        {
-            for address in addresses {
-                state.new_contract_with_admin(
-                    &address.with_native_space(),
-                    /* No admin; admin = */ &Address::zero(),
-                    /* balance = */ U256::zero(),
-                    Some(STORAGE_LAYOUT_REGULAR_V0),
-                    false,
-                )?;
-            }
-            Ok(())
-        }
-    }()
-    .expect(&concat!(file!(), ":", line!(), ":", column!()));
+) -> DbResult<()> {
+    for address in addresses {
+        state.new_contract_with_admin(
+            &address.with_native_space(),
+            /* No admin; admin = */ &Address::zero(),
+            /* balance = */ U256::zero(),
+            Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
+        )?;
+    }
+    Ok(())
 }

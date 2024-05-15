@@ -15,7 +15,7 @@ use crate::{
 };
 use cfx_types::{Address, AddressWithSpace, Space, H256};
 use cfx_vm_types::Spec;
-use primitives::BlockNumber;
+use primitives::{block::BlockHeight, BlockNumber};
 use std::{collections::BTreeMap, sync::Arc};
 
 pub use vm_factory::VmFactory;
@@ -55,12 +55,17 @@ impl Machine {
     /// Get the general parameters of the chain.
     pub fn params(&self) -> &CommonParams { &self.params }
 
-    pub fn spec(&self, number: BlockNumber) -> Spec {
-        let mut spec = self.params.spec(number);
+    pub fn spec(&self, number: BlockNumber, height: BlockHeight) -> Spec {
+        let mut spec = self.params.spec(number, height);
         if let Some(ref rules) = self.spec_rules {
             (rules)(&mut spec, number)
         }
         spec
+    }
+
+    #[cfg(test)]
+    pub fn spec_for_test(&self, number: u64) -> Spec {
+        self.spec(number, number)
     }
 
     /// Builtin-contracts for the chain..

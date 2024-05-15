@@ -995,7 +995,7 @@ impl RpcImpl {
                 })?;
             let required_storage_collateral =
                 if let Transaction::Native(ref tx) = tx.unsigned {
-                    U256::from(tx.storage_limit)
+                    U256::from(*tx.storage_limit())
                         * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
                 } else {
                     U256::zero()

@@ -9,7 +9,10 @@ use cfx_addr::Network;
 use cfx_types::{Space, H256, U256, U64};
 use cfxkey::Error;
 use primitives::{
-    transaction::Action, Eip155Transaction, NativeTransaction,
+    transaction::{
+        eth_transaction::Eip155Transaction,
+        native_transaction::NativeTransaction, Action,
+    },
     SignedTransaction, Transaction as PrimitiveTransaction, TransactionIndex,
     TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
@@ -106,7 +109,7 @@ impl Transaction {
         }
         let (storage_limit, epoch_height) =
             if let PrimitiveTransaction::Native(ref tx) = t.unsigned {
-                (tx.storage_limit, tx.epoch_height)
+                (*tx.storage_limit(), *tx.epoch_height())
             } else {
                 (0, 0)
             };

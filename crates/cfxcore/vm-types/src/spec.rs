@@ -101,6 +101,8 @@ pub struct Spec {
     pub retire_gas: usize,
     /// Price for deploying Eip-1820 contract.
     pub eip1820_gas: usize,
+    pub access_list_storage_key_gas: usize,
+    pub access_list_address_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -167,6 +169,8 @@ pub struct Spec {
     pub cip133_b: BlockNumber,
     pub cip133_e: BlockHeight,
     pub cip133_core: bool,
+    pub cip137: bool,
+    pub cip1559: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -281,6 +285,8 @@ impl Spec {
             suicide_gas: 5000,
             retire_gas: 5_000_000,
             eip1820_gas: 1_500_000,
+            access_list_storage_key_gas: 1900,
+            access_list_address_gas: 2400,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
@@ -313,6 +319,8 @@ impl Spec {
             cip133_b: u64::MAX,
             cip133_e: u64::MAX,
             cip133_core: false,
+            cip137: false,
+            cip1559: false,
         }
     }
 

@@ -585,6 +585,8 @@ mod tests {
             pos_view: None,
             finalized_epoch: None,
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
+            base_gas_price: Default::default(),
+            burnt_gas_price: Default::default(),
         }
     }
 
@@ -610,7 +612,7 @@ mod tests {
                 Default::default(),
             );
             let env = get_test_env();
-            let spec = machine.spec(env.number);
+            let spec = machine.spec_for_test(env.number);
             let callstack = CallStackInfo::new();
 
             let mut setup = Self {

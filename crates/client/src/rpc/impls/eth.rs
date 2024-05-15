@@ -41,11 +41,11 @@ use cfxcore::{
 use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS,
+    transaction::eth_transaction::Eip155Transaction, Action,
+    BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
+    StorageValue, TransactionStatus, TransactionWithSignature,
 };
-use rlp::Rlp;
 use rustc_hex::ToHex;
 use std::{cmp::min, convert::TryInto};
 
@@ -662,8 +662,10 @@ impl Eth for EthHandler {
             "RPC Request: eth_sendRawTransaction / eth_submitTransaction raw={:?}",
             raw,
         );
-        let tx: TransactionWithSignature =
-            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+        let tx: TransactionWithSignature = invalid_params_check(
+            "raw",
+            TransactionWithSignature::from_raw(&raw.into_vec()),
+        )?;
 
         if tx.space() != Space::Ethereum {
             bail!(invalid_params("tx", "Incorrect transaction space"));

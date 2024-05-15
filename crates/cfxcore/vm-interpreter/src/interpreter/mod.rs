@@ -1182,6 +1182,10 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::GASPRICE => {
                 self.stack.push(self.params.gas_price.clone());
             }
+            instructions::BASEFEE => {
+                self.stack
+                    .push(context.env().base_gas_price[context.space()]);
+            }
             instructions::BLOCKHASH => {
                 let block_number = self.stack.pop_back();
                 let block_hash = context.blockhash(&block_number)?;

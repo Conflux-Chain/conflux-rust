@@ -266,6 +266,7 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
         let loss_ratio = config.loss_ratio(sort_key);
         let weight = PackingPoolWeight {
             gas_limit: self.total_gas_limit,
+            min_gas_price: gas_price,
             weighted_loss_ratio: loss_ratio * self.total_gas_limit,
             max_loss_ratio: loss_ratio,
         };

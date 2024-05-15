@@ -102,6 +102,10 @@ use cfxcore::{
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
 };
 use diem_types::account_address::AccountAddress;
+use primitives::transaction::{
+    eth_transaction::EthereumTransaction,
+    native_transaction::TypedNativeTransaction,
+};
 use serde::Serialize;
 
 #[derive(Debug)]
@@ -461,8 +465,10 @@ impl RpcImpl {
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
-        let tx: TransactionWithSignature =
-            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+        let tx: TransactionWithSignature = invalid_params_check(
+            "raw",
+            TransactionWithSignature::from_raw(&raw.into_vec()),
+        )?;
 
         if tx.recover_public().is_err() {
             bail!(invalid_params(
@@ -959,6 +965,7 @@ impl RpcImpl {
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty, pos_reference,
         );
+
         Ok(self.block_gen.generate_fixed_block(
             parent_hash,
             referee,
@@ -1067,10 +1074,34 @@ impl RpcImpl {
 
             // set fake data for latency tests
             match signed_tx.transaction.transaction.unsigned {
-                Transaction::Native(ref mut unsigned) if tx_data_len > 0 => {
+                Transaction::Native(TypedNativeTransaction::Cip155(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
                     unsigned.data = vec![0; tx_data_len];
                 }
-                Transaction::Ethereum(ref mut unsigned) if tx_data_len > 0 => {
+                Transaction::Native(TypedNativeTransaction::Cip1559(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Native(TypedNativeTransaction::Cip2930(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(EthereumTransaction::Eip155(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(EthereumTransaction::Eip1559(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(EthereumTransaction::Eip2930(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
                     unsigned.data = vec![0; tx_data_len];
                 }
                 _ => {}

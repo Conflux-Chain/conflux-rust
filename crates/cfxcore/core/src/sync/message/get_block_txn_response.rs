@@ -17,7 +17,7 @@ use primitives::{Block, TransactionWithSignature};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::collections::HashSet;
 
-#[derive(Debug, PartialEq, Default, RlpDecodable, RlpEncodable)]
+#[derive(Debug, PartialEq, Default, RlpEncodable, RlpDecodable)]
 pub struct GetBlockTxnResponse {
     pub request_id: RequestId,
     pub block_hash: H256,

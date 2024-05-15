@@ -29,6 +29,9 @@ pub struct Executed {
     /// Fee that need to be paid by execution of this transaction.
     pub fee: U256,
 
+    /// Fee burnt by CIP-1559
+    pub burnt_fee: Option<U256>,
+
     /// Gas charged during execution of transaction.
     pub gas_charged: U256,
 
@@ -74,10 +77,10 @@ impl Executed {
         tx: &TransactionWithSignature, fee: &U256, cost: CostInfo,
         ext_result: ExecutedExt, spec: &Spec,
     ) -> Self {
-        let gas_charged = if *tx.gas_price() == U256::zero() {
+        let gas_charged = if cost.gas_price == U256::zero() {
             U256::zero()
         } else {
-            fee / tx.gas_price()
+            fee / cost.gas_price
         };
         let mut gas_sponsor_paid = cost.gas_sponsored;
         let mut storage_sponsor_paid = cost.storage_sponsored;
@@ -85,10 +88,12 @@ impl Executed {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
+        let burnt_fee = spec.cip1559.then_some(*fee);
         Self {
             gas_used: *tx.gas(),
             gas_charged,
             fee: fee.clone(),
+            burnt_fee,
             gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],
@@ -112,10 +117,18 @@ impl Executed {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
+
+        let fee = tx.gas().saturating_mul(cost.gas_price);
+
+        let burnt_fee = spec
+            .cip1559
+            .then(|| tx.gas().saturating_mul(cost.burnt_gas_price));
+
         Self {
             gas_used: *tx.gas(),
             gas_charged: *tx.gas(),
-            fee: tx.gas().saturating_mul(*tx.gas_price()),
+            fee,
+            burnt_fee,
             gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],
@@ -147,6 +160,7 @@ impl Executed {
             gas_used,
             gas_charged,
             fees_value: fee,
+            burnt_fees_value: burnt_fee,
             ..
         } = refund_info;
         let mut storage_sponsor_paid = if spec.cip78a {
@@ -165,6 +179,7 @@ impl Executed {
             gas_used,
             gas_charged,
             fee,
+            burnt_fee,
             gas_sponsor_paid,
             logs: substate.logs.to_vec(),
             contracts_created: substate.contracts_created.to_vec(),

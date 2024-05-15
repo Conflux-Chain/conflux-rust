@@ -8,7 +8,8 @@ use cfx_parameters::{
     block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
     consensus::{
         CIP112_HEADER_CUSTOM_FIRST_ELEMENT,
-        DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
+        DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT,
+        NEXT_HARDFORK_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
         TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
     },
     consensus_internal::{
@@ -16,7 +17,7 @@ use cfx_parameters::{
         INITIAL_BASE_MINING_REWARD_IN_UCFX,
     },
 };
-use cfx_types::{AllChainID, Space, U256, U512};
+use cfx_types::{AllChainID, Space, SpaceMap, U256, U512};
 use cfx_vm_types::Spec;
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
@@ -53,6 +54,7 @@ pub struct CommonParams {
     /// transactions
     pub evm_transaction_gas_ratio: u64,
     pub params_dao_vote_period: u64,
+    pub min_base_price: SpaceMap<U256>,
 
     /// Set the internal contracts to state at the genesis blocks, even if it
     /// is not activated.
@@ -76,14 +78,13 @@ pub struct TransitionsBlockNumber {
     pub cip71: BlockNumber,
     /// CIP-78: Correct `is_sponsored` Fields in Receipt
     pub cip78a: BlockNumber,
-    /// CIP-78: Correct `is_sponsored` Fields in Receipt
     pub cip78b: BlockNumber,
     /// CIP-90: Introduce a Fully EVM-Compatible Space
     pub cip90b: BlockNumber,
     /// CIP-92: Enable Blake2F Builtin Function
     pub cip92: BlockNumber,
     /// CIP-94: On-Chain DAO Vote for Chain Parameters
-    pub cip94: BlockNumber,
+    pub cip94n: BlockNumber,
     /// CIP-97: Clear Staking Lists
     pub cip97: BlockNumber,
     /// CIP-98: Fix BLOCKHASH Opcode Bug in eSpace
@@ -103,7 +104,8 @@ pub struct TransitionsBlockNumber {
     /// CIP-132: Fix Static Context Check for Internal Contracts
     pub cip132: BlockNumber,
     /// CIP-133: Enhanced Block Hash Query
-    pub cip133_b: BlockNumber,
+    pub cip133b: BlockNumber,
+    pub cip137: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -117,13 +119,14 @@ pub struct TransitionsEpochHeight {
     /// CIP-90: Introduce a Fully EVM-Compatible Space
     pub cip90a: BlockHeight,
     /// CIP-94: On-Chain DAO Vote for Chain Parameters
-    pub cip94: BlockHeight,
+    pub cip94h: BlockHeight,
     /// CIP-112: Fix Block Headers `custom` Field Serde
     pub cip112: BlockHeight,
     /// CIP-130: Aligning Gas Limit with Transaction Size
     pub cip130: BlockHeight,
     /// CIP-133: Enhanced Block Hash Query
-    pub cip133_e: BlockHeight,
+    pub cip133e: BlockHeight,
+    pub cip1559: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -146,12 +149,13 @@ impl Default for CommonParams {
             early_set_internal_contracts_states: false,
             transition_numbers: Default::default(),
             transition_heights: Default::default(),
+            min_base_price: SpaceMap::new(U256::one(), U256::one()),
         }
     }
 }
 
 impl CommonParams {
-    pub fn spec(&self, number: BlockNumber) -> Spec {
+    pub fn spec(&self, number: BlockNumber, height: BlockHeight) -> Spec {
         let mut spec = Spec::genesis_spec();
         spec.cip43_contract = number >= self.transition_numbers.cip43a;
         spec.cip43_init = number >= self.transition_numbers.cip43a
@@ -162,8 +166,8 @@ impl CommonParams {
         spec.cip90 = number >= self.transition_numbers.cip90b;
         spec.cip78a = number >= self.transition_numbers.cip78a;
         spec.cip78b = number >= self.transition_numbers.cip78b;
-        spec.cip94 = number >= self.transition_numbers.cip94;
-        spec.cip94_activation_block_number = self.transition_numbers.cip94;
+        spec.cip94 = number >= self.transition_numbers.cip94n;
+        spec.cip94_activation_block_number = self.transition_numbers.cip94n;
         spec.cip97 = number >= self.transition_numbers.cip97;
         spec.cip98 = number >= self.transition_numbers.cip98;
         spec.cip105 = number >= self.transition_numbers.cip105;
@@ -174,10 +178,17 @@ impl CommonParams {
         spec.cip119 = number >= self.transition_numbers.cip119;
         spec.cip131 = number >= self.transition_numbers.cip131;
         spec.cip132 = number >= self.transition_numbers.cip132;
-        spec.cip133_b = self.transition_numbers.cip133_b;
-        spec.cip133_e = self.transition_heights.cip133_e;
-        spec.cip133_core = number >= self.transition_numbers.cip133_b;
+        spec.cip133_b = self.transition_numbers.cip133b;
+        spec.cip133_e = self.transition_heights.cip133e;
+        spec.cip133_core = number >= self.transition_numbers.cip133b;
+        spec.cip137 = number >= self.transition_numbers.cip137;
+        spec.cip1559 = height >= self.transition_heights.cip1559;
         spec
+    }
+
+    #[cfg(test)]
+    pub fn spec_for_test(&self, number: u64) -> Spec {
+        self.spec(number, number)
     }
 
     /// Return the base reward for a block.
@@ -195,15 +206,19 @@ impl CommonParams {
 
     pub fn custom_prefix(&self, height: BlockHeight) -> Option<Vec<Bytes>> {
         if height >= self.transition_heights.cip40
-            && height < self.transition_heights.cip94
+            && height < self.transition_heights.cip94h
         {
             Some(vec![TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
-        } else if height >= self.transition_heights.cip94
+        } else if height >= self.transition_heights.cip94h
             && height < self.transition_heights.cip112
         {
             Some(vec![DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
-        } else if height >= self.transition_heights.cip112 {
+        } else if height >= self.transition_heights.cip112
+            && height < self.transition_heights.cip1559
+        {
             Some(vec![CIP112_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
+        } else if height >= self.transition_heights.cip1559 {
+            Some(vec![NEXT_HARDFORK_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }
@@ -229,4 +244,8 @@ impl CommonParams {
             ),
         ])
     }
+
+    pub fn init_base_price(&self) -> SpaceMap<U256> { self.min_base_price }
+
+    pub fn min_base_price(&self) -> SpaceMap<U256> { self.min_base_price }
 }
