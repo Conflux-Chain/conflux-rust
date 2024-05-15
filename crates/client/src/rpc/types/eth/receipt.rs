@@ -25,6 +25,8 @@ use cfx_types::{Bloom as H2048, H160, H256, U256, U64};
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub transaction_type: Option<u8>,
     /// Transaction Hash
     pub transaction_hash: H256,
     /// Transaction index
@@ -56,8 +58,6 @@ pub struct Receipt {
     /// is None if tx execution is successful or it can not be offered.
     /// Error message can not be offered by light client.
     pub tx_exec_error_msg: Option<String>,
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub type_id: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub burnt_gas_fee: Option<U256>,
 }

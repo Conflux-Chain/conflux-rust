@@ -32,9 +32,9 @@ use serde::Serialize;
 #[derive(Debug, Default, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
-    // /// transaction type
-    // #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    // pub transaction_type: Option<U64>,
+    /// transaction type
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub transaction_type: Option<u8>,
     /// Hash
     pub hash: H256,
     /// Nonce
@@ -86,18 +86,10 @@ pub struct Transaction {
     /// miner bribe
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_priority_fee_per_gas: Option<U256>,
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub y_parity: Option<u8>,
     /* /// Transaction activates at specified block.
-     * pub condition: Option<TransactionCondition>,
-     * /// optional access list
-     * #[serde(skip_serializing_if = "Option::is_none")]
-     * pub access_list: Option<AccessList>,
-     * /// miner bribe
-     * #[serde(skip_serializing_if = "Option::is_none")]
-     * pub max_priority_fee_per_gas: Option<U256>, */
+     * pub condition: Option<TransactionCondition>, */
 }
 
 impl Transaction {

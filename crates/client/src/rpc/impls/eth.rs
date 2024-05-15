@@ -308,7 +308,10 @@ impl EthHandler {
                 .into(),
             effective_gas_price,
             tx_exec_error_msg,
-            type_id: receipt.burnt_gas_fee.is_some().then_some(tx.type_id()),
+            transaction_type: receipt
+                .burnt_gas_fee
+                .is_some()
+                .then_some(tx.type_id()),
             burnt_gas_fee: receipt.burnt_gas_fee,
         })
     }

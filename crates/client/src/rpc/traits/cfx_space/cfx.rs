@@ -280,6 +280,11 @@ pub trait Cfx {
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<StorageCollateralInfo>;
 
+    #[rpc(name = "cfx_getFeeBurnt")]
+    fn get_fee_burnt(
+        &self, epoch_number: Option<EpochNumber>,
+    ) -> JsonRpcResult<U256>;
+
     #[rpc(name = "cfx_getPoSRewardByEpoch")]
     fn get_pos_reward_by_epoch(
         &self, epoch: EpochNumber,

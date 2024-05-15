@@ -19,8 +19,7 @@ use cfx_executor::{
 };
 use cfx_statedb::{
     global_params::{
-        AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
-        InterestRate, LastDistributeBlock, PowBaseReward, TotalPosStaking,
+        AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest, InterestRate, LastDistributeBlock, PowBaseReward, TotalBurnt1559, TotalPosStaking
     },
     StateDbExt,
 };
@@ -703,6 +702,14 @@ impl RpcImpl {
                         .get_data_manager()
                         .get_executed_state_root(&tx_index.block_hash);
 
+                    // Acutally, the return value of `block_header_by_hash`
+                    // should not be none.
+                    let maybe_base_price = self
+                        .consensus
+                        .get_data_manager()
+                        .block_header_by_hash(&tx_index.block_hash)
+                        .and_then(|x| x.base_price());
+
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
                         receipt,
@@ -710,6 +717,7 @@ impl RpcImpl {
                         prior_gas_used,
                         epoch_number,
                         block_number,
+                        maybe_base_price,
                         maybe_state_root,
                         tx_exec_error_msg,
                         *self.sync.network.get_network_type(),
@@ -830,6 +838,7 @@ impl RpcImpl {
             prior_gas_used,
             Some(exec_info.epoch_number),
             exec_info.block_receipts.block_number,
+            exec_info.block.block_header.base_price(),
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
@@ -1584,6 +1593,15 @@ impl RpcImpl {
         })
     }
 
+    pub fn get_fee_burnt(&self,epoch: Option<EpochNumber>) -> RpcResult<U256>{
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch, "epoch_num")?;
+
+        Ok(state_db.get_global_param::<TotalBurnt1559>()?)
+    }
+
     pub fn set_db_crash(
         &self, crash_probability: f64, crash_exit_code: i32,
     ) -> RpcResult<()> {
@@ -2125,36 +2143,33 @@ impl RpcImpl {
                                     let tx_exec_error_msg = &execution_result
                                         .block_receipts
                                         .tx_execution_error_messages[id];
+                                    let receipt = RpcReceipt::new(
+                                        (**tx).clone(),
+                                        receipt.clone(),
+                                        tx_index,
+                                        prior_gas_used,
+                                        Some(epoch_number),
+                                        execution_result
+                                            .block_receipts
+                                            .block_number,
+                                        b.block_header.base_price(),
+                                        maybe_state_root,
+                                        if tx_exec_error_msg.is_empty() {
+                                            None
+                                        } else {
+                                            Some(tx_exec_error_msg.clone())
+                                        },
+                                        network,
+                                        false,
+                                        false,
+                                    )?;
                                     res.push(
                                         WrapTransaction::NativeTransaction(
                                             RpcTransaction::from_signed(
                                                 tx,
                                                 Some(
                                                     PackedOrExecuted::Executed(
-                                                        RpcReceipt::new(
-                                                            (**tx).clone(),
-                                                            receipt.clone(),
-                                                            tx_index,
-                                                            prior_gas_used,
-                                                            Some(epoch_number),
-                                                            execution_result
-                                                                .block_receipts
-                                                                .block_number,
-                                                            maybe_state_root,
-                                                            if tx_exec_error_msg
-                                                                .is_empty()
-                                                            {
-                                                                None
-                                                            } else {
-                                                                Some(
-                                                        tx_exec_error_msg
-                                                            .clone(),
-                                                    )
-                                                            },
-                                                            network,
-                                                            false,
-                                                            false,
-                                                        )?,
+                                                        receipt,
                                                     ),
                                                 ),
                                                 network,
@@ -2286,6 +2301,7 @@ impl Cfx for CfxHandler {
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
             fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
             fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
+            fn get_fee_burnt(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
         }
     }
 }

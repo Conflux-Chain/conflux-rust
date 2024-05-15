@@ -676,6 +676,7 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let data_man = self.data_man.clone();
 
         let fut = async move {
             // TODO:
@@ -706,6 +707,10 @@ impl RpcImpl {
                 return Ok(None);
             }
 
+            let maybe_base_price = data_man
+                .block_header_by_hash(&tx_index.block_hash)
+                .and_then(|x| x.base_price());
+
             let receipt = RpcReceipt::new(
                 tx,
                 receipt,
@@ -713,6 +718,7 @@ impl RpcImpl {
                 prior_gas_used,
                 maybe_epoch,
                 maybe_block_number.unwrap(),
+                maybe_base_price,
                 maybe_state_root,
                 // Can not offer error_message from light node.
                 None,
@@ -1248,6 +1254,7 @@ impl Cfx for CfxHandler {
         fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
         fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
+        fn get_fee_burnt(&self, epoch: Option<EpochNumber>) -> JsonRpcResult<U256>;
     }
 }
 
