@@ -15,7 +15,7 @@ use crate::rpc::{
             CallRequest, EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus,
             Transaction,
         },
-        Bytes, Index, MAX_GAS_CALL_REQUEST,
+        Bytes, FeeHistory, Index, MAX_GAS_CALL_REQUEST,
     },
 };
 use cfx_execute_helper::estimation::{
@@ -817,6 +817,83 @@ impl Eth for EthHandler {
         };
 
         Ok(estimation.estimated_gas_limit)
+    }
+
+    fn fee_history(
+        &self, block_count: usize, newest_block: BlockNumber,
+        reward_percentiles: Vec<u64>,
+    ) -> jsonrpc_core::Result<FeeHistory> {
+        info!(
+            "RPC Request: eth_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
+            block_count, newest_block, reward_percentiles
+        );
+
+        if block_count == 0 {
+            return Ok(FeeHistory::new());
+        }
+
+        // keep read lock to ensure consistent view
+        let _consensus = self.consensus_graph().inner.read();
+
+        let fetch_block = |height| {
+            let maybe_block = self
+                .consensus_graph()
+                .get_phantom_block_pivot_by_number(
+                    EpochNumber::Number(height),
+                    None,
+                    false,
+                )
+                .map_err(RpcError::invalid_params)?;
+            if let Some(block) = maybe_block {
+                // Internal error happens only if the fetch header has
+                // inconsistent block height
+                Ok(block)
+            } else {
+                Err(RpcError::invalid_params(
+                    "Specified block header does not exist",
+                ))
+            }
+        };
+
+        let start_height: u64 = self
+            .consensus_graph()
+            .get_height_from_epoch_number(newest_block.try_into()?)
+            .map_err(RpcError::invalid_params)?;
+
+        let mut current_height = start_height;
+
+        let mut fee_history = FeeHistory::new();
+        while current_height
+            >= start_height.saturating_sub(block_count as u64 - 1)
+        {
+            let block = fetch_block(current_height)?;
+
+            // Internal error happens only if the fetch header has inconsistent
+            // block height
+            fee_history
+                .push_back_block(
+                    Space::Ethereum,
+                    &reward_percentiles,
+                    &block.pivot_header,
+                    block.transactions.iter().map(|x| &**x),
+                )
+                .map_err(|_| RpcError::internal_error())?;
+
+            if current_height == 0 {
+                fee_history.finish(0, None, Space::Ethereum);
+                return Ok(fee_history);
+            } else {
+                current_height -= 1;
+            }
+        }
+
+        let block = fetch_block(current_height)?;
+        fee_history.finish(
+            current_height + 1,
+            block.pivot_header.base_price().as_ref(),
+            Space::Ethereum,
+        );
+        Ok(fee_history)
     }
 
     fn transaction_by_hash(

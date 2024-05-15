@@ -56,7 +56,7 @@ pub struct Receipt {
     /// is None if tx execution is successful or it can not be offered.
     /// Error message can not be offered by light client.
     pub tx_exec_error_msg: Option<String>,
-    #[serde(rename = "status", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub type_id: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub burnt_gas_fee: Option<U256>,

@@ -7,7 +7,7 @@ use crate::rpc::types::{
     AccountPendingTransactions, Block, BlockHashOrEpochNumber, Bytes,
     CallRequest, CfxFilterChanges, CfxRpcLogFilter,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
+    EstimateGasAndCollateralResponse, FeeHistory, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, StorageCollateralInfo, TokenSupplyInfo,
     Transaction, VoteParamsInfo,
@@ -196,6 +196,12 @@ pub trait Cfx {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
+
+    #[rpc(name = "cfx_feeHistory")]
+    fn fee_history(
+        &self, block_count: usize, newest_block: EpochNumber,
+        reward_percentiles: Vec<u64>,
+    ) -> BoxFuture<FeeHistory>;
 
     /// Check if user balance is enough for the transaction.
     #[rpc(name = "cfx_checkBalanceAgainstTransaction")]

@@ -6,8 +6,8 @@ use crate::rpc::{
     error_codes::{internal_error_msg, invalid_params_msg},
     types::{
         call_request::rpc_call_request_network,
-        errors::check_rpc_address_network, pos::PoSEpochReward, PoSEconomics,
-        RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
+        errors::check_rpc_address_network, pos::PoSEpochReward, FeeHistory,
+        PoSEconomics, RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
         VoteParamsInfo, WrapTransaction,
     },
 };
@@ -19,8 +19,8 @@ use cfx_executor::{
 };
 use cfx_statedb::{
     global_params::{
-        AccumulateInterestRate, DistributablePoSInterest, InterestRate,
-        LastDistributeBlock, PowBaseReward, TotalPosStaking,
+        AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
+        InterestRate, LastDistributeBlock, PowBaseReward, TotalPosStaking,
     },
     StateDbExt,
 };
@@ -1574,10 +1574,13 @@ impl RpcImpl {
 
         let storage_point_prop =
             state_db.get_system_storage(&storage_point_prop())?;
+
+        let base_fee_share_prop = state_db.get_global_param::<BaseFeeProp>()?;
         Ok(VoteParamsInfo {
             pow_base_reward,
             interest_rate,
             storage_point_prop,
+            base_fee_share_prop,
         })
     }
 
@@ -2244,6 +2247,7 @@ impl Cfx for CfxHandler {
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
+            fn fee_history(&self, block_count: usize, newest_block: EpochNumber, reward_percentiles: Vec<u64>) -> BoxFuture<FeeHistory>;
         }
 
         to self.rpc_impl {
