@@ -985,7 +985,7 @@ impl ConsensusGraph {
         let inner = self.inner.read();
 
         // NOTE: as batches are processed atomically and only the
-        // first batch (last few epochs) is likely to fluctuate, is is unlikely
+        // first batch (last few epochs) is likely to fluctuate, it is unlikely
         // that releasing the lock between batches would cause inconsistency:
         // we assume there are no pivot chain reorgs deeper than batch_size.
         // However, we still add a simple sanity check here:
