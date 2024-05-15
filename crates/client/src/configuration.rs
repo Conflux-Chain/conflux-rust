@@ -164,6 +164,7 @@ build_config! {
         (next_hardfork_transition_number, (Option<u64>), None)
         (next_hardfork_transition_height, (Option<u64>), None)
         (cip1559_transition_height, (Option<u64>), None)
+        (cancun_opcodes_transition_number, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -1401,7 +1402,7 @@ impl Configuration {
         //
         set_conf!(
             self.raw_conf.next_hardfork_transition_number.unwrap_or(default_transition_time);
-            params.transition_numbers => { cip131, cip132, cip133b, cip137, cancun_opcodes }
+            params.transition_numbers => { cip131, cip132, cip133b, cip137 }
         );
         set_conf!(
             self.raw_conf.next_hardfork_transition_height.unwrap_or(default_transition_time);
@@ -1411,7 +1412,14 @@ impl Configuration {
         params.transition_heights.cip1559 = self
             .raw_conf
             .cip1559_transition_height
+            .or(self.raw_conf.next_hardfork_transition_height)
             .unwrap_or(non_genesis_default_transition_time);
+        params.transition_numbers.cancun_opcodes = self
+            .raw_conf
+            .cancun_opcodes_transition_number
+            .or(self.raw_conf.next_hardfork_transition_height)
+            // Don't enable by default, since the gas is changed
+            .unwrap_or(default_transition_time);
 
         if params.transition_heights.cip1559
             < self.raw_conf.pos_reference_enable_height
