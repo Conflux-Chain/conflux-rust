@@ -19,7 +19,9 @@ use cfx_executor::{
 };
 use cfx_statedb::{
     global_params::{
-        AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest, InterestRate, LastDistributeBlock, PowBaseReward, TotalBurnt1559, TotalPosStaking
+        AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
+        InterestRate, LastDistributeBlock, PowBaseReward, TotalBurnt1559,
+        TotalPosStaking,
     },
     StateDbExt,
 };
@@ -1593,7 +1595,7 @@ impl RpcImpl {
         })
     }
 
-    pub fn get_fee_burnt(&self,epoch: Option<EpochNumber>) -> RpcResult<U256>{
+    pub fn get_fee_burnt(&self, epoch: Option<EpochNumber>) -> RpcResult<U256> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state_db = self
             .consensus

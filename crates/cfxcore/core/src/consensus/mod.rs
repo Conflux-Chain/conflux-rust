@@ -1815,7 +1815,7 @@ impl ConsensusGraph {
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool,
     ) -> Result<Option<PhantomBlock>, String> {
-        self.get_phantom_block_by_number_innser(
+        self.get_phantom_block_by_number_inner(
             block_num,
             pivot_assumption,
             include_traces,
@@ -1827,7 +1827,7 @@ impl ConsensusGraph {
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool,
     ) -> Result<Option<PhantomBlock>, String> {
-        self.get_phantom_block_by_number_innser(
+        self.get_phantom_block_by_number_inner(
             block_num,
             pivot_assumption,
             include_traces,
@@ -1835,7 +1835,7 @@ impl ConsensusGraph {
         )
     }
 
-    fn get_phantom_block_by_number_innser(
+    fn get_phantom_block_by_number_inner(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool, only_pivot: bool,
     ) -> Result<Option<PhantomBlock>, String> {
