@@ -186,12 +186,15 @@ enum_with_from_u8! {
         GAS = 0x5a,
         #[doc = "set a potential jump destination"]
         JUMPDEST = 0x5b,
-        #[doc = "Marks the entry point to a subroutine."]
-        BEGINSUB = 0x5c,
-        #[doc = "Returns from a subroutine."]
-        RETURNSUB = 0x5d,
-        #[doc = "Jumps to a defined BEGINSUB subroutine."]
-        JUMPSUB = 0x5e,
+        #[doc = "Marks the entry point to a subroutine (pre cip-142). load word from transient storage (after cip-142)"]
+        #[allow(non_camel_case_types)]
+        BEGINSUB_TLOAD = 0x5c,
+        #[doc = "Returns from a subroutine (pre cip-142). store word from transient storage (after cip-142)"]
+        #[allow(non_camel_case_types)]
+        RETURNSUB_TSTORE = 0x5d,
+        #[doc = "Jumps to a defined BEGINSUB subroutine (pre cip-143). copy data from one memory range to another (after cip-143)"]
+        #[allow(non_camel_case_types)]
+        JUMPSUB_MCOPY = 0x5e,
 
         #[doc = "place zero item on stack (EIP-3855/CIP-119)"]
         PUSH0 = 0x5f,
@@ -411,8 +414,14 @@ impl Instruction {
     }
 
     /// Returns the instruction info.
-    pub fn info(&self) -> &'static InstructionInfo {
-        INSTRUCTIONS[*self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")
+    pub fn info<const CANCUN: bool>(&self) -> &InstructionInfo {
+        let instrs = if !CANCUN {
+            &*INSTRUCTIONS
+        } else {
+            &*INSTRUCTIONS_CANCUN
+        };
+
+        instrs[*self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")
     }
 }
 
@@ -617,9 +626,9 @@ lazy_static! {
         arr[LOG2 as usize] = Some(InstructionInfo::new("LOG2", 4, 0, GasPriceTier::Special));
         arr[LOG3 as usize] = Some(InstructionInfo::new("LOG3", 5, 0, GasPriceTier::Special));
         arr[LOG4 as usize] = Some(InstructionInfo::new("LOG4", 6, 0, GasPriceTier::Special));
-        arr[BEGINSUB as usize] = Some(InstructionInfo::new("BEGINSUB", 0, 0, GasPriceTier::Base));
-        arr[JUMPSUB as usize] = Some(InstructionInfo::new("JUMPSUB", 1, 0, GasPriceTier::High));
-        arr[RETURNSUB as usize] = Some(InstructionInfo::new("RETURNSUB", 0, 0, GasPriceTier::Low));
+        arr[BEGINSUB_TLOAD as usize] = Some(InstructionInfo::new("BEGINSUB", 0, 0, GasPriceTier::Base));
+        arr[JUMPSUB_MCOPY as usize] = Some(InstructionInfo::new("JUMPSUB", 1, 0, GasPriceTier::High));
+        arr[RETURNSUB_TSTORE as usize] = Some(InstructionInfo::new("RETURNSUB", 0, 0, GasPriceTier::Low));
         arr[CREATE as usize] = Some(InstructionInfo::new("CREATE", 3, 1, GasPriceTier::Special));
         arr[CALL as usize] = Some(InstructionInfo::new("CALL", 7, 1, GasPriceTier::Special));
         arr[CALLCODE as usize] = Some(InstructionInfo::new("CALLCODE", 7, 1, GasPriceTier::Special));
@@ -629,6 +638,14 @@ lazy_static! {
         arr[SUICIDE as usize] = Some(InstructionInfo::new("SUICIDE", 1, 0, GasPriceTier::Special));
         arr[CREATE2 as usize] = Some(InstructionInfo::new("CREATE2", 4, 1, GasPriceTier::Special));
         arr[REVERT as usize] = Some(InstructionInfo::new("REVERT", 2, 0, GasPriceTier::Zero));
+        arr
+    };
+
+    static ref INSTRUCTIONS_CANCUN: [Option<InstructionInfo>; 0x100] = {
+        let mut arr = *INSTRUCTIONS;
+        arr[BEGINSUB_TLOAD as usize] = Some(InstructionInfo::new("TLOAD", 1, 1, GasPriceTier::Special));
+        arr[JUMPSUB_MCOPY as usize] = Some(InstructionInfo::new("MCOPY", 3, 0, GasPriceTier::Special));
+        arr[RETURNSUB_TSTORE as usize] = Some(InstructionInfo::new("TSTORE", 2, 0, GasPriceTier::Special));
         arr
     };
 }

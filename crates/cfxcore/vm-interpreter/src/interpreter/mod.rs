@@ -178,9 +178,9 @@ impl From<vm::Error> for InterpreterResult {
 }
 
 /// Interpreter EVM implementation
-pub struct Interpreter<Cost: CostType> {
+pub struct Interpreter<Cost: CostType, const CANCUN: bool> {
     mem: Vec<u8>,
-    cache: Arc<SharedCache>,
+    cache: Arc<SharedCache<CANCUN>>,
     params: InterpreterParams,
     reader: CodeReader,
     return_data: ReturnData,
@@ -199,7 +199,9 @@ pub struct Interpreter<Cost: CostType> {
     _type: PhantomData<Cost>,
 }
 
-impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
+impl<Cost: 'static + CostType, const CANCUN: bool> vm::Exec
+    for Interpreter<Cost, CANCUN>
+{
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
     ) -> vm::ExecTrapResult<GasLeft> {
@@ -231,7 +233,9 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     }
 }
 
-impl<Cost: 'static + CostType> vm::ResumeCall for Interpreter<Cost> {
+impl<Cost: 'static + CostType, const CANCUN: bool> vm::ResumeCall
+    for Interpreter<Cost, CANCUN>
+{
     fn resume_call(
         mut self: Box<Self>, result: MessageCallResult,
     ) -> Box<dyn vm::Exec> {
@@ -276,7 +280,9 @@ impl<Cost: 'static + CostType> vm::ResumeCall for Interpreter<Cost> {
     }
 }
 
-impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
+impl<Cost: 'static + CostType, const CANCUN: bool> vm::ResumeCreate
+    for Interpreter<Cost, CANCUN>
+{
     fn resume_create(
         mut self: Box<Self>, result: ContractCreateResult,
     ) -> Box<dyn vm::Exec> {
@@ -305,12 +311,12 @@ impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
     }
 }
 
-impl<Cost: CostType> Interpreter<Cost> {
+impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
     /// Create a new `Interpreter` instance with shared cache.
     pub fn new(
-        mut params: ActionParams, cache: Arc<SharedCache>, spec: &Spec,
+        mut params: ActionParams, cache: Arc<SharedCache<CANCUN>>, spec: &Spec,
         depth: usize,
-    ) -> Interpreter<Cost> {
+    ) -> Interpreter<Cost, CANCUN> {
         let reader = CodeReader::new(
             params.code.take().expect("VM always called with code; qed"),
         );
@@ -410,7 +416,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                     }
                 };
 
-                let info = instruction.info();
+                let info = instruction.info::<CANCUN>();
                 self.last_stack_ret_len = info.ret;
                 if let Err(e) =
                     self.verify_instruction(context, instruction, info)
@@ -639,6 +645,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::CALLDATACOPY
             | instructions::CODECOPY
             | instructions::RETURNDATACOPY => Some((read(0), read(2))),
+            instructions::JUMPSUB_MCOPY if CANCUN => Some((read(0), read(2))),
             instructions::EXTCODECOPY => Some((read(1), read(3))),
             instructions::CALL | instructions::CALLCODE => {
                 Some((read(5), read(6)))
@@ -689,31 +696,58 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::JUMPDEST => {
                 // ignore
             }
-            instructions::BEGINSUB => {
-                // BEGINSUB should not be executed. If so, returns
-                // InvalidSubEntry (EIP-2315).
-                return Err(vm::Error::InvalidSubEntry);
-            }
-            instructions::JUMPSUB => {
-                if self.return_stack.len() >= MAX_SUB_STACK_SIZE {
-                    return Err(vm::Error::OutOfSubStack {
-                        wanted: 1,
-                        limit: MAX_SUB_STACK_SIZE,
-                    });
-                }
-                let sub_destination = self.stack.pop_back();
-                return Ok(InstructionResult::JumpToSubroutine(
-                    sub_destination,
-                ));
-            }
-            instructions::RETURNSUB => {
-                if let Some(pos) = self.return_stack.pop() {
-                    return Ok(InstructionResult::ReturnFromSubroutine(pos));
+            instructions::BEGINSUB_TLOAD => {
+                if !CANCUN {
+                    // BEGINSUB
+                    // BEGINSUB should not be executed. If so, returns
+                    // InvalidSubEntry (EIP-2315).
+                    return Err(vm::Error::InvalidSubEntry);
                 } else {
-                    return Err(vm::Error::SubStackUnderflow {
-                        wanted: 1,
-                        on_stack: 0,
-                    });
+                    // TLOAD
+                    let mut key = vec![0; 32];
+                    self.stack.pop_back().to_big_endian(key.as_mut());
+                    let word = context.storage_at(&key)?;
+                    self.stack.push(word);
+                }
+            }
+            instructions::JUMPSUB_MCOPY => {
+                if !CANCUN {
+                    // JUMPSUB
+                    if self.return_stack.len() >= MAX_SUB_STACK_SIZE {
+                        return Err(vm::Error::OutOfSubStack {
+                            wanted: 1,
+                            limit: MAX_SUB_STACK_SIZE,
+                        });
+                    }
+                    let sub_destination = self.stack.pop_back();
+                    return Ok(InstructionResult::JumpToSubroutine(
+                        sub_destination,
+                    ));
+                } else {
+                    // MCOPY
+                    Self::copy_memory_to_memory(&mut self.mem, &mut self.stack);
+                }
+            }
+            instructions::RETURNSUB_TSTORE => {
+                if !CANCUN {
+                    // RETURNSUB
+                    if let Some(pos) = self.return_stack.pop() {
+                        return Ok(InstructionResult::ReturnFromSubroutine(
+                            pos,
+                        ));
+                    } else {
+                        return Err(vm::Error::SubStackUnderflow {
+                            wanted: 1,
+                            on_stack: 0,
+                        });
+                    }
+                } else {
+                    // TSTORE
+                    let mut key = vec![0; 32];
+                    self.stack.pop_back().to_big_endian(key.as_mut());
+                    let val = self.stack.pop_back();
+
+                    context.transient_set_storage(key, val)?;
                 }
             }
             instructions::CREATE | instructions::CREATE2 => {
@@ -1551,6 +1585,47 @@ impl<Cost: CostType> Interpreter<Cost> {
         let dest_offset = stack.pop_back();
         let source_offset = stack.pop_back();
         let size = stack.pop_back();
+
+        Self::copy_data_to_memory_inner(
+            mem,
+            source,
+            dest_offset,
+            source_offset,
+            size,
+        );
+    }
+
+    fn copy_memory_to_memory(mem: &mut Vec<u8>, stack: &mut dyn Stack<U256>) {
+        let dest_offset = stack.pop_back();
+        let source_offset = stack.pop_back();
+        let size = stack.pop_back();
+
+        let mem_size = U256::from(mem.len());
+
+        if source_offset >= mem_size {
+            return;
+        }
+        let source_offset_usize = source_offset.as_usize();
+        let source = if size >= mem_size || source_offset + size >= mem_size {
+            mem[source_offset_usize..].to_vec()
+        } else {
+            let size = size.as_usize();
+            mem[source_offset_usize..source_offset_usize + size].to_vec()
+        };
+
+        Self::copy_data_to_memory_inner(
+            mem,
+            &source,
+            dest_offset,
+            U256::zero(),
+            size,
+        );
+    }
+
+    fn copy_data_to_memory_inner(
+        mem: &mut Vec<u8>, source: &[u8], dest_offset: U256,
+        source_offset: U256, size: U256,
+    ) {
         let source_size = U256::from(source.len());
 
         let output_end = match source_offset > source_size

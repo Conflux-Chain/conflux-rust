@@ -123,6 +123,16 @@ impl Context for MockContext {
         Ok(())
     }
 
+    fn transient_storage_at(&self, _key: &Vec<u8>) -> Result<U256> {
+        Ok(U256::zero())
+    }
+
+    fn transient_set_storage(
+        &mut self, _key: Vec<u8>, _value: U256,
+    ) -> Result<()> {
+        Ok(())
+    }
+
     fn exists(&self, address: &Address) -> Result<bool> {
         Ok(self.balances.contains_key(address))
     }
