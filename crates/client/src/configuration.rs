@@ -47,7 +47,7 @@ use diem_types::term_state::{
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
-use primitives::{block_header::CIP112_TRANSITION_HEIGHT, BlockNumber};
+use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
 
 use crate::rpc::{
@@ -149,17 +149,17 @@ build_config! {
         (tanzanite_transition_height, (u64), 0)
         (hydra_transition_number, (Option<u64>), Some(0))
         (hydra_transition_height, (Option<u64>), Some(0))
-        (dao_vote_transition_number, (Option<u64>), Some(0))
-        (dao_vote_transition_height, (Option<u64>), Some(0))
+        (dao_vote_transition_number, (Option<u64>), Some(2))
+        (dao_vote_transition_height, (Option<u64>), Some(2))
         (cip43_init_end_number, (Option<u64>), Some(1 << 31))
         (cip78_patch_transition_number,(Option<u64>), None)
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
-        (cip105_transition_number, (Option<u64>), Some(0))
+        (cip105_transition_number, (Option<u64>), None)
         (sigma_fix_transition_number, (Option<u64>), Some(0))
-        (cip107_transition_number, (Option<u64>), Some(0))
+        (cip107_transition_number, (Option<u64>), Some(3))
         (cip112_transition_height, (Option<u64>), Some(0))
-        (cip118_transition_number, (Option<u64>), Some(0))
+        (cip118_transition_number, (Option<u64>), Some(3))
         (cip119_transition_number, (Option<u64>), Some(0))
         (next_hardfork_transition_number, (Option<u64>), Some(14400))
         (next_hardfork_transition_height, (Option<u64>), Some(7200))

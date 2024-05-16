@@ -7,10 +7,7 @@ use crate::{
     internal_bail,
     state::State,
 };
-use cfx_parameters::{
-    consensus::ONE_CFX_IN_DRIP,
-    staking::BLOCKS_PER_HOUR,
-};
+use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::BLOCKS_PER_HOUR};
 use cfx_types::{Address, AddressSpaceUtil, U256};
 use cfx_vm_types::{self as vm, ActionParams, Env, Spec};
 
