@@ -45,7 +45,7 @@ pub mod consensus {
 
     /// About 2020.12.11-15:30 for both the height and the block number.
     pub const TANZANITE_HEIGHT: u64 = 3_615_000;
-    pub const BN128_ENABLE_NUMBER: u64 = 7_600_000;
+    pub const BN128_ENABLE_NUMBER: u64 = 0;
 
     pub const TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
     pub const DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [2];
