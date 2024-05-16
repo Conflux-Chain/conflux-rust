@@ -188,6 +188,32 @@ impl<'a> ContextTrait for Context<'a> {
         }
     }
 
+    fn transient_storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        self.state
+            .transient_storage_at(&receiver, key)
+            .map_err(Into::into)
+    }
+
+    fn transient_set_storage(
+        &mut self, key: Vec<u8>, value: U256,
+    ) -> vm::Result<()> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        if self.is_static_or_reentrancy() {
+            Err(vm::Error::MutableCallInStaticContext)
+        } else {
+            self.state
+                .transient_set_storage(&receiver, key, value)
+                .map_err(Into::into)
+        }
+    }
+
     fn exists(&self, address: &Address) -> vm::Result<bool> {
         let address = AddressWithSpace {
             address: *address,
@@ -585,6 +611,8 @@ mod tests {
             pos_view: None,
             finalized_epoch: None,
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
+            base_gas_price: Default::default(),
+            burnt_gas_price: Default::default(),
         }
     }
 
@@ -610,7 +638,7 @@ mod tests {
                 Default::default(),
             );
             let env = get_test_env();
-            let spec = machine.spec(env.number);
+            let spec = machine.spec_for_test(env.number);
             let callstack = CallStackInfo::new();
 
             let mut setup = Self {

@@ -30,7 +30,8 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct Factory {
     evm: VMType,
-    evm_cache: Arc<SharedCache>,
+    evm_cache: Arc<SharedCache<false>>,
+    evm_cache_cancun: Arc<SharedCache<true>>,
 }
 
 impl Factory {
@@ -39,24 +40,38 @@ impl Factory {
     pub fn create(
         &self, params: ActionParams, spec: &Spec, depth: usize,
     ) -> Box<dyn Exec> {
+        use super::interpreter::Interpreter;
+        // Assert there is only one type. Parity Ethereum is dead and no more
+        // types will be added.
         match self.evm {
-            VMType::Interpreter => {
-                if Self::can_fit_in_usize(&params.gas) {
-                    Box::new(super::interpreter::Interpreter::<usize>::new(
-                        params,
-                        self.evm_cache.clone(),
-                        spec,
-                        depth,
-                    ))
-                } else {
-                    Box::new(super::interpreter::Interpreter::<U256>::new(
-                        params,
-                        self.evm_cache.clone(),
-                        spec,
-                        depth,
-                    ))
-                }
-            }
+            VMType::Interpreter => {}
+        };
+
+        match (Self::can_fit_in_usize(&params.gas), spec.cancun_opcodes) {
+            (true, true) => Box::new(Interpreter::<usize, true>::new(
+                params,
+                self.evm_cache_cancun.clone(),
+                spec,
+                depth,
+            )),
+            (true, false) => Box::new(Interpreter::<usize, false>::new(
+                params,
+                self.evm_cache.clone(),
+                spec,
+                depth,
+            )),
+            (false, true) => Box::new(Interpreter::<U256, true>::new(
+                params,
+                self.evm_cache_cancun.clone(),
+                spec,
+                depth,
+            )),
+            (false, false) => Box::new(Interpreter::<U256, false>::new(
+                params,
+                self.evm_cache.clone(),
+                spec,
+                depth,
+            )),
         }
     }
 
@@ -66,6 +81,7 @@ impl Factory {
         Factory {
             evm,
             evm_cache: Arc::new(SharedCache::new(cache_size)),
+            evm_cache_cancun: Arc::new(SharedCache::new(cache_size)),
         }
     }
 
@@ -80,6 +96,7 @@ impl Default for Factory {
         Factory {
             evm: VMType::Interpreter,
             evm_cache: Arc::new(SharedCache::default()),
+            evm_cache_cancun: Arc::new(SharedCache::default()),
         }
     }
 }

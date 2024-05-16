@@ -45,6 +45,14 @@ impl State {
     }
 
     #[inline]
+    pub fn transient_storage_at(
+        &self, address: &AddressWithSpace, key: &[u8],
+    ) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_account_lock(address));
+        Ok(acc.transient_storage_at(key))
+    }
+
+    #[inline]
     pub fn storage_entry_at(
         &self, address: &AddressWithSpace, key: &[u8],
     ) -> DbResult<StorageValue> {
@@ -66,6 +74,15 @@ impl State {
             .set_storage(key, value, old_value, owner, substate)?;
 
         Ok(())
+    }
+
+    #[inline]
+    pub fn transient_set_storage(
+        &mut self, address: &AddressWithSpace, key: Vec<u8>, value: U256,
+    ) -> DbResult<()> {
+        Ok(self
+            .write_account_lock(address)?
+            .transient_set_storage(key, value))
     }
 
     pub fn is_fresh_storage(

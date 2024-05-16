@@ -15,7 +15,7 @@ use crate::rpc::{
             CallRequest, EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus,
             Transaction,
         },
-        Bytes, Index, MAX_GAS_CALL_REQUEST,
+        Bytes, FeeHistory, Index, MAX_GAS_CALL_REQUEST,
     },
 };
 use cfx_execute_helper::estimation::{
@@ -41,11 +41,11 @@ use cfxcore::{
 use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS,
+    transaction::eth_transaction::Eip155Transaction, Action,
+    BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
+    StorageValue, TransactionStatus, TransactionWithSignature,
 };
-use rlp::Rlp;
 use rustc_hex::ToHex;
 use std::{cmp::min, convert::TryInto};
 
@@ -238,7 +238,7 @@ impl EthHandler {
         let transaction_hash = tx.hash();
         let transaction_index: U256 = idx.into();
         let block_hash = b.pivot_header.hash();
-        let block_number: U256 = b.pivot_header.height().into();
+        let block_height: U256 = b.pivot_header.height().into();
 
         let logs: Vec<_> = receipt
             .logs
@@ -250,7 +250,7 @@ impl EthHandler {
                 topics: log.topics,
                 data: Bytes(log.data),
                 block_hash,
-                block_number,
+                block_number: block_height,
                 transaction_hash,
                 transaction_index,
                 log_index: Some((*prior_log_index + idx).into()),
@@ -275,6 +275,18 @@ impl EthHandler {
             Some(b.errors[idx].clone())
         };
 
+        let effective_gas_price =
+            if let Some(base_price) = b.pivot_header.base_price() {
+                let base_price = base_price[tx.space()];
+                if *tx.gas_price() < base_price {
+                    *tx.gas_price()
+                } else {
+                    tx.effective_gas_price(&base_price)
+                }
+            } else {
+                *tx.gas_price()
+            };
+
         Ok(Receipt {
             transaction_hash,
             transaction_index,
@@ -284,7 +296,7 @@ impl EthHandler {
                 Action::Create => None,
                 Action::Call(addr) => Some(*addr),
             },
-            block_number,
+            block_number: block_height,
             cumulative_gas_used: receipt.accumulated_gas_used,
             gas_used,
             contract_address,
@@ -294,8 +306,13 @@ impl EthHandler {
                 .outcome_status
                 .in_space(Space::Ethereum)
                 .into(),
-            effective_gas_price: *tx.gas_price(),
+            effective_gas_price,
             tx_exec_error_msg,
+            transaction_type: receipt
+                .burnt_gas_fee
+                .is_some()
+                .then_some(tx.type_id()),
+            burnt_gas_fee: receipt.burnt_gas_fee,
         })
     }
 
@@ -377,6 +394,12 @@ impl Eth for EthHandler {
 
     fn gas_price(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_gasPrice");
+        let (_, maybe_base_price) =
+            self.tx_pool.get_best_info_with_parent_base_price();
+        if let Some(base_price) = maybe_base_price {
+            return Ok(base_price[Space::Ethereum]);
+        }
+
         let consensus_gas_price = self
             .consensus_graph()
             .gas_price(Space::Ethereum)
@@ -389,8 +412,11 @@ impl Eth for EthHandler {
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_maxPriorityFeePerGas");
-        // TODO: Change this
-        Ok(U256::from(20000000000u64))
+        let (_, maybe_base_price) =
+            self.tx_pool.get_best_info_with_parent_base_price();
+        let answer = maybe_base_price
+            .map_or(U256::from(20000000000u64), |x| x[Space::Ethereum]);
+        Ok(answer)
     }
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
@@ -662,8 +688,10 @@ impl Eth for EthHandler {
             "RPC Request: eth_sendRawTransaction / eth_submitTransaction raw={:?}",
             raw,
         );
-        let tx: TransactionWithSignature =
-            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+        let tx: TransactionWithSignature = invalid_params_check(
+            "raw",
+            TransactionWithSignature::from_raw(&raw.into_vec()),
+        )?;
 
         if tx.space() != Space::Ethereum {
             bail!(invalid_params("tx", "Incorrect transaction space"));
@@ -792,6 +820,83 @@ impl Eth for EthHandler {
         };
 
         Ok(estimation.estimated_gas_limit)
+    }
+
+    fn fee_history(
+        &self, block_count: usize, newest_block: BlockNumber,
+        reward_percentiles: Vec<u64>,
+    ) -> jsonrpc_core::Result<FeeHistory> {
+        info!(
+            "RPC Request: eth_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
+            block_count, newest_block, reward_percentiles
+        );
+
+        if block_count == 0 {
+            return Ok(FeeHistory::new());
+        }
+
+        // keep read lock to ensure consistent view
+        let _consensus = self.consensus_graph().inner.read();
+
+        let fetch_block = |height| {
+            let maybe_block = self
+                .consensus_graph()
+                .get_phantom_block_pivot_by_number(
+                    EpochNumber::Number(height),
+                    None,
+                    false,
+                )
+                .map_err(RpcError::invalid_params)?;
+            if let Some(block) = maybe_block {
+                // Internal error happens only if the fetch header has
+                // inconsistent block height
+                Ok(block)
+            } else {
+                Err(RpcError::invalid_params(
+                    "Specified block header does not exist",
+                ))
+            }
+        };
+
+        let start_height: u64 = self
+            .consensus_graph()
+            .get_height_from_epoch_number(newest_block.try_into()?)
+            .map_err(RpcError::invalid_params)?;
+
+        let mut current_height = start_height;
+
+        let mut fee_history = FeeHistory::new();
+        while current_height
+            >= start_height.saturating_sub(block_count as u64 - 1)
+        {
+            let block = fetch_block(current_height)?;
+
+            // Internal error happens only if the fetch header has inconsistent
+            // block height
+            fee_history
+                .push_back_block(
+                    Space::Ethereum,
+                    &reward_percentiles,
+                    &block.pivot_header,
+                    block.transactions.iter().map(|x| &**x),
+                )
+                .map_err(|_| RpcError::internal_error())?;
+
+            if current_height == 0 {
+                fee_history.finish(0, None, Space::Ethereum);
+                return Ok(fee_history);
+            } else {
+                current_height -= 1;
+            }
+        }
+
+        let block = fetch_block(current_height)?;
+        fee_history.finish(
+            current_height + 1,
+            block.pivot_header.base_price().as_ref(),
+            Space::Ethereum,
+        );
+        Ok(fee_history)
     }
 
     fn transaction_by_hash(

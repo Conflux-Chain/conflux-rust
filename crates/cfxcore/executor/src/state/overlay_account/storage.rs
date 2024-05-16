@@ -167,6 +167,10 @@ impl OverlayAccount {
         })
     }
 
+    pub fn transient_storage_at(&self, key: &[u8]) -> U256 {
+        self.transient_storage.get(key).cloned().unwrap_or_default()
+    }
+
     fn get_and_cache_storage(
         &self, db: &StateDbGeneric, key: &[u8],
     ) -> DbResult<StorageValue> {
@@ -183,6 +187,10 @@ impl OverlayAccount {
             .write()
             .insert(key.to_vec(), storage_value.clone());
         Ok(storage_value)
+    }
+
+    pub fn transient_set_storage(&mut self, key: Vec<u8>, value: U256) {
+        Arc::make_mut(&mut self.transient_storage).insert(key, value);
     }
 
     pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {

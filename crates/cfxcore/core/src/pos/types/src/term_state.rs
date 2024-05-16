@@ -54,8 +54,9 @@ pub const TERM_MAX_SIZE: usize = 10000;
 pub const TERM_ELECTED_SIZE: usize = 50;
 
 mod incentives {
-    use super::{
-        ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_LIST_LEN, TERM_MAX_SIZE,
+    use super::{TERM_ELECTED_SIZE, TERM_LIST_LEN, TERM_MAX_SIZE};
+    use crate::term_state::pos_state_config::{
+        PosStateConfigTrait, POS_STATE_CONFIG,
     };
 
     const BONUS_VOTE_MAX_SIZE: u64 = 100;
@@ -73,12 +74,19 @@ mod incentives {
         / 100
         / (TERM_ELECTED_SIZE as u64)
         / (TERM_LIST_LEN as u64);
-    pub const LEADER_POINTS: u64 =
-        MAX_TERM_POINTS * LEADER_PERCENTAGE / 100 / ROUND_PER_TERM;
-    pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
-        / 100
-        / ROUND_PER_TERM
-        / BONUS_VOTE_MAX_SIZE;
+
+    pub fn leader_points(view: u64) -> u64 {
+        MAX_TERM_POINTS * LEADER_PERCENTAGE
+            / 100
+            / POS_STATE_CONFIG.round_per_term(view)
+    }
+
+    pub fn bonus_vote_points(view: u64) -> u64 {
+        MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
+            / 100
+            / POS_STATE_CONFIG.round_per_term(view)
+            / BONUS_VOTE_MAX_SIZE
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]

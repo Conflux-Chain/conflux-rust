@@ -17,6 +17,7 @@ class SameHeightTest(ConfluxTestFramework):
         self.num_nodes = 2
         # Disable pos reference because pow blocks are generated too fast.
         self.conf_parameters["pos_reference_enable_height"] = '100000'
+        self.conf_parameters["cip1559_transition_height"] = '100000'
 
     def setup_network(self):
         self.setup_nodes()

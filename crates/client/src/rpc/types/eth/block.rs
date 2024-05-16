@@ -203,7 +203,10 @@ impl Block {
             timestamp: pb.pivot_header.timestamp().into(),
             difficulty: pb.pivot_header.difficulty().into(),
             total_difficulty: 0.into(),
-            base_fee_per_gas: None,
+            base_fee_per_gas: pb
+                .pivot_header
+                .base_price()
+                .map(|x| x[Space::Ethereum]),
             uncles: vec![],
             // Note: we allow U256 nonce in Stratum and in the block.
             // However, most mining clients use U64. Here we truncate

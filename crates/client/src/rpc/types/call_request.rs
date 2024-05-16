@@ -16,7 +16,9 @@ use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use primitives::{
-    transaction::Action, NativeTransaction as PrimitiveTransaction,
+    transaction::{
+        native_transaction::NativeTransaction as PrimitiveTransaction, Action,
+    },
     SignedTransaction, Transaction, TransactionWithSignature,
 };
 use std::{cmp::min, sync::Arc};

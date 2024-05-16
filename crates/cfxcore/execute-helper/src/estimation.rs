@@ -16,9 +16,7 @@ use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, Space, U256,
 };
 use cfx_vm_types::{self as vm, Env, Spec};
-use primitives::{
-    transaction::Action, NativeTransaction, SignedTransaction, Transaction,
-};
+use primitives::{transaction::Action, SignedTransaction, Transaction};
 use std::{
     cmp::{max, min},
     fmt::Display,
@@ -105,26 +103,27 @@ impl<'a> EstimationContext<'a> {
     fn sponsored_contract_if_eligible_sender(
         &self, tx: &SignedTransaction, ty: SponsoredType,
     ) -> DbResult<Option<Address>> {
-        if let Transaction::Native(NativeTransaction {
-            action: Action::Call(ref to),
-            ..
-        }) = tx.unsigned
-        {
-            if to.is_contract_address() {
-                let sponsor = match ty {
-                    SponsoredType::Gas => self.state.sponsor_for_gas(&to)?,
-                    SponsoredType::Collateral => {
-                        self.state.sponsor_for_collateral(&to)?
-                    }
-                };
-                let has_sponsor = sponsor.map_or(false, |x| !x.is_zero());
+        if let Transaction::Native(ref native_tx) = tx.unsigned {
+            if let Action::Call(to) = native_tx.action() {
+                if to.is_contract_address() {
+                    let sponsor = match ty {
+                        SponsoredType::Gas => {
+                            self.state.sponsor_for_gas(&to)?
+                        }
+                        SponsoredType::Collateral => {
+                            self.state.sponsor_for_collateral(&to)?
+                        }
+                    };
+                    let has_sponsor = sponsor.map_or(false, |x| !x.is_zero());
 
-                if has_sponsor
-                    && self
-                        .state
-                        .check_contract_whitelist(&to, &tx.sender().address)?
-                {
-                    return Ok(Some(*to));
+                    if has_sponsor
+                        && self.state.check_contract_whitelist(
+                            &to,
+                            &tx.sender().address,
+                        )?
+                    {
+                        return Ok(Some(*to));
+                    }
                 }
             }
         }

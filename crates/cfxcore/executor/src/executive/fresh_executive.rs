@@ -38,6 +38,8 @@ pub(super) struct CostInfo {
     pub gas_cost: U512,
     pub storage_cost: U256,
     pub sender_intended_cost: U512,
+    pub gas_price: U256,
+    pub burnt_gas_price: U256,
 
     pub gas_sponsored: bool,
     pub storage_sponsored: bool,
@@ -53,6 +55,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let base_gas = gas_required_for(
             tx.action() == &Action::Create,
             &tx.data(),
+            tx.access_list(),
             context.spec,
         );
         FreshExecutive {
@@ -67,6 +70,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
     pub(super) fn check_all(
         self,
     ) -> DbResult<Result<PreCheckedExecutive<'a, O>, ExecutionOutcome>> {
+        early_return_on_err!(self.check_base_price());
         // Validate transaction nonce
         early_return_on_err!(self.check_nonce()?);
 
@@ -115,6 +119,20 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         })
     }
 
+    fn check_base_price(&self) -> Result<(), ExecutionOutcome> {
+        let burnt_gas_price = self.context.env.burnt_gas_price[self.tx.space()];
+        if self.tx.gas_price() < &burnt_gas_price {
+            Err(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::NotEnoughBaseFee {
+                    expected: burnt_gas_price,
+                    got: *self.tx.gas_price(),
+                },
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn check_epoch_bound(&self) -> DbResult<Result<(), ExecutionOutcome>> {
         let tx = if let Transaction::Native(ref tx) =
             self.tx.transaction.transaction.unsigned
@@ -126,13 +144,13 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
 
         let env = self.context.env;
 
-        if tx.epoch_height.abs_diff(env.epoch_height)
+        if tx.epoch_height().abs_diff(env.epoch_height)
             > env.transaction_epoch_bound
         {
             Ok(Err(ExecutionOutcome::NotExecutedToReconsiderPacking(
                 ToRepackError::EpochHeightOutOfBound {
                     block_height: env.epoch_height,
-                    set: tx.epoch_height,
+                    set: *tx.epoch_height(),
                     transaction_epoch_bound: env.transaction_epoch_bound,
                 },
             )))
@@ -164,11 +182,27 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let settings = self.settings;
         let sender = tx.sender();
         let state = &self.context.state;
+        let env = self.context.env;
         let spec = self.context.spec;
+
+        let gas_price = if !spec.cip1559 {
+            *tx.gas_price()
+        } else {
+            // actual_base_gas >= tx gas_price >= burnt_base_price
+            let actual_base_gas =
+                U256::min(*tx.gas_price(), env.base_gas_price[tx.space()]);
+            tx.effective_gas_price(&actual_base_gas)
+        };
+
+        let burnt_gas_price = env.burnt_gas_price[tx.space()];
+        // gas_price >= actual_base_gas >=
+        //   1. tx gas_price >= burnt_base_price
+        //   2. base_gas_price >= burnt_gas_price
+        assert!(gas_price >= burnt_gas_price);
 
         let sender_balance = U512::from(state.balance(&sender)?);
         let gas_cost = if settings.charge_gas {
-            tx.gas().full_mul(*tx.gas_price())
+            tx.gas().full_mul(gas_price)
         } else {
             0.into()
         };
@@ -177,7 +211,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
                 &tx.transaction.transaction.unsigned,
                 settings.charge_collateral,
             ) {
-                U256::from(tx.storage_limit)
+                U256::from(*tx.storage_limit())
                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
             } else {
                 U256::zero()
@@ -190,6 +224,8 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
                 sender_balance,
                 base_gas: self.base_gas,
                 gas_cost,
+                gas_price,
+                burnt_gas_price,
                 storage_cost,
                 sender_intended_cost: sender_cost,
                 total_cost: sender_cost,
@@ -301,6 +337,8 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
             sender_intended_cost,
             base_gas: self.base_gas,
             gas_cost,
+            gas_price,
+            burnt_gas_price,
             storage_cost,
             sender_balance,
             total_cost,
