@@ -30,6 +30,7 @@ class P2PTest(ConfluxTestFramework):
         # it goes through all the phases to download data as a normal node.
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
         self.conf_parameters["pos_reference_enable_height"] = 600
+        self.conf_parameters["cip1559_transition_height"] = 600
 
         self.stop_probability = 0.01
         self.clean_probability = 0.5

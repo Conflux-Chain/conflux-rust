@@ -28,7 +28,7 @@ use lazy_static::lazy_static;
 use metrics::{register_meter_with_group, Meter};
 use parking_lot::RwLock;
 use primitives::{
-    transaction::{Action, NativeTransaction},
+    transaction::{native_transaction::NativeTransaction, Action},
     Account, SignedTransaction, Transaction,
 };
 use rand::prelude::*;

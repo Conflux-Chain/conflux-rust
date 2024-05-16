@@ -50,10 +50,13 @@ pub use crate::{
     },
     storage_key::*,
     transaction::{
-        Action, Eip155Transaction, NativeTransaction, SignedTransaction,
-        Transaction, TransactionWithSignature,
-        TransactionWithSignatureSerializePart, TxPropagateId,
+        AccessList, Action, SignedTransaction, Transaction,
+        TransactionWithSignature, TransactionWithSignatureSerializePart,
+        TxPropagateId,
     },
     transaction_index::TransactionIndex,
     zero::Zero,
+};
+pub use transaction::{
+    eth_transaction::Eip155Transaction, native_transaction::NativeTransaction,
 };

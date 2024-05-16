@@ -333,9 +333,9 @@ impl ParamVoteCount {
     }
 
     pub fn compute_next_params(
-        &self, old_value: U256, pos_staking_tokens: U256,
+        &self, old_value: U256, pos_staking_for_votes: U256,
     ) -> U256 {
-        if self.should_update(pos_staking_tokens) {
+        if self.should_update(pos_staking_for_votes) {
             let answer = self.compute_next_params_inner(old_value);
             // The return value should be in `[2^8, 2^192]`
             let min_value = U256::from(256u64);
@@ -348,7 +348,7 @@ impl ParamVoteCount {
                 answer
             }
         } else {
-            debug!("params unchanged with pos token {}", pos_staking_tokens);
+            debug!("params unchanged with pos token {}", pos_staking_for_votes);
             old_value
         }
     }
@@ -387,9 +387,9 @@ impl ParamVoteCount {
         }
     }
 
-    fn should_update(&self, pos_staking_tokens: U256) -> bool {
+    fn should_update(&self, pos_staking_for_votes: U256) -> bool {
         (self.decrease + self.increase + self.unchange)
-            >= pos_staking_tokens * DAO_MIN_VOTE_PERCENTAGE / 100
+            >= pos_staking_for_votes * DAO_MIN_VOTE_PERCENTAGE / 100
     }
 }
 
@@ -398,6 +398,7 @@ pub struct AllParamsVoteCount {
     pub pow_base_reward: ParamVoteCount,
     pub pos_reward_interest: ParamVoteCount,
     pub storage_point_prop: ParamVoteCount,
+    pub base_fee_prop: ParamVoteCount,
 }
 
 /// If the vote counts are not initialized, all counts will be zero, and the
@@ -417,10 +418,15 @@ pub fn get_settled_param_vote_count(
         state,
         &SETTLED_VOTES_ENTRIES[STORAGE_POINT_PROP_INDEX as usize],
     )?;
+    let base_fee_prop = ParamVoteCount::from_state(
+        state,
+        &SETTLED_VOTES_ENTRIES[BASEFEE_PROP_INDEX as usize],
+    )?;
     Ok(AllParamsVoteCount {
         pow_base_reward,
         pos_reward_interest,
         storage_point_prop,
+        base_fee_prop,
     })
 }
 
@@ -430,9 +436,7 @@ pub fn get_settled_pos_staking_for_votes(state: &State) -> DbResult<U256> {
 
 /// Move the next vote counts into settled and reset the counts.
 /// `set_pos_staking` is for compatibility with the Testnet.
-pub fn settle_current_votes(
-    state: &mut State, set_pos_staking: bool,
-) -> DbResult<()> {
+pub fn settle_current_votes(state: &mut State, cip105: bool) -> DbResult<()> {
     // Here using `PARAMETER_INDEX_MAX` without knowing the block_number is okay
     // because if the new parameters have not been enabled, their votes will
     // be zero and setting them will be no-op.
@@ -450,7 +454,7 @@ pub fn settle_current_votes(
             )?;
         }
     }
-    if set_pos_staking {
+    if cip105 {
         let pos_staking =
             state.get_system_storage(&current_pos_staking_for_votes())?;
         state.set_system_storage(
@@ -466,11 +470,14 @@ pub fn settle_current_votes(
 }
 
 pub fn params_index_max(spec: &Spec) -> usize {
-    if spec.cip107 {
-        PARAMETER_INDEX_MAX
-    } else {
-        PARAMETER_INDEX_MAX - 1
+    let mut max = PARAMETER_INDEX_MAX;
+    if !spec.cip1559 {
+        max -= 1;
     }
+    if !spec.cip107 {
+        max -= 1;
+    }
+    max
 }
 
 /// Solidity variable sequences.
@@ -506,7 +513,7 @@ mod storage_key {
     pub fn votes(
         address: &Address, index: usize, opt_index: usize,
     ) -> [u8; 32] {
-        const TOPIC_OFFSET: [usize; 3] = [1, 2, 3];
+        const TOPIC_OFFSET: [usize; 4] = [1, 2, 3, 4];
 
         // Position of `votes`
         let base = U256::from(VOTES_SLOT);

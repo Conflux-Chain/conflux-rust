@@ -14,6 +14,7 @@ impl Default for OverlayAccount {
             sponsor_info: Default::default(),
             storage_read_cache: Default::default(),
             storage_write_cache: Default::default(),
+            transient_storage: Default::default(),
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -143,6 +144,7 @@ impl OverlayAccount {
             pending_db_clear: self.pending_db_clear,
             storage_write_cache: self.storage_write_cache.clone(),
             storage_read_cache: self.storage_read_cache.clone(),
+            transient_storage: self.transient_storage.clone(),
             storage_layout_change: self.storage_layout_change.clone(),
         }
     }

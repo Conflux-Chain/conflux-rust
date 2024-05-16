@@ -39,6 +39,7 @@ fn get_state(
     .expect("Failed to initialize state")
 }
 
+#[cfg(test)]
 pub fn get_state_for_genesis_write(
     storage_manager: &Arc<StorageManager>,
 ) -> State {
@@ -49,7 +50,8 @@ pub fn get_state_for_genesis_write(
     initialize_internal_contract_accounts(
         &mut state,
         InternalContractMap::initialize_for_test().as_slice(),
-    );
+    )
+    .expect("no db error");
     let genesis_epoch_id = EpochId::default();
     state
         .commit(genesis_epoch_id, /* debug_record = */ None)

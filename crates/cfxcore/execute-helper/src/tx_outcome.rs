@@ -2,6 +2,7 @@ use cfx_executor::{
     executive::ExecutionOutcome, internal_contract::make_staking_events,
 };
 use cfx_types::{H256, U256};
+use cfx_vm_types::Spec;
 use pow_types::StakingEvent;
 use primitives::Receipt;
 
@@ -38,12 +39,13 @@ fn geth_traces(outcome: &ExecutionOutcome) -> Option<GethTrace> {
 
 pub fn make_process_tx_outcome(
     outcome: ExecutionOutcome, accumulated_gas_used: &mut U256, tx_hash: H256,
+    spec: &Spec,
 ) -> ProcessTxOutcome {
     let tx_traces = tx_traces(&outcome);
     let geth_trace = geth_traces(&outcome);
     let tx_exec_error_msg = outcome.error_message();
     let consider_repacked = outcome.consider_repacked();
-    let receipt = outcome.make_receipt(accumulated_gas_used);
+    let receipt = outcome.make_receipt(accumulated_gas_used, spec);
 
     let tx_staking_events = make_staking_events(receipt.logs());
 

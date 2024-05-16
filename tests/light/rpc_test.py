@@ -37,6 +37,8 @@ class LightRPCTest(ConfluxTestFramework):
         self.conf_parameters["timer_chain_beta"] = "20"
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
         self.conf_parameters["block_cache_gc_period_ms"] = "10"
+        # Disable 1559 for RPC tests temporarily
+        self.conf_parameters["cip1559_transition_height"] = str(99999999)
 
     def deploy_contract(self, data_hex):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, storage_limit=2000)

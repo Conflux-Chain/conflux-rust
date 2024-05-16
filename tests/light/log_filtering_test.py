@@ -28,6 +28,8 @@ LIGHTNODE = 2
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 3
+        # Disable 1559 for RPC tests temporarily
+        self.conf_parameters["cip1559_transition_height"] = str(99999999)
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)

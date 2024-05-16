@@ -134,6 +134,9 @@ pub struct OverlayAccount {
     /// changed values.
     storage_write_cache: Arc<HashMap<Vec<u8>, StorageValue>>,
 
+    /// Transient storage from CIP-142
+    transient_storage: Arc<HashMap<Vec<u8>, U256>>,
+
     /* ---------------
     -  Special flags -
     --------------- */

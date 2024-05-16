@@ -20,7 +20,9 @@
 use crate::schema::{ensure_slice_len_eq, REWARD_EVENT_CF_NAME};
 use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt};
-use diem_types::reward_distribution_event::RewardDistributionEvent;
+use diem_types::reward_distribution_event::{
+    RewardDistributionEventV1, RewardDistributionEventV2,
+};
 use schemadb::{
     define_schema,
     schema::{KeyCodec, ValueCodec},
@@ -30,7 +32,7 @@ use std::mem::size_of;
 define_schema!(
     RewardEventSchema,
     u64, /* epoch num */
-    RewardDistributionEvent,
+    RewardDistributionEventV2,
     REWARD_EVENT_CF_NAME
 );
 
@@ -43,12 +45,17 @@ impl KeyCodec<RewardEventSchema> for u64 {
     }
 }
 
-impl ValueCodec<RewardEventSchema> for RewardDistributionEvent {
+impl ValueCodec<RewardEventSchema> for RewardDistributionEventV2 {
     fn encode_value(&self) -> Result<Vec<u8>> {
         bcs::to_bytes(self).map_err(Into::into)
     }
 
     fn decode_value(data: &[u8]) -> Result<Self> {
-        bcs::from_bytes(data).map_err(Into::into)
+        bcs::from_bytes(data)
+            // If `data` cannot be deserialized to `Self`, it may be stored in
+            // an older version.
+            .or(bcs::from_bytes::<RewardDistributionEventV1>(data)
+                .map(Into::into))
+            .map_err(Into::into)
     }
 }
