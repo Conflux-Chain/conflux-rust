@@ -62,6 +62,7 @@ class Eip1559Test(Web3Base):
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
         receipt = self.w3.eth.waitForTransactionReceipt(return_tx_hash)
+        print(receipt)
         assert_equal(receipt["status"], 1)
         # TODO check EIP1559 gas usage
         # assert_equal(receipt["gasUsed"], 210000 / 4 * 3)
@@ -78,6 +79,12 @@ class Eip1559Test(Web3Base):
         assert_equal(len(ret1), 1)
         assert_equal(len(ret2), 1)
         assert_equal(ret1[0], ret2[0])
+
+
+        fee_history = self.nodes[0].eth_feeHistory(5, "latest", [25, 75])
+        assert_equal(len(fee_history['base_fee_per_gas']), 6)
+        assert_equal(len(fee_history['gas_used_ratio']), 5)
+        assert_equal(len(fee_history['reward']), 5)
 
 
 if __name__ == "__main__":

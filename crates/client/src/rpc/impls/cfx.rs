@@ -6,8 +6,8 @@ use crate::rpc::{
     error_codes::{internal_error_msg, invalid_params_msg},
     types::{
         call_request::rpc_call_request_network,
-        errors::check_rpc_address_network, pos::PoSEpochReward, PoSEconomics,
-        RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
+        errors::check_rpc_address_network, pos::PoSEpochReward, FeeHistory,
+        PoSEconomics, RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
         VoteParamsInfo, WrapTransaction,
     },
 };
@@ -19,8 +19,9 @@ use cfx_executor::{
 };
 use cfx_statedb::{
     global_params::{
-        AccumulateInterestRate, DistributablePoSInterest, InterestRate,
-        LastDistributeBlock, PowBaseReward, TotalPosStaking,
+        AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
+        InterestRate, LastDistributeBlock, PowBaseReward, TotalBurnt1559,
+        TotalPosStaking,
     },
     StateDbExt,
 };
@@ -703,6 +704,14 @@ impl RpcImpl {
                         .get_data_manager()
                         .get_executed_state_root(&tx_index.block_hash);
 
+                    // Acutally, the return value of `block_header_by_hash`
+                    // should not be none.
+                    let maybe_base_price = self
+                        .consensus
+                        .get_data_manager()
+                        .block_header_by_hash(&tx_index.block_hash)
+                        .and_then(|x| x.base_price());
+
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
                         receipt,
@@ -710,6 +719,7 @@ impl RpcImpl {
                         prior_gas_used,
                         epoch_number,
                         block_number,
+                        maybe_base_price,
                         maybe_state_root,
                         tx_exec_error_msg,
                         *self.sync.network.get_network_type(),
@@ -830,6 +840,7 @@ impl RpcImpl {
             prior_gas_used,
             Some(exec_info.epoch_number),
             exec_info.block_receipts.block_number,
+            exec_info.block.block_header.base_price(),
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
@@ -1574,11 +1585,23 @@ impl RpcImpl {
 
         let storage_point_prop =
             state_db.get_system_storage(&storage_point_prop())?;
+
+        let base_fee_share_prop = state_db.get_global_param::<BaseFeeProp>()?;
         Ok(VoteParamsInfo {
             pow_base_reward,
             interest_rate,
             storage_point_prop,
+            base_fee_share_prop,
         })
+    }
+
+    pub fn get_fee_burnt(&self, epoch: Option<EpochNumber>) -> RpcResult<U256> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch, "epoch_num")?;
+
+        Ok(state_db.get_global_param::<TotalBurnt1559>()?)
     }
 
     pub fn set_db_crash(
@@ -2122,36 +2145,33 @@ impl RpcImpl {
                                     let tx_exec_error_msg = &execution_result
                                         .block_receipts
                                         .tx_execution_error_messages[id];
+                                    let receipt = RpcReceipt::new(
+                                        (**tx).clone(),
+                                        receipt.clone(),
+                                        tx_index,
+                                        prior_gas_used,
+                                        Some(epoch_number),
+                                        execution_result
+                                            .block_receipts
+                                            .block_number,
+                                        b.block_header.base_price(),
+                                        maybe_state_root,
+                                        if tx_exec_error_msg.is_empty() {
+                                            None
+                                        } else {
+                                            Some(tx_exec_error_msg.clone())
+                                        },
+                                        network,
+                                        false,
+                                        false,
+                                    )?;
                                     res.push(
                                         WrapTransaction::NativeTransaction(
                                             RpcTransaction::from_signed(
                                                 tx,
                                                 Some(
                                                     PackedOrExecuted::Executed(
-                                                        RpcReceipt::new(
-                                                            (**tx).clone(),
-                                                            receipt.clone(),
-                                                            tx_index,
-                                                            prior_gas_used,
-                                                            Some(epoch_number),
-                                                            execution_result
-                                                                .block_receipts
-                                                                .block_number,
-                                                            maybe_state_root,
-                                                            if tx_exec_error_msg
-                                                                .is_empty()
-                                                            {
-                                                                None
-                                                            } else {
-                                                                Some(
-                                                        tx_exec_error_msg
-                                                            .clone(),
-                                                    )
-                                                            },
-                                                            network,
-                                                            false,
-                                                            false,
-                                                        )?,
+                                                        receipt,
                                                     ),
                                                 ),
                                                 network,
@@ -2244,6 +2264,7 @@ impl Cfx for CfxHandler {
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
+            fn fee_history(&self, block_count: usize, newest_block: EpochNumber, reward_percentiles: Vec<u64>) -> BoxFuture<FeeHistory>;
         }
 
         to self.rpc_impl {
@@ -2282,6 +2303,7 @@ impl Cfx for CfxHandler {
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
             fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
             fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
+            fn get_fee_burnt(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
         }
     }
 }

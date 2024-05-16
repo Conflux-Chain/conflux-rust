@@ -13,8 +13,9 @@ use primitives::{
         eth_transaction::Eip155Transaction,
         native_transaction::NativeTransaction, Action,
     },
-    SignedTransaction, Transaction as PrimitiveTransaction, TransactionIndex,
-    TransactionWithSignature, TransactionWithSignatureSerializePart,
+    AccessList, SignedTransaction, Transaction as PrimitiveTransaction,
+    TransactionIndex, TransactionWithSignature,
+    TransactionWithSignatureSerializePart,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -27,6 +28,8 @@ pub enum WrapTransaction {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub transaction_type: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub space: Option<Space>,
     pub hash: H256,
@@ -44,12 +47,23 @@ pub struct Transaction {
     pub epoch_height: U256,
     pub chain_id: Option<U256>,
     pub status: Option<U64>,
+    /// Optional access list
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_list: Option<AccessList>,
+    /// miner bribe
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_priority_fee_per_gas: Option<U256>,
+    /// Max fee per gas
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_fee_per_gas: Option<U256>,
     /// The standardised V field of the signature.
     pub v: U256,
     /// The R field of the signature.
     pub r: U256,
     /// The S field of the signature.
     pub s: U256,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub y_parity: Option<u8>,
 }
 
 pub enum PackedOrExecuted {
@@ -79,6 +93,11 @@ impl Transaction {
             v: Default::default(),
             r: Default::default(),
             s: Default::default(),
+            access_list: Default::default(),
+            max_priority_fee_per_gas: Default::default(),
+            max_fee_per_gas: Default::default(),
+            y_parity: Default::default(),
+            transaction_type: Default::default(),
         })
     }
 
@@ -139,6 +158,13 @@ impl Transaction {
             storage_limit: storage_limit.into(),
             epoch_height: epoch_height.into(),
             chain_id: t.chain_id().map(|x| U256::from(x as u64)),
+            access_list: t.access_list().cloned(),
+            max_fee_per_gas: t.after_1559().then_some(*t.gas_price()),
+            max_priority_fee_per_gas: t
+                .after_1559()
+                .then_some(*t.max_priority_gas_price()),
+            y_parity: t.is_2718().then_some(t.transaction.v.into()),
+            transaction_type: Default::default(),
             v: t.transaction.v.into(),
             r: t.transaction.r.into(),
             s: t.transaction.s.into(),

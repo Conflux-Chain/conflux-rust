@@ -27,6 +27,8 @@ pub enum Error {
     InvalidAddress,
     /// Invalid EC signature
     InvalidSignature,
+    /// Invalid y-parity
+    InvalidYParity,
     /// Invalid AES message
     InvalidMessage,
     /// IO Error
@@ -42,6 +44,7 @@ impl fmt::Display for Error {
             Error::InvalidPublic => "Invalid public".into(),
             Error::InvalidAddress => "Invalid address".into(),
             Error::InvalidSignature => "Invalid EC signature".into(),
+            Error::InvalidYParity => "Invalid y Parity".into(),
             Error::InvalidMessage => "Invalid AES message".into(),
             Error::Io(ref err) => format!("I/O error: {}", err),
             Error::Custom(ref s) => s.clone(),

@@ -953,6 +953,37 @@ impl TransactionPool {
         Ok(())
     }
 
+    // For RPC use only
+    pub fn get_best_info_with_parent_base_price(
+        &self,
+    ) -> (Arc<BestInformation>, Option<SpaceMap<U256>>) {
+        let consensus_best_info_clone = self.consensus_best_info.lock().clone();
+        debug!(
+            "get_best_info_with_base_price: {:?}",
+            consensus_best_info_clone
+        );
+
+        let params = self.machine.params();
+        let parent_block = self
+            .data_man
+            .block_header_by_hash(&consensus_best_info_clone.best_block_hash)
+            // The parent block must exists.
+            .expect(&concat!(file!(), ":", line!(), ":", column!()));
+
+        let cip1559_height = params.transition_heights.cip1559;
+        let pack_height = consensus_best_info_clone.best_epoch_number + 1;
+
+        (
+            consensus_best_info_clone,
+            if pack_height <= cip1559_height {
+                None
+            } else {
+                // TODO: should we compute for the current base_price?
+                Some(parent_block.base_price().unwrap())
+            },
+        )
+    }
+
     pub fn get_best_info_with_packed_transactions(
         &self, num_txs: usize, block_size_limit: usize,
         additional_transactions: Vec<Arc<SignedTransaction>>,

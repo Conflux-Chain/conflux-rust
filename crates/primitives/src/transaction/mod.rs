@@ -341,20 +341,34 @@ impl Transaction {
         }
     }
 
-    pub fn type_id(&self) -> Option<u32> {
+    pub fn type_id(&self) -> u8 {
         match self {
-            Transaction::Native(_)
-            | Transaction::Ethereum(EthereumTransaction::Eip155(_)) => None,
-            Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => Some(1),
-            Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => Some(2),
+            Transaction::Native(TypedNativeTransaction::Cip155(_))
+            | Transaction::Ethereum(EthereumTransaction::Eip155(_)) => 0,
+
+            Transaction::Native(TypedNativeTransaction::Cip2930(_))
+            | Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => 1,
+
+            Transaction::Native(TypedNativeTransaction::Cip1559(_))
+            | Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => 2,
         }
     }
 
-    pub fn before_1559(&self) -> bool {
+    pub fn is_legacy(&self) -> bool {
         matches!(
             self,
             Transaction::Native(TypedNativeTransaction::Cip155(_))
                 | Transaction::Ethereum(EthereumTransaction::Eip155(_))
+        )
+    }
+
+    pub fn is_2718(&self) -> bool { !self.is_legacy() }
+
+    pub fn after_1559(&self) -> bool {
+        matches!(
+            self,
+            Transaction::Native(TypedNativeTransaction::Cip1559(_))
+                | Transaction::Ethereum(EthereumTransaction::Eip1559(_))
         )
     }
 
@@ -843,6 +857,16 @@ impl TransactionWithSignature {
     pub fn check_low_s(&self) -> Result<(), keylib::Error> {
         if !self.signature().is_low_s() {
             Err(keylib::Error::InvalidSignature)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn check_y_parity(&self) -> Result<(), keylib::Error> {
+        if self.is_2718() && self.v > 1 {
+            // In Typed transactions (EIP-2718), v means y_parity, which must be
+            // 0 or 1
+            Err(keylib::Error::InvalidYParity)
         } else {
             Ok(())
         }

@@ -7,12 +7,14 @@ use cfx_types::{
 };
 use cfxcore::{
     block_data_manager::BlockDataManager,
+    consensus::ConsensusConfig,
     light_protocol::{
         self, query_service::TxInfo, Error as LightError, ErrorKind,
     },
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     verification::EpochReceiptProof,
-    ConsensusGraph, LightQueryService, PeerInfo, SharedConsensusGraph,
+    ConsensusGraph, ConsensusGraphTrait, LightQueryService, PeerInfo,
+    SharedConsensusGraph,
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
@@ -42,12 +44,12 @@ use crate::{
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest, CfxRpcLogFilter,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-            RpcAddress, SendTxRequest, SponsorInfo, StatOnGasLoad,
-            Status as RpcStatus, StorageCollateralInfo, SyncGraphStates,
-            TokenSupplyInfo, Transaction as RpcTransaction, VoteParamsInfo,
-            WrapTransaction,
+            EpochNumber, EstimateGasAndCollateralResponse, FeeHistory,
+            Log as RpcLog, PoSEconomics, Receipt as RpcReceipt,
+            RewardInfo as RpcRewardInfo, RpcAddress, SendTxRequest,
+            SponsorInfo, StatOnGasLoad, Status as RpcStatus,
+            StorageCollateralInfo, SyncGraphStates, TokenSupplyInfo,
+            Transaction as RpcTransaction, VoteParamsInfo, WrapTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -674,6 +676,7 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let data_man = self.data_man.clone();
 
         let fut = async move {
             // TODO:
@@ -704,6 +707,10 @@ impl RpcImpl {
                 return Ok(None);
             }
 
+            let maybe_base_price = data_man
+                .block_header_by_hash(&tx_index.block_hash)
+                .and_then(|x| x.base_price());
+
             let receipt = RpcReceipt::new(
                 tx,
                 receipt,
@@ -711,6 +718,7 @@ impl RpcImpl {
                 prior_gas_used,
                 maybe_epoch,
                 maybe_block_number.unwrap(),
+                maybe_base_price,
                 maybe_state_root,
                 // Can not offer error_message from light node.
                 None,
@@ -1081,6 +1089,105 @@ impl RpcImpl {
 
         Box::new(fut.boxed().compat())
     }
+
+    fn fee_history(
+        &self, block_count: usize, newest_block: EpochNumber,
+        reward_percentiles: Vec<u64>,
+    ) -> RpcBoxFuture<FeeHistory> {
+        info!(
+            "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
+            block_count, newest_block, reward_percentiles
+        );
+
+        if block_count == 0 {
+            return Box::new(async { Ok(FeeHistory::new()) }.boxed().compat());
+        }
+
+        // clone to avoid lifetime issues due to capturing `self`
+        let consensus_graph = self.consensus.clone();
+        let light = self.light.clone();
+
+        let fut = async move {
+            let start_height: u64 = light
+                .get_height_from_epoch_number(newest_block.into())
+                .map_err(|e| e.to_string())
+                .map_err(RpcError::invalid_params)?;
+
+            let mut current_height = start_height;
+
+            let mut fee_history = FeeHistory::new();
+
+            while current_height
+                >= start_height.saturating_sub(block_count as u64 - 1)
+            {
+                let block = fetch_block_for_fee_history(
+                    consensus_graph.clone(),
+                    light.clone(),
+                    current_height,
+                )
+                .await?;
+
+                let transactions = block
+                    .transactions
+                    .iter()
+                    .filter(|tx| tx.space() == Space::Native)
+                    .map(|x| &**x);
+                // Internal error happens only if the fetch header has
+                // inconsistent block height
+                fee_history
+                    .push_back_block(
+                        Space::Native,
+                        &reward_percentiles,
+                        &block.block_header,
+                        transactions,
+                    )
+                    .map_err(|_| RpcError::internal_error())?;
+
+                if current_height == 0 {
+                    fee_history.finish(0, None, Space::Native);
+                    return Ok(fee_history);
+                } else {
+                    current_height -= 1;
+                }
+            }
+
+            let block = fetch_block_for_fee_history(
+                consensus_graph.clone(),
+                light.clone(),
+                current_height,
+            )
+            .await?;
+            fee_history.finish(
+                current_height + 1,
+                block.block_header.base_price().as_ref(),
+                Space::Native,
+            );
+            Ok(fee_history)
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+}
+
+async fn fetch_block_for_fee_history(
+    consensus_graph: Arc<
+        dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
+    >,
+    light: Arc<QueryService>, height: u64,
+) -> cfxcore::rpc_errors::Result<primitives::Block> {
+    let hash = consensus_graph
+        .as_any()
+        .downcast_ref::<ConsensusGraph>()
+        .expect("downcast should succeed")
+        .inner
+        .read()
+        .get_pivot_hash_from_epoch_number(height)
+        .map_err(RpcError::invalid_params)?;
+
+    match light.retrieve_block(hash).await? {
+        None => Err(RpcError::internal_error().into()),
+        Some(b) => Ok(b),
+    }
 }
 
 pub struct CfxHandler {
@@ -1132,6 +1239,7 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
+            fn fee_history(&self, block_count: usize, newest_block: EpochNumber, reward_percentiles: Vec<u64>) -> BoxFuture<FeeHistory>;
         }
     }
 
@@ -1146,6 +1254,7 @@ impl Cfx for CfxHandler {
         fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
         fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
+        fn get_fee_burnt(&self, epoch: Option<EpochNumber>) -> JsonRpcResult<U256>;
     }
 }
 

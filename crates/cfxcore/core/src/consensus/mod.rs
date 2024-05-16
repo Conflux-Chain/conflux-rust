@@ -1811,9 +1811,33 @@ impl ConsensusGraph {
         Ok(Some(bloom))
     }
 
+    pub fn get_phantom_block_pivot_by_number(
+        &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
+        include_traces: bool,
+    ) -> Result<Option<PhantomBlock>, String> {
+        self.get_phantom_block_by_number_inner(
+            block_num,
+            pivot_assumption,
+            include_traces,
+            true,
+        )
+    }
+
     pub fn get_phantom_block_by_number(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool,
+    ) -> Result<Option<PhantomBlock>, String> {
+        self.get_phantom_block_by_number_inner(
+            block_num,
+            pivot_assumption,
+            include_traces,
+            false,
+        )
+    }
+
+    fn get_phantom_block_by_number_inner(
+        &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
+        include_traces: bool, only_pivot: bool,
     ) -> Result<Option<PhantomBlock>, String> {
         let hashes = self.get_block_hashes_by_epoch(block_num)?;
 
@@ -1860,7 +1884,13 @@ impl ConsensusGraph {
 
         let mut gas_used = U256::from(0);
 
-        for b in &blocks {
+        let iter_blocks = if only_pivot {
+            &blocks[blocks.len() - 1..]
+        } else {
+            &blocks[..]
+        };
+
+        for b in iter_blocks {
             // note: we need the receipts to reconstruct a phantom block.
             // as a result, we cannot return unexecuted blocks in eth_* RPCs.
             let exec_info = match self
