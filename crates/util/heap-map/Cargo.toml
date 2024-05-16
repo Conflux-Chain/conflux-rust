@@ -1,0 +1,18 @@
+[package]
+name = "heap-map"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+malloc_size_of_derive = {path = "../malloc_size_of_derive" }
+malloc_size_of = {path = "../malloc_size_of" }
+
+[dev-dependencies]
+rand = "0.8.0"
+criterion = "0.3.0"
+
+[[bench]]
+name = "bench"
+harness = false

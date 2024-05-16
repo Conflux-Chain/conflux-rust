@@ -1,0 +1,34 @@
+[package]
+name = "diem-vault-client"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+repository = "https://github.com/diem/diem"
+description = "Diem's Restful Vault Client"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+base64 = "0.13.0"
+chrono = "=0.4.24"
+once_cell = "1.7.2"
+proptest = { version = "1.0.0", optional = true }
+native-tls = "0.2.7"
+serde = { version = "1.0.124", features = ["derive"], default-features = false }
+serde_json = "1.0.64"
+thiserror = "1.0.24"
+ureq = { version = "1.5.4", features = ["json", "native-tls"], default-features = false }
+
+diem-crypto = { path = "../../../crypto/crypto" }
+diem-proptest-helpers = { path = "../../../common/proptest-helpers", optional = true }
+diem-types = { path = "../../../types" }
+
+[dev-dependencies]
+proptest = "1.0.0"
+
+diem-proptest-helpers = { path = "../../../common/proptest-helpers" }
+diem-types = { path = "../../../types", features = ["fuzzing"] }
+
+[features]
+fuzzing = ["proptest", "diem-proptest-helpers"]

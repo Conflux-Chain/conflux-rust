@@ -1,0 +1,29 @@
+[package]
+name = "storage-interface"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem storage interface"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+itertools = "0.10.0"
+serde = { version = "1.0.124", default-features = false }
+thiserror = "1.0.24"
+parking_lot = "0.11.1"
+
+bcs = "0.1.2"
+diem-crypto = { path = "../../crypto/crypto" }
+diem-secure-net = { path = "../../secure/net" }
+diem-state-view = { path = "../state-view" }
+diem-types = { path = "../../types" }
+scratchpad = { path = "../scratchpad" }
+move-core-types = { path = "../../types/move-core-types" }
+
+[features]
+default = []
+fuzzing = ["diem-types/fuzzing"]

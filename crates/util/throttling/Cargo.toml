@@ -1,0 +1,10 @@
+[package]
+name = "throttling"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+parking_lot = "0.11"
+toml = "0.5.8"
+malloc_size_of = {path = "../malloc_size_of" }
+malloc_size_of_derive = {path = "../malloc_size_of_derive" }

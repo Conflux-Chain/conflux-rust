@@ -1,6 +1,7 @@
 from os.path import dirname, join
 from pathlib import Path
 import json
+from dataclasses import dataclass
 
 from typing import Literal, Dict
 import types
@@ -204,13 +205,21 @@ setattr(ContractConstructor, 'cfx_call', _cfx_call)
 setattr(ContractConstructor, 'data', _cfx_data)
 
 
+@dataclass
+class Account:
+    address: str
+    key: str
+
 class ConfluxTestFrameworkForContract(ConfluxTestFramework):
     def __init__(self):
         super().__init__()
+
+    def set_test_params(self):
+        self.num_nodes = 1
         self.conf_parameters["executive_trace"] = "true"  
 
     def before_test(self):
-        if not bool(self.conf_parameters["executive_trace"]):
+        if "executive_trace" not in self.conf_parameters or not bool(self.conf_parameters["executive_trace"]):
             raise AssertionError(
                 "Trace should be enabled for contract toolkit")
         super().before_test()
@@ -223,9 +232,9 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         self.deploy_create2()
 
         self.genesis_key = default_config["GENESIS_PRI_KEY"]
-        self.genesis_addr = encode_hex_0x(priv_to_addr(self.genesis_key))
+        self.genesis_addr = Web3.toChecksumAddress(encode_hex_0x(priv_to_addr(self.genesis_key)))
         self.genesis_key2 = default_config["GENESIS_PRI_KEY_2"]
-        self.genesis_addr2 = encode_hex_0x(priv_to_addr(self.genesis_key2))
+        self.genesis_addr2 = Web3.toChecksumAddress(encode_hex_0x(priv_to_addr(self.genesis_key2)))
 
     def cfx_contract(self, name):
         return cfx_contract(name, self)
@@ -233,26 +242,29 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
     def internal_contract(self, name: InternalContractName):
         return cfx_internal_contract(name, self)
 
-    def cfx_transfer(self, receiver, value=None, gas_price=1, priv_key=None, decimals: int = 18):
+    def cfx_transfer(self, receiver, value=None, gas_price=1, priv_key=None, decimals: int = 18, nonce = None, execute: bool = True):
         if value is not None:
             value = int(value * (10**decimals))
         else:
             value = 0
 
         tx = self.client.new_tx(
-            receiver=receiver, gas_price=gas_price, priv_key=priv_key, value=value)
-        self.client.send_tx(tx, True)
-        self.wait_for_tx([tx], True)
-        receipt = self.client.get_transaction_receipt(tx.hash_hex())
-        # self.log.info(receipt)
-        return receipt
+            receiver=receiver, gas_price=gas_price, priv_key=priv_key, value=value, nonce=nonce)
+        self.client.send_tx(tx, execute)
+        if execute:
+            self.wait_for_tx([tx], True)
+            receipt = self.client.get_transaction_receipt(tx.hash_hex())
+            # self.log.info(receipt)
+            return receipt
+        else:
+            return tx.hash_hex()
     
-    def initialize_accounts(self, number = 10, value = 100):
+    def initialize_accounts(self, number = 10, value = 100) -> List[Account]:
         def initialize_new_account() -> (str, bytes):
             (address, priv) = self.client.rand_account()
             if value > 0:
                 self.cfx_transfer(address, value = value)
-            return (address, priv)
+            return Account(address, priv)
         
         return [initialize_new_account() for _ in range(number)]
 

@@ -334,12 +334,18 @@ class RpcClient:
         convert_b32_address_field_to_hex(block, "miner")
         return block
 
-    def block_by_epoch(self, epoch: str, include_txs: bool = False) -> dict:
+    def block_by_epoch(self, epoch: Union[str, int], include_txs: bool = False) -> dict:
+        if type(epoch) is int:
+            epoch = hex(epoch)
+
         block = self.node.cfx_getBlockByEpochNumber(epoch, include_txs)
         convert_b32_address_field_to_hex(block, "miner")
         return block
 
-    def block_by_block_number(self, block_number: str, include_txs: bool = False) -> dict:
+    def block_by_block_number(self, block_number: Union[str, int], include_txs: bool = False) -> dict:
+        if type(block_number) is int:
+            block_number = hex(block_number)
+
         block = self.node.cfx_getBlockByBlockNumber(block_number, include_txs)
         convert_b32_address_field_to_hex(block, "miner")
         return block
@@ -447,9 +453,19 @@ class RpcClient:
     def get_transaction_receipt(self, tx_hash: str) -> dict:
         assert_is_hash_string(tx_hash)
         r = self.node.cfx_getTransactionReceipt(tx_hash)
+        if r is None:
+            return None
+        
         convert_b32_address_field_to_hex(r, "contractCreated")
         convert_b32_address_field_to_hex(r, "from")
         convert_b32_address_field_to_hex(r, "to")
+
+        if "storageCollateralized" in r:
+            r["storageCollateralized"] = int(r["storageCollateralized"], 0)
+
+        if "storageReleased" in r:
+            storage_released = { b32_address_to_hex(item["address"]): int(item["collaterals"], 0) for item in r["storageReleased"] }
+            r["storageReleased"] = storage_released
         return r
 
     def txpool_status(self) -> (int, int):

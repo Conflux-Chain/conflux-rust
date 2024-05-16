@@ -54,6 +54,7 @@ class TestNode:
             self.ip = ip
             self.user = user
             self.rpcport = rpcport if rpcport is not None else remote_rpc_port(self.index)
+            self.ethrpcport = evm_rpc_port(self.index)
         else:
             self.ip = "127.0.0.1"
             self.rpcport = rpc_port(self.index)

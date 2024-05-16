@@ -74,12 +74,12 @@ class FilterTransactionTest(Web3Base):
         # create txs
         txs_size = 20
         txs = []
-        for _ in range(txs_size):
+        for i in range(txs_size):
             signed = self.evmAccount.signTransaction(
                 {
                     "to": to_address.address,
                     "value": 1,
-                    "gasPrice": 1,
+                    "gasPrice": txs_size * 2 - i,
                     "gas": 210000,
                     "nonce": nonce,
                     "chainId": 10,
