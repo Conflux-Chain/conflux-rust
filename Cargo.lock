@@ -1024,9 +1024,9 @@ dependencies = [
 
 [[package]]
 name = "c-kzg"
-version = "1.0.0"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3130f3d8717cc02e668a896af24984d5d5d4e8bf12e278e982e0f1bd88a0f9af"
+checksum = "cdf100c4cea8f207e883ff91ca886d621d8a166cb04971dfaa9bb8fd99ed95df"
 dependencies = [
  "blst",
  "cc",
@@ -1162,6 +1162,7 @@ version = "2.0.2"
 dependencies = [
  "bls-signatures",
  "byteorder",
+ "c-kzg",
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-math",
@@ -1173,9 +1174,11 @@ dependencies = [
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
  "cfxkey",
+ "derive_more",
  "diem-crypto",
  "diem-types",
  "error-chain",
+ "hex-literal",
  "impl-tools",
  "impl-trait-for-tuples 0.2.2",
  "keccak-hash",
@@ -1184,6 +1187,7 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "num 0.2.1",
+ "once_cell",
  "parity-crypto",
  "parking_lot 0.11.2",
  "pow-types",
