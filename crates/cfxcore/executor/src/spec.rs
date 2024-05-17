@@ -111,6 +111,8 @@ pub struct TransitionsBlockNumber {
     /// CIP-142: Transient Storage Opcodes
     /// CIP-143: MCOPY (0x5e) Opcode for Efficient Memory Copy
     pub cancun_opcodes: BlockNumber,
+    /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
+    pub cip145: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -187,6 +189,7 @@ impl CommonParams {
         spec.cip133_e = self.transition_heights.cip133e;
         spec.cip133_core = number >= self.transition_numbers.cip133b;
         spec.cip137 = number >= self.transition_numbers.cip137;
+        spec.cip145 = number >= self.transition_numbers.cip145;
         spec.cip1559 = height >= self.transition_heights.cip1559;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         if spec.cancun_opcodes {
