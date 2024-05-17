@@ -162,7 +162,6 @@ enum_with_from_u8! {
         #[doc = "base fee for EIP-1559 (EIP-3198)"]
         BASEFEE = 0x48,
 
-        // BASEFEE=0x48
         // BLOBHASH=0x49
         // BLOBBASEFEE=0x4A
 

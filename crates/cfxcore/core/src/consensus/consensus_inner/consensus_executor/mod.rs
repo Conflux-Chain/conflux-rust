@@ -4,6 +4,8 @@
 
 mod epoch_execution;
 
+use epoch_execution::{BlockProcessContext, EpochProcessContext};
+
 use core::convert::TryFrom;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -1759,61 +1761,43 @@ impl ConsensusExecutionHandler {
     ) -> DbResult<Vec<GethTraceWithHash>> {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
-        let mut block_number = start_block_number;
-        let mut last_block_hash =
-            pivot_block.block_header.parent_hash().clone();
-        let last_block_header =
-            &self.data_man.block_header_by_hash(&last_block_hash);
+        let base_gas_price =
+            pivot_block.block_header.base_price().unwrap_or_default();
+        let burnt_gas_price =
+            base_gas_price.map_all(|x| state.burnt_gas_price(x));
+
+        let context = EpochProcessContext::new(
+            true, // TODO check this
+            false,
+            pivot_block,
+            base_gas_price,
+            burnt_gas_price,
+        );
+
+        // used for make env
+        let mut block_context = BlockProcessContext::first_block(
+            &context,
+            epoch_blocks.first().unwrap(),
+            start_block_number,
+        );
 
         let mut traces = Vec::new();
+        let mut block_number = start_block_number;
 
-        for block in epoch_blocks.iter() {
-            // self.maybe_update_state(state, block_number)?;
-
-            let pos_id = last_block_header
-                .as_ref()
-                .and_then(|header| header.pos_reference().as_ref());
-            let pos_view_number =
-                pos_id.and_then(|id| self.pos_verifier.get_pos_view(id));
-            let pivot_decision_epoch = pos_id
-                .and_then(|id| self.pos_verifier.get_pivot_decision(id))
-                .and_then(|hash| self.data_man.block_header_by_hash(&hash))
-                .map(|header| header.height());
-
-            let epoch_height = pivot_block.block_header.height();
-            let chain_id = self.machine.params().chain_id_map(epoch_height);
-            let mut env = Env {
-                chain_id,
-                number: block_number,
-                author: block.block_header.author().clone(),
-                timestamp: pivot_block.block_header.timestamp(),
-                difficulty: block.block_header.difficulty().clone(),
-                accumulated_gas_used: U256::zero(),
-                last_hash: last_block_hash,
-                gas_limit: U256::from(block.block_header.gas_limit()),
-                epoch_height,
-                pos_view: pos_view_number,
-                finalized_epoch: pivot_decision_epoch,
-                transaction_epoch_bound: self
-                    .verification_config
-                    .transaction_epoch_bound,
-                base_gas_price: Default::default(),
-                burnt_gas_price: Default::default(),
-            };
-            let spec = self.machine.spec(env.number, env.epoch_height);
-            if !spec.cip43_contract {
-                state.bump_block_number_accumulate_interest();
+        for (idx, block) in epoch_blocks.iter().enumerate() {
+            if idx > 0 {
+                block_context.next_block(block);
             }
+
+            let _secondary_reward =
+                self.before_block_execution(state, block_number, block)?;
+
+            let mut env = self.make_block_env(&block_context);
+
+            let spec = self.machine.spec(env.number, env.epoch_height);
             let machine = self.machine.as_ref();
 
-            state.inc_distributable_pos_interest(env.number)?;
-            // initialize_internal_contract_accounts(
-            //     state,
-            //     self.machine.internal_contracts().initialized_at(env.number),
-            // );
             block_number += 1;
-
-            last_block_hash = block.hash();
 
             for (_idx, transaction) in block.transactions.iter().enumerate() {
                 let need_trace = match tx_hash {
@@ -1864,6 +1848,13 @@ impl ConsensusExecutionHandler {
                 let execution_outcome =
                     ExecutiveContext::new(state, &env, machine, &spec)
                         .transact(transaction, options)?;
+
+                if let Some(burnt_fee) = execution_outcome
+                    .try_as_executed()
+                    .and_then(|e| e.burnt_fee)
+                {
+                    state.burn_by_cip1559(burnt_fee);
+                };
 
                 let r = make_process_tx_outcome(
                     execution_outcome,

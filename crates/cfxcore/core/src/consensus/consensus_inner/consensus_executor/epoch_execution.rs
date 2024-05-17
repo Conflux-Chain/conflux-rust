@@ -148,7 +148,9 @@ impl ConsensusExecutionHandler {
         drop(prefetch_join_handles);
     }
 
-    fn make_block_env(&self, block_context: &BlockProcessContext) -> Env {
+    pub(super) fn make_block_env(
+        &self, block_context: &BlockProcessContext,
+    ) -> Env {
         let BlockProcessContext {
             epoch_context:
                 &EpochProcessContext {
@@ -413,7 +415,7 @@ impl ConsensusExecutionHandler {
     }
 }
 
-struct EpochProcessContext<'a> {
+pub(super) struct EpochProcessContext<'a> {
     on_local_pivot: bool,
     executive_trace: bool,
 
@@ -423,7 +425,22 @@ struct EpochProcessContext<'a> {
     burnt_gas_price: SpaceMap<U256>,
 }
 
-struct BlockProcessContext<'a, 'b> {
+impl<'a> EpochProcessContext<'a> {
+    pub(super) fn new(
+        on_local_pivot: bool, executive_trace: bool, pivot_block: &'a Block,
+        base_gas_price: SpaceMap<U256>, burnt_gas_price: SpaceMap<U256>,
+    ) -> Self {
+        Self {
+            on_local_pivot,
+            executive_trace,
+            pivot_block,
+            base_gas_price,
+            burnt_gas_price,
+        }
+    }
+}
+
+pub(super) struct BlockProcessContext<'a, 'b> {
     epoch_context: &'b EpochProcessContext<'a>,
     block: &'b Block,
     block_number: u64,
@@ -431,7 +448,7 @@ struct BlockProcessContext<'a, 'b> {
 }
 
 impl<'a, 'b> BlockProcessContext<'a, 'b> {
-    fn first_block(
+    pub(super) fn first_block(
         epoch_context: &'b EpochProcessContext<'a>, block: &'b Block,
         start_block_number: u64,
     ) -> Self {
@@ -445,7 +462,7 @@ impl<'a, 'b> BlockProcessContext<'a, 'b> {
         }
     }
 
-    fn next_block(&mut self, block: &'b Block) {
+    pub(super) fn next_block(&mut self, block: &'b Block) {
         self.last_hash = self.block.hash();
         self.block_number += 1;
         self.block = block;
