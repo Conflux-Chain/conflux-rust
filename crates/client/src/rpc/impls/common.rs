@@ -610,6 +610,21 @@ impl RpcImpl {
 
         Ok(fee_history)
     }
+
+    pub fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {
+        info!("RPC Request: max_priority_fee_per_gas",);
+
+        let fee_history =
+            self.fee_history(300, EpochNumber::LatestState, vec![50])?;
+
+        let total_reward: U256 = fee_history
+            .reward()
+            .iter()
+            .map(|x| x.first().unwrap())
+            .fold(U256::zero(), |x, y| x + *y);
+
+        Ok(total_reward / 300)
+    }
 }
 
 // Test RPC implementation

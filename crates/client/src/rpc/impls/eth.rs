@@ -467,11 +467,20 @@ impl Eth for EthHandler {
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_maxPriorityFeePerGas");
-        let (_, maybe_base_price) =
-            self.tx_pool.get_best_info_with_parent_base_price();
-        let answer = maybe_base_price
-            .map_or(U256::from(20000000000u64), |x| x[Space::Ethereum]);
-        Ok(answer)
+        let evm_ratio =
+            self.tx_pool.machine().params().evm_transaction_block_ratio
+                as usize;
+
+        let fee_history =
+            self.fee_history(300, BlockNumber::Latest, vec![50])?;
+
+        let total_reward: U256 = fee_history
+            .reward()
+            .iter()
+            .map(|x| x.first().unwrap())
+            .fold(U256::zero(), |x, y| x + *y);
+
+        Ok(total_reward * evm_ratio / 300)
     }
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
