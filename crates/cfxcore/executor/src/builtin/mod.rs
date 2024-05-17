@@ -21,7 +21,9 @@
 //! Standard built-in contracts.
 
 mod blake2f;
+mod ethereum_trusted_setup_points;
 mod executable;
+mod kzg_point_evaluations;
 
 pub use executable::BuiltinExec;
 
@@ -277,6 +279,7 @@ pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
         "alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<dyn Impl>,
         "alt_bn128_pairing" => Box::new(Bn128PairingImpl) as Box<dyn Impl>,
         "blake2_f" => Box::new(Blake2FImpl) as Box<dyn Impl>,
+        "kzg_point_eval" => Box::new(KzgPointEval) as Box<dyn Impl>,
         _ => panic!("invalid builtin name: {}", name),
     }
 }
@@ -324,6 +327,10 @@ struct Bn128PairingImpl;
 #[derive(Debug)]
 #[allow(dead_code)]
 struct Blake2FImpl;
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct KzgPointEval;
 
 impl Impl for Identity {
     fn execute(
@@ -771,6 +778,15 @@ impl Impl for Blake2FImpl {
     }
 }
 
+impl Impl for KzgPointEval {
+    fn execute(
+        &self, input: &[u8], output: &mut BytesRef,
+    ) -> Result<(), Error> {
+        kzg_point_evaluations::run(input)?;
+        output.write(0, &kzg_point_evaluations::RETURN_VALUE[..]);
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::{
