@@ -62,7 +62,7 @@ class Eip1559Test(Web3Base):
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
         receipt = self.w3.eth.waitForTransactionReceipt(return_tx_hash)
-        print(receipt)
+
         assert_equal(receipt["status"], 1)
         # TODO check EIP1559 gas usage
         # assert_equal(receipt["gasUsed"], 210000 / 4 * 3)
@@ -85,6 +85,27 @@ class Eip1559Test(Web3Base):
         assert_equal(len(fee_history['base_fee_per_gas']), 6)
         assert_equal(len(fee_history['gas_used_ratio']), 5)
         assert_equal(len(fee_history['reward']), 5)
+
+        assert_greater_than(int(self.nodes[0].cfx_getFeeBurnt(), 0), 0)
+
+        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        for i in range(1, 10):
+            signed = self.evmAccount.signTransaction({
+                "type": "0x2",
+                "to": self.evmAccount.address,
+                "value": 1,
+                "gas": 21000,
+                'maxFeePerGas': 20* (10**9),
+                'maxPriorityFeePerGas': 1,
+                "nonce": i,
+                "chainId": 10,
+            })
+            return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        self.rpc.generate_block(10)
+        self.rpc.generate_blocks(20, 1)
+        receipt = self.w3.eth.waitForTransactionReceipt(return_tx_hash)
+        assert_equal(receipt["cumulativeGasUsed"], 21000 * 9)
+        assert_equal(receipt["gasUsed"], 21000)
 
 
 if __name__ == "__main__":
