@@ -29,7 +29,7 @@ pub enum WrapTransaction {
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<u8>,
+    pub transaction_type: Option<U256>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub space: Option<Space>,
     pub hash: H256,
@@ -63,7 +63,7 @@ pub struct Transaction {
     /// The S field of the signature.
     pub s: U256,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub y_parity: Option<u8>,
+    pub y_parity: Option<U256>,
 }
 
 pub enum PackedOrExecuted {

@@ -46,7 +46,7 @@ pub struct CallRequest {
     pub max_priority_fee_per_gas: Option<U256>,
     pub access_list: Option<AccessList>,
     #[serde(rename = "type")]
-    pub transaction_type: Option<u8>,
+    pub transaction_type: Option<U256>,
 }
 
 // impl Into<Request> for CallRequest {

@@ -39,7 +39,7 @@ impl StorageChange {
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<u8>,
+    pub transaction_type: Option<U256>,
     /// Transaction hash.
     pub transaction_hash: H256,
     /// Transaction index within the block.

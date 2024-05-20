@@ -340,16 +340,22 @@ impl Transaction {
         }
     }
 
-    pub fn type_id(&self) -> u8 {
+    pub fn type_id(&self) -> U256 {
         match self {
             Transaction::Native(TypedNativeTransaction::Cip155(_))
-            | Transaction::Ethereum(EthereumTransaction::Eip155(_)) => 0,
+            | Transaction::Ethereum(EthereumTransaction::Eip155(_)) => {
+                U256::from(0)
+            }
 
             Transaction::Native(TypedNativeTransaction::Cip2930(_))
-            | Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => 1,
+            | Transaction::Ethereum(EthereumTransaction::Eip2930(_)) => {
+                U256::from(1)
+            }
 
             Transaction::Native(TypedNativeTransaction::Cip1559(_))
-            | Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => 2,
+            | Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => {
+                U256::from(2)
+            }
         }
     }
 
