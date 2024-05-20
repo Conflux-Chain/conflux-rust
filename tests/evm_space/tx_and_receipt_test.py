@@ -41,7 +41,7 @@ class EvmTx2ReceiptTest(Web3Base):
         self.rpc.generate_blocks(20, 1)
         receipt = self.w3.eth.waitForTransactionReceipt(return_tx_hash)
         assert_equal(receipt["status"], 1)
-        assert_equal(receipt["gasUsed"], 210000 / 4 * 3)
+        assert_equal(receipt["gasUsed"], 21000)
         assert_equal(receipt["txExecErrorMsg"], None)
 
         tx = self.w3.eth.get_transaction(return_tx_hash)

@@ -187,4 +187,24 @@ pub enum TypedNativeTransaction {
     Cip1559(Cip1559Transaction),
 }
 
+impl TypedNativeTransaction {
+    pub fn fake_sign_rpc(self, from: AddressWithSpace) -> SignedTransaction {
+        SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Transaction::Native(self),
+                    r: U256::one(),
+                    s: U256::one(),
+                    v: 0,
+                },
+                hash: H256::zero(),
+                rlp_size: None,
+            }
+            .compute_hash(),
+            sender: from.address,
+            public: None,
+        }
+    }
+}
+
 use TypedNativeTransaction::*;

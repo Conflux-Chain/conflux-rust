@@ -173,6 +173,14 @@ fn new_builtin_map(
             params.transition_numbers.cip92,
         ),
     );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(10)),
+        Builtin::new(
+            Box::new(Linear::new(50000, 0)),
+            builtin_factory("kzg_point_eval"),
+            params.transition_numbers.cip144,
+        ),
+    );
     btree
 }
 

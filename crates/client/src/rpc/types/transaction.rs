@@ -164,7 +164,7 @@ impl Transaction {
                 .after_1559()
                 .then_some(*t.max_priority_gas_price()),
             y_parity: t.is_2718().then_some(t.transaction.v.into()),
-            transaction_type: Default::default(),
+            transaction_type: Some(t.type_id()),
             v: t.transaction.v.into(),
             r: t.transaction.r.into(),
             s: t.transaction.s.into(),

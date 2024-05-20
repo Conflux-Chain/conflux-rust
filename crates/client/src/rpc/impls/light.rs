@@ -1255,6 +1255,7 @@ impl Cfx for CfxHandler {
         fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
         fn get_fee_burnt(&self, epoch: Option<EpochNumber>) -> JsonRpcResult<U256>;
+        fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
     }
 }
 
