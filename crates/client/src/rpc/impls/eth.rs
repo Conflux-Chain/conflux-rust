@@ -801,6 +801,12 @@ impl Eth for EthHandler {
                 "Transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
             )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
@@ -850,6 +856,12 @@ impl Eth for EthHandler {
             ) => bail!(call_execution_error(
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
