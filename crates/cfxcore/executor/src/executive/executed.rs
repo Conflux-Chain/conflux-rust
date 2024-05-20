@@ -122,6 +122,9 @@ impl Executed {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
+        if spec.cip145 {
+            gas_sponsor_paid = false;
+        }
 
         let fee = tx.gas().saturating_mul(cost.gas_price);
 

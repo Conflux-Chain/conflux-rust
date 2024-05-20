@@ -152,6 +152,7 @@ pub struct Spec {
     /// CIP-94: On-chain Parameter DAO Vote
     pub cip94: bool,
     pub cip94_activation_block_number: u64,
+    pub params_dao_vote_period: u64,
     /// CIP-97: Remove staking list
     pub cip97: bool,
     /// CIP-98: Fix espace bug
@@ -182,7 +183,8 @@ pub struct Spec {
     pub cancun_opcodes: bool,
     /// CIP-144: Point Evaluation Precompile from EIP-4844
     pub cip144: bool,
-    pub params_dao_vote_period: u64,
+    /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
+    pub cip145: bool,
 }
 
 /// Wasm cost table
@@ -334,6 +336,7 @@ impl Spec {
             cip133_e: u64::MAX,
             cip133_core: false,
             cip137: false,
+            cip145: false,
             cip1559: false,
             cancun_opcodes: false,
             cip144: false,
