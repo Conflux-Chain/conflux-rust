@@ -370,6 +370,9 @@ impl Instruction {
         if instruction == Some(PUSH0) && !spec.cip119 {
             instruction = None;
         }
+        if instruction == Some(BASEFEE) && !spec.cip1559 {
+            instruction = None;
+        }
         return instruction;
     }
 
