@@ -45,6 +45,7 @@ pub trait PersistentLivenessStorage: Send + Sync {
     fn save_vote(&self, vote: &Vote) -> Result<()>;
 
     /// Construct data that can be recovered from ledger
+    #[allow(dead_code)]
     fn recover_from_ledger(&self) -> LedgerRecoveryData;
 
     /// Construct necessary data to start consensus.
@@ -70,6 +71,7 @@ pub trait PersistentLivenessStorage: Send + Sync {
         unimplemented!()
     }
 
+    #[allow(dead_code)]
     fn prune_staking_events(
         &self, _committed_pivot_decision: &PivotBlockDecision,
     ) -> Result<()> {
