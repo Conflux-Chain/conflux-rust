@@ -471,8 +471,11 @@ impl Eth for EthHandler {
             self.tx_pool.machine().params().evm_transaction_block_ratio
                 as usize;
 
-        let fee_history =
-            self.fee_history(300, BlockNumber::Latest, vec![50])?;
+        let fee_history = self.fee_history(
+            U256::from(300),
+            BlockNumber::Latest,
+            vec![U64::from(50)],
+        )?;
 
         let total_reward: U256 = fee_history
             .reward()
@@ -899,15 +902,15 @@ impl Eth for EthHandler {
     }
 
     fn fee_history(
-        &self, block_count: usize, newest_block: BlockNumber,
-        reward_percentiles: Vec<u64>,
+        &self, block_count: U256, newest_block: BlockNumber,
+        reward_percentiles: Vec<U64>,
     ) -> jsonrpc_core::Result<FeeHistory> {
         info!(
             "RPC Request: eth_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
             block_count, newest_block, reward_percentiles
         );
 
-        if block_count == 0 {
+        if block_count == U256::zero() {
             return Ok(FeeHistory::new());
         }
 
@@ -943,7 +946,7 @@ impl Eth for EthHandler {
 
         let mut fee_history = FeeHistory::new();
         while current_height
-            >= start_height.saturating_sub(block_count as u64 - 1)
+            >= start_height.saturating_sub(block_count.as_u64() - 1)
         {
             let block = fetch_block(current_height)?;
 

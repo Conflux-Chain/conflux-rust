@@ -2277,7 +2277,7 @@ impl Cfx for CfxHandler {
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
-            fn fee_history(&self, block_count: usize, newest_block: EpochNumber, reward_percentiles: Vec<u64>) -> BoxFuture<FeeHistory>;
+            fn fee_history(&self, block_count: U256, newest_block: EpochNumber, reward_percentiles: Vec<U64>) -> BoxFuture<FeeHistory>;
             fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
         }
 
