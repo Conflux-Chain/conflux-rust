@@ -98,7 +98,7 @@ pub fn sign_call(
     };
     let transaction_type = request
         .transaction_type
-        .unwrap_or(U256::from(default_type_id));
+        .unwrap_or(U64::from(default_type_id));
 
     let gas_price = request.gas_price.unwrap_or(1.into());
     let max_fee_per_gas = request
@@ -368,7 +368,7 @@ impl EthHandler {
             transaction_type: receipt
                 .burnt_gas_fee
                 .is_some()
-                .then_some(U256::from(tx.type_id())),
+                .then_some(U64::from(tx.type_id())),
             burnt_gas_fee: receipt.burnt_gas_fee,
         })
     }

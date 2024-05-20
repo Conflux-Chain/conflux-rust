@@ -26,7 +26,7 @@ use cfx_types::{Bloom as H2048, H160, H256, U256, U64};
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<U256>,
+    pub transaction_type: Option<U64>,
     /// Transaction Hash
     pub transaction_hash: H256,
     /// Transaction index

@@ -54,7 +54,7 @@ pub struct CallRequest {
     pub max_fee_per_gas: Option<U256>,
     pub max_priority_fee_per_gas: Option<U256>,
     #[serde(rename = "type")]
-    pub transaction_type: Option<U256>,
+    pub transaction_type: Option<U64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -181,7 +181,7 @@ pub fn sign_call(
     };
     let transaction_type = request
         .transaction_type
-        .unwrap_or(U256::from(default_type_id));
+        .unwrap_or(U64::from(default_type_id));
 
     let gas_price = request.gas_price.unwrap_or(1.into());
     let max_fee_per_gas = request

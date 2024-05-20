@@ -19,7 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::Bytes;
-use cfx_types::{H160, U256};
+use cfx_types::{H160, U256, U64};
 use primitives::AccessList;
 
 /// Call request
@@ -46,7 +46,7 @@ pub struct CallRequest {
     pub max_priority_fee_per_gas: Option<U256>,
     pub access_list: Option<AccessList>,
     #[serde(rename = "type")]
-    pub transaction_type: Option<U256>,
+    pub transaction_type: Option<U64>,
 }
 
 // impl Into<Request> for CallRequest {
