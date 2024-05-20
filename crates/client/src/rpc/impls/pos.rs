@@ -179,17 +179,12 @@ impl PosHandler {
         call_data.extend_from_slice(&account_addr.abi_encode());
 
         let call_request = CallRequest {
-            from: None,
             to: Some(RpcAddress::try_from_h160(
                 POS_REGISTER_CONTRACT_ADDRESS,
                 self.network_type,
             )?),
-            gas_price: None,
-            gas: None,
-            value: None,
             data: Some(Bytes(call_data)),
-            nonce: None,
-            storage_limit: None,
+            ..Default::default()
         };
 
         let epoch = match view {

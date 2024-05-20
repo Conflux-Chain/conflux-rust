@@ -1433,7 +1433,8 @@ impl RpcImpl {
         let estimate_request = EstimateRequest {
             has_sender: request.from.is_some(),
             has_gas_limit: request.gas.is_some(),
-            has_gas_price: request.gas_price.is_some(),
+            has_gas_price: request.gas_price.is_some()
+                || request.max_priority_fee_per_gas.is_some(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: request.storage_limit.is_some(),
         };
@@ -2265,6 +2266,7 @@ impl Cfx for CfxHandler {
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
             fn fee_history(&self, block_count: usize, newest_block: EpochNumber, reward_percentiles: Vec<u64>) -> BoxFuture<FeeHistory>;
+            fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
         }
 
         to self.rpc_impl {

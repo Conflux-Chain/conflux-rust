@@ -42,6 +42,8 @@ macro_rules! for_all_global_param_keys {
         $f::<DistributablePoSInterest>($($args),*);
         $f::<LastDistributeBlock>($($args),*);
         $f::<PowBaseReward>($($args),*);
+        $f::<TotalBurnt1559>($($args),*);
+        $f::<BaseFeeProp>($($args),*);
     };
     ($f:ident::<Key>($($args:expr),*)?;) => {
         $f::<InterestRate>($($args),*)?;
@@ -56,6 +58,8 @@ macro_rules! for_all_global_param_keys {
         $f::<DistributablePoSInterest>($($args),*)?;
         $f::<LastDistributeBlock>($($args),*)?;
         $f::<PowBaseReward>($($args),*)?;
+        $f::<TotalBurnt1559>($($args),*)?;
+        $f::<BaseFeeProp>($($args),*)?;
     };
 }
 

@@ -57,6 +57,3 @@ pub use crate::{
     transaction_index::TransactionIndex,
     zero::Zero,
 };
-pub use transaction::{
-    eth_transaction::Eip155Transaction, native_transaction::NativeTransaction,
-};

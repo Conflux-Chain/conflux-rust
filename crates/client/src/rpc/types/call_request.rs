@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
+    error_codes::invalid_params,
     types::{
         address::RpcAddress,
         errors::{check_rpc_address_network, RcpAddressNetworkInconsistent},
@@ -19,7 +20,7 @@ use primitives::{
     transaction::{
         native_transaction::NativeTransaction as PrimitiveTransaction, Action,
     },
-    SignedTransaction, Transaction, TransactionWithSignature,
+    AccessList, SignedTransaction, Transaction, TransactionWithSignature,
 };
 use std::{cmp::min, sync::Arc};
 
@@ -48,6 +49,12 @@ pub struct CallRequest {
     pub nonce: Option<U256>,
     /// StorageLimit
     pub storage_limit: Option<U64>,
+    /// Access list in EIP-2930
+    pub access_list: Option<AccessList>,
+    pub max_fee_per_gas: Option<U256>,
+    pub max_priority_fee_per_gas: Option<U256>,
+    #[serde(rename = "type")]
+    pub transaction_type: Option<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -145,29 +152,93 @@ impl SendTxRequest {
 pub fn sign_call(
     epoch_height: u64, chain_id: u32, request: CallRequest,
 ) -> RpcResult<SignedTransaction> {
+    use primitives::transaction::*;
+    use TypedNativeTransaction::*;
+
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
+
+    let nonce = request.nonce.unwrap_or_default();
+    let action = request.to.map_or(Action::Create, |rpc_addr| {
+        Action::Call(rpc_addr.hex_address)
+    });
+
+    let value = request.value.unwrap_or_default();
+    let storage_limit = request
+        .storage_limit
+        .map(|v| v.as_u64())
+        .unwrap_or(std::u64::MAX);
+    let data = request.data.unwrap_or_default().into_vec();
+
+    let default_type_id = if request.max_fee_per_gas.is_some()
+        || request.max_priority_fee_per_gas.is_some()
+    {
+        2
+    } else if request.access_list.is_some() {
+        1
+    } else {
+        0
+    };
+    let transaction_type = request.transaction_type.unwrap_or(default_type_id);
+
+    let gas_price = request.gas_price.unwrap_or(1.into());
+    let max_fee_per_gas = request
+        .max_fee_per_gas
+        .or(request.max_priority_fee_per_gas)
+        .unwrap_or(gas_price);
+    let max_priority_fee_per_gas =
+        request.max_priority_fee_per_gas.unwrap_or(U256::zero());
+    let access_list = request.access_list.unwrap_or(vec![]);
+
+    let transaction = match transaction_type {
+        0 => Cip155(NativeTransaction {
+            nonce,
+            action,
+            gas,
+            gas_price,
+            value,
+            storage_limit,
+            epoch_height,
+            chain_id,
+            data,
+        }),
+        1 => Cip2930(Cip2930Transaction {
+            nonce,
+            gas_price,
+            gas,
+            action,
+            value,
+            storage_limit,
+            epoch_height,
+            chain_id,
+            data,
+            access_list,
+        }),
+        2 => Cip1559(Cip1559Transaction {
+            nonce,
+            action,
+            gas,
+            value,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            storage_limit,
+            epoch_height,
+            chain_id,
+            data,
+            access_list,
+        }),
+        x => {
+            return Err(
+                invalid_params("Unrecognized transaction type", x).into()
+            );
+        }
+    };
+
     let from = request
         .from
         .map_or_else(|| Address::zero(), |rpc_addr| rpc_addr.hex_address);
 
-    Ok(PrimitiveTransaction {
-        nonce: request.nonce.unwrap_or_default(),
-        action: request.to.map_or(Action::Create, |rpc_addr| {
-            Action::Call(rpc_addr.hex_address)
-        }),
-        gas,
-        gas_price: request.gas_price.unwrap_or(1.into()),
-        value: request.value.unwrap_or_default(),
-        storage_limit: request
-            .storage_limit
-            .map(|v| v.as_u64())
-            .unwrap_or(std::u64::MAX),
-        epoch_height,
-        chain_id,
-        data: request.data.unwrap_or_default().into_vec(),
-    }
-    .fake_sign(from.with_native_space()))
+    Ok(transaction.fake_sign_rpc(from.with_native_space()))
 }
 
 pub fn rpc_call_request_network(
@@ -224,6 +295,7 @@ mod tests {
             data: Some(vec![0x12, 0x34, 0x56].into()),
             storage_limit: Some(U64::from_str("7b").unwrap()),
             nonce: Some(U256::from(4)),
+            ..Default::default()
         };
 
         let s = r#"{
@@ -255,7 +327,8 @@ mod tests {
             value: Some(U256::from_str("9184e72a").unwrap()),
             storage_limit: Some(U64::from_str("3344adf").unwrap()),
             data: Some("d46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675".from_hex::<Vec<u8>>().unwrap().into()),
-            nonce: None
+            nonce: None,
+            ..Default::default()
         };
 
         let s = r#"{
@@ -293,6 +366,7 @@ mod tests {
             data: None,
             storage_limit: None,
             nonce: None,
+            ..Default::default()
         };
 
         let s = r#"{"from":"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEJC4EYEY6"}"#;
