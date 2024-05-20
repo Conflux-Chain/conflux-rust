@@ -40,6 +40,10 @@ pub trait Cfx {
     #[rpc(name = "cfx_gasPrice")]
     fn gas_price(&self) -> BoxFuture<U256>;
 
+    /// Returns current max_priority_fee
+    #[rpc(name = "cfx_maxPriorityFeePerGas")]
+    fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
+
     /// Returns highest epoch number.
     #[rpc(name = "cfx_epochNumber")]
     fn epoch_number(

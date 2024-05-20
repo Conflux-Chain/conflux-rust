@@ -95,6 +95,9 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             ..
         } = self.cost;
 
+        // Here, we only discuss the case `sender_balance <
+        // sender_intended_cost` The case `sender_intended_cost <=
+        // sender_balance < sender_cost` has been handled before nonce bumping.
         let insufficient_sender_balance = sender_balance < sender_intended_cost;
 
         let actual_gas_cost: U256 = if insufficient_sender_balance {

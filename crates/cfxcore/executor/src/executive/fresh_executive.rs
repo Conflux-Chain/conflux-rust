@@ -31,18 +31,30 @@ pub struct FreshExecutive<'a, O: ExecutiveObserver> {
 }
 
 pub(super) struct CostInfo {
+    /// Sender balance
     pub sender_balance: U512,
+    /// The intrinsic gas (21000/53000 + tx data gas + access list gas)
     pub base_gas: u64,
 
+    /// Transaction value + gas cost (except the sponsored part)
     pub total_cost: U512,
+    /// Gas cost
     pub gas_cost: U512,
+    /// Storage collateral cost
     pub storage_cost: U256,
+    /// Transaction value + gas cost (except the part that eligible for
+    /// sponsor)
     pub sender_intended_cost: U512,
+    /// Effective gas price
     pub gas_price: U256,
+    /// Burnt gas price
     pub burnt_gas_price: U256,
 
+    /// Transaction's gas is sponsored
     pub gas_sponsored: bool,
+    /// Transaction's collateral is sponsored
     pub storage_sponsored: bool,
+    /// Transaction's gas is in the sponsor whitelist
     pub storage_sponsor_eligible: bool,
 }
 
@@ -196,8 +208,8 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
 
         let burnt_gas_price = env.burnt_gas_price[tx.space()];
         // gas_price >= actual_base_gas >=
-        //   1. tx gas_price >= burnt_base_price
-        //   2. base_gas_price >= burnt_gas_price
+        // either 1. tx gas_price >= burnt_gas_price
+        // or     2. base_gas_price >= burnt_gas_price
         assert!(gas_price >= burnt_gas_price);
 
         let sender_balance = U512::from(state.balance(&sender)?);

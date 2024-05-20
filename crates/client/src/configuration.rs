@@ -1402,7 +1402,7 @@ impl Configuration {
         //
         set_conf!(
             self.raw_conf.next_hardfork_transition_number.unwrap_or(default_transition_time);
-            params.transition_numbers => { cip131, cip132, cip133b, cip137 }
+            params.transition_numbers => { cip131, cip132, cip133b, cip137, cip144, cip145 }
         );
         set_conf!(
             self.raw_conf.next_hardfork_transition_height.unwrap_or(default_transition_time);

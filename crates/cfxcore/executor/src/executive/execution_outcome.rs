@@ -67,6 +67,9 @@ pub enum TxDropError {
     /// Although it can be verified in tx packing,
     /// by spec doc, it is checked in execution.
     InvalidRecipientAddress(Address),
+
+    /// Not enough gas limit for large transacton, only for estimation
+    NotEnoughGasLimit { expected: U256, got: U256 },
 }
 
 #[derive(Debug, PartialEq)]

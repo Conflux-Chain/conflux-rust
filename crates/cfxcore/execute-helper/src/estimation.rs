@@ -133,6 +133,10 @@ impl<'a> EstimationContext<'a> {
     pub fn transact_virtual(
         &mut self, mut tx: SignedTransaction, request: EstimateRequest,
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
+        if let Some(outcome) = self.check_cip130(&tx, &request) {
+            return Ok(outcome);
+        }
+
         self.process_estimate_request(&mut tx, &request)?;
 
         let (executed, overwrite_storage_limit) = match self
@@ -147,7 +151,9 @@ impl<'a> EstimationContext<'a> {
                     }
                     ExecutionOutcome::ExecutionErrorBumpNonce(_, executed) => {
                         EstimateExt {
-                            estimated_gas_limit: estimated_gas_limit(executed),
+                            estimated_gas_limit: estimated_gas_limit(
+                                executed, &tx,
+                            ),
                             estimated_storage_limit: storage_limit(executed),
                         }
                     }
@@ -163,6 +169,25 @@ impl<'a> EstimationContext<'a> {
             overwrite_storage_limit,
             &request,
         )
+    }
+
+    fn check_cip130(
+        &self, tx: &SignedTransaction, request: &EstimateRequest,
+    ) -> Option<(ExecutionOutcome, EstimateExt)> {
+        let min_gas_limit = U256::from(tx.data().len() * 100);
+        if !request.has_gas_limit || *tx.gas_limit() >= min_gas_limit {
+            return None;
+        }
+
+        let outcome = ExecutionOutcome::NotExecutedDrop(
+            cfx_executor::executive::TxDropError::NotEnoughGasLimit {
+                expected: min_gas_limit,
+                got: *tx.gas_limit(),
+            },
+        );
+        let estimation = Default::default();
+
+        Some((outcome, estimation))
     }
 
     // For the same transaction, the storage limit paid by user and the
@@ -270,7 +295,7 @@ impl<'a> EstimationContext<'a> {
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         let estimated_storage_limit =
             overwrite_storage_limit.unwrap_or(storage_limit(&executed));
-        let estimated_gas_limit = estimated_gas_limit(&executed);
+        let estimated_gas_limit = estimated_gas_limit(&executed, &tx);
         let estimation = EstimateExt {
             estimated_storage_limit,
             estimated_gas_limit,
@@ -373,9 +398,12 @@ impl<'a> EstimationContext<'a> {
     }
 }
 
-fn estimated_gas_limit(executed: &Executed) -> U256 {
-    executed.ext_result.get::<GasLimitEstimation>().unwrap() * 7 / 6
-        + executed.base_gas
+fn estimated_gas_limit(executed: &Executed, tx: &SignedTransaction) -> U256 {
+    let cip130_min_gas_limit = U256::from(tx.data().len() * 100);
+    let estimated =
+        executed.ext_result.get::<GasLimitEstimation>().unwrap() * 7 / 6
+            + executed.base_gas;
+    U256::max(estimated, cip130_min_gas_limit)
 }
 
 fn storage_limit(executed: &Executed) -> u64 {

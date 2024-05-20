@@ -678,6 +678,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "c-kzg"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdf100c4cea8f207e883ff91ca886d621d8a166cb04971dfaa9bb8fd99ed95df"
+dependencies = [
+ "blst",
+ "cc",
+ "glob",
+ "hex 0.4.3",
+ "libc",
+]
+
+[[package]]
 name = "c_linked_list"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -796,6 +809,7 @@ version = "2.0.2"
 dependencies = [
  "bls-signatures",
  "byteorder",
+ "c-kzg",
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-math",
@@ -807,9 +821,11 @@ dependencies = [
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
  "cfxkey",
+ "derive_more",
  "diem-crypto",
  "diem-types",
  "error-chain",
+ "hex-literal",
  "impl-tools",
  "impl-trait-for-tuples 0.2.2",
  "keccak-hash",
@@ -818,6 +834,7 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "num",
+ "once_cell",
  "parity-crypto",
  "parking_lot 0.11.2",
  "pow-types",
@@ -1563,6 +1580,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d6f2aa4d0537bcc1c74df8755072bd31c1ef1a3a1b85a68e8404a8c353b7b8b"
 
 [[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1975,6 +1998,19 @@ checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
 dependencies = [
  "proc-macro2 1.0.71",
  "quote 1.0.33",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_more"
+version = "0.99.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
+dependencies = [
+ "convert_case",
+ "proc-macro2 1.0.71",
+ "quote 1.0.33",
+ "rustc_version 0.4.0",
  "syn 1.0.109",
 ]
 
@@ -4718,9 +4754,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.17.1"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7e5500299e16ebb147ae15a00a942af264cf3688f47923b8fc2cd5858f23ad3"
+checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
 
 [[package]]
 name = "oorandom"
