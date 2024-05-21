@@ -11,9 +11,9 @@ use alloy_rpc_types_trace::geth::{
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace, NoopFrame,
     TraceResult,
 };
-use cfx_execute_helper::observer::geth_tracer::utils::to_alloy_h256;
 use cfx_types::{Space, H256};
 use cfxcore::{ConsensusGraph, SharedConsensusGraph};
+use geth_tracer::to_alloy_h256;
 use jsonrpc_core::Result as JsonRpcResult;
 
 pub struct GethDebugHandler {

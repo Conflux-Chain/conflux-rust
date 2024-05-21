@@ -6,7 +6,7 @@ use super::{
         StorageChange, StorageChangeReason,
     },
     utils::{gas_used, stack_push_count, to_alloy_address, to_alloy_u256},
-    CallTraceArena, GethTraceBuilder, StackStep, TracingInspectorConfig,
+    CallTraceArena, GethTraceBuilder, TracingInspectorConfig,
 };
 use cfx_types::{Space, H160};
 
@@ -427,4 +427,10 @@ impl TracingInspector {
         // TODO set the status
         // step.status = interp.instruction_result;
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StackStep {
+    trace_idx: usize,
+    step_idx: usize,
 }

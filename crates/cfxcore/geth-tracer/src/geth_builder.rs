@@ -1,5 +1,5 @@
 //! Geth trace builder
-use crate::observer::geth_tracer::{
+use crate::{
     types::{CallTraceNode, CallTraceStepStackItem},
     TracingInspectorConfig,
 };

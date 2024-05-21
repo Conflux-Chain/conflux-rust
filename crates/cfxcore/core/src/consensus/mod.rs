@@ -41,10 +41,10 @@ use cfx_execute_helper::{
         recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
         TraceFilter, TransactionExecTraces,
     },
-    observer::geth_tracer::types::GethTraceWithHash,
     phantom_tx::build_bloom_and_recover_phantom,
 };
 use cfx_executor::{executive::ExecutionOutcome, state::State};
+use geth_tracer::GethTraceWithHash;
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
 use cfx_internal_common::ChainIdParams;
