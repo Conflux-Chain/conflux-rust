@@ -1,5 +1,87 @@
 # JSON-RPC CHANGELOG
 
+## vNext
+
+This RPC upgrade is primarily to support Conflux 1559 transactions, with the main changes as follows:
+
+### eSpace
+
+#### New RPC
+
+- `eth_maxPriorityFeePerGas`: Returns an estimated `maxPriorityFeePerGas` value based on on-chain data.
+- `eth_feeHistory`: Returns an array containing the `baseFeePerGas` values of several consecutive blocks, with the block range specifiable by parameters.
+
+#### RPC Updates
+
+Transaction adds fields:
+
+- `type`: 0 - Legacy tx 1 - 2930 tx 2 - 1559 tx
+- 2930 tx adds fields: `accessList`, `yParity`
+- 1559 tx adds fields: `accessList`, `yParity`, `maxPriorityFeePerGas`, `maxFeePerGas`
+
+Receipt adds fields：
+
+- `type`: 0/1/2
+- `burntGasFee`
+- `effectiveGasPrice`
+
+Block adds fields：
+
+- `baseFeePerGas`
+
+`eth_call`, `eth_estimate` Request adds fields：
+
+- `type`
+- `accessList`
+- `maxPriorityPerGas`
+- `maxFeePerGas`
+
+#### New `debug` RPC namespace
+
+This namespace includes some RPCs for debugging:
+
+- `debug_traceTransaction`: Returns the execution trace of the transaction.
+- `debug_traceBlockByHash`: Get the execution trace of the block by block hash.
+- `debug_traceBlockByNumber`: Get the execution trace of the block by block number
+- `debug_traceCall`：Get the execution trace of one `tx call`.
+
+### Core Space
+
+#### New RPC
+
+- `cfx_maxPriorityFeePerGas`: Returns an estimated `maxPriorityFeePerGas` value based on on-chain data.
+- `cfx_feeHistory`: Returns an array containing the `baseFeePerGas` values of several consecutive blocks, with the block range specifiable by parameters.
+- `cfx_getFeeBurnt`: Returns the total amount of gas fees burned historically by 1559.
+
+#### RPC Updates
+
+Transaction adds fields：
+
+- `type`: 0 - Legacy tx 1 - 2930 tx 2 - 1559 tx
+- 2930 tx adds fields: `accessList`, `yParity`
+- 1559 tx adds fields: `accessList`, `yParity`, `maxPriorityFeePerGas`, `maxFeePerGas`
+
+Receipt adds fields:
+
+- `type`: 0/1/2
+- `burntGasFee`
+- `effectiveGasPrice`
+
+Block adds fields:
+
+- `baseFeePerGas`
+
+`cfx_call`, `cfx_estimate` Request adds fields：
+
+- `type`
+- `accessList`
+- `maxPriorityPerGas`
+- `maxFeePerGas`
+
+`cfx_getParamsFromVote` result adds fields:
+
+- `baseFeeShareProp`
+
 ## v2.3.1
 
 - Return `storagePointProp` in cfx_getParamsFromVote, which is introduced by [CIP-107](https://github.com/Conflux-Chain/CIPs/blob/master/CIPs/cip-107.md#the-voting-of-proportion).
