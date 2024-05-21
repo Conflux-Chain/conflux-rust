@@ -201,7 +201,9 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let env = self.context.env;
         let spec = self.context.spec;
 
-        let gas_price = if !spec.cip1559 {
+        let check_base_price = self.settings.check_base_price;
+
+        let gas_price = if !spec.cip1559 || !check_base_price {
             *tx.gas_price()
         } else {
             // actual_base_gas >= tx gas_price >= burnt_base_price
@@ -214,7 +216,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         // gas_price >= actual_base_gas >=
         // either 1. tx gas_price >= burnt_gas_price
         // or     2. base_gas_price >= burnt_gas_price
-        assert!(gas_price >= burnt_gas_price);
+        assert!(gas_price >= burnt_gas_price || !check_base_price);
 
         let sender_balance = U512::from(state.balance(&sender)?);
         let gas_cost = if settings.charge_gas {
