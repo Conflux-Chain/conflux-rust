@@ -29,7 +29,7 @@ pub enum WrapTransaction {
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<u8>,
+    pub transaction_type: Option<U64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub space: Option<Space>,
     pub hash: H256,
@@ -63,7 +63,7 @@ pub struct Transaction {
     /// The S field of the signature.
     pub s: U256,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub y_parity: Option<u8>,
+    pub y_parity: Option<U64>,
 }
 
 pub enum PackedOrExecuted {
@@ -164,7 +164,7 @@ impl Transaction {
                 .after_1559()
                 .then_some(*t.max_priority_gas_price()),
             y_parity: t.is_2718().then_some(t.transaction.v.into()),
-            transaction_type: Some(t.type_id()),
+            transaction_type: Some(U64::from(t.type_id())),
             v: t.transaction.v.into(),
             r: t.transaction.r.into(),
             s: t.transaction.s.into(),

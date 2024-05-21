@@ -530,15 +530,15 @@ impl RpcImpl {
     }
 
     pub fn fee_history(
-        &self, block_count: usize, newest_block: EpochNumber,
-        reward_percentiles: Vec<u64>,
+        &self, block_count: U64, newest_block: EpochNumber,
+        reward_percentiles: Vec<U64>,
     ) -> RpcResult<FeeHistory> {
         info!(
             "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
             block_count, newest_block, reward_percentiles
         );
 
-        if block_count == 0 {
+        if block_count == U64::zero() {
             return Ok(FeeHistory::new());
         }
         // keep read lock to ensure consistent view
@@ -572,7 +572,7 @@ impl RpcImpl {
 
         let mut fee_history = FeeHistory::new();
         while current_height
-            >= start_height.saturating_sub(block_count as u64 - 1)
+            >= start_height.saturating_sub(block_count.as_u64() - 1)
         {
             let block = fetch_block(current_height)?;
 
@@ -614,8 +614,11 @@ impl RpcImpl {
     pub fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {
         info!("RPC Request: max_priority_fee_per_gas",);
 
-        let fee_history =
-            self.fee_history(300, EpochNumber::LatestState, vec![50])?;
+        let fee_history = self.fee_history(
+            U64::from(300),
+            EpochNumber::LatestState,
+            vec![U64::from(50)],
+        )?;
 
         let total_reward: U256 = fee_history
             .reward()
