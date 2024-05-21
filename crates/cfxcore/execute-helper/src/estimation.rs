@@ -466,6 +466,7 @@ impl EstimateRequest {
             charge_collateral,
             charge_gas: self.charge_gas(),
             check_epoch_bound: false,
+            check_base_price: self.has_gas_price,
         }
     }
 
