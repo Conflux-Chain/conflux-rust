@@ -47,7 +47,7 @@ diem-types = { path = "../core/src/pos/types" }
 pow-types = {path = "../core/src/pos/types/pow-types" }
 impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
-typemap = "0.3"
+typemap = { package = "typemap-ors", version = "1.0"}
 hex-literal = "0.4.1"
 derive_more = "0.99"
 c-kzg = { version = "1.0.2", default-features = false}
