@@ -530,7 +530,7 @@ impl RpcImpl {
     }
 
     pub fn fee_history(
-        &self, block_count: U256, newest_block: EpochNumber,
+        &self, block_count: U64, newest_block: EpochNumber,
         reward_percentiles: Vec<U64>,
     ) -> RpcResult<FeeHistory> {
         info!(
@@ -538,7 +538,7 @@ impl RpcImpl {
             block_count, newest_block, reward_percentiles
         );
 
-        if block_count == U256::zero() {
+        if block_count == U64::zero() {
             return Ok(FeeHistory::new());
         }
         // keep read lock to ensure consistent view
@@ -615,7 +615,7 @@ impl RpcImpl {
         info!("RPC Request: max_priority_fee_per_gas",);
 
         let fee_history = self.fee_history(
-            U256::from(300),
+            U64::from(300),
             EpochNumber::LatestState,
             vec![U64::from(50)],
         )?;

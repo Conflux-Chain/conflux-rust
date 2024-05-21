@@ -474,7 +474,7 @@ impl Eth for EthHandler {
                 as usize;
 
         let fee_history = self.fee_history(
-            U256::from(300),
+            U64::from(300),
             BlockNumber::Latest,
             vec![U64::from(50)],
         )?;
@@ -904,7 +904,7 @@ impl Eth for EthHandler {
     }
 
     fn fee_history(
-        &self, block_count: U256, newest_block: BlockNumber,
+        &self, block_count: U64, newest_block: BlockNumber,
         reward_percentiles: Vec<U64>,
     ) -> jsonrpc_core::Result<FeeHistory> {
         info!(
@@ -912,7 +912,7 @@ impl Eth for EthHandler {
             block_count, newest_block, reward_percentiles
         );
 
-        if block_count == U256::zero() {
+        if block_count == U64::zero() {
             return Ok(FeeHistory::new());
         }
 
