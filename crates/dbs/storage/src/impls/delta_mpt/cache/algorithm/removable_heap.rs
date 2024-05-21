@@ -631,7 +631,13 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         &mut self, pos: PosT, hole: Hole<ValueType>, replaced: *mut ValueType,
         value_util: &mut ValueUtilT,
     ) {
-        ptr::copy_nonoverlapping(self.get_unchecked_mut(pos), replaced, 1);
+        {
+            let src = self.get_unchecked_mut(pos) as *mut ValueType;
+            let dst = replaced;
+            if src != dst {
+                ptr::copy_nonoverlapping(src, dst, 1);
+            }
+        }
 
         if value_util.get_key_for_comparison(self.get_unchecked_mut(pos))
             < value_util.get_key_for_comparison(&hole.value)

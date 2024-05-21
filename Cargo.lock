@@ -1046,7 +1046,6 @@ dependencies = [
 name = "cfx-vm-types"
 version = "2.0.2"
 dependencies = [
- "bls-signatures",
  "cfx-bytes",
  "cfx-db-errors",
  "cfx-types",
