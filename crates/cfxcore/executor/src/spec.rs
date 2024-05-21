@@ -158,7 +158,7 @@ impl Default for CommonParams {
             early_set_internal_contracts_states: false,
             transition_numbers: Default::default(),
             transition_heights: Default::default(),
-            min_base_price: SpaceMap::new(U256::one(), U256::one()),
+            min_base_price: SpaceMap::default(),
         }
     }
 }

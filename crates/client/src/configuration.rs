@@ -169,6 +169,8 @@ build_config! {
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        (min_native_base_price, (Option<u64>), None)
+        (min_eth_base_price, (Option<u64>), None)
         // FIXME: this is part of spec.
         (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
 
@@ -1226,13 +1228,26 @@ impl Configuration {
             params.early_set_internal_contracts_states = true;
         }
 
-        if !self.is_test_or_dev_mode() {
-            params.min_base_price = SpaceMap::new(
-                INITIAL_1559_CORE_BASE_PRICE,
-                INITIAL_1559_ETH_BASE_PRICE,
-            )
-            .map_all(U256::from)
-        }
+        let non_test_default = SpaceMap::new(
+            INITIAL_1559_CORE_BASE_PRICE,
+            INITIAL_1559_ETH_BASE_PRICE,
+        );
+        let test_default = SpaceMap::new(1u64, 1);
+        let config = SpaceMap::new(
+            self.raw_conf.min_native_base_price,
+            self.raw_conf.min_eth_base_price,
+        );
+        let base_price = SpaceMap::zip3(non_test_default, test_default, config)
+            .map_all(|(non_test, test, config)| {
+                if let Some(x) = config {
+                    x
+                } else if self.is_test_or_dev_mode() {
+                    test
+                } else {
+                    non_test
+                }
+            });
+        params.min_base_price = base_price.map_all(U256::from);
 
         params.chain_id = self.chain_id_params();
         params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
