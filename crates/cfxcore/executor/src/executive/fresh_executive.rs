@@ -132,6 +132,10 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
     }
 
     fn check_base_price(&self) -> Result<(), ExecutionOutcome> {
+        if !self.settings.check_base_price {
+            return Ok(());
+        }
+
         let burnt_gas_price = self.context.env.burnt_gas_price[self.tx.space()];
         if self.tx.gas_price() < &burnt_gas_price {
             Err(ExecutionOutcome::NotExecutedToReconsiderPacking(

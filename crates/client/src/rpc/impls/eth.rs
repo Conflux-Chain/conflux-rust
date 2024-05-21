@@ -96,7 +96,9 @@ pub fn sign_call(
     } else {
         0
     };
-    let transaction_type = request.transaction_type.unwrap_or(default_type_id);
+    let transaction_type = request
+        .transaction_type
+        .unwrap_or(U64::from(default_type_id));
 
     let gas_price = request.gas_price.unwrap_or(1.into());
     let max_fee_per_gas = request
@@ -108,7 +110,7 @@ pub fn sign_call(
     let access_list = request.access_list.unwrap_or(vec![]);
     let data = request.data.unwrap_or_default().into_vec();
 
-    let transaction = match transaction_type {
+    let transaction = match transaction_type.as_usize() {
         0 => Eip155(Eip155Transaction {
             nonce,
             gas_price,
@@ -366,7 +368,7 @@ impl EthHandler {
             transaction_type: receipt
                 .burnt_gas_fee
                 .is_some()
-                .then_some(tx.type_id()),
+                .then_some(U64::from(tx.type_id())),
             burnt_gas_fee: receipt.burnt_gas_fee,
         })
     }
@@ -471,8 +473,11 @@ impl Eth for EthHandler {
             self.tx_pool.machine().params().evm_transaction_block_ratio
                 as usize;
 
-        let fee_history =
-            self.fee_history(300, BlockNumber::Latest, vec![50])?;
+        let fee_history = self.fee_history(
+            U64::from(300),
+            BlockNumber::Latest,
+            vec![U64::from(50)],
+        )?;
 
         let total_reward: U256 = fee_history
             .reward()
@@ -899,15 +904,15 @@ impl Eth for EthHandler {
     }
 
     fn fee_history(
-        &self, block_count: usize, newest_block: BlockNumber,
-        reward_percentiles: Vec<u64>,
+        &self, block_count: U64, newest_block: BlockNumber,
+        reward_percentiles: Vec<U64>,
     ) -> jsonrpc_core::Result<FeeHistory> {
         info!(
             "RPC Request: eth_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
             block_count, newest_block, reward_percentiles
         );
 
-        if block_count == 0 {
+        if block_count == U64::zero() {
             return Ok(FeeHistory::new());
         }
 
@@ -943,7 +948,7 @@ impl Eth for EthHandler {
 
         let mut fee_history = FeeHistory::new();
         while current_height
-            >= start_height.saturating_sub(block_count as u64 - 1)
+            >= start_height.saturating_sub(block_count.as_u64() - 1)
         {
             let block = fetch_block(current_height)?;
 

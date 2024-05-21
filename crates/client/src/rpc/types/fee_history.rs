@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use cfx_types::{Space, SpaceMap, U256};
+use cfx_types::{Space, SpaceMap, U256, U64};
 use primitives::{transaction::SignedTransaction, BlockHeader};
 
 #[derive(Serialize, Debug, Default)]
@@ -24,7 +24,7 @@ impl FeeHistory {
     pub fn reward(&self) -> &VecDeque<Vec<U256>> { &self.reward }
 
     pub fn push_back_block<'a, I>(
-        &mut self, space: Space, percentiles: &Vec<u64>,
+        &mut self, space: Space, percentiles: &Vec<U64>,
         pivot_header: &BlockHeader, transactions: I,
     ) -> Result<(), String>
     where
@@ -83,7 +83,7 @@ impl FeeHistory {
 }
 
 fn compute_reward<'a, I>(
-    percentiles: &Vec<u64>, transactions: I, base_price: U256,
+    percentiles: &Vec<U64>, transactions: I, base_price: U256,
 ) -> Vec<U256>
 where I: Iterator<Item = &'a SignedTransaction> {
     let mut rewards: Vec<_> = transactions
@@ -105,7 +105,7 @@ where I: Iterator<Item = &'a SignedTransaction> {
     percentiles
         .into_iter()
         .map(|per| {
-            let mut index = *per as usize * n / 100;
+            let mut index = (*per).as_usize() * n / 100;
             if index >= n {
                 index = n - 1;
             }

@@ -34,7 +34,7 @@ use serde::Serialize;
 pub struct Transaction {
     /// transaction type
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<u8>,
+    pub transaction_type: Option<U64>,
     /// Hash
     pub hash: H256,
     /// Nonce
@@ -87,7 +87,7 @@ pub struct Transaction {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_priority_fee_per_gas: Option<U256>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub y_parity: Option<u8>,
+    pub y_parity: Option<U64>,
     /* /// Transaction activates at specified block.
      * pub condition: Option<TransactionCondition>, */
 }
@@ -134,8 +134,8 @@ impl Transaction {
             max_priority_fee_per_gas: t
                 .after_1559()
                 .then_some(*t.max_priority_gas_price()),
-            y_parity: t.is_2718().then_some(signature.v()),
-            transaction_type: Some(t.type_id()),
+            y_parity: t.is_2718().then_some(U64::from(signature.v())),
+            transaction_type: Some(U64::from(t.type_id())),
         }
     }
 
