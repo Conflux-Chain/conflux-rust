@@ -169,6 +169,26 @@ pub enum EthereumTransaction {
 }
 use EthereumTransaction::*;
 
+impl EthereumTransaction {
+    pub fn fake_sign_rpc(self, from: AddressWithSpace) -> SignedTransaction {
+        SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Transaction::Ethereum(self),
+                    r: U256::one(),
+                    s: U256::one(),
+                    v: 0,
+                },
+                hash: H256::zero(),
+                rlp_size: None,
+            }
+            .compute_hash(),
+            sender: from.address,
+            public: None,
+        }
+    }
+}
+
 macro_rules! eth_access_common_ref {
     ($field:ident, $ty:ty) => {
         pub fn $field(&self) -> &$ty {

@@ -1662,6 +1662,10 @@ impl ConsensusExecutionHandler {
             address
         };
 
+        let base_gas_price = best_block_header.base_price().unwrap_or_default();
+        let burnt_gas_price =
+            base_gas_price.map_all(|x| state.burnt_gas_price(x));
+
         let env = Env {
             chain_id: self.machine.params().chain_id_map(block_height),
             number: start_block_number,
@@ -1677,8 +1681,8 @@ impl ConsensusExecutionHandler {
             transaction_epoch_bound: self
                 .verification_config
                 .transaction_epoch_bound,
-            base_gas_price: Default::default(),
-            burnt_gas_price: Default::default(),
+            base_gas_price,
+            burnt_gas_price,
         };
         let spec = self.machine.spec(env.number, env.epoch_height);
         let mut ex = EstimationContext::new(

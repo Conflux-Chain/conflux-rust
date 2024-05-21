@@ -5,26 +5,25 @@
 pub mod eth_transaction;
 pub mod native_transaction;
 
-use crate::{
-    bytes::Bytes,
-    hash::keccak,
-    transaction::{
-        eth_transaction::{Eip1559Transaction, Eip2930Transaction},
-        native_transaction::TypedNativeTransaction,
-    },
+pub use eth_transaction::{
+    Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
+    EthereumTransaction,
 };
+pub use native_transaction::{
+    Cip1559Transaction, Cip2930Transaction, NativeTransaction,
+    TypedNativeTransaction,
+};
+
+use crate::{bytes::Bytes, hash::keccak};
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
     H256, U256,
 };
-use eth_transaction::{
-    eip155_signature, Eip155Transaction, EthereumTransaction,
-};
+use eth_transaction::eip155_signature;
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use native_transaction::NativeTransaction;
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::{Deserialize, Serialize};
 use std::{

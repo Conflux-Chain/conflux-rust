@@ -41,8 +41,7 @@ use cfxcore::{
 use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS,
-    transaction::eth_transaction::Eip155Transaction, Action,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
     BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
     StorageValue, TransactionStatus, TransactionWithSignature,
 };
@@ -83,20 +82,76 @@ impl EthHandler {
 pub fn sign_call(
     chain_id: u32, request: CallRequest,
 ) -> RpcResult<SignedTransaction> {
+    use primitives::transaction::*;
+    use EthereumTransaction::*;
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.unwrap_or_else(|| Address::zero());
+    let nonce = request.nonce.unwrap_or_default();
+    let action = request.to.map_or(Action::Create, |addr| Action::Call(addr));
+    let value = request.value.unwrap_or_default();
 
-    Ok(Eip155Transaction {
-        nonce: request.nonce.unwrap_or_default(),
-        action: request.to.map_or(Action::Create, |addr| Action::Call(addr)),
-        gas,
-        gas_price: request.gas_price.unwrap_or(1.into()),
-        value: request.value.unwrap_or_default(),
-        chain_id: Some(chain_id),
-        data: request.data.unwrap_or_default().into_vec(),
-    }
-    .fake_sign_rpc(from.with_evm_space()))
+    let default_type_id = if request.max_fee_per_gas.is_some()
+        || request.max_priority_fee_per_gas.is_some()
+    {
+        2
+    } else if request.access_list.is_some() {
+        1
+    } else {
+        0
+    };
+    let transaction_type = request.transaction_type.unwrap_or(default_type_id);
+
+    let gas_price = request.gas_price.unwrap_or(1.into());
+    let max_fee_per_gas = request
+        .max_fee_per_gas
+        .or(request.max_priority_fee_per_gas)
+        .unwrap_or(gas_price);
+    let max_priority_fee_per_gas =
+        request.max_priority_fee_per_gas.unwrap_or(U256::zero());
+    let access_list = request.access_list.unwrap_or(vec![]);
+    let data = request.data.unwrap_or_default().into_vec();
+
+    let transaction = match transaction_type {
+        0 => Eip155(Eip155Transaction {
+            nonce,
+            gas_price,
+            gas,
+            action,
+            value,
+            chain_id: Some(chain_id),
+            data,
+        }),
+        1 => Eip2930(Eip2930Transaction {
+            chain_id,
+            nonce,
+            gas_price,
+            gas,
+            action,
+            value,
+            data,
+            access_list,
+        }),
+        2 => Eip1559(Eip1559Transaction {
+            chain_id,
+            nonce,
+            max_priority_fee_per_gas,
+            max_fee_per_gas,
+            gas,
+            action,
+            value,
+            data,
+            access_list,
+        }),
+        x => {
+            return Err(
+                invalid_params("Unrecognized transaction type", x).into()
+            );
+        }
+    };
+
+    let from = request.from.unwrap_or(Address::zero());
+
+    Ok(transaction.fake_sign_rpc(from.with_evm_space()))
 }
 
 fn block_tx_by_index(
@@ -415,11 +470,20 @@ impl Eth for EthHandler {
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_maxPriorityFeePerGas");
-        let (_, maybe_base_price) =
-            self.tx_pool.get_best_info_with_parent_base_price();
-        let answer = maybe_base_price
-            .map_or(U256::from(20000000000u64), |x| x[Space::Ethereum]);
-        Ok(answer)
+        let evm_ratio =
+            self.tx_pool.machine().params().evm_transaction_block_ratio
+                as usize;
+
+        let fee_history =
+            self.fee_history(300, BlockNumber::Latest, vec![50])?;
+
+        let total_reward: U256 = fee_history
+            .reward()
+            .iter()
+            .map(|x| x.first().unwrap())
+            .fold(U256::zero(), |x, y| x + *y);
+
+        Ok(total_reward * evm_ratio / 300)
     }
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
@@ -740,6 +804,12 @@ impl Eth for EthHandler {
                 "Transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
             )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
@@ -789,6 +859,12 @@ impl Eth for EthHandler {
             ) => bail!(call_execution_error(
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(

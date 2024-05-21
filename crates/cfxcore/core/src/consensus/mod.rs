@@ -1907,7 +1907,8 @@ impl ConsensusGraph {
             traces: vec![],
         };
 
-        let mut gas_used = U256::from(0);
+        let mut accumulated_gas_used = U256::from(0);
+        let mut gas_used_offset;
 
         let iter_blocks = if only_pivot {
             &blocks[blocks.len() - 1..]
@@ -1916,6 +1917,7 @@ impl ConsensusGraph {
         };
 
         for b in iter_blocks {
+            gas_used_offset = accumulated_gas_used;
             // note: we need the receipts to reconstruct a phantom block.
             // as a result, we cannot return unexecuted blocks in eth_* RPCs.
             let exec_info = match self
@@ -1987,11 +1989,11 @@ impl ConsensusGraph {
                             return Err("Inconsistent state: zero transaction gas price".into());
                         }
 
-                        // FIXME(thegaram): is this correct?
-                        gas_used += receipt.gas_fee / tx.gas_price();
+                        accumulated_gas_used =
+                            gas_used_offset + receipt.accumulated_gas_used;
 
                         phantom_block.receipts.push(Receipt {
-                            accumulated_gas_used: gas_used,
+                            accumulated_gas_used,
                             outcome_status: receipt.outcome_status,
                             ..receipt.clone()
                         });
@@ -2038,7 +2040,8 @@ impl ConsensusGraph {
                             ));
 
                             // note: phantom txs consume no gas
-                            let phantom_receipt = p.into_receipt(gas_used);
+                            let phantom_receipt =
+                                p.into_receipt(accumulated_gas_used);
 
                             phantom_block
                                 .bloom

@@ -158,31 +158,37 @@ fn extract_attr(attrs: &[Attribute]) -> Option<ValueType> {
         {
             for segment in path.segments {
                 // Only handle schema attrs
-                if segment.ident == "schema" {
-                    #[allow(clippy::never_loop)]
-                    for meta in &nested {
-                        let path =
-                            if let NestedMeta::Meta(Meta::Path(path)) = meta {
-                                path
-                            } else {
-                                panic!("unsupported schema attribute");
-                            };
-
-                        match path
-                            .segments
-                            .first()
-                            .unwrap()
-                            .ident
-                            .to_string()
-                            .as_ref()
-                        {
-                            "debug" => return Some(ValueType::Debug),
-                            "display" => return Some(ValueType::Display),
-                            "serde" => return Some(ValueType::Serde),
-                            _ => panic!("unsupported schema attribute"),
-                        }
-                    }
+                if segment.ident != "schema" {
+                    continue;
                 }
+
+                let meta = if let Some(meta) = nested.first() {
+                    meta
+                } else {
+                    continue;
+                };
+
+                let path = if let NestedMeta::Meta(Meta::Path(path)) = meta {
+                    path
+                } else {
+                    panic!("unsupported schema attribute");
+                };
+
+                let answer = match path
+                    .segments
+                    .first()
+                    .unwrap()
+                    .ident
+                    .to_string()
+                    .as_ref()
+                {
+                    "debug" => ValueType::Debug,
+                    "display" => ValueType::Display,
+                    "serde" => ValueType::Serde,
+                    _ => panic!("unsupported schema attribute"),
+                };
+
+                return Some(answer);
             }
         }
     }

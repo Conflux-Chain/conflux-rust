@@ -74,13 +74,13 @@ pub type ExecutedExt = ShareDebugMap;
 
 impl Executed {
     pub(super) fn not_enough_balance_fee_charged(
-        tx: &TransactionWithSignature, fee: &U256, cost: CostInfo,
+        tx: &TransactionWithSignature, actual_gas_cost: &U256, cost: CostInfo,
         ext_result: ExecutedExt, spec: &Spec,
     ) -> Self {
         let gas_charged = if cost.gas_price == U256::zero() {
             U256::zero()
         } else {
-            fee / cost.gas_price
+            actual_gas_cost / cost.gas_price
         };
         let mut gas_sponsor_paid = cost.gas_sponsored;
         let mut storage_sponsor_paid = cost.storage_sponsored;
@@ -88,11 +88,16 @@ impl Executed {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
-        let burnt_fee = spec.cip1559.then_some(*fee);
+
+        let burnt_fee = spec.cip1559.then(|| {
+            let target_burnt = tx.gas().saturating_mul(cost.burnt_gas_price);
+            U256::min(*actual_gas_cost, target_burnt)
+        });
+
         Self {
             gas_used: *tx.gas(),
             gas_charged,
-            fee: fee.clone(),
+            fee: *actual_gas_cost,
             burnt_fee,
             gas_sponsor_paid,
             logs: vec![],
@@ -116,6 +121,9 @@ impl Executed {
         if !spec.cip78b {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
+        }
+        if spec.cip145 {
+            gas_sponsor_paid = false;
         }
 
         let fee = tx.gas().saturating_mul(cost.gas_price);

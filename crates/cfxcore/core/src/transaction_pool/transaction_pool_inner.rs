@@ -30,7 +30,6 @@ use rand_xorshift::XorShiftRng;
 use rlp::*;
 use serde::Serialize;
 use std::{
-    cmp::Ordering,
     collections::{BTreeSet, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -486,29 +485,6 @@ impl DeferredPool {
     ) -> impl Iterator<Item = &Arc<SignedTransaction>> + '_ {
         self.ready_transactions_by_space(Space::Native)
             .chain(self.ready_transactions_by_space(Space::Ethereum))
-    }
-}
-
-#[derive(DeriveMallocSizeOf, Clone)]
-struct PriceOrderedTransaction(Arc<SignedTransaction>);
-
-impl PartialEq for PriceOrderedTransaction {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.gas_price().eq(other.0.gas_price())
-    }
-}
-
-impl Eq for PriceOrderedTransaction {}
-
-impl PartialOrd for PriceOrderedTransaction {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for PriceOrderedTransaction {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.gas_price().cmp(other.0.gas_price())
     }
 }
 

@@ -149,13 +149,6 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> NodeRefMapDeltaMpts<CacheAlgoDataT> {
 
 pub const DEFAULT_NODE_MAP_SIZE: u32 = 200_000_000;
 
-// Type alias for clarity.
-pub trait NodeRefMapTrait {
-    type StorageAccessKey;
-    type NodeRef;
-    type MaybeCacheSlotIndex;
-}
-
 use super::{
     super::errors::*, cache::algorithm::CacheAlgoDataTrait,
     node_memory_manager::ActualSlabIndex, row_number::RowNumberUnderlyingType,

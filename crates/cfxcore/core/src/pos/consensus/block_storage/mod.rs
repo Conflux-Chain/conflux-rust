@@ -49,6 +49,7 @@ pub trait BlockReader: Send + Sync {
     ) -> Option<Vec<Arc<ExecutedBlock>>>;
 
     /// Return the certified block with the highest round.
+    #[allow(dead_code)]
     fn highest_certified_block(&self) -> Arc<ExecutedBlock>;
 
     /// Return the quorum certificate with the highest round

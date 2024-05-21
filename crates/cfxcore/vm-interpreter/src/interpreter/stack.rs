@@ -39,6 +39,7 @@ pub trait Stack<T> {
     /// Get number of elements on Stack
     fn size(&self) -> usize;
     /// Returns all data on stack.
+    #[allow(dead_code)]
     fn peek_top(&self, no_of_elems: usize) -> &[T];
 }
 

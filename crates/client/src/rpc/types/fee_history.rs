@@ -21,6 +21,8 @@ pub struct FeeHistory {
 impl FeeHistory {
     pub fn new() -> Self { Default::default() }
 
+    pub fn reward(&self) -> &VecDeque<Vec<U256>> { &self.reward }
+
     pub fn push_back_block<'a, I>(
         &mut self, space: Space, percentiles: &Vec<u64>,
         pivot_header: &BlockHeader, transactions: I,
