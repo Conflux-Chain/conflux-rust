@@ -53,7 +53,7 @@ pow-types = {path = "../core/src/pos/types/pow-types" }
 # impl-tools = "^0.10"
 typemap = { package = "typemap-ors", version = "1.0"}
 
-alloy-primitives.workspace = true
+alloy-primitives = { workspace = true }
 alloy-sol-types = "0.7.1"
 revm = { version = "8.0", default-features = false, features = ["std"] }
-alloy-rpc-types-trace.workspace = true
+alloy-rpc-types-trace = { workspace = true }

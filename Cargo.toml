@@ -52,7 +52,7 @@ members = [
     "crates/util/throttling",
     "crates/util/treap-map",
     "crates/util/version",
-    "crates/serde",
+    "crates/serde_utils",
 ]
 
 resolver = "2"

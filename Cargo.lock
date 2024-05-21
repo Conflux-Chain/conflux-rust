@@ -1274,16 +1274,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cfx-serde"
-version = "2.0.2"
-dependencies = [
- "alloy-primitives",
- "cfx-types",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "cfx-statedb"
 version = "1.0.0"
 dependencies = [
@@ -7287,6 +7277,16 @@ checksum = "12c47087018ec281d1cdab673d36aea22d816b54d498264029c05d5fa1910da6"
 dependencies = [
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "serde-utils"
+version = "2.0.2"
+dependencies = [
+ "alloy-primitives",
+ "cfx-types",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
