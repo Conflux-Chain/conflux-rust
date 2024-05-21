@@ -2,6 +2,7 @@
 use alloy_primitives::{hex, B256};
 use alloy_sol_types::{ContractError, GenericRevertReason};
 use cfx_types::{Address, H160, H256, U256};
+use cfx_vm_interpreter::instructions::INSTRUCTIONS_CANCUN;
 use revm::{
     interpreter::opcode,
     primitives::{Address as RAddress, U256 as RU256},
@@ -53,65 +54,9 @@ pub(crate) fn maybe_revert_reason(output: &[u8]) -> Option<String> {
 /// The value is obvious for most opcodes, but SWAP* and DUP* are a bit weird,
 /// and we handle those as they are handled in parity vmtraces.
 /// For reference: <https://github.com/ledgerwatch/erigon/blob/9b74cf0384385817459f88250d1d9c459a18eab1/turbo/jsonrpc/trace_adhoc.go#L451>
-pub(crate) const fn stack_push_count(step_op: u8) -> usize {
-    match step_op {
-        opcode::PUSH0..=opcode::PUSH32 => 1,
-        opcode::SWAP1..=opcode::SWAP16 => {
-            (step_op - opcode::SWAP1) as usize + 2
-        }
-        opcode::DUP1..=opcode::DUP16 => (step_op - opcode::DUP1) as usize + 2,
-        opcode::CALLDATALOAD
-        | opcode::SLOAD
-        | opcode::MLOAD
-        | opcode::CALLDATASIZE
-        | opcode::LT
-        | opcode::GT
-        | opcode::DIV
-        | opcode::SDIV
-        | opcode::SAR
-        | opcode::AND
-        | opcode::EQ
-        | opcode::CALLVALUE
-        | opcode::ISZERO
-        | opcode::ADD
-        | opcode::EXP
-        | opcode::CALLER
-        | opcode::KECCAK256
-        | opcode::SUB
-        | opcode::ADDRESS
-        | opcode::GAS
-        | opcode::MUL
-        | opcode::RETURNDATASIZE
-        | opcode::NOT
-        | opcode::SHR
-        | opcode::SHL
-        | opcode::EXTCODESIZE
-        | opcode::SLT
-        | opcode::OR
-        | opcode::NUMBER
-        | opcode::PC
-        | opcode::TIMESTAMP
-        | opcode::BALANCE
-        | opcode::SELFBALANCE
-        | opcode::MULMOD
-        | opcode::ADDMOD
-        | opcode::BASEFEE
-        | opcode::BLOCKHASH
-        | opcode::BYTE
-        | opcode::XOR
-        | opcode::ORIGIN
-        | opcode::CODESIZE
-        | opcode::MOD
-        | opcode::SIGNEXTEND
-        | opcode::GASLIMIT
-        | opcode::DIFFICULTY
-        | opcode::SGT
-        | opcode::GASPRICE
-        | opcode::MSIZE
-        | opcode::EXTCODEHASH
-        | opcode::SMOD
-        | opcode::CHAINID
-        | opcode::COINBASE => 1,
+pub(crate) fn stack_push_count(step_op: u8) -> usize {
+    match INSTRUCTIONS_CANCUN.get(step_op as usize) {
+        Some(Some(instruct)) => instruct.ret,
         _ => 0,
     }
 }

@@ -501,7 +501,7 @@ impl InstructionInfo {
 
 lazy_static! {
     /// Static instruction table.
-    static ref INSTRUCTIONS: [Option<InstructionInfo>; 0x100] = {
+    pub static ref INSTRUCTIONS: [Option<InstructionInfo>; 0x100] = {
         let mut arr = [None; 0x100];
         arr[STOP as usize] = Some(InstructionInfo::new("STOP", 0, 0, GasPriceTier::Zero));
         arr[ADD as usize] = Some(InstructionInfo::new("ADD", 2, 1, GasPriceTier::VeryLow));
@@ -652,7 +652,7 @@ lazy_static! {
         arr
     };
 
-    static ref INSTRUCTIONS_CANCUN: [Option<InstructionInfo>; 0x100] = {
+    pub static ref INSTRUCTIONS_CANCUN: [Option<InstructionInfo>; 0x100] = {
         let mut arr = *INSTRUCTIONS;
         arr[BEGINSUB_TLOAD as usize] = Some(InstructionInfo::new("TLOAD", 1, 1, GasPriceTier::Special));
         arr[JUMPSUB_MCOPY as usize] = Some(InstructionInfo::new("MCOPY", 3, 0, GasPriceTier::Special));

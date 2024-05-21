@@ -3588,6 +3588,7 @@ dependencies = [
  "alloy-sol-types",
  "cfx-executor",
  "cfx-types",
+ "cfx-vm-interpreter",
  "cfx-vm-types",
  "revm",
  "typemap-ors",

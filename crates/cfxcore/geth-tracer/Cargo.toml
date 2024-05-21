@@ -21,3 +21,4 @@ cfx-vm-types = { path = "../vm-types" }
 cfx-types = { path = "../../cfx_types" }
 cfx-executor = { path = "../executor" }
 typemap = { package = "typemap-ors", version = "1.0"}
+cfx-vm-interpreter = { path = "../vm-interpreter" }
