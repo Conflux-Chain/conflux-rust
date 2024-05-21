@@ -17,6 +17,7 @@ class Eip1559Test(Web3Base):
         self.conf_parameters["evm_transaction_block_ratio"] = str(1)
         self.conf_parameters["executive_trace"] = "true"
         self.conf_parameters["cip1559_transition_height"] = str(1)
+        self.conf_parameters["min_eth_base_price"] = 20 * (10**9)
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -51,7 +52,7 @@ class Eip1559Test(Web3Base):
             "to": self.evmAccount.address,
             "value": 1,
             "gas": 210000,
-            'maxFeePerGas': 1,
+            'maxFeePerGas': 20 * (10**9),
             'maxPriorityFeePerGas': 1,
             "nonce": nonce,
             "chainId": 10,
@@ -107,6 +108,7 @@ class Eip1559Test(Web3Base):
         assert_equal(receipt["cumulativeGasUsed"], 21000 * 9)
         assert_equal(receipt["gasUsed"], 21000)
 
+        assert_equal(self.w3.eth.estimate_gas({"to": self.evmAccount.address}), 21000)
 
 if __name__ == "__main__":
     Eip1559Test().main()

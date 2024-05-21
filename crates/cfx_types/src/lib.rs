@@ -146,6 +146,15 @@ impl<T> SpaceMap<T> {
         }
     }
 
+    pub fn zip3<B, C>(
+        a: SpaceMap<T>, b: SpaceMap<B>, c: SpaceMap<C>,
+    ) -> SpaceMap<(T, B, C)> {
+        SpaceMap {
+            native: (a.native, b.native, c.native),
+            evm: (a.evm, b.evm, c.evm),
+        }
+    }
+
     pub fn zip4<B, C, D>(
         a: SpaceMap<T>, b: SpaceMap<B>, c: SpaceMap<C>, d: SpaceMap<D>,
     ) -> SpaceMap<(T, B, C, D)> {
