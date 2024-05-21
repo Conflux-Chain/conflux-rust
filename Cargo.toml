@@ -53,6 +53,7 @@ members = [
     "crates/util/treap-map",
     "crates/util/version",
     "crates/serde_utils",
+    "crates/cfxcore/geth-tracer",
 ]
 
 resolver = "2"

@@ -6,8 +6,8 @@ use cfx_vm_types::Spec;
 use pow_types::StakingEvent;
 use primitives::Receipt;
 
-use crate::observer::geth_tracer::GethTraceKey;
 use alloy_rpc_types_trace::geth::GethTrace;
+use geth_tracer::GethTraceKey;
 
 use super::{
     observer::exec_tracer::{ExecTrace, ExecTraceKey},

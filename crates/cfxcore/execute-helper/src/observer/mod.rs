@@ -1,7 +1,5 @@
 pub mod exec_tracer;
-pub mod fourbyte;
 pub mod gasman;
-pub mod geth_tracer;
 mod utils;
 
 use exec_tracer::ExecTracer;
@@ -14,8 +12,8 @@ use cfx_executor::{
 use cfx_vm_tracer_derive::{AsTracer, DrainTrace};
 use std::sync::Arc;
 
-use self::geth_tracer::GethTracer;
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
+use geth_tracer::GethTracer;
 
 #[derive(AsTracer, DrainTrace)]
 pub struct Observer {

@@ -62,7 +62,7 @@ use crate::{
 };
 use cfx_execute_helper::{
     estimation::{EstimateExt, EstimateRequest, EstimationContext},
-    observer::{geth_tracer::types::GethTraceWithHash, Observer},
+    observer::Observer,
     tx_outcome::make_process_tx_outcome,
 };
 use cfx_executor::{
@@ -76,6 +76,7 @@ use cfx_executor::{
     },
 };
 use cfx_vm_types::{Env, Spec};
+use geth_tracer::GethTraceWithHash;
 
 use alloy_rpc_types_trace::geth::{
     GethDebugBuiltInTracerType::*, GethDebugTracerType, GethDebugTracingOptions,

@@ -20,7 +20,7 @@ mod tests;
 pub use self::{
     evm::{CostType, FinalizationResult, Finalize},
     factory::Factory,
-    instructions::GasPriceTier,
+    instructions::{GasPriceTier, INSTRUCTIONS, INSTRUCTIONS_CANCUN},
     interpreter::{Interpreter, InterpreterResult},
     vmtype::VMType,
 };

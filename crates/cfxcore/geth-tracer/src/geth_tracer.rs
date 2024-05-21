@@ -1,28 +1,16 @@
-#![allow(unused)]
-mod arena;
-mod builder;
-mod config;
-mod gas;
-mod tracing_inspector;
-pub mod types;
-pub mod utils;
-
-use arena::CallTraceArena;
-use builder::GethTraceBuilder;
-use cfx_types::H160;
-use config::TracingInspectorConfig;
-
-use types::LogCallOrder;
-use utils::{to_alloy_address, to_alloy_h256, to_alloy_u256};
-
-use super::fourbyte::FourByteInspector;
-use alloy_primitives::{Address, Bytes, LogData};
-use revm::{
-    db::InMemoryDB,
-    interpreter::{Gas, InstructionResult, InterpreterResult},
-    primitives::State,
+use crate::{
+    config::TracingInspectorConfig,
+    fourbyte::FourByteInspector,
+    tracing_inspector::TracingInspector,
+    types::LogCallOrder,
+    utils::{to_alloy_address, to_alloy_h256, to_alloy_u256},
 };
-
+use alloy_primitives::{Address, Bytes, LogData};
+use alloy_rpc_types_trace::geth::{
+    CallConfig, GethDebugBuiltInTracerType, GethDebugBuiltInTracerType::*,
+    GethDebugTracerType, GethDebugTracingOptions, GethTrace, NoopFrame,
+    PreStateConfig,
+};
 use cfx_executor::{
     machine::Machine,
     observer::{
@@ -31,16 +19,13 @@ use cfx_executor::{
     },
     stack::{FrameResult, FrameReturn},
 };
-
+use cfx_types::H160;
 use cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
-
-use alloy_rpc_types_trace::geth::{
-    CallConfig, GethDebugBuiltInTracerType, GethDebugBuiltInTracerType::*,
-    GethDebugTracerType, GethDebugTracingOptions, GethTrace, NoopFrame,
-    PreStateConfig,
+use revm::{
+    db::InMemoryDB,
+    interpreter::{Gas, InstructionResult, InterpreterResult},
+    primitives::State,
 };
-use tracing_inspector::TracingInspector;
-
 use std::sync::Arc;
 
 pub struct GethTracer {
@@ -430,12 +415,6 @@ impl OpcodeTracer for GethTracer {
         trace.selfdestruct_refund_target =
             Some(to_alloy_address(*target as H160))
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct StackStep {
-    trace_idx: usize,
-    step_idx: usize,
 }
 
 pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
