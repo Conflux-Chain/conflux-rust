@@ -36,15 +36,6 @@ Block adds fields：
 - `maxPriorityPerGas`
 - `maxFeePerGas`
 
-#### New `debug` RPC namespace
-
-This namespace includes some RPCs for debugging:
-
-- `debug_traceTransaction`: Returns the execution trace of the transaction.
-- `debug_traceBlockByHash`: Get the execution trace of the block by block hash.
-- `debug_traceBlockByNumber`: Get the execution trace of the block by block number
-- `debug_traceCall`：Get the execution trace of one `tx call`.
-
 ### Core Space
 
 #### New RPC
