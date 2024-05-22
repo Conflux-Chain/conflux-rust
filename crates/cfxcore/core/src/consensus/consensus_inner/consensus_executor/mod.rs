@@ -4,8 +4,6 @@
 
 mod epoch_execution;
 
-use epoch_execution::{BlockProcessContext, EpochProcessContext};
-
 use core::convert::TryFrom;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -60,15 +58,11 @@ use crate::{
     },
     SharedTransactionPool,
 };
-use cfx_execute_helper::{
-    estimation::{EstimateExt, EstimateRequest, EstimationContext},
-    observer::Observer,
-    tx_outcome::make_process_tx_outcome,
+use cfx_execute_helper::estimation::{
+    EstimateExt, EstimateRequest, EstimationContext,
 };
 use cfx_executor::{
-    executive::{
-        ExecutionOutcome, ExecutiveContext, TransactOptions, TransactSettings,
-    },
+    executive::ExecutionOutcome,
     machine::Machine,
     state::{
         distribute_pos_interest, update_pos_status, CleanupMode, State,
@@ -78,9 +72,9 @@ use cfx_executor::{
 use cfx_vm_types::{Env, Spec};
 use geth_tracer::GethTraceWithHash;
 
-use alloy_rpc_types_trace::geth::{
-    GethDebugBuiltInTracerType::*, GethDebugTracerType, GethDebugTracingOptions,
-};
+use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
+
+use self::epoch_execution::{GethTask, VirtualCall};
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
@@ -1065,6 +1059,7 @@ impl ConsensusExecutionHandler {
                 &epoch_blocks,
                 start_block_number,
                 on_local_pivot,
+                /* virtual_call */ None,
             )
             // TODO: maybe propagate the error all the way up so that the
             // program may restart by itself.
@@ -1584,6 +1579,7 @@ impl ConsensusExecutionHandler {
             &epoch_blocks,
             start_block_number,
             false,
+            /* virtual_call */ None,
         )
     }
 
@@ -1725,20 +1721,23 @@ impl ConsensusExecutionHandler {
         ) {
             bail!("state is not ready");
         }
+        drop(state_availability_boundary);
+
         let state_index = self
             .data_man
             .get_state_readonly_index(parent_pivot_block_hash);
-        let mut state = State::new(StateDb::new(
-            self.data_man
-                .storage_manager
-                .get_state_no_commit(
-                    state_index.unwrap(),
-                    /* try_open = */ true,
-                    state_space,
-                )?
-                .ok_or("state deleted")?,
-        ))?;
-        drop(state_availability_boundary);
+
+        let storage = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(
+                state_index.unwrap(),
+                /* try_open = */ true,
+                state_space,
+            )?
+            .ok_or("state deleted")?;
+        let state_db = StateDb::new(storage);
+        let mut state = State::new(state_db)?;
 
         let start_block_number = self
             .data_man
@@ -1756,129 +1755,31 @@ impl ConsensusExecutionHandler {
         .map_err(|err| err.into())
     }
 
-    // Execute transactions in the epoch to collect traces.
-    // The behavior is similar to `process_epoch_transactions`, but it won't
-    // persist any state or data
+    /// Execute transactions in the epoch to collect traces.
     fn execute_epoch_tx_to_collect_trace(
         &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
         start_block_number: u64, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
     ) -> DbResult<Vec<GethTraceWithHash>> {
-        let pivot_block = epoch_blocks.last().expect("Epoch not empty");
+        let epoch_id = epoch_blocks.last().unwrap().hash();
 
-        let base_gas_price =
-            pivot_block.block_header.base_price().unwrap_or_default();
-        let burnt_gas_price =
-            base_gas_price.map_all(|x| state.burnt_gas_price(x));
+        let mut answer = vec![];
+        let virtual_call = VirtualCall::GethTrace(GethTask {
+            tx_hash,
+            opts,
+            answer: &mut answer,
+        });
 
-        let context = EpochProcessContext::new(
-            true, // TODO check this
-            false,
-            pivot_block,
-            base_gas_price,
-            burnt_gas_price,
-        );
-
-        // used for make env
-        let mut block_context = BlockProcessContext::first_block(
-            &context,
-            epoch_blocks.first().unwrap(),
+        self.process_epoch_transactions(
+            epoch_id,
+            state,
+            epoch_blocks,
             start_block_number,
-        );
+            false,
+            Some(virtual_call),
+        )?;
 
-        let mut traces = Vec::new();
-        let mut block_number = start_block_number;
-
-        for (idx, block) in epoch_blocks.iter().enumerate() {
-            if idx > 0 {
-                block_context.next_block(block);
-            }
-
-            let _secondary_reward =
-                self.before_block_execution(state, block_number, block)?;
-
-            let mut env = self.make_block_env(&block_context);
-
-            let spec = self.machine.spec(env.number, env.epoch_height);
-            let machine = self.machine.as_ref();
-
-            block_number += 1;
-
-            for (_idx, transaction) in block.transactions.iter().enumerate() {
-                let need_trace = match tx_hash {
-                    Some(ref hash) => transaction.hash() == *hash,
-                    None => true, // trace all tx
-                };
-
-                // choose the observer according to the options
-                let observer = if need_trace {
-                    let tx_gas_limit = transaction.gas_limit().as_u64();
-                    match &opts.tracer {
-                        Some(t) => match t {
-                            GethDebugTracerType::BuiltInTracer(bt) => {
-                                match bt {
-                                    FourByteTracer | CallTracer
-                                    | PreStateTracer | NoopTracer => {
-                                        Observer::geth_tracer(
-                                            tx_gas_limit,
-                                            Arc::clone(&self.machine),
-                                            opts.clone(),
-                                        )
-                                    }
-                                    MuxTracer => Observer::with_no_tracing(),
-                                }
-                            }
-                            GethDebugTracerType::JsTracer(_) => {
-                                Observer::with_no_tracing()
-                            }
-                        },
-                        None =>
-                        // default is opcode tracer
-                        {
-                            Observer::geth_tracer(
-                                tx_gas_limit,
-                                Arc::clone(&self.machine),
-                                opts.clone(),
-                            )
-                        }
-                    }
-                } else {
-                    Observer::with_no_tracing()
-                };
-
-                let options = TransactOptions {
-                    observer,
-                    settings: TransactSettings::all_checks(),
-                };
-                let execution_outcome =
-                    ExecutiveContext::new(state, &env, machine, &spec)
-                        .transact(transaction, options)?;
-
-                if let Some(burnt_fee) = execution_outcome
-                    .try_as_executed()
-                    .and_then(|e| e.burnt_fee)
-                {
-                    state.burn_by_cip1559(burnt_fee);
-                };
-
-                let r = make_process_tx_outcome(
-                    execution_outcome,
-                    &mut env.accumulated_gas_used,
-                    transaction.hash,
-                    &spec,
-                );
-
-                if need_trace && r.geth_trace.is_some() {
-                    traces.push(GethTraceWithHash {
-                        trace: r.geth_trace.unwrap(),
-                        tx_hash: transaction.hash(),
-                        space: transaction.space(),
-                    });
-                }
-            }
-        }
-
-        Ok(traces)
+        Ok(answer)
     }
 }
 
