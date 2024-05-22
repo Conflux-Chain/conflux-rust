@@ -7,6 +7,7 @@ use super::OverlayAccount;
 /// Entry object in cache and checkpoint layers, adding additional markers
 /// like dirty bits to the `OverlayAccount` structure.
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub enum AccountEntry {
     /// Represents an account that is confirmed to be absent from the database.
     DbAbsent,
