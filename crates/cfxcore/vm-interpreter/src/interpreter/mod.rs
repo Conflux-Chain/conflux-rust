@@ -368,122 +368,20 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
-                // invoke tracer step hook
                 if self.do_trace {
                     context.trace_step(self);
                 }
 
-                let opcode = self.reader.code[self.reader.position];
-                let instruction =
-                    Instruction::from_u8_versioned(opcode, context.spec());
-                self.reader.position += 1;
+                let op_result = self.exec_instruction(context);
 
-                // TODO: make compile-time removable if too much of a
-                // performance hit.
-                // self.do_trace = self.do_trace
-                //     && context.trace_next_instruction(
-                //         self.reader.position - 1,
-                //         opcode,
-                //         self.gasometer
-                //             .as_mut()
-                //             .expect(GASOMETER_PROOF)
-                //             .current_gas
-                //             .as_u256(),
-                //     );
-
-                let instruction = match instruction {
-                    Some(i) => i,
-                    None => {
-                        return InterpreterResult::Done(Err(
-                            vm::Error::BadInstruction {
-                                instruction: opcode,
-                            },
-                        ));
-                    }
-                };
-
-                let info = instruction.info::<CANCUN>();
-                self.last_stack_ret_len = info.ret;
-                if let Err(e) =
-                    self.verify_instruction(context, instruction, info)
-                {
-                    return InterpreterResult::Done(Err(e));
+                if self.do_trace {
+                    context.trace_step_end(self);
                 }
 
-                // Calculate gas cost
-                let requirements = match self
-                    .gasometer
-                    .as_mut()
-                    .expect(GASOMETER_PROOF)
-                    .requirements(
-                        context,
-                        instruction,
-                        info,
-                        &self.stack,
-                        self.mem.size(),
-                    ) {
-                    Ok(t) => t,
-                    Err(e) => return InterpreterResult::Done(Err(e)),
-                };
-                // if self.do_trace {
-                //     context.trace_prepare_execute(
-                //         self.reader.position - 1,
-                //         opcode,
-                //         requirements.gas_cost.as_u256(),
-                //         Self::mem_written(instruction, &self.stack),
-                //         Self::store_written(instruction, &self.stack),
-                //     );
-                // }
-
-                if let Err(e) = self
-                    .gasometer
-                    .as_mut()
-                    .expect(GASOMETER_PROOF)
-                    .verify_gas(&requirements.gas_cost)
-                {
-                    return InterpreterResult::Done(Err(e));
+                match op_result {
+                    Ok(result) => result,
+                    Err(e) => return e,
                 }
-                self.mem.expand(requirements.memory_required_size);
-                self.gasometer
-                    .as_mut()
-                    .expect(GASOMETER_PROOF)
-                    .current_mem_gas = requirements.memory_total_gas;
-                self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas =
-                    self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas
-                        - requirements.gas_cost;
-
-                evm_debug!({
-                    self.informant.before_instruction(
-                        self.reader.position,
-                        instruction,
-                        info,
-                        &self
-                            .gasometer
-                            .as_mut()
-                            .expect(GASOMETER_PROOF)
-                            .current_gas,
-                        &self.stack,
-                    )
-                });
-
-                // Execute instruction
-                let current_gas =
-                    self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas;
-                let result = match self.exec_instruction(
-                    current_gas,
-                    context,
-                    instruction,
-                    requirements.provide_gas,
-                ) {
-                    Err(x) => {
-                        return InterpreterResult::Done(Err(x));
-                    }
-                    Ok(x) => x,
-                };
-
-                evm_debug!({ self.informant.after_instruction(instruction) });
-
-                result
             }
         };
 
@@ -508,11 +406,6 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
         //         &self.mem,
         //     );
         // }
-
-        // invoke trace step_end hook
-        if self.do_trace {
-            context.trace_step_end(self);
-        }
 
         // Advance
         match result {
@@ -668,6 +561,116 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
     }
 
     fn exec_instruction(
+        &mut self, context: &mut dyn vm::Context,
+    ) -> Result<InstructionResult<Cost>, InterpreterResult> {
+        let opcode = self.reader.code[self.reader.position];
+        let instruction =
+            Instruction::from_u8_versioned(opcode, context.spec());
+        self.reader.position += 1;
+
+        // TODO: make compile-time removable if too much of a
+        // performance hit.
+        // self.do_trace = self.do_trace
+        //     && context.trace_next_instruction(
+        //         self.reader.position - 1,
+        //         opcode,
+        //         self.gasometer
+        //             .as_mut()
+        //             .expect(GASOMETER_PROOF)
+        //             .current_gas
+        //             .as_u256(),
+        //     );
+
+        let instruction = match instruction {
+            Some(i) => i,
+            None => {
+                return Err(InterpreterResult::Done(Err(
+                    vm::Error::BadInstruction {
+                        instruction: opcode,
+                    },
+                )));
+            }
+        };
+
+        let info = instruction.info::<CANCUN>();
+        self.last_stack_ret_len = info.ret;
+        if let Err(e) = self.verify_instruction(context, instruction, info) {
+            return Err(InterpreterResult::Done(Err(e)));
+        }
+
+        // Calculate gas cost
+        let requirements = match self
+            .gasometer
+            .as_mut()
+            .expect(GASOMETER_PROOF)
+            .requirements(
+                context,
+                instruction,
+                info,
+                &self.stack,
+                self.mem.size(),
+            ) {
+            Ok(t) => t,
+            Err(e) => return Err(InterpreterResult::Done(Err(e))),
+        };
+        // if self.do_trace {
+        //     context.trace_prepare_execute(
+        //         self.reader.position - 1,
+        //         opcode,
+        //         requirements.gas_cost.as_u256(),
+        //         Self::mem_written(instruction, &self.stack),
+        //         Self::store_written(instruction, &self.stack),
+        //     );
+        // }
+
+        if let Err(e) = self
+            .gasometer
+            .as_mut()
+            .expect(GASOMETER_PROOF)
+            .verify_gas(&requirements.gas_cost)
+        {
+            return Err(InterpreterResult::Done(Err(e)));
+        }
+        self.mem.expand(requirements.memory_required_size);
+        self.gasometer
+            .as_mut()
+            .expect(GASOMETER_PROOF)
+            .current_mem_gas = requirements.memory_total_gas;
+        self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas =
+            self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas
+                - requirements.gas_cost;
+
+        evm_debug!({
+            self.informant.before_instruction(
+                self.reader.position,
+                instruction,
+                info,
+                &self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas,
+                &self.stack,
+            )
+        });
+
+        // Execute instruction
+        let current_gas =
+            self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas;
+        let result = match self.exec_instruction_inner(
+            current_gas,
+            context,
+            instruction,
+            requirements.provide_gas,
+        ) {
+            Err(x) => {
+                return Err(InterpreterResult::Done(Err(x)));
+            }
+            Ok(x) => x,
+        };
+
+        evm_debug!({ self.informant.after_instruction(instruction) });
+
+        Ok(result)
+    }
+
+    fn exec_instruction_inner(
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
     ) -> vm::Result<InstructionResult<Cost>> {
