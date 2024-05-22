@@ -65,6 +65,7 @@ use std::{collections::HashMap, sync::Arc};
 use cfx_types::AddressSpaceUtil;
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 /// The access and manipulation object during execution, which includes both
 /// database-stored information and in-execution data of an account. It is a
 /// basic unit of state caching map and the checkpoint layers (more
