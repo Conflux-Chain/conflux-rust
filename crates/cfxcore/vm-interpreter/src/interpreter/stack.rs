@@ -56,7 +56,7 @@ impl<S: Copy> VecStack<S> {
         }
     }
 
-    pub fn content(&self) -> Vec<S> { self.stack.clone() }
+    pub fn content(&self) -> &Vec<S> { &self.stack }
 }
 
 impl<S: fmt::Display> Stack<S> for VecStack<S> {

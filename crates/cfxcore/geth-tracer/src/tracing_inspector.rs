@@ -17,6 +17,8 @@
 // shall be included in all copies or substantial portions
 // of the Software.
 
+use crate::TxExecContext;
+
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
 // ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
 // TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
@@ -63,11 +65,16 @@ pub struct TracingInspector {
     pub gas_inspector: GasInspector,
     //
     machine: Arc<Machine>,
+
+    tx_exec_context: TxExecContext,
 }
 
 impl TracingInspector {
     /// Returns a new instance for the given config
-    pub fn new(config: TracingInspectorConfig, machine: Arc<Machine>) -> Self {
+    pub fn new(
+        config: TracingInspectorConfig, machine: Arc<Machine>,
+        tx_exec_context: TxExecContext,
+    ) -> Self {
         Self {
             config,
             traces: Default::default(),
@@ -76,6 +83,7 @@ impl TracingInspector {
             last_call_return_data: None,
             gas_inspector: Default::default(),
             machine,
+            tx_exec_context,
         }
     }
 
@@ -95,6 +103,7 @@ impl TracingInspector {
             // kept
             config: _,
             machine: _,
+            ..
         } = self;
         traces.clear();
         trace_stack.clear();
@@ -333,7 +342,7 @@ impl TracingInspector {
                     interp
                         .stack()
                         .into_iter()
-                        .map(|v| to_alloy_u256(v))
+                        .map(|v| to_alloy_u256(*v))
                         .collect(),
                 )
             } else {
@@ -410,7 +419,12 @@ impl TracingInspector {
         let step = &mut self.traces.arena[trace_idx].trace.steps[step_idx];
 
         if self.config.record_stack_snapshots.is_pushes() {
-            let num_pushed = stack_push_count(step.op.get());
+            let spec = self.machine.spec(
+                self.tx_exec_context.block_number,
+                self.tx_exec_context.block_height,
+            );
+            let num_pushed =
+                stack_push_count(step.op.get(), spec.cancun_opcodes);
             let start = interp.stack().len() - num_pushed;
             let push_stack = interp.stack()[start..].to_vec();
             step.push_stack = Some(

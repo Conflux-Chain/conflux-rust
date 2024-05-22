@@ -410,7 +410,7 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        self.tracer.log(&self.origin.address, topics.clone(), data);
+        self.tracer.log(&self.origin.address, &topics, data);
 
         let address = self.origin.address.clone();
         self.substate.logs.push(LogEntry {

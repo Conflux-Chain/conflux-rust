@@ -313,7 +313,6 @@ pub(crate) enum TraceStyle {
     /// Parity style tracer
     Parity,
     /// Geth style tracer
-    #[allow(dead_code)]
     Geth,
 }
 

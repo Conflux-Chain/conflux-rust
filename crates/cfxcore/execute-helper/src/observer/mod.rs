@@ -13,7 +13,7 @@ use cfx_vm_tracer_derive::{AsTracer, DrainTrace};
 use std::sync::Arc;
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
-use geth_tracer::GethTracer;
+use geth_tracer::{GethTracer, TxExecContext};
 
 #[derive(AsTracer, DrainTrace)]
 pub struct Observer {
@@ -48,12 +48,13 @@ impl Observer {
     }
 
     pub fn geth_tracer(
-        tx_gas_limit: u64, machine: Arc<Machine>, opts: GethDebugTracingOptions,
+        tx_exec_context: TxExecContext, machine: Arc<Machine>,
+        opts: GethDebugTracingOptions,
     ) -> Self {
         Observer {
             tracer: None,
             gas_man: None,
-            geth_tracer: Some(GethTracer::new(tx_gas_limit, machine, opts)),
+            geth_tracer: Some(GethTracer::new(tx_exec_context, machine, opts)),
         }
     }
 }

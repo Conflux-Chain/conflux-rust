@@ -2,7 +2,7 @@ use crate::{
     config::TracingInspectorConfig,
     fourbyte::FourByteInspector,
     tracing_inspector::TracingInspector,
-    types::LogCallOrder,
+    types::{LogCallOrder, TxExecContext},
     utils::{to_alloy_address, to_alloy_h256, to_alloy_u256},
 };
 use alloy_primitives::{Address, Bytes, LogData};
@@ -46,8 +46,10 @@ pub struct GethTracer {
 
 impl GethTracer {
     pub fn new(
-        tx_gas_limit: u64, machine: Arc<Machine>, opts: GethDebugTracingOptions,
+        tx_exec_context: TxExecContext, machine: Arc<Machine>,
+        opts: GethDebugTracingOptions,
     ) -> Self {
+        let TxExecContext { tx_gas_limit, .. } = tx_exec_context;
         let config = match opts.tracer {
             Some(GethDebugTracerType::BuiltInTracer(builtin_tracer)) => {
                 match builtin_tracer {
@@ -79,7 +81,7 @@ impl GethTracer {
         };
 
         Self {
-            inner: TracingInspector::new(config, machine),
+            inner: TracingInspector::new(config, machine, tx_exec_context),
             fourbyte_inspector: FourByteInspector::new(),
             tx_gas_limit,
             depth: 0,
@@ -388,8 +390,8 @@ impl OpcodeTracer for GethTracer {
     }
 
     fn log(
-        &mut self, _address: &cfx_types::Address, topics: Vec<cfx_types::H256>,
-        data: &[u8],
+        &mut self, _address: &cfx_types::Address,
+        topics: &Vec<cfx_types::H256>, data: &[u8],
     ) {
         if self.inner.config.record_logs {
             let trace_idx = self.inner.last_trace_idx();

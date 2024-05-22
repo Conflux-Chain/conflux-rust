@@ -35,6 +35,7 @@ use alloy_rpc_types_trace::geth::{
 };
 use cfx_types::{Space, H256};
 use cfx_vm_types::CallType as CfxCallType;
+use primitives::{block::BlockHeight, BlockNumber};
 use revm::interpreter::{
     opcode, CallContext, CallScheme, CreateScheme, InstructionResult, OpCode,
 };
@@ -608,6 +609,13 @@ pub struct GethTraceWithHash {
     pub trace: GethTrace,
     pub tx_hash: H256,
     pub space: Space,
+}
+
+#[derive(Clone)]
+pub struct TxExecContext {
+    pub tx_gas_limit: u64,
+    pub block_number: BlockNumber,
+    pub block_height: BlockHeight,
 }
 
 #[cfg(feature = "serde")]

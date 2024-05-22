@@ -24,7 +24,7 @@ pub trait OpcodeTracer {
 
     /// Called when a log is emitted.
     #[inline]
-    fn log(&mut self, address: &Address, topics: Vec<H256>, data: &[u8]) {
+    fn log(&mut self, address: &Address, topics: &Vec<H256>, data: &[u8]) {
         let _ = address;
         let _ = topics;
         let _ = data;

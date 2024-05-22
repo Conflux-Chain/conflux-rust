@@ -29,7 +29,6 @@ mod vault_file;
 mod vault_key_file;
 mod version;
 
-#[allow(unused_imports)]
 pub use self::{
     bytes::Bytes,
     cipher::{Aes128Ctr, Cipher, CipherSer, CipherSerParams},

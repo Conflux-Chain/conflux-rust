@@ -11,7 +11,7 @@ pub trait InterpreterInfo {
 
     fn mem(&self) -> &Vec<u8>;
 
-    fn stack(&self) -> Vec<U256>;
+    fn stack(&self) -> &Vec<U256>;
 
     fn return_stack(&self) -> &Vec<usize>;
 

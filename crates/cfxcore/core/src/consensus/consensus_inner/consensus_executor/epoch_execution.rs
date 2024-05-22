@@ -2,7 +2,7 @@ use super::ConsensusExecutionHandler;
 use std::{convert::From, sync::Arc};
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
-use geth_tracer::{GethTraceWithHash, GethTracer};
+use geth_tracer::{GethTraceWithHash, GethTracer, TxExecContext};
 use pow_types::StakingEvent;
 
 use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult};
@@ -387,7 +387,15 @@ impl ConsensusExecutionHandler {
 
             if need_trace && support_tracer {
                 observer.geth_tracer = Some(GethTracer::new(
-                    tx_gas_limit,
+                    TxExecContext {
+                        tx_gas_limit,
+                        block_height: block_context
+                            .epoch_context
+                            .pivot_block
+                            .block_header
+                            .height(),
+                        block_number: block_context.block_number,
+                    },
                     Arc::clone(&self.machine),
                     task.opts.clone(),
                 ))

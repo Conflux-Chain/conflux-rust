@@ -8,7 +8,6 @@ pub struct GasInspector {
 impl GasInspector {
     pub fn gas_remaining(&self) -> u64 { self.gas_remaining }
 
-    #[allow(dead_code)]
     pub fn last_gas_cost(&self) -> u64 { self.last_gas_cost }
 
     pub fn set_gas_remainning(&mut self, remainning: u64) {
