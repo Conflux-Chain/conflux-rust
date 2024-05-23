@@ -26,7 +26,7 @@ use cfx_types::{Address, U256};
 use solidity_abi::ABIDecodeError;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TrapKind {
     Call(ActionParams),
     Create(ActionParams),

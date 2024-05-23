@@ -531,7 +531,7 @@ impl RpcImpl {
 
     pub fn fee_history(
         &self, block_count: U64, newest_block: EpochNumber,
-        reward_percentiles: Vec<U64>,
+        reward_percentiles: Vec<f64>,
     ) -> RpcResult<FeeHistory> {
         info!(
             "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
@@ -617,7 +617,7 @@ impl RpcImpl {
         let fee_history = self.fee_history(
             U64::from(300),
             EpochNumber::LatestState,
-            vec![U64::from(50)],
+            vec![50f64],
         )?;
 
         let total_reward: U256 = fee_history

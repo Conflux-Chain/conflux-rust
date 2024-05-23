@@ -1,6 +1,8 @@
 use super::ConsensusExecutionHandler;
 use std::{convert::From, sync::Arc};
 
+use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
+use geth_tracer::{GethTraceWithHash, GethTracer, TxExecContext};
 use pow_types::StakingEvent;
 
 use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult};
@@ -32,15 +34,27 @@ use cfx_executor::{
 };
 use cfx_vm_types::Env;
 
+pub enum VirtualCall<'a> {
+    GethTrace(GethTask<'a>),
+}
+
+pub struct GethTask<'a> {
+    pub(super) tx_hash: Option<H256>,
+    pub(super) opts: GethDebugTracingOptions,
+    pub(super) answer: &'a mut Vec<GethTraceWithHash>,
+}
+
 impl ConsensusExecutionHandler {
-    pub(super) fn process_epoch_transactions(
+    pub(super) fn process_epoch_transactions<'a>(
         &self, epoch_id: EpochId, state: &mut State,
         epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
-        on_local_pivot: bool,
+        on_local_pivot: bool, virtual_call: Option<VirtualCall<'a>>,
     ) -> DbResult<Vec<Arc<BlockReceipts>>> {
         self.prefetch_storage_for_execution(epoch_id, state, epoch_blocks);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
+
+        let dry_run = virtual_call.is_some();
 
         self.before_epoch_execution(state, &*pivot_block)?;
 
@@ -52,6 +66,8 @@ impl ConsensusExecutionHandler {
         let context = EpochProcessContext {
             on_local_pivot,
             executive_trace: self.config.executive_trace,
+            dry_run,
+            virtual_call,
             pivot_block,
             base_gas_price,
             burnt_gas_price,
@@ -77,7 +93,11 @@ impl ConsensusExecutionHandler {
             )?;
         }
 
-        if self.pos_verifier.pos_option().is_some() {
+        if let Some(VirtualCall::GethTrace(task)) = context.virtual_call {
+            std::mem::swap(&mut epoch_recorder.geth_traces, task.answer);
+        }
+
+        if !dry_run && self.pos_verifier.pos_option().is_some() {
             debug!(
                 "put_staking_events: {:?} height={} len={}",
                 pivot_block.hash(),
@@ -98,7 +118,7 @@ impl ConsensusExecutionHandler {
                 })?;
         }
 
-        if on_local_pivot {
+        if !dry_run && on_local_pivot {
             self.tx_pool.recycle_transactions(epoch_recorder.repack_tx);
         }
 
@@ -256,18 +276,14 @@ impl ConsensusExecutionHandler {
         let rpc_index = recorder.tx_idx[transaction.space()];
 
         let block = &block_context.block;
+        let dry_run = block_context.epoch_context.dry_run;
 
         let machine = self.machine.as_ref();
 
         let spec = machine.spec(env.number, env.epoch_height);
-        let observer = if self.config.executive_trace {
-            Observer::with_tracing()
-        } else {
-            Observer::with_no_tracing()
-        };
 
         let options = TransactOptions {
-            observer,
+            observer: self.make_observer(transaction, block_context),
             settings: TransactSettings::all_checks(),
         };
 
@@ -299,7 +315,8 @@ impl ConsensusExecutionHandler {
 
         recorder.receive_tx_outcome(r, transaction, block_context);
 
-        if !on_local_pivot || tx_skipped {
+        if !on_local_pivot || tx_skipped || dry_run {
+            // Skip transaction index persist
             return Ok(());
         }
 
@@ -339,6 +356,52 @@ impl ConsensusExecutionHandler {
         }
 
         Ok(())
+    }
+
+    fn make_observer(
+        &self, transaction: &Arc<SignedTransaction>,
+        block_context: &BlockProcessContext,
+    ) -> Observer {
+        use alloy_rpc_types_trace::geth::{
+            GethDebugBuiltInTracerType::*, GethDebugTracerType::BuiltInTracer,
+        };
+
+        let mut observer = if self.config.executive_trace {
+            Observer::with_tracing()
+        } else {
+            Observer::with_no_tracing()
+        };
+
+        if let Some(VirtualCall::GethTrace(ref task)) =
+            block_context.epoch_context.virtual_call
+        {
+            let need_trace =
+                task.tx_hash.map_or(true, |hash| transaction.hash() == hash);
+            let support_tracer = matches!(
+                task.opts.tracer,
+                Some(BuiltInTracer(
+                    FourByteTracer | CallTracer | PreStateTracer | NoopTracer
+                )) | None
+            );
+            let tx_gas_limit = transaction.gas_limit().as_u64();
+
+            if need_trace && support_tracer {
+                observer.geth_tracer = Some(GethTracer::new(
+                    TxExecContext {
+                        tx_gas_limit,
+                        block_height: block_context
+                            .epoch_context
+                            .pivot_block
+                            .block_header
+                            .height(),
+                        block_number: block_context.block_number,
+                    },
+                    Arc::clone(&self.machine),
+                    task.opts.clone(),
+                ))
+            }
+        }
+        observer
     }
 
     fn before_epoch_execution(
@@ -416,6 +479,8 @@ impl ConsensusExecutionHandler {
 struct EpochProcessContext<'a> {
     on_local_pivot: bool,
     executive_trace: bool,
+    virtual_call: Option<VirtualCall<'a>>,
+    dry_run: bool,
 
     pivot_block: &'a Block,
 
@@ -457,6 +522,7 @@ struct EpochProcessRecorder {
     receipts: Vec<Arc<BlockReceipts>>,
     staking_events: Vec<StakingEvent>,
     repack_tx: Vec<Arc<SignedTransaction>>,
+    geth_traces: Vec<GethTraceWithHash>,
 
     evm_tx_idx: usize,
 }
@@ -469,6 +535,7 @@ struct BlockProcessRecorder {
     receipt: Vec<Receipt>,
     tx_error_msg: Vec<String>,
     traces: Vec<TransactionExecTraces>,
+    geth_traces: Vec<GethTraceWithHash>,
     repack_tx: Vec<Arc<SignedTransaction>>,
     staking_events: Vec<StakingEvent>,
 
@@ -483,6 +550,7 @@ impl BlockProcessRecorder {
             receipt: vec![],
             tx_error_msg: vec![],
             traces: vec![],
+            geth_traces: vec![],
             repack_tx: vec![],
             staking_events: vec![],
             tx_idx,
@@ -513,6 +581,14 @@ impl BlockProcessRecorder {
         self.tx_error_msg.push(r.tx_exec_error_msg);
         self.staking_events.extend(r.tx_staking_events);
 
+        if let Some(trace) = r.geth_trace {
+            self.geth_traces.push(GethTraceWithHash {
+                trace,
+                tx_hash: tx.hash(),
+                space: tx.space(),
+            });
+        }
+
         match tx.space() {
             Space::Native => {
                 self.tx_idx[Space::Native] += 1;
@@ -535,6 +611,7 @@ impl BlockProcessRecorder {
                     on_local_pivot,
                     executive_trace,
                     pivot_block,
+                    dry_run,
                     ..
                 },
             block,
@@ -554,7 +631,13 @@ impl BlockProcessRecorder {
         epoch_recorder.receipts.push(block_receipts.clone());
         epoch_recorder.staking_events.extend(self.staking_events);
         epoch_recorder.repack_tx.extend(self.repack_tx);
+        epoch_recorder.geth_traces.extend(self.geth_traces);
+
         epoch_recorder.evm_tx_idx = self.tx_idx[Space::Ethereum];
+
+        if dry_run {
+            return;
+        }
 
         if executive_trace {
             data_man.insert_block_traces(

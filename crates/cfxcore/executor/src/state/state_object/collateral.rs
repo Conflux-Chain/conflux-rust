@@ -174,7 +174,7 @@ fn settle_collateral_for_address(
         && (!sub.is_zero() || !inc.is_zero())
     {
         let (from_balance, from_collateral) = state.initialize_cip107(addr)?;
-        tracer.trace_convert_stroage_points(
+        tracer.trace_convert_storage_points(
             *addr,
             from_balance,
             from_collateral,

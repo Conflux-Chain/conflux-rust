@@ -55,6 +55,8 @@ impl<S: Copy> VecStack<S> {
             logs: [zero; instructions::MAX_NO_OF_TOPICS],
         }
     }
+
+    pub fn content(&self) -> &Vec<S> { &self.stack }
 }
 
 impl<S: fmt::Display> Stack<S> for VecStack<S> {

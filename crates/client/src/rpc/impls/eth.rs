@@ -48,6 +48,9 @@ use primitives::{
 use rustc_hex::ToHex;
 use std::{cmp::min, convert::TryInto};
 
+mod debug;
+pub use debug::GethDebugHandler;
+
 pub struct EthHandler {
     config: RpcImplConfiguration,
     consensus: SharedConsensusGraph,
@@ -473,11 +476,8 @@ impl Eth for EthHandler {
             self.tx_pool.machine().params().evm_transaction_block_ratio
                 as usize;
 
-        let fee_history = self.fee_history(
-            U64::from(300),
-            BlockNumber::Latest,
-            vec![U64::from(50)],
-        )?;
+        let fee_history =
+            self.fee_history(U64::from(300), BlockNumber::Latest, vec![50f64])?;
 
         let total_reward: U256 = fee_history
             .reward()
@@ -905,7 +905,7 @@ impl Eth for EthHandler {
 
     fn fee_history(
         &self, block_count: U64, newest_block: BlockNumber,
-        reward_percentiles: Vec<U64>,
+        reward_percentiles: Vec<f64>,
     ) -> jsonrpc_core::Result<FeeHistory> {
         info!(
             "RPC Request: eth_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",

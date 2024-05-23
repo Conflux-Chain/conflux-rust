@@ -70,6 +70,11 @@ use cfx_executor::{
     },
 };
 use cfx_vm_types::{Env, Spec};
+use geth_tracer::GethTraceWithHash;
+
+use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
+
+use self::epoch_execution::{GethTask, VirtualCall};
 
 lazy_static! {
     static ref CONSENSIS_EXECUTION_TIMER: Arc<dyn Meter> =
@@ -639,6 +644,14 @@ impl ConsensusExecutor {
         self.handler.call_virtual(tx, epoch_id, epoch_size, request)
     }
 
+    pub fn collect_epoch_geth_trace(
+        &self, epoch_block_hashes: Vec<H256>, tx_hash: Option<H256>,
+        opts: GethDebugTracingOptions,
+    ) -> RpcResult<Vec<GethTraceWithHash>> {
+        self.handler
+            .collect_epoch_geth_trace(epoch_block_hashes, tx_hash, opts)
+    }
+
     pub fn stop(&self) {
         // `stopped` is used to allow the execution thread to stopped even the
         // queue is not empty and `ExecutionTask::Stop` has not been
@@ -1046,6 +1059,7 @@ impl ConsensusExecutionHandler {
                 &epoch_blocks,
                 start_block_number,
                 on_local_pivot,
+                /* virtual_call */ None,
             )
             // TODO: maybe propagate the error all the way up so that the
             // program may restart by itself.
@@ -1565,6 +1579,7 @@ impl ConsensusExecutionHandler {
             &epoch_blocks,
             start_block_number,
             false,
+            /* virtual_call */ None,
         )
     }
 
@@ -1677,6 +1692,94 @@ impl ConsensusExecutionHandler {
         let r = ex.transact_virtual(tx.clone(), request);
         trace!("Execution result {:?}", r);
         Ok(r?)
+    }
+
+    pub fn collect_epoch_geth_trace(
+        &self, epoch_block_hashes: Vec<H256>, tx_hash: Option<H256>,
+        opts: GethDebugTracingOptions,
+    ) -> RpcResult<Vec<GethTraceWithHash>> {
+        // Get blocks in this epoch after skip checking
+        let epoch_blocks = self
+            .data_man
+            .blocks_by_hash_list(
+                &epoch_block_hashes,
+                true, /* update_cache */
+            )
+            .expect("blocks exist");
+
+        let pivot_block = epoch_blocks.last().expect("Not empty");
+        let parent_pivot_block_hash = pivot_block.block_header.parent_hash();
+
+        // get the state of the parent pivot block
+        let state_availability_boundary =
+            self.data_man.state_availability_boundary.read();
+        let state_space = None; // None for both core and espace
+        if !state_availability_boundary.check_read_availability(
+            pivot_block.block_header.height() - 1,
+            parent_pivot_block_hash,
+            state_space,
+        ) {
+            bail!("state is not ready");
+        }
+        drop(state_availability_boundary);
+
+        let state_index = self
+            .data_man
+            .get_state_readonly_index(parent_pivot_block_hash);
+
+        let storage = self
+            .data_man
+            .storage_manager
+            .get_state_no_commit(
+                state_index.unwrap(),
+                /* try_open = */ true,
+                state_space,
+            )?
+            .ok_or("state deleted")?;
+        let state_db = StateDb::new(storage);
+        let mut state = State::new(state_db)?;
+
+        let start_block_number = self
+            .data_man
+            .get_epoch_execution_context(&parent_pivot_block_hash)
+            .map(|v| v.start_block_number)
+            .expect("should exist");
+
+        self.execute_epoch_tx_to_collect_trace(
+            &mut state,
+            &epoch_blocks,
+            start_block_number,
+            tx_hash,
+            opts,
+        )
+        .map_err(|err| err.into())
+    }
+
+    /// Execute transactions in the epoch to collect traces.
+    fn execute_epoch_tx_to_collect_trace(
+        &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
+        start_block_number: u64, tx_hash: Option<H256>,
+        opts: GethDebugTracingOptions,
+    ) -> DbResult<Vec<GethTraceWithHash>> {
+        let epoch_id = epoch_blocks.last().unwrap().hash();
+
+        let mut answer = vec![];
+        let virtual_call = VirtualCall::GethTrace(GethTask {
+            tx_hash,
+            opts,
+            answer: &mut answer,
+        });
+
+        self.process_epoch_transactions(
+            epoch_id,
+            state,
+            epoch_blocks,
+            start_block_number,
+            false,
+            Some(virtual_call),
+        )?;
+
+        Ok(answer)
     }
 }
 

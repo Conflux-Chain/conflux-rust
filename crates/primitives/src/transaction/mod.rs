@@ -234,6 +234,7 @@ impl Encodable for Action {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AccessListItem {
     pub address: Address,
     pub storage_keys: Vec<H256>,
