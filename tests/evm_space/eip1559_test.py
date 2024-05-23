@@ -82,7 +82,7 @@ class Eip1559Test(Web3Base):
         assert_equal(ret1[0], ret2[0])
 
 
-        fee_history = self.nodes[0].eth_feeHistory("0x5", "latest", ["0x15", "0x4b"])
+        fee_history = self.nodes[0].eth_feeHistory("0x5", "latest", [21, 75])
         assert_equal(len(fee_history['base_fee_per_gas']), 6)
         assert_equal(len(fee_history['gas_used_ratio']), 5)
         assert_equal(len(fee_history['reward']), 5)
