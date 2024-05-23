@@ -23,11 +23,11 @@ pub struct RpcImplConfiguration {
 pub mod cfx;
 pub mod cfx_filter;
 pub mod common;
-pub mod eth;
-pub mod eth_filter;
-pub mod eth_pubsub;
 pub mod light;
 pub mod pool;
 pub mod pos;
 pub mod pubsub;
 pub mod trace;
+pub mod eth;
+
+pub use eth::{eth_handler::EthHandler, eth_filter, eth_pubsub, debug};
