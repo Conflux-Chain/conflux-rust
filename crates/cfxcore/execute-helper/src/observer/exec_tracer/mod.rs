@@ -24,11 +24,10 @@ pub use trace_types::{
 use super::utils::CheckpointLog;
 
 use cfx_executor::{
-    executive_observer::{
+    observer::{
         AddressPocket, CallTracer, CheckpointTracer, DrainTrace,
-        InternalTransferTracer,
+        InternalTransferTracer, OpcodeTracer, StorageTracer,
     },
-    observer::{OpcodeTracer, StorageTracer},
     stack::{FrameResult, FrameReturn},
 };
 use cfx_types::U256;
@@ -42,6 +41,20 @@ pub struct ExecTracer {
     valid_indices: CheckpointLog<usize>,
 }
 
+impl ExecTracer {
+    pub fn drain(self) -> Vec<ExecTrace> {
+        let mut validity: Vec<bool> = vec![false; self.traces.len()];
+        for index in self.valid_indices.drain() {
+            validity[index] = true;
+        }
+        self.traces
+            .into_iter()
+            .zip(validity.into_iter())
+            .map(|(action, valid)| ExecTrace { action, valid })
+            .collect()
+    }
+}
+
 impl DrainTrace for ExecTracer {
     fn drain_trace(self, map: &mut ShareDebugMap) {
         map.insert::<ExecTraceKey>(self.drain());
@@ -49,6 +62,7 @@ impl DrainTrace for ExecTracer {
 }
 
 pub struct ExecTraceKey;
+
 impl typemap::Key for ExecTraceKey {
     type Value = Vec<ExecTrace>;
 }
@@ -137,19 +151,5 @@ impl CallTracer for ExecTracer {
     }
 }
 
-impl OpcodeTracer for ExecTracer {}
 impl StorageTracer for ExecTracer {}
-
-impl ExecTracer {
-    pub fn drain(self) -> Vec<ExecTrace> {
-        let mut validity: Vec<bool> = vec![false; self.traces.len()];
-        for index in self.valid_indices.drain() {
-            validity[index] = true;
-        }
-        self.traces
-            .into_iter()
-            .zip(validity.into_iter())
-            .map(|(action, valid)| ExecTrace { action, valid })
-            .collect()
-    }
-}
+impl OpcodeTracer for ExecTracer {}

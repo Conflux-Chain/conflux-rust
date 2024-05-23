@@ -162,6 +162,9 @@ enum_with_from_u8! {
         #[doc = "base fee for EIP-1559 (EIP-3198)"]
         BASEFEE = 0x48,
 
+        // BLOBHASH=0x49
+        // BLOBBASEFEE=0x4A
+
         #[doc = "remove item from stack"]
         POP = 0x50,
         #[doc = "load word from memory"]
@@ -352,10 +355,13 @@ enum_with_from_u8! {
         DELEGATECALL = 0xf4,
         #[doc = "create a new account and set creation address to sha3(sender + sha3(init code)) % 2**160"]
         CREATE2 = 0xf5,
-        #[doc = "stop execution and revert state changes. Return output data."]
-        REVERT = 0xfd,
         #[doc = "like CALL but it does not take value, nor modify the state"]
         STATICCALL = 0xfa,
+        #[doc = "stop execution and revert state changes. Return output data."]
+        REVERT = 0xfd,
+
+        // INVALID = 0xfe
+
         #[doc = "halt execution and register account for later deletion"]
         SUICIDE = 0xff,
     }
@@ -375,6 +381,8 @@ impl Instruction {
         }
         return instruction;
     }
+
+    pub fn u8(self) -> u8 { self as u8 }
 
     /// Returns number of bytes to read for `PUSHN` instruction
     /// PUSH1 -> 1
@@ -493,7 +501,7 @@ impl InstructionInfo {
 
 lazy_static! {
     /// Static instruction table.
-    static ref INSTRUCTIONS: [Option<InstructionInfo>; 0x100] = {
+    pub static ref INSTRUCTIONS: [Option<InstructionInfo>; 0x100] = {
         let mut arr = [None; 0x100];
         arr[STOP as usize] = Some(InstructionInfo::new("STOP", 0, 0, GasPriceTier::Zero));
         arr[ADD as usize] = Some(InstructionInfo::new("ADD", 2, 1, GasPriceTier::VeryLow));
@@ -644,7 +652,7 @@ lazy_static! {
         arr
     };
 
-    static ref INSTRUCTIONS_CANCUN: [Option<InstructionInfo>; 0x100] = {
+    pub static ref INSTRUCTIONS_CANCUN: [Option<InstructionInfo>; 0x100] = {
         let mut arr = *INSTRUCTIONS;
         arr[BEGINSUB_TLOAD as usize] = Some(InstructionInfo::new("TLOAD", 1, 1, GasPriceTier::Special));
         arr[JUMPSUB_MCOPY as usize] = Some(InstructionInfo::new("MCOPY", 3, 0, GasPriceTier::Special));

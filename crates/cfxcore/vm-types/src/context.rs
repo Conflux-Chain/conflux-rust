@@ -26,7 +26,7 @@ use super::{
     error::{Result, TrapKind},
     return_data::ReturnData,
     spec::Spec,
-    Error,
+    Error, InterpreterInfo,
 };
 use cfx_bytes::Bytes;
 use cfx_db_errors::statedb::Result as DbResult;
@@ -269,9 +269,15 @@ pub trait Context {
     // ) {
     // }
 
-    fn opcode_trace_enabled(&self) -> bool { false }
+    fn trace_step(&mut self, interpreter: &dyn InterpreterInfo) {
+        let _ = interpreter;
+    }
 
-    // TODO[geth-tracer]: customize your tracer hook.
+    fn trace_step_end(&mut self, interpreter: &dyn InterpreterInfo) {
+        let _ = interpreter;
+    }
+
+    fn opcode_trace_enabled(&self) -> bool { false }
 
     /// Check if running in static context.
     fn is_static(&self) -> bool;

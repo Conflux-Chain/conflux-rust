@@ -23,7 +23,7 @@ pub type SpecCreationRules = dyn Fn(&mut Spec, BlockNumber) + Sync + Send;
 
 pub struct Machine {
     params: CommonParams,
-    vm: VmFactory,
+    vm_factory: VmFactory,
     builtins: Arc<BTreeMap<Address, Builtin>>,
     builtins_evm: Arc<BTreeMap<Address, Builtin>>,
     internal_contracts: Arc<InternalContractMap>,
@@ -71,21 +71,25 @@ impl Machine {
     /// Builtin-contracts for the chain..
     pub fn builtins(&self) -> &BTreeMap<Address, Builtin> { &*self.builtins }
 
+    pub fn builtins_evm(&self) -> &BTreeMap<Address, Builtin> {
+        &*self.builtins_evm
+    }
+
     /// Builtin-contracts for the chain..
     pub fn internal_contracts(&self) -> &InternalContractMap {
         &*self.internal_contracts
     }
 
     /// Get a VM factory that can execute on this state.
-    pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
+    pub fn vm_factory(&self) -> VmFactory { self.vm_factory.clone() }
 
-    pub fn vm_factory_ref(&self) -> &VmFactory { &self.vm }
+    pub fn vm_factory_ref(&self) -> &VmFactory { &self.vm_factory }
 }
 
-pub fn new_machine(params: CommonParams, vm: VmFactory) -> Machine {
+pub fn new_machine(params: CommonParams, vm_factory: VmFactory) -> Machine {
     Machine {
         params,
-        vm,
+        vm_factory,
         builtins: Arc::new(BTreeMap::new()),
         builtins_evm: Arc::new(Default::default()),
         internal_contracts: Arc::new(InternalContractMap::default()),
@@ -185,7 +189,7 @@ fn new_builtin_map(
 }
 
 pub fn new_machine_with_builtin(
-    params: CommonParams, vm: VmFactory,
+    params: CommonParams, vm_factory: VmFactory,
 ) -> Machine {
     let builtin = new_builtin_map(&params, Space::Native);
     let builtin_evm = new_builtin_map(&params, Space::Ethereum);
@@ -193,7 +197,7 @@ pub fn new_machine_with_builtin(
     let internal_contracts = InternalContractMap::new(&params);
     Machine {
         params,
-        vm,
+        vm_factory,
         builtins: Arc::new(builtin),
         builtins_evm: Arc::new(builtin_evm),
         internal_contracts: Arc::new(internal_contracts),
