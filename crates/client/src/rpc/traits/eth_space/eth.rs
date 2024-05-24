@@ -28,7 +28,7 @@ use crate::rpc::types::{
         AccountPendingTransactions, Block, BlockNumber, CallRequest,
         EthRpcLogFilter, FilterChanges, Log, Receipt, SyncStatus, Transaction,
     },
-    Bytes, Index,
+    Bytes, FeeHistory, Index,
 };
 
 /// Eth rpc interface.
@@ -74,10 +74,11 @@ pub trait Eth {
     #[rpc(name = "eth_maxPriorityFeePerGas")]
     fn max_priority_fee_per_gas(&self) -> Result<U256>;
 
-    // /// Returns transaction fee history.
-    // #[rpc(name = "eth_feeHistory")]
-    // fn fee_history(&self, _: U256, _: BlockNumber, _: Option<Vec<f64>>)
-    //     -> BoxFuture<EthFeeHistory>;
+    #[rpc(name = "eth_feeHistory")]
+    fn fee_history(
+        &self, block_count: U64, newest_block: BlockNumber,
+        reward_percentiles: Vec<f64>,
+    ) -> Result<FeeHistory>;
 
     /// Returns accounts list.
     #[rpc(name = "eth_accounts")]

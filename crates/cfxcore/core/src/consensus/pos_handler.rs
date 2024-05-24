@@ -8,7 +8,7 @@ use diem_crypto::HashValue;
 use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
-    reward_distribution_event::RewardDistributionEvent,
+    reward_distribution_event::RewardDistributionEventV2,
     term_state::{DisputeEvent, UnlockEvent},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
@@ -82,7 +82,8 @@ pub trait PosInterface: Send + Sync {
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Vec<PosBlockId>;
 
-    fn get_reward_event(&self, epoch: u64) -> Option<RewardDistributionEvent>;
+    fn get_reward_event(&self, epoch: u64)
+        -> Option<RewardDistributionEventV2>;
 
     fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
 
@@ -346,7 +347,7 @@ impl PosHandler {
 
     pub fn get_reward_distribution_event(
         &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
-    ) -> Option<Vec<(u64, RewardDistributionEvent)>> {
+    ) -> Option<Vec<(u64, RewardDistributionEventV2)>> {
         if h == parent_pos_ref {
             return None;
         }
@@ -610,7 +611,9 @@ impl PosInterface for PosConnection {
             .collect()
     }
 
-    fn get_reward_event(&self, epoch: u64) -> Option<RewardDistributionEvent> {
+    fn get_reward_event(
+        &self, epoch: u64,
+    ) -> Option<RewardDistributionEventV2> {
         self.pos_storage.get_reward_event(epoch).ok()
     }
 

@@ -15,7 +15,7 @@ use cfx_types::{
     U256,
 };
 use cfx_vm_types::{CreateContractAddress, Env, Spec};
-use primitives::SignedTransaction;
+use primitives::{AccessList, SignedTransaction};
 
 use fresh_executive::FreshExecutive;
 use pre_checked_executive::PreCheckedExecutive;
@@ -56,29 +56,45 @@ impl<'a> ExecutiveContext<'a> {
     ) -> DbResult<ExecutionOutcome> {
         let fresh_exec = FreshExecutive::new(self, tx, options);
 
-        let pre_checked_exec = match fresh_exec.check_all()? {
-            Ok(executive) => executive,
-            Err(execution_outcome) => return Ok(execution_outcome),
-        };
-
-        pre_checked_exec.execute_transaction()
+        Ok(match fresh_exec.check_all()? {
+            Ok(executive) => executive.execute_transaction()?,
+            Err(execution_outcome) => execution_outcome,
+        })
     }
 }
 
-pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
-    data.iter().fold(
-        (if is_create {
-            spec.tx_create_gas
-        } else {
-            spec.tx_gas
-        }) as u64,
-        |g, b| {
-            g + (match *b {
-                0 => spec.tx_data_zero_gas,
-                _ => spec.tx_data_non_zero_gas,
-            }) as u64
-        },
-    )
+pub fn gas_required_for(
+    is_create: bool, data: &[u8], access_list: Option<&AccessList>, spec: &Spec,
+) -> u64 {
+    let init_gas = (if is_create {
+        spec.tx_create_gas
+    } else {
+        spec.tx_gas
+    }) as u64;
+
+    let byte_gas = |b: &u8| {
+        (match *b {
+            0 => spec.tx_data_zero_gas,
+            _ => spec.tx_data_non_zero_gas,
+        }) as u64
+    };
+    let data_gas: u64 = data.iter().map(byte_gas).sum();
+
+    let access_gas: u64 = if let Some(acc) = access_list {
+        let address_gas =
+            acc.len() as u64 * spec.access_list_address_gas as u64;
+
+        let storage_key_num =
+            acc.iter().map(|e| e.storage_keys.len() as u64).sum::<u64>();
+        let storage_key_gas =
+            storage_key_num * spec.access_list_storage_key_gas as u64;
+
+        address_gas + storage_key_gas
+    } else {
+        0
+    };
+
+    init_gas + data_gas + access_gas
 }
 
 pub fn contract_address(

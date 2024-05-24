@@ -54,7 +54,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         if self.tx.space() == Space::Native
             && !self.check_create_address(&params)?
         {
-            return self.finialize_on_conflict_address(params.address);
+            return self.finalize_on_conflict_address(params.address);
         }
 
         let result = self.exec_vm(params.clone())?;
@@ -71,7 +71,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         // perform suicides
         self.kill_process()?;
 
-        self.finialize_on_executed(result, refund_info)
+        self.finalize_on_executed(result, refund_info)
     }
 }
 
@@ -95,6 +95,9 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             ..
         } = self.cost;
 
+        // Here, we only discuss the case `sender_balance <
+        // sender_intended_cost` The case `sender_intended_cost <=
+        // sender_balance < sender_cost` has been handled before nonce bumping.
         let insufficient_sender_balance = sender_balance < sender_intended_cost;
 
         let actual_gas_cost: U256 = if insufficient_sender_balance {
@@ -176,7 +179,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                     original_sender: sender.address,
                     storage_owner: sender.address,
                     gas: init_gas,
-                    gas_price: *tx.gas_price(),
+                    gas_price: cost.gas_price,
                     value: ActionValue::Transfer(*tx.value()),
                     code: Some(Arc::new(tx.data().clone())),
                     data: None,
@@ -200,7 +203,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                     original_sender: sender.address,
                     storage_owner,
                     gas: init_gas,
-                    gas_price: *tx.gas_price(),
+                    gas_price: cost.gas_price,
                     value: ActionValue::Transfer(*tx.value()),
                     code: state.code(&receipient)?,
                     code_hash: state.code_hash(&receipient)?,
@@ -465,6 +468,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
     fn compute_refunded_gas(&self, result: &ExecutiveResult) -> RefundInfo {
         let tx = self.tx;
+        let cost = &self.cost;
+        let spec = self.context.spec;
         let gas_left = match result {
             Ok(ExecutiveReturn { gas_left, .. }) => *gas_left,
             _ => 0.into(),
@@ -474,25 +479,26 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
         let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
-        let (gas_charged, fees_value, refund_value) = if charge_all {
+        let (gas_charged, gas_refunded) = if charge_all {
             let gas_refunded = tx.gas() >> 2;
             let gas_charged = tx.gas() - gas_refunded;
-            (
-                gas_charged,
-                gas_charged.saturating_mul(*tx.gas_price()),
-                gas_refunded.saturating_mul(*tx.gas_price()),
-            )
+            (gas_charged, gas_refunded)
         } else {
-            (
-                gas_used,
-                gas_used.saturating_mul(*tx.gas_price()),
-                gas_left.saturating_mul(*tx.gas_price()),
-            )
+            (gas_used, gas_left)
         };
+
+        let fees_value = gas_charged.saturating_mul(cost.gas_price);
+        let burnt_fees_value = spec
+            .cip1559
+            .then(|| gas_charged.saturating_mul(cost.burnt_gas_price));
+
+        let refund_value = gas_refunded.saturating_mul(cost.gas_price);
+
         RefundInfo {
             gas_used,
             gas_charged,
             fees_value,
+            burnt_fees_value,
             refund_value,
         }
     }
@@ -553,7 +559,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         ));
     }
 
-    fn finialize_on_conflict_address(
+    fn finalize_on_conflict_address(
         self, address: Address,
     ) -> DbResult<ExecutionOutcome> {
         return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -567,7 +573,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         ));
     }
 
-    fn finialize_on_executed(
+    fn finalize_on_executed(
         self, result: ExecutiveResult, refund_info: RefundInfo,
     ) -> DbResult<ExecutionOutcome> {
         let tx = self.tx;
@@ -576,14 +582,14 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         let spec = self.context.spec;
         let tx_substate = self.substate;
 
-        match result {
+        let outcome = match result {
             Err(vm::Error::StateDbError(e)) => bail!(e.0),
-            Err(exception) => Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+            Err(exception) => ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(exception),
                 Executed::execution_error_fully_charged(
                     tx, cost, ext_result, spec,
                 ),
-            )),
+            ),
             Ok(r) => {
                 let executed = Executed::from_executive_return(
                     &r,
@@ -595,16 +601,18 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 );
 
                 if r.apply_state {
-                    Ok(ExecutionOutcome::Finished(executed))
+                    ExecutionOutcome::Finished(executed)
                 } else {
                     // Transaction reverted by vm instruction.
-                    Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                    ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::VmError(vm::Error::Reverted),
                         executed,
-                    ))
+                    )
                 }
             }
-        }
+        };
+
+        Ok(outcome)
     }
 }
 
@@ -613,6 +621,7 @@ pub(super) struct RefundInfo {
     pub gas_charged: U256,
 
     pub fees_value: U256,
+    pub burnt_fees_value: Option<U256>,
     pub refund_value: U256,
 }
 

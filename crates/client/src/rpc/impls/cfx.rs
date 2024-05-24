@@ -6,8 +6,8 @@ use crate::rpc::{
     error_codes::{internal_error_msg, invalid_params_msg},
     types::{
         call_request::rpc_call_request_network,
-        errors::check_rpc_address_network, pos::PoSEpochReward, PoSEconomics,
-        RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
+        errors::check_rpc_address_network, pos::PoSEpochReward, FeeHistory,
+        PoSEconomics, RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
         VoteParamsInfo, WrapTransaction,
     },
 };
@@ -19,8 +19,9 @@ use cfx_executor::{
 };
 use cfx_statedb::{
     global_params::{
-        AccumulateInterestRate, DistributablePoSInterest, InterestRate,
-        LastDistributeBlock, PowBaseReward, TotalPosStaking,
+        AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
+        InterestRate, LastDistributeBlock, PowBaseReward, TotalBurnt1559,
+        TotalPosStaking,
     },
     StateDbExt,
 };
@@ -102,6 +103,10 @@ use cfxcore::{
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
 };
 use diem_types::account_address::AccountAddress;
+use primitives::transaction::{
+    eth_transaction::EthereumTransaction,
+    native_transaction::TypedNativeTransaction,
+};
 use serde::Serialize;
 
 #[derive(Debug)]
@@ -461,8 +466,10 @@ impl RpcImpl {
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
-        let tx: TransactionWithSignature =
-            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+        let tx: TransactionWithSignature = invalid_params_check(
+            "raw",
+            TransactionWithSignature::from_raw(&raw.into_vec()),
+        )?;
 
         if tx.recover_public().is_err() {
             bail!(invalid_params(
@@ -697,6 +704,14 @@ impl RpcImpl {
                         .get_data_manager()
                         .get_executed_state_root(&tx_index.block_hash);
 
+                    // Acutally, the return value of `block_header_by_hash`
+                    // should not be none.
+                    let maybe_base_price = self
+                        .consensus
+                        .get_data_manager()
+                        .block_header_by_hash(&tx_index.block_hash)
+                        .and_then(|x| x.base_price());
+
                     PackedOrExecuted::Executed(RpcReceipt::new(
                         tx.clone(),
                         receipt,
@@ -704,6 +719,7 @@ impl RpcImpl {
                         prior_gas_used,
                         epoch_number,
                         block_number,
+                        maybe_base_price,
                         maybe_state_root,
                         tx_exec_error_msg,
                         *self.sync.network.get_network_type(),
@@ -824,6 +840,7 @@ impl RpcImpl {
             prior_gas_used,
             Some(exec_info.epoch_number),
             exec_info.block_receipts.block_number,
+            exec_info.block.block_header.base_price(),
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
@@ -959,6 +976,7 @@ impl RpcImpl {
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty, pos_reference,
         );
+
         Ok(self.block_gen.generate_fixed_block(
             parent_hash,
             referee,
@@ -1067,10 +1085,34 @@ impl RpcImpl {
 
             // set fake data for latency tests
             match signed_tx.transaction.transaction.unsigned {
-                Transaction::Native(ref mut unsigned) if tx_data_len > 0 => {
+                Transaction::Native(TypedNativeTransaction::Cip155(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
                     unsigned.data = vec![0; tx_data_len];
                 }
-                Transaction::Ethereum(ref mut unsigned) if tx_data_len > 0 => {
+                Transaction::Native(TypedNativeTransaction::Cip1559(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Native(TypedNativeTransaction::Cip2930(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(EthereumTransaction::Eip155(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(EthereumTransaction::Eip1559(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(EthereumTransaction::Eip2930(
+                    ref mut unsigned,
+                )) if tx_data_len > 0 => {
                     unsigned.data = vec![0; tx_data_len];
                 }
                 _ => {}
@@ -1224,6 +1266,12 @@ impl RpcImpl {
                 "Transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
             )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(call_execution_error(
+                "Transaction can not be executed".into(),
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
@@ -1275,6 +1323,12 @@ impl RpcImpl {
                     format! {"{:?}", e}
                 ))
             }
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            )),
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(VmError::Reverted),
                 executed,
@@ -1391,7 +1445,8 @@ impl RpcImpl {
         let estimate_request = EstimateRequest {
             has_sender: request.from.is_some(),
             has_gas_limit: request.gas.is_some(),
-            has_gas_price: request.gas_price.is_some(),
+            has_gas_price: request.gas_price.is_some()
+                || request.max_priority_fee_per_gas.is_some(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: request.storage_limit.is_some(),
         };
@@ -1543,11 +1598,23 @@ impl RpcImpl {
 
         let storage_point_prop =
             state_db.get_system_storage(&storage_point_prop())?;
+
+        let base_fee_share_prop = state_db.get_global_param::<BaseFeeProp>()?;
         Ok(VoteParamsInfo {
             pow_base_reward,
             interest_rate,
             storage_point_prop,
+            base_fee_share_prop,
         })
+    }
+
+    pub fn get_fee_burnt(&self, epoch: Option<EpochNumber>) -> RpcResult<U256> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch, "epoch_num")?;
+
+        Ok(state_db.get_global_param::<TotalBurnt1559>()?)
     }
 
     pub fn set_db_crash(
@@ -2091,36 +2158,33 @@ impl RpcImpl {
                                     let tx_exec_error_msg = &execution_result
                                         .block_receipts
                                         .tx_execution_error_messages[id];
+                                    let receipt = RpcReceipt::new(
+                                        (**tx).clone(),
+                                        receipt.clone(),
+                                        tx_index,
+                                        prior_gas_used,
+                                        Some(epoch_number),
+                                        execution_result
+                                            .block_receipts
+                                            .block_number,
+                                        b.block_header.base_price(),
+                                        maybe_state_root,
+                                        if tx_exec_error_msg.is_empty() {
+                                            None
+                                        } else {
+                                            Some(tx_exec_error_msg.clone())
+                                        },
+                                        network,
+                                        false,
+                                        false,
+                                    )?;
                                     res.push(
                                         WrapTransaction::NativeTransaction(
                                             RpcTransaction::from_signed(
                                                 tx,
                                                 Some(
                                                     PackedOrExecuted::Executed(
-                                                        RpcReceipt::new(
-                                                            (**tx).clone(),
-                                                            receipt.clone(),
-                                                            tx_index,
-                                                            prior_gas_used,
-                                                            Some(epoch_number),
-                                                            execution_result
-                                                                .block_receipts
-                                                                .block_number,
-                                                            maybe_state_root,
-                                                            if tx_exec_error_msg
-                                                                .is_empty()
-                                                            {
-                                                                None
-                                                            } else {
-                                                                Some(
-                                                        tx_exec_error_msg
-                                                            .clone(),
-                                                    )
-                                                            },
-                                                            network,
-                                                            false,
-                                                            false,
-                                                        )?,
+                                                        receipt,
                                                     ),
                                                 ),
                                                 network,
@@ -2213,6 +2277,8 @@ impl Cfx for CfxHandler {
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
+            fn fee_history(&self, block_count: U64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<FeeHistory>;
+            fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
         }
 
         to self.rpc_impl {
@@ -2251,6 +2317,7 @@ impl Cfx for CfxHandler {
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
             fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
             fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
+            fn get_fee_burnt(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
         }
     }
 }

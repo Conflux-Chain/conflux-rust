@@ -43,7 +43,7 @@ use diem_types::{
         AccountStateProof, AccumulatorConsistencyProof, SparseMerkleProof,
         TransactionListProof,
     },
-    reward_distribution_event::RewardDistributionEvent,
+    reward_distribution_event::RewardDistributionEventV2,
     term_state::PosState,
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof,
@@ -1000,7 +1000,7 @@ impl DbWriter for PosLedgerDB {
     }
 
     fn save_reward_event(
-        &self, epoch: u64, event: &RewardDistributionEvent,
+        &self, epoch: u64, event: &RewardDistributionEventV2,
     ) -> Result<()> {
         self.ledger_store.put_reward_event(epoch, event)
     }
@@ -1047,7 +1047,9 @@ impl DBReaderForPoW for PosLedgerDB {
         Ok(ending_blocks)
     }
 
-    fn get_reward_event(&self, epoch: u64) -> Result<RewardDistributionEvent> {
+    fn get_reward_event(
+        &self, epoch: u64,
+    ) -> Result<RewardDistributionEventV2> {
         self.ledger_store.get_reward_event(epoch)
     }
 

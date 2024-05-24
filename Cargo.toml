@@ -51,8 +51,12 @@ members = [
     "crates/util/solidity-abi-derive",
     "crates/util/throttling",
     "crates/util/treap-map",
-    "crates/util/version"
+    "crates/util/version",
+    "crates/serde_utils",
+    "crates/cfxcore/geth-tracer",
 ]
+
+resolver = "2"
 
 [workspace.package]
 version = "2.0.2"
@@ -82,3 +86,11 @@ overflow-checks = true
 overflow-checks = true
 # Temporarily run with debug assertion before main-net release.
 debug-assertions = true
+
+[workspace.dependencies]
+serde_derive = "1.0"
+serde = { version = "1.0", features = ["derive", "alloc"] }
+serde_json = "1.0"
+
+alloy-primitives = "0.7.1"
+alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }

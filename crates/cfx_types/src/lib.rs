@@ -8,6 +8,8 @@ extern crate rlp_derive;
 extern crate serde;
 extern crate serde_derive;
 
+use std::ops::{Add, Index, IndexMut};
+
 pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
@@ -119,14 +121,14 @@ impl AddressWithSpace {
     pub fn assert_native(&self) { assert_eq!(self.space, Space::Native) }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct SpaceMap<T> {
     native: T,
     evm: T,
 }
 
 impl<T> SpaceMap<T> {
-    pub fn new(native: T, evm: T) -> Self { SpaceMap { native, evm } }
+    pub const fn new(native: T, evm: T) -> Self { SpaceMap { native, evm } }
 
     #[inline]
     pub fn in_space(&self, space: Space) -> &T {
@@ -144,11 +146,38 @@ impl<T> SpaceMap<T> {
         }
     }
 
-    pub fn map_sum<F: FnMut(&T) -> usize>(&self, mut f: F) -> usize {
+    pub fn zip3<B, C>(
+        a: SpaceMap<T>, b: SpaceMap<B>, c: SpaceMap<C>,
+    ) -> SpaceMap<(T, B, C)> {
+        SpaceMap {
+            native: (a.native, b.native, c.native),
+            evm: (a.evm, b.evm, c.evm),
+        }
+    }
+
+    pub fn zip4<B, C, D>(
+        a: SpaceMap<T>, b: SpaceMap<B>, c: SpaceMap<C>, d: SpaceMap<D>,
+    ) -> SpaceMap<(T, B, C, D)> {
+        SpaceMap {
+            native: (a.native, b.native, c.native, d.native),
+            evm: (a.evm, b.evm, c.evm, d.evm),
+        }
+    }
+
+    pub fn map_sum<F: FnMut(&T) -> U, U: Add<U, Output = U>>(
+        &self, mut f: F,
+    ) -> U {
         f(&self.native) + f(&self.evm)
     }
 
     pub const fn size(&self) -> usize { 2 }
+
+    pub fn map_all<U, F: Fn(T) -> U>(self, f: F) -> SpaceMap<U> {
+        SpaceMap {
+            native: f(self.native),
+            evm: f(self.evm),
+        }
+    }
 
     pub fn apply_all<U, F: FnMut(&mut T) -> U>(
         &mut self, mut f: F,
@@ -157,6 +186,18 @@ impl<T> SpaceMap<T> {
             native: f(&mut self.native),
             evm: f(&mut self.evm),
         }
+    }
+}
+
+impl<T> Index<Space> for SpaceMap<T> {
+    type Output = T;
+
+    fn index(&self, space: Space) -> &Self::Output { self.in_space(space) }
+}
+
+impl<T> IndexMut<Space> for SpaceMap<T> {
+    fn index_mut(&mut self, space: Space) -> &mut Self::Output {
+        self.in_space_mut(space)
     }
 }
 

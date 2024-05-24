@@ -26,7 +26,7 @@ use super::{
     error::{Result, TrapKind},
     return_data::ReturnData,
     spec::Spec,
-    Error,
+    Error, InterpreterInfo,
 };
 use cfx_bytes::Bytes;
 use cfx_db_errors::statedb::Result as DbResult;
@@ -163,6 +163,14 @@ pub trait Context {
     /// Stores a value for given key.
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()>;
 
+    /// Returns a value for given key.
+    fn transient_storage_at(&self, key: &Vec<u8>) -> Result<U256>;
+
+    /// Stores a value for given key.
+    fn transient_set_storage(
+        &mut self, key: Vec<u8>, value: U256,
+    ) -> Result<()>;
+
     /// Determine whether an account exists.
     fn exists(&self, address: &Address) -> Result<bool>;
 
@@ -261,9 +269,15 @@ pub trait Context {
     // ) {
     // }
 
-    fn opcode_trace_enabled(&self) -> bool { false }
+    fn trace_step(&mut self, interpreter: &dyn InterpreterInfo) {
+        let _ = interpreter;
+    }
 
-    // TODO[geth-tracer]: customize your tracer hook.
+    fn trace_step_end(&mut self, interpreter: &dyn InterpreterInfo) {
+        let _ = interpreter;
+    }
+
+    fn opcode_trace_enabled(&self) -> bool { false }
 
     /// Check if running in static context.
     fn is_static(&self) -> bool;

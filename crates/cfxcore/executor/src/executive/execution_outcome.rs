@@ -14,6 +14,7 @@ pub enum ExecutionOutcome {
     ExecutionErrorBumpNonce(ExecutionError, Executed),
     Finished(Executed),
 }
+use vm::Spec;
 use ExecutionOutcome::*;
 
 #[derive(Debug)]
@@ -50,6 +51,11 @@ pub enum ToRepackError {
 
     /// Returned when a non-sponsored transaction's sender does not exist yet.
     SenderDoesNotExist,
+
+    NotEnoughBaseFee {
+        expected: U256,
+        got: U256,
+    },
 }
 
 #[derive(Debug)]
@@ -61,6 +67,9 @@ pub enum TxDropError {
     /// Although it can be verified in tx packing,
     /// by spec doc, it is checked in execution.
     InvalidRecipientAddress(Address),
+
+    /// Not enough gas limit for large transacton, only for estimation
+    NotEnoughGasLimit { expected: U256, got: U256 },
 }
 
 #[derive(Debug, PartialEq)]
@@ -82,7 +91,9 @@ pub enum ExecutionError {
 
 impl ExecutionOutcome {
     #[inline]
-    pub fn make_receipt(self, accumulated_gas_used: &mut U256) -> Receipt {
+    pub fn make_receipt(
+        self, accumulated_gas_used: &mut U256, spec: &Spec,
+    ) -> Receipt {
         *accumulated_gas_used += self.gas_used();
 
         let gas_fee = self.gas_fee();
@@ -93,6 +104,8 @@ impl ExecutionOutcome {
         let transaction_logs = self.transaction_logs();
         let storage_collateralized = self.storage_collateralized();
         let storage_released = self.storage_released();
+
+        let burnt_fee = self.burnt_fee(spec);
 
         let log_bloom = build_bloom(&transaction_logs);
 
@@ -106,6 +119,7 @@ impl ExecutionOutcome {
             storage_sponsor_paid,
             storage_collateralized,
             storage_released,
+            burnt_fee,
         )
     }
 
@@ -175,6 +189,17 @@ impl ExecutionOutcome {
     pub fn storage_released(&self) -> Vec<StorageChange> {
         let executed = unwrap_or_return!(self.try_as_success_executed());
         executed.storage_released.clone()
+    }
+
+    #[inline]
+    pub fn burnt_fee(&self, spec: &Spec) -> Option<U256> {
+        if let Some(e) = self.try_as_executed() {
+            e.burnt_fee
+        } else if spec.cip1559 {
+            Some(U256::zero())
+        } else {
+            None
+        }
     }
 
     #[inline]

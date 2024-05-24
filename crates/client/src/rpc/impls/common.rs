@@ -15,7 +15,7 @@ use crate::rpc::{
         errors::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
-        EpochNumber, RpcAddress, Status as RpcStatus,
+        EpochNumber, FeeHistory, RpcAddress, Status as RpcStatus,
         Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
         TxWithPoolInfo,
     },
@@ -528,6 +528,106 @@ impl RpcImpl {
             "num",
         )
     }
+
+    pub fn fee_history(
+        &self, block_count: U64, newest_block: EpochNumber,
+        reward_percentiles: Vec<f64>,
+    ) -> RpcResult<FeeHistory> {
+        info!(
+            "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
+            block_count, newest_block, reward_percentiles
+        );
+
+        if block_count == U64::zero() {
+            return Ok(FeeHistory::new());
+        }
+        // keep read lock to ensure consistent view
+        let inner = self.consensus_graph().inner.read();
+
+        let fetch_block = |height| {
+            let pivot_hash = inner
+                .get_pivot_hash_from_epoch_number(height)
+                .map_err(RpcError::invalid_params)?;
+
+            let maybe_block = self
+                .data_man
+                .block_by_hash(&pivot_hash, false /* update_cache */);
+            if let Some(block) = maybe_block {
+                // Internal error happens only if the fetch header has
+                // inconsistent block height
+                Ok(block)
+            } else {
+                Err(RpcError::invalid_params(
+                    "Specified block header does not exist",
+                ))
+            }
+        };
+
+        let start_height: u64 = self
+            .consensus_graph()
+            .get_height_from_epoch_number(newest_block.into())
+            .map_err(RpcError::invalid_params)?;
+
+        let mut current_height = start_height;
+
+        let mut fee_history = FeeHistory::new();
+        while current_height
+            >= start_height.saturating_sub(block_count.as_u64() - 1)
+        {
+            let block = fetch_block(current_height)?;
+
+            let transactions = block
+                .transactions
+                .iter()
+                .filter(|tx| tx.space() == Space::Native)
+                .map(|x| &**x);
+
+            // Internal error happens only if the fetch header has inconsistent
+            // block height
+            fee_history
+                .push_back_block(
+                    Space::Native,
+                    &reward_percentiles,
+                    &block.block_header,
+                    transactions,
+                )
+                .map_err(|_| RpcError::internal_error())?;
+
+            if current_height == 0 {
+                fee_history.finish(0, None, Space::Native);
+                return Ok(fee_history);
+            } else {
+                current_height -= 1;
+            }
+        }
+
+        let block = fetch_block(current_height)?;
+        fee_history.finish(
+            current_height + 1,
+            block.block_header.base_price().as_ref(),
+            Space::Native,
+        );
+
+        Ok(fee_history)
+    }
+
+    pub fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {
+        info!("RPC Request: max_priority_fee_per_gas",);
+
+        let fee_history = self.fee_history(
+            U64::from(300),
+            EpochNumber::LatestState,
+            vec![50f64],
+        )?;
+
+        let total_reward: U256 = fee_history
+            .reward()
+            .iter()
+            .map(|x| x.first().unwrap())
+            .fold(U256::zero(), |x, y| x + *y);
+
+        Ok(total_reward / 300)
+    }
 }
 
 // Test RPC implementation
@@ -995,7 +1095,7 @@ impl RpcImpl {
                 })?;
             let required_storage_collateral =
                 if let Transaction::Native(ref tx) = tx.unsigned {
-                    U256::from(tx.storage_limit)
+                    U256::from(*tx.storage_limit())
                         * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
                 } else {
                     U256::zero()

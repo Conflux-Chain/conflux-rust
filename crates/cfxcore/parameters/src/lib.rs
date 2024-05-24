@@ -58,10 +58,11 @@ pub mod consensus {
     /// The height to enable CIP118 and CIP119 for testnet.
     pub const TESTNET_CIP119_HEIGHT: u64 = 132220000;
     pub const CIP119_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [6];
+    pub const NEXT_HARDFORK_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [7];
 }
 
 pub mod consensus_internal {
-    use crate::consensus::ONE_CFX_IN_DRIP;
+    use crate::consensus::{ONE_CFX_IN_DRIP, ONE_GDRIP_IN_DRIP};
 
     /// `REWARD_EPOCH_COUNT` needs to be larger than
     /// `ANTICONE_PENALTY_UPPER_EPOCH_COUNT`. If we cannot cache receipts of
@@ -124,6 +125,17 @@ pub mod consensus_internal {
 
     /// The initial storage point proportion after CIP107 is enabled.
     pub const CIP107_STORAGE_POINT_PROP_INIT: u64 = ONE_CFX_IN_DRIP;
+
+    /// The initial base price share proportion after CIP137 is enabled.
+    pub const CIP137_BASEFEE_PROP_INIT: u64 = ONE_CFX_IN_DRIP;
+
+    /// The initial and minimum base price
+    pub const INITIAL_1559_CORE_BASE_PRICE: u64 = ONE_GDRIP_IN_DRIP;
+
+    pub const INITIAL_1559_ETH_BASE_PRICE: u64 = 20 * ONE_GDRIP_IN_DRIP;
+
+    // Parameter specified in EIP-1559
+    pub const ELASTICITY_MULTIPLIER: usize = 2;
 }
 
 pub mod rpc {

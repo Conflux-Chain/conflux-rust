@@ -12,6 +12,7 @@ use super::{
 };
 use cfx_types::U256;
 use malloc_size_of::MallocSizeOf;
+use primitives::block_header::estimate_gas_used;
 use rand::RngCore;
 use treap_map::{
     ApplyOpOutcome, ConsoliableWeight, Node, SearchDirection, SearchResult,
@@ -181,6 +182,39 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         }
     }
 
+    pub fn estimate_packing_gas_limit(
+        &self, gas_target: U256, parent_base_price: U256, min_base_price: U256,
+    ) -> U256 {
+        let ret = self.treap_map.search(|left_weight, node| {
+            let can_sample = |weight| {
+                can_sample_within_1559(
+                    weight,
+                    gas_target,
+                    parent_base_price,
+                    min_base_price,
+                )
+            };
+
+            if !can_sample(&left_weight) {
+                return SearchDirection::Left;
+            }
+            let right_weight =
+                PackingPoolWeight::consolidate(left_weight, &node.weight);
+            if !can_sample(&right_weight) {
+                return SearchDirection::Stop;
+            } else {
+                return SearchDirection::Right(right_weight);
+            }
+        });
+        match ret {
+            Some(
+                SearchResult::Found { base_weight, .. }
+                | SearchResult::RightMost(base_weight),
+            ) => base_weight.gas_limit,
+            _ => U256::zero(),
+        }
+    }
+
     #[cfg(test)]
     fn assert_consistency(&self) {
         self.treap_map.assert_consistency();
@@ -240,6 +274,31 @@ fn can_sample(weight: &PackingPoolWeight, gas_limit: U256) -> bool {
     weight
         .max_loss_ratio
         .saturating_mul(weight.gas_limit - gas_limit)
+        < weight.weighted_loss_ratio
+}
+
+fn can_sample_within_1559(
+    weight: &PackingPoolWeight, gas_target: U256, parent_base_price: U256,
+    min_base_price: U256,
+) -> bool {
+    if weight.min_gas_price < min_base_price {
+        return false;
+    }
+
+    let target_gas_used =
+        estimate_gas_used(gas_target, weight.min_gas_price, parent_base_price);
+
+    if target_gas_used.is_zero() {
+        return false;
+    }
+
+    if weight.gas_limit <= target_gas_used {
+        return true;
+    }
+
+    weight
+        .max_loss_ratio
+        .saturating_mul(weight.gas_limit - target_gas_used)
         < weight.weighted_loss_ratio
 }
 

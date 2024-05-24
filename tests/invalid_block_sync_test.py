@@ -69,6 +69,8 @@ class InvalidBodySyncTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
+        # Disable 1559 because the client submit old format data
+        self.conf_parameters["cip1559_transition_height"] = str(99999999)
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)

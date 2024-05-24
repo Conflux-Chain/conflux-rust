@@ -39,12 +39,16 @@ mod staking;
 /// Implements access functions for the account storage entries of `State`.
 mod storage_entry;
 
+mod reward;
+
 #[cfg(test)]
 mod tests;
 
 pub use self::{
     collateral::{initialize_cip107, settle_collateral_for_all},
+    commit::StateCommitResult,
     pos::{distribute_pos_interest, update_pos_status},
+    reward::initialize_cip137,
     sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY,
     staking::initialize_or_update_dao_voted_params,
 };

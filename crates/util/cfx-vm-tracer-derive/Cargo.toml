@@ -2,7 +2,7 @@
 name = "cfx-vm-tracer-derive"
 version = "0.1.0"
 authors = ["Your Name <your.email@example.com>"]
-edition = "2018"
+edition = "2021"
 
 # Set the crate type to "proc-macro"
 [lib]

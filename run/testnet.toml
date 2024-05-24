@@ -155,10 +155,13 @@ jsonrpc_local_http_port=12539
 
 # Specify the APIs available through the public JSON-RPC interfaces (HTTP, TCP, WebSocket)
 # using a comma-delimited list of API names.
-# Possible names are: all, safe, cfx, pos, debug, pubsub, test, trace, txpool.
+
+# Possible Core space names are: all, safe, cfx, pos, debug, pubsub, test, trace, txpool.
 # `safe` only includes `cfx` and `pubsub`, `txpool`.
-#
 # public_rpc_apis = "safe"
+
+# Possible eSpace names are: eth, ethpubsub, ethdebug.
+# `evm` only includes `eth` and `ethpubsub`
 # public_evm_rpc_apis = "evm"
 
 # --------------- Performance-related Network Parameters ----------------------
@@ -194,7 +197,7 @@ jsonrpc_local_http_port=12539
 #
 # egress_max_throttle = 10
 
-# Time interval to to garbage-collect not block-graph-ready blocks periodically.
+# Time interval to garbage-collect not block-graph-ready blocks periodically.
 #
 # expire_block_gc_period_s = 900
 

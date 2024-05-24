@@ -29,7 +29,7 @@ use diem_types::{
         TransactionAccumulatorProof, TransactionAccumulatorRangeProof,
         TransactionInfoWithProof,
     },
-    reward_distribution_event::RewardDistributionEvent,
+    reward_distribution_event::RewardDistributionEventV2,
     term_state::PosState,
     transaction::{TransactionInfo, Version},
 };
@@ -403,7 +403,7 @@ impl LedgerStore {
         )
     }
 
-    /// Write `txn_infos` to `batch`. Assigned `first_version` to the the
+    /// Write `txn_infos` to `batch`. Assigned `first_version` to the
     /// version number of the first transaction, and so on.
     pub fn put_transaction_infos(
         &self, first_version: u64, txn_infos: &[TransactionInfo],
@@ -501,7 +501,7 @@ impl LedgerStore {
     }
 
     pub fn put_reward_event(
-        &self, epoch: u64, event: &RewardDistributionEvent,
+        &self, epoch: u64, event: &RewardDistributionEventV2,
     ) -> Result<()> {
         let mut cs = ChangeSet::new();
         cs.batch.put::<RewardEventSchema>(&epoch, event)?;
@@ -510,7 +510,7 @@ impl LedgerStore {
 
     pub fn get_reward_event(
         &self, epoch: u64,
-    ) -> Result<RewardDistributionEvent> {
+    ) -> Result<RewardDistributionEventV2> {
         self.db.get::<RewardEventSchema>(&epoch)?.ok_or_else(|| {
             DiemDbError::NotFound(format!("RewardEvent of epoch {}", epoch))
                 .into()

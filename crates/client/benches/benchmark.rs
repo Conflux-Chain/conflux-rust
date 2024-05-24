@@ -17,7 +17,9 @@ use cfxkey::{Generator, KeyPair, Random};
 use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Criterion};
 use parking_lot::{Condvar, Mutex};
-use primitives::{Action, NativeTransaction, Transaction};
+use primitives::{
+    transaction::native_transaction::NativeTransaction, Action, Transaction,
+};
 use std::{sync::Arc, time::Duration};
 
 fn txexe_benchmark(c: &mut Criterion) {
@@ -60,6 +62,8 @@ fn txexe_benchmark(c: &mut Criterion) {
         pos_view: None,
         finalized_epoch: None,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
+        base_gas_price: Default::default(),
+        burnt_gas_price: Default::default(),
     };
     let mut group = c.benchmark_group("Execute 1 transaction");
     group
@@ -85,7 +89,7 @@ fn txexe_benchmark(c: &mut Criterion) {
             ))
             .expect("Failed to initialize state");
 
-            let spec = machine.spec(env.number);
+            let spec = machine.spec(env.number, env.epoch_height);
 
             b.iter(|| {
                 state.clear();

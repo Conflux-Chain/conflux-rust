@@ -7,7 +7,10 @@ use crate::{node::Node, update::ApplyOpOutcome, KeyMngTrait, TreapMapConfig};
 use super::{SharedKeyTreapMapConfig, TreapMap};
 use cfx_types::{Address, Public, H256, U256, U512};
 use cfxkey::Signature;
-use primitives::{Action, NativeTransaction, SignedTransaction, Transaction};
+use primitives::{
+    transaction::native_transaction::NativeTransaction, Action,
+    SignedTransaction, Transaction,
+};
 use rand::{seq::SliceRandom, thread_rng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rand_xorshift::XorShiftRng;

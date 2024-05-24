@@ -24,6 +24,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
             "dev_allow_phase_change_without_peer": "false",
             # Disable pos reference because pow blocks are generated too fast.
             "pos_reference_enable_height": "10000",
+            "cip1559_transition_height": "10000",
             "keep_snapshot_before_stable_checkpoint": "false",
             # force recompute with parent snapshot doesn't exist
             "force_recompute_height_during_construct_pivot": "1501",

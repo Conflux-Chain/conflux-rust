@@ -49,7 +49,7 @@ use cfx_executor::{
 };
 use cfx_vm_types::{CreateContractAddress, Env};
 use diem_types::account_address::AccountAddress;
-use primitives::transaction::NativeTransaction;
+use primitives::transaction::native_transaction::NativeTransaction;
 
 pub fn default(_dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
     let mut accounts: HashMap<AddressWithSpace, U256> = HashMap::new();
@@ -108,7 +108,8 @@ pub fn genesis_block(
     initialize_internal_contract_accounts(
         &mut state,
         machine.internal_contracts().initialized_at_genesis(),
-    );
+    )
+    .expect("no db error");
     trace!("genesis_accounts: {:?}", genesis_accounts);
     for (addr, balance) in genesis_accounts {
         state
@@ -469,7 +470,7 @@ fn execute_genesis_transaction(
             state,
             &env,
             machine.as_ref(),
-            &machine.spec(env.number),
+            &machine.spec(env.number, env.epoch_height),
         )
         .transact(transaction, options)
         .unwrap()
