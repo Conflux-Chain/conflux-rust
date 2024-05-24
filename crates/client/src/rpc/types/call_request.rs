@@ -23,7 +23,7 @@ use primitives::{
     AccessList, AccessListItem, SignedTransaction, Transaction,
     TransactionWithSignature,
 };
-use std::{cmp::min, convert::From, sync::Arc};
+use std::{cmp::min, convert::Into, sync::Arc};
 
 // use serde_json::de::ParserNumber::U64;
 
@@ -38,15 +38,19 @@ pub struct CoreAccessListItem {
     pub storage_keys: Vec<H256>,
 }
 
+impl Into<AccessListItem> for CoreAccessListItem {
+    fn into(self) -> AccessListItem {
+        AccessListItem {
+            address: self.address.hex_address,
+            storage_keys: self.storage_keys,
+        }
+    }
+}
+
 pub type CoreAccessList = Vec<CoreAccessListItem>;
 
 fn to_primitive_access_list(list: CoreAccessList) -> AccessList {
-    list.into_iter()
-        .map(|item| AccessListItem {
-            address: item.address.hex_address,
-            storage_keys: item.storage_keys,
-        })
-        .collect()
+    list.into_iter().map(|item| item.into()).collect()
 }
 
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
