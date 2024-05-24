@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "2.3.5-testnet"
+version = "2.4.0-testnet"
 edition = "2018"
 
 [dependencies]

@@ -1414,7 +1414,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.3.5-testnet"
+version = "2.4.0-testnet"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -1714,7 +1714,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "2.3.5-testnet"
+version = "2.4.0-testnet"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
