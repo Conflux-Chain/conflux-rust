@@ -7,6 +7,8 @@ mod call_create_type;
 mod context;
 mod env;
 mod error;
+mod instruction_result;
+mod interpreter_info;
 mod return_data;
 mod spec;
 
@@ -17,14 +19,16 @@ pub use self::{
     action_params::{ActionParams, ActionValue, ParamsType},
     call_create_type::{CallType, CreateType},
     context::{
-        contract_address, Context, ContractCreateResult, CreateContractAddress,
-        MessageCallResult,
+        contract_address, BlockHashSource, Context, ContractCreateResult,
+        CreateContractAddress, MessageCallResult,
     },
     env::Env,
     error::{
         separate_out_db_error, Error, ExecTrapError, ExecTrapResult, Result,
         TrapError, TrapKind, TrapResult,
     },
+    instruction_result::InstructionResult,
+    interpreter_info::InterpreterInfo,
     return_data::{GasLeft, ReturnData},
     spec::{CleanDustMode, Spec, WasmCosts},
 };

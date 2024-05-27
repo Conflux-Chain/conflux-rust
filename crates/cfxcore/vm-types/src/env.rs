@@ -26,7 +26,7 @@
 
 use std::collections::BTreeMap;
 
-use cfx_types::{Address, Space, H256, U256};
+use cfx_types::{Address, Space, SpaceMap, H256, U256};
 use primitives::BlockNumber;
 
 /// Information concerning the execution environment for a
@@ -58,6 +58,11 @@ pub struct Env {
     /// The transaction_epoch_bound used to verify if a transaction has
     /// expired.
     pub transaction_epoch_bound: u64,
+    /// Base gas price in CIP-1559, equals to 0 if CIP-1559 has not been
+    /// activated
+    pub base_gas_price: SpaceMap<U256>,
+    /// Base gas price to miner according to in CIP-137
+    pub burnt_gas_price: SpaceMap<U256>,
 }
 
 #[cfg(test)]

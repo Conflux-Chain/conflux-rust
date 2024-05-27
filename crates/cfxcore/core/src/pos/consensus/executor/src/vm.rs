@@ -75,17 +75,16 @@ impl PosVM {
         diem_debug!("get_unlock_events: {}", events.len());
 
         let next_view = state_view.pos_state().current_view() + 1;
-        let round_per_term = POS_STATE_CONFIG.round_per_term();
+        let (term, view_in_term) = POS_STATE_CONFIG.get_term_view(next_view);
 
         // TODO(lpl): Simplify.
-        if next_view % round_per_term == 0 {
-            let term = next_view / round_per_term;
+        if view_in_term == 0 {
             let (validator_verifier, vrf_seed) =
                 state_view.pos_state().get_committee_at(term).map_err(|e| {
                     diem_warn!("get_new_committee error: {:?}", e);
                     VMStatus::Error(StatusCode::CFX_INVALID_TX)
                 })?;
-            let epoch = next_view / round_per_term + 1;
+            let epoch = term + 1;
             let validator_bytes = bcs::to_bytes(&EpochState::new(
                 epoch,
                 validator_verifier,

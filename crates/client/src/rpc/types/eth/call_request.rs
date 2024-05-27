@@ -19,7 +19,8 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::Bytes;
-use cfx_types::{H160, U256};
+use cfx_types::{H160, U256, U64};
+use primitives::AccessList;
 
 /// Call request
 #[derive(Debug, Default, PartialEq, Deserialize)]
@@ -30,10 +31,8 @@ pub struct CallRequest {
     /// To
     pub to: Option<H160>,
     /// Gas Price
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub gas_price: Option<U256>,
     /// Max fee per gas
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_fee_per_gas: Option<U256>,
     /// Gas
     pub gas: Option<U256>,
@@ -44,8 +43,10 @@ pub struct CallRequest {
     /// Nonce
     pub nonce: Option<U256>,
     /// Miner bribe
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_priority_fee_per_gas: Option<U256>,
+    pub access_list: Option<AccessList>,
+    #[serde(rename = "type")]
+    pub transaction_type: Option<U64>,
 }
 
 // impl Into<Request> for CallRequest {

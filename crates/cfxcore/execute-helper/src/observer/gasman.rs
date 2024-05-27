@@ -1,8 +1,8 @@
 use cfx_executor::{
-    executive_observer::{
+    observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
+        OpcodeTracer, StorageTracer,
     },
-    observer::{OpcodeTracer, StorageTracer},
     stack::FrameResult,
 };
 use cfx_parameters::{
@@ -59,6 +59,7 @@ impl DrainTrace for GasMan {
 }
 
 pub struct GasLimitEstimation;
+
 impl typemap::Key for GasLimitEstimation {
     type Value = U256;
 }

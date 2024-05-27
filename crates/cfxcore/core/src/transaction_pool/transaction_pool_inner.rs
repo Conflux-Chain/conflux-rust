@@ -7,7 +7,10 @@ use super::{
 use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_parameters::{
+    consensus_internal::ELASTICITY_MULTIPLIER,
+    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
 
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
@@ -19,14 +22,14 @@ use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, Transaction, TransactionWithSignature,
+    block_header::compute_next_price, Account, Action, SignedTransaction,
+    Transaction, TransactionWithSignature,
 };
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use rlp::*;
 use serde::Serialize;
 use std::{
-    cmp::Ordering,
     collections::{BTreeSet, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -104,10 +107,32 @@ impl DeferredPool {
         self.packing_pool.apply_all(|x| x.clear());
     }
 
+    fn estimate_packing_gas_limit(
+        &self, space: Space, gas_target: U256, parent_base_price: U256,
+        min_base_price: U256,
+    ) -> (U256, U256) {
+        let packing_gas_limit = self
+            .packing_pool
+            .in_space(space)
+            .estimate_packing_gas_limit(
+                gas_target,
+                parent_base_price,
+                min_base_price,
+            );
+        let price_limit = compute_next_price(
+            gas_target,
+            packing_gas_limit,
+            parent_base_price,
+            min_base_price,
+        );
+        (packing_gas_limit, price_limit)
+    }
+
     #[inline]
     fn packing_sampler<'a, F: Fn(&SignedTransaction) -> PackingCheckResult>(
         &'a mut self, space: Space, block_gas_limit: U256,
-        block_size_limit: usize, tx_num_limit: usize, validity: F,
+        block_size_limit: usize, tx_num_limit: usize, tx_min_price: U256,
+        validity: F,
     ) -> (Vec<Arc<SignedTransaction>>, U256, usize) {
         if block_gas_limit.is_zero()
             || block_size_limit == 0
@@ -145,6 +170,10 @@ impl DeferredPool {
             .tx_sampler(&mut rng, block_gas_limit.into())
         {
             'sender: for tx in sender_txs.iter() {
+                if tx.gas_price() < &tx_min_price {
+                    to_drop_txs.push(tx.clone());
+                    break 'sender;
+                }
                 match validity(&*tx) {
                     PackingCheckResult::Pack => {}
                     PackingCheckResult::Pending => {
@@ -456,29 +485,6 @@ impl DeferredPool {
     ) -> impl Iterator<Item = &Arc<SignedTransaction>> + '_ {
         self.ready_transactions_by_space(Space::Native)
             .chain(self.ready_transactions_by_space(Space::Ethereum))
-    }
-}
-
-#[derive(DeriveMallocSizeOf, Clone)]
-struct PriceOrderedTransaction(Arc<SignedTransaction>);
-
-impl PartialEq for PriceOrderedTransaction {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.gas_price().eq(other.0.gas_price())
-    }
-}
-
-impl Eq for PriceOrderedTransaction {}
-
-impl PartialOrd for PriceOrderedTransaction {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for PriceOrderedTransaction {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.0.gas_price().cmp(other.0.gas_price())
     }
 }
 
@@ -981,6 +987,7 @@ impl TransactionPoolInner {
             .unwrap_or(state_nonce)
     }
 
+    #[allow(dead_code)]
     fn recalculate_readiness_with_local_info(
         &mut self, addr: &AddressWithSpace,
     ) {
@@ -1066,7 +1073,7 @@ impl TransactionPoolInner {
             return packed_transactions;
         }
 
-        let spec = machine.spec(best_block_number);
+        let spec = machine.spec(best_block_number, best_epoch_height);
         let transitions = &machine.params().transition_heights;
 
         let validity = |tx: &SignedTransaction| {
@@ -1084,6 +1091,7 @@ impl TransactionPoolInner {
                 std::cmp::min(block_gas_limit, evm_gas_limit),
                 block_size_limit,
                 num_txs,
+                U256::zero(),
                 validity,
             );
         packed_transactions.extend_from_slice(&sampled_tx);
@@ -1093,6 +1101,7 @@ impl TransactionPoolInner {
             block_gas_limit - used_gas,
             block_size_limit - used_size,
             num_txs - sampled_tx.len(),
+            U256::zero(),
             validity,
         );
         packed_transactions.extend_from_slice(&sampled_tx);
@@ -1110,6 +1119,119 @@ impl TransactionPoolInner {
         }
 
         packed_transactions
+    }
+
+    pub fn pack_transactions_1559<'a>(
+        &mut self, num_txs: usize, block_gas_limit: U256,
+        parent_base_price: SpaceMap<U256>, block_size_limit: usize,
+        best_epoch_height: u64, best_block_number: u64,
+        verification_config: &VerificationConfig, machine: &Machine,
+    ) -> (Vec<Arc<SignedTransaction>>, SpaceMap<U256>) {
+        let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
+        if num_txs == 0 {
+            return (packed_transactions, parent_base_price);
+        }
+
+        let mut block_base_price = parent_base_price.clone();
+
+        let spec = machine.spec(best_block_number, best_epoch_height);
+        let transitions = &machine.params().transition_heights;
+
+        let validity = |tx: &SignedTransaction| {
+            verification_config.fast_recheck(
+                tx,
+                best_epoch_height,
+                transitions,
+                &spec,
+            )
+        };
+
+        let can_pack_evm =
+            machine.params().can_pack_evm_transaction(best_epoch_height);
+
+        let (evm_packed_tx_num, evm_used_size) = if can_pack_evm {
+            let gas_target = block_gas_limit * 5 / 10 / ELASTICITY_MULTIPLIER;
+            let parent_base_price = parent_base_price[Space::Ethereum];
+            let min_base_price =
+                machine.params().min_base_price()[Space::Ethereum];
+
+            let (packing_gas_limit, base_price) =
+                self.deferred_pool.estimate_packing_gas_limit(
+                    Space::Ethereum,
+                    gas_target,
+                    parent_base_price,
+                    min_base_price,
+                );
+            let (sampled_tx, used_gas, used_size) =
+                self.deferred_pool.packing_sampler(
+                    Space::Ethereum,
+                    packing_gas_limit,
+                    block_size_limit,
+                    num_txs,
+                    base_price,
+                    validity,
+                );
+            packed_transactions.extend_from_slice(&sampled_tx);
+            // Recompute the base price, it should be <= estimated base price,
+            // since the actual used gas is <= estimated limit
+            block_base_price[Space::Ethereum] = compute_next_price(
+                gas_target,
+                used_gas,
+                parent_base_price,
+                min_base_price,
+            );
+            (sampled_tx.len(), used_size)
+        } else {
+            (0, 0)
+        };
+
+        {
+            let gas_target = block_gas_limit * 9 / 10 / ELASTICITY_MULTIPLIER;
+            let parent_base_price = parent_base_price[Space::Native];
+            let min_base_price =
+                machine.params().min_base_price()[Space::Native];
+
+            let (packed_limit, tx_min_price) =
+                self.deferred_pool.estimate_packing_gas_limit(
+                    Space::Native,
+                    gas_target,
+                    parent_base_price,
+                    min_base_price,
+                );
+
+            let (sampled_tx, used_gas, _) = self.deferred_pool.packing_sampler(
+                Space::Native,
+                packed_limit,
+                block_size_limit - evm_used_size,
+                num_txs - evm_packed_tx_num,
+                tx_min_price,
+                validity,
+            );
+            packed_transactions.extend_from_slice(&sampled_tx);
+
+            // Recompute the base price, it should be <= estimated base price,
+            // since the actual used gas is <= estimated limit
+            block_base_price[Space::Native] = compute_next_price(
+                gas_target,
+                used_gas,
+                parent_base_price,
+                min_base_price,
+            );
+        }
+
+        if log::max_level() >= log::Level::Debug {
+            let mut rlp_s = RlpStream::new();
+            for tx in &packed_transactions {
+                rlp_s.append::<TransactionWithSignature>(&**tx);
+            }
+            debug!(
+                "After packing packed_transactions: {}, rlp size: {}",
+                packed_transactions.len(),
+                rlp_s.out().len(),
+            );
+        }
+
+        (packed_transactions, block_base_price)
     }
 
     pub fn notify_modified_accounts(
@@ -1207,17 +1329,17 @@ impl TransactionPoolInner {
             );
             match transaction.unsigned {
                 Transaction::Native(ref utx) => {
-                    need_balance += utx.value.clone();
+                    need_balance += utx.value().clone();
                     if sponsored_gas == U256::from(0) {
                         need_balance += estimate_gas_fee;
                     }
                     if sponsored_storage == 0 {
-                        need_balance += U256::from(utx.storage_limit)
+                        need_balance += U256::from(*utx.storage_limit())
                             * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
                     }
                 }
                 Transaction::Ethereum(ref utx) => {
-                    need_balance += utx.value.clone();
+                    need_balance += utx.value().clone();
                     need_balance += estimate_gas_fee;
                 }
             }
@@ -1277,7 +1399,7 @@ impl TransactionPoolInner {
 
         // Compute sponsored_gas for `transaction`
         if let Transaction::Native(ref utx) = transaction.unsigned {
-            if let Action::Call(ref callee) = utx.action {
+            if let Action::Call(ref callee) = utx.action().clone() {
                 // FIXME: This is a quick fix for performance issue.
                 if callee.is_contract_address() {
                     if let Some(sponsor_info) =
@@ -1305,15 +1427,15 @@ impl TransactionPoolInner {
                                 && estimated_gas
                                 <= sponsor_info.sponsor_balance_for_gas
                             {
-                                sponsored_gas = utx.gas;
+                                sponsored_gas = utx.gas().clone();
                             }
                             let estimated_collateral =
-                                U256::from(utx.storage_limit)
+                                U256::from(*utx.storage_limit())
                                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
                             if estimated_collateral
                                 <= sponsor_info.sponsor_balance_for_collateral + sponsor_info.unused_storage_points()
                             {
-                                sponsored_storage = utx.storage_limit;
+                                sponsored_storage = *utx.storage_limit();
                             }
                         }
                     }
@@ -1330,7 +1452,8 @@ mod test_transaction_pool_inner {
     use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{
-        Action, NativeTransaction, SignedTransaction, Transaction,
+        transaction::native_transaction::NativeTransaction, Action,
+        SignedTransaction, Transaction,
     };
     use std::sync::Arc;
 

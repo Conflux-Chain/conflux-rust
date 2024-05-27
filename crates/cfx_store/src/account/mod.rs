@@ -23,7 +23,7 @@ mod version;
 pub use self::{
     cipher::{Aes128Ctr, Cipher},
     crypto::Crypto,
-    kdf::{Kdf, Pbkdf2, Prf, Scrypt},
+    kdf::{Kdf, Pbkdf2, Prf},
     safe_account::SafeAccount,
     version::Version,
 };

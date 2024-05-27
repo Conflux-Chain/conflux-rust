@@ -4,10 +4,8 @@
 
 use cfx_statedb::Result as DbResult;
 use cfx_types::U256;
-use cfx_vm_types::{self as vm, ActionParams, CallType, GasLeft, Spec};
+use cfx_vm_types::{self as vm, ActionParams, CallType, GasLeft};
 use solidity_abi::{ABIDecodable, ABIEncodable};
-
-use crate::stack::CallStackInfo;
 
 use super::{InternalRefContext, InternalTrapResult, IsActive};
 use InternalTrapResult::*;
@@ -90,7 +88,7 @@ fn preprocessing<T: SolidityFunctionConfigTrait>(
     sol_fn: &T, input: &[u8], params: &ActionParams,
     context: &InternalRefContext,
 ) -> vm::Result<(T::Input, U256)> {
-    sol_fn.pre_execution_check(params, context.callstack, context.spec)?;
+    sol_fn.pre_execution_check(params, context)?;
     let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
     let cost = sol_fn.upfront_gas_payment(&solidity_params, params, context)?;
     if cost > params.gas {
@@ -108,8 +106,7 @@ pub trait InterfaceTrait {
 
 pub trait PreExecCheckTrait: Send + Sync {
     fn pre_execution_check(
-        &self, params: &ActionParams, call_stack: &CallStackInfo,
-        context: &Spec,
+        &self, params: &ActionParams, context: &InternalRefContext,
     ) -> vm::Result<()>;
 }
 
@@ -157,18 +154,22 @@ pub trait PreExecCheckConfTrait: Send + Sync {
 
 impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
     fn pre_execution_check(
-        &self, params: &ActionParams, call_stack: &CallStackInfo, spec: &Spec,
+        &self, params: &ActionParams, context: &InternalRefContext,
     ) -> vm::Result<()> {
         if !Self::PAYABLE && !params.value.value().is_zero() {
             return Err(vm::Error::InternalContract(
-                "should not transfer balance to Staking contract".into(),
+                "should not transfer balance to non-payable function".into(),
             ));
         }
 
-        if Self::HAS_WRITE_OP
-            && (call_stack.in_reentrancy(spec)
-                || params.call_type == CallType::StaticCall)
-        {
+        let spec = context.spec;
+        // Check static context before CIP-132
+        let mut static_context = context.callstack.in_reentrancy(spec)
+            || params.call_type == CallType::StaticCall;
+        // Add the lost constraint after CIP-132
+        static_context |= spec.cip132 && context.static_flag;
+
+        if Self::HAS_WRITE_OP && static_context {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 

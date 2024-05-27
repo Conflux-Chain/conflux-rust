@@ -15,7 +15,7 @@ use crate::{
 };
 use cfx_types::{Address, AddressWithSpace, Space, H256};
 use cfx_vm_types::Spec;
-use primitives::BlockNumber;
+use primitives::{block::BlockHeight, BlockNumber};
 use std::{collections::BTreeMap, sync::Arc};
 
 pub use vm_factory::VmFactory;
@@ -23,7 +23,7 @@ pub type SpecCreationRules = dyn Fn(&mut Spec, BlockNumber) + Sync + Send;
 
 pub struct Machine {
     params: CommonParams,
-    vm: VmFactory,
+    vm_factory: VmFactory,
     builtins: Arc<BTreeMap<Address, Builtin>>,
     builtins_evm: Arc<BTreeMap<Address, Builtin>>,
     internal_contracts: Arc<InternalContractMap>,
@@ -55,16 +55,25 @@ impl Machine {
     /// Get the general parameters of the chain.
     pub fn params(&self) -> &CommonParams { &self.params }
 
-    pub fn spec(&self, number: BlockNumber) -> Spec {
-        let mut spec = self.params.spec(number);
+    pub fn spec(&self, number: BlockNumber, height: BlockHeight) -> Spec {
+        let mut spec = self.params.spec(number, height);
         if let Some(ref rules) = self.spec_rules {
             (rules)(&mut spec, number)
         }
         spec
     }
 
+    #[cfg(test)]
+    pub fn spec_for_test(&self, number: u64) -> Spec {
+        self.spec(number, number)
+    }
+
     /// Builtin-contracts for the chain..
     pub fn builtins(&self) -> &BTreeMap<Address, Builtin> { &*self.builtins }
+
+    pub fn builtins_evm(&self) -> &BTreeMap<Address, Builtin> {
+        &*self.builtins_evm
+    }
 
     /// Builtin-contracts for the chain..
     pub fn internal_contracts(&self) -> &InternalContractMap {
@@ -72,15 +81,15 @@ impl Machine {
     }
 
     /// Get a VM factory that can execute on this state.
-    pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
+    pub fn vm_factory(&self) -> VmFactory { self.vm_factory.clone() }
 
-    pub fn vm_factory_ref(&self) -> &VmFactory { &self.vm }
+    pub fn vm_factory_ref(&self) -> &VmFactory { &self.vm_factory }
 }
 
-pub fn new_machine(params: CommonParams, vm: VmFactory) -> Machine {
+pub fn new_machine(params: CommonParams, vm_factory: VmFactory) -> Machine {
     Machine {
         params,
-        vm,
+        vm_factory,
         builtins: Arc::new(BTreeMap::new()),
         builtins_evm: Arc::new(Default::default()),
         internal_contracts: Arc::new(InternalContractMap::default()),
@@ -168,11 +177,19 @@ fn new_builtin_map(
             params.transition_numbers.cip92,
         ),
     );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(10)),
+        Builtin::new(
+            Box::new(Linear::new(50000, 0)),
+            builtin_factory("kzg_point_eval"),
+            params.transition_numbers.cip144,
+        ),
+    );
     btree
 }
 
 pub fn new_machine_with_builtin(
-    params: CommonParams, vm: VmFactory,
+    params: CommonParams, vm_factory: VmFactory,
 ) -> Machine {
     let builtin = new_builtin_map(&params, Space::Native);
     let builtin_evm = new_builtin_map(&params, Space::Ethereum);
@@ -180,7 +197,7 @@ pub fn new_machine_with_builtin(
     let internal_contracts = InternalContractMap::new(&params);
     Machine {
         params,
-        vm,
+        vm_factory,
         builtins: Arc::new(builtin),
         builtins_evm: Arc::new(builtin_evm),
         internal_contracts: Arc::new(internal_contracts),

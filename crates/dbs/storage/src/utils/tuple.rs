@@ -37,6 +37,7 @@ pub trait TupleIndexExt: Sized {
 
 /// We don't support generics and lifetime yet because it will take some time to
 /// update the macro implementation.
+#[cfg(test)]
 macro_rules! make_tuple_with_index_ext {
     ( $tuple_struct_name:ident($($element_type:ty$(: $pub_vis:tt)*),*) ) => {
         #[derive(Default, Clone)]
@@ -281,6 +282,7 @@ mod macros {
         }
     }
 
+    #[cfg(test)]
     macro_rules! make_get_index_ext {
         (
             $tuple_type:ty,
@@ -318,6 +320,7 @@ mod macros {
         };
     }
 
+    #[cfg(test)]
     macro_rules! make_get_index_ext_all {
         (
             $tuple_struct_name:ident(),
@@ -454,7 +457,7 @@ pub mod placeholders {
     }
 }
 
-//#[cfg(test)]
+#[cfg(test)]
 mod test {
     use super::*;
 

@@ -23,7 +23,7 @@ use diem_types::{
     proof::{
         definition::LeafCount, AccumulatorConsistencyProof, SparseMerkleProof,
     },
-    reward_distribution_event::RewardDistributionEvent,
+    reward_distribution_event::RewardDistributionEventV2,
     term_state::PosState,
     transaction::{
         TransactionInfo, TransactionListWithProof, TransactionToCommit,
@@ -426,7 +426,7 @@ pub trait DbWriter: Send + Sync {
     ) -> Result<()>;
 
     fn save_reward_event(
-        &self, epoch: u64, event: &RewardDistributionEvent,
+        &self, epoch: u64, event: &RewardDistributionEventV2,
     ) -> Result<()>;
 
     fn delete_pos_state_by_block(&self, block_id: &HashValue) -> Result<()>;
@@ -529,7 +529,8 @@ pub trait DBReaderForPoW: Send + Sync + DbReader {
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Result<Vec<HashValue>>;
 
-    fn get_reward_event(&self, epoch: u64) -> Result<RewardDistributionEvent>;
+    fn get_reward_event(&self, epoch: u64)
+        -> Result<RewardDistributionEventV2>;
 
     fn get_committed_block_by_hash(
         &self, block_hash: &HashValue,

@@ -7,7 +7,7 @@ use crate::rpc::types::{
     AccountPendingTransactions, Block, BlockHashOrEpochNumber, Bytes,
     CallRequest, CfxFilterChanges, CfxRpcLogFilter,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
+    EstimateGasAndCollateralResponse, FeeHistory, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, StorageCollateralInfo, TokenSupplyInfo,
     Transaction, VoteParamsInfo,
@@ -39,6 +39,10 @@ pub trait Cfx {
     /// Returns current gas price.
     #[rpc(name = "cfx_gasPrice")]
     fn gas_price(&self) -> BoxFuture<U256>;
+
+    /// Returns current max_priority_fee
+    #[rpc(name = "cfx_maxPriorityFeePerGas")]
+    fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
 
     /// Returns highest epoch number.
     #[rpc(name = "cfx_epochNumber")]
@@ -197,6 +201,12 @@ pub trait Cfx {
         &self, request: CallRequest, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
 
+    #[rpc(name = "cfx_feeHistory")]
+    fn fee_history(
+        &self, block_count: U64, newest_block: EpochNumber,
+        reward_percentiles: Vec<f64>,
+    ) -> BoxFuture<FeeHistory>;
+
     /// Check if user balance is enough for the transaction.
     #[rpc(name = "cfx_checkBalanceAgainstTransaction")]
     fn check_balance_against_transaction(
@@ -273,6 +283,11 @@ pub trait Cfx {
     fn get_collateral_info(
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<StorageCollateralInfo>;
+
+    #[rpc(name = "cfx_getFeeBurnt")]
+    fn get_fee_burnt(
+        &self, epoch_number: Option<EpochNumber>,
+    ) -> JsonRpcResult<U256>;
 
     #[rpc(name = "cfx_getPoSRewardByEpoch")]
     fn get_pos_reward_by_epoch(

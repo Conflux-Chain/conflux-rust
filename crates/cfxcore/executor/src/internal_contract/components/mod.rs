@@ -14,8 +14,5 @@ pub use contract::{InternalContractTrait, SolFnTable};
 pub use contract_map::InternalContractMap;
 pub use event::SolidityEventTrait;
 pub use executable::InternalContractExec;
-pub use function::{
-    ExecutionTrait, InterfaceTrait, SimpleExecutionTrait,
-    SolidityFunctionTrait, UpfrontPaymentTrait,
-};
+pub use function::{InterfaceTrait, SolidityFunctionTrait};
 pub use trap_result::InternalTrapResult;

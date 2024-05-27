@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
+    error_codes::invalid_params,
     types::{
         address::RpcAddress,
         errors::{check_rpc_address_network, RcpAddressNetworkInconsistent},
@@ -11,21 +12,46 @@ use crate::rpc::{
     RpcResult,
 };
 use cfx_addr::Network;
-use cfx_types::{Address, AddressSpaceUtil, U256, U64};
+use cfx_types::{Address, AddressSpaceUtil, H256, U256, U64};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use primitives::{
-    transaction::Action, NativeTransaction as PrimitiveTransaction,
-    SignedTransaction, Transaction, TransactionWithSignature,
+    transaction::{
+        native_transaction::NativeTransaction as PrimitiveTransaction, Action,
+    },
+    AccessList, AccessListItem, SignedTransaction, Transaction,
+    TransactionWithSignature,
 };
-use std::{cmp::min, sync::Arc};
+use std::{cmp::min, convert::Into, sync::Arc};
 
 // use serde_json::de::ParserNumber::U64;
 
 /// The MAX_GAS_CALL_REQUEST is one magnitude higher than block gas limit and
 /// not too high that a call_virtual consumes too much resource.
 pub const MAX_GAS_CALL_REQUEST: u64 = 15_000_000;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoreAccessListItem {
+    pub address: RpcAddress,
+    pub storage_keys: Vec<H256>,
+}
+
+impl Into<AccessListItem> for CoreAccessListItem {
+    fn into(self) -> AccessListItem {
+        AccessListItem {
+            address: self.address.hex_address,
+            storage_keys: self.storage_keys,
+        }
+    }
+}
+
+pub type CoreAccessList = Vec<CoreAccessListItem>;
+
+fn to_primitive_access_list(list: CoreAccessList) -> AccessList {
+    list.into_iter().map(|item| item.into()).collect()
+}
 
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +72,12 @@ pub struct CallRequest {
     pub nonce: Option<U256>,
     /// StorageLimit
     pub storage_limit: Option<U64>,
+    /// Access list in EIP-2930
+    pub access_list: Option<CoreAccessList>,
+    pub max_fee_per_gas: Option<U256>,
+    pub max_priority_fee_per_gas: Option<U256>,
+    #[serde(rename = "type")]
+    pub transaction_type: Option<U64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -143,29 +175,95 @@ impl SendTxRequest {
 pub fn sign_call(
     epoch_height: u64, chain_id: u32, request: CallRequest,
 ) -> RpcResult<SignedTransaction> {
+    use primitives::transaction::*;
+    use TypedNativeTransaction::*;
+
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
+
+    let nonce = request.nonce.unwrap_or_default();
+    let action = request.to.map_or(Action::Create, |rpc_addr| {
+        Action::Call(rpc_addr.hex_address)
+    });
+
+    let value = request.value.unwrap_or_default();
+    let storage_limit = request
+        .storage_limit
+        .map(|v| v.as_u64())
+        .unwrap_or(std::u64::MAX);
+    let data = request.data.unwrap_or_default().into_vec();
+
+    let default_type_id = if request.max_fee_per_gas.is_some()
+        || request.max_priority_fee_per_gas.is_some()
+    {
+        2
+    } else if request.access_list.is_some() {
+        1
+    } else {
+        0
+    };
+    let transaction_type = request
+        .transaction_type
+        .unwrap_or(U64::from(default_type_id));
+
+    let gas_price = request.gas_price.unwrap_or(1.into());
+    let max_fee_per_gas = request
+        .max_fee_per_gas
+        .or(request.max_priority_fee_per_gas)
+        .unwrap_or(gas_price);
+    let max_priority_fee_per_gas =
+        request.max_priority_fee_per_gas.unwrap_or(U256::zero());
+    let access_list = request.access_list.unwrap_or(vec![]);
+
+    let transaction = match transaction_type.as_usize() {
+        0 => Cip155(NativeTransaction {
+            nonce,
+            action,
+            gas,
+            gas_price,
+            value,
+            storage_limit,
+            epoch_height,
+            chain_id,
+            data,
+        }),
+        1 => Cip2930(Cip2930Transaction {
+            nonce,
+            gas_price,
+            gas,
+            action,
+            value,
+            storage_limit,
+            epoch_height,
+            chain_id,
+            data,
+            access_list: to_primitive_access_list(access_list),
+        }),
+        2 => Cip1559(Cip1559Transaction {
+            nonce,
+            action,
+            gas,
+            value,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            storage_limit,
+            epoch_height,
+            chain_id,
+            data,
+            access_list: to_primitive_access_list(access_list),
+        }),
+        x => {
+            return Err(
+                invalid_params("Unrecognized transaction type", x).into()
+            );
+        }
+    };
+
     let from = request
         .from
         .map_or_else(|| Address::zero(), |rpc_addr| rpc_addr.hex_address);
 
-    Ok(PrimitiveTransaction {
-        nonce: request.nonce.unwrap_or_default(),
-        action: request.to.map_or(Action::Create, |rpc_addr| {
-            Action::Call(rpc_addr.hex_address)
-        }),
-        gas,
-        gas_price: request.gas_price.unwrap_or(1.into()),
-        value: request.value.unwrap_or_default(),
-        storage_limit: request
-            .storage_limit
-            .map(|v| v.as_u64())
-            .unwrap_or(std::u64::MAX),
-        epoch_height,
-        chain_id,
-        data: request.data.unwrap_or_default().into_vec(),
-    }
-    .fake_sign(from.with_native_space()))
+    Ok(transaction.fake_sign_rpc(from.with_native_space()))
 }
 
 pub fn rpc_call_request_network(
@@ -222,6 +320,7 @@ mod tests {
             data: Some(vec![0x12, 0x34, 0x56].into()),
             storage_limit: Some(U64::from_str("7b").unwrap()),
             nonce: Some(U256::from(4)),
+            ..Default::default()
         };
 
         let s = r#"{
@@ -253,7 +352,8 @@ mod tests {
             value: Some(U256::from_str("9184e72a").unwrap()),
             storage_limit: Some(U64::from_str("3344adf").unwrap()),
             data: Some("d46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675".from_hex::<Vec<u8>>().unwrap().into()),
-            nonce: None
+            nonce: None,
+            ..Default::default()
         };
 
         let s = r#"{
@@ -291,6 +391,7 @@ mod tests {
             data: None,
             storage_limit: None,
             nonce: None,
+            ..Default::default()
         };
 
         let s = r#"{"from":"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEJC4EYEY6"}"#;

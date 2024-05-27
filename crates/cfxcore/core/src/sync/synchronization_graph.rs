@@ -14,6 +14,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use cfx_parameters::consensus_internal::ELASTICITY_MULTIPLIER;
 use futures::executor::block_on;
 use parking_lot::RwLock;
 use slab::Slab;
@@ -572,7 +573,7 @@ impl SynchronizationGraphInner {
             minimal_status,
         ) {
             debug!(
-                "Block {:?} not not ready for its pos_reference: {:?}",
+                "Block {:?} not ready for its pos_reference: {:?}",
                 self.arena[index].block_header.hash(),
                 self.pos_verifier.get_pivot_decision(
                     self.arena[index]
@@ -755,6 +756,13 @@ impl SynchronizationGraphInner {
                 },
             )));
         }
+
+        let parent_gas_limit = parent_gas_limit
+            * if epoch == self.machine.params().transition_heights.cip1559 {
+                ELASTICITY_MULTIPLIER
+            } else {
+                1
+            };
 
         // Verify the gas limit is respected
         let self_gas_limit = *self.arena[index].block_header.gas_limit();
@@ -1757,6 +1765,7 @@ impl SynchronizationGraph {
         if need_to_verify {
             let r = self.verification_config.verify_sync_graph_block_basic(
                 &block,
+                &inner.arena[me].block_header,
                 self.consensus.best_chain_id(),
             );
             match r {
@@ -1764,7 +1773,7 @@ impl SynchronizationGraph {
                     ErrorKind::Block(BlockError::InvalidTransactionsRoot(e)),
                     _,
                 )) => {
-                    warn ! ("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
+                    warn!("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
                     // If the transaction root does not match, it might be
                     // caused by receiving wrong
                     // transactions because of conflicting ShortId in
@@ -2092,7 +2101,7 @@ pub enum BlockInsertionResult {
     // We should request again to get
     // the correct transactions for full verification.
     RequestAgain,
-    // This is only for the case the the header is removed, possibly because
+    // This is only for the case the header is removed, possibly because
     // we switch phases.
     // We ignore the block without verification.
     Ignored,

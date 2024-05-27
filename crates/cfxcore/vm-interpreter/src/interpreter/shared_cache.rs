@@ -53,11 +53,11 @@ impl MallocSizeOf for CacheItem {
 }
 
 /// Global cache for EVM interpreter
-pub struct SharedCache {
+pub struct SharedCache<const CANCUN: bool> {
     jump_destinations: Mutex<MemoryLruCache<H256, CacheItem>>,
 }
 
-impl SharedCache {
+impl<const CANCUN: bool> SharedCache<CANCUN> {
     /// Create a jump destinations cache with a maximum size in bytes
     /// to cache.
     pub fn new(max_size: usize) -> Self {
@@ -101,7 +101,7 @@ impl SharedCache {
                     instructions::JUMPDEST => {
                         jump_dests.insert(position);
                     }
-                    instructions::BEGINSUB => {
+                    instructions::BEGINSUB_TLOAD if !CANCUN => {
                         sub_entrypoints.insert(position);
                     }
                     _ => {
@@ -122,7 +122,7 @@ impl SharedCache {
     }
 }
 
-impl Default for SharedCache {
+impl<const CANCUN: bool> Default for SharedCache<CANCUN> {
     fn default() -> Self { SharedCache::new(DEFAULT_CACHE_SIZE) }
 }
 
@@ -141,7 +141,8 @@ fn test_find_jump_destinations() {
     let code: Vec<u8> = "7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5b01600055".from_hex().unwrap();
 
     // when
-    let cache_item = SharedCache::find_jump_and_sub_destinations(&code);
+    let cache_item =
+        SharedCache::<false>::find_jump_and_sub_destinations(&code);
 
     // then
     assert!(cache_item
@@ -166,7 +167,8 @@ fn test_find_jump_destinations_not_in_data_segments() {
     let code: Vec<u8> = "600656605B565B6004".from_hex().unwrap();
 
     // when
-    let cache_item = SharedCache::find_jump_and_sub_destinations(&code);
+    let cache_item =
+        SharedCache::<false>::find_jump_and_sub_destinations(&code);
 
     // then
     assert!(cache_item.jump_destination.0.iter().eq(vec![6].into_iter()));
@@ -182,7 +184,8 @@ fn test_find_sub_entrypoints() {
         "6800000000000000000c5e005c60115e5d5c5d".from_hex().unwrap();
 
     // when
-    let cache_item = SharedCache::find_jump_and_sub_destinations(&code);
+    let cache_item =
+        SharedCache::<false>::find_jump_and_sub_destinations(&code);
 
     // then
     assert!(cache_item.jump_destination.0.is_empty());
@@ -206,7 +209,8 @@ fn test_find_jump_and_sub_allowing_unknown_opcodes() {
     let code: Vec<u8> = "5BCC5C".from_hex().unwrap();
 
     // when
-    let cache_item = SharedCache::find_jump_and_sub_destinations(&code);
+    let cache_item =
+        SharedCache::<false>::find_jump_and_sub_destinations(&code);
 
     // then
     assert!(cache_item.jump_destination.0.iter().eq(vec![0].into_iter()));

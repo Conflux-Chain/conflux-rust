@@ -13,6 +13,8 @@ from test_framework.util import *
 class MessageTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 4
+        # Disable 1559 for RPC tests temporarily
+        self.conf_parameters["cip1559_transition_height"] = str(99999999)
 
     def setup_network(self):
         self.setup_nodes()

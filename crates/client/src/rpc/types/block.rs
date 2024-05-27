@@ -113,6 +113,9 @@ pub struct Block {
     pub gas_limit: U256,
     /// Gas used
     pub gas_used: Option<U256>,
+    /// Base fee
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_fee_per_gas: Option<U256>,
     /// Timestamp
     pub timestamp: U256,
     /// Difficulty
@@ -240,6 +243,7 @@ impl Block {
                                                     prior_gas_used,
                                                     epoch_number,
                                                     execution_result.block_receipts.block_number,
+                                                    b.block_header.base_price(),
                                                     maybe_state_root,
                                                     if tx_exec_error_msg.is_empty() {
                                                         None
@@ -304,6 +308,11 @@ impl Block {
             // fee system
             gas_used,
             gas_limit: b.block_header.gas_limit().into(),
+            base_fee_per_gas: b
+                .block_header
+                .base_price()
+                .map(|x| x[Space::Native])
+                .into(),
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
             pow_quality: b
@@ -538,6 +547,7 @@ mod tests {
             epoch_number: None,
             block_number: None,
             gas_limit: U256::default(),
+            base_fee_per_gas: None,
             gas_used: None,
             timestamp: 0.into(),
             difficulty: U256::default(),
@@ -573,6 +583,7 @@ mod tests {
             transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
             epoch_number: Some(0.into()),
             block_number: Some(0.into()),
+            base_fee_per_gas: None,
             gas_limit: U256::default(),
             gas_used: None,
             timestamp: 0.into(),

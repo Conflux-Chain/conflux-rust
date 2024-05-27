@@ -12,6 +12,7 @@ mod consensus_graph_states;
 mod epoch_number;
 pub mod errors;
 pub mod eth;
+mod fee_history;
 mod filter;
 mod index;
 mod log;
@@ -45,6 +46,7 @@ pub use self::{
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
+    fee_history::FeeHistory,
     filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
     index::Index,
     log::Log,

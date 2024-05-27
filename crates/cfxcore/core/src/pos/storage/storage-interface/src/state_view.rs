@@ -48,7 +48,7 @@ pub struct VerifiedStateView<'a> {
 
     /// The cache of verified account states from `reader` and
     /// `speculative_state_view`, represented by a hashmap with an account
-    /// address as key and a pair of an ordered account state map and an an
+    /// address as key and a pair of an ordered account state map and an
     /// optional account state proof as value. When the VM queries an
     /// `access_path`, this cache will first check whether `reader_cache` is
     /// hit. If hit, it will return the corresponding value of that

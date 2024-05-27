@@ -54,8 +54,9 @@ pub const TERM_MAX_SIZE: usize = 10000;
 pub const TERM_ELECTED_SIZE: usize = 50;
 
 mod incentives {
-    use super::{
-        ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_LIST_LEN, TERM_MAX_SIZE,
+    use super::{TERM_ELECTED_SIZE, TERM_LIST_LEN, TERM_MAX_SIZE};
+    use crate::term_state::pos_state_config::{
+        PosStateConfigTrait, POS_STATE_CONFIG,
     };
 
     const BONUS_VOTE_MAX_SIZE: u64 = 100;
@@ -73,12 +74,19 @@ mod incentives {
         / 100
         / (TERM_ELECTED_SIZE as u64)
         / (TERM_LIST_LEN as u64);
-    pub const LEADER_POINTS: u64 =
-        MAX_TERM_POINTS * LEADER_PERCENTAGE / 100 / ROUND_PER_TERM;
-    pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
-        / 100
-        / ROUND_PER_TERM
-        / BONUS_VOTE_MAX_SIZE;
+
+    pub fn leader_points(view: u64) -> u64 {
+        MAX_TERM_POINTS * LEADER_PERCENTAGE
+            / 100
+            / POS_STATE_CONFIG.round_per_term(view)
+    }
+
+    pub fn bonus_vote_points(view: u64) -> u64 {
+        MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
+            / 100
+            / POS_STATE_CONFIG.round_per_term(view)
+            / BONUS_VOTE_MAX_SIZE
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
@@ -260,6 +268,10 @@ pub struct TermData {
 impl TermData {
     pub fn start_view(&self) -> u64 { self.start_view }
 
+    pub fn get_term(&self) -> u64 {
+        POS_STATE_CONFIG.get_term_view(self.start_view).0
+    }
+
     pub fn node_list(&self) -> &NodeList { &self.node_list }
 }
 
@@ -289,7 +301,8 @@ impl Eq for ElectingHeap {}
 impl TermData {
     fn next_term(&self, node_list: NodeList, seed: Vec<u8>) -> Self {
         TermData {
-            start_view: self.start_view + POS_STATE_CONFIG.round_per_term(),
+            start_view: self.start_view
+                + POS_STATE_CONFIG.round_per_term(self.start_view),
             seed,
             node_list,
         }
@@ -403,8 +416,8 @@ impl TermList {
         }
         // This double-check should always pass.
         debug_assert!(
-            self.term_list[TERM_LIST_LEN].start_view
-                == new_term.saturating_mul(POS_STATE_CONFIG.round_per_term())
+            Some(self.term_list[TERM_LIST_LEN].start_view)
+                == POS_STATE_CONFIG.get_starting_view_for_term(new_term)
         );
         self.term_list.remove(0);
         let new_term = self
@@ -635,16 +648,14 @@ impl PosState {
             }
         };
 
-        if election_tx
-            .target_term
-            .checked_mul(POS_STATE_CONFIG.round_per_term())
-            .is_none()
+        let target_view = match POS_STATE_CONFIG
+            .get_starting_view_for_term(election_tx.target_term)
         {
-            return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
-        }
-
-        let target_view =
-            election_tx.target_term * POS_STATE_CONFIG.round_per_term();
+            None => {
+                return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN)
+            }
+            Some(v) => v,
+        };
 
         if node.lock_status.available_votes() == 0 {
             return Some(DiscardedVMStatus::ELECTION_WITHOUT_VOTES);
@@ -652,7 +663,8 @@ impl PosState {
         // Do not check `ELECTION_TERM_END_ROUND` because we are using the
         // committed state in this simple validation.
         if target_view
-            <= self.current_view + POS_STATE_CONFIG.election_term_end_round()
+            <= self.current_view
+                + POS_STATE_CONFIG.election_term_end_round(self.current_view)
         {
             return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
         }
@@ -691,13 +703,21 @@ impl PosState {
         if node.lock_status.available_votes() == 0 {
             bail!("Election without any votes");
         }
-        let target_view =
-            election_tx.target_term * POS_STATE_CONFIG.round_per_term();
+        let target_view = match POS_STATE_CONFIG
+            .get_starting_view_for_term(election_tx.target_term)
+        {
+            None => {
+                bail!("target view overflows, election_tx={:?}", election_tx)
+            }
+            Some(v) => v,
+        };
         if target_view
-            > self.current_view + POS_STATE_CONFIG.election_term_start_round()
+            > self.current_view
+                + POS_STATE_CONFIG.election_term_start_round(self.current_view)
             || target_view
                 <= self.current_view
-                    + POS_STATE_CONFIG.election_term_end_round()
+                    + POS_STATE_CONFIG
+                        .election_term_end_round(self.current_view)
         {
             bail!(
                 "Target term is not open for election: target={} current={}",
@@ -857,25 +877,28 @@ impl PosState {
     }
 
     pub fn final_serving_view(&self, author: &AccountAddress) -> Option<Round> {
-        let mut final_elected_view = None;
+        let mut final_elected_term = None;
         for term in self.term_list.term_list.iter().rev() {
             match &term.node_list {
                 NodeList::Electing(heap) => {
                     if heap.1.contains(author) {
-                        final_elected_view = Some(term.start_view);
+                        final_elected_term = Some(term.get_term());
                         break;
                     }
                 }
                 NodeList::Elected(map) => {
                     if map.0.contains_key(author) {
-                        final_elected_view = Some(term.start_view);
+                        final_elected_term = Some(term.get_term());
                         break;
                     }
                 }
             }
         }
-        final_elected_view.map(|v| {
-            v + TERM_LIST_LEN as u64 * POS_STATE_CONFIG.round_per_term() + 1
+        final_elected_term.map(|t| {
+            POS_STATE_CONFIG
+                .get_starting_view_for_term(t + TERM_LIST_LEN as u64)
+                .expect("checked term")
+                + 1
         })
     }
 
@@ -1012,27 +1035,30 @@ impl PosState {
             let (verifier, term_seed) = self.get_committee_at(0)?;
             // genesis
             Some(EpochState::new(1, verifier, term_seed.clone()))
-        } else if self.current_view % POS_STATE_CONFIG.round_per_term() == 0 {
-            let new_term =
-                self.current_view / POS_STATE_CONFIG.round_per_term();
-            let (verifier, term_seed) = self.get_committee_at(new_term)?;
-            // generate new epoch for new term.
-            self.term_list.new_term(
-                new_term,
-                self.pivot_decision.block_hash.as_bytes().to_vec(),
-            );
-            // TODO(lpl): If we allow epoch changes within a term, this
-            // should be updated.
-            Some(EpochState::new(new_term + 1, verifier, term_seed.clone()))
-        } else if self.current_view
-            >= POS_STATE_CONFIG.first_end_election_view()
-            && self.current_view % POS_STATE_CONFIG.round_per_term()
-                == POS_STATE_CONFIG.round_per_term() / 2
-        {
-            self.term_list.finalize_election();
-            None
         } else {
-            None
+            let (term, view_in_term) =
+                POS_STATE_CONFIG.get_term_view(self.current_view);
+            if view_in_term == 0 {
+                let new_term = term;
+                let (verifier, term_seed) = self.get_committee_at(new_term)?;
+                // generate new epoch for new term.
+                self.term_list.new_term(
+                    new_term,
+                    self.pivot_decision.block_hash.as_bytes().to_vec(),
+                );
+                // TODO(lpl): If we allow epoch changes within a term, this
+                // should be updated.
+                Some(EpochState::new(new_term + 1, verifier, term_seed.clone()))
+            } else if self.current_view
+                >= POS_STATE_CONFIG.first_end_election_view()
+                && view_in_term
+                    == POS_STATE_CONFIG.round_per_term(self.current_view) / 2
+            {
+                self.term_list.finalize_election();
+                None
+            } else {
+                None
+            }
         };
         if let Some(epoch_state) = &epoch_state {
             self.epoch_state = epoch_state.clone();

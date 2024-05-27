@@ -159,6 +159,11 @@ enum_with_from_u8! {
         CHAINID = 0x46,
         #[doc = "get balance of own account"]
         SELFBALANCE = 0x47,
+        #[doc = "base fee for EIP-1559 (EIP-3198)"]
+        BASEFEE = 0x48,
+
+        // BLOBHASH=0x49
+        // BLOBBASEFEE=0x4A
 
         #[doc = "remove item from stack"]
         POP = 0x50,
@@ -184,12 +189,15 @@ enum_with_from_u8! {
         GAS = 0x5a,
         #[doc = "set a potential jump destination"]
         JUMPDEST = 0x5b,
-        #[doc = "Marks the entry point to a subroutine."]
-        BEGINSUB = 0x5c,
-        #[doc = "Returns from a subroutine."]
-        RETURNSUB = 0x5d,
-        #[doc = "Jumps to a defined BEGINSUB subroutine."]
-        JUMPSUB = 0x5e,
+        #[doc = "Marks the entry point to a subroutine (pre cip-142). load word from transient storage (after cip-142)"]
+        #[allow(non_camel_case_types)]
+        BEGINSUB_TLOAD = 0x5c,
+        #[doc = "Returns from a subroutine (pre cip-142). store word from transient storage (after cip-142)"]
+        #[allow(non_camel_case_types)]
+        RETURNSUB_TSTORE = 0x5d,
+        #[doc = "Jumps to a defined BEGINSUB subroutine (pre cip-143). copy data from one memory range to another (after cip-143)"]
+        #[allow(non_camel_case_types)]
+        JUMPSUB_MCOPY = 0x5e,
 
         #[doc = "place zero item on stack (EIP-3855/CIP-119)"]
         PUSH0 = 0x5f,
@@ -347,10 +355,13 @@ enum_with_from_u8! {
         DELEGATECALL = 0xf4,
         #[doc = "create a new account and set creation address to sha3(sender + sha3(init code)) % 2**160"]
         CREATE2 = 0xf5,
-        #[doc = "stop execution and revert state changes. Return output data."]
-        REVERT = 0xfd,
         #[doc = "like CALL but it does not take value, nor modify the state"]
         STATICCALL = 0xfa,
+        #[doc = "stop execution and revert state changes. Return output data."]
+        REVERT = 0xfd,
+
+        // INVALID = 0xfe
+
         #[doc = "halt execution and register account for later deletion"]
         SUICIDE = 0xff,
     }
@@ -365,8 +376,13 @@ impl Instruction {
         if instruction == Some(PUSH0) && !spec.cip119 {
             instruction = None;
         }
+        if instruction == Some(BASEFEE) && !spec.cip1559 {
+            instruction = None;
+        }
         return instruction;
     }
+
+    pub fn u8(self) -> u8 { self as u8 }
 
     /// Returns number of bytes to read for `PUSHN` instruction
     /// PUSH1 -> 1
@@ -409,8 +425,14 @@ impl Instruction {
     }
 
     /// Returns the instruction info.
-    pub fn info(&self) -> &'static InstructionInfo {
-        INSTRUCTIONS[*self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")
+    pub fn info<const CANCUN: bool>(&self) -> &InstructionInfo {
+        let instrs = if !CANCUN {
+            &*INSTRUCTIONS
+        } else {
+            &*INSTRUCTIONS_CANCUN
+        };
+
+        instrs[*self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")
     }
 }
 
@@ -479,7 +501,7 @@ impl InstructionInfo {
 
 lazy_static! {
     /// Static instruction table.
-    static ref INSTRUCTIONS: [Option<InstructionInfo>; 0x100] = {
+    pub static ref INSTRUCTIONS: [Option<InstructionInfo>; 0x100] = {
         let mut arr = [None; 0x100];
         arr[STOP as usize] = Some(InstructionInfo::new("STOP", 0, 0, GasPriceTier::Zero));
         arr[ADD as usize] = Some(InstructionInfo::new("ADD", 2, 1, GasPriceTier::VeryLow));
@@ -532,6 +554,7 @@ lazy_static! {
         arr[GASLIMIT as usize] = Some(InstructionInfo::new("GASLIMIT", 0, 1, GasPriceTier::Base));
         arr[CHAINID as usize] = Some(InstructionInfo::new("CHAINID", 0, 1, GasPriceTier::Base));
         arr[SELFBALANCE as usize] = Some(InstructionInfo::new("SELFBALANCE", 0, 1, GasPriceTier::Low));
+        arr[BASEFEE as usize] = Some(InstructionInfo::new("BASEFEE", 0, 1, GasPriceTier::VeryLow));
         arr[POP as usize] = Some(InstructionInfo::new("POP", 1, 0, GasPriceTier::Base));
         arr[MLOAD as usize] = Some(InstructionInfo::new("MLOAD", 1, 1, GasPriceTier::VeryLow));
         arr[MSTORE as usize] = Some(InstructionInfo::new("MSTORE", 2, 0, GasPriceTier::VeryLow));
@@ -614,9 +637,9 @@ lazy_static! {
         arr[LOG2 as usize] = Some(InstructionInfo::new("LOG2", 4, 0, GasPriceTier::Special));
         arr[LOG3 as usize] = Some(InstructionInfo::new("LOG3", 5, 0, GasPriceTier::Special));
         arr[LOG4 as usize] = Some(InstructionInfo::new("LOG4", 6, 0, GasPriceTier::Special));
-        arr[BEGINSUB as usize] = Some(InstructionInfo::new("BEGINSUB", 0, 0, GasPriceTier::Base));
-        arr[JUMPSUB as usize] = Some(InstructionInfo::new("JUMPSUB", 1, 0, GasPriceTier::High));
-        arr[RETURNSUB as usize] = Some(InstructionInfo::new("RETURNSUB", 0, 0, GasPriceTier::Low));
+        arr[BEGINSUB_TLOAD as usize] = Some(InstructionInfo::new("BEGINSUB", 0, 0, GasPriceTier::Base));
+        arr[JUMPSUB_MCOPY as usize] = Some(InstructionInfo::new("JUMPSUB", 1, 0, GasPriceTier::High));
+        arr[RETURNSUB_TSTORE as usize] = Some(InstructionInfo::new("RETURNSUB", 0, 0, GasPriceTier::Low));
         arr[CREATE as usize] = Some(InstructionInfo::new("CREATE", 3, 1, GasPriceTier::Special));
         arr[CALL as usize] = Some(InstructionInfo::new("CALL", 7, 1, GasPriceTier::Special));
         arr[CALLCODE as usize] = Some(InstructionInfo::new("CALLCODE", 7, 1, GasPriceTier::Special));
@@ -626,6 +649,14 @@ lazy_static! {
         arr[SUICIDE as usize] = Some(InstructionInfo::new("SUICIDE", 1, 0, GasPriceTier::Special));
         arr[CREATE2 as usize] = Some(InstructionInfo::new("CREATE2", 4, 1, GasPriceTier::Special));
         arr[REVERT as usize] = Some(InstructionInfo::new("REVERT", 2, 0, GasPriceTier::Zero));
+        arr
+    };
+
+    pub static ref INSTRUCTIONS_CANCUN: [Option<InstructionInfo>; 0x100] = {
+        let mut arr = *INSTRUCTIONS;
+        arr[BEGINSUB_TLOAD as usize] = Some(InstructionInfo::new("TLOAD", 1, 1, GasPriceTier::Special));
+        arr[JUMPSUB_MCOPY as usize] = Some(InstructionInfo::new("MCOPY", 3, 0, GasPriceTier::Special));
+        arr[RETURNSUB_TSTORE as usize] = Some(InstructionInfo::new("TSTORE", 2, 0, GasPriceTier::Special));
         arr
     };
 }

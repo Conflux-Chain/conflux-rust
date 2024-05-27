@@ -44,7 +44,9 @@ use cfx_execute_helper::{
     phantom_tx::build_bloom_and_recover_phantom,
 };
 use cfx_executor::{executive::ExecutionOutcome, state::State};
+use geth_tracer::GethTraceWithHash;
 
+use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
@@ -985,7 +987,7 @@ impl ConsensusGraph {
         let inner = self.inner.read();
 
         // NOTE: as batches are processed atomically and only the
-        // first batch (last few epochs) is likely to fluctuate, is is unlikely
+        // first batch (last few epochs) is likely to fluctuate, it is unlikely
         // that releasing the lock between batches would cause inconsistency:
         // we assume there are no pivot chain reorgs deeper than batch_size.
         // However, we still add a simple sanity check here:
@@ -1435,6 +1437,29 @@ impl ConsensusGraph {
             .call_virtual(tx, &epoch_id, epoch_size, request)
     }
 
+    pub fn collect_epoch_geth_trace(
+        &self, epoch_num: u64, tx_hash: Option<H256>,
+        opts: GethDebugTracingOptions,
+    ) -> RpcResult<Vec<GethTraceWithHash>> {
+        // only allow to call against stated epoch
+        let epoch = EpochNumber::Number(epoch_num);
+        self.validate_stated_epoch(&epoch)?;
+
+        let epoch_block_hashes = if let Ok(v) =
+            self.get_block_hashes_by_epoch(epoch)
+        {
+            v
+        } else {
+            bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
+        };
+
+        self.executor.collect_epoch_geth_trace(
+            epoch_block_hashes,
+            tx_hash,
+            opts,
+        )
+    }
+
     /// Get the number of processed blocks (i.e., the number of calls to
     /// on_new_block()
     pub fn get_processed_block_count(&self) -> usize {
@@ -1811,9 +1836,33 @@ impl ConsensusGraph {
         Ok(Some(bloom))
     }
 
+    pub fn get_phantom_block_pivot_by_number(
+        &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
+        include_traces: bool,
+    ) -> Result<Option<PhantomBlock>, String> {
+        self.get_phantom_block_by_number_inner(
+            block_num,
+            pivot_assumption,
+            include_traces,
+            true,
+        )
+    }
+
     pub fn get_phantom_block_by_number(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool,
+    ) -> Result<Option<PhantomBlock>, String> {
+        self.get_phantom_block_by_number_inner(
+            block_num,
+            pivot_assumption,
+            include_traces,
+            false,
+        )
+    }
+
+    fn get_phantom_block_by_number_inner(
+        &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
+        include_traces: bool, only_pivot: bool,
     ) -> Result<Option<PhantomBlock>, String> {
         let hashes = self.get_block_hashes_by_epoch(block_num)?;
 
@@ -1858,9 +1907,17 @@ impl ConsensusGraph {
             traces: vec![],
         };
 
-        let mut gas_used = U256::from(0);
+        let mut accumulated_gas_used = U256::from(0);
+        let mut gas_used_offset;
 
-        for b in &blocks {
+        let iter_blocks = if only_pivot {
+            &blocks[blocks.len() - 1..]
+        } else {
+            &blocks[..]
+        };
+
+        for b in iter_blocks {
+            gas_used_offset = accumulated_gas_used;
             // note: we need the receipts to reconstruct a phantom block.
             // as a result, we cannot return unexecuted blocks in eth_* RPCs.
             let exec_info = match self
@@ -1932,11 +1989,11 @@ impl ConsensusGraph {
                             return Err("Inconsistent state: zero transaction gas price".into());
                         }
 
-                        // FIXME(thegaram): is this correct?
-                        gas_used += receipt.gas_fee / tx.gas_price();
+                        accumulated_gas_used =
+                            gas_used_offset + receipt.accumulated_gas_used;
 
                         phantom_block.receipts.push(Receipt {
-                            accumulated_gas_used: gas_used,
+                            accumulated_gas_used,
                             outcome_status: receipt.outcome_status,
                             ..receipt.clone()
                         });
@@ -1983,7 +2040,8 @@ impl ConsensusGraph {
                             ));
 
                             // note: phantom txs consume no gas
-                            let phantom_receipt = p.into_receipt(gas_used);
+                            let phantom_receipt =
+                                p.into_receipt(accumulated_gas_used);
 
                             phantom_block
                                 .bloom

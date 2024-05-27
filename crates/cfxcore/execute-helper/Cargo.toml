@@ -18,7 +18,7 @@ cfx-statedb = { path = "../../dbs/statedb" }
 cfx-vm-tracer-derive = { path= "../../util/cfx-vm-tracer-derive" }
 cfx-types = { path = "../../cfx_types" }
 cfx-vm-types = { path = "../vm-types" }
-# cfx-vm-interpreter = { path = "../vm-interpreter" }
+cfx-vm-interpreter = { path = "../vm-interpreter" }
 cfx-executor = { path = "../executor" }
 error-chain = { version = "0.12", default-features = false }
 # keccak-hash = "0.5"
@@ -35,6 +35,9 @@ rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git",
 # rustc-hex = "2.1"
 serde = { version = "1.0", features = ["rc"] }
 serde_derive = "1.0"
+serde_json = { version = "1.0", default-features = false, features = [
+    "alloc",
+]}
 # serde_json = "1.0"
 solidity-abi = { path= "../../util/solidity-abi" }
 # solidity-abi-derive = { path="../../util/solidity-abi-derive" }
@@ -48,4 +51,10 @@ strum_macros = "0.20"
 pow-types = {path = "../core/src/pos/types/pow-types" }
 # impl-trait-for-tuples = "^0.2"
 # impl-tools = "^0.10"
-typemap = "0.3"
+typemap = { package = "typemap-ors", version = "1.0"}
+
+alloy-primitives = { workspace = true }
+alloy-sol-types = "0.7.1"
+revm = { version = "8.0", default-features = false, features = ["std"] }
+alloy-rpc-types-trace = { workspace = true }
+geth-tracer = { path = "../geth-tracer" }

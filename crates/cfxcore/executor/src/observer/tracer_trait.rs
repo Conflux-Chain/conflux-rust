@@ -1,15 +1,14 @@
 use super::{
-    call_tracer::CallTracer, checkpoint_tracer::CheckpointTracer,
-    internal_transfer_tracer::InternalTransferTracer,
-    opcode_tracer::OpcodeTracer, StorageTracer,
+    CallTracer, CheckpointTracer, InternalTransferTracer, OpcodeTracer,
+    StorageTracer,
 };
 
 pub trait TracerTrait:
     CheckpointTracer
     + CallTracer
     + InternalTransferTracer
-    + OpcodeTracer
     + StorageTracer
+    + OpcodeTracer
 {
 }
 

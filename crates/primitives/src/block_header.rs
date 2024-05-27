@@ -6,10 +6,13 @@ use crate::{
     block::BlockHeight, bytes::Bytes, hash::keccak, pos::PosBlockId,
     receipt::BlockReceipts, MERKLE_NULL_NODE, NULL_EPOCH,
 };
-use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
+use cfx_types::{
+    Address, Bloom, Space, SpaceMap, H256, KECCAK_EMPTY_BLOOM, U256,
+};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use once_cell::sync::OnceCell;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     mem,
     ops::{Deref, DerefMut},
@@ -58,6 +61,8 @@ pub struct BlockHeaderRlpPart {
     nonce: U256,
     /// Referred PoS block ID.
     pos_reference: Option<H256>,
+    /// `[core_space_base_price, espace_base_price]`.
+    base_price: Option<BasePrice>,
 }
 
 impl PartialEq for BlockHeaderRlpPart {
@@ -76,6 +81,8 @@ impl PartialEq for BlockHeaderRlpPart {
             && self.gas_limit == o.gas_limit
             && self.referee_hashes == o.referee_hashes
             && self.custom == o.custom
+            && self.pos_reference == o.pos_reference
+            && self.base_price == o.base_price
     }
 }
 
@@ -167,6 +174,15 @@ impl BlockHeader {
     /// Get the PoS reference.
     pub fn pos_reference(&self) -> &Option<PosBlockId> { &self.pos_reference }
 
+    pub fn base_price(&self) -> Option<SpaceMap<U256>> {
+        self.base_price.map(
+            |BasePrice {
+                 core_base_price,
+                 espace_base_price,
+             }| SpaceMap::new(core_base_price, espace_base_price),
+        )
+    }
+
     /// Set the nonce field of the header.
     pub fn set_nonce(&mut self, nonce: U256) { self.nonce = nonce; }
 
@@ -212,6 +228,7 @@ impl BlockHeader {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
         let list_len = HEADER_LIST_MIN_LEN
             + self.pos_reference.is_some() as usize
+            + self.base_price.is_some() as usize
             + self.custom.len();
         stream
             .begin_list(list_len)
@@ -231,6 +248,9 @@ impl BlockHeader {
         if self.pos_reference.is_some() {
             stream.append(&self.pos_reference);
         }
+        if self.base_price.is_some() {
+            stream.append(&self.base_price);
+        }
 
         for b in &self.custom {
             if self.height
@@ -249,6 +269,7 @@ impl BlockHeader {
         let list_len = HEADER_LIST_MIN_LEN
             + 1
             + self.pos_reference.is_some() as usize
+            + self.base_price.is_some() as usize
             + self.custom.len();
         stream
             .begin_list(list_len)
@@ -269,6 +290,9 @@ impl BlockHeader {
         if self.pos_reference.is_some() {
             stream.append(&self.pos_reference);
         }
+        if self.base_price.is_some() {
+            stream.append(&self.base_price);
+        }
         for b in &self.custom {
             if self.height
                 >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
@@ -286,6 +310,7 @@ impl BlockHeader {
         let list_len = HEADER_LIST_MIN_LEN
             + 2
             + self.pos_reference.is_some() as usize
+            + self.base_price.is_some() as usize
             + self.custom.len();
         stream
             .begin_list(list_len)
@@ -308,6 +333,9 @@ impl BlockHeader {
             .append(&self.pow_hash);
         if self.pos_reference.is_some() {
             stream.append(&self.pos_reference);
+        }
+        if self.base_price.is_some() {
+            stream.append(&self.base_price);
         }
 
         for b in &self.custom {
@@ -340,11 +368,14 @@ impl BlockHeader {
             custom: vec![],
             nonce: r.val_at(13)?,
             pos_reference: r.val_at(15).unwrap_or(None),
+            base_price: r.val_at(16).unwrap_or(None),
         };
         let pow_hash = r.val_at(14)?;
 
-        for i in
-            (15 + rlp_part.pos_reference.is_some() as usize)..r.item_count()?
+        for i in (15
+            + rlp_part.pos_reference.is_some() as usize
+            + rlp_part.base_price.is_some() as usize)
+            ..r.item_count()?
         {
             if rlp_part.height
                 >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
@@ -389,6 +420,7 @@ pub struct BlockHeaderBuilder {
     custom: Vec<Bytes>,
     nonce: U256,
     pos_reference: Option<PosBlockId>,
+    base_price: Option<BasePrice>,
 }
 
 impl BlockHeaderBuilder {
@@ -410,6 +442,7 @@ impl BlockHeaderBuilder {
             custom: Vec::new(),
             nonce: U256::zero(),
             pos_reference: None,
+            base_price: None,
         }
     }
 
@@ -505,6 +538,16 @@ impl BlockHeaderBuilder {
         self
     }
 
+    pub fn with_base_price(
+        &mut self, maybe_base_price: Option<SpaceMap<U256>>,
+    ) -> &mut Self {
+        self.base_price = maybe_base_price.map(|x| BasePrice {
+            core_base_price: x[Space::Native],
+            espace_base_price: x[Space::Ethereum],
+        });
+        self
+    }
+
     pub fn build(&self) -> BlockHeader {
         let mut block_header = BlockHeader {
             rlp_part: BlockHeaderRlpPart {
@@ -524,6 +567,7 @@ impl BlockHeaderBuilder {
                 custom: self.custom.clone(),
                 nonce: self.nonce,
                 pos_reference: self.pos_reference,
+                base_price: self.base_price.clone(),
             },
             hash: None,
             pow_hash: None,
@@ -606,9 +650,12 @@ impl Decodable for BlockHeader {
             custom: vec![],
             nonce: r.val_at(13)?,
             pos_reference: r.val_at(14).unwrap_or(None),
+            base_price: r.val_at(15).unwrap_or(None),
         };
-        for i in
-            (14 + rlp_part.pos_reference.is_some() as usize)..r.item_count()?
+        for i in (14
+            + rlp_part.pos_reference.is_some() as usize
+            + rlp_part.base_price.is_some() as usize)
+            ..r.item_count()?
         {
             if rlp_part.height
                 >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
@@ -629,6 +676,66 @@ impl Decodable for BlockHeader {
 
         Ok(header)
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, RlpDecodable, RlpEncodable, PartialEq)]
+pub struct BasePrice {
+    pub core_base_price: U256,
+    pub espace_base_price: U256,
+}
+
+const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
+
+pub fn compute_next_price(
+    gas_target: U256, gas_actual: U256, last_base_price: U256,
+    min_base_price: U256,
+) -> U256 {
+    const DENOM: usize = BASE_PRICE_CHANGE_DENOMINATOR;
+
+    let next_base_price = if gas_target.is_zero() || gas_target == gas_actual {
+        last_base_price
+    } else if gas_actual > gas_target {
+        let delta = gas_actual - gas_target;
+        let mut price_delta = last_base_price * delta / gas_target / DENOM;
+        if price_delta.is_zero() {
+            price_delta = U256::one();
+        }
+        last_base_price + price_delta
+    } else {
+        let delta = gas_target - gas_actual;
+        let mut price_delta = last_base_price * delta / gas_target / DENOM;
+        if price_delta.is_zero() {
+            price_delta = U256::one();
+        }
+        last_base_price - price_delta
+    };
+    next_base_price.max(min_base_price)
+}
+
+pub fn estimate_gas_used(
+    gas_target: U256, current_base_price: U256, last_base_price: U256,
+) -> U256 {
+    // dbg!(gas_target, current_base_price, last_base_price);
+    const DENOM: usize = BASE_PRICE_CHANGE_DENOMINATOR;
+
+    let delta = U256::max(U256::one(), last_base_price / DENOM);
+
+    let upper_base_price = last_base_price + delta;
+    let lower_base_price = last_base_price - delta;
+
+    if current_base_price > upper_base_price {
+        gas_target * 2
+    } else if current_base_price < lower_base_price {
+        U256::zero()
+    } else {
+        gas_target * 2 * (current_base_price - lower_base_price)
+            / (upper_base_price - lower_base_price)
+    }
+}
+
+/// A helper function for `compute_next_price` which takes a typle as input
+pub fn compute_next_price_tuple(x: (U256, U256, U256, U256)) -> U256 {
+    compute_next_price(x.0, x.1, x.2, x.3)
 }
 
 #[cfg(test)]
@@ -674,6 +781,7 @@ mod tests {
             storage_sponsor_paid: false,
             storage_collateralized: vec![],
             storage_released: vec![],
+            burnt_gas_fee: None,
         };
 
         // 10 blocks with 10 empty receipts each
@@ -723,6 +831,7 @@ mod tests {
                     storage_sponsor_paid: false,
                     storage_collateralized: vec![],
                     storage_released: vec![],
+                    burnt_gas_fee: None,
                 },
                 Receipt {
                     accumulated_gas_used: U256::zero(),
@@ -752,6 +861,7 @@ mod tests {
                     storage_sponsor_paid: false,
                     storage_collateralized: vec![],
                     storage_released: vec![],
+                    burnt_gas_fee: None,
                 },
             ],
             block_number: 0,
@@ -788,6 +898,7 @@ mod tests {
                 storage_sponsor_paid: false,
                 storage_collateralized: vec![],
                 storage_released: vec![],
+                burnt_gas_fee: None,
             }],
             block_number: 0,
             secondary_reward: U256::zero(),

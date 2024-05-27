@@ -3,8 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_parameters::internal_contract_addresses::CONTEXT_CONTRACT_ADDRESS;
-use cfx_types::{Address, U256};
+use cfx_types::{Address, BigEndianHash, U256};
 use cfx_vm_interpreter::GasPriceTier;
+
+use crate::{internal_contract::epoch_hash_slot, return_if};
 
 use super::preludes::*;
 
@@ -13,7 +15,7 @@ make_solidity_contract! {
 }
 
 fn generate_fn_table() -> SolFnTable {
-    make_function_table!(EpochNumber, PoSHeight, FinalizedEpoch)
+    make_function_table!(EpochNumber, PoSHeight, FinalizedEpoch, EpochHash)
 }
 
 group_impl_is_active!(
@@ -22,6 +24,8 @@ group_impl_is_active!(
     PoSHeight,
     FinalizedEpoch
 );
+
+group_impl_is_active!(|spec: &Spec| spec.cip133_core, EpochHash);
 
 make_solidity_function! {
     struct EpochNumber((), "epochNumber()", U256);
@@ -68,6 +72,31 @@ impl SimpleExecutionTrait for FinalizedEpoch {
         context: &mut InternalRefContext,
     ) -> vm::Result<U256> {
         Ok(context.env.finalized_epoch.unwrap_or(0).into())
+    }
+}
+
+make_solidity_function! {
+    struct EpochHash(U256, "epochHash(uint256)", H256);
+}
+
+impl_function_type!(EpochHash, "query", gas: |spec: &Spec| spec.sload_gas);
+
+impl SimpleExecutionTrait for EpochHash {
+    fn execute_inner(
+        &self, number: U256, _params: &ActionParams,
+        context: &mut InternalRefContext,
+    ) -> vm::Result<H256> {
+        return_if!(number > U256::from(u64::MAX));
+
+        let number = number.as_u64();
+
+        return_if!(number < context.spec.cip133_e);
+        return_if!(number > context.env.epoch_height);
+        return_if!(number
+            .checked_add(65536)
+            .map_or(false, |n| n <= context.env.epoch_height));
+        let res = context.state.get_system_storage(&epoch_hash_slot(number))?;
+        Ok(BigEndianHash::from_uint(&res))
     }
 }
 

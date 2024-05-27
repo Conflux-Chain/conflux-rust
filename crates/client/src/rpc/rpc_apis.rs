@@ -12,13 +12,14 @@ use std::{
 pub enum Api {
     Cfx,
     Eth,
-    Debug,
+    Debug, // core space parity style debug
     Pubsub,
     Test,
     Trace,
     TxPool,
     Pos,
     EthPubsub,
+    EthDebug,
 }
 
 impl FromStr for Api {
@@ -36,6 +37,7 @@ impl FromStr for Api {
             "txpool" => Ok(TxPool),
             "pos" => Ok(Pos),
             "ethpubsub" => Ok(EthPubsub),
+            "ethdebug" => Ok(EthDebug),
             _ => Err("Unknown api type".into()),
         }
     }
@@ -53,13 +55,14 @@ impl Display for Api {
             Api::TxPool => write!(f, "txpool"),
             Api::Pos => write!(f, "pos"),
             Api::EthPubsub => write!(f, "ethpubsub"),
+            Api::EthDebug => write!(f, "ethdebug"),
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ApiSet {
-    All,
+    All, // core space all apis
     Safe,
     Evm, // Ethereum api set
     List(HashSet<Api>),

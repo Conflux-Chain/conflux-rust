@@ -11,7 +11,7 @@ use cfx_vm_interpreter::GasPriceTier;
 use super::{super::impls::params_control::*, preludes::*};
 
 make_solidity_contract! {
-    pub struct ParamsControl(PARAMS_CONTROL_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip94, is_active: |spec: &Spec| spec.cip94);
+    pub struct ParamsControl(PARAMS_CONTROL_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip94n, is_active: |spec: &Spec| spec.cip94);
 }
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(
@@ -137,7 +137,8 @@ fn test_vote_abi_length() {
 pub const POW_BASE_REWARD_INDEX: u8 = 0;
 pub const POS_REWARD_INTEREST_RATE_INDEX: u8 = 1;
 pub const STORAGE_POINT_PROP_INDEX: u8 = 2;
-pub const PARAMETER_INDEX_MAX: usize = 3;
+pub const BASEFEE_PROP_INDEX: u8 = 3;
+pub const PARAMETER_INDEX_MAX: usize = 4;
 
 pub const OPTION_UNCHANGE_INDEX: u8 = 0;
 pub const OPTION_INCREASE_INDEX: u8 = 1;
