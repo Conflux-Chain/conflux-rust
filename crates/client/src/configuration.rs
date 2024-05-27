@@ -1432,8 +1432,7 @@ impl Configuration {
         params.transition_numbers.cancun_opcodes = self
             .raw_conf
             .cancun_opcodes_transition_number
-            .or(self.raw_conf.next_hardfork_transition_height)
-            // Don't enable by default, since the gas is changed
+            .or(self.raw_conf.next_hardfork_transition_number)
             .unwrap_or(default_transition_time);
 
         if params.transition_heights.cip1559
