@@ -12,7 +12,7 @@ use crate::rpc::{
     RpcResult,
 };
 use cfx_addr::Network;
-use cfx_types::{Address, AddressSpaceUtil, U256, U64};
+use cfx_types::{Address, AddressSpaceUtil, H256, U256, U64};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -20,15 +20,38 @@ use primitives::{
     transaction::{
         native_transaction::NativeTransaction as PrimitiveTransaction, Action,
     },
-    AccessList, SignedTransaction, Transaction, TransactionWithSignature,
+    AccessList, AccessListItem, SignedTransaction, Transaction,
+    TransactionWithSignature,
 };
-use std::{cmp::min, sync::Arc};
+use std::{cmp::min, convert::Into, sync::Arc};
 
 // use serde_json::de::ParserNumber::U64;
 
 /// The MAX_GAS_CALL_REQUEST is one magnitude higher than block gas limit and
 /// not too high that a call_virtual consumes too much resource.
 pub const MAX_GAS_CALL_REQUEST: u64 = 15_000_000;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CoreAccessListItem {
+    pub address: RpcAddress,
+    pub storage_keys: Vec<H256>,
+}
+
+impl Into<AccessListItem> for CoreAccessListItem {
+    fn into(self) -> AccessListItem {
+        AccessListItem {
+            address: self.address.hex_address,
+            storage_keys: self.storage_keys,
+        }
+    }
+}
+
+pub type CoreAccessList = Vec<CoreAccessListItem>;
+
+fn to_primitive_access_list(list: CoreAccessList) -> AccessList {
+    list.into_iter().map(|item| item.into()).collect()
+}
 
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,7 +73,7 @@ pub struct CallRequest {
     /// StorageLimit
     pub storage_limit: Option<U64>,
     /// Access list in EIP-2930
-    pub access_list: Option<AccessList>,
+    pub access_list: Option<CoreAccessList>,
     pub max_fee_per_gas: Option<U256>,
     pub max_priority_fee_per_gas: Option<U256>,
     #[serde(rename = "type")]
@@ -214,7 +237,7 @@ pub fn sign_call(
             epoch_height,
             chain_id,
             data,
-            access_list,
+            access_list: to_primitive_access_list(access_list),
         }),
         2 => Cip1559(Cip1559Transaction {
             nonce,
@@ -227,7 +250,7 @@ pub fn sign_call(
             epoch_height,
             chain_id,
             data,
-            access_list,
+            access_list: to_primitive_access_list(access_list),
         }),
         x => {
             return Err(
