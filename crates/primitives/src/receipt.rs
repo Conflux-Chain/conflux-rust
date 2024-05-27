@@ -113,20 +113,6 @@ pub struct Receipt {
     pub burnt_gas_fee: Option<U256>,
 }
 
-#[test]
-fn tmp() {
-    let receipt = Receipt {
-        accumulated_gas_used: 189000.into(),
-        gas_fee: 60054.into(),
-        burnt_gas_fee: Some(30027.into()),
-        ..Default::default()
-    };
-    dbg!(&receipt);
-    let x = receipt.rlp_bytes();
-    let receipt2: Receipt = Rlp::new(&x).as_val().unwrap();
-    assert_eq!(receipt2, receipt)
-}
-
 impl Encodable for Receipt {
     fn rlp_append(&self, s: &mut RlpStream) {
         let length = if self.burnt_gas_fee.is_none() { 9 } else { 10 };
@@ -243,4 +229,18 @@ fn test_transaction_outcome_rlp() {
     assert_eq!(rlp::encode(&TransactionStatus::Success), rlp::encode(&0u8));
     assert_eq!(rlp::encode(&TransactionStatus::Failure), rlp::encode(&1u8));
     assert_eq!(rlp::encode(&TransactionStatus::Skipped), rlp::encode(&2u8));
+}
+
+#[test]
+fn test_receipt_rlp_serde() {
+    let mut receipt = Receipt {
+        accumulated_gas_used: 189000.into(),
+        gas_fee: 60054.into(),
+        burnt_gas_fee: Some(30027.into()),
+        ..Default::default()
+    };
+    assert_eq!(receipt, Rlp::new(&receipt.rlp_bytes()).as_val().unwrap());
+
+    receipt.burnt_gas_fee = None;
+    assert_eq!(receipt, Rlp::new(&receipt.rlp_bytes()).as_val().unwrap());
 }
