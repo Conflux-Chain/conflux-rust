@@ -38,8 +38,8 @@ class Eip1559Test(Web3Base):
         # initialize EVM account
         self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
-        self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
-        assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
+        self.cross_space_transfer(self.evmAccount.address, 100 * 10 ** 18)
+        assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(100 * 10 ** 18))
 
         x = b32_address_to_hex("NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH")
         y = b32_address_to_hex('NET10:TYPE.BUILTIN:AAEJUAAAAAAAAAAAAAAAAAAAAAAAAAAAA27GYVFYR7')
@@ -51,8 +51,8 @@ class Eip1559Test(Web3Base):
             "type": "0x2",
             "to": self.evmAccount.address,
             "value": 1,
-            "gas": 210000,
-            'maxFeePerGas': 20 * (10**9),
+            "gas": 30000000,
+            'maxFeePerGas': 200 * (10**9),
             'maxPriorityFeePerGas': 1,
             "nonce": nonce,
             "chainId": 10,

@@ -42,7 +42,10 @@ use crate::{
     verification::VerificationConfig,
     ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
-use cfx_executor::machine::{new_machine_with_builtin, VmFactory};
+use cfx_executor::{
+    machine::{new_machine_with_builtin, VmFactory},
+    spec::CommonParams,
+};
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
@@ -181,7 +184,9 @@ pub fn initialize_synchronization_graph_with_data_manager(
     data_man: Arc<BlockDataManager>, beta: u64, h: u64, tcr: u64, tcb: u64,
     era_epoch_count: u64, pow: Arc<PowComputer>, vm: VmFactory,
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>) {
-    let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
+    let mut params = CommonParams::default();
+    params.transition_heights.cip1559 = u64::MAX;
+    let machine = Arc::new(new_machine_with_builtin(params, vm));
     let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_verifier = Arc::new(PosVerifier::new(
         None,
