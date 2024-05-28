@@ -862,12 +862,16 @@ impl SynchronizationGraphInner {
     fn verify_graph_ready_block(
         &self, index: usize, verification_config: &VerificationConfig,
     ) -> Result<(), Error> {
-        let parent = self.arena[self.arena[index].parent].block_header.as_ref();
+        let block_header = &self.arena[index].block_header;
+        let parent = self
+            .data_man
+            .block_header_by_hash(block_header.parent_hash())
+            .expect("headers will not be deleted");
         let block = self
             .data_man
-            .block_by_hash(&self.arena[index].block_header.hash(), true)
+            .block_by_hash(&block_header.hash(), true)
             .expect("received");
-        verification_config.verify_sync_graph_ready_block(&block, parent)
+        verification_config.verify_sync_graph_ready_block(&block, &parent)
     }
 
     fn process_invalid_blocks(&mut self, invalid_set: &HashSet<usize>) {
