@@ -859,6 +859,17 @@ impl SynchronizationGraphInner {
         Ok(())
     }
 
+    fn verify_graph_ready_block(
+        &self, index: usize, verification_config: &VerificationConfig,
+    ) -> Result<(), Error> {
+        let header = self.arena[index].block_header.as_ref();
+        let block = self
+            .data_man
+            .block_by_hash(&header.hash(), true)
+            .expect("received");
+        verification_config.verify_sync_graph_ready_block(&block, header)
+    }
+
     fn process_invalid_blocks(&mut self, invalid_set: &HashSet<usize>) {
         for index in invalid_set {
             let hash = self.arena[*index].block_header.hash();
@@ -1705,6 +1716,23 @@ impl SynchronizationGraph {
                     index,
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
+                let verify_result = inner
+                    .verify_graph_ready_block(index, &self.verification_config);
+                if verify_result.is_err() {
+                    warn!(
+                        "Invalid block! inserted_header={:?} err={:?}",
+                        inner.arena[index].block_header.clone(),
+                        verify_result
+                    );
+                    invalid_set.insert(index);
+                    inner.arena[index].graph_status = BLOCK_INVALID;
+                    inner.set_and_propagate_invalid(
+                        &mut queue,
+                        &mut invalid_set,
+                        index,
+                    );
+                    continue;
+                }
                 self.set_graph_ready(inner, index);
                 for child in &inner.arena[index].children {
                     debug_assert!(
@@ -1763,14 +1791,8 @@ impl SynchronizationGraph {
         inner.arena[me].block_ready = true;
 
         if need_to_verify {
-            let parent_hash = inner.arena[me].block_header.parent_hash();
-            let parent = self
-                .data_man
-                .block_header_by_hash(parent_hash)
-                .expect("parent not exist");
             let r = self.verification_config.verify_sync_graph_block_basic(
                 &block,
-                &*parent,
                 self.consensus.best_chain_id(),
             );
             match r {

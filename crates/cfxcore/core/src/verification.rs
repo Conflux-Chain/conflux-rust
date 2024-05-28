@@ -464,13 +464,12 @@ impl VerificationConfig {
     /// should discard this block and all its descendants.
     #[inline]
     pub fn verify_sync_graph_block_basic(
-        &self, block: &Block, parent: &BlockHeader, chain_id: AllChainID,
+        &self, block: &Block, chain_id: AllChainID,
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
         let block_height = block.block_header.height();
 
-        let mut total_gas: SpaceMap<U256> = SpaceMap::default();
         let mut block_size = 0;
         let transitions = &self.machine.params().transition_heights;
 
@@ -483,7 +482,6 @@ impl VerificationConfig {
                 VerifyTxMode::Remote,
             )?;
             block_size += t.rlp_size();
-            total_gas[t.space()] += *t.gas_limit();
         }
 
         if block_size > self.max_block_size_in_bytes {
@@ -495,13 +493,24 @@ impl VerificationConfig {
                 },
             )));
         }
+        Ok(())
+    }
 
-        if block_height >= self.machine.params().transition_heights.cip1559 {
+    pub fn verify_sync_graph_ready_block(
+        &self, block: &Block, parent: &BlockHeader,
+    ) -> Result<(), Error> {
+        let mut total_gas: SpaceMap<U256> = SpaceMap::default();
+        for t in &block.transactions {
+            total_gas[t.space()] += *t.gas_limit();
+        }
+
+        if block.block_header.height()
+            >= self.machine.params().transition_heights.cip1559
+        {
             self.check_base_fee(block, parent, total_gas)?;
         } else {
             self.check_hard_gas_limit(block, total_gas)?;
         }
-
         Ok(())
     }
 
