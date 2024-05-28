@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Optional, Union
+from typing import Optional, Union, TypedDict
 from web3 import Web3
 
 import eth_utils
@@ -33,6 +33,11 @@ REQUEST_BASE = {
     'chainId': 1,
     "to": b'',
 }
+
+class CfxFeeHistoryResponse(TypedDict):
+    base_fee_per_gas: list[int]
+    gas_used_ratio: list[float]
+    reward: list[list[str]] # does not convert it currently
 
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
@@ -580,6 +585,18 @@ class RpcClient:
 
     def filter_trace(self, filter: dict):
         return self.node.trace_filter(filter)
+    
+    def fee_history(self, epoch_count: int, last_epoch: Union[int, str], reward_percentiles: Optional[list[float]]=None) -> CfxFeeHistoryResponse:
+        if reward_percentiles is None:
+            reward_percentiles = [50]*epoch_count
+        if isinstance(last_epoch, int):
+            last_epoch = hex(last_epoch)
+        rtn = self.node.cfx_feeHistory(hex(epoch_count), last_epoch, reward_percentiles)
+        rtn[
+            'base_fee_per_gas'
+        ] = [ int(v, 16) for v in rtn['base_fee_per_gas'] ]
+        return rtn
+
 
     def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=None, legacy=True, should_fail=False):
         if priv_key is None:
