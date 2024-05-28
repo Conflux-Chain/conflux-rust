@@ -48,9 +48,6 @@ use primitives::{
 use rustc_hex::ToHex;
 use std::{cmp::min, convert::TryInto};
 
-mod debug;
-pub use debug::GethDebugHandler;
-
 pub struct EthHandler {
     config: RpcImplConfiguration,
     consensus: SharedConsensusGraph,
