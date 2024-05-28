@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.0.2"
+version = "2.4.0-testnet"
 dependencies = [
  "app_dirs",
  "base64ct",
@@ -3581,7 +3581,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.0.2"
+version = "2.4.0-testnet"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -7300,7 +7300,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.0.2"
+version = "2.4.0-testnet"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
