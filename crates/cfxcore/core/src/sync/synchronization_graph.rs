@@ -1763,9 +1763,14 @@ impl SynchronizationGraph {
         inner.arena[me].block_ready = true;
 
         if need_to_verify {
+            let parent_hash = inner.arena[me].block_header.parent_hash();
+            let parent = self
+                .data_man
+                .block_header_by_hash(parent_hash)
+                .expect("parent not exist");
             let r = self.verification_config.verify_sync_graph_block_basic(
                 &block,
-                &inner.arena[me].block_header,
+                &*parent,
                 self.consensus.best_chain_id(),
             );
             match r {
