@@ -41,8 +41,13 @@ use cfxcore::{
 use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
-    BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
+    filter::LogFilter,
+    receipt::EVM_SPACE_SUCCESS,
+    transaction::{
+        Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
+        EthereumTransaction::*, EIP1559_TYPE, EIP2930_TYPE, LEGACY_TX_TYPE,
+    },
+    Action, BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
     StorageValue, TransactionStatus, TransactionWithSignature,
 };
 use rustc_hex::ToHex;
@@ -79,8 +84,6 @@ impl EthHandler {
 pub fn sign_call(
     chain_id: u32, request: CallRequest,
 ) -> RpcResult<SignedTransaction> {
-    use primitives::transaction::*;
-    use EthereumTransaction::*;
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
     let nonce = request.nonce.unwrap_or_default();
@@ -90,11 +93,11 @@ pub fn sign_call(
     let default_type_id = if request.max_fee_per_gas.is_some()
         || request.max_priority_fee_per_gas.is_some()
     {
-        2
+        EIP1559_TYPE
     } else if request.access_list.is_some() {
-        1
+        EIP2930_TYPE
     } else {
-        0
+        LEGACY_TX_TYPE
     };
     let transaction_type = request
         .transaction_type
@@ -110,8 +113,8 @@ pub fn sign_call(
     let access_list = request.access_list.unwrap_or(vec![]);
     let data = request.data.unwrap_or_default().into_vec();
 
-    let transaction = match transaction_type.as_usize() {
-        0 => Eip155(Eip155Transaction {
+    let transaction = match transaction_type.as_usize() as u8 {
+        LEGACY_TX_TYPE => Eip155(Eip155Transaction {
             nonce,
             gas_price,
             gas,
@@ -120,7 +123,7 @@ pub fn sign_call(
             chain_id: Some(chain_id),
             data,
         }),
-        1 => Eip2930(Eip2930Transaction {
+        EIP2930_TYPE => Eip2930(Eip2930Transaction {
             chain_id,
             nonce,
             gas_price,
@@ -130,7 +133,7 @@ pub fn sign_call(
             data,
             access_list,
         }),
-        2 => Eip1559(Eip1559Transaction {
+        EIP1559_TYPE => Eip1559(Eip1559Transaction {
             chain_id,
             nonce,
             max_priority_fee_per_gas,
