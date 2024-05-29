@@ -9,6 +9,7 @@ use crate::{
 use cfx_types::{
     Address, Bloom, Space, SpaceMap, H256, KECCAK_EMPTY_BLOOM, U256,
 };
+use log::warn;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use once_cell::sync::OnceCell;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -691,6 +692,10 @@ pub fn compute_next_price(
     min_base_price: U256,
 ) -> U256 {
     const DENOM: usize = BASE_PRICE_CHANGE_DENOMINATOR;
+
+    if gas_actual > gas_target * 2 {
+        warn!("gas target is larger than expected");
+    }
 
     let next_base_price = if gas_target.is_zero() || gas_target == gas_actual {
         last_base_price
