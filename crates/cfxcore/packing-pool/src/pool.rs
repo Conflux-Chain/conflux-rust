@@ -352,6 +352,25 @@ mod pool_tests {
         }
     }
 
+    #[allow(dead_code)]
+    fn same_price_txs() -> PackingPool<MockTransaction> {
+        let config = PackingPoolConfig::new_for_test();
+        let mut pool = PackingPool::new(config);
+
+        static ID: AtomicUsize = AtomicUsize::new(0);
+        for i in 1000..2000 {
+            let (_, res) = pool.insert(MockTransaction {
+                sender: i,
+                nonce: 0,
+                gas_price: 20,
+                gas_limit: 1,
+                id: ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            });
+            res.unwrap();
+        }
+        pool
+    }
+
     #[test]
     fn test_split_in_middle() {
         let mut pool = default_pool(5, 10);

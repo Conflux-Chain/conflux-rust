@@ -111,7 +111,7 @@ impl DeferredPool {
         &self, space: Space, gas_target: U256, parent_base_price: U256,
         min_base_price: U256,
     ) -> (U256, U256) {
-        let packing_gas_limit = self
+        let estimated_gas_limit = self
             .packing_pool
             .in_space(space)
             .estimate_packing_gas_limit(
@@ -119,6 +119,7 @@ impl DeferredPool {
                 parent_base_price,
                 min_base_price,
             );
+        let packing_gas_limit = U256::min(gas_target * 2, estimated_gas_limit);
         let price_limit = compute_next_price(
             gas_target,
             packing_gas_limit,
@@ -171,7 +172,6 @@ impl DeferredPool {
         {
             'sender: for tx in sender_txs.iter() {
                 if tx.gas_price() < &tx_min_price {
-                    to_drop_txs.push(tx.clone());
                     break 'sender;
                 }
                 match validity(&*tx) {
@@ -1132,6 +1132,11 @@ impl TransactionPoolInner {
             return (packed_transactions, parent_base_price);
         }
 
+        debug!(
+            "Packing transaction for 1559, parent base price {:?}",
+            parent_base_price
+        );
+
         let mut block_base_price = parent_base_price.clone();
 
         let spec = machine.spec(best_block_number, best_epoch_height);
@@ -1155,32 +1160,59 @@ impl TransactionPoolInner {
             let min_base_price =
                 machine.params().min_base_price()[Space::Ethereum];
 
-            let (packing_gas_limit, base_price) =
+            let (packing_gas_limit, tx_min_price) =
                 self.deferred_pool.estimate_packing_gas_limit(
                     Space::Ethereum,
                     gas_target,
                     parent_base_price,
                     min_base_price,
                 );
+            debug!(
+                "Packing plan (espace): gas limit: {:?}, tx min price: {:?}",
+                packing_gas_limit, tx_min_price
+            );
             let (sampled_tx, used_gas, used_size) =
                 self.deferred_pool.packing_sampler(
                     Space::Ethereum,
                     packing_gas_limit,
                     block_size_limit,
                     num_txs,
-                    base_price,
+                    tx_min_price,
                     validity,
                 );
-            packed_transactions.extend_from_slice(&sampled_tx);
+
             // Recompute the base price, it should be <= estimated base price,
             // since the actual used gas is <= estimated limit
-            block_base_price[Space::Ethereum] = compute_next_price(
+            let base_price = compute_next_price(
                 gas_target,
                 used_gas,
                 parent_base_price,
                 min_base_price,
             );
-            (sampled_tx.len(), used_size)
+
+            if base_price <= tx_min_price {
+                debug!(
+                    "Packing result (espace): gas used: {:?}, base price: {:?}",
+                    used_gas, base_price
+                );
+                block_base_price[Space::Ethereum] = base_price;
+                packed_transactions.extend_from_slice(&sampled_tx);
+
+                (sampled_tx.len(), used_size)
+            } else {
+                // Should be unreachable
+                warn!(
+                    "Inconsistent packing result (espace): gas used: {:?}, base price: {:?}", 
+                    used_gas, base_price
+                );
+                block_base_price[Space::Ethereum] = compute_next_price(
+                    gas_target,
+                    U256::zero(),
+                    parent_base_price,
+                    min_base_price,
+                );
+                (0, 0)
+            }
         } else {
             (0, 0)
         };
@@ -1191,7 +1223,7 @@ impl TransactionPoolInner {
             let min_base_price =
                 machine.params().min_base_price()[Space::Native];
 
-            let (packed_limit, tx_min_price) =
+            let (packing_gas_limit, tx_min_price) =
                 self.deferred_pool.estimate_packing_gas_limit(
                     Space::Native,
                     gas_target,
@@ -1199,9 +1231,14 @@ impl TransactionPoolInner {
                     min_base_price,
                 );
 
+            debug!(
+                "Packing plan (core space): gas limit: {:?}, tx min price: {:?}",
+                packing_gas_limit, tx_min_price
+            );
+
             let (sampled_tx, used_gas, _) = self.deferred_pool.packing_sampler(
                 Space::Native,
-                packed_limit,
+                packing_gas_limit,
                 block_size_limit - evm_used_size,
                 num_txs - evm_packed_tx_num,
                 tx_min_price,
@@ -1210,12 +1247,33 @@ impl TransactionPoolInner {
 
             // Recompute the base price, it should be <= estimated base price,
             // since the actual used gas is <= estimated limit
-            block_base_price[Space::Native] = compute_next_price(
+            let base_price = compute_next_price(
                 gas_target,
                 used_gas,
                 parent_base_price,
                 min_base_price,
             );
+
+            if base_price <= tx_min_price {
+                debug!(
+                    "Packing result (core space): gas used: {:?}, base price: {:?}",
+                    used_gas, base_price
+                );
+                block_base_price[Space::Native] = base_price;
+                packed_transactions.extend_from_slice(&sampled_tx);
+            } else {
+                // Should be unreachable
+                warn!(
+                    "Inconsistent packing result (core space): gas used: {:?}, base price: {:?}", 
+                    used_gas, base_price
+                );
+                block_base_price[Space::Native] = compute_next_price(
+                    gas_target,
+                    U256::zero(),
+                    parent_base_price,
+                    min_base_price,
+                );
+            }
         }
 
         if log::max_level() >= log::Level::Debug {
