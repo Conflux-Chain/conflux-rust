@@ -1207,7 +1207,6 @@ impl TransactionPoolInner {
                 tx_min_price,
                 validity,
             );
-            packed_transactions.extend_from_slice(&sampled_tx);
 
             // Recompute the base price, it should be <= estimated base price,
             // since the actual used gas is <= estimated limit
