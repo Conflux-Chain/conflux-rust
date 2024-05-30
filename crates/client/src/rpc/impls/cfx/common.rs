@@ -585,7 +585,7 @@ impl RpcImpl {
             // Internal error happens only if the fetch header has inconsistent
             // block height
             fee_history
-                .push_back_block(
+                .push_front_block(
                     Space::Native,
                     &reward_percentiles,
                     &block.block_header,

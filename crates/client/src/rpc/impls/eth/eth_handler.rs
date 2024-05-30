@@ -955,7 +955,7 @@ impl Eth for EthHandler {
             // Internal error happens only if the fetch header has inconsistent
             // block height
             fee_history
-                .push_back_block(
+                .push_front_block(
                     Space::Ethereum,
                     &reward_percentiles,
                     &block.pivot_header,
