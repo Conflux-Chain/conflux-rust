@@ -8,6 +8,7 @@ from cfx_account import Account as CfxAccount
 from cfx_account.signers.local import LocalAccount as CfxLocalAccount
 
 from test_framework.test_framework import ConfluxTestFramework
+from test_framework.util import generate_blocks_for_base_fee_manipulation
 
 CORE_BLOCK_GAS_TARGET = 270000
 BURNT_RATIO = 0.5
@@ -16,8 +17,6 @@ MIN_NATIVE_BASE_PRICE = 10000
 class CIP1559Test(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
-        # self.conf_parameters["executive_trace"] = "true"
-        # self.conf_parameters["cip1559_transition_height"] = str(1)
         self.conf_parameters["min_native_base_price"] = MIN_NATIVE_BASE_PRICE
         
 
@@ -27,30 +26,15 @@ class CIP1559Test(ConfluxTestFramework):
         self.rpc = RpcClient(self.nodes[0])
 
     # acct should have cfx
-    def increase_base_fee(self, acct: CfxLocalAccount=None, block_count=10, tx_per_block=4, gas_per_tx=13500000):
+    def change_base_fee(self, acct: CfxLocalAccount=None, block_count=10, tx_per_block=4, gas_per_tx=13500000):
         if acct is None:
             acct = self.init_acct_with_cfx()
-        starting_nonce = self.rpc.get_nonce(acct.hex_address)
+        generate_blocks_for_base_fee_manipulation(self.rpc, acct, block_count, tx_per_block, gas_per_tx)
 
-        for block_count in range(block_count):
-            self.rpc.generate_custom_block(
-                txs=[
-                    self.rpc.new_tx(
-                        priv_key=acct.key,
-                        receiver=CfxAccount.create().address,
-                        gas=gas_per_tx,
-                        nonce=starting_nonce + i + block_count * tx_per_block,
-                        gas_price=self.rpc.base_fee_per_gas()*2 # give enough gas price to make the tx valid
-                    )
-                    for i in range(tx_per_block)
-                ],
-                parent_hash=self.rpc.block_by_epoch("latest_mined")["hash"],
-                referee=[],
-            )
             
     def test_block_base_fee_change(self, acct: CfxLocalAccount, epoch_to_test:int, tx_per_block=4, gas_per_tx=13500000):
         starting_epoch = self.rpc.epoch_number()
-        self.increase_base_fee(acct, epoch_to_test, tx_per_block, gas_per_tx)
+        self.change_base_fee(acct, epoch_to_test, tx_per_block, gas_per_tx)
         expected_base_fee_change_delta_rate = self.get_expected_base_fee_change_delta_rate(tx_per_block * gas_per_tx, 27000000)
 
         for i in range(starting_epoch+1, self.rpc.epoch_number()):
@@ -113,13 +97,13 @@ class CIP1559Test(ConfluxTestFramework):
         assert_equal(acct_new_balance, acct_balance - int(receipt["gasFee"], 16) - 100)
         
     def test_max_fee_not_enough_for_current_base_fee(self):
-        self.increase_base_fee(block_count=10)
+        self.change_base_fee(block_count=10)
         initial_base_fee = self.rpc.base_fee_per_gas()
         
         self.log.info(f"initla base fee: {initial_base_fee}")
         
         # 112.5% ^ 10
-        self.increase_base_fee(block_count=10)
+        self.change_base_fee(block_count=10)
         self.log.info(f"increase base fee by 112.5% ^ 10")
         self.log.info(f"new base fee: {self.rpc.base_fee_per_gas()}")
         assert self.rpc.base_fee_per_gas() > initial_base_fee

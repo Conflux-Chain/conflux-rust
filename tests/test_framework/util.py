@@ -10,12 +10,14 @@ import random
 import re
 from subprocess import CalledProcessError, check_output
 import time
-from typing import Optional, Callable, List, TYPE_CHECKING, cast
+from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union
 import socket
 import threading
 import jsonrpcclient.exceptions
 import solcx
 import web3
+from cfx_account import Account as CfxAccount
+from cfx_account.signers.local import LocalAccount  as CfxLocalAccount
 from sys import platform
 import yaml
 import shutil
@@ -806,3 +808,43 @@ def test_rpc_call_with_block_object(client: "RpcClient", txs: List, rpc_call: Ca
     
     assert(expected_result_lambda(result1))
     assert_equal(result2, result1)
+
+# acct should have cfx
+# create a chain of blocks with specified transfer tx with specified num and gas
+# return the last block's hash and acct nonce
+def generate_blocks_for_base_fee_manipulation(rpc: "RpcClient", acct: Union[CfxLocalAccount, str], block_count=10, tx_per_block=4, gas_per_tx=13500000,initial_parent_hash:str = None) -> Tuple[str, int]:
+    if isinstance(acct, str):
+        acct = CfxAccount.from_key(acct)
+    starting_nonce: int = rpc.get_nonce(acct.hex_address)
+    
+    if initial_parent_hash is None:
+        initial_parent_hash = cast(str, rpc.block_by_epoch("latest_mined")["hash"])
+
+    block_pointer = initial_parent_hash
+    for block_count in range(block_count):
+        block_pointer, starting_nonce = generate_single_block_for_base_fee_manipulation(rpc, acct, tx_per_block=tx_per_block, gas_per_tx=gas_per_tx,parent_hash=block_pointer, starting_nonce=starting_nonce)
+
+    return block_pointer, starting_nonce + block_count * tx_per_block
+
+def generate_single_block_for_base_fee_manipulation(rpc: "RpcClient", acct: CfxLocalAccount, referee:list[str] =[], tx_per_block=4, gas_per_tx=13500000,parent_hash:str = None, starting_nonce: int = None) -> Tuple[str, int]:
+    if starting_nonce is None:
+        starting_nonce = cast(int, rpc.get_nonce(acct.hex_address))
+    
+    if parent_hash is None:
+        parent_hash = cast(str, rpc.block_by_epoch("latest_mined")["hash"])
+
+    new_block = rpc.generate_custom_block(
+        txs=[
+            rpc.new_tx(
+                priv_key=acct.key,
+                receiver=acct.address,
+                gas=gas_per_tx,
+                nonce=starting_nonce + i ,
+                gas_price=rpc.base_fee_per_gas()*2 # give enough gas price to make the tx valid
+            )
+            for i in range(tx_per_block)
+        ],
+        parent_hash=parent_hash,
+        referee=referee,
+    )
+    return new_block, starting_nonce + tx_per_block
