@@ -90,7 +90,9 @@ pub trait Eth {
 
     /// Returns balance of the given account.
     #[rpc(name = "eth_getBalance")]
-    fn balance(&self, address: H160, block: Option<BlockNumber>) -> Result<U256>;
+    fn balance(
+        &self, address: H160, block: Option<BlockNumber>,
+    ) -> Result<U256>;
 
     // /// Returns the account- and storage-values of the specified account
     // including the Merkle-proof #[rpc(name = "eth_getProof")]
@@ -105,12 +107,15 @@ pub trait Eth {
 
     /// Returns block with given hash.
     #[rpc(name = "eth_getBlockByHash")]
-    fn block_by_hash(&self, block_hash: H256, hydrated_transactions: bool) -> Result<Option<Block>>;
+    fn block_by_hash(
+        &self, block_hash: H256, hydrated_transactions: bool,
+    ) -> Result<Option<Block>>;
 
     /// Returns block with given number.
     #[rpc(name = "eth_getBlockByNumber")]
-    fn block_by_number(&self, block: BlockNumber, hydrated_transactions: bool)
-        -> Result<Option<Block>>;
+    fn block_by_number(
+        &self, block: BlockNumber, hydrated_transactions: bool,
+    ) -> Result<Option<Block>>;
 
     /// Returns the number of transactions sent from given address at given time
     /// (block number).
@@ -121,7 +126,9 @@ pub trait Eth {
 
     /// Returns the number of transactions in a block with given hash.
     #[rpc(name = "eth_getBlockTransactionCountByHash")]
-    fn block_transaction_count_by_hash(&self, block_hash: H256) -> Result<Option<U256>>;
+    fn block_transaction_count_by_hash(
+        &self, block_hash: H256,
+    ) -> Result<Option<U256>>;
 
     /// Returns the number of transactions in a block with given block number.
     #[rpc(name = "eth_getBlockTransactionCountByNumber")]
@@ -131,7 +138,9 @@ pub trait Eth {
 
     /// Returns the number of uncles in a block with given hash.
     #[rpc(name = "eth_getUncleCountByBlockHash")]
-    fn block_uncles_count_by_hash(&self, block_hash: H256) -> Result<Option<U256>>;
+    fn block_uncles_count_by_hash(
+        &self, block_hash: H256,
+    ) -> Result<Option<U256>>;
 
     /// Returns the number of uncles in a block with given block number.
     #[rpc(name = "eth_getUncleCountByBlockNumber")]
@@ -141,7 +150,9 @@ pub trait Eth {
 
     /// Returns the code at given address at given time (block number).
     #[rpc(name = "eth_getCode")]
-    fn code_at(&self, address: H160, block: Option<BlockNumber>) -> Result<Bytes>;
+    fn code_at(
+        &self, address: H160, block: Option<BlockNumber>,
+    ) -> Result<Bytes>;
 
     /// Sends signed transaction, returning its hash.
     #[rpc(name = "eth_sendRawTransaction")]
@@ -153,7 +164,9 @@ pub trait Eth {
 
     /// Call contract, returning the output data.
     #[rpc(name = "eth_call")]
-    fn call(&self, transaction: CallRequest, block: Option<BlockNumber>) -> Result<Bytes>;
+    fn call(
+        &self, transaction: CallRequest, block: Option<BlockNumber>,
+    ) -> Result<Bytes>;
 
     /// Estimate gas needed for execution of given contract.
     #[rpc(name = "eth_estimateGas")]
@@ -163,7 +176,9 @@ pub trait Eth {
 
     /// Get transaction by its hash.
     #[rpc(name = "eth_getTransactionByHash")]
-    fn transaction_by_hash(&self, transaction_hash: H256) -> Result<Option<Transaction>>;
+    fn transaction_by_hash(
+        &self, transaction_hash: H256,
+    ) -> Result<Option<Transaction>>;
 
     /// Returns transaction at given block hash and index.
     #[rpc(name = "eth_getTransactionByBlockHashAndIndex")]
@@ -179,7 +194,9 @@ pub trait Eth {
 
     /// Returns transaction receipt by transaction hash.
     #[rpc(name = "eth_getTransactionReceipt")]
-    fn transaction_receipt(&self, transaction_hash: H256) -> Result<Option<Receipt>>;
+    fn transaction_receipt(
+        &self, transaction_hash: H256,
+    ) -> Result<Option<Receipt>>;
 
     /// Returns an uncles at given block and index.
     #[rpc(name = "eth_getUncleByBlockHashAndIndex")]
@@ -230,7 +247,9 @@ pub trait Eth {
     fn submit_hashrate(&self, _: U256, _: H256) -> Result<bool>;
 
     #[rpc(name = "parity_getBlockReceipts")]
-    fn block_receipts(&self, block: Option<BlockNumber>) -> Result<Vec<Receipt>>;
+    fn block_receipts(
+        &self, block: Option<BlockNumber>,
+    ) -> Result<Vec<Receipt>>;
 
     #[rpc(name = "eth_getAccountPendingTransactions")]
     fn account_pending_transactions(
