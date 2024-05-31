@@ -19,6 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Eth rpc interface.
+use crate::rpc::types::U64 as HexU64;
 use cfx_types::{H128, H160, H256, U256, U64};
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
@@ -76,7 +77,7 @@ pub trait Eth {
 
     #[rpc(name = "eth_feeHistory")]
     fn fee_history(
-        &self, block_count: U64, newest_block: BlockNumber,
+        &self, block_count: HexU64, newest_block: BlockNumber,
         reward_percentiles: Vec<f64>,
     ) -> Result<FeeHistory>;
 

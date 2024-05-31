@@ -8,7 +8,7 @@ use crate::rpc::{
         call_request::rpc_call_request_network,
         errors::check_rpc_address_network, pos::PoSEpochReward, FeeHistory,
         PoSEconomics, RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
-        VoteParamsInfo, WrapTransaction,
+        VoteParamsInfo, WrapTransaction, U64 as HexU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -2272,7 +2272,7 @@ impl Cfx for CfxHandler {
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
-            fn fee_history(&self, block_count: U64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<FeeHistory>;
+            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<FeeHistory>;
             fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
         }
 

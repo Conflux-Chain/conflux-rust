@@ -106,7 +106,7 @@ where I: Iterator<Item = &'a SignedTransaction> {
     percentiles
         .into_iter()
         .map(|per| {
-            let mut index = (*per) as usize * n / 100;
+            let mut index = ((*per) * (n as f64) / 100f64) as usize;
             if index >= n {
                 index = n - 1;
             }
