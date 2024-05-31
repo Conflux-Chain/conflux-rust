@@ -800,13 +800,16 @@ impl TransactionPoolInner {
     fn insert_transaction_for_test(
         &mut self, transaction: Arc<SignedTransaction>, sender_nonce: U256,
     ) -> InsertResult {
-        self.insert_transaction_without_readiness_check(
+        let sender = transaction.sender();
+        let res = self.insert_transaction_without_readiness_check(
             transaction,
             false,
             true,
             (sender_nonce, U256::from(u64::MAX)),
             (0.into(), 0),
-        )
+        );
+        self.recalculate_readiness(&sender, sender_nonce, U256::from(u64::MAX));
+        res
     }
 
     // the new inserting will fail if tx_pool is full (even if `force` is true)
@@ -1793,7 +1796,7 @@ mod tests {
     fn pack_transactions_1559_checked(
         pool: &mut TransactionPoolInner, machine: &Machine,
     ) {
-        let parent_base_price = SpaceMap::new(100, 100).map_all(U256::from);
+        let parent_base_price = SpaceMap::new(100, 200).map_all(U256::from);
         let block_gas_limit = U256::from(6000);
         let best_epoch_height = 20;
 
@@ -1827,7 +1830,7 @@ mod tests {
         for tx in txs {
             gas_used[tx.space()] += *tx.gas_limit();
             min_gas_price[tx.space()] =
-                min_gas_price[tx.space()].min(*tx.gas_limit());
+                min_gas_price[tx.space()].min(*tx.gas_price());
         }
 
         let min_base_price = params.min_base_price();
@@ -1850,7 +1853,7 @@ mod tests {
     }
 
     #[test]
-    fn test_eip1559_transactions() {
+    fn test_pack_eip1559_transactions() {
         let mut pool = TransactionPoolInner::new_for_test();
 
         let mut params = CommonParams::default();

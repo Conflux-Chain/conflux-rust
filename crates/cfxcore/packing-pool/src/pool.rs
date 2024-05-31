@@ -12,7 +12,9 @@ use super::{
 };
 use cfx_types::U256;
 use malloc_size_of::MallocSizeOf;
-use primitives::block_header::estimate_gas_used;
+use primitives::block_header::{
+    compute_next_price, estimate_gas_used_boundary, estimate_max_possible_gas,
+};
 use rand::RngCore;
 use treap_map::{
     ApplyOpOutcome, ConsoliableWeight, Node, SearchDirection, SearchResult,
@@ -210,7 +212,24 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             Some(
                 SearchResult::Found { base_weight, .. }
                 | SearchResult::RightMost(base_weight),
-            ) => base_weight.gas_limit,
+            ) => {
+                let gas_limit = estimate_max_possible_gas(
+                    gas_target,
+                    base_weight.min_gas_price,
+                    parent_base_price,
+                );
+                if cfg!(test) {
+                    // Guarantee the searched result can be packed
+                    let next_price = compute_next_price(
+                        gas_target,
+                        gas_limit,
+                        parent_base_price,
+                        min_base_price,
+                    );
+                    assert!(base_weight.min_gas_price >= next_price);
+                }
+                gas_limit
+            }
             _ => U256::zero(),
         }
     }
@@ -285,20 +304,23 @@ fn can_sample_within_1559(
         return false;
     }
 
-    let target_gas_used =
-        estimate_gas_used(gas_target, weight.min_gas_price, parent_base_price);
+    let max_target_gas_used = estimate_max_possible_gas(
+        gas_target,
+        weight.min_gas_price,
+        parent_base_price,
+    );
 
-    if target_gas_used.is_zero() {
+    if max_target_gas_used.is_zero() {
         return false;
     }
 
-    if weight.gas_limit <= target_gas_used {
+    if weight.gas_limit <= max_target_gas_used {
         return true;
     }
 
     weight
         .max_loss_ratio
-        .saturating_mul(weight.gas_limit - target_gas_used)
+        .saturating_mul(weight.gas_limit - max_target_gas_used)
         < weight.weighted_loss_ratio
 }
 
