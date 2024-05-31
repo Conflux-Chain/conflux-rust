@@ -3,11 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 mod account;
-pub mod address;
 mod blame_info;
 mod block;
 mod bytes;
 pub mod call_request;
+pub mod cfx;
 mod consensus_graph_states;
 mod epoch_number;
 pub mod errors;
@@ -36,7 +36,6 @@ mod vote_params_info;
 
 pub use self::{
     account::Account,
-    address::RpcAddress,
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
@@ -44,6 +43,7 @@ pub use self::{
         sign_call, CallRequest, CheckBalanceAgainstTransactionResponse,
         EstimateGasAndCollateralResponse, SendTxRequest, MAX_GAS_CALL_REQUEST,
     },
+    cfx::{address, address::RpcAddress},
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
     fee_history::FeeHistory,
