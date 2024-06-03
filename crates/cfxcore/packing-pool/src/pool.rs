@@ -12,9 +12,7 @@ use super::{
 };
 use cfx_types::U256;
 use malloc_size_of::MallocSizeOf;
-use primitives::block_header::{
-    compute_next_price, estimate_gas_used_boundary, estimate_max_possible_gas,
-};
+use primitives::block_header::{compute_next_price, estimate_max_possible_gas};
 use rand::RngCore;
 use treap_map::{
     ApplyOpOutcome, ConsoliableWeight, Node, SearchDirection, SearchResult,
