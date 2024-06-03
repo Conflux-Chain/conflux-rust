@@ -7,7 +7,7 @@ from test_framework.util import assert_equal
 class TestBlockSync(RpcClient):
     # FIXME currently not validated yet
     def test_tx_invalid(self):
-        # basic tx validation is requried
+        # basic tx validation is required
         pass
 
     # FIXME currently not validated yet
