@@ -1797,6 +1797,7 @@ dependencies = [
  "rustc-hex",
  "secret-store",
  "serde",
+ "serde-utils",
  "serde_derive",
  "serde_json",
  "serial_test",

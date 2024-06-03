@@ -126,8 +126,8 @@ class Eip1559Test(Web3Base):
 
     def check_fee_history(self):
         fee_history = self.nodes[0].eth_feeHistory("0x5", "latest", [21, 75])
-        assert_equal(len(fee_history['base_fee_per_gas']), 6)
-        assert_equal(len(fee_history['gas_used_ratio']), 5)
+        assert_equal(len(fee_history['baseFeePerGas']), 6)
+        assert_equal(len(fee_history['gasUsedRatio']), 5)
         assert_equal(len(fee_history['reward']), 5)
 
         assert_greater_than(int(self.nodes[0].cfx_getFeeBurnt(), 0), 0)

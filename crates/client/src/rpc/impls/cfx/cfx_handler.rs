@@ -8,7 +8,7 @@ use crate::rpc::{
         call_request::rpc_call_request_network,
         errors::check_rpc_address_network, pos::PoSEpochReward, FeeHistory,
         PoSEconomics, RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
-        VoteParamsInfo, WrapTransaction,
+        VoteParamsInfo, WrapTransaction, U64 as HexU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -1359,18 +1359,13 @@ impl RpcImpl {
         };
         let storage_collateralized =
             U64::from(estimation.estimated_storage_limit);
-        let estimated_gas_limit = estimation.estimated_gas_limit;
+        let estimated_gas_used = estimation.estimated_gas_limit;
         let response = EstimateGasAndCollateralResponse {
-            // We multiply the gas_used for 2 reasons:
-            // 1. In each EVM call, the gas passed is at most 63/64 of the
-            // remaining gas, so the gas_limit should be multiplied a factor so
-            // that the gas passed into the sub-call is sufficient. The 4 / 3
-            // factor is sufficient for 18 level of calls.
-            // 2. In Conflux, we recommend setting the gas_limit to (gas_used *
-            // 4) / 3, because the extra gas will be refunded up to
-            // 1/4 of the gas limit.
-            gas_limit: estimation.estimated_gas_limit,
-            gas_used: estimated_gas_limit,
+            gas_limit: estimated_gas_used, /* gas_limit used to be 4/3 of
+                                            * gas_used due to inaccuracy,
+                                            * currently it's the same as gas
+                                            * used as it's more accurate */
+            gas_used: estimated_gas_used,
             storage_collateralized,
         };
         Ok(response)
@@ -2277,7 +2272,7 @@ impl Cfx for CfxHandler {
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
-            fn fee_history(&self, block_count: U64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<FeeHistory>;
+            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<FeeHistory>;
             fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
         }
 

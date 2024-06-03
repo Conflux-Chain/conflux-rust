@@ -102,6 +102,7 @@ solidity-abi = {path= "../util/solidity-abi" }
 bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
 alloy-rpc-types-trace = { workspace = true }
 geth-tracer = { path = "../cfxcore/geth-tracer" }
+serde-utils = { path = "../serde_utils" }
 
 [dev-dependencies]
 criterion = "0.3"
