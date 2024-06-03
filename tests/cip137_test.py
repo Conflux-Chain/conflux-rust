@@ -21,6 +21,8 @@ class CIP137Test(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["min_native_base_price"] = MIN_NATIVE_BASE_PRICE
+        self.conf_parameters["next_hardfork_transition_height"] = 1
+        self.conf_parameters["next_hardfork_transition_number"] = 1
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -94,13 +96,7 @@ class CIP137Test(ConfluxTestFramework):
         max_fee_per_gas = int(data["maxFeePerGas"], 16)
         max_priority_fee_per_gas = int(data["maxPriorityFeePerGas"], 16)
         receipt = self.rpc.get_transaction_receipt(tx_hash)
-        # print(receipt)
-        
-        # effective_gas_price = int(receipt["effectiveGasPrice"], 16)
-        # transaction_epoch = int(receipt["epochNumber"],16)
-        # base_fee_per_gas = self.rpc.base_fee_per_gas(transaction_epoch)
-        # computed gas price
-        # priority_fee_per_gas = effective_gas_price - base_fee_per_gas
+
         self.log.info(f'max fee per gas: {max_fee_per_gas}')
         self.log.info(f'max priority fee per gas: {max_priority_fee_per_gas}')
         self.log.info(f'tx status: {data["status"]}')
@@ -109,8 +105,6 @@ class CIP137Test(ConfluxTestFramework):
             self.log.info(f'tx outcome status: {receipt["outcomeStatus"]}')
         else:
             self.log.info(f'tx receipt is None: {receipt is None}')
-        # self.log.info(f'effective gas price: {effective_gas_price}')
-        # self.log.info(f'base fee per gas: {base_fee_per_gas}')
 
     # continuously fill transaction in C to F to increase base gas fee for F epoch
     # then transaction in B block will fail
@@ -214,11 +208,9 @@ class CIP137Test(ConfluxTestFramework):
         self.log_tx_fee_info(self.rpc.block_by_hash(block_b)['transactions'][0])
         self.log_tx_fee_info(self.rpc.block_by_hash(block_b)['transactions'][1])
 
-        # print(focusing_block["transactions"])
         assert_equal(focusing_block["transactions"][0]["status"], "0x0")
         self.log_tx_fee_info(focusing_block["transactions"][1]["hash"])
         assert_equal(focusing_block["transactions"][1]["status"], "0x0")
-        # assert_equal(focusing_block["transactions"][1]["blockHash"], None)
         assert_equal(focusing_block["transactions"][2]["status"], None)
         assert_equal(focusing_block["transactions"][2]["blockHash"], None)
         assert_equal(focusing_block["transactions"][3]["status"], None)
