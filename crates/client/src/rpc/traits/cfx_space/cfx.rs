@@ -10,7 +10,7 @@ use crate::rpc::types::{
     EstimateGasAndCollateralResponse, FeeHistory, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, StorageCollateralInfo, TokenSupplyInfo,
-    Transaction, VoteParamsInfo,
+    Transaction, VoteParamsInfo, U64 as HexU64,
 };
 use cfx_types::{H128, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
@@ -203,7 +203,7 @@ pub trait Cfx {
 
     #[rpc(name = "cfx_feeHistory")]
     fn fee_history(
-        &self, block_count: U64, newest_block: EpochNumber,
+        &self, block_count: HexU64, newest_block: EpochNumber,
         reward_percentiles: Vec<f64>,
     ) -> BoxFuture<FeeHistory>;
 

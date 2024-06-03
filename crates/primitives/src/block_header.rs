@@ -2,6 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod base_price;
+pub use base_price::{
+    compute_next_price, compute_next_price_tuple, estimate_gas_used_boundary,
+    estimate_max_possible_gas,
+};
+
 use crate::{
     block::BlockHeight, bytes::Bytes, hash::keccak, pos::PosBlockId,
     receipt::BlockReceipts, MERKLE_NULL_NODE, NULL_EPOCH,
@@ -23,6 +29,8 @@ const HEADER_LIST_MIN_LEN: usize = 13;
 /// The height to start fixing the wrong encoding/decoding of the `custom`
 /// field.
 pub static CIP112_TRANSITION_HEIGHT: OnceCell<u64> = OnceCell::new();
+
+const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
 
 #[derive(Clone, Debug, Eq)]
 pub struct BlockHeaderRlpPart {
@@ -683,61 +691,6 @@ pub struct BasePrice {
     pub core_base_price: U256,
     pub espace_base_price: U256,
 }
-
-const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
-
-pub fn compute_next_price(
-    gas_target: U256, gas_actual: U256, last_base_price: U256,
-    min_base_price: U256,
-) -> U256 {
-    const DENOM: usize = BASE_PRICE_CHANGE_DENOMINATOR;
-
-    let next_base_price = if gas_target.is_zero() || gas_target == gas_actual {
-        last_base_price
-    } else if gas_actual > gas_target {
-        let delta = gas_actual - gas_target;
-        let mut price_delta = last_base_price * delta / gas_target / DENOM;
-        if price_delta.is_zero() {
-            price_delta = U256::one();
-        }
-        last_base_price + price_delta
-    } else {
-        let delta = gas_target - gas_actual;
-        let mut price_delta = last_base_price * delta / gas_target / DENOM;
-        if price_delta.is_zero() {
-            price_delta = U256::one();
-        }
-        last_base_price - price_delta
-    };
-    next_base_price.max(min_base_price)
-}
-
-pub fn estimate_gas_used(
-    gas_target: U256, current_base_price: U256, last_base_price: U256,
-) -> U256 {
-    // dbg!(gas_target, current_base_price, last_base_price);
-    const DENOM: usize = BASE_PRICE_CHANGE_DENOMINATOR;
-
-    let delta = U256::max(U256::one(), last_base_price / DENOM);
-
-    let upper_base_price = last_base_price + delta;
-    let lower_base_price = last_base_price - delta;
-
-    if current_base_price > upper_base_price {
-        gas_target * 2
-    } else if current_base_price < lower_base_price {
-        U256::zero()
-    } else {
-        gas_target * 2 * (current_base_price - lower_base_price)
-            / (upper_base_price - lower_base_price)
-    }
-}
-
-/// A helper function for `compute_next_price` which takes a typle as input
-pub fn compute_next_price_tuple(x: (U256, U256, U256, U256)) -> U256 {
-    compute_next_price(x.0, x.1, x.2, x.3)
-}
-
 #[cfg(test)]
 mod tests {
     use super::BlockHeaderBuilder;
