@@ -96,6 +96,8 @@ class CIP1559Test(ConfluxTestFramework):
         acct_new_balance = self.rpc.get_balance(acct.address)
         assert_equal(acct_new_balance, acct_balance - int(receipt["gasFee"], 16) - 100)
         
+    # this tests the case for pivot blocks
+    # as for non-pivot blocks, the tests are in ./cip137_test.py
     def test_max_fee_not_enough_for_current_base_fee(self):
         self.change_base_fee(block_count=10)
         initial_base_fee = self.rpc.base_fee_per_gas()

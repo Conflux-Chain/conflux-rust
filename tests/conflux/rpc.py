@@ -145,8 +145,16 @@ class RpcClient:
         for r in referee:
             assert_is_hash_string(r)
 
+        raw_txs = []
+        for tx in txs:
+            if isinstance(tx, SignedTransaction):
+                raw_txs.append(tx.rawTransaction)
+            elif isinstance(tx, Transaction):
+                raw_txs.append(rlp.encode(tx))
+            else:
+                raise Exception("Unknown transaction type")
         
-        encoded_txs = eth_utils.encode_hex(rlp.encode(txs))
+        encoded_txs = eth_utils.encode_hex(rlp.encode(raw_txs))
 
         block_hash = self.node.test_generatecustomblock(parent_hash, referee, encoded_txs)
         assert_is_hash_string(block_hash)
