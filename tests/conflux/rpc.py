@@ -152,7 +152,8 @@ class RpcClient:
             elif isinstance(tx, Transaction):
                 raw_txs.append(rlp.encode(tx))
             else:
-                raise Exception("Unknown transaction type")
+                raw_txs.append(rlp.encode(tx))
+                # raise Exception(f"Unknown transaction type {repr(tx.__class__)}")
         
         encoded_txs = eth_utils.encode_hex(rlp.encode(raw_txs))
 
