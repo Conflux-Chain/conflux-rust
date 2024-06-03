@@ -379,9 +379,6 @@ impl TransactionPool {
         let mut failure = HashMap::new();
         let current_best_info = self.consensus_best_info.lock().clone();
 
-        // filter out invalid transactions.
-        let mut index = 0;
-
         let (chain_id, best_height, best_block_number) = {
             (
                 current_best_info.best_chain_id(),
@@ -395,6 +392,8 @@ impl TransactionPool {
         let vm_spec = self.machine.spec(best_block_number, best_height);
         let transitions = &self.machine.params().transition_heights;
 
+        // filter out invalid transactions.
+        let mut index = 0;
         while let Some(tx) = transactions.get(index) {
             match self.verify_transaction_tx_pool(
                 tx,

@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    eth::Transaction as ETHTransaction, receipt::Receipt, Bytes, RpcAddress,
+    cfx::{from_primitive_access_list, CfxAccessList},
+    eth::Transaction as ETHTransaction,
+    receipt::Receipt,
+    Bytes, RpcAddress,
 };
 use cfx_addr::Network;
 use cfx_types::{Space, H256, U256, U64};
@@ -13,9 +16,8 @@ use primitives::{
         eth_transaction::Eip155Transaction,
         native_transaction::NativeTransaction, Action,
     },
-    AccessList, SignedTransaction, Transaction as PrimitiveTransaction,
-    TransactionIndex, TransactionWithSignature,
-    TransactionWithSignatureSerializePart,
+    SignedTransaction, Transaction as PrimitiveTransaction, TransactionIndex,
+    TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -49,7 +51,7 @@ pub struct Transaction {
     pub status: Option<U64>,
     /// Optional access list
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub access_list: Option<AccessList>,
+    pub access_list: Option<CfxAccessList>,
     /// miner bribe
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_priority_fee_per_gas: Option<U256>,
@@ -158,7 +160,10 @@ impl Transaction {
             storage_limit: storage_limit.into(),
             epoch_height: epoch_height.into(),
             chain_id: t.chain_id().map(|x| U256::from(x as u64)),
-            access_list: t.access_list().cloned(),
+            access_list: t
+                .access_list()
+                .cloned()
+                .map(|list| from_primitive_access_list(list, network)),
             max_fee_per_gas: t.after_1559().then_some(*t.gas_price()),
             max_priority_fee_per_gas: t
                 .after_1559()

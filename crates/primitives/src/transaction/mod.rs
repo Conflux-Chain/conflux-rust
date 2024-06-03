@@ -37,6 +37,7 @@ pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
 
 pub const TYPED_NATIVE_TX_PREFIX: &[u8; 3] = b"cfx";
 pub const TYPED_NATIVE_TX_PREFIX_BYTE: u8 = TYPED_NATIVE_TX_PREFIX[0];
+pub const LEGACY_TX_TYPE: u8 = 0x00;
 pub const EIP2930_TYPE: u8 = 0x01;
 pub const EIP1559_TYPE: u8 = 0x02;
 pub const CIP2930_TYPE: u8 = 0x01;

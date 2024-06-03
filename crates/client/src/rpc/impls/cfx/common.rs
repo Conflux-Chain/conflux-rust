@@ -17,7 +17,7 @@ use crate::rpc::{
         BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
         EpochNumber, FeeHistory, RpcAddress, Status as RpcStatus,
         Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
-        TxWithPoolInfo,
+        TxWithPoolInfo, U64 as HexU64,
     },
     RpcErrorKind, RpcResult,
 };
@@ -530,7 +530,7 @@ impl RpcImpl {
     }
 
     pub fn fee_history(
-        &self, block_count: U64, newest_block: EpochNumber,
+        &self, block_count: HexU64, newest_block: EpochNumber,
         reward_percentiles: Vec<f64>,
     ) -> RpcResult<FeeHistory> {
         info!(
@@ -538,7 +538,7 @@ impl RpcImpl {
             block_count, newest_block, reward_percentiles
         );
 
-        if block_count == U64::zero() {
+        if block_count.as_u64() == 0 {
             return Ok(FeeHistory::new());
         }
         // keep read lock to ensure consistent view
@@ -585,7 +585,7 @@ impl RpcImpl {
             // Internal error happens only if the fetch header has inconsistent
             // block height
             fee_history
-                .push_back_block(
+                .push_front_block(
                     Space::Native,
                     &reward_percentiles,
                     &block.block_header,
@@ -615,7 +615,7 @@ impl RpcImpl {
         info!("RPC Request: max_priority_fee_per_gas",);
 
         let fee_history = self.fee_history(
-            U64::from(300),
+            HexU64::from(300),
             EpochNumber::LatestState,
             vec![50f64],
         )?;
