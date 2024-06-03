@@ -41,8 +41,6 @@ class CfxFeeHistoryResponse(TypedDict):
     base_fee_per_gas: list[int]
     gas_used_ratio: list[float]
     reward: list[list[str]] # does not convert it currently
-    
-# class TransactionReceipt(TypedDict):
 
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
@@ -153,7 +151,6 @@ class RpcClient:
                 raw_txs.append(rlp.encode(tx))
             else:
                 raw_txs.append(rlp.encode(tx))
-                # raise Exception(f"Unknown transaction type {repr(tx.__class__)}")
         
         encoded_txs = eth_utils.encode_hex(rlp.encode(raw_txs))
 

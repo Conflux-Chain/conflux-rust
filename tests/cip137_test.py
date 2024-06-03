@@ -85,10 +85,7 @@ class CIP137Test(ConfluxTestFramework):
         )
         return acct
 
-    # TODO: test in pivot block transaction will not be included if burnt_ratio*base_gas_fee_per_gas < max_fee_per_gas < base_gas_fee_per_gas
-    # low max_fee means the transaction max fee is less than the epoch's base fee * burnt ratio
-    # def test_transaction_ignored_in_non_pivot_block_if_low_max_fee(self):
-    
+
     def log_tx_fee_info(self, tx_hash: str):
         self.log.info(f'tx hash: {tx_hash}')
         data = self.rpc.get_tx(tx_hash)
@@ -106,14 +103,11 @@ class CIP137Test(ConfluxTestFramework):
         else:
             self.log.info(f'tx receipt is None: {receipt is None}')
 
-    # continuously fill transaction in C to F to increase base gas fee for F epoch
-    # then transaction in B block will fail
+
     def run_test(self):
 
         acct1 = self.init_acct_with_cfx()
         acct2 = self.init_acct_with_cfx()
-
-        # assert self.rpc.base_fee_per_gas() < gas_price_level_1 * burnt_ratio
 
         block_p = self.rpc.block_by_epoch("latest_mined")["hash"]
 
