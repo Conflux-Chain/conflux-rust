@@ -880,6 +880,9 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
     burnt_fee_per_gas = math.ceil(base_fee_per_gas * burnt_ratio)
 
     # check gas fee computation
+    print("effective gas price: ", effective_gas_price)
+    print("gas charged: ", get_gas_charged(rpc, tx_hash))
+    print("gas fee", int(receipt["gasFee"], 16))
     assert_equal(int(receipt["gasFee"], 16), effective_gas_price*get_gas_charged(rpc, tx_hash))
     # check burnt fee computation
     assert_equal(int(receipt["burntGasFee"], 16), burnt_fee_per_gas*get_gas_charged(rpc, tx_hash))
