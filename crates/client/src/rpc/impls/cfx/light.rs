@@ -38,7 +38,7 @@ use crate::{
         impls::common::{self, RpcImpl as CommonImpl},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            errors::check_rpc_address_network,
+            cfx::check_rpc_address_network,
             pos::{Block as PosBlock, PoSEpochReward},
             Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,

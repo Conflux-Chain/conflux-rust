@@ -5,10 +5,10 @@
 use crate::rpc::{
     error_codes::{internal_error_msg, invalid_params_msg},
     types::{
-        call_request::rpc_call_request_network,
-        errors::check_rpc_address_network, pos::PoSEpochReward, FeeHistory,
-        PoSEconomics, RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
-        VoteParamsInfo, WrapTransaction, U64 as HexU64,
+        call_request::rpc_call_request_network, cfx::check_rpc_address_network,
+        pos::PoSEpochReward, FeeHistory, PoSEconomics, RpcAddress, SponsorInfo,
+        StatOnGasLoad, TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
+        U64 as HexU64,
     },
 };
 use blockgen::BlockGenerator;

@@ -12,7 +12,7 @@ use crate::{
         traits::pos::Pos,
         types::{
             call_request::rpc_call_request_network,
-            errors::check_rpc_address_network,
+            cfx::check_rpc_address_network,
             pos::{
                 tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
                 EpochState as RpcEpochState,

@@ -12,7 +12,7 @@ use std::{
 use crate::rpc::{
     impls::pos::hash_value_to_h256,
     types::{
-        errors::check_rpc_address_network, pos::PoSEpochReward,
+        cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
         EpochNumber, FeeHistory, RpcAddress, Status as RpcStatus,
