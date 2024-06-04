@@ -38,8 +38,8 @@ REQUEST_BASE = {
 }
 
 class CfxFeeHistoryResponse(TypedDict):
-    base_fee_per_gas: list[int]
-    gas_used_ratio: list[float]
+    baseFeePerGas: list[int]
+    gasUsedRatio: list[float]
     reward: list[list[str]] # does not convert it currently
 
 
@@ -206,7 +206,7 @@ class RpcClient:
         return int(self.node.cfx_gasPrice(), 0)
 
     def base_fee_per_gas(self, epoch: Union[int,str] = "latest_mined"):
-        return self.fee_history(1, epoch)['base_fee_per_gas'][0]
+        return self.fee_history(1, epoch)['baseFeePerGas'][-1]
 
     def get_block_reward_info(self, epoch: str):
         reward = self.node.cfx_getBlockRewardInfo(epoch)
@@ -653,8 +653,8 @@ class RpcClient:
             last_epoch = hex(last_epoch)
         rtn = self.node.cfx_feeHistory(hex(epoch_count), last_epoch, reward_percentiles)
         rtn[
-            'base_fee_per_gas'
-        ] = [ int(v, 16) for v in rtn['base_fee_per_gas'] ]
+            'baseFeePerGas'
+        ] = [ int(v, 16) for v in rtn['baseFeePerGas'] ]
         return rtn
 
 
