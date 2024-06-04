@@ -1,3 +1,4 @@
+import math
 from typing import Union, Tuple
 from conflux.rpc import RpcClient, default_config
 from test_framework.util import (
@@ -11,6 +12,7 @@ from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import (
     generate_blocks_for_base_fee_manipulation,
     generate_single_block_for_base_fee_manipulation,
+    assert_correct_fee_computation_for_core_tx,
 )
 
 MIN_NATIVE_BASE_PRICE = 10000
@@ -84,25 +86,11 @@ class CIP137Test(ConfluxTestFramework):
             True,
         )
         return acct
-
-
-    def log_tx_fee_info(self, tx_hash: str):
-        self.log.info(f'tx hash: {tx_hash}')
-        data = self.rpc.get_tx(tx_hash)
-
-        max_fee_per_gas = int(data["maxFeePerGas"], 16)
-        max_priority_fee_per_gas = int(data["maxPriorityFeePerGas"], 16)
-        receipt = self.rpc.get_transaction_receipt(tx_hash)
-
-        self.log.info(f'max fee per gas: {max_fee_per_gas}')
-        self.log.info(f'max priority fee per gas: {max_priority_fee_per_gas}')
-        self.log.info(f'tx status: {data["status"]}')
-        if receipt:
-            self.log.info(f'tx block hash: {receipt["blockHash"]}')
-            self.log.info(f'tx outcome status: {receipt["outcomeStatus"]}')
-        else:
-            self.log.info(f'tx receipt is None: {receipt is None}')
-
+    
+    def get_gas_charged(self, tx_hash: str) -> int:
+        gas_limit = int(self.rpc.get_tx(tx_hash)["gas"], 16)
+        gas_used = int(self.rpc.get_transaction_receipt(tx_hash)["gasUsed"], 16)
+        return max(int(3/4*gas_limit), gas_used)
 
     def run_test(self):
 
@@ -198,12 +186,8 @@ class CIP137Test(ConfluxTestFramework):
         self.log.info(f"burnt_fee_per_gas for epoch {epoch}: {self.rpc.base_fee_per_gas(epoch) * 0.5}")
         self.log.info(f"least base fee for epoch {epoch}: {self.rpc.base_fee_per_gas(epoch) * BURNT_RATIO}")
         self.log.info(f"transactions in block b: {self.rpc.block_by_hash(block_b)['transactions']}")
-        
-        self.log_tx_fee_info(self.rpc.block_by_hash(block_b)['transactions'][0])
-        self.log_tx_fee_info(self.rpc.block_by_hash(block_b)['transactions'][1])
 
         assert_equal(focusing_block["transactions"][0]["status"], "0x0")
-        self.log_tx_fee_info(focusing_block["transactions"][1]["hash"])
         assert_equal(focusing_block["transactions"][1]["status"], "0x0")
         assert_equal(focusing_block["transactions"][2]["status"], None)
         assert_equal(focusing_block["transactions"][2]["blockHash"], None)
@@ -214,6 +198,9 @@ class CIP137Test(ConfluxTestFramework):
         assert_equal(focusing_block["transactions"][4]["status"], "0x0")
         assert_equal(focusing_block["transactions"][5]["status"], "0x0")
         assert_equal(focusing_block["transactions"][6]["status"], "0x0")
+        
+        for tx_hash in self.rpc.block_by_hash(block_b)['transactions']:
+            assert_correct_fee_computation_for_core_tx(self.rpc, tx_hash, BURNT_RATIO)
 
         self.rpc.generate_blocks(20, 5)
 

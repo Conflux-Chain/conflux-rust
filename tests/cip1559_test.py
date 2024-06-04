@@ -8,7 +8,7 @@ from cfx_account import Account as CfxAccount
 from cfx_account.signers.local import LocalAccount as CfxLocalAccount
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import generate_blocks_for_base_fee_manipulation
+from test_framework.util import generate_blocks_for_base_fee_manipulation, assert_correct_fee_computation_for_core_tx
 
 CORE_BLOCK_GAS_TARGET = 270000
 BURNT_RATIO = 0.5
@@ -18,6 +18,8 @@ class CIP1559Test(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["min_native_base_price"] = MIN_NATIVE_BASE_PRICE
+        self.conf_parameters["next_hardfork_transition_height"] = 1
+        self.conf_parameters["next_hardfork_transition_number"] = 1
         
 
     def setup_network(self):
@@ -64,22 +66,8 @@ class CIP1559Test(ConfluxTestFramework):
         gas_limit = int(self.rpc.get_tx(tx_hash)["gas"], 16)
         gas_used = int(self.rpc.get_transaction_receipt(tx_hash)["gasUsed"], 16)
         return max(int(3/4*gas_limit), gas_used)
-    
-    # TODO: currently only assert transaction in pivot block
-    # the transactions in non-pivot block is different
-    def assert_expected_effective_gas_fee(self, tx_hash: str):
-        data = self.rpc.get_tx(tx_hash)
-        max_fee_per_gas = int(data["maxFeePerGas"], 16)
-        max_priority_fee_per_gas = int(data["maxPriorityFeePerGas"], 16)
-        receipt = self.rpc.get_transaction_receipt(tx_hash)
-        effective_gas_price = int(receipt["effectiveGasPrice"], 16)
-        transaction_epoch = int(receipt["epochNumber"],16)
-        base_fee_per_gas = self.rpc.base_fee_per_gas(transaction_epoch)
-        # computed gas price
-        priority_fee_per_gas = effective_gas_price - base_fee_per_gas
-        assert_equal(priority_fee_per_gas, min(max_priority_fee_per_gas, max_fee_per_gas - base_fee_per_gas))
-        assert_equal(int(receipt["gasFee"], 16), effective_gas_price*self.get_gas_charged(tx_hash))
-    
+
+
     def test_balance_change(self, acct: CfxLocalAccount):
         acct_balance = self.rpc.get_balance(acct.address)
         h = self.rpc.send_tx(
@@ -125,9 +113,9 @@ class CIP1559Test(ConfluxTestFramework):
         self.log.info(f"epoch base fee for transaction accepted: {tx_base_fee}")
         assert tx_base_fee <= initial_base_fee
     
-    def test_type_2_tx(self):
+    def test_type_2_tx_fees(self):
         
-        self.assert_expected_effective_gas_fee(self.rpc.send_tx(
+        assert_correct_fee_computation_for_core_tx(self.rpc, self.rpc.send_tx(
             self.rpc.new_typed_tx(
                 receiver=CfxAccount.create().address,
                 max_fee_per_gas=self.rpc.base_fee_per_gas(),
@@ -135,7 +123,7 @@ class CIP1559Test(ConfluxTestFramework):
             ),
             wait_for_receipt=True,
         ))
-        self.assert_expected_effective_gas_fee(self.rpc.send_tx(
+        assert_correct_fee_computation_for_core_tx(self.rpc, self.rpc.send_tx(
             self.rpc.new_typed_tx(
                 receiver=CfxAccount.create().address,
                 max_fee_per_gas=self.rpc.base_fee_per_gas(),
@@ -156,7 +144,7 @@ class CIP1559Test(ConfluxTestFramework):
         self.test_block_base_fee_change(self.init_acct_with_cfx(), 10, 1, 13500000)
         self.test_block_base_fee_change(self.init_acct_with_cfx(), 10, 2, 10000000)
 
-        self.test_type_2_tx()
+        self.test_type_2_tx_fees()
         self.test_max_fee_not_enough_for_current_base_fee()
 
 

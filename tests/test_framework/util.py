@@ -21,6 +21,7 @@ from cfx_account.signers.local import LocalAccount  as CfxLocalAccount
 from sys import platform
 import yaml
 import shutil
+import math
 
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
@@ -848,3 +849,48 @@ def generate_single_block_for_base_fee_manipulation(rpc: "RpcClient", acct: CfxL
         referee=referee,
     )
     return new_block, starting_nonce + tx_per_block
+
+# for transactions in either pivot/non-pivot block
+# checks priority fee is calculated as expeted
+def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, burnt_ratio=0.5):
+    def get_gas_charged(rpc: "RpcClient", tx_hash: str) -> int:
+        gas_limit = int(rpc.get_tx(tx_hash)["gas"], 16)
+        gas_used = int(rpc.get_transaction_receipt(tx_hash)["gasUsed"], 16)
+        return max(int(3/4*gas_limit), gas_used)
+
+    receipt = rpc.get_transaction_receipt(tx_hash)
+    # The transaction is not executed
+    if receipt is None:
+        return
+
+    tx_data = rpc.get_tx(tx_hash)
+    tx_type = int(tx_data["type"], 16)
+    if tx_type == 2:
+        # original tx fields
+        max_fee_per_gas = int(tx_data["maxFeePerGas"], 16)
+        max_priority_fee_per_gas = int(tx_data["maxPriorityFeePerGas"], 16)
+    else:
+        max_fee_per_gas = int(tx_data["gasPrice"], 16)
+        max_priority_fee_per_gas = int(tx_data["gasPrice"], 16)
+
+    effective_gas_price = int(receipt["effectiveGasPrice"], 16)
+    transaction_epoch = int(receipt["epochNumber"],16)
+    is_in_pivot_block = rpc.block_by_epoch(transaction_epoch)["hash"] == receipt["blockHash"]
+    base_fee_per_gas = rpc.base_fee_per_gas(transaction_epoch)
+    burnt_fee_per_gas = math.ceil(base_fee_per_gas * burnt_ratio)
+
+    # check gas fee computation
+    assert_equal(int(receipt["gasFee"], 16), effective_gas_price*get_gas_charged(rpc, tx_hash))
+    # check burnt fee computation
+    assert_equal(int(receipt["burntGasFee"], 16), burnt_fee_per_gas*get_gas_charged(rpc, tx_hash))
+
+    # if max_fee_per_gas >= base_fee_per_gas, it shall follow the computation, regardless of transaction in pivot block or not
+    if max_fee_per_gas >= base_fee_per_gas:
+        priority_fee_per_gas = effective_gas_price - base_fee_per_gas
+        # check priority fee computation
+        assert_equal(priority_fee_per_gas, min(max_priority_fee_per_gas, max_fee_per_gas - base_fee_per_gas))
+    else:
+        # max fee per gas should be greater than burnt fee per gas
+        assert is_in_pivot_block == False, "Transaction should be in non-pivot block"
+        assert max_fee_per_gas >= burnt_fee_per_gas
+
