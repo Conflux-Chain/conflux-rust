@@ -187,7 +187,8 @@ fn block_tx_by_index(
 
 impl EthHandler {
     fn exec_transaction(
-        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
+        &self, mut request: CallRequest,
+        block_number_or_hash: Option<BlockNumber>,
     ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
 
@@ -212,6 +213,9 @@ impl EthHandler {
             }
             epoch => epoch.try_into()?,
         };
+
+        // if gas_price is zero, it is considered as not set
+        request.unset_zero_gas_price();
 
         let estimate_request = EstimateRequest {
             has_sender: request.from.is_some(),
