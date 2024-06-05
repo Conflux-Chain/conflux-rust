@@ -878,14 +878,27 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
     is_in_pivot_block = rpc.block_by_epoch(transaction_epoch)["hash"] == receipt["blockHash"]
     base_fee_per_gas = rpc.base_fee_per_gas(transaction_epoch)
     burnt_fee_per_gas = math.ceil(base_fee_per_gas * burnt_ratio)
+    gas_fee = int(receipt["gasFee"], 16)
+    burnt_gas_fee = int(receipt["burntGasFee"], 16)
+    gas_charged = get_gas_charged(rpc, tx_hash)
 
     # check gas fee computation
     print("effective gas price: ", effective_gas_price)
     print("gas charged: ", get_gas_charged(rpc, tx_hash))
-    print("gas fee", int(receipt["gasFee"], 16))
-    assert_equal(int(receipt["gasFee"], 16), effective_gas_price*get_gas_charged(rpc, tx_hash))
-    # check burnt fee computation
-    assert_equal(int(receipt["burntGasFee"], 16), burnt_fee_per_gas*get_gas_charged(rpc, tx_hash))
+    print("gas fee", gas_fee)
+    
+    # check gas fee and burnt gas fee computation
+    if receipt["outcomeStatus"] == "0x1": # tx fails becuase of not enough cash
+        assert "NotEnoughCash" in receipt["txExecErrorMsg"]
+        # all gas is charged
+        print(rpc.get_transaction_trace(tx_hash))
+        assert_equal(rpc.get_balance(tx_data["from"], receipt["epochNumber"]), 0)
+        # gas fee less than effective gas price
+        assert gas_fee < effective_gas_price*gas_charged
+    else:
+        assert_equal(gas_fee, effective_gas_price*gas_charged)
+        # check burnt fee computation
+    assert_equal(burnt_gas_fee, burnt_fee_per_gas*gas_charged)
 
     # if max_fee_per_gas >= base_fee_per_gas, it shall follow the computation, regardless of transaction in pivot block or not
     if max_fee_per_gas >= base_fee_per_gas:

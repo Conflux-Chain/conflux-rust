@@ -3,6 +3,7 @@ from test_framework.util import (
     assert_equal,
 )
 from decimal import Decimal
+from typing import Literal
 
 from cfx_account import Account as CfxAccount
 from cfx_account.signers.local import LocalAccount as CfxLocalAccount
@@ -133,6 +134,63 @@ class CIP1559Test(ConfluxTestFramework):
         ))
         self.test_balance_change(self.init_acct_with_cfx())
 
+    def test_balance_not_enough_for_base_fee(self):
+        # ensuring acct does not have enough balance to pay for base fee
+        initial_value = 21000*(MIN_NATIVE_BASE_PRICE-1)
+        acct = self.init_acct_with_cfx(initial_value)
+        block = self.rpc.generate_custom_block(parent_hash=self.rpc.block_by_epoch("latest_mined")["hash"], referee=[], txs=[
+            self.rpc.new_typed_tx(value=0, gas=21000, priv_key=acct.key.hex())
+        ])
+        self.rpc.generate_blocks(20, 5)
+        # self.
+        # h = self.rpc.send_tx(
+        #     self.rpc.new_typed_tx(
+        #         priv_key=acct.key.hex(),
+        #         max_fee_per_gas=self.rpc.base_fee_per_gas(),
+        #         max_priority_fee_per_gas=self.rpc.base_fee_per_gas(),
+        #         value=0,
+        #     ),
+        #     wait_for_receipt=True,
+        # )
+        tx_data = self.rpc.block_by_hash(block, True)["transactions"][0]
+        tx_receipt = self.rpc.get_transaction_receipt(tx_data["hash"])
+        gas_fee = int(tx_receipt["gasFee"],16)
+        assert_equal(gas_fee, initial_value)
+        assert_equal(tx_data["status"],"0x1")
+        # account balance is all consumed
+        assert_equal(self.rpc.get_balance(acct.address),0)
+
+    # two cases to test based on balance enough for max priority fee per gas
+    # maxPriorityFeePerGas = maxFeePerGas <- will fail because balance is not enough for effective_gas_price * gas_charged
+    # maxPriorityFeePerGas = 0 <- succeed
+    def test_balance_enough_for_base_fee_but_not_for_max_fee_per_gas(self, priority_fee_setting: Literal["MAX", "ZERO"]):
+        # ensuring acct does not have enough balance to pay for base fee
+        self.log.info(f"current base fee: {self.rpc.base_fee_per_gas()}")
+        assert_equal(self.rpc.base_fee_per_gas(), MIN_NATIVE_BASE_PRICE)
+        # allow extra 1 priority fee
+        initial_value = 21000*(MIN_NATIVE_BASE_PRICE+1)
+        acct = self.init_acct_with_cfx(initial_value)
+        max_fee_per_gas = MIN_NATIVE_BASE_PRICE+2
+        max_priority_fee: int
+        if priority_fee_setting == "MAX":
+            max_priority_fee = max_fee_per_gas
+        elif priority_fee_setting == "ZERO":
+            max_priority_fee = 0
+        block = self.rpc.generate_custom_block(parent_hash=self.rpc.block_by_epoch("latest_mined")["hash"], referee=[], txs=[
+            self.rpc.new_typed_tx(value=0, gas=21000, priv_key=acct.key.hex(), max_fee_per_gas=max_fee_per_gas, max_priority_fee_per_gas=max_priority_fee)
+        ])
+        self.rpc.generate_blocks(20, 5)
+
+        tx_data = self.rpc.block_by_hash(block, True)["transactions"][0]
+        assert_correct_fee_computation_for_core_tx(self.rpc, tx_data["hash"], BURNT_RATIO)
+
+        if priority_fee_setting == "MAX":
+            # extra test to assert gas fee equal to all of the balance
+            tx_receipt = self.rpc.get_transaction_receipt(tx_data["hash"])
+            gas_fee = int(tx_receipt["gasFee"],16)
+            assert_equal(gas_fee, initial_value)
+
+
     def run_test(self):
         self.rpc.generate_blocks(5)
         
@@ -146,6 +204,9 @@ class CIP1559Test(ConfluxTestFramework):
 
         self.test_type_2_tx_fees()
         self.test_max_fee_not_enough_for_current_base_fee()
+        self.test_balance_not_enough_for_base_fee()
+        self.test_balance_enough_for_base_fee_but_not_for_max_fee_per_gas("ZERO")
+        self.test_balance_enough_for_base_fee_but_not_for_max_fee_per_gas("MAX")
 
 
 if __name__ == "__main__":

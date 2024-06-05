@@ -419,6 +419,8 @@ class RpcClient:
             acct = CfxAccount.from_key(priv_key, DEFAULT_PY_TEST_CHAIN_ID)
         else:
             acct = CfxAccount.from_key(default_config["GENESIS_PRI_KEY"], DEFAULT_PY_TEST_CHAIN_ID)
+        if receiver is None:
+            receiver = self.COINBASE_ADDR
         tx = {}
         tx["type"] = type_
         tx["gas"] = gas
