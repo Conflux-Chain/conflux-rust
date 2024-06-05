@@ -650,7 +650,7 @@ class RpcClient:
     
     def fee_history(self, epoch_count: int, last_epoch: Union[int, str], reward_percentiles: Optional[list[float]]=None) -> CfxFeeHistoryResponse:
         if reward_percentiles is None:
-            reward_percentiles = [50]*epoch_count
+            reward_percentiles = [50]
         if isinstance(last_epoch, int):
             last_epoch = hex(last_epoch)
         rtn = self.node.cfx_feeHistory(hex(epoch_count), last_epoch, reward_percentiles)
