@@ -1,4 +1,3 @@
-use crate::rpc::types::FeeHistory;
 use cfx_types::U256;
 use std::collections::VecDeque;
 
@@ -20,18 +19,17 @@ pub struct CfxFeeHistory {
 }
 
 impl CfxFeeHistory {
-    pub fn new(fee_history: FeeHistory) -> Self { fee_history.into() }
-
-    pub fn reward(&self) -> &VecDeque<Vec<U256>> { &self.reward }
-}
-
-impl From<FeeHistory> for CfxFeeHistory {
-    fn from(fee_history: FeeHistory) -> Self {
-        Self {
-            oldest_epoch: fee_history.oldest_block,
-            base_fee_per_gas: fee_history.base_fee_per_gas,
-            gas_used_ratio: fee_history.gas_used_ratio,
-            reward: fee_history.reward,
+    pub fn new(
+        oldest_epoch: U256, base_fee_per_gas: VecDeque<U256>,
+        gas_used_ratio: VecDeque<f64>, reward: VecDeque<Vec<U256>>,
+    ) -> Self {
+        CfxFeeHistory {
+            oldest_epoch,
+            base_fee_per_gas,
+            gas_used_ratio,
+            reward,
         }
     }
+
+    pub fn reward(&self) -> &VecDeque<Vec<U256>> { &self.reward }
 }

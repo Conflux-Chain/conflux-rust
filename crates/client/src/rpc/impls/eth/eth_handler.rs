@@ -971,8 +971,6 @@ impl Eth for EthHandler {
                 .map_err(|_| RpcError::internal_error())?;
 
             if current_height == 0 {
-                // fee_history.finish(0, None, Space::Ethereum);
-                // return Ok(fee_history);
                 break;
             } else {
                 current_height -= 1;

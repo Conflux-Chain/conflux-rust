@@ -1102,7 +1102,7 @@ impl RpcImpl {
 
         if block_count.as_u64() == 0 {
             return Box::new(
-                async { Ok(CfxFeeHistory::from(FeeHistory::new())) }
+                async { Ok(FeeHistory::new().to_cfx_fee_history()) }
                     .boxed()
                     .compat(),
             );
@@ -1171,7 +1171,7 @@ impl RpcImpl {
                 block.block_header.base_price().as_ref(),
                 Space::Native,
             );
-            Ok(CfxFeeHistory::from(fee_history))
+            Ok(fee_history.to_cfx_fee_history())
         };
 
         Box::new(fut.boxed().compat())

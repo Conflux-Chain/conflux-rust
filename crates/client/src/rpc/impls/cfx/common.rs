@@ -547,7 +547,7 @@ impl RpcImpl {
         );
 
         if block_count.as_u64() == 0 {
-            return Ok(CfxFeeHistory::from(FeeHistory::new()));
+            return Ok(FeeHistory::new().to_cfx_fee_history());
         }
         // keep read lock to ensure consistent view
         let inner = self.consensus_graph().inner.read();
@@ -621,7 +621,7 @@ impl RpcImpl {
             Space::Native,
         );
 
-        Ok(CfxFeeHistory::from(fee_history))
+        Ok(fee_history.to_cfx_fee_history())
     }
 
     pub fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {

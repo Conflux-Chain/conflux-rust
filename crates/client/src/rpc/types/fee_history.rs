@@ -3,26 +3,37 @@ use std::collections::VecDeque;
 use cfx_types::{Space, SpaceMap, U256};
 use primitives::{transaction::SignedTransaction, BlockHeader};
 
+use super::CfxFeeHistory;
+
 #[derive(Serialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeHistory {
     /// Oldest Block
-    pub oldest_block: U256,
+    oldest_block: U256,
     /// An array of block base fees per gas. This includes one block earlier
     /// than the oldest block. Zeroes are returned for pre-EIP-1559 blocks.
-    pub base_fee_per_gas: VecDeque<U256>,
+    base_fee_per_gas: VecDeque<U256>,
     /// In Conflux, 1559 is adjusted by the current block's gas limit of total
     /// transactions, instead of parent's gas used
-    pub gas_used_ratio: VecDeque<f64>,
+    gas_used_ratio: VecDeque<f64>,
     /// A two-dimensional array of effective priority fees per gas at the
     /// requested block percentiles.
-    pub reward: VecDeque<Vec<U256>>,
+    reward: VecDeque<Vec<U256>>,
 }
 
 impl FeeHistory {
     pub fn new() -> Self { Default::default() }
 
     pub fn reward(&self) -> &VecDeque<Vec<U256>> { &self.reward }
+
+    pub fn to_cfx_fee_history(self) -> CfxFeeHistory {
+        CfxFeeHistory::new(
+            self.oldest_block,
+            self.base_fee_per_gas,
+            self.gas_used_ratio,
+            self.reward,
+        )
+    }
 
     pub fn push_front_block<'a, I>(
         &mut self, space: Space, percentiles: &Vec<f64>,

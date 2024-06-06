@@ -48,7 +48,7 @@ pub use self::{
             EstimateGasAndCollateralResponse, SendTxRequest,
             MAX_GAS_CALL_REQUEST,
         },
-        CfxFeeHistory
+        CfxFeeHistory,
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
