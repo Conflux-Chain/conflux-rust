@@ -47,7 +47,7 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block, BlockHeader,
     BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
     StorageValue, Transaction, TransactionIndex, TransactionStatus,
     TransactionWithSignature, VoteStakeInfo,
@@ -115,7 +115,7 @@ pub(crate) struct BlockExecInfo {
     pub(crate) block: Arc<Block>,
     pub(crate) epoch_number: u64,
     pub(crate) maybe_state_root: Option<H256>,
-    pub(crate) pivot_hash: H256,
+    pub(crate) pivot_header: Arc<BlockHeader>,
 }
 
 pub struct RpcImpl {
@@ -790,12 +790,23 @@ impl RpcImpl {
             bail!("Inconsistent state");
         }
 
+        let pivot_header = if let Some(x) = self
+            .consensus
+            .get_data_manager()
+            .block_header_by_hash(&pivot_hash)
+        {
+            x
+        } else {
+            warn!("Cannot find pivot header when get block execution info: pivot hash {:?}", pivot_hash);
+            return Ok(None);
+        };
+
         Ok(Some(BlockExecInfo {
             block_receipts,
             block,
             epoch_number,
             maybe_state_root,
-            pivot_hash,
+            pivot_header,
         }))
     }
 
@@ -840,7 +851,7 @@ impl RpcImpl {
             prior_gas_used,
             Some(exec_info.epoch_number),
             exec_info.block_receipts.block_number,
-            exec_info.block.block_header.base_price(),
+            exec_info.pivot_header.base_price(),
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
@@ -900,10 +911,10 @@ impl RpcImpl {
         };
 
         // pivot chain reorg
-        if pivot_assumption != exec_info.pivot_hash {
+        if pivot_assumption != exec_info.pivot_header.hash() {
             bail!(pivot_assumption_failed(
                 pivot_assumption,
-                exec_info.pivot_hash
+                exec_info.pivot_header.hash()
             ));
         }
 
