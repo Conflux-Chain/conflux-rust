@@ -206,7 +206,7 @@ class RpcClient:
         return int(self.node.cfx_gasPrice(), 0)
 
     def base_fee_per_gas(self, epoch: Union[int,str] = "latest_mined"):
-        return self.fee_history(1, epoch)['baseFeePerGas'][-1]
+        return int(self.block_by_epoch(epoch).get("baseFeePerGas", "0x0"), 16)
 
     def get_block_reward_info(self, epoch: str):
         reward = self.node.cfx_getBlockRewardInfo(epoch)
