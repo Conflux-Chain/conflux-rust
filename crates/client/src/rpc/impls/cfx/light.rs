@@ -34,7 +34,7 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use crate::{
     common::delegate_convert,
     rpc::{
-        error_codes,
+        errors,
         impls::common::{self, RpcImpl as CommonImpl},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
@@ -69,7 +69,7 @@ macro_rules! not_supported {
         #[allow(unused_variables)]
         fn $fn ( &self $(, $name : $type)* ) $( -> BoxFuture<$ret> )? {
             use jsonrpc_core::futures::future::{Future, IntoFuture};
-            Err(error_codes::unimplemented(Some("Tracking issue: https://github.com/Conflux-Chain/conflux-rust/issues/1461".to_string())))
+            Err(errors::unimplemented(Some("Tracking issue: https://github.com/Conflux-Chain/conflux-rust/issues/1461".to_string())))
                 .into_future()
                 .boxed()
         }
@@ -79,7 +79,7 @@ macro_rules! not_supported {
     ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> $ret:ty )? ; $($tail:tt)* ) => {
         #[allow(unused_variables)]
         fn $fn ( &self $(, $name : $type)* ) $( -> $ret )? {
-            Err(error_codes::unimplemented(Some("Tracking issue: https://github.com/Conflux-Chain/conflux-rust/issues/1461".to_string())))
+            Err(errors::unimplemented(Some("Tracking issue: https://github.com/Conflux-Chain/conflux-rust/issues/1461".to_string())))
         }
 
         not_supported!($($tail)*);

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes::invalid_params,
+    errors::invalid_params,
     types::{
         address::RpcAddress,
         cfx::{

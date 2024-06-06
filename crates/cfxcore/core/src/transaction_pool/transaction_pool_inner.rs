@@ -2,6 +2,7 @@ use super::{
     account_cache::AccountCache,
     garbage_collector::GarbageCollector,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
+    TransactionPoolError, SAME_NONCE_HIGH_GAS_PRICE_NEEED,
 };
 
 use crate::verification::{PackingCheckResult, VerificationConfig};
@@ -827,7 +828,7 @@ impl TransactionPoolInner {
         ) {
             self.collect_garbage(transaction.as_ref());
             if self.is_full(transaction.space()) {
-                return InsertResult::Failed("Transaction Pool is full".into());
+                return InsertResult::Failed("txpool is full".into());
             }
         }
         let result = {
@@ -1342,15 +1343,19 @@ impl TransactionPoolInner {
     pub fn insert_transaction_with_readiness_check(
         &mut self, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), TransactionPoolError> {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
-        let (sponsored_gas, sponsored_storage) =
-            self.get_sponsored_gas_and_storage(account_cache, &transaction)?;
+        let (sponsored_gas, sponsored_storage) = self
+            .get_sponsored_gas_and_storage(account_cache, &transaction)
+            .map_err(|e| TransactionPoolError::Other(e))?;
 
         let (state_nonce, state_balance) = account_cache
             .get_nonce_and_balance(&transaction.sender())
             .map_err(|e| {
-                format!("Failed to read account_cache from storage: {}", e)
+                TransactionPoolError::Other(format!(
+                    "Failed to read account_cache from storage: {}",
+                    e
+                ))
             })?;
 
         if transaction.hash[0] & 254 == 0 {
@@ -1367,10 +1372,10 @@ impl TransactionPoolInner {
                 "Transaction {:?} is discarded due to in too distant future",
                 transaction.hash()
             );
-            return Err(format!(
-                "Transaction {:?} is discarded due to in too distant future",
-                transaction.hash()
-            ));
+            return Err(TransactionPoolError::NonceTooDistant {
+                hash: transaction.hash(),
+                nonce: *transaction.nonce(),
+            });
         } else if !packed /* Because we may get slightly out-dated state for transaction pool, we should allow transaction pool to set already past-nonce transactions to packed. */
             && *transaction.nonce() < state_nonce
         {
@@ -1378,10 +1383,10 @@ impl TransactionPoolInner {
                 "Transaction {:?} is discarded due to a too stale nonce, self.nonce()={}, state_nonce={}",
                 transaction.hash(), transaction.nonce(), state_nonce,
             );
-            return Err(format!(
-                "Transaction {:?} is discarded due to a too stale nonce",
-                transaction.hash()
-            ));
+            return Err(TransactionPoolError::NonceTooStale {
+                hash: transaction.hash(),
+                nonce: *transaction.nonce(),
+            });
         }
 
         // check balance
@@ -1416,7 +1421,11 @@ impl TransactionPoolInner {
                     state_balance
                 );
                 trace!("{}", msg);
-                return Err(msg);
+                return Err(TransactionPoolError::OutOfBalance {
+                    need: need_balance,
+                    have: state_balance,
+                    hash: transaction.hash(),
+                });
             }
         }
 
@@ -1428,7 +1437,17 @@ impl TransactionPoolInner {
             (sponsored_gas, sponsored_storage),
         );
         if let InsertResult::Failed(info) = result {
-            return Err(format!("Failed imported to deferred pool: {}", info));
+            let err = match info.as_str() {
+                "txpool is full" => TransactionPoolError::TxPoolFull,
+                _ if info.starts_with(SAME_NONCE_HIGH_GAS_PRICE_NEEED) => {
+                    TransactionPoolError::HigherGasPriceNeeded
+                }
+                _ => TransactionPoolError::Other(format!(
+                    "Failed imported to deferred pool: {}",
+                    info
+                )),
+            };
+            return Err(err);
         }
 
         self.recalculate_readiness_with_state(
@@ -1436,7 +1455,10 @@ impl TransactionPoolInner {
             account_cache,
         )
         .map_err(|e| {
-            format!("Failed to read account_cache from storage: {}", e)
+            TransactionPoolError::Other(format!(
+                "Failed to read account_cache from storage: {}",
+                e
+            ))
         })?;
 
         Ok(())
@@ -1512,7 +1534,10 @@ impl TransactionPoolInner {
 
 #[cfg(test)]
 mod tests {
-    use crate::verification::PackingCheckResult;
+    use crate::{
+        transaction_pool::SAME_NONCE_HIGH_GAS_PRICE_NEEED,
+        verification::PackingCheckResult,
+    };
 
     use super::{
         DeferredPool, InsertResult, TransactionPoolInner, TxWithReadyInfo,
@@ -1641,7 +1666,10 @@ mod tests {
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
-            InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", bob_tx2_new.gas_price()))
+            InsertResult::Failed(format!(
+                "{SAME_NONCE_HIGH_GAS_PRICE_NEEED} > {}",
+                bob_tx2_new.gas_price()
+            ))
         );
 
         assert_eq!(

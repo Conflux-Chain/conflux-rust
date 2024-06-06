@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::rpc::{
-    error_codes::{codes, invalid_params},
+    errors::{codes, invalid_params},
     helpers::{
         limit_logs, PollFilter, PollManager, SyncPollFilter,
         MAX_BLOCK_HISTORY_SIZE,

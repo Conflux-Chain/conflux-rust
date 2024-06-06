@@ -386,6 +386,7 @@ impl NoncePool {
 #[cfg(test)]
 mod nonce_pool_test {
     use super::{InsertResult, NoncePool, TxWithReadyInfo};
+    use crate::transaction_pool::SAME_NONCE_HIGH_GAS_PRICE_NEEED;
     use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
     use cfx_types::{Address, U128, U256};
     use keylib::{Generator, KeyPair, Random};
@@ -602,8 +603,13 @@ mod nonce_pool_test {
                 nonce_pool.get_tx_by_nonce(U256::from(i)),
                 Some(tx1[i].clone())
             );
-            assert_eq!(nonce_pool.insert(&tx2[i as usize], false /* force */),
-                       InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &tx1[i as usize].gas_price())));
+            assert_eq!(
+                nonce_pool.insert(&tx2[i as usize], false /* force */),
+                InsertResult::Failed(format!(
+                    "{SAME_NONCE_HIGH_GAS_PRICE_NEEED} > {}",
+                    &tx1[i as usize].gas_price()
+                ))
+            );
             assert_eq!(
                 nonce_pool.insert(&tx2[i as usize], true /* force */),
                 InsertResult::Updated(tx1[i as usize].clone())

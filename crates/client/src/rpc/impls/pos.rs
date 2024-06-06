@@ -5,7 +5,7 @@
 use crate::{
     common::delegate_convert::into_jsonrpc_result,
     rpc::{
-        error_codes::{
+        errors::{
             build_rpc_server_error, call_execution_error,
             codes::POS_NOT_ENABLED,
         },

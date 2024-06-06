@@ -23,7 +23,7 @@ use std::{
 };
 
 mod authcodes;
-pub mod error_codes;
+pub mod errors;
 pub mod extractor;
 mod helpers;
 mod http_common;
@@ -39,6 +39,7 @@ pub use cfxcore::rpc_errors::{
     BoxFuture as RpcBoxFuture, Error as RpcError, ErrorKind as RpcErrorKind,
     ErrorKind::JsonRpcError as JsonRpcErrorKind, Result as RpcResult,
 };
+pub use errors::error_codes;
 
 use self::{
     impls::{
@@ -75,7 +76,7 @@ pub use self::types::{Block as RpcBlock, Origin};
 use crate::{
     configuration::Configuration,
     rpc::{
-        error_codes::request_rejected_too_many_request_error,
+        errors::request_rejected_too_many_request_error,
         impls::{
             eth::{EthHandler, GethDebugHandler},
             eth_filter::EthFilterClient,

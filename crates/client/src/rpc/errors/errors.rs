@@ -2,12 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use alloy_primitives::{Address, Bytes};
+use super::error_helpers::*;
+use alloy_primitives::{hex, Address, Bytes};
 use alloy_rpc_types::error::EthRpcErrorCode;
 use alloy_sol_types::decode_revert_reason;
+use cfxcore::transaction_pool::TransactionPoolError;
 use jsonrpc_core::{Error as JsonRpcError, ErrorCode};
+use primitives::transaction::TransactionError;
 use revm::primitives::{HaltReason, OutOfGasError};
 use std::time::Duration;
+
+// The key point is the error code and message.
 
 /// Result alias
 pub type EthResult<T> = Result<T, EthApiError>;
@@ -125,11 +130,81 @@ pub enum EthApiError {
 }
 
 impl From<EthApiError> for JsonRpcError {
-    fn from(e: EthApiError) -> Self {
-        JsonRpcError {
-            code: ErrorCode::InternalError,
-            message: e.to_string(),
-            data: None,
+    fn from(error: EthApiError) -> Self {
+        match error {
+            EthApiError::FailedToDecodeSignedTransaction |
+            EthApiError::InvalidTransactionSignature |
+            EthApiError::EmptyRawTransactionData |
+            EthApiError::InvalidBlockRange |
+            EthApiError::ConflictingFeeFieldsInRequest |
+            // EthApiError::Signing(_) |
+            EthApiError::BothStateAndStateDiffInOverride(_) |
+            EthApiError::InvalidTracerConfig |
+            EthApiError::TransactionConversionError => invalid_params_rpc_err(error.to_string()),
+            EthApiError::InvalidTransaction(err) => err.into(),
+            EthApiError::PoolError(err) => err.into(),
+            EthApiError::PrevrandaoNotSet |
+            EthApiError::ExcessBlobGasNotSet |
+            // EthApiError::InvalidBlockData(_) |
+            // EthApiError::Internal(_) |
+            EthApiError::TransactionNotFound |
+            EthApiError::EvmCustom(_) |
+            EthApiError::InvalidRewardPercentiles => internal_rpc_err(error.to_string()),
+            EthApiError::UnknownBlockNumber | EthApiError::UnknownBlockOrTxIndex => {
+                rpc_error_with_code(EthRpcErrorCode::ResourceNotFound.code(), error.to_string())
+            }
+            EthApiError::UnknownSafeOrFinalizedBlock => {
+                rpc_error_with_code(EthRpcErrorCode::UnknownBlock.code(), error.to_string())
+            }
+            EthApiError::Unsupported(msg) => internal_rpc_err(msg),
+            EthApiError::InternalJsTracerError(msg) => internal_rpc_err(msg),
+            EthApiError::InvalidParams(msg) => invalid_params_rpc_err(msg),
+            err @ EthApiError::ExecutionTimedOut(_) => {
+                rpc_error_with_code(-32000, err.to_string()) // CALL_EXECUTION_FAILED_CODE = -32000
+            }
+            err @ EthApiError::InternalBlockingTaskError | err @ EthApiError::InternalEthError => {
+                internal_rpc_err(err.to_string())
+            }
+            err @ EthApiError::TransactionInputError(_) => invalid_params_rpc_err(err.to_string()),
+            EthApiError::Other(err) => internal_rpc_err(err),
+            // EthApiError::MuxTracerError(msg) => internal_rpc_err(msg.to_string()),
+        }
+    }
+}
+
+impl From<TransactionPoolError> for EthApiError {
+    fn from(err: TransactionPoolError) -> Self {
+        match err {
+            TransactionPoolError::TransactionError(tx_err) => match tx_err {
+                TransactionError::AlreadyImported => Self::PoolError(RpcPoolError::ReplaceUnderpriced),
+                TransactionError::ChainIdMismatch { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::InvalidChainId),
+                TransactionError::EpochHeightOutOfBound { .. } => Self::InvalidBlockRange,
+                TransactionError::NotEnoughBaseGas { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::GasTooLow),
+                TransactionError::Stale => Self::InvalidTransaction(RpcInvalidTransactionError::NonceTooLow),
+                TransactionError::TooCheapToReplace => Self::PoolError(RpcPoolError::ReplaceUnderpriced),
+                TransactionError::LimitReached => Self::PoolError(RpcPoolError::TxPoolOverflow),
+                TransactionError::InsufficientGasPrice { .. } => Self::PoolError(RpcPoolError::Underpriced),
+                TransactionError::InsufficientGas { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::GasTooLow),
+                TransactionError::InsufficientBalance { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::InsufficientFundsForTransfer),
+                TransactionError::GasLimitExceeded { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::GasTooHigh),
+                TransactionError::InvalidGasLimit(_) => Self::InvalidTransaction(RpcInvalidTransactionError::GasUintOverflow),
+                TransactionError::InvalidSignature(_) => Self::InvalidTransactionSignature,
+                TransactionError::TooBig => Self::InvalidTransaction(RpcInvalidTransactionError::MaxInitCodeSizeExceeded),
+                TransactionError::InvalidRlp(_) => Self::FailedToDecodeSignedTransaction,
+                TransactionError::ZeroGasPrice => Self::PoolError(RpcPoolError::Underpriced),
+                TransactionError::FutureTransactionType => Self::InvalidTransaction(RpcInvalidTransactionError::TxTypeNotSupported),
+                TransactionError::InvalidReceiver => Self::Other("Invalid receiver".to_string()),
+                TransactionError::TooLargeNonce => Self::InvalidTransaction(RpcInvalidTransactionError::NonceMaxValue),
+            },
+            TransactionPoolError::GasLimitExceeded { .. } => Self::PoolError(RpcPoolError::ExceedsGasLimit),
+            TransactionPoolError::GasPriceLessThanMinimum { .. } => Self::PoolError(RpcPoolError::Underpriced),
+            TransactionPoolError::RlpDecodeError(_) => Self::FailedToDecodeSignedTransaction,
+            TransactionPoolError::NonceTooDistant { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::NonceTooHigh),
+            TransactionPoolError::NonceTooStale { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::NonceTooLow),
+            TransactionPoolError::OutOfBalance { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::InsufficientFundsForTransfer),
+            TransactionPoolError::TxPoolFull => Self::PoolError(RpcPoolError::TxPoolOverflow),
+            TransactionPoolError::HigherGasPriceNeeded => Self::PoolError(RpcPoolError::ReplaceUnderpriced),
+            TransactionPoolError::Other(msg) => Self::Other(msg),
         }
     }
 }
@@ -288,6 +363,7 @@ impl RpcInvalidTransactionError {
     ///
     /// Takes the configured gas limit of the transaction which is attached to
     /// the error
+    #[allow(dead_code)]
     pub(crate) const fn halt(reason: HaltReason, gas_limit: u64) -> Self {
         match reason {
             HaltReason::OutOfGas(err) => Self::out_of_gas(err, gas_limit),
@@ -297,6 +373,7 @@ impl RpcInvalidTransactionError {
     }
 
     /// Converts the out of gas error
+    #[allow(dead_code)]
     pub(crate) const fn out_of_gas(
         reason: OutOfGasError, gas_limit: u64,
     ) -> Self {
@@ -315,10 +392,19 @@ impl RpcInvalidTransactionError {
 
 impl From<RpcInvalidTransactionError> for JsonRpcError {
     fn from(e: RpcInvalidTransactionError) -> Self {
-        JsonRpcError {
-            code: ErrorCode::ServerError(e.error_code() as i64),
-            message: e.to_string(),
-            data: None,
+        match e {
+            RpcInvalidTransactionError::Revert(revert) => JsonRpcError {
+                code: ErrorCode::ServerError(revert.error_code() as i64),
+                message: revert.to_string(),
+                data: revert.output.as_ref().map(|out| out.as_ref()).map(|v| {
+                    serde_json::Value::String(hex::encode_prefixed(v))
+                }),
+            },
+            err => JsonRpcError {
+                code: ErrorCode::ServerError(err.error_code() as i64),
+                message: err.to_string(),
+                data: None,
+            },
         }
     }
 }
@@ -408,10 +494,10 @@ pub enum RpcPoolError {
     /// Errors related to invalid transactions
     #[error(transparent)]
     Invalid(#[from] RpcInvalidTransactionError),
-    // Custom pool error
+    /// Custom pool error
     // #[error(transparent)]
     // PoolTransactionError(Box<dyn PoolTransactionError>),
-    // Eip-4844 related error
+    /// Eip-4844 related error
     // #[error(transparent)]
     // Eip4844(#[from] Eip4844PoolTransactionError),
     /// Thrown if a conflicting transaction type is already in the pool
@@ -427,14 +513,13 @@ pub enum RpcPoolError {
 
 impl From<RpcPoolError> for JsonRpcError {
     fn from(e: RpcPoolError) -> Self {
-        // JsonRpcError {
-        //     code: ErrorCode::InternalError,
-        //     message: e.to_string(),
-        //     data: None,
-        // }
         match e {
             RpcPoolError::Invalid(err) => err.into(),
-            error => internal_rpc_err(error.to_string()),
+            error => JsonRpcError {
+                code: ErrorCode::InternalError,
+                message: error.to_string(),
+                data: None,
+            },
         }
     }
 }
