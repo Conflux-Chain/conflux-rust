@@ -7,16 +7,16 @@ use primitives::{transaction::SignedTransaction, BlockHeader};
 #[serde(rename_all = "camelCase")]
 pub struct FeeHistory {
     /// Oldest Block
-    oldest_block: U256,
+    pub oldest_block: U256,
     /// An array of block base fees per gas. This includes one block earlier
     /// than the oldest block. Zeroes are returned for pre-EIP-1559 blocks.
-    base_fee_per_gas: VecDeque<U256>,
+    pub base_fee_per_gas: VecDeque<U256>,
     /// In Conflux, 1559 is adjusted by the current block's gas limit of total
     /// transactions, instead of parent's gas used
-    gas_used_ratio: VecDeque<f64>,
+    pub gas_used_ratio: VecDeque<f64>,
     /// A two-dimensional array of effective priority fees per gas at the
     /// requested block percentiles.
-    reward: VecDeque<Vec<U256>>,
+    pub reward: VecDeque<Vec<U256>>,
 }
 
 impl FeeHistory {
@@ -41,9 +41,7 @@ impl FeeHistory {
             return Ok(());
         };
 
-        self.base_fee_per_gas.push_front(
-            pivot_header.base_price().map_or(U256::zero(), |x| x[space]),
-        );
+        self.base_fee_per_gas.push_front(base_price);
 
         let gas_limit: U256 = match space {
             Space::Native => pivot_header.gas_limit() * 9 / 10,
@@ -74,12 +72,12 @@ impl FeeHistory {
     }
 
     pub fn finish(
-        &mut self, oldest_block: u64,
-        parent_base_price: Option<&SpaceMap<U256>>, space: Space,
+        &mut self, oldest_block: u64, last_base_price: Option<&SpaceMap<U256>>,
+        space: Space,
     ) {
         self.oldest_block = oldest_block.into();
         self.base_fee_per_gas
-            .push_front(parent_base_price.map_or(U256::zero(), |x| x[space]));
+            .push_back(last_base_price.map_or(U256::zero(), |x| x[space]));
     }
 }
 

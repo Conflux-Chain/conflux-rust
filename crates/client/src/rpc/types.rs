@@ -44,7 +44,7 @@ pub use self::{
         sign_call, CallRequest, CheckBalanceAgainstTransactionResponse,
         EstimateGasAndCollateralResponse, SendTxRequest, MAX_GAS_CALL_REQUEST,
     },
-    cfx::{address, address::RpcAddress},
+    cfx::{address, address::RpcAddress, CfxFeeHistory},
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
     fee_history::FeeHistory,
