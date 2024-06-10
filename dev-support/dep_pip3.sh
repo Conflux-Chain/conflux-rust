@@ -8,6 +8,7 @@ function install() {
 	fi
 }
 
+install git+https://github.com/conflux-fans/cfx-account.git@v1.1.0-beta.2 # install cfx-account lib and prepare for CIP-1559 tests
 install eth-utils
 install rlp==1.2.0
 install py-ecc==5.2.0
