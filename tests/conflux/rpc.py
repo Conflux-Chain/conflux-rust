@@ -1,13 +1,15 @@
 import os
 import random
-from typing import Optional, Union
+from typing import cast, Optional, Union, TypedDict, Any
 from web3 import Web3
 
 import eth_utils
+from cfx_account import Account as CfxAccount
+from eth_account.datastructures import SignedTransaction
 import rlp
 import json
 
-from .address import hex_to_b32_address, b32_address_to_hex
+from .address import hex_to_b32_address, b32_address_to_hex, DEFAULT_PY_TEST_CHAIN_ID
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
@@ -25,6 +27,7 @@ from test_framework.util import (
     assert_equal,
     wait_until, checktx, get_contract_instance
 )
+from test_framework.test_node import TestNode
 
 file_dir = os.path.dirname(os.path.realpath(__file__))
 REQUEST_BASE = {
@@ -34,6 +37,11 @@ REQUEST_BASE = {
     "to": b'',
 }
 
+class CfxFeeHistoryResponse(TypedDict):
+    baseFeePerGas: list[int]
+    gasUsedRatio: list[float]
+    reward: list[list[str]] # does not convert it currently
+
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
     if original_dict is not None and field_name in original_dict and original_dict[field_name] not in [None, "null"]:
@@ -41,8 +49,8 @@ def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
 
 
 class RpcClient:
-    def __init__(self, node=None, auto_restart=False, log=None):
-        self.node = node
+    def __init__(self, node: Optional[TestNode]=None, auto_restart=False, log=None):
+        self.node: TestNode = node # type: ignore
         self.auto_restart = auto_restart
         self.log = log
 
@@ -129,13 +137,22 @@ class RpcClient:
         assert_is_hash_string(block_hash)
         return block_hash
 
-    def generate_custom_block(self, parent_hash: str, referee: list, txs: list) -> str:
+    def generate_custom_block(self, parent_hash: str, referee: list, txs: list[Union[Transaction, SignedTransaction]]) -> str:
         assert_is_hash_string(parent_hash)
 
         for r in referee:
             assert_is_hash_string(r)
 
-        encoded_txs = eth_utils.encode_hex(rlp.encode(txs))
+        raw_txs = []
+        for tx in txs:
+            if isinstance(tx, SignedTransaction):
+                raw_txs.append(tx.rawTransaction)
+            elif isinstance(tx, Transaction):
+                raw_txs.append(rlp.encode(tx))
+            else:
+                raw_txs.append(rlp.encode(tx))
+        
+        encoded_txs = eth_utils.encode_hex(rlp.encode(raw_txs))
 
         block_hash = self.node.test_generatecustomblock(parent_hash, referee, encoded_txs)
         assert_is_hash_string(block_hash)
@@ -187,6 +204,9 @@ class RpcClient:
 
     def gas_price(self) -> int:
         return int(self.node.cfx_gasPrice(), 0)
+
+    def base_fee_per_gas(self, epoch: Union[int,str] = "latest_mined"):
+        return int(self.block_by_epoch(epoch).get("baseFeePerGas", "0x0"), 16)
 
     def get_block_reward_info(self, epoch: str):
         reward = self.node.cfx_getBlockRewardInfo(epoch)
@@ -296,8 +316,12 @@ class RpcClient:
     def clear_tx_pool(self):
         self.node.txpool_clear()
 
-    def send_tx(self, tx: Transaction, wait_for_receipt=False, wait_for_catchup=True) -> str:
-        encoded = eth_utils.encode_hex(rlp.encode(tx))
+    # a temporary patch for transaction compatibity
+    def send_tx(self, tx: Union[Transaction, SignedTransaction], wait_for_receipt=False, wait_for_catchup=True) -> str:
+        if isinstance(tx, SignedTransaction):
+            encoded = cast(str, tx.rawTransaction.hex())
+        else:
+            encoded = eth_utils.encode_hex(rlp.encode(tx))
         tx_hash = self.send_raw_tx(encoded, wait_for_catchup=wait_for_catchup)
 
         if wait_for_receipt:
@@ -360,7 +384,7 @@ class RpcClient:
         convert_b32_address_field_to_hex(tx, "contractCreated")
         return tx
 
-    def new_tx(self, sender=None, receiver=None, nonce=None, gas_price=1, gas=21000, value=100, data=b'', sign=True,
+    def new_tx(self, *, sender=None, receiver=None, nonce=None, gas_price=1, gas=21000, value=100, data=b'', sign=True,
                priv_key=None, storage_limit=None, epoch_height=None, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if priv_key is None:
             priv_key = default_config["GENESIS_PRI_KEY"]
@@ -386,6 +410,49 @@ class RpcClient:
             return tx.sign(priv_key)
         else:
             return tx
+    
+    def new_typed_tx(self, *, type_=2, receiver=None, nonce=None, max_fee_per_gas=None,max_priority_fee_per_gas=0, access_list=[], gas=21000, value=100, data=b'',
+                    priv_key=None, storage_limit=0, epoch_height=None, chain_id=DEFAULT_PY_TEST_CHAIN_ID
+    ) -> SignedTransaction:
+
+        if priv_key:
+            acct = CfxAccount.from_key(priv_key, DEFAULT_PY_TEST_CHAIN_ID)
+        else:
+            acct = CfxAccount.from_key(default_config["GENESIS_PRI_KEY"], DEFAULT_PY_TEST_CHAIN_ID)
+        if receiver is None:
+            receiver = self.COINBASE_ADDR
+        tx = {}
+        tx["type"] = type_
+        tx["gas"] = gas
+        tx["storageLimit"] = storage_limit
+        tx["value"] = value
+        tx["data"] = data
+        tx["maxPriorityFeePerGas"] = max_priority_fee_per_gas
+        tx["chainId"] = chain_id
+        tx["to"] = receiver
+            
+        if nonce is None:
+            nonce = self.get_nonce(acct.hex_address)
+        tx["nonce"] = nonce
+
+        if access_list != []:
+            def format_access_list(a_list):
+                rtn = []
+                for item in a_list:
+                    rtn.append({"address": item['address'], "storageKeys": item['storage_keys']})
+        
+            access_list = format_access_list(access_list)
+        tx["accessList"] = access_list
+
+        if epoch_height is None:
+            epoch_height = self.epoch_number()
+        tx["epochHeight"] = epoch_height
+        
+        # ensuring transaction can be sent
+        if max_fee_per_gas is None:
+            max_fee_per_gas = self.base_fee_per_gas('latest_mined') + 1
+        tx["maxFeePerGas"] = max_fee_per_gas
+        return acct.sign_transaction(tx)
 
     def new_contract_tx(self, receiver: Optional[str], data_hex: str = None, sender=None, priv_key=None, nonce=None,
                         gas_price=1,
@@ -450,7 +517,7 @@ class RpcClient:
     def chain(self) -> list:
         return self.node.cfx_getChain()
 
-    def get_transaction_receipt(self, tx_hash: str) -> dict:
+    def get_transaction_receipt(self, tx_hash: str) -> dict[str, Any]:
         assert_is_hash_string(tx_hash)
         r = self.node.cfx_getTransactionReceipt(tx_hash)
         if r is None:
@@ -580,6 +647,18 @@ class RpcClient:
 
     def filter_trace(self, filter: dict):
         return self.node.trace_filter(filter)
+    
+    def fee_history(self, epoch_count: int, last_epoch: Union[int, str], reward_percentiles: Optional[list[float]]=None) -> CfxFeeHistoryResponse:
+        if reward_percentiles is None:
+            reward_percentiles = [50]
+        if isinstance(last_epoch, int):
+            last_epoch = hex(last_epoch)
+        rtn = self.node.cfx_feeHistory(hex(epoch_count), last_epoch, reward_percentiles)
+        rtn[
+            'baseFeePerGas'
+        ] = [ int(v, 16) for v in rtn['baseFeePerGas'] ]
+        return rtn
+
 
     def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=None, legacy=True, should_fail=False):
         if priv_key is None:

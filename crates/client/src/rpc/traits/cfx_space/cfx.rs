@@ -5,9 +5,9 @@
 use crate::rpc::types::{
     pos::PoSEpochReward, Account as RpcAccount, AccountPendingInfo,
     AccountPendingTransactions, Block, BlockHashOrEpochNumber, Bytes,
-    CallRequest, CfxFilterChanges, CfxRpcLogFilter,
+    CallRequest, CfxFeeHistory, CfxFilterChanges, CfxRpcLogFilter,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, FeeHistory, Log as RpcLog, PoSEconomics,
+    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, StorageCollateralInfo, TokenSupplyInfo,
     Transaction, VoteParamsInfo, U64 as HexU64,
@@ -205,7 +205,7 @@ pub trait Cfx {
     fn fee_history(
         &self, block_count: HexU64, newest_block: EpochNumber,
         reward_percentiles: Vec<f64>,
-    ) -> BoxFuture<FeeHistory>;
+    ) -> BoxFuture<CfxFeeHistory>;
 
     /// Check if user balance is enough for the transaction.
     #[rpc(name = "cfx_checkBalanceAgainstTransaction")]
