@@ -14,10 +14,10 @@ use crate::rpc::{
     types::{
         errors::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
-        EpochNumber, FeeHistory, RpcAddress, Status as RpcStatus,
-        Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
-        TxWithPoolInfo, U64 as HexU64,
+        BlockHashOrEpochNumber, Bytes, CfxFeeHistory,
+        CheckBalanceAgainstTransactionResponse, EpochNumber, FeeHistory,
+        RpcAddress, Status as RpcStatus, Transaction as RpcTransaction,
+        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo, U64 as HexU64,
     },
     RpcErrorKind, RpcResult,
 };
@@ -529,17 +529,25 @@ impl RpcImpl {
         )
     }
 
+    // TODO: cache the history to improve performance
     pub fn fee_history(
         &self, block_count: HexU64, newest_block: EpochNumber,
         reward_percentiles: Vec<f64>,
-    ) -> RpcResult<FeeHistory> {
+    ) -> RpcResult<CfxFeeHistory> {
+        if newest_block == EpochNumber::LatestMined {
+            return Err(RpcError::invalid_params(
+                "newestBlock cannot be 'LatestMined'",
+            )
+            .into());
+        }
+
         info!(
             "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
             block_count, newest_block, reward_percentiles
         );
 
         if block_count.as_u64() == 0 {
-            return Ok(FeeHistory::new());
+            return Ok(FeeHistory::new().to_cfx_fee_history());
         }
         // keep read lock to ensure consistent view
         let inner = self.consensus_graph().inner.read();
@@ -594,21 +602,26 @@ impl RpcImpl {
                 .map_err(|_| RpcError::internal_error())?;
 
             if current_height == 0 {
-                fee_history.finish(0, None, Space::Native);
-                return Ok(fee_history);
+                break;
             } else {
                 current_height -= 1;
             }
         }
 
-        let block = fetch_block(current_height)?;
+        // Fetch the block after the last block in the history
+        let block = fetch_block(start_height + 1)?;
+        let oldest_block = if current_height == 0 {
+            0
+        } else {
+            current_height + 1
+        };
         fee_history.finish(
-            current_height + 1,
+            oldest_block,
             block.block_header.base_price().as_ref(),
             Space::Native,
         );
 
-        Ok(fee_history)
+        Ok(fee_history.to_cfx_fee_history())
     }
 
     pub fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {
