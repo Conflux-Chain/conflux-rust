@@ -187,7 +187,8 @@ fn block_tx_by_index(
 
 impl EthHandler {
     fn exec_transaction(
-        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
+        &self, mut request: CallRequest,
+        block_number_or_hash: Option<BlockNumber>,
     ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
 
@@ -212,6 +213,9 @@ impl EthHandler {
             }
             epoch => epoch.try_into()?,
         };
+
+        // if gas_price is zero, it is considered as not set
+        request.unset_zero_gas_price();
 
         let estimate_request = EstimateRequest {
             has_sender: request.from.is_some(),
@@ -967,16 +971,20 @@ impl Eth for EthHandler {
                 .map_err(|_| RpcError::internal_error())?;
 
             if current_height == 0 {
-                fee_history.finish(0, None, Space::Ethereum);
-                return Ok(fee_history);
+                break;
             } else {
                 current_height -= 1;
             }
         }
 
-        let block = fetch_block(current_height)?;
+        let block = fetch_block(start_height + 1)?;
+        let oldest_block = if current_height == 0 {
+            0
+        } else {
+            current_height + 1
+        };
         fee_history.finish(
-            current_height + 1,
+            oldest_block,
             block.pivot_header.base_price().as_ref(),
             Space::Ethereum,
         );

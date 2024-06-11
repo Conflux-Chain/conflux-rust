@@ -3,6 +3,8 @@ use std::collections::VecDeque;
 use cfx_types::{Space, SpaceMap, U256};
 use primitives::{transaction::SignedTransaction, BlockHeader};
 
+use super::CfxFeeHistory;
+
 #[derive(Serialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeHistory {
@@ -24,6 +26,15 @@ impl FeeHistory {
 
     pub fn reward(&self) -> &VecDeque<Vec<U256>> { &self.reward }
 
+    pub fn to_cfx_fee_history(self) -> CfxFeeHistory {
+        CfxFeeHistory::new(
+            self.oldest_block,
+            self.base_fee_per_gas,
+            self.gas_used_ratio,
+            self.reward,
+        )
+    }
+
     pub fn push_front_block<'a, I>(
         &mut self, space: Space, percentiles: &Vec<f64>,
         pivot_header: &BlockHeader, transactions: I,
@@ -41,9 +52,7 @@ impl FeeHistory {
             return Ok(());
         };
 
-        self.base_fee_per_gas.push_front(
-            pivot_header.base_price().map_or(U256::zero(), |x| x[space]),
-        );
+        self.base_fee_per_gas.push_front(base_price);
 
         let gas_limit: U256 = match space {
             Space::Native => pivot_header.gas_limit() * 9 / 10,
@@ -74,12 +83,12 @@ impl FeeHistory {
     }
 
     pub fn finish(
-        &mut self, oldest_block: u64,
-        parent_base_price: Option<&SpaceMap<U256>>, space: Space,
+        &mut self, oldest_block: u64, last_base_price: Option<&SpaceMap<U256>>,
+        space: Space,
     ) {
         self.oldest_block = oldest_block.into();
         self.base_fee_per_gas
-            .push_front(parent_base_price.map_or(U256::zero(), |x| x[space]));
+            .push_back(last_base_price.map_or(U256::zero(), |x| x[space]));
     }
 }
 

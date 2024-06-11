@@ -6,7 +6,6 @@ mod account;
 mod blame_info;
 mod block;
 mod bytes;
-pub mod call_request;
 pub mod cfx;
 mod consensus_graph_states;
 mod epoch_number;
@@ -40,11 +39,17 @@ pub use self::{
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
-    call_request::{
-        sign_call, CallRequest, CheckBalanceAgainstTransactionResponse,
-        EstimateGasAndCollateralResponse, SendTxRequest, MAX_GAS_CALL_REQUEST,
+    cfx::{
+        address,
+        address::RpcAddress,
+        call_request::{
+            self, sign_call, CallRequest,
+            CheckBalanceAgainstTransactionResponse,
+            EstimateGasAndCollateralResponse, SendTxRequest,
+            MAX_GAS_CALL_REQUEST,
+        },
+        CfxFeeHistory,
     },
-    cfx::{address, address::RpcAddress},
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
     fee_history::FeeHistory,

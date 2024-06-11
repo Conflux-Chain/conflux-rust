@@ -48,3 +48,11 @@ pub struct CallRequest {
     #[serde(rename = "type")]
     pub transaction_type: Option<U64>,
 }
+
+impl CallRequest {
+    pub fn unset_zero_gas_price(&mut self) {
+        if self.gas_price == Some(U256::zero()) {
+            self.gas_price = None;
+        }
+    }
+}
