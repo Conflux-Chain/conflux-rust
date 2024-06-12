@@ -2,10 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{EpochNumber, RpcAddress};
 use crate::rpc::{
     helpers::{maybe_vec_into, VariadicValue},
-    types::Log,
+    types::{EpochNumber, Log, RpcAddress},
 };
 use cfx_types::{Space, H256, U256, U64};
 use jsonrpc_core::Error as RpcError;

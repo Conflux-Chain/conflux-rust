@@ -3,9 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    cfx::{from_primitive_access_list, CfxAccessList},
+    cfx::{from_primitive_access_list, receipt::Receipt, CfxAccessList},
     eth::Transaction as ETHTransaction,
-    receipt::Receipt,
     Bytes, RpcAddress,
 };
 use cfx_addr::Network;
