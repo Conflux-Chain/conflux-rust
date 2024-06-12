@@ -10,15 +10,18 @@ import random
 import re
 from subprocess import CalledProcessError, check_output
 import time
-from typing import Optional, Callable, List, TYPE_CHECKING, cast
+from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union
 import socket
 import threading
 import jsonrpcclient.exceptions
 import solcx
 import web3
+from cfx_account import Account as CfxAccount
+from cfx_account.signers.local import LocalAccount  as CfxLocalAccount
 from sys import platform
 import yaml
 import shutil
+import math
 
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
@@ -806,3 +809,103 @@ def test_rpc_call_with_block_object(client: "RpcClient", txs: List, rpc_call: Ca
     
     assert(expected_result_lambda(result1))
     assert_equal(result2, result1)
+
+# acct should have cfx
+# create a chain of blocks with specified transfer tx with specified num and gas
+# return the last block's hash and acct nonce
+def generate_blocks_for_base_fee_manipulation(rpc: "RpcClient", acct: Union[CfxLocalAccount, str], block_count=10, tx_per_block=4, gas_per_tx=13500000,initial_parent_hash:str = None) -> Tuple[str, int]:
+    if isinstance(acct, str):
+        acct = CfxAccount.from_key(acct)
+    starting_nonce: int = rpc.get_nonce(acct.hex_address)
+    
+    if initial_parent_hash is None:
+        initial_parent_hash = cast(str, rpc.block_by_epoch("latest_mined")["hash"])
+
+    block_pointer = initial_parent_hash
+    for block_count in range(block_count):
+        block_pointer, starting_nonce = generate_single_block_for_base_fee_manipulation(rpc, acct, tx_per_block=tx_per_block, gas_per_tx=gas_per_tx,parent_hash=block_pointer, starting_nonce=starting_nonce)
+
+    return block_pointer, starting_nonce + block_count * tx_per_block
+
+def generate_single_block_for_base_fee_manipulation(rpc: "RpcClient", acct: CfxLocalAccount, referee:list[str] =[], tx_per_block=4, gas_per_tx=13500000,parent_hash:str = None, starting_nonce: int = None) -> Tuple[str, int]:
+    if starting_nonce is None:
+        starting_nonce = cast(int, rpc.get_nonce(acct.hex_address))
+    
+    if parent_hash is None:
+        parent_hash = cast(str, rpc.block_by_epoch("latest_mined")["hash"])
+
+    new_block = rpc.generate_custom_block(
+        txs=[
+            rpc.new_tx(
+                priv_key=acct.key,
+                receiver=acct.address,
+                gas=gas_per_tx,
+                nonce=starting_nonce + i ,
+                gas_price=rpc.base_fee_per_gas()*2 # give enough gas price to make the tx valid
+            )
+            for i in range(tx_per_block)
+        ],
+        parent_hash=parent_hash,
+        referee=referee,
+    )
+    return new_block, starting_nonce + tx_per_block
+
+# for transactions in either pivot/non-pivot block
+# checks priority fee is calculated as expeted
+def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, burnt_ratio=0.5):
+    def get_gas_charged(rpc: "RpcClient", tx_hash: str) -> int:
+        gas_limit = int(rpc.get_tx(tx_hash)["gas"], 16)
+        gas_used = int(rpc.get_transaction_receipt(tx_hash)["gasUsed"], 16)
+        return max(int(3/4*gas_limit), gas_used)
+
+    receipt = rpc.get_transaction_receipt(tx_hash)
+    # The transaction is not executed
+    if receipt is None:
+        return
+
+    tx_data = rpc.get_tx(tx_hash)
+    tx_type = int(tx_data["type"], 16)
+    if tx_type == 2:
+        # original tx fields
+        max_fee_per_gas = int(tx_data["maxFeePerGas"], 16)
+        max_priority_fee_per_gas = int(tx_data["maxPriorityFeePerGas"], 16)
+    else:
+        max_fee_per_gas = int(tx_data["gasPrice"], 16)
+        max_priority_fee_per_gas = int(tx_data["gasPrice"], 16)
+
+    effective_gas_price = int(receipt["effectiveGasPrice"], 16)
+    transaction_epoch = int(receipt["epochNumber"],16)
+    is_in_pivot_block = rpc.block_by_epoch(transaction_epoch)["hash"] == receipt["blockHash"]
+    base_fee_per_gas = rpc.base_fee_per_gas(transaction_epoch)
+    burnt_fee_per_gas = math.ceil(base_fee_per_gas * burnt_ratio)
+    gas_fee = int(receipt["gasFee"], 16)
+    burnt_gas_fee = int(receipt["burntGasFee"], 16)
+    gas_charged = get_gas_charged(rpc, tx_hash)
+
+    # check gas fee computation
+    # print("effective gas price: ", effective_gas_price)
+    # print("gas charged: ", get_gas_charged(rpc, tx_hash))
+    # print("gas fee", gas_fee)
+    
+    # check gas fee and burnt gas fee computation
+    if receipt["outcomeStatus"] == "0x1": # tx fails becuase of not enough cash
+        assert "NotEnoughCash" in receipt["txExecErrorMsg"]
+        # all gas is charged
+        assert_equal(rpc.get_balance(tx_data["from"], receipt["epochNumber"]), 0)
+        # gas fee less than effective gas price
+        assert gas_fee < effective_gas_price*gas_charged
+    else:
+        assert_equal(gas_fee, effective_gas_price*gas_charged)
+        # check burnt fee computation
+    assert_equal(burnt_gas_fee, burnt_fee_per_gas*gas_charged)
+
+    # if max_fee_per_gas >= base_fee_per_gas, it shall follow the computation, regardless of transaction in pivot block or not
+    if max_fee_per_gas >= base_fee_per_gas:
+        priority_fee_per_gas = effective_gas_price - base_fee_per_gas
+        # check priority fee computation
+        assert_equal(priority_fee_per_gas, min(max_priority_fee_per_gas, max_fee_per_gas - base_fee_per_gas))
+    else:
+        # max fee per gas should be greater than burnt fee per gas
+        assert is_in_pivot_block == False, "Transaction should be in non-pivot block"
+        assert max_fee_per_gas >= burnt_fee_per_gas
+

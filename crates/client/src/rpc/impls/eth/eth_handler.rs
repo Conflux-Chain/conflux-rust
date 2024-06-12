@@ -974,16 +974,20 @@ impl Eth for EthHandler {
                 .map_err(|_| RpcError::internal_error())?;
 
             if current_height == 0 {
-                fee_history.finish(0, None, Space::Ethereum);
-                return Ok(fee_history);
+                break;
             } else {
                 current_height -= 1;
             }
         }
 
-        let block = fetch_block(current_height)?;
+        let block = fetch_block(start_height + 1)?;
+        let oldest_block = if current_height == 0 {
+            0
+        } else {
+            current_height + 1
+        };
         fee_history.finish(
-            current_height + 1,
+            oldest_block,
             block.pivot_header.base_price().as_ref(),
             Space::Ethereum,
         );
