@@ -565,7 +565,7 @@ impl RpcImpl {
         } else if signed_trans.is_empty() {
             let tx_err = failed_trans.iter().next().expect("Not empty").1;
             // FIXME: this is not invalid params
-            bail!(invalid_params("tx", tx_err))
+            bail!(invalid_params("tx", tx_err.to_string()))
         } else {
             let tx_hash = signed_trans[0].hash();
             self.sync.append_received_transactions(signed_trans);
