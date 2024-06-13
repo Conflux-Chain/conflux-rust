@@ -15,7 +15,7 @@ use crate::rpc::{
             CallRequest, EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus,
             Transaction,
         },
-        Bytes, FeeHistory, Index, MAX_GAS_CALL_REQUEST, U64 as HexU64,
+        Bytes, FeeHistory, Index, U64 as HexU64,
     },
 };
 use cfx_execute_helper::estimation::{
@@ -39,19 +39,14 @@ use cfxcore::{
     SharedSynchronizationService, SharedTransactionPool,
 };
 use clap::crate_version;
-use jsonrpc_core::{Error as RpcError, Result as RpcResult};
+use jsonrpc_core::Error as RpcError;
 use primitives::{
-    filter::LogFilter,
-    receipt::EVM_SPACE_SUCCESS,
-    transaction::{
-        Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
-        EthereumTransaction::*, EIP1559_TYPE, EIP2930_TYPE, LEGACY_TX_TYPE,
-    },
-    Action, BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
-    StorageValue, TransactionStatus, TransactionWithSignature,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
+    BlockHashOrEpochNumber, EpochNumber, StorageKey, StorageValue,
+    TransactionStatus, TransactionWithSignature,
 };
 use rustc_hex::ToHex;
-use std::{cmp::min, convert::TryInto};
+use std::convert::TryInto;
 
 pub struct EthHandler {
     config: RpcImplConfiguration,
@@ -79,81 +74,6 @@ impl EthHandler {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed")
     }
-}
-
-pub fn sign_call(
-    chain_id: u32, request: CallRequest,
-) -> RpcResult<SignedTransaction> {
-    let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
-    let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let nonce = request.nonce.unwrap_or_default();
-    let action = request.to.map_or(Action::Create, |addr| Action::Call(addr));
-    let value = request.value.unwrap_or_default();
-
-    let default_type_id = if request.max_fee_per_gas.is_some()
-        || request.max_priority_fee_per_gas.is_some()
-    {
-        EIP1559_TYPE
-    } else if request.access_list.is_some() {
-        EIP2930_TYPE
-    } else {
-        LEGACY_TX_TYPE
-    };
-    let transaction_type = request
-        .transaction_type
-        .unwrap_or(U64::from(default_type_id));
-
-    let gas_price = request.gas_price.unwrap_or(1.into());
-    let max_fee_per_gas = request
-        .max_fee_per_gas
-        .or(request.max_priority_fee_per_gas)
-        .unwrap_or(gas_price);
-    let max_priority_fee_per_gas =
-        request.max_priority_fee_per_gas.unwrap_or(U256::zero());
-    let access_list = request.access_list.unwrap_or(vec![]);
-    let data = request.data.unwrap_or_default().into_vec();
-
-    let transaction = match transaction_type.as_usize() as u8 {
-        LEGACY_TX_TYPE => Eip155(Eip155Transaction {
-            nonce,
-            gas_price,
-            gas,
-            action,
-            value,
-            chain_id: Some(chain_id),
-            data,
-        }),
-        EIP2930_TYPE => Eip2930(Eip2930Transaction {
-            chain_id,
-            nonce,
-            gas_price,
-            gas,
-            action,
-            value,
-            data,
-            access_list,
-        }),
-        EIP1559_TYPE => Eip1559(Eip1559Transaction {
-            chain_id,
-            nonce,
-            max_priority_fee_per_gas,
-            max_fee_per_gas,
-            gas,
-            action,
-            value,
-            data,
-            access_list,
-        }),
-        x => {
-            return Err(
-                invalid_params("Unrecognized transaction type", x).into()
-            );
-        }
-    };
-
-    let from = request.from.unwrap_or(Address::zero());
-
-    Ok(transaction.fake_sign_rpc(from.with_evm_space()))
 }
 
 fn block_tx_by_index(
@@ -226,7 +146,7 @@ impl EthHandler {
         };
 
         let chain_id = self.consensus.best_chain_id();
-        let signed_tx = sign_call(chain_id.in_evm_space(), request)?;
+        let signed_tx = request.sign_call(chain_id.in_evm_space())?;
 
         trace!("call tx {:?}, request {:?}", signed_tx, estimate_request);
         consensus_graph.call_virtual(&signed_tx, epoch, estimate_request)
