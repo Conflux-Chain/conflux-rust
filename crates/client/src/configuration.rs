@@ -352,7 +352,7 @@ build_config! {
         (pos_cip99_in_queue_locked_views, (u64), 18720)
         (pos_cip99_out_queue_locked_views, (u64), 1440)
         (nonce_limit_transition_view, (u64), 465540)
-        (pos_cip136_transition_view, (u64), 1685544)
+        (pos_cip136_transition_view, (u64), 1685520)
         (pos_cip136_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS * 2)
         (pos_cip136_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS * 2)
         (pos_cip136_round_per_term, (u64), ROUND_PER_TERM * 2)
