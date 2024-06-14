@@ -1414,7 +1414,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.4.0-testnet"
+version = "2.4.0-testnet-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -1714,7 +1714,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "2.4.0-testnet"
+version = "2.4.0-testnet-fix"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -1849,7 +1849,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.4.0-testnet"
+version = "2.4.0-testnet-fix"
 dependencies = [
  "app_dirs",
  "base64ct",
@@ -3582,7 +3582,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.4.0-testnet"
+version = "2.4.0-testnet-fix"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -7302,7 +7302,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.4.0-testnet"
+version = "2.4.0-testnet-fix"
 dependencies = [
  "alloy-primitives",
  "cfx-types",

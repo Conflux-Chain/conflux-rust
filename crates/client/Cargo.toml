@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "2.4.0-testnet"
+version = "2.4.0-testnet-fix"
 edition = "2021"
 
 [dependencies]
