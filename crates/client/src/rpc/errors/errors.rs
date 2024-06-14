@@ -151,16 +151,16 @@ impl From<EthApiError> for JsonRpcError {
             EthApiError::EvmCustom(_) |
             EthApiError::InvalidRewardPercentiles => internal_rpc_err(error.to_string()),
             EthApiError::UnknownBlockNumber | EthApiError::UnknownBlockOrTxIndex => {
-                rpc_error_with_code(EthRpcErrorCode::ResourceNotFound.code(), error.to_string())
+                build_rpc_server_error(EthRpcErrorCode::ResourceNotFound.code() as i64, error.to_string())
             }
             EthApiError::UnknownSafeOrFinalizedBlock => {
-                rpc_error_with_code(EthRpcErrorCode::UnknownBlock.code(), error.to_string())
+                build_rpc_server_error(EthRpcErrorCode::UnknownBlock.code() as i64, error.to_string())
             }
             EthApiError::Unsupported(msg) => internal_rpc_err(msg),
             EthApiError::InternalJsTracerError(msg) => internal_rpc_err(msg),
             EthApiError::InvalidParams(msg) => invalid_params_rpc_err(msg),
             err @ EthApiError::ExecutionTimedOut(_) => {
-                rpc_error_with_code(-32000, err.to_string()) // CALL_EXECUTION_FAILED_CODE = -32000
+                build_rpc_server_error(-32000, err.to_string()) // CALL_EXECUTION_FAILED_CODE = -32000
             }
             err @ EthApiError::InternalBlockingTaskError | err @ EthApiError::InternalEthError => {
                 internal_rpc_err(err.to_string())

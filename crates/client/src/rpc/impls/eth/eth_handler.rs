@@ -4,9 +4,9 @@
 
 use crate::rpc::{
     errors::{
-        call_execution_error, internal_error, invalid_params,
-        request_rejected_in_catch_up_mode, unknown_block, EthApiError,
-        RpcPoolError,
+        geth_call_execution_error, internal_error, invalid_input_rpc_err,
+        invalid_params, request_rejected_in_catch_up_mode, unknown_block,
+        EthApiError, RpcInvalidTransactionError, RpcPoolError,
     },
     impls::RpcImplConfiguration,
     traits::eth_space::eth::Eth,
@@ -190,6 +190,24 @@ impl EthHandler {
         block_number_or_hash: Option<BlockNumber>,
     ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
+
+        if request.gas_price.is_some()
+            && request.max_priority_fee_per_gas.is_some()
+        {
+            return Err(RpcError::from(
+                EthApiError::ConflictingFeeFieldsInRequest,
+            )
+            .into());
+        }
+
+        if request.max_fee_per_gas.is_some()
+            && request.max_priority_fee_per_gas.is_some()
+        {
+            return Err(RpcError::from(
+                RpcInvalidTransactionError::TipAboveFeeCap,
+            )
+            .into());
+        }
 
         let epoch = match block_number_or_hash.unwrap_or_default() {
             BlockNumber::Hash { hash, .. } => {
@@ -802,34 +820,28 @@ impl Eth for EthHandler {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
-            )) => bail!(call_execution_error(
-                "Transaction can not be executed".into(),
-                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )) => bail!(invalid_input_rpc_err(
+                format! {"err: nonce is too old expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(call_execution_error(
-                "Transaction can not be executed".into(),
-                format! {"invalid recipient address {:?}", recipient}
+            ) => bail!(invalid_input_rpc_err(
+                format! {"err: invalid recipient address {:?}", recipient}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(call_execution_error(
-                "Transaction can not be executed".into(),
-                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            ) => bail!(invalid_input_rpc_err(
+                format! {"err: not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(call_execution_error(
-                    "Transaction can not be executed".into(),
-                    format! {"{:?}", e}
-                ))
+                bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(VmError::Reverted),
                 executed,
-            ) => bail!(call_execution_error(
+            ) => bail!(geth_call_execution_error(
                 format!(
-                    "Transaction execution reverted: {}",
+                    "execution reverted: {}",
                     revert_reason_decode(&executed.output)
                 ),
                 format!("0x{}", executed.output.to_hex::<String>())
@@ -837,14 +849,14 @@ impl Eth for EthHandler {
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(e),
                 executed,
-            ) => bail!(call_execution_error(
-                format!("Transaction execution reverted: {}", e),
+            ) => bail!(geth_call_execution_error(
+                format!("execution reverted: {}", e),
                 format!("0x{}", executed.output.to_hex::<String>())
             )),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
-                bail!(call_execution_error(
-                    "Transaction execution failed".into(),
-                    format! {"{:?}", e}
+                bail!(geth_call_execution_error(
+                    format! {"execution failed: {:?}", e},
+                    "".into()
                 ))
             }
             ExecutionOutcome::Finished(executed) => Ok(executed.output.into()),
@@ -864,26 +876,22 @@ impl Eth for EthHandler {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
-            )) => bail!(call_execution_error(
-                "Can not estimate: transaction can not be executed".into(),
-                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )) => bail!(invalid_input_rpc_err(
+                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: nonce is too old expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(call_execution_error(
-                "Can not estimate: transaction can not be executed".into(),
-                format! {"invalid recipient address {:?}", recipient}
+            ) => bail!(invalid_input_rpc_err(
+                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: invalid recipient address {:?}", recipient}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(call_execution_error(
-                "Can not estimate: transaction can not be executed".into(),
-                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            ) => bail!(invalid_input_rpc_err(
+                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
-                    format! {"{:?}", e}
+                bail!(invalid_input_rpc_err(
+                    format! {"failed with {MAX_GAS_CALL_REQUEST} gas: {:?}", e}
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -893,18 +901,18 @@ impl Eth for EthHandler {
                 let (revert_error, innermost_error, errors) =
                     decode_error(&executed, |addr| *addr);
 
-                bail!(call_execution_error(
+                bail!(geth_call_execution_error(
                     format!(
-                        "Can not estimate: transaction execution reverted, {} {}",
+                        "failed with {MAX_GAS_CALL_REQUEST} gas: {} {}",
                         revert_error, innermost_error
                     ),
                     errors.join("\n"),
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
-                bail!(call_execution_error(
-                    format!("Can not estimate: transaction execution failed, all gas will be charged (execution error: {:?})", e),
-                    format! {"{:?}", e}
+                bail!(geth_call_execution_error(
+                    format!("failed with {MAX_GAS_CALL_REQUEST} gas: {:?})", e),
+                    "".into()
                 ))
             }
             ExecutionOutcome::Finished(executed) => executed,

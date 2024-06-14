@@ -1,30 +1,9 @@
 use super::codes;
 use alloy_primitives::hex;
+use alloy_rpc_types::error::EthRpcErrorCode;
 use cfx_types::H256;
 use jsonrpc_core::{Error, ErrorCode, Value};
 use std::fmt;
-
-/// Constructs an invalid params JSON-RPC error.
-pub fn invalid_params_rpc_err(msg: impl Into<String>) -> Error {
-    rpc_err(ErrorCode::InvalidParams.code() as i32, msg, None)
-}
-
-/// Constructs an internal JSON-RPC error.
-pub fn internal_rpc_err(msg: impl Into<String>) -> Error {
-    rpc_err(ErrorCode::InternalError.code() as i32, msg, None)
-}
-
-/// Constructs an internal JSON-RPC error with data
-pub fn internal_rpc_err_with_data(
-    msg: impl Into<String>, data: &[u8],
-) -> Error {
-    rpc_err(ErrorCode::InternalError.code() as i32, msg, Some(data))
-}
-
-/// Constructs an internal JSON-RPC error with code and message
-pub fn rpc_error_with_code(code: i32, msg: impl Into<String>) -> Error {
-    rpc_err(code, msg, None)
-}
 
 /// Constructs a JSON-RPC error, consisting of `code`, `message` and optional
 /// `data`.
@@ -54,6 +33,16 @@ pub fn unimplemented(details: Option<String>) -> Error {
     }
 }
 
+// code is -32000
+pub fn invalid_input_rpc_err(msg: impl Into<String>) -> Error {
+    rpc_err(EthRpcErrorCode::InvalidInput.code(), msg, None)
+}
+
+/// Constructs an invalid params JSON-RPC error.
+pub fn invalid_params_rpc_err(msg: impl Into<String>) -> Error {
+    rpc_err(ErrorCode::InvalidParams.code() as i32, msg, None)
+}
+
 pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
     Error {
         code: ErrorCode::InvalidParams,
@@ -63,26 +52,14 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
 }
 
 pub fn invalid_params_msg(param: &str) -> Error {
-    Error {
-        code: ErrorCode::InvalidParams,
-        message: format!("Invalid parameters: {}", param),
-        data: None,
-    }
+    invalid_params_rpc_err(format!("Invalid parameters: {}", param))
 }
 
 pub fn invalid_params_detail<T: fmt::Debug>(param: &str, details: T) -> Error {
     Error {
         code: ErrorCode::InvalidParams,
-        message: format!("Invalid parameters: {} - {:?}", param, details),
-        data: None,
-    }
-}
-
-pub fn internal_error_msg(param: &str) -> Error {
-    Error {
-        code: ErrorCode::InternalError,
-        message: format!("Internal error: {}", param),
-        data: None,
+        message: format!("Invalid parameters: {} {:?}", param, details),
+        data: Some(Value::String(format!("{:?}", details))),
     }
 }
 
@@ -90,6 +67,26 @@ pub fn unknown_block() -> Error {
     Error {
         code: ErrorCode::InvalidParams,
         message: "Unknown block number".into(),
+        data: None,
+    }
+}
+
+/// Constructs an internal JSON-RPC error.
+pub fn internal_rpc_err(msg: impl Into<String>) -> Error {
+    rpc_err(ErrorCode::InternalError.code() as i32, msg, None)
+}
+
+/// Constructs an internal JSON-RPC error with data
+pub fn internal_rpc_err_with_data(
+    msg: impl Into<String>, data: &[u8],
+) -> Error {
+    rpc_err(ErrorCode::InternalError.code() as i32, msg, Some(data))
+}
+
+pub fn internal_error_msg(param: &str) -> Error {
+    Error {
+        code: ErrorCode::InternalError,
+        message: format!("Internal error: {}", param),
         data: None,
     }
 }
@@ -105,6 +102,16 @@ pub fn internal_error<T: fmt::Debug>(details: T) -> Error {
 pub fn call_execution_error(message: String, data: String) -> Error {
     Error {
         code: ErrorCode::ServerError(codes::CALL_EXECUTION_ERROR),
+        message,
+        data: Some(Value::String(data)),
+    }
+}
+
+pub fn geth_call_execution_error(message: String, data: String) -> Error {
+    Error {
+        code: ErrorCode::ServerError(
+            EthRpcErrorCode::ExecutionError.code() as i64
+        ),
         message,
         data: Some(Value::String(data)),
     }
