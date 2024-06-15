@@ -415,10 +415,11 @@ impl TermList {
             return;
         }
         // This double-check should always pass.
-        debug_assert!(
-            Some(self.term_list[TERM_LIST_LEN].start_view)
-                == POS_STATE_CONFIG.get_starting_view_for_term(new_term)
-        );
+        // This is fixing wrong cip136 hardfork height.
+        self.term_list[TERM_LIST_LEN].start_view = POS_STATE_CONFIG
+            .get_starting_view_for_term(new_term)
+            .unwrap();
+
         self.term_list.remove(0);
         let new_term = self
             .term_list
