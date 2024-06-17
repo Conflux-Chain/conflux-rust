@@ -200,13 +200,15 @@ impl EthHandler {
             .into());
         }
 
-        if request.max_fee_per_gas.is_some()
-            && request.max_priority_fee_per_gas.is_some()
-        {
-            return Err(RpcError::from(
-                RpcInvalidTransactionError::TipAboveFeeCap,
-            )
-            .into());
+        if let Some(max_fee_per_gas) = request.max_fee_per_gas {
+            if max_fee_per_gas
+                < request.max_priority_fee_per_gas.unwrap_or_default()
+            {
+                return Err(RpcError::from(
+                    RpcInvalidTransactionError::TipAboveFeeCap,
+                )
+                .into());
+            }
         }
 
         let epoch = match block_number_or_hash.unwrap_or_default() {
