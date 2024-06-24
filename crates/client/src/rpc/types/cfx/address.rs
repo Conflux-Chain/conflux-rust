@@ -5,6 +5,7 @@
 use cfx_addr::{cfx_addr_decode, cfx_addr_encode, EncodingOptions, Network};
 use cfx_types::H160;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
 
 /// This is the address type used in Rpc. It deserializes user's Rpc input, or
 /// it prepares the base32 address for Rpc output.
@@ -71,6 +72,51 @@ impl Serialize for RpcAddress {
     }
 }
 
+#[derive(Debug)]
+pub struct RcpAddressNetworkInconsistent {
+    pub from_network: Network,
+    pub to_network: Network,
+}
+
+impl fmt::Display for RcpAddressNetworkInconsistent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "network prefix inconsistent in from({}) and to({})",
+            self.from_network, self.to_network
+        )
+    }
+}
+
+pub fn check_rpc_address_network(
+    rpc_request_network: Option<Network>, expected: &Network,
+) -> Result<(), UnexpectedRpcAddressNetwork> {
+    if let Some(rpc_network) = rpc_request_network {
+        if rpc_network != *expected {
+            return Err(UnexpectedRpcAddressNetwork {
+                expected: *expected,
+                got: rpc_network,
+            });
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+pub struct UnexpectedRpcAddressNetwork {
+    pub expected: Network,
+    pub got: Network,
+}
+
+impl fmt::Display for UnexpectedRpcAddressNetwork {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "network prefix unexpected: ours {}, got {}",
+            self.expected, self.got
+        )
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::RpcAddress;

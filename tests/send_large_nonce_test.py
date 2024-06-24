@@ -28,7 +28,7 @@ class TxPoolLargeNonceTest(ConfluxTestFramework):
         except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
             error = e.response
             assert_equal(error.code, -32602)
-            assert_equal(error.message, "Invalid parameters: tx")
+            assert_equal(error.message, "Invalid parameters: tx \"TooLargeNonce\"")
             assert_equal(error.data, "\"TooLargeNonce\"")
         except Exception as e:
             raise AssertionError("Unexpected exception raised: " +

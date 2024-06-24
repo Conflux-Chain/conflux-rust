@@ -1,7 +1,7 @@
 use std::{convert::TryInto, sync::Arc};
 
 use crate::rpc::{
-    error_codes::invalid_params_msg,
+    errors::invalid_params_msg,
     traits::eth_space::debug::Debug,
     types::eth::{BlockNumber, CallRequest},
 };

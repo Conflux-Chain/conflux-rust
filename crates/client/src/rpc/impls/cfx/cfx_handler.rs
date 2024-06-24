@@ -3,10 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes::{internal_error_msg, invalid_params_msg},
+    errors::{internal_error_msg, invalid_params_detail, invalid_params_msg},
     types::{
         call_request::rpc_call_request_network,
-        errors::check_rpc_address_network, pos::PoSEpochReward, CfxFeeHistory,
+        cfx::{check_rpc_address_network, CfxFeeHistory},
+        pos::PoSEpochReward,
         PoSEconomics, RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
         VoteParamsInfo, WrapTransaction, U64 as HexU64,
     },
@@ -63,7 +64,7 @@ use txgen::{DirectTransactionGenerator, TransactionGenerator};
 use crate::{
     common::delegate_convert,
     rpc::{
-        error_codes::{
+        errors::{
             call_execution_error, internal_error, invalid_params,
             pivot_assumption_failed, request_rejected_in_catch_up_mode,
         },
@@ -472,7 +473,7 @@ impl RpcImpl {
         )?;
 
         if tx.recover_public().is_err() {
-            bail!(invalid_params(
+            bail!(invalid_params_detail(
                 "tx",
                 "Can not recover pubkey for Ethereum like tx"
             ));
@@ -539,12 +540,6 @@ impl RpcImpl {
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<H256> {
-        // if let Call(address) = &tx.transaction.action {
-        //     if !address.is_valid_address() {
-        //         bail!(invalid_params("tx", "Sending transactions to invalid
-        // address. The first four bits must be 0x0 (built-in/reserved), 0x1
-        // (user-account), or 0x8 (contract)."));     }
-        // }
         if self.sync.catch_up_mode() {
             warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
             bail!(request_rejected_in_catch_up_mode(None));
@@ -560,11 +555,14 @@ impl RpcImpl {
             // For tx in transactions_pubkey_cache, we simply ignore them
             debug!("insert_new_transactions ignores inserted transactions");
             // FIXME: this is not invalid params
-            bail!(invalid_params("tx", String::from("tx already exist")))
+            bail!(invalid_params_detail(
+                "tx",
+                String::from("tx already exist")
+            ))
         } else if signed_trans.is_empty() {
             let tx_err = failed_trans.iter().next().expect("Not empty").1;
             // FIXME: this is not invalid params
-            bail!(invalid_params("tx", tx_err))
+            bail!(invalid_params_detail("tx", tx_err.to_string()))
         } else {
             let tx_hash = signed_trans[0].hash();
             self.sync.append_received_transactions(signed_trans);

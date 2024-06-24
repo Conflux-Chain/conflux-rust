@@ -9,7 +9,6 @@ mod bytes;
 pub mod cfx;
 mod consensus_graph_states;
 mod epoch_number;
-pub mod errors;
 pub mod eth;
 mod fee_history;
 mod filter;
