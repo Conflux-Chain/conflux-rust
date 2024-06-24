@@ -23,7 +23,7 @@ use serde_json::Value;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::rpc::types::{
-    transaction::PackedOrExecuted, Bytes, Receipt, Transaction,
+    cfx::transaction::PackedOrExecuted, Bytes, Receipt, Transaction,
 };
 use primitives::pos::PosBlockId;
 

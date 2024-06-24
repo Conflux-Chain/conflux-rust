@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "2.0.2"
+version = {workspace = true}
 edition = "2021"
 
 [dependencies]
