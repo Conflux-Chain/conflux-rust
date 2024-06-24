@@ -16,7 +16,7 @@ log = "0.4"
 slab = "0.4"
 num_cpus = "1.8"
 timer = "0.2"
-time = "0.1"
+time = "0.3"
 metrics = { path = "../metrics" }
 lazy_static = "1.4"
 
