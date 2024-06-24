@@ -94,15 +94,21 @@ executor = { path = "../cfxcore/core/src/pos/consensus/executor" }
 fail = "0.4.0"
 storage-interface = { path = "../cfxcore/core/src/pos/storage/storage-interface" }
 consensus-types = {path = "../cfxcore/core/src/pos/consensus/consensus-types" }
-anyhow = "1.0.38"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
 parity-version = {path = "../util/version" }
 solidity-abi = {path= "../util/solidity-abi" }
 bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
-alloy-rpc-types-trace = { workspace = true }
 geth-tracer = { path = "../cfxcore/geth-tracer" }
 serde-utils = { path = "../serde_utils" }
+
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-sol-types = { workspace = true }
+alloy-rpc-types-trace = { workspace = true }
+alloy-rpc-types = { workspace = true }
+revm = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"

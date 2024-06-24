@@ -76,8 +76,8 @@ use primitives::{
     log_entry::LocalizedLogEntry,
     pos::PosBlockId,
     receipt::Receipt,
-    BlockHeader, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-    TransactionStatus,
+    Block, BlockHeader, EpochId, EpochNumber, SignedTransaction,
+    TransactionIndex, TransactionStatus,
 };
 use rayon::prelude::*;
 use std::{
@@ -587,7 +587,7 @@ impl ConsensusGraph {
         }
     }
 
-    fn validate_stated_epoch(
+    pub fn validate_stated_epoch(
         &self, epoch_number: &EpochNumber,
     ) -> Result<(), String> {
         match epoch_number {
@@ -1441,7 +1441,6 @@ impl ConsensusGraph {
         &self, epoch_num: u64, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
     ) -> RpcResult<Vec<GethTraceWithHash>> {
-        // only allow to call against stated epoch
         let epoch = EpochNumber::Number(epoch_num);
         self.validate_stated_epoch(&epoch)?;
 
@@ -1453,10 +1452,33 @@ impl ConsensusGraph {
             bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
         };
 
-        self.executor.collect_epoch_geth_trace(
-            epoch_block_hashes,
-            tx_hash,
+        let blocks = self
+            .data_man
+            .blocks_by_hash_list(
+                &epoch_block_hashes,
+                true, /* update_cache */
+            )
+            .expect("blocks exist");
+
+        let pivot_block = blocks.last().expect("Not empty");
+        let parent_pivot_block_hash = pivot_block.block_header.parent_hash();
+        let parent_epoch_num = pivot_block.block_header.height() - 1;
+
+        self.collect_blocks_geth_trace(
+            *parent_pivot_block_hash,
+            parent_epoch_num,
+            &blocks,
             opts,
+            tx_hash,
+        )
+    }
+
+    pub fn collect_blocks_geth_trace(
+        &self, epoch_id: H256, epoch_num: u64, blocks: &Vec<Arc<Block>>,
+        opts: GethDebugTracingOptions, tx_hash: Option<H256>,
+    ) -> RpcResult<Vec<GethTraceWithHash>> {
+        self.executor.collect_blocks_geth_trace(
+            epoch_id, epoch_num, blocks, opts, tx_hash,
         )
     }
 

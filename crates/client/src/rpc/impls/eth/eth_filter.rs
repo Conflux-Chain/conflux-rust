@@ -21,7 +21,7 @@ use primitives::{
 use runtime::Executor;
 
 use crate::rpc::{
-    error_codes::codes,
+    errors::codes,
     helpers::{
         limit_logs, PollFilter, PollManager, SyncPollFilter,
         MAX_BLOCK_HISTORY_SIZE,

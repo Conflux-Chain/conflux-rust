@@ -19,7 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::{
-    error_codes::{internal_error, invalid_params},
+    errors::{internal_error, invalid_params},
     types::eth::{BlockNumber, Log},
 };
 use cfx_types::{Space, H160, H256};

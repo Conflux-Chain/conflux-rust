@@ -4,7 +4,6 @@
 
 mod bytes;
 pub mod cfx;
-pub mod errors;
 pub mod eth;
 mod fee_history;
 mod index;

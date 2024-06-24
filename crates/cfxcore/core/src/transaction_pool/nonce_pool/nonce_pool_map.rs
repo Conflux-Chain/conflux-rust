@@ -7,7 +7,10 @@ use treap_map::{
     SharedKeyTreapMapConfig, TreapMap,
 };
 
-use super::{weight::NoncePoolWeight, InsertResult, TxWithReadyInfo};
+use super::{
+    super::error::SAME_NONCE_HIGH_GAS_PRICE_NEEED, weight::NoncePoolWeight,
+    InsertResult, TxWithReadyInfo,
+};
 
 struct NoncePoolConfig;
 
@@ -50,33 +53,44 @@ impl NoncePoolMap {
     pub fn insert(
         &mut self, tx: &TxWithReadyInfo, force: bool,
     ) -> InsertResult {
-        self.0.update(tx.transaction.nonce(), |node|-> Result<_, Infallible> {
-            if tx.should_replace(&node.value, force) {
-                let old_value =std::mem::replace(
-                    &mut node.value,
-                    tx.clone(),
-                );
-                node.weight = NoncePoolWeight::from_tx_info(&node.value);
-                Ok(ApplyOpOutcome {
-                    out: InsertResult::Updated(old_value),
-                    update_weight: true,
-                    update_key:false,
-                    delete_item: false,
-                })
-            } else {
-                let err_msg = format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", &node.value.transaction.gas_price());
-                Ok(ApplyOpOutcome {
-                    out: InsertResult::Failed(err_msg),
-                    update_weight: false,
-                    update_key: false,
-                    delete_item: false,
-                })
-            }
-        }, |rng| {
-            let weight = NoncePoolWeight::from_tx_info(&tx);
-            let key = tx.transaction.nonce();
-            Ok((Node::new(*key, tx.clone(), (), weight, rng.next_u64()), InsertResult::NewAdded))
-        }).unwrap()
+        self.0
+            .update(
+                tx.transaction.nonce(),
+                |node| -> Result<_, Infallible> {
+                    if tx.should_replace(&node.value, force) {
+                        let old_value =
+                            std::mem::replace(&mut node.value, tx.clone());
+                        node.weight =
+                            NoncePoolWeight::from_tx_info(&node.value);
+                        Ok(ApplyOpOutcome {
+                            out: InsertResult::Updated(old_value),
+                            update_weight: true,
+                            update_key: false,
+                            delete_item: false,
+                        })
+                    } else {
+                        let err_msg = format!(
+                            "{SAME_NONCE_HIGH_GAS_PRICE_NEEED} > {}",
+                            &node.value.transaction.gas_price()
+                        );
+                        Ok(ApplyOpOutcome {
+                            out: InsertResult::Failed(err_msg),
+                            update_weight: false,
+                            update_key: false,
+                            delete_item: false,
+                        })
+                    }
+                },
+                |rng| {
+                    let weight = NoncePoolWeight::from_tx_info(&tx);
+                    let key = tx.transaction.nonce();
+                    Ok((
+                        Node::new(*key, tx.clone(), (), weight, rng.next_u64()),
+                        InsertResult::NewAdded,
+                    ))
+                },
+            )
+            .unwrap()
     }
 
     /// mark packed of given nonce, return false if nothing changes

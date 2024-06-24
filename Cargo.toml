@@ -88,9 +88,14 @@ overflow-checks = true
 debug-assertions = true
 
 [workspace.dependencies]
-serde_derive = "1.0"
 serde = { version = "1.0", features = ["derive", "alloc"] }
 serde_json = "1.0"
+serde_derive = "1.0"
+thiserror = "1.0.61"
+anyhow = "1.0.38"
 
-alloy-primitives = "0.7.1"
+alloy-sol-types = "0.7.2"
+alloy-primitives = "0.7.2"
+alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
+revm = "8.0"

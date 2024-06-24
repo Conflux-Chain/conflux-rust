@@ -24,7 +24,10 @@ pub mod vote_params_info;
 
 pub use access_list::*;
 pub use account::Account;
-pub use address::RpcAddress;
-pub use fee_history::*;
+pub use address::{
+    check_rpc_address_network, RcpAddressNetworkInconsistent, RpcAddress,
+    UnexpectedRpcAddressNetwork,
+};
+pub use fee_history::CfxFeeHistory;
 pub use sponsor_info::SponsorInfo;
 pub use tx_pool::*;

@@ -1,6 +1,6 @@
 # JSON-RPC CHANGELOG
 
-## vNext
+## v2.4.0
 
 This RPC upgrade is primarily to support Conflux 1559 transactions, with the main changes as follows:
 
@@ -35,6 +35,15 @@ Block adds fields：
 - `accessList`
 - `maxPriorityPerGas`
 - `maxFeePerGas`
+
+#### debug namespace
+
+A new namespace `debug` is added to support debugging features(compatible with Geth debug methods). The following RPCs are included:
+
+- `debug_traceTransaction`: Returns the trace of a transaction.
+- `debug_traceBlockByNumber`: Returns the trace of a block.
+- `debug_traceBlockByHash`: Returns the trace of a block.
+- `debug_traceCall`: Returns the trace of a call.
 
 ### Core Space
 

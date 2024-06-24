@@ -3,9 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes::{
-        call_execution_error, internal_error, invalid_params,
-        request_rejected_in_catch_up_mode, unknown_block,
+    errors::{
+        geth_call_execution_error, internal_error, invalid_input_rpc_err,
+        invalid_params, request_rejected_in_catch_up_mode, unknown_block,
+        EthApiError, RpcInvalidTransactionError, RpcPoolError,
     },
     impls::RpcImplConfiguration,
     traits::eth_space::eth::Eth,
@@ -32,26 +33,19 @@ use cfx_types::{
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     consensus::PhantomBlock,
-    rpc_errors::{
-        invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
-    },
+    rpc_errors::{Error as CfxRpcError, Result as CfxRpcResult},
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
-    filter::LogFilter,
-    receipt::EVM_SPACE_SUCCESS,
-    transaction::{
-        Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
-        EthereumTransaction::*, EIP1559_TYPE, EIP2930_TYPE, LEGACY_TX_TYPE,
-    },
-    Action, BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
-    StorageValue, TransactionStatus, TransactionWithSignature,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
+    BlockHashOrEpochNumber, EpochNumber, StorageKey, StorageValue,
+    TransactionStatus, TransactionWithSignature,
 };
 use rustc_hex::ToHex;
-use std::{cmp::min, convert::TryInto};
+use std::convert::TryInto;
 
 pub struct EthHandler {
     config: RpcImplConfiguration,
@@ -79,81 +73,6 @@ impl EthHandler {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed")
     }
-}
-
-pub fn sign_call(
-    chain_id: u32, request: CallRequest,
-) -> RpcResult<SignedTransaction> {
-    let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
-    let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let nonce = request.nonce.unwrap_or_default();
-    let action = request.to.map_or(Action::Create, |addr| Action::Call(addr));
-    let value = request.value.unwrap_or_default();
-
-    let default_type_id = if request.max_fee_per_gas.is_some()
-        || request.max_priority_fee_per_gas.is_some()
-    {
-        EIP1559_TYPE
-    } else if request.access_list.is_some() {
-        EIP2930_TYPE
-    } else {
-        LEGACY_TX_TYPE
-    };
-    let transaction_type = request
-        .transaction_type
-        .unwrap_or(U64::from(default_type_id));
-
-    let gas_price = request.gas_price.unwrap_or(1.into());
-    let max_fee_per_gas = request
-        .max_fee_per_gas
-        .or(request.max_priority_fee_per_gas)
-        .unwrap_or(gas_price);
-    let max_priority_fee_per_gas =
-        request.max_priority_fee_per_gas.unwrap_or(U256::zero());
-    let access_list = request.access_list.unwrap_or(vec![]);
-    let data = request.data.unwrap_or_default().into_vec();
-
-    let transaction = match transaction_type.as_usize() as u8 {
-        LEGACY_TX_TYPE => Eip155(Eip155Transaction {
-            nonce,
-            gas_price,
-            gas,
-            action,
-            value,
-            chain_id: Some(chain_id),
-            data,
-        }),
-        EIP2930_TYPE => Eip2930(Eip2930Transaction {
-            chain_id,
-            nonce,
-            gas_price,
-            gas,
-            action,
-            value,
-            data,
-            access_list,
-        }),
-        EIP1559_TYPE => Eip1559(Eip1559Transaction {
-            chain_id,
-            nonce,
-            max_priority_fee_per_gas,
-            max_fee_per_gas,
-            gas,
-            action,
-            value,
-            data,
-            access_list,
-        }),
-        x => {
-            return Err(
-                invalid_params("Unrecognized transaction type", x).into()
-            );
-        }
-    };
-
-    let from = request.from.unwrap_or(Address::zero());
-
-    Ok(transaction.fake_sign_rpc(from.with_evm_space()))
 }
 
 fn block_tx_by_index(
@@ -192,6 +111,28 @@ impl EthHandler {
     ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
 
+        if request.gas_price.is_some()
+            && request.max_priority_fee_per_gas.is_some()
+        {
+            return Err(RpcError::from(
+                EthApiError::ConflictingFeeFieldsInRequest,
+            )
+            .into());
+        }
+
+        if request.max_fee_per_gas.is_some()
+            && request.max_priority_fee_per_gas.is_some()
+        {
+            if request.max_fee_per_gas.unwrap()
+                < request.max_priority_fee_per_gas.unwrap()
+            {
+                return Err(RpcError::from(
+                    RpcInvalidTransactionError::TipAboveFeeCap,
+                )
+                .into());
+            }
+        }
+
         let epoch = match block_number_or_hash.unwrap_or_default() {
             BlockNumber::Hash { hash, .. } => {
                 match consensus_graph.get_block_epoch_number(&hash) {
@@ -226,7 +167,7 @@ impl EthHandler {
         };
 
         let chain_id = self.consensus.best_chain_id();
-        let signed_tx = sign_call(chain_id.in_evm_space(), request)?;
+        let signed_tx = request.sign_call(chain_id.in_evm_space())?;
 
         trace!("call tx {:?}, request {:?}", signed_tx, estimate_request);
         consensus_graph.call_virtual(&signed_tx, epoch, estimate_request)
@@ -241,7 +182,6 @@ impl EthHandler {
         }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
-        // FIXME: how is it possible?
         if signed_trans.len() + failed_trans.len() > 1 {
             // This should never happen
             error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
@@ -249,12 +189,12 @@ impl EthHandler {
         } else if signed_trans.len() + failed_trans.len() == 0 {
             // For tx in transactions_pubkey_cache, we simply ignore them
             debug!("insert_new_transactions ignores inserted transactions");
-            // FIXME: this is not invalid params
-            bail!(invalid_params("tx", String::from("tx already exist")))
+            bail!(RpcError::from(EthApiError::PoolError(
+                RpcPoolError::ReplaceUnderpriced
+            )));
         } else if signed_trans.is_empty() {
-            let tx_err = failed_trans.iter().next().expect("Not empty").1;
-            // FIXME: this is not invalid params
-            bail!(invalid_params("tx", tx_err))
+            let tx_err = failed_trans.into_iter().next().expect("Not empty").1;
+            bail!(RpcError::from(EthApiError::from(tx_err)))
         } else {
             let tx_hash = signed_trans[0].hash();
             self.sync.append_received_transactions(signed_trans);
@@ -264,7 +204,7 @@ impl EthHandler {
 
     fn construct_rpc_receipt(
         &self, b: &PhantomBlock, idx: usize, prior_log_index: &mut usize,
-    ) -> jsonrpc_core::Result<Receipt> {
+    ) -> RpcResult<Receipt> {
         if b.transactions.len() != b.receipts.len() {
             return Err(internal_error(
                 "Inconsistent state: transactions and receipts length mismatch",
@@ -396,23 +336,23 @@ impl EthHandler {
 }
 
 impl Eth for EthHandler {
-    fn client_version(&self) -> jsonrpc_core::Result<String> {
+    fn client_version(&self) -> RpcResult<String> {
         info!("RPC Request: web3_clientVersion");
         Ok(parity_version::version(crate_version!()))
     }
 
-    fn net_version(&self) -> jsonrpc_core::Result<String> {
+    fn net_version(&self) -> RpcResult<String> {
         info!("RPC Request: net_version");
         Ok(format!("{}", self.consensus.best_chain_id().in_evm_space()))
     }
 
-    fn protocol_version(&self) -> jsonrpc_core::Result<String> {
+    fn protocol_version(&self) -> RpcResult<String> {
         info!("RPC Request: eth_protocolVersion");
         // 65 is a common ETH version now
         Ok(format!("{}", 65))
     }
 
-    fn syncing(&self) -> jsonrpc_core::Result<SyncStatus> {
+    fn syncing(&self) -> RpcResult<SyncStatus> {
         info!("RPC Request: eth_syncing");
         if self.sync.catch_up_mode() {
             Ok(
@@ -433,30 +373,30 @@ impl Eth for EthHandler {
         }
     }
 
-    fn hashrate(&self) -> jsonrpc_core::Result<U256> {
+    fn hashrate(&self) -> RpcResult<U256> {
         info!("RPC Request: eth_hashrate");
         // We do not mine
         Ok(U256::zero())
     }
 
-    fn author(&self) -> jsonrpc_core::Result<H160> {
+    fn author(&self) -> RpcResult<H160> {
         info!("RPC Request: eth_coinbase");
         // We do not care this, just return zero address
         Ok(H160::zero())
     }
 
-    fn is_mining(&self) -> jsonrpc_core::Result<bool> {
+    fn is_mining(&self) -> RpcResult<bool> {
         info!("RPC Request: eth_mining");
         // We do not mine from ETH perspective
         Ok(false)
     }
 
-    fn chain_id(&self) -> jsonrpc_core::Result<Option<U64>> {
+    fn chain_id(&self) -> RpcResult<Option<U64>> {
         info!("RPC Request: eth_chainId");
         return Ok(Some(self.consensus.best_chain_id().in_evm_space().into()));
     }
 
-    fn gas_price(&self) -> jsonrpc_core::Result<U256> {
+    fn gas_price(&self) -> RpcResult<U256> {
         info!("RPC Request: eth_gasPrice");
         let (_, maybe_base_price) =
             self.tx_pool.get_best_info_with_parent_base_price();
@@ -474,7 +414,7 @@ impl Eth for EthHandler {
         ))
     }
 
-    fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
+    fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {
         info!("RPC Request: eth_maxPriorityFeePerGas");
         let evm_ratio =
             self.tx_pool.machine().params().evm_transaction_block_ratio
@@ -495,13 +435,13 @@ impl Eth for EthHandler {
         Ok(total_reward * evm_ratio / 300)
     }
 
-    fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
+    fn accounts(&self) -> RpcResult<Vec<H160>> {
         info!("RPC Request: eth_accounts");
         // Conflux eSpace does not manage accounts
         Ok(vec![])
     }
 
-    fn block_number(&self) -> jsonrpc_core::Result<U256> {
+    fn block_number(&self) -> RpcResult<U256> {
         let consensus_graph = self.consensus_graph();
         let epoch_num = EpochNumber::LatestState;
         info!("RPC Request: eth_blockNumber()");
@@ -513,7 +453,7 @@ impl Eth for EthHandler {
 
     fn balance(
         &self, address: H160, num: Option<BlockNumber>,
-    ) -> jsonrpc_core::Result<U256> {
+    ) -> RpcResult<U256> {
         let epoch_num = num.unwrap_or_default().try_into()?;
 
         info!(
@@ -533,7 +473,7 @@ impl Eth for EthHandler {
 
     fn storage_at(
         &self, address: H160, position: U256, block_num: Option<BlockNumber>,
-    ) -> jsonrpc_core::Result<H256> {
+    ) -> RpcResult<H256> {
         let epoch_num = block_num.unwrap_or_default().try_into()?;
 
         info!(
@@ -563,7 +503,7 @@ impl Eth for EthHandler {
 
     fn block_by_hash(
         &self, hash: H256, include_txs: bool,
-    ) -> jsonrpc_core::Result<Option<RpcBlock>> {
+    ) -> RpcResult<Option<RpcBlock>> {
         info!(
             "RPC Request: eth_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
@@ -588,7 +528,7 @@ impl Eth for EthHandler {
 
     fn block_by_number(
         &self, block_num: BlockNumber, include_txs: bool,
-    ) -> jsonrpc_core::Result<Option<RpcBlock>> {
+    ) -> RpcResult<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
 
         let phantom_block = {
@@ -612,7 +552,7 @@ impl Eth for EthHandler {
 
     fn transaction_count(
         &self, address: H160, num: Option<BlockNumber>,
-    ) -> jsonrpc_core::Result<U256> {
+    ) -> RpcResult<U256> {
         info!(
             "RPC Request: eth_getTransactionCount address={:?} block_number={:?}",
             address, num
@@ -638,7 +578,7 @@ impl Eth for EthHandler {
 
     fn block_transaction_count_by_hash(
         &self, hash: H256,
-    ) -> jsonrpc_core::Result<Option<U256>> {
+    ) -> RpcResult<Option<U256>> {
         info!(
             "RPC Request: eth_getBlockTransactionCountByHash hash={:?}",
             hash,
@@ -663,7 +603,7 @@ impl Eth for EthHandler {
 
     fn block_transaction_count_by_number(
         &self, block_num: BlockNumber,
-    ) -> jsonrpc_core::Result<Option<U256>> {
+    ) -> RpcResult<Option<U256>> {
         info!(
             "RPC Request: eth_getBlockTransactionCountByNumber block_number={:?}",
             block_num
@@ -690,7 +630,7 @@ impl Eth for EthHandler {
 
     fn block_uncles_count_by_hash(
         &self, hash: H256,
-    ) -> jsonrpc_core::Result<Option<U256>> {
+    ) -> RpcResult<Option<U256>> {
         info!("RPC Request: eth_getUncleCountByBlockHash hash={:?}", hash);
 
         let epoch_num = match self.consensus.get_block_epoch_number(&hash) {
@@ -712,7 +652,7 @@ impl Eth for EthHandler {
 
     fn block_uncles_count_by_number(
         &self, block_num: BlockNumber,
-    ) -> jsonrpc_core::Result<Option<U256>> {
+    ) -> RpcResult<Option<U256>> {
         info!(
             "RPC Request: eth_getUncleCountByBlockNumber block_number={:?}",
             block_num
@@ -728,7 +668,7 @@ impl Eth for EthHandler {
 
     fn code_at(
         &self, address: H160, epoch_num: Option<BlockNumber>,
-    ) -> jsonrpc_core::Result<Bytes> {
+    ) -> RpcResult<Bytes> {
         let epoch_num = epoch_num.unwrap_or_default().try_into()?;
 
         info!(
@@ -759,86 +699,88 @@ impl Eth for EthHandler {
         Ok(Bytes::new(code))
     }
 
-    fn send_raw_transaction(&self, raw: Bytes) -> jsonrpc_core::Result<H256> {
+    fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
         info!(
             "RPC Request: eth_sendRawTransaction / eth_submitTransaction raw={:?}",
             raw,
         );
-        let tx: TransactionWithSignature = invalid_params_check(
-            "raw",
-            TransactionWithSignature::from_raw(&raw.into_vec()),
-        )?;
+        let tx = if let Ok(tx) =
+            TransactionWithSignature::from_raw(&raw.into_vec())
+        {
+            tx
+        } else {
+            bail!(EthApiError::FailedToDecodeSignedTransaction)
+        };
 
         if tx.space() != Space::Ethereum {
-            bail!(invalid_params("tx", "Incorrect transaction space"));
+            bail!(EthApiError::Other(
+                "Incorrect transaction space".to_string()
+            ));
         }
 
         if tx.recover_public().is_err() {
-            bail!(invalid_params(
-                "tx",
-                "Can not recover pubkey for Ethereum like tx. Conflux eSpace only supports EIP-155 rather than EIP-1559 or other format transactions."
-            ));
+            bail!(EthApiError::InvalidTransactionSignature);
         }
 
         let r = self.send_transaction_with_signature(tx)?;
         Ok(r)
     }
 
-    fn submit_transaction(&self, raw: Bytes) -> jsonrpc_core::Result<H256> {
+    fn submit_transaction(&self, raw: Bytes) -> RpcResult<H256> {
         self.send_raw_transaction(raw)
     }
 
     fn call(
         &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
-    ) -> jsonrpc_core::Result<Bytes> {
+    ) -> RpcResult<Bytes> {
         info!(
             "RPC Request: eth_call request={:?}, block_num={:?}",
             request, block_number_or_hash
         );
-        // TODO: EVM core: Check the EVM error message. To make the
-        // assert_error_eq test case in solidity project compatible.
+
         let (execution_outcome, _estimation) =
             self.exec_transaction(request, block_number_or_hash)?;
         match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
-            )) => bail!(call_execution_error(
-                "Transaction can not be executed".into(),
-                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )) => bail!(invalid_input_rpc_err(
+                format! {"err: nonce is too old expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(call_execution_error(
-                "Transaction can not be executed".into(),
-                format! {"invalid recipient address {:?}", recipient}
+            ) => bail!(invalid_input_rpc_err(
+                format! {"err: invalid recipient address {:?}", recipient}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(call_execution_error(
-                "Can not estimate: transaction can not be executed".into(),
-                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            ) => bail!(invalid_input_rpc_err(
+                format! {"err: not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(call_execution_error(
-                    "Transaction can not be executed".into(),
-                    format! {"{:?}", e}
-                ))
+                bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(VmError::Reverted),
                 executed,
-            ) => bail!(call_execution_error(
+            ) => bail!(geth_call_execution_error(
                 format!(
                     "execution reverted: {}",
                     revert_reason_decode(&executed.output)
                 ),
                 format!("0x{}", executed.output.to_hex::<String>())
             )),
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(e),
+                executed,
+            ) => bail!(geth_call_execution_error(
+                format!("execution reverted: {}", e),
+                format!("0x{}", executed.output.to_hex::<String>())
+            )),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
-                bail!(call_execution_error(
-                    "Transaction execution failed".into(),
-                    format! {"{:?}", e}
+                bail!(geth_call_execution_error(
+                    format! {"execution failed: {:?}", e},
+                    "".into()
                 ))
             }
             ExecutionOutcome::Finished(executed) => Ok(executed.output.into()),
@@ -847,38 +789,33 @@ impl Eth for EthHandler {
 
     fn estimate_gas(
         &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
-    ) -> jsonrpc_core::Result<U256> {
+    ) -> RpcResult<U256> {
         info!(
             "RPC Request: eth_estimateGas request={:?}, block_num={:?}",
             request, block_number_or_hash
         );
-        // TODO: EVM core: same as call
         let (execution_outcome, estimation) =
             self.exec_transaction(request, block_number_or_hash)?;
         match execution_outcome {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
-            )) => bail!(call_execution_error(
-                "Can not estimate: transaction can not be executed".into(),
-                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )) => bail!(invalid_input_rpc_err(
+                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: nonce is too old expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(call_execution_error(
-                "Can not estimate: transaction can not be executed".into(),
-                format! {"invalid recipient address {:?}", recipient}
+            ) => bail!(invalid_input_rpc_err(
+                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: invalid recipient address {:?}", recipient}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(call_execution_error(
-                "Can not estimate: transaction can not be executed".into(),
-                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            ) => bail!(invalid_input_rpc_err(
+                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
-                    format! {"{:?}", e}
+                bail!(invalid_input_rpc_err(
+                    format! {"failed with {MAX_GAS_CALL_REQUEST} gas: {:?}", e}
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -888,20 +825,18 @@ impl Eth for EthHandler {
                 let (revert_error, innermost_error, errors) =
                     decode_error(&executed, |addr| *addr);
 
-                bail!(call_execution_error(
+                bail!(geth_call_execution_error(
                     format!(
-                        "execution reverted: {}{}",
+                        "failed with {MAX_GAS_CALL_REQUEST} gas: {} {}",
                         revert_error, innermost_error
                     ),
                     errors.join("\n"),
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
-                bail!(call_execution_error(
-                    format! {"Can not estimate: transaction execution failed, \
-                    all gas will be charged (execution error: {:?})", e}
-                    .into(),
-                    format! {"{:?}", e}
+                bail!(geth_call_execution_error(
+                    format!("failed with {MAX_GAS_CALL_REQUEST} gas: {:?})", e),
+                    "".into()
                 ))
             }
             ExecutionOutcome::Finished(executed) => executed,
@@ -913,7 +848,7 @@ impl Eth for EthHandler {
     fn fee_history(
         &self, block_count: HexU64, newest_block: BlockNumber,
         reward_percentiles: Vec<f64>,
-    ) -> jsonrpc_core::Result<FeeHistory> {
+    ) -> RpcResult<FeeHistory> {
         info!(
             "RPC Request: eth_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
             block_count, newest_block, reward_percentiles
@@ -993,7 +928,7 @@ impl Eth for EthHandler {
 
     fn transaction_by_hash(
         &self, hash: H256,
-    ) -> jsonrpc_core::Result<Option<Transaction>> {
+    ) -> RpcResult<Option<Transaction>> {
         info!("RPC Request: eth_getTransactionByHash({:?})", hash);
 
         let tx_index = match self
@@ -1050,7 +985,7 @@ impl Eth for EthHandler {
 
     fn transaction_by_block_hash_and_index(
         &self, hash: H256, idx: Index,
-    ) -> jsonrpc_core::Result<Option<Transaction>> {
+    ) -> RpcResult<Option<Transaction>> {
         info!("RPC Request: eth_getTransactionByBlockHashAndIndex hash={:?}, idx={:?}", hash, idx);
 
         let phantom_block = {
@@ -1069,7 +1004,7 @@ impl Eth for EthHandler {
 
     fn transaction_by_block_number_and_index(
         &self, block_num: BlockNumber, idx: Index,
-    ) -> jsonrpc_core::Result<Option<Transaction>> {
+    ) -> RpcResult<Option<Transaction>> {
         info!("RPC Request: eth_getTransactionByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
 
         let phantom_block = {
@@ -1088,9 +1023,7 @@ impl Eth for EthHandler {
         Ok(block_tx_by_index(phantom_block, idx.value()))
     }
 
-    fn transaction_receipt(
-        &self, tx_hash: H256,
-    ) -> jsonrpc_core::Result<Option<Receipt>> {
+    fn transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<Receipt>> {
         info!(
             "RPC Request: eth_getTransactionReceipt tx_hash={:?}",
             tx_hash
@@ -1161,7 +1094,7 @@ impl Eth for EthHandler {
 
     fn uncle_by_block_hash_and_index(
         &self, hash: H256, idx: Index,
-    ) -> jsonrpc_core::Result<Option<RpcBlock>> {
+    ) -> RpcResult<Option<RpcBlock>> {
         info!(
             "RPC Request: eth_getUncleByBlockHashAndIndex hash={:?}, idx={:?}",
             hash, idx
@@ -1172,13 +1105,13 @@ impl Eth for EthHandler {
 
     fn uncle_by_block_number_and_index(
         &self, block_num: BlockNumber, idx: Index,
-    ) -> jsonrpc_core::Result<Option<RpcBlock>> {
+    ) -> RpcResult<Option<RpcBlock>> {
         info!("RPC Request: eth_getUncleByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
         // We do not have uncle block
         Ok(None)
     }
 
-    fn logs(&self, filter: EthRpcLogFilter) -> jsonrpc_core::Result<Vec<Log>> {
+    fn logs(&self, filter: EthRpcLogFilter) -> RpcResult<Vec<Log>> {
         info!("RPC Request: eth_getLogs({:?})", filter);
 
         let filter: LogFilter =
@@ -1203,7 +1136,7 @@ impl Eth for EthHandler {
             .collect::<Result<_, _>>()?)
     }
 
-    fn submit_hashrate(&self, _: U256, _: H256) -> jsonrpc_core::Result<bool> {
+    fn submit_hashrate(&self, _: U256, _: H256) -> RpcResult<bool> {
         info!("RPC Request: eth_submitHashrate");
         // We do not care mining
         Ok(false)
@@ -1211,7 +1144,7 @@ impl Eth for EthHandler {
 
     fn block_receipts(
         &self, block_num: Option<BlockNumber>,
-    ) -> jsonrpc_core::Result<Vec<Receipt>> {
+    ) -> RpcResult<Vec<Receipt>> {
         info!(
             "RPC Request: parity_getBlockReceipts block_number={:?}",
             block_num
@@ -1263,7 +1196,7 @@ impl Eth for EthHandler {
     fn account_pending_transactions(
         &self, address: H160, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
-    ) -> jsonrpc_core::Result<AccountPendingTransactions> {
+    ) -> RpcResult<AccountPendingTransactions> {
         info!("RPC Request: eth_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
               address, maybe_start_nonce, maybe_limit);
 
