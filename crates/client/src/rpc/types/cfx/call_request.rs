@@ -3,11 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes::invalid_params,
+    errors::invalid_params,
     types::{
         address::RpcAddress,
-        cfx::{to_primitive_access_list, CfxAccessList},
-        errors::{check_rpc_address_network, RcpAddressNetworkInconsistent},
+        cfx::{
+            check_rpc_address_network, to_primitive_access_list, CfxAccessList,
+            RcpAddressNetworkInconsistent,
+        },
         Bytes,
     },
     RpcResult,

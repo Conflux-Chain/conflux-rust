@@ -4,5 +4,8 @@ pub mod call_request;
 mod fee_history;
 
 pub use access_list::*;
-pub use address::RpcAddress;
-pub use fee_history::*;
+pub use address::{
+    check_rpc_address_network, RcpAddressNetworkInconsistent, RpcAddress,
+    UnexpectedRpcAddressNetwork,
+};
+pub use fee_history::CfxFeeHistory;

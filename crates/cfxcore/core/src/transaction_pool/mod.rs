@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod account_cache;
+mod error;
 mod garbage_collector;
 mod nonce_pool;
 mod transaction_pool_inner;
@@ -32,6 +33,7 @@ use cfx_types::{
     AddressWithSpace as Address, AllChainID, Space, SpaceMap, H256, U256,
 };
 use cfx_vm_types::Spec;
+pub use error::{TransactionPoolError, SAME_NONCE_HIGH_GAS_PRICE_NEEED};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -370,7 +372,10 @@ impl TransactionPool {
     /// `failure` and will not be propagated.
     pub fn insert_new_transactions(
         &self, mut transactions: Vec<TransactionWithSignature>,
-    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
+    ) -> (
+        Vec<Arc<SignedTransaction>>,
+        HashMap<H256, TransactionPoolError>,
+    ) {
         INSERT_TPS.mark(1);
         INSERT_TXS_TPS.mark(transactions.len());
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
@@ -458,7 +463,13 @@ impl TransactionPool {
             }
             Err(e) => {
                 for tx in transactions {
-                    failure.insert(tx.hash(), format!("{:?}", e).into());
+                    failure.insert(
+                        tx.hash(),
+                        TransactionPoolError::RlpDecodeError(format!(
+                            "{:?}",
+                            e
+                        )),
+                    );
                 }
             }
         }
@@ -481,7 +492,10 @@ impl TransactionPool {
     /// `failure` and will not be propagated.
     pub fn insert_new_signed_transactions(
         &self, mut signed_transactions: Vec<Arc<SignedTransaction>>,
-    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
+    ) -> (
+        Vec<Arc<SignedTransaction>>,
+        HashMap<H256, TransactionPoolError>,
+    ) {
         INSERT_TPS.mark(1);
         INSERT_TXS_TPS.mark(signed_transactions.len());
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
@@ -531,7 +545,7 @@ impl TransactionPool {
         if quota < signed_transactions.len() {
             for tx in signed_transactions.split_off(quota) {
                 trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
-                failure.insert(tx.hash, "txpool is full".into());
+                failure.insert(tx.hash, TransactionPoolError::TxPoolFull);
             }
         }
 
@@ -590,14 +604,14 @@ impl TransactionPool {
         &self, transaction: &TransactionWithSignature, basic_check: bool,
         chain_id: AllChainID, best_height: u64,
         transitions: &TransitionsEpochHeight, spec: &Spec,
-    ) -> Result<(), String> {
+    ) -> Result<(), TransactionPoolError> {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
         let mode = VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
 
         if basic_check {
             self.verification_config
                 .check_tx_size(transaction)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| TransactionPoolError::TransactionError(e))?;
             if let Err(e) = self.verification_config.verify_transaction_common(
                 transaction,
                 chain_id,
@@ -606,7 +620,7 @@ impl TransactionPool {
                 mode,
             ) {
                 warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
-                return Err(format!("{:?}", e));
+                return Err(TransactionPoolError::TransactionError(e));
             }
         }
 
@@ -623,10 +637,10 @@ impl TransactionPool {
                 transaction.gas(),
                 max_tx_gas
             );
-            return Err(format!(
-                "transaction gas {} exceeds the maximum value {:?}, the half of pivot block gas limit",
-                transaction.gas(), max_tx_gas
-            ));
+            return Err(TransactionPoolError::GasLimitExceeded {
+                max: max_tx_gas.as_u64(),
+                have: transaction.gas().as_u64(),
+            });
         }
 
         let min_tx_price = match transaction.space() {
@@ -636,11 +650,10 @@ impl TransactionPool {
         // check transaction gas price
         if *transaction.gas_price() < min_tx_price.into() {
             trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price());
-            return Err(format!(
-                "transaction gas price {} less than the minimum value {}",
-                transaction.gas_price(),
-                min_tx_price
-            ));
+            return Err(TransactionPoolError::GasPriceLessThanMinimum {
+                min: min_tx_price.into(),
+                have: *transaction.gas_price(),
+            });
         }
 
         Ok(())
@@ -652,7 +665,7 @@ impl TransactionPool {
     pub fn add_transaction_with_readiness_check(
         &self, inner: &mut TransactionPoolInner, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), TransactionPoolError> {
         inner.insert_transaction_with_readiness_check(
             account_cache,
             transaction,
@@ -1110,7 +1123,7 @@ impl TransactionPool {
                         warn!("Should not happen");
                     }
                     Err(e) => {
-                        error!("Cannot compute base price with additinal transactions: {}", e);
+                        error!("Cannot compute base price with additional transactions: {}", e);
                     }
                 }
             }
