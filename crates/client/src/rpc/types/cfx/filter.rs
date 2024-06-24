@@ -221,7 +221,7 @@ impl Serialize for CfxFilterChanges {
 
 #[cfg(test)]
 mod tests {
-    use crate::rpc::types::{filter::RevertTo, CfxFilterLog, Log};
+    use crate::rpc::types::{cfx::filter::RevertTo, CfxFilterLog, Log};
 
     use super::{
         super::RpcAddress, CfxRpcLogFilter, EpochNumber, VariadicValue,
