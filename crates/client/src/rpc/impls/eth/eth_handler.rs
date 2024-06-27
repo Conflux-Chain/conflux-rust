@@ -104,7 +104,7 @@ impl EthHandler {
         };
 
         for i in start_block..=latest_block {
-            let block = self.fetch_pivot_block_by_height(i)?;
+            let block = self.fetch_block_by_height(i)?;
             self.fee_history_cache.push_back(
                 i,
                 FeeHistoryEntry::from_block(
@@ -118,12 +118,12 @@ impl EthHandler {
         Ok(())
     }
 
-    fn fetch_pivot_block_by_height(
+    fn fetch_block_by_height(
         &self, height: u64,
     ) -> Result<PhantomBlock, String> {
         let maybe_block = self
             .consensus_graph()
-            .get_phantom_block_pivot_by_number(
+            .get_phantom_block_by_number(
                 EpochNumber::Number(height),
                 None,
                 false,
@@ -965,7 +965,7 @@ impl Eth for EthHandler {
             if entry.is_none() {
                 let height = end_block - i as u64;
                 let block = self
-                    .fetch_pivot_block_by_height(height)
+                    .fetch_block_by_height(height)
                     .map_err(RpcError::invalid_params)?;
 
                 // Internal error happens only if the fetch header has
@@ -986,7 +986,7 @@ impl Eth for EthHandler {
         }
 
         let block = self
-            .fetch_pivot_block_by_height(end_block + 1)
+            .fetch_block_by_height(end_block + 1)
             .map_err(RpcError::invalid_params)?;
 
         fee_history.finish(
