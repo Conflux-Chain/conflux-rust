@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "2.4.0-alpha"
+version = "2.4.0"
 edition = "2021"
 
 [dependencies]
