@@ -26,6 +26,10 @@ pub struct PosStateConfig {
     cip136_in_queue_locked_views: u64,
     cip136_round_per_term: u64,
 
+    fix_cip136_transition_view: u64,
+    fix_cip136_in_queue_locked_views: u64,
+    fix_cip136_out_queue_locked_views: u64,
+
     nonce_limit_transition_view: u64,
     max_nonce_per_account: u64,
 }
@@ -56,7 +60,9 @@ impl PosStateConfig {
         cip99_out_queue_locked_views: u64, nonce_limit_transition_view: u64,
         max_nonce_per_account: u64, cip136_transition_view: u64,
         cip136_in_queue_locked_views: u64, cip136_out_queue_locked_views: u64,
-        cip136_round_per_term: u64,
+        cip136_round_per_term: u64, fix_cip136_transition_view: u64,
+        fix_cip136_in_queue_locked_views: u64,
+        fix_cip136_out_queue_locked_views: u64,
     ) -> Self {
         Self {
             round_per_term,
@@ -71,6 +77,9 @@ impl PosStateConfig {
             cip136_out_queue_locked_views,
             cip136_in_queue_locked_views,
             cip136_round_per_term,
+            fix_cip136_transition_view,
+            fix_cip136_in_queue_locked_views,
+            fix_cip136_out_queue_locked_views,
             nonce_limit_transition_view,
             max_nonce_per_account,
         }
@@ -120,8 +129,12 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
             && view < conf.cip136_transition_view
         {
             conf.cip99_in_queue_locked_views
-        } else if view >= conf.cip136_transition_view {
+        } else if view >= conf.cip136_transition_view
+            && view < conf.fix_cip136_transition_view
+        {
             conf.cip136_in_queue_locked_views
+        } else if view >= conf.fix_cip136_transition_view {
+            conf.fix_cip136_in_queue_locked_views
         } else {
             conf.in_queue_locked_views
         }
@@ -133,8 +146,12 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
             && view < conf.cip136_transition_view
         {
             conf.cip99_out_queue_locked_views
-        } else if view >= conf.cip136_transition_view {
+        } else if view >= conf.cip136_transition_view
+            && view < conf.fix_cip136_transition_view
+        {
             conf.cip136_out_queue_locked_views
+        } else if view >= conf.fix_cip136_transition_view {
+            conf.fix_cip136_out_queue_locked_views
         } else {
             conf.out_queue_locked_views
         }
@@ -209,6 +226,9 @@ impl Default for PosStateConfig {
             cip136_out_queue_locked_views: IN_QUEUE_LOCKED_VIEWS,
             cip136_in_queue_locked_views: OUT_QUEUE_LOCKED_VIEWS,
             cip136_round_per_term: ROUND_PER_TERM,
+            fix_cip136_transition_view: u64::MAX,
+            fix_cip136_in_queue_locked_views: IN_QUEUE_LOCKED_VIEWS,
+            fix_cip136_out_queue_locked_views: OUT_QUEUE_LOCKED_VIEWS,
             nonce_limit_transition_view: u64::MAX,
             max_nonce_per_account: u64::MAX,
         }
