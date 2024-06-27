@@ -170,6 +170,14 @@ impl BlockHeader {
     /// Get the gas limit field of the header.
     pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
 
+    /// Get the gas limit for the given space after 1559 hardfork.
+    pub fn space_gas_limit(&self, space: Space) -> U256 {
+        match space {
+            Space::Native => self.gas_limit() * 9 / 10,
+            Space::Ethereum => self.gas_limit() * 5 / 10,
+        }
+    }
+
     /// Get the referee hashes field of the header.
     pub fn referee_hashes(&self) -> &Vec<H256> { &self.referee_hashes }
 
@@ -189,6 +197,14 @@ impl BlockHeader {
                  espace_base_price,
              }| SpaceMap::new(core_base_price, espace_base_price),
         )
+    }
+
+    // Get the base price for the given space after 1559 hardfork.
+    pub fn space_base_price(&self, space: Space) -> Option<U256> {
+        self.base_price.map(|x| match space {
+            Space::Native => x.core_base_price,
+            Space::Ethereum => x.espace_base_price,
+        })
     }
 
     /// Set the nonce field of the header.

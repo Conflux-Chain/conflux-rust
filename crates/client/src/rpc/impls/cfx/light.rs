@@ -50,7 +50,7 @@ use crate::{
             RpcAddress, SendTxRequest, SponsorInfo, StatOnGasLoad,
             Status as RpcStatus, StorageCollateralInfo, SyncGraphStates,
             TokenSupplyInfo, Transaction as RpcTransaction, VoteParamsInfo,
-            WrapTransaction, U64 as HexU64,
+            WrapTransaction, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, U64 as HexU64,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1092,8 +1092,8 @@ impl RpcImpl {
     }
 
     fn fee_history(
-        &self, block_count: HexU64, newest_block: EpochNumber,
-        reward_percentiles: Vec<f64>,
+        &self, mut block_count: HexU64, newest_block: EpochNumber,
+        reward_percentiles: Option<Vec<f64>>,
     ) -> RpcBoxFuture<CfxFeeHistory> {
         info!(
             "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
@@ -1108,9 +1108,14 @@ impl RpcImpl {
             );
         }
 
+        if block_count.as_u64() > MAX_FEE_HISTORY_CACHE_BLOCK_COUNT {
+            block_count = HexU64::from(MAX_FEE_HISTORY_CACHE_BLOCK_COUNT);
+        }
+
         // clone to avoid lifetime issues due to capturing `self`
         let consensus_graph = self.consensus.clone();
         let light = self.light.clone();
+        let reward_percentiles = reward_percentiles.unwrap_or_default();
 
         let fut = async move {
             let start_height: u64 = light
@@ -1248,7 +1253,7 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
-            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<CfxFeeHistory>;
+            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Option<Vec<f64>>) -> BoxFuture<CfxFeeHistory>;
         }
     }
 

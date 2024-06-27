@@ -4,6 +4,7 @@
 
 mod bytes;
 pub mod cfx;
+mod constants;
 pub mod eth;
 mod fee_history;
 mod index;
@@ -25,7 +26,6 @@ pub use self::{
             self, sign_call, CallRequest,
             CheckBalanceAgainstTransactionResponse,
             EstimateGasAndCollateralResponse, SendTxRequest,
-            MAX_GAS_CALL_REQUEST,
         },
         consensus_graph_states::ConsensusGraphStates,
         epoch_number::{BlockHashOrEpochNumber, EpochNumber},
@@ -47,7 +47,8 @@ pub use self::{
         vote_params_info::VoteParamsInfo,
         Account, CfxFeeHistory, SponsorInfo,
     },
-    fee_history::FeeHistory,
+    constants::{MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, MAX_GAS_CALL_REQUEST},
+    fee_history::{FeeHistory, FeeHistoryEntry},
     index::Index,
     provenance::Origin,
     trace::{
