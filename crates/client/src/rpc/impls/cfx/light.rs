@@ -42,14 +42,15 @@ use crate::{
             pos::{Block as PosBlock, PoSEpochReward},
             Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest, CfxRpcLogFilter,
-            CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, FeeHistory,
-            Log as RpcLog, PoSEconomics, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, RpcAddress, SendTxRequest,
-            SponsorInfo, StatOnGasLoad, Status as RpcStatus,
-            StorageCollateralInfo, SyncGraphStates, TokenSupplyInfo,
-            Transaction as RpcTransaction, VoteParamsInfo, WrapTransaction,
+            BlockHashOrEpochNumber, Bytes, CallRequest, CfxFeeHistory,
+            CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
+            ConsensusGraphStates, EpochNumber,
+            EstimateGasAndCollateralResponse, FeeHistory, Log as RpcLog,
+            PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+            RpcAddress, SendTxRequest, SponsorInfo, StatOnGasLoad,
+            Status as RpcStatus, StorageCollateralInfo, SyncGraphStates,
+            TokenSupplyInfo, Transaction as RpcTransaction, VoteParamsInfo,
+            WrapTransaction, U64 as HexU64,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1091,16 +1092,20 @@ impl RpcImpl {
     }
 
     fn fee_history(
-        &self, block_count: U64, newest_block: EpochNumber,
+        &self, block_count: HexU64, newest_block: EpochNumber,
         reward_percentiles: Vec<f64>,
-    ) -> RpcBoxFuture<FeeHistory> {
+    ) -> RpcBoxFuture<CfxFeeHistory> {
         info!(
             "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
             block_count, newest_block, reward_percentiles
         );
 
-        if block_count == U64::zero() {
-            return Box::new(async { Ok(FeeHistory::new()) }.boxed().compat());
+        if block_count.as_u64() == 0 {
+            return Box::new(
+                async { Ok(FeeHistory::new().to_cfx_fee_history()) }
+                    .boxed()
+                    .compat(),
+            );
         }
 
         // clone to avoid lifetime issues due to capturing `self`
@@ -1135,7 +1140,7 @@ impl RpcImpl {
                 // Internal error happens only if the fetch header has
                 // inconsistent block height
                 fee_history
-                    .push_back_block(
+                    .push_front_block(
                         Space::Native,
                         &reward_percentiles,
                         &block.block_header,
@@ -1144,8 +1149,7 @@ impl RpcImpl {
                     .map_err(|_| RpcError::internal_error())?;
 
                 if current_height == 0 {
-                    fee_history.finish(0, None, Space::Native);
-                    return Ok(fee_history);
+                    break;
                 } else {
                     current_height -= 1;
                 }
@@ -1154,15 +1158,20 @@ impl RpcImpl {
             let block = fetch_block_for_fee_history(
                 consensus_graph.clone(),
                 light.clone(),
-                current_height,
+                start_height + 1,
             )
             .await?;
+            let oldest_block = if current_height == 0 {
+                0
+            } else {
+                current_height + 1
+            };
             fee_history.finish(
-                current_height + 1,
+                oldest_block,
                 block.block_header.base_price().as_ref(),
                 Space::Native,
             );
-            Ok(fee_history)
+            Ok(fee_history.to_cfx_fee_history())
         };
 
         Box::new(fut.boxed().compat())
@@ -1239,7 +1248,7 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
-            fn fee_history(&self, block_count: U64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<FeeHistory>;
+            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<CfxFeeHistory>;
         }
     }
 

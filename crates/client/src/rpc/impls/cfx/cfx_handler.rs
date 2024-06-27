@@ -6,9 +6,9 @@ use crate::rpc::{
     error_codes::{internal_error_msg, invalid_params_msg},
     types::{
         call_request::rpc_call_request_network,
-        errors::check_rpc_address_network, pos::PoSEpochReward, FeeHistory,
+        errors::check_rpc_address_network, pos::PoSEpochReward, CfxFeeHistory,
         PoSEconomics, RpcAddress, SponsorInfo, StatOnGasLoad, TokenSupplyInfo,
-        VoteParamsInfo, WrapTransaction,
+        VoteParamsInfo, WrapTransaction, U64 as HexU64,
     },
 };
 use blockgen::BlockGenerator;
@@ -47,7 +47,7 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block, BlockHeader,
     BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
     StorageValue, Transaction, TransactionIndex, TransactionStatus,
     TransactionWithSignature, VoteStakeInfo,
@@ -115,7 +115,7 @@ pub(crate) struct BlockExecInfo {
     pub(crate) block: Arc<Block>,
     pub(crate) epoch_number: u64,
     pub(crate) maybe_state_root: Option<H256>,
-    pub(crate) pivot_hash: H256,
+    pub(crate) pivot_header: Arc<BlockHeader>,
 }
 
 pub struct RpcImpl {
@@ -790,12 +790,23 @@ impl RpcImpl {
             bail!("Inconsistent state");
         }
 
+        let pivot_header = if let Some(x) = self
+            .consensus
+            .get_data_manager()
+            .block_header_by_hash(&pivot_hash)
+        {
+            x
+        } else {
+            warn!("Cannot find pivot header when get block execution info: pivot hash {:?}", pivot_hash);
+            return Ok(None);
+        };
+
         Ok(Some(BlockExecInfo {
             block_receipts,
             block,
             epoch_number,
             maybe_state_root,
-            pivot_hash,
+            pivot_header,
         }))
     }
 
@@ -840,7 +851,7 @@ impl RpcImpl {
             prior_gas_used,
             Some(exec_info.epoch_number),
             exec_info.block_receipts.block_number,
-            exec_info.block.block_header.base_price(),
+            exec_info.pivot_header.base_price(),
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
@@ -900,10 +911,10 @@ impl RpcImpl {
         };
 
         // pivot chain reorg
-        if pivot_assumption != exec_info.pivot_hash {
+        if pivot_assumption != exec_info.pivot_header.hash() {
             bail!(pivot_assumption_failed(
                 pivot_assumption,
-                exec_info.pivot_hash
+                exec_info.pivot_header.hash()
             ));
         }
 
@@ -1359,18 +1370,13 @@ impl RpcImpl {
         };
         let storage_collateralized =
             U64::from(estimation.estimated_storage_limit);
-        let estimated_gas_limit = estimation.estimated_gas_limit;
+        let estimated_gas_used = estimation.estimated_gas_limit;
         let response = EstimateGasAndCollateralResponse {
-            // We multiply the gas_used for 2 reasons:
-            // 1. In each EVM call, the gas passed is at most 63/64 of the
-            // remaining gas, so the gas_limit should be multiplied a factor so
-            // that the gas passed into the sub-call is sufficient. The 4 / 3
-            // factor is sufficient for 18 level of calls.
-            // 2. In Conflux, we recommend setting the gas_limit to (gas_used *
-            // 4) / 3, because the extra gas will be refunded up to
-            // 1/4 of the gas limit.
-            gas_limit: estimation.estimated_gas_limit,
-            gas_used: estimated_gas_limit,
+            gas_limit: estimated_gas_used, /* gas_limit used to be 4/3 of
+                                            * gas_used due to inaccuracy,
+                                            * currently it's the same as gas
+                                            * used as it's more accurate */
+            gas_used: estimated_gas_used,
             storage_collateralized,
         };
         Ok(response)
@@ -2277,7 +2283,7 @@ impl Cfx for CfxHandler {
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
-            fn fee_history(&self, block_count: U64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<FeeHistory>;
+            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<CfxFeeHistory>;
             fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
         }
 

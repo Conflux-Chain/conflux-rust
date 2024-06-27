@@ -73,7 +73,7 @@ class ConfluxTestFramework:
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
         self.setup_clean_chain = True
-        self.nodes = []
+        self.nodes: list[TestNode] = []
         self.network_thread = None
         self.mocktime = 0
         self.rpc_timewait = CONFLUX_RPC_WAIT_TIMEOUT
