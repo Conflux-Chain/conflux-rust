@@ -59,7 +59,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "2.4.0-testnet-fix2"
+version = "2.4.0-testnet-fix3"
 authors = ["peilun-conflux", "ChenxingLi"]
 description = "A rust implementation of the Conflux-Protocol"
 documentation = "https://doc.confluxnetwork.org"
