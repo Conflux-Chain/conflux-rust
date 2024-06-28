@@ -140,7 +140,7 @@ impl Position {
     /// This method takes in a node position and return its sibling position
     ///
     /// The observation is that, after stripping out the right-most common bits,
-    /// two sibling nodes flip the the next right-most bits with each other.
+    /// two sibling nodes flip the next right-most bits with each other.
     /// To find out the right-most common bits, first remove all the right-most
     /// ones because they are corresponding to level's indicator. Then
     /// remove next zero right after.
@@ -496,7 +496,7 @@ fn nodes_to_left_of(node: u64) -> u64 {
 }
 
 /// Given `node`, an index in an in-order traversal of a perfect binary tree,
-/// what order would the node be visited in in post-order traversal?
+/// what order would the node be visited in post-order traversal?
 /// For example, consider this tree of in-order nodes.
 ///
 /// ```text

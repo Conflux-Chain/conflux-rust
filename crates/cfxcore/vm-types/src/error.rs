@@ -21,13 +21,12 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
-use bls_signatures::Error as CryptoError;
 use cfx_db_errors::statedb::{Error as DbError, Result as DbResult};
 use cfx_types::{Address, U256};
 use solidity_abi::ABIDecodeError;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TrapKind {
     Call(ActionParams),
     Create(ActionParams),
@@ -134,14 +133,6 @@ impl<T: std::fmt::Debug> PartialEq for PartialEqWrapper<T> {
 
 impl From<DbError> for Error {
     fn from(err: DbError) -> Self { Error::StateDbError(PartialEqWrapper(err)) }
-}
-
-impl From<CryptoError> for Error {
-    fn from(err: CryptoError) -> Self {
-        Error::InternalContract(
-            format!("Crypto decoding error {:?}", err).into(),
-        )
-    }
 }
 
 impl From<ABIDecodeError> for Error {

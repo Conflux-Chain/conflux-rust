@@ -20,6 +20,7 @@
 
 //! Cost spec and other parameterisations for the EVM.
 use cfx_types::{address_util::AddressUtil, Address};
+use primitives::{block::BlockHeight, BlockNumber};
 
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
@@ -48,6 +49,10 @@ pub struct Spec {
     pub sstore_reset_gas: usize,
     /// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`)
     pub sstore_refund_gas: usize,
+    /// Gas price for `TLOAD`
+    pub tload_gas: usize,
+    /// Gas price for `TSTORE`
+    pub tstore_gas: usize,
     /// Gas price for `JUMPDEST` opcode
     pub jumpdest_gas: usize,
     /// Gas price for `LOG*`
@@ -100,6 +105,8 @@ pub struct Spec {
     pub retire_gas: usize,
     /// Price for deploying Eip-1820 contract.
     pub eip1820_gas: usize,
+    pub access_list_storage_key_gas: usize,
+    pub access_list_address_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -145,6 +152,7 @@ pub struct Spec {
     /// CIP-94: On-chain Parameter DAO Vote
     pub cip94: bool,
     pub cip94_activation_block_number: u64,
+    pub params_dao_vote_period: u64,
     /// CIP-97: Remove staking list
     pub cip97: bool,
     /// CIP-98: Fix espace bug
@@ -158,7 +166,25 @@ pub struct Spec {
     pub cip118: bool,
     /// CIP-119: PUSH0 instruction
     pub cip119: bool,
-    pub params_dao_vote_period: u64,
+    /// CIP-131: Retain Whitelist on Contract Deletion
+    pub cip131: bool,
+    /// CIP-132: Fix Static Context Check for Internal Contracts
+    pub cip132: bool,
+    /// CIP-133: Enhanced Block Hash Query
+    pub cip133_b: BlockNumber,
+    pub cip133_e: BlockHeight,
+    pub cip133_core: bool,
+    /// CIP-137: Base Fee Sharing in CIP-1559
+    pub cip137: bool,
+    pub cip1559: bool,
+    /// CIP-141: Disable Subroutine Opcodes
+    /// CIP-142: Transient Storage Opcodes
+    /// CIP-143: MCOPY (0x5e) Opcode for Efficient Memory Copy
+    pub cancun_opcodes: bool,
+    /// CIP-144: Point Evaluation Precompile from EIP-4844
+    pub cip144: bool,
+    /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
+    pub cip145: bool,
 }
 
 /// Wasm cost table
@@ -242,10 +268,13 @@ impl Spec {
             exp_byte_gas: 50,
             sha3_gas: 30,
             sha3_word_gas: 6,
+            // Become 800 after CIP-142
             sload_gas: 200,
             sstore_set_gas: 20000,
             sstore_reset_gas: 5000,
             sstore_refund_gas: 15000,
+            tload_gas: 100,
+            tstore_gas: 100,
             jumpdest_gas: 1,
             log_gas: 375,
             log_data_gas: 8,
@@ -272,6 +301,8 @@ impl Spec {
             suicide_gas: 5000,
             retire_gas: 5_000_000,
             eip1820_gas: 1_500_000,
+            access_list_storage_key_gas: 1900,
+            access_list_address_gas: 2400,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
@@ -299,6 +330,16 @@ impl Spec {
             cip107: false,
             cip118: false,
             cip119: false,
+            cip131: false,
+            cip132: false,
+            cip133_b: u64::MAX,
+            cip133_e: u64::MAX,
+            cip133_core: false,
+            cip137: false,
+            cip145: false,
+            cip1559: false,
+            cancun_opcodes: false,
+            cip144: false,
         }
     }
 

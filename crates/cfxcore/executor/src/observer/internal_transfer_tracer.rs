@@ -20,7 +20,7 @@ pub trait InternalTransferTracer {
     ) {
     }
 
-    fn trace_convert_stroage_points(
+    fn trace_convert_storage_points(
         &mut self, addr: Address, from_balance: U256, from_collateral: U256,
     ) {
         if !from_balance.is_zero() {

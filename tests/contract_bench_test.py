@@ -21,6 +21,7 @@ class ContractBenchTest(SmartContractBenchBase):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["execute_genesis"] = "true"
+        self.conf_parameters["cancun_opcodes_transition_number"] = 99999999
 
     def setup_network(self):
         self.setup_nodes()

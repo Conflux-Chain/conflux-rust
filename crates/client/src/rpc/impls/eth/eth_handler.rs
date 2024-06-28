@@ -15,7 +15,7 @@ use crate::rpc::{
             CallRequest, EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus,
             Transaction,
         },
-        Bytes, Index, MAX_GAS_CALL_REQUEST,
+        Bytes, FeeHistory, Index, MAX_GAS_CALL_REQUEST, U64 as HexU64,
     },
 };
 use cfx_execute_helper::estimation::{
@@ -41,11 +41,15 @@ use cfxcore::{
 use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
+    filter::LogFilter,
+    receipt::EVM_SPACE_SUCCESS,
+    transaction::{
+        Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
+        EthereumTransaction::*, EIP1559_TYPE, EIP2930_TYPE, LEGACY_TX_TYPE,
+    },
+    Action, BlockHashOrEpochNumber, EpochNumber, SignedTransaction, StorageKey,
+    StorageValue, TransactionStatus, TransactionWithSignature,
 };
-use rlp::Rlp;
 use rustc_hex::ToHex;
 use std::{cmp::min, convert::TryInto};
 
@@ -82,18 +86,74 @@ pub fn sign_call(
 ) -> RpcResult<SignedTransaction> {
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.unwrap_or_else(|| Address::zero());
+    let nonce = request.nonce.unwrap_or_default();
+    let action = request.to.map_or(Action::Create, |addr| Action::Call(addr));
+    let value = request.value.unwrap_or_default();
 
-    Ok(Eip155Transaction {
-        nonce: request.nonce.unwrap_or_default(),
-        action: request.to.map_or(Action::Create, |addr| Action::Call(addr)),
-        gas,
-        gas_price: request.gas_price.unwrap_or(1.into()),
-        value: request.value.unwrap_or_default(),
-        chain_id: Some(chain_id),
-        data: request.data.unwrap_or_default().into_vec(),
-    }
-    .fake_sign_rpc(from.with_evm_space()))
+    let default_type_id = if request.max_fee_per_gas.is_some()
+        || request.max_priority_fee_per_gas.is_some()
+    {
+        EIP1559_TYPE
+    } else if request.access_list.is_some() {
+        EIP2930_TYPE
+    } else {
+        LEGACY_TX_TYPE
+    };
+    let transaction_type = request
+        .transaction_type
+        .unwrap_or(U64::from(default_type_id));
+
+    let gas_price = request.gas_price.unwrap_or(1.into());
+    let max_fee_per_gas = request
+        .max_fee_per_gas
+        .or(request.max_priority_fee_per_gas)
+        .unwrap_or(gas_price);
+    let max_priority_fee_per_gas =
+        request.max_priority_fee_per_gas.unwrap_or(U256::zero());
+    let access_list = request.access_list.unwrap_or(vec![]);
+    let data = request.data.unwrap_or_default().into_vec();
+
+    let transaction = match transaction_type.as_usize() as u8 {
+        LEGACY_TX_TYPE => Eip155(Eip155Transaction {
+            nonce,
+            gas_price,
+            gas,
+            action,
+            value,
+            chain_id: Some(chain_id),
+            data,
+        }),
+        EIP2930_TYPE => Eip2930(Eip2930Transaction {
+            chain_id,
+            nonce,
+            gas_price,
+            gas,
+            action,
+            value,
+            data,
+            access_list,
+        }),
+        EIP1559_TYPE => Eip1559(Eip1559Transaction {
+            chain_id,
+            nonce,
+            max_priority_fee_per_gas,
+            max_fee_per_gas,
+            gas,
+            action,
+            value,
+            data,
+            access_list,
+        }),
+        x => {
+            return Err(
+                invalid_params("Unrecognized transaction type", x).into()
+            );
+        }
+    };
+
+    let from = request.from.unwrap_or(Address::zero());
+
+    Ok(transaction.fake_sign_rpc(from.with_evm_space()))
 }
 
 fn block_tx_by_index(
@@ -127,7 +187,8 @@ fn block_tx_by_index(
 
 impl EthHandler {
     fn exec_transaction(
-        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
+        &self, mut request: CallRequest,
+        block_number_or_hash: Option<BlockNumber>,
     ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
 
@@ -152,6 +213,9 @@ impl EthHandler {
             }
             epoch => epoch.try_into()?,
         };
+
+        // if gas_price is zero, it is considered as not set
+        request.unset_zero_gas_price();
 
         let estimate_request = EstimateRequest {
             has_sender: request.from.is_some(),
@@ -238,7 +302,7 @@ impl EthHandler {
         let transaction_hash = tx.hash();
         let transaction_index: U256 = idx.into();
         let block_hash = b.pivot_header.hash();
-        let block_number: U256 = b.pivot_header.height().into();
+        let block_height: U256 = b.pivot_header.height().into();
 
         let logs: Vec<_> = receipt
             .logs
@@ -250,7 +314,7 @@ impl EthHandler {
                 topics: log.topics,
                 data: Bytes(log.data),
                 block_hash,
-                block_number,
+                block_number: block_height,
                 transaction_hash,
                 transaction_index,
                 log_index: Some((*prior_log_index + idx).into()),
@@ -275,6 +339,18 @@ impl EthHandler {
             Some(b.errors[idx].clone())
         };
 
+        let effective_gas_price =
+            if let Some(base_price) = b.pivot_header.base_price() {
+                let base_price = base_price[tx.space()];
+                if *tx.gas_price() < base_price {
+                    *tx.gas_price()
+                } else {
+                    tx.effective_gas_price(&base_price)
+                }
+            } else {
+                *tx.gas_price()
+            };
+
         Ok(Receipt {
             transaction_hash,
             transaction_index,
@@ -284,7 +360,7 @@ impl EthHandler {
                 Action::Create => None,
                 Action::Call(addr) => Some(*addr),
             },
-            block_number,
+            block_number: block_height,
             cumulative_gas_used: receipt.accumulated_gas_used,
             gas_used,
             contract_address,
@@ -294,8 +370,13 @@ impl EthHandler {
                 .outcome_status
                 .in_space(Space::Ethereum)
                 .into(),
-            effective_gas_price: *tx.gas_price(),
+            effective_gas_price,
             tx_exec_error_msg,
+            transaction_type: receipt
+                .burnt_gas_fee
+                .is_some()
+                .then_some(U64::from(tx.type_id())),
+            burnt_gas_fee: receipt.burnt_gas_fee,
         })
     }
 
@@ -377,6 +458,12 @@ impl Eth for EthHandler {
 
     fn gas_price(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_gasPrice");
+        let (_, maybe_base_price) =
+            self.tx_pool.get_best_info_with_parent_base_price();
+        if let Some(base_price) = maybe_base_price {
+            return Ok(base_price[Space::Ethereum]);
+        }
+
         let consensus_gas_price = self
             .consensus_graph()
             .gas_price(Space::Ethereum)
@@ -389,8 +476,23 @@ impl Eth for EthHandler {
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_maxPriorityFeePerGas");
-        // TODO: Change this
-        Ok(U256::from(20000000000u64))
+        let evm_ratio =
+            self.tx_pool.machine().params().evm_transaction_block_ratio
+                as usize;
+
+        let fee_history = self.fee_history(
+            HexU64::from(300),
+            BlockNumber::Latest,
+            vec![50f64],
+        )?;
+
+        let total_reward: U256 = fee_history
+            .reward()
+            .iter()
+            .map(|x| x.first().unwrap())
+            .fold(U256::zero(), |x, y| x + *y);
+
+        Ok(total_reward * evm_ratio / 300)
     }
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
@@ -662,8 +764,10 @@ impl Eth for EthHandler {
             "RPC Request: eth_sendRawTransaction / eth_submitTransaction raw={:?}",
             raw,
         );
-        let tx: TransactionWithSignature =
-            invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+        let tx: TransactionWithSignature = invalid_params_check(
+            "raw",
+            TransactionWithSignature::from_raw(&raw.into_vec()),
+        )?;
 
         if tx.space() != Space::Ethereum {
             bail!(invalid_params("tx", "Incorrect transaction space"));
@@ -708,6 +812,12 @@ impl Eth for EthHandler {
             ) => bail!(call_execution_error(
                 "Transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
@@ -759,6 +869,12 @@ impl Eth for EthHandler {
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
             )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Can not estimate: transaction can not be executed".into(),
@@ -792,6 +908,87 @@ impl Eth for EthHandler {
         };
 
         Ok(estimation.estimated_gas_limit)
+    }
+
+    fn fee_history(
+        &self, block_count: HexU64, newest_block: BlockNumber,
+        reward_percentiles: Vec<f64>,
+    ) -> jsonrpc_core::Result<FeeHistory> {
+        info!(
+            "RPC Request: eth_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
+            block_count, newest_block, reward_percentiles
+        );
+
+        if block_count.as_u64() == 0 {
+            return Ok(FeeHistory::new());
+        }
+
+        // keep read lock to ensure consistent view
+        let _consensus = self.consensus_graph().inner.read();
+
+        let fetch_block = |height| {
+            let maybe_block = self
+                .consensus_graph()
+                .get_phantom_block_pivot_by_number(
+                    EpochNumber::Number(height),
+                    None,
+                    false,
+                )
+                .map_err(RpcError::invalid_params)?;
+            if let Some(block) = maybe_block {
+                // Internal error happens only if the fetch header has
+                // inconsistent block height
+                Ok(block)
+            } else {
+                Err(RpcError::invalid_params(
+                    "Specified block header does not exist",
+                ))
+            }
+        };
+
+        let start_height: u64 = self
+            .consensus_graph()
+            .get_height_from_epoch_number(newest_block.try_into()?)
+            .map_err(RpcError::invalid_params)?;
+
+        let mut current_height = start_height;
+
+        let mut fee_history = FeeHistory::new();
+        while current_height
+            >= start_height.saturating_sub(block_count.as_u64() - 1)
+        {
+            let block = fetch_block(current_height)?;
+
+            // Internal error happens only if the fetch header has inconsistent
+            // block height
+            fee_history
+                .push_front_block(
+                    Space::Ethereum,
+                    &reward_percentiles,
+                    &block.pivot_header,
+                    block.transactions.iter().map(|x| &**x),
+                )
+                .map_err(|_| RpcError::internal_error())?;
+
+            if current_height == 0 {
+                break;
+            } else {
+                current_height -= 1;
+            }
+        }
+
+        let block = fetch_block(start_height + 1)?;
+        let oldest_block = if current_height == 0 {
+            0
+        } else {
+            current_height + 1
+        };
+        fee_history.finish(
+            oldest_block,
+            block.pivot_header.base_price().as_ref(),
+            Space::Ethereum,
+        );
+        Ok(fee_history)
     }
 
     fn transaction_by_hash(

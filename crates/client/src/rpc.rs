@@ -36,7 +36,8 @@ mod traits;
 pub mod types;
 
 pub use cfxcore::rpc_errors::{
-    BoxFuture as RpcBoxFuture, Error as RpcError, ErrorKind as RpcErrorKind,
+    invalid_params, invalid_params_check, BoxFuture as RpcBoxFuture,
+    Error as RpcError, ErrorKind as RpcErrorKind,
     ErrorKind::JsonRpcError as JsonRpcErrorKind, Result as RpcResult,
 };
 
@@ -77,11 +78,14 @@ use crate::{
     rpc::{
         error_codes::request_rejected_too_many_request_error,
         impls::{
-            eth::EthHandler, eth_filter::EthFilterClient,
-            trace::EthTraceHandler, RpcImplConfiguration,
+            eth::{EthHandler, GethDebugHandler},
+            eth_filter::EthFilterClient,
+            trace::EthTraceHandler,
+            RpcImplConfiguration,
         },
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
+        traits::eth_space::debug::Debug,
     },
 };
 use futures01::lazy;
@@ -344,6 +348,11 @@ fn setup_rpc_apis(
                     throttling_section,
                 );
             }
+            Api::EthDebug => {
+                info!("Add geth debug method");
+                let geth_debug = GethDebugHandler::new(rpc.consensus.clone());
+                handler.extend_with(geth_debug.to_delegate());
+            }
             Api::Test => {
                 handler.extend_with(
                     TestRpcImpl::new(common.clone(), rpc.clone()).to_delegate(),
@@ -491,6 +500,9 @@ fn setup_rpc_apis_light(
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
             Api::Eth => {
+                warn!("Light nodes do not support evm ports.");
+            }
+            Api::EthDebug => {
                 warn!("Light nodes do not support evm ports.");
             }
             Api::Debug => {

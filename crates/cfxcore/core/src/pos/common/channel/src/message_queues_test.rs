@@ -17,6 +17,7 @@ struct ProposalMsg {
 
 /// This represents a vote message from a validator
 #[derive(Debug, PartialEq)]
+#[allow(dead_code)]
 struct VoteMsg {
     msg: String,
 }

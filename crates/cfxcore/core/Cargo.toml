@@ -3,8 +3,8 @@ description = "Conflux core library"
 homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = "2.3.5"
-edition = "2018"
+version = "2.4.0"
+edition = "2021"
 
 [dependencies]
 bit-set = "0.4"
@@ -137,6 +137,8 @@ impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
 treap-map = {path = "../../util/treap-map" }
 cfx-packing-pool = { path = "../packing-pool" }
+alloy-rpc-types-trace = { workspace = true }
+geth-tracer = { path = "../geth-tracer" }
 
 
 [dev-dependencies]

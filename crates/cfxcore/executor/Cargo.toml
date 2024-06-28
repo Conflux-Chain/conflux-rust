@@ -4,7 +4,7 @@ homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfx-executor"
 version = "2.0.2"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
@@ -47,7 +47,11 @@ diem-types = { path = "../core/src/pos/types" }
 pow-types = {path = "../core/src/pos/types/pow-types" }
 impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
-typemap = "0.3"
+typemap = { package = "typemap-ors", version = "1.0"}
+hex-literal = "0.4.1"
+derive_more = "0.99"
+c-kzg = { version = "1.0.2", default-features = false}
+once_cell = "1.19"
 
 [dev-dependencies]
 cfx-statedb = { path = "../../dbs/statedb", features = ["testonly_code"]}

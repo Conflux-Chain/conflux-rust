@@ -21,6 +21,7 @@
 use cfx_types::{Space, U256};
 use cfx_vm_types::{self as vm, Spec};
 use std::cmp;
+use vm::BlockHashSource;
 
 use super::{
     instructions::{self, Instruction, InstructionInfo},
@@ -206,6 +207,19 @@ impl<Gas: CostType> Gasometer<Gas> {
                 mem_needed(stack.peek(0), stack.peek(2))?,
                 Gas::from_u256(*stack.peek(2))?,
             ),
+            instructions::JUMPSUB_MCOPY if spec.cancun_opcodes => {
+                Request::GasMemCopy(
+                    default_gas,
+                    mem_needed(stack.peek(0), stack.peek(2))?,
+                    Gas::from_u256(*stack.peek(2))?,
+                )
+            }
+            instructions::BEGINSUB_TLOAD if spec.cancun_opcodes => {
+                Request::Gas(Gas::from(spec.tload_gas))
+            }
+            instructions::RETURNSUB_TSTORE if spec.cancun_opcodes => {
+                Request::Gas(Gas::from(spec.tstore_gas))
+            }
             instructions::EXTCODECOPY => Request::GasMemCopy(
                 spec.extcodecopy_base_gas.into(),
                 mem_needed(stack.peek(1), stack.peek(3))?,
@@ -298,7 +312,11 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::Gas(gas)
             }
             instructions::BLOCKHASH => {
-                Request::Gas(Gas::from(spec.blockhash_gas))
+                let gas = match context.blockhash_source() {
+                    BlockHashSource::Env => spec.blockhash_gas,
+                    BlockHashSource::State => spec.sload_gas,
+                };
+                Request::Gas(Gas::from(gas))
             }
             _ => Request::Gas(default_gas),
         };

@@ -32,7 +32,7 @@ mod version;
 pub use self::{
     bytes::Bytes,
     cipher::{Aes128Ctr, Cipher, CipherSer, CipherSerParams},
-    crypto::{CipherText, Crypto},
+    crypto::Crypto,
     error::Error,
     hash::{H128, H160, H256},
     id::Uuid,

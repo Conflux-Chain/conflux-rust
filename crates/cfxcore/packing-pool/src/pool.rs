@@ -12,6 +12,7 @@ use super::{
 };
 use cfx_types::U256;
 use malloc_size_of::MallocSizeOf;
+use primitives::block_header::{compute_next_price, estimate_max_possible_gas};
 use rand::RngCore;
 use treap_map::{
     ApplyOpOutcome, ConsoliableWeight, Node, SearchDirection, SearchResult,
@@ -181,6 +182,56 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         }
     }
 
+    pub fn estimate_packing_gas_limit(
+        &self, gas_target: U256, parent_base_price: U256, min_base_price: U256,
+    ) -> U256 {
+        let ret = self.treap_map.search(|left_weight, node| {
+            let can_sample = |weight| {
+                can_sample_within_1559(
+                    weight,
+                    gas_target,
+                    parent_base_price,
+                    min_base_price,
+                )
+            };
+
+            if !can_sample(&left_weight) {
+                return SearchDirection::Left;
+            }
+            let right_weight =
+                PackingPoolWeight::consolidate(left_weight, &node.weight);
+            if !can_sample(&right_weight) {
+                return SearchDirection::Stop;
+            } else {
+                return SearchDirection::Right(right_weight);
+            }
+        });
+        match ret {
+            Some(
+                SearchResult::Found { base_weight, .. }
+                | SearchResult::RightMost(base_weight),
+            ) => {
+                let gas_limit = estimate_max_possible_gas(
+                    gas_target,
+                    base_weight.min_gas_price,
+                    parent_base_price,
+                );
+                if cfg!(test) {
+                    // Guarantee the searched result can be packed
+                    let next_price = compute_next_price(
+                        gas_target,
+                        gas_limit,
+                        parent_base_price,
+                        min_base_price,
+                    );
+                    assert!(base_weight.min_gas_price >= next_price);
+                }
+                gas_limit
+            }
+            _ => U256::zero(),
+        }
+    }
+
     #[cfg(test)]
     fn assert_consistency(&self) {
         self.treap_map.assert_consistency();
@@ -243,6 +294,34 @@ fn can_sample(weight: &PackingPoolWeight, gas_limit: U256) -> bool {
         < weight.weighted_loss_ratio
 }
 
+fn can_sample_within_1559(
+    weight: &PackingPoolWeight, gas_target: U256, parent_base_price: U256,
+    min_base_price: U256,
+) -> bool {
+    if weight.min_gas_price < min_base_price {
+        return false;
+    }
+
+    let max_target_gas_used = estimate_max_possible_gas(
+        gas_target,
+        weight.min_gas_price,
+        parent_base_price,
+    );
+
+    if max_target_gas_used.is_zero() {
+        return false;
+    }
+
+    if weight.gas_limit <= max_target_gas_used {
+        return true;
+    }
+
+    weight
+        .max_loss_ratio
+        .saturating_mul(weight.gas_limit - max_target_gas_used)
+        < weight.weighted_loss_ratio
+}
+
 impl<TX> MallocSizeOf for PackingPool<TX>
 where
     TX: PackingPoolTransaction + MallocSizeOf,
@@ -291,6 +370,25 @@ mod pool_tests {
             gas_limit: i,
             id: ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         }
+    }
+
+    #[allow(dead_code)]
+    fn same_price_txs() -> PackingPool<MockTransaction> {
+        let config = PackingPoolConfig::new_for_test();
+        let mut pool = PackingPool::new(config);
+
+        static ID: AtomicUsize = AtomicUsize::new(0);
+        for i in 1000..2000 {
+            let (_, res) = pool.insert(MockTransaction {
+                sender: i,
+                nonce: 0,
+                gas_price: 20,
+                gas_limit: 1,
+                id: ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            });
+            res.unwrap();
+        }
+        pool
     }
 
     #[test]

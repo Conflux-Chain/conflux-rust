@@ -6,8 +6,12 @@
 use crate::{
     executive::contract_address,
     executive_observer::TracerTrait,
-    internal_contract::{suicide as suicide_impl, InternalRefContext},
+    internal_contract::{
+        block_hash_slot, epoch_hash_slot, suicide as suicide_impl,
+        InternalRefContext,
+    },
     machine::Machine,
+    return_if,
     stack::{CallStackInfo, FrameLocal, RuntimeRes},
     state::State,
     substate::Substate,
@@ -17,7 +21,8 @@ use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H256,
+    U256,
 };
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, Context as ContextTrait,
@@ -26,6 +31,7 @@ use cfx_vm_types::{
 };
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
+use vm::BlockHashSource;
 
 /// Transaction properties that externalities need to know about.
 #[derive(Debug)]
@@ -106,6 +112,51 @@ impl<'a> Context<'a> {
             tracer,
         }
     }
+
+    fn blockhash_from_env(&self, number: &U256) -> H256 {
+        if self.space == Space::Ethereum && self.spec.cip98 {
+            return if U256::from(self.env().epoch_height) == number + 1 {
+                self.env().last_hash.clone()
+            } else {
+                H256::default()
+            };
+        }
+
+        // In Conflux, we only maintain the block hash of the previous block.
+        // For other block numbers, it always returns zero.
+        if U256::from(self.env().number) == number + 1 {
+            self.env().last_hash.clone()
+        } else {
+            H256::default()
+        }
+    }
+
+    fn blockhash_from_state(&self, number: &U256) -> vm::Result<H256> {
+        return_if!(number > &U256::from(u64::MAX));
+
+        let number = number.as_u64();
+
+        let state_res = match self.space {
+            Space::Native => {
+                return_if!(number < self.spec.cip133_b);
+                return_if!(number > self.env.number);
+                return_if!(number
+                    .checked_add(65536)
+                    .map_or(false, |n| n <= self.env.number));
+                self.state.get_system_storage(&block_hash_slot(number))?
+            }
+            Space::Ethereum => {
+                return_if!(number < self.spec.cip133_e);
+                return_if!(number > self.env.epoch_height);
+                return_if!(number
+                    .checked_add(65536)
+                    .map_or(false, |n| n <= self.env.epoch_height));
+                self.state.get_system_storage(&epoch_hash_slot(number))?
+            }
+        };
+
+        Ok(BigEndianHash::from_uint(&state_res))
+    }
 }
 
 impl<'a> ContextTrait for Context<'a> {
@@ -133,6 +184,32 @@ impl<'a> ContextTrait for Context<'a> {
                     self.origin.storage_owner,
                     &mut self.substate,
                 )
+                .map_err(Into::into)
+        }
+    }
+
+    fn transient_storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        self.state
+            .transient_storage_at(&receiver, key)
+            .map_err(Into::into)
+    }
+
+    fn transient_set_storage(
+        &mut self, key: Vec<u8>, value: U256,
+    ) -> vm::Result<()> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        if self.is_static_or_reentrancy() {
+            Err(vm::Error::MutableCallInStaticContext)
+        } else {
+            self.state
+                .transient_set_storage(&receiver, key, value)
                 .map_err(Into::into)
         }
     }
@@ -165,21 +242,10 @@ impl<'a> ContextTrait for Context<'a> {
         self.state.balance(&address).map_err(Into::into)
     }
 
-    fn blockhash(&mut self, number: &U256) -> H256 {
-        if self.space == Space::Ethereum && self.spec.cip98 {
-            return if U256::from(self.env().epoch_height) == number + 1 {
-                self.env().last_hash.clone()
-            } else {
-                H256::default()
-            };
-        }
-
-        // In Conflux, we only maintain the block hash of the previous block.
-        // For other block numbers, it always returns zero.
-        if U256::from(self.env().number) == number + 1 {
-            self.env().last_hash.clone()
-        } else {
-            H256::default()
+    fn blockhash(&mut self, number: &U256) -> vm::Result<H256> {
+        match self.blockhash_source() {
+            BlockHashSource::Env => Ok(self.blockhash_from_env(number)),
+            BlockHashSource::State => self.blockhash_from_state(number),
         }
     }
 
@@ -344,6 +410,8 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
+        self.tracer.log(&self.origin.address, &topics, data);
+
         let address = self.origin.address.clone();
         self.substate.logs.push(LogEntry {
             address,
@@ -406,8 +474,15 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
+        let contract_address = self.origin.address;
+        let contract_address_with_space =
+            self.origin.address.with_space(self.space);
+        let balance = self.state.balance(&contract_address_with_space)?;
+        self.tracer
+            .selfdestruct(&contract_address, refund_address, balance);
+
         suicide_impl(
-            &self.origin.address.with_space(self.space),
+            &contract_address_with_space,
             &refund_address.with_space(self.space),
             self.state,
             &self.spec,
@@ -447,6 +522,14 @@ impl<'a> ContextTrait for Context<'a> {
     //     // TODO
     // }
 
+    fn trace_step(&mut self, interpreter: &dyn vm::InterpreterInfo) {
+        self.tracer.step(interpreter);
+    }
+
+    fn trace_step_end(&mut self, interpreter: &dyn vm::InterpreterInfo) {
+        self.tracer.step_end(interpreter);
+    }
+
     fn opcode_trace_enabled(&self) -> bool {
         let mut enabled = false;
         self.tracer.do_trace_opcode(&mut enabled);
@@ -457,6 +540,18 @@ impl<'a> ContextTrait for Context<'a> {
 
     fn is_static_or_reentrancy(&self) -> bool {
         self.static_flag || self.callstack.in_reentrancy(self.spec)
+    }
+
+    fn blockhash_source(&self) -> vm::BlockHashSource {
+        let from_state = match self.space {
+            Space::Native => self.env.number >= self.spec.cip133_b,
+            Space::Ethereum => self.env.epoch_height >= self.spec.cip133_e,
+        };
+        if from_state {
+            BlockHashSource::State
+        } else {
+            BlockHashSource::Env
+        }
     }
 }
 
@@ -533,6 +628,8 @@ mod tests {
             pos_view: None,
             finalized_epoch: None,
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
+            base_gas_price: Default::default(),
+            burnt_gas_price: Default::default(),
         }
     }
 
@@ -558,7 +655,7 @@ mod tests {
                 Default::default(),
             );
             let env = get_test_env();
-            let spec = machine.spec(env.number);
+            let spec = machine.spec_for_test(env.number);
             let callstack = CallStackInfo::new();
 
             let mut setup = Self {
@@ -632,7 +729,7 @@ mod tests {
             &"0000000000000000000000000000000000000000000000000000000000120000"
                 .parse::<U256>()
                 .unwrap(),
-        );
+        ).unwrap();
 
         assert_eq!(hash, H256::zero());
     }

@@ -8,7 +8,7 @@ extern crate log;
 mod evm;
 #[macro_use]
 pub mod factory;
-mod instructions;
+pub mod instructions;
 mod interpreter;
 mod vmtype;
 #[macro_use]
@@ -20,6 +20,6 @@ mod tests;
 pub use self::{
     evm::{CostType, FinalizationResult, Finalize},
     factory::Factory,
-    instructions::GasPriceTier,
+    instructions::{GasPriceTier, INSTRUCTIONS, INSTRUCTIONS_CANCUN},
     vmtype::VMType,
 };

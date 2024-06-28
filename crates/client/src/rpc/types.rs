@@ -3,15 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 mod account;
-pub mod address;
 mod blame_info;
 mod block;
 mod bytes;
-pub mod call_request;
+pub mod cfx;
 mod consensus_graph_states;
 mod epoch_number;
 pub mod errors;
 pub mod eth;
+mod fee_history;
 mod filter;
 mod index;
 mod log;
@@ -31,20 +31,28 @@ mod trace;
 mod trace_filter;
 mod transaction;
 mod tx_pool;
+mod variadic_u64;
 mod vote_params_info;
 
 pub use self::{
     account::Account,
-    address::RpcAddress,
     blame_info::BlameInfo,
     block::{Block, BlockTransactions, Header},
     bytes::Bytes,
-    call_request::{
-        sign_call, CallRequest, CheckBalanceAgainstTransactionResponse,
-        EstimateGasAndCollateralResponse, SendTxRequest, MAX_GAS_CALL_REQUEST,
+    cfx::{
+        address,
+        address::RpcAddress,
+        call_request::{
+            self, sign_call, CallRequest,
+            CheckBalanceAgainstTransactionResponse,
+            EstimateGasAndCollateralResponse, SendTxRequest,
+            MAX_GAS_CALL_REQUEST,
+        },
+        CfxFeeHistory,
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
+    fee_history::FeeHistory,
     filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
     index::Index,
     log::Log,
@@ -68,5 +76,6 @@ pub use self::{
         AccountPendingInfo, AccountPendingTransactions,
         TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
     },
+    variadic_u64::U64,
     vote_params_info::VoteParamsInfo,
 };

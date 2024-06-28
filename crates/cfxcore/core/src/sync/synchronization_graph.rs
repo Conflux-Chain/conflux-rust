@@ -14,6 +14,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use cfx_parameters::consensus_internal::ELASTICITY_MULTIPLIER;
 use futures::executor::block_on;
 use parking_lot::RwLock;
 use slab::Slab;
@@ -572,7 +573,7 @@ impl SynchronizationGraphInner {
             minimal_status,
         ) {
             debug!(
-                "Block {:?} not not ready for its pos_reference: {:?}",
+                "Block {:?} not ready for its pos_reference: {:?}",
                 self.arena[index].block_header.hash(),
                 self.pos_verifier.get_pivot_decision(
                     self.arena[index]
@@ -756,6 +757,13 @@ impl SynchronizationGraphInner {
             )));
         }
 
+        let parent_gas_limit = parent_gas_limit
+            * if epoch == self.machine.params().transition_heights.cip1559 {
+                ELASTICITY_MULTIPLIER
+            } else {
+                1
+            };
+
         // Verify the gas limit is respected
         let self_gas_limit = *self.arena[index].block_header.gas_limit();
         let gas_limit_divisor = self.machine.params().gas_limit_bound_divisor;
@@ -849,6 +857,21 @@ impl SynchronizationGraphInner {
         }
 
         Ok(())
+    }
+
+    fn verify_graph_ready_block(
+        &self, index: usize, verification_config: &VerificationConfig,
+    ) -> Result<(), Error> {
+        let block_header = &self.arena[index].block_header;
+        let parent = self
+            .data_man
+            .block_header_by_hash(block_header.parent_hash())
+            .expect("headers will not be deleted");
+        let block = self
+            .data_man
+            .block_by_hash(&block_header.hash(), true)
+            .expect("received");
+        verification_config.verify_sync_graph_ready_block(&block, &parent)
     }
 
     fn process_invalid_blocks(&mut self, invalid_set: &HashSet<usize>) {
@@ -1697,6 +1720,23 @@ impl SynchronizationGraph {
                     index,
                 );
             } else if inner.new_to_be_block_graph_ready(index) {
+                let verify_result = inner
+                    .verify_graph_ready_block(index, &self.verification_config);
+                if verify_result.is_err() {
+                    warn!(
+                        "Invalid block! inserted_header={:?} err={:?}",
+                        inner.arena[index].block_header.clone(),
+                        verify_result
+                    );
+                    invalid_set.insert(index);
+                    inner.arena[index].graph_status = BLOCK_INVALID;
+                    inner.set_and_propagate_invalid(
+                        &mut queue,
+                        &mut invalid_set,
+                        index,
+                    );
+                    continue;
+                }
                 self.set_graph_ready(inner, index);
                 for child in &inner.arena[index].children {
                     debug_assert!(
@@ -1764,7 +1804,7 @@ impl SynchronizationGraph {
                     ErrorKind::Block(BlockError::InvalidTransactionsRoot(e)),
                     _,
                 )) => {
-                    warn ! ("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
+                    warn!("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
                     // If the transaction root does not match, it might be
                     // caused by receiving wrong
                     // transactions because of conflicting ShortId in
@@ -2092,7 +2132,7 @@ pub enum BlockInsertionResult {
     // We should request again to get
     // the correct transactions for full verification.
     RequestAgain,
-    // This is only for the case the the header is removed, possibly because
+    // This is only for the case the header is removed, possibly because
     // we switch phases.
     // We ignore the block without verification.
     Ignored,

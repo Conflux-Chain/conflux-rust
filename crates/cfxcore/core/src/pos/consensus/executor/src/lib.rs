@@ -40,7 +40,7 @@ use diem_types::{
     ledger_info::LedgerInfoWithSignatures,
     on_chain_config,
     proof::accumulator::InMemoryAccumulator,
-    reward_distribution_event::{RewardDistributionEvent, VoteCount},
+    reward_distribution_event::{RewardDistributionEventV2, VoteCount},
     term_state::{
         ElectionEvent, PosState, RegisterEvent, RetireEvent,
         UpdateVotingPowerEvent,
@@ -1252,12 +1252,13 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 }
             }
 
-            let reward_event = RewardDistributionEvent {
+            let reward_event = RewardDistributionEventV2 {
                 candidates: pos_state_to_commit.next_evicted_term(),
                 elected: elected
                     .into_iter()
                     .map(|(k, v)| (H256::from_slice(k.as_ref()), v))
                     .collect(),
+                view: pos_state_to_commit.current_view(),
             };
             self.db_with_cache.db.writer.save_reward_event(
                 ledger_info_with_sigs.ledger_info().epoch(),

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::message::Bytes;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, SpaceMap, H256, U256};
 use primitives::{filter::FilterError, transaction::TransactionError};
 use std::{error, fmt, time::SystemTime};
 use unexpected::{Mismatch, OutOfBounds};
@@ -34,9 +34,10 @@ pub enum BlockError {
     /// Gas limit header field is invalid.
     InvalidGasLimit(OutOfBounds<U256>),
     /// Total gas limits of transactions in block is out of bound.
-    InvalidBlockGasLimit(OutOfBounds<U256>),
+    InvalidPackedGasLimit(OutOfBounds<U256>),
     /// Total rlp sizes of transactions in block is out of bound.
     InvalidBlockSize(OutOfBounds<u64>),
+    InvalidBasePrice(Mismatch<SpaceMap<U256>>),
     /// Timestamp header field is invalid.
     InvalidTimestamp(OutOfBounds<SystemTime>),
     /// Timestamp header field is too far in future.
@@ -57,6 +58,10 @@ pub enum BlockError {
     MissingPosReference,
     /// Should not have a PoS reference but it's set.
     UnexpectedPosReference,
+    /// Should have a base fee but it's not set.
+    MissingBaseFee,
+    /// Should not have a base fee but it's set.
+    UnexpectedBaseFee,
     /// The PoS reference violates the validity rule (it should extend the PoS
     /// reference of the parent and referees).
     InvalidPosReference,
@@ -90,8 +95,11 @@ impl fmt::Display for BlockError {
                 format!("Block has invalid PoW: {}", oob)
             }
             InvalidGasLimit(ref oob) => format!("Invalid gas limit: {}", oob),
-            InvalidBlockGasLimit(ref oob) => {
-                format!("Invalid block gas limit: {}", oob)
+            InvalidBasePrice(ref mis) => {
+                format!("Invalid base price: {:?}", mis)
+            }
+            InvalidPackedGasLimit(ref oob) => {
+                format!("Invalid packed gas limit: {}", oob)
             }
             InvalidBlockSize(ref oob) => format!("Invalid block size: {}", oob),
             InvalidTimestamp(ref oob) => {
@@ -123,6 +131,8 @@ impl fmt::Display for BlockError {
             }
             MissingPosReference => "Missing PoS reference".into(),
             UnexpectedPosReference => "Should not have PoS reference".into(),
+            MissingBaseFee => "Missing base fee".into(),
+            UnexpectedBaseFee => "Should not have base fee".into(),
             InvalidPosReference => "The PoS reference is invalid".into(),
         };
 

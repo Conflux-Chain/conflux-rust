@@ -11,18 +11,22 @@ use crate::{
 use cfx_executor::{
     executive::gas_required_for, machine::Machine, spec::TransitionsEpochHeight,
 };
-use cfx_parameters::block::*;
+use cfx_parameters::{block::*, consensus_internal::ELASTICITY_MULTIPLIER};
 use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
 };
 use cfx_types::{
-    address_util::AddressUtil, AllChainID, BigEndianHash, Space, H256, U256,
+    address_util::AddressUtil, AllChainID, BigEndianHash, Space, SpaceMap,
+    H256, U256,
 };
 use cfx_vm_types::Spec;
 use primitives::{
     block::BlockHeight,
-    transaction::{NativeTransaction, TransactionError},
+    block_header::compute_next_price_tuple,
+    transaction::{
+        native_transaction::TypedNativeTransaction, TransactionError,
+    },
     Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
     SignedTransaction, Transaction, TransactionWithSignature,
 };
@@ -364,6 +368,16 @@ impl VerificationConfig {
             }
         }
 
+        if header.height() >= self.machine.params().transition_heights.cip1559 {
+            if header.base_price().is_none() {
+                bail!(BlockError::MissingBaseFee);
+            }
+        } else {
+            if header.base_price().is_some() {
+                bail!(BlockError::UnexpectedBaseFee);
+            }
+        }
+
         // Note that this is just used to rule out deprecated blocks, so the
         // change of header struct actually happens before the change of
         // reward is reflected in the state root. The first state root
@@ -454,19 +468,11 @@ impl VerificationConfig {
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
-        let mut block_size = 0;
-        let mut block_total_gas = U256::zero();
-
         let block_height = block.block_header.height();
-        let evm_space_gas_limit =
-            if self.machine.params().can_pack_evm_transaction(block_height) {
-                *block.block_header.gas_limit()
-                    / self.machine.params().evm_transaction_gas_ratio
-            } else {
-                U256::zero()
-            };
-        let mut evm_total_gas = U256::zero();
+
+        let mut block_size = 0;
         let transitions = &self.machine.params().transition_heights;
+
         for t in &block.transactions {
             self.verify_transaction_common(
                 t,
@@ -476,10 +482,6 @@ impl VerificationConfig {
                 VerifyTxMode::Remote,
             )?;
             block_size += t.rlp_size();
-            block_total_gas += *t.gas_limit();
-            if t.space() == Space::Ethereum {
-                evm_total_gas += *t.gas_limit();
-            }
         }
 
         if block_size > self.max_block_size_in_bytes {
@@ -491,11 +493,47 @@ impl VerificationConfig {
                 },
             )));
         }
+        Ok(())
+    }
+
+    pub fn verify_sync_graph_ready_block(
+        &self, block: &Block, parent: &BlockHeader,
+    ) -> Result<(), Error> {
+        let mut total_gas: SpaceMap<U256> = SpaceMap::default();
+        for t in &block.transactions {
+            total_gas[t.space()] += *t.gas_limit();
+        }
+
+        if block.block_header.height()
+            >= self.machine.params().transition_heights.cip1559
+        {
+            self.check_base_fee(block, parent, total_gas)?;
+        } else {
+            self.check_hard_gas_limit(block, total_gas)?;
+        }
+        Ok(())
+    }
+
+    fn check_hard_gas_limit(
+        &self, block: &Block, total_gas: SpaceMap<U256>,
+    ) -> Result<(), Error> {
+        let block_height = block.block_header.height();
+
+        let evm_space_gas_limit =
+            if self.machine.params().can_pack_evm_transaction(block_height) {
+                *block.block_header.gas_limit()
+                    / self.machine.params().evm_transaction_gas_ratio
+            } else {
+                U256::zero()
+            };
+
+        let evm_total_gas = total_gas[Space::Ethereum];
+        let block_total_gas = total_gas.map_sum(|x| *x);
 
         if evm_total_gas > evm_space_gas_limit {
-            return Err(From::from(BlockError::InvalidBlockGasLimit(
+            return Err(From::from(BlockError::InvalidPackedGasLimit(
                 OutOfBounds {
-                    min: Some(evm_space_gas_limit),
+                    min: None,
                     max: Some(evm_space_gas_limit),
                     found: evm_total_gas,
                 },
@@ -503,9 +541,9 @@ impl VerificationConfig {
         }
 
         if block_total_gas > *block.block_header.gas_limit() {
-            return Err(From::from(BlockError::InvalidBlockGasLimit(
+            return Err(From::from(BlockError::InvalidPackedGasLimit(
                 OutOfBounds {
-                    min: Some(*block.block_header.gas_limit()),
+                    min: None,
                     max: Some(*block.block_header.gas_limit()),
                     found: block_total_gas,
                 },
@@ -515,13 +553,84 @@ impl VerificationConfig {
         Ok(())
     }
 
+    fn check_base_fee(
+        &self, block: &Block, parent: &BlockHeader, total_gas: SpaceMap<U256>,
+    ) -> Result<(), Error> {
+        use Space::*;
+
+        let params = self.machine.params();
+        let cip1559_init = params.transition_heights.cip1559;
+        let block_height = block.block_header.height();
+
+        assert!(block_height >= cip1559_init);
+
+        let core_gas_limit = block.block_header.gas_limit() * 9 / 10;
+        let espace_gas_limit =
+            if self.machine.params().can_pack_evm_transaction(block_height) {
+                block.block_header.gas_limit() * 5 / 10
+            } else {
+                U256::zero()
+            };
+
+        if total_gas[Ethereum] > espace_gas_limit {
+            return Err(From::from(BlockError::InvalidPackedGasLimit(
+                OutOfBounds {
+                    min: None,
+                    max: Some(espace_gas_limit),
+                    found: total_gas[Ethereum],
+                },
+            )));
+        }
+
+        if total_gas[Native] > core_gas_limit {
+            return Err(From::from(BlockError::InvalidPackedGasLimit(
+                OutOfBounds {
+                    min: None,
+                    max: Some(core_gas_limit),
+                    found: total_gas[Native],
+                },
+            )));
+        }
+
+        let parent_base_price = if block_height == cip1559_init {
+            params.init_base_price()
+        } else {
+            parent.base_price().unwrap()
+        };
+
+        let gas_limit = SpaceMap::new(core_gas_limit, espace_gas_limit);
+        let gas_target = gas_limit.map_all(|x| x / ELASTICITY_MULTIPLIER);
+        let min_base_price = params.min_base_price();
+
+        let expected_base_price = SpaceMap::zip4(
+            gas_target,
+            total_gas,
+            parent_base_price,
+            min_base_price,
+        )
+        .map_all(compute_next_price_tuple);
+
+        let actual_base_price = block.block_header.base_price().unwrap();
+
+        if actual_base_price != expected_base_price {
+            return Err(From::from(BlockError::InvalidBasePrice(Mismatch {
+                expected: expected_base_price,
+                found: actual_base_price,
+            })));
+        }
+
+        Ok(())
+    }
+
     pub fn check_transaction_epoch_bound(
-        tx: &NativeTransaction, block_height: u64, transaction_epoch_bound: u64,
+        tx: &TypedNativeTransaction, block_height: u64,
+        transaction_epoch_bound: u64,
     ) -> i8 {
-        if tx.epoch_height.wrapping_add(transaction_epoch_bound) < block_height
+        if tx.epoch_height().wrapping_add(transaction_epoch_bound)
+            < block_height
         {
             -1
-        } else if tx.epoch_height > block_height + transaction_epoch_bound {
+        } else if *tx.epoch_height() > block_height + transaction_epoch_bound {
             1
         } else {
             0
@@ -529,7 +638,7 @@ impl VerificationConfig {
     }
 
     fn verify_transaction_epoch_height(
-        tx: &NativeTransaction, block_height: u64,
+        tx: &TypedNativeTransaction, block_height: u64,
         transaction_epoch_bound: u64, mode: &VerifyTxMode,
     ) -> Result<(), TransactionError> {
         let result = Self::check_transaction_epoch_bound(
@@ -543,7 +652,7 @@ impl VerificationConfig {
             Ok(())
         } else {
             bail!(TransactionError::EpochHeightOutOfBound {
-                set: tx.epoch_height,
+                set: *tx.epoch_height(),
                 block_height,
                 transaction_epoch_bound,
             });
@@ -564,10 +673,15 @@ impl VerificationConfig {
         transitions: &TransitionsEpochHeight, spec: &Spec,
     ) -> PackingCheckResult {
         let cip90a = height >= transitions.cip90a;
+        let cip1559 = height >= transitions.cip1559;
 
         let (can_pack, later_pack) =
-            if let Transaction::Native(ref tx) = tx.unsigned {
-                Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
+            Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
+                if !Self::check_eip1559_transaction(tx, cip1559, mode) {
+                    return false;
+                }
+
+                if let Transaction::Native(ref tx) = tx.unsigned {
                     Self::verify_transaction_epoch_height(
                         tx,
                         height,
@@ -575,12 +689,11 @@ impl VerificationConfig {
                         mode,
                     )
                     .is_ok()
-                })
-            } else {
-                Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
+                } else {
                     Self::check_eip155_transaction(tx, cip90a, mode)
-                })
-            };
+                }
+            });
+
         match (can_pack, later_pack) {
             (true, _) => PackingCheckResult::Pack,
             (false, true) => PackingCheckResult::Pending,
@@ -597,6 +710,7 @@ impl VerificationConfig {
         mode: VerifyTxMode,
     ) -> Result<(), TransactionError> {
         tx.check_low_s()?;
+        tx.check_y_parity()?;
 
         // Disallow unsigned transactions
         if tx.is_unsigned() {
@@ -644,6 +758,8 @@ impl VerificationConfig {
         // ******************************************
         let cip76 = height >= transitions.cip76;
         let cip90a = height >= transitions.cip90a;
+        let cip130 = height >= transitions.cip130;
+        let cip1559 = height >= transitions.cip1559;
 
         if let Transaction::Native(ref tx) = tx.unsigned {
             Self::verify_transaction_epoch_height(
@@ -655,10 +771,15 @@ impl VerificationConfig {
         }
 
         if !Self::check_eip155_transaction(tx, cip90a, &mode) {
-            bail!(TransactionError::InvalidEthereumLike);
+            bail!(TransactionError::FutureTransactionType);
+        }
+
+        if !Self::check_eip1559_transaction(tx, cip1559, &mode) {
+            bail!(TransactionError::FutureTransactionType)
         }
 
         Self::check_gas_limit(tx, cip76, &mode)?;
+        Self::check_gas_limit_with_calldata(tx, cip130)?;
         Ok(())
     }
 
@@ -674,6 +795,21 @@ impl VerificationConfig {
             VerifyTxMode::Local(Full, spec) => cip90a && spec.cip90,
             VerifyTxMode::Local(MaybeLater, _spec) => true,
             VerifyTxMode::Remote => cip90a,
+        }
+    }
+
+    fn check_eip1559_transaction(
+        tx: &TransactionWithSignature, cip1559: bool, mode: &VerifyTxMode,
+    ) -> bool {
+        if tx.is_legacy() {
+            return true;
+        }
+
+        use VerifyTxLocalMode::*;
+        match mode {
+            VerifyTxMode::Local(Full, _spec) => cip1559,
+            VerifyTxMode::Local(MaybeLater, _spec) => true,
+            VerifyTxMode::Remote => cip1559,
         }
     }
 
@@ -696,6 +832,7 @@ impl VerificationConfig {
             let tx_intrinsic_gas = gas_required_for(
                 *tx.action() == Action::Create,
                 &tx.data(),
+                tx.access_list(),
                 &spec,
             );
             if *tx.gas() < (tx_intrinsic_gas as usize).into() {
@@ -706,6 +843,23 @@ impl VerificationConfig {
             }
         }
 
+        Ok(())
+    }
+
+    fn check_gas_limit_with_calldata(
+        tx: &TransactionWithSignature, cip130: bool,
+    ) -> Result<(), TransactionError> {
+        if !cip130 {
+            return Ok(());
+        }
+        let data_length = tx.data().len();
+        let min_gas_limit = data_length.saturating_mul(100);
+        if tx.gas() < &U256::from(min_gas_limit) {
+            bail!(TransactionError::NotEnoughBaseGas {
+                required: min_gas_limit.into(),
+                got: *tx.gas()
+            });
+        }
         Ok(())
     }
 
@@ -731,24 +885,20 @@ pub enum PackingCheckResult {
 
 #[derive(Copy, Clone)]
 pub enum VerifyTxMode<'a> {
+    /// Check transactions in local mode, may have more constraints
     Local(VerifyTxLocalMode, &'a Spec),
-    /* Be strict with yourself: We
-     * apply more checks in packing
-     * transactions and local
-     * execution. */
+    /// Check transactions for received blocks in sync graph, may have less
+    /// constraints
     Remote,
-    /* Be lenient to others: We apply less
-     * check for transaction in sync graph. */
 }
 
 #[derive(Copy, Clone)]
 pub enum VerifyTxLocalMode {
+    /// Apply all checks
     Full,
-    // Apply all checks.
+    /// If a transaction is not valid now, but can become valid in the future,
+    /// the check sould pass
     MaybeLater,
-    /* When inserting transactions to tx pool, if its epoch
-     * height is too large, it can be accept even if it is not
-     * regarded as a valid transaction. */
 }
 
 impl<'a> VerifyTxMode<'a> {

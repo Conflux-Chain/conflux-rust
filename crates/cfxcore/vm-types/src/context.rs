@@ -26,7 +26,7 @@ use super::{
     error::{Result, TrapKind},
     return_data::ReturnData,
     spec::Spec,
-    Error,
+    Error, InterpreterInfo,
 };
 use cfx_bytes::Bytes;
 use cfx_db_errors::statedb::Result as DbResult;
@@ -77,6 +77,14 @@ pub enum CreateContractAddress {
     /// Address is calculated from sender, salt and code hash. Conflux and
     /// Ethereum `create2` scheme.
     FromSenderSaltAndCodeHash(H256),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub enum BlockHashSource {
+    /// Before CIP-133, block hash is read from `Env`, same as the Ethereum
+    Env,
+    /// After CIP-133, block hash is read from `State`
+    State,
 }
 
 /// Calculate new contract address.
@@ -155,6 +163,14 @@ pub trait Context {
     /// Stores a value for given key.
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()>;
 
+    /// Returns a value for given key.
+    fn transient_storage_at(&self, key: &Vec<u8>) -> Result<U256>;
+
+    /// Stores a value for given key.
+    fn transient_set_storage(
+        &mut self, key: Vec<u8>, value: U256,
+    ) -> Result<()>;
+
     /// Determine whether an account exists.
     fn exists(&self, address: &Address) -> Result<bool>;
 
@@ -169,7 +185,7 @@ pub trait Context {
     fn balance(&self, address: &Address) -> Result<U256>;
 
     /// Returns the hash of one of the 256 most recent complete blocks.
-    fn blockhash(&mut self, number: &U256) -> H256;
+    fn blockhash(&mut self, number: &U256) -> Result<H256>;
 
     /// Creates new contract.
     ///
@@ -253,13 +269,21 @@ pub trait Context {
     // ) {
     // }
 
-    fn opcode_trace_enabled(&self) -> bool { false }
+    fn trace_step(&mut self, interpreter: &dyn InterpreterInfo) {
+        let _ = interpreter;
+    }
 
-    // TODO[geth-tracer]: customize your tracer hook.
+    fn trace_step_end(&mut self, interpreter: &dyn InterpreterInfo) {
+        let _ = interpreter;
+    }
+
+    fn opcode_trace_enabled(&self) -> bool { false }
 
     /// Check if running in static context.
     fn is_static(&self) -> bool;
 
     /// Check if running in static context or reentrancy context
     fn is_static_or_reentrancy(&self) -> bool;
+
+    fn blockhash_source(&self) -> BlockHashSource;
 }

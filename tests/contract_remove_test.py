@@ -36,6 +36,9 @@ class ContractRemoveTest(ConfluxTestFrameworkForContract):
         self.conf_parameters["dev_snapshot_epoch_count"] = str(SNAPSHOT_EPOCH)
         self.conf_parameters["anticone_penalty_ratio"] = "10"
 
+        # Disable CIP-131 on test
+        self.conf_parameters["next_hardfork_transition_number"] = 9999999
+
     def run_test(self):
         accounts: List[Account] = self.initialize_accounts(2, value = 1000)
         self.genesis_addr3 = accounts[0].address

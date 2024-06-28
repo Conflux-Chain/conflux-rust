@@ -4,7 +4,7 @@ homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfx-internal-common"
 version = "1.0.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 cfx-bytes = { path = "../../cfx_bytes" }

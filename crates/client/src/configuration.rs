@@ -20,7 +20,7 @@ use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{Address, AllChainID, Space, H256, U256};
+use cfx_types::{Address, AllChainID, Space, SpaceMap, H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -161,10 +161,16 @@ build_config! {
         (cip112_transition_height, (Option<u64>), Some(79050000))
         (cip118_transition_number, (Option<u64>), Some(188900000))
         (cip119_transition_number, (Option<u64>), Some(188900000))
+        (next_hardfork_transition_number, (Option<u64>), Some(247480000))
+        (next_hardfork_transition_height, (Option<u64>), Some(101900000))
+        (cip1559_transition_height, (Option<u64>), None)
+        (cancun_opcodes_transition_number, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        (min_native_base_price, (Option<u64>), None)
+        (min_eth_base_price, (Option<u64>), None)
         // FIXME: this is part of spec.
         (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
 
@@ -349,6 +355,10 @@ build_config! {
         (pos_fix_cip99_in_queue_locked_views, (u64), 18720)
         (pos_fix_cip99_out_queue_locked_views, (u64), 1440)
         (nonce_limit_transition_view, (u64), u64::MAX)
+        (pos_cip136_transition_view, (u64), 1684080)
+        (pos_cip136_in_queue_locked_views, (u64), 18720 * 2)
+        (pos_cip136_out_queue_locked_views, (u64), 1440 * 2)
+        (pos_cip136_round_per_term, (u64), ROUND_PER_TERM * 2)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 
@@ -413,6 +423,14 @@ build_config! {
     }
 }
 
+macro_rules! set_conf {
+    ($src: expr; $dst: expr => {$($field: tt),* }) => {
+        {
+            let number = $src;
+            $($dst.$field = number;)*
+        }
+    };
+}
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }
@@ -1209,6 +1227,50 @@ impl Configuration {
     pub fn common_params(&self) -> CommonParams {
         let mut params = CommonParams::default();
 
+        if self.is_test_or_dev_mode() {
+            params.early_set_internal_contracts_states = true;
+        }
+
+        let non_test_default = SpaceMap::new(
+            INITIAL_1559_CORE_BASE_PRICE,
+            INITIAL_1559_ETH_BASE_PRICE,
+        );
+        let test_default = SpaceMap::new(1u64, 1);
+        let config = SpaceMap::new(
+            self.raw_conf.min_native_base_price,
+            self.raw_conf.min_eth_base_price,
+        );
+        let base_price = SpaceMap::zip3(non_test_default, test_default, config)
+            .map_all(|(non_test, test, config)| {
+                if let Some(x) = config {
+                    x
+                } else if self.is_test_or_dev_mode() {
+                    test
+                } else {
+                    non_test
+                }
+            });
+        params.min_base_price = base_price.map_all(U256::from);
+
+        params.chain_id = self.chain_id_params();
+        params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
+        params.evm_transaction_block_ratio =
+            self.raw_conf.evm_transaction_block_ratio;
+        params.evm_transaction_gas_ratio =
+            self.raw_conf.evm_transaction_gas_ratio;
+
+        params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
+
+        self.set_cips(&mut params);
+
+        params
+    }
+
+    pub fn node_type(&self) -> NodeType {
+        self.raw_conf.node_type.unwrap_or(NodeType::Full)
+    }
+
+    fn set_cips(&self, params: &mut CommonParams) {
         let default_transition_time =
             if let Some(num) = self.raw_conf.default_transition_time {
                 num
@@ -1217,6 +1279,7 @@ impl Configuration {
             } else {
                 u64::MAX
             };
+
         // This is to set the default transition time for the CIPs that cannot
         // be enabled in the genesis.
         let non_genesis_default_transition_time =
@@ -1231,117 +1294,11 @@ impl Configuration {
                 }
             };
 
-        if self.is_test_or_dev_mode() {
-            params.early_set_internal_contracts_states = true;
-        }
-
-        params.chain_id = self.chain_id_params();
-        params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
-        params.evm_transaction_block_ratio =
-            self.raw_conf.evm_transaction_block_ratio;
-        params.evm_transaction_gas_ratio =
-            self.raw_conf.evm_transaction_gas_ratio;
-
+        //
+        // Tanzanite hardfork
+        //
         params.transition_heights.cip40 =
             self.raw_conf.tanzanite_transition_height;
-        params.transition_numbers.cip43a = self
-            .raw_conf
-            .hydra_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip94 = self
-            .raw_conf
-            .dao_vote_transition_number
-            .unwrap_or(non_genesis_default_transition_time);
-        params.transition_numbers.cip97 = self
-            .raw_conf
-            .dao_vote_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip98 = self
-            .raw_conf
-            .dao_vote_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip105 = self
-            .raw_conf
-            .cip105_transition_number
-            .or(self.raw_conf.dao_vote_transition_number)
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip_sigma_fix = self
-            .raw_conf
-            .sigma_fix_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip107 = self
-            .raw_conf
-            .cip107_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip118 = self
-            .raw_conf
-            .cip118_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip119 = self
-            .raw_conf
-            .cip119_transition_number
-            .unwrap_or(default_transition_time);
-        if self.is_test_or_dev_mode() {
-            params.transition_numbers.cip43b =
-                self.raw_conf.cip43_init_end_number.unwrap_or(u64::MAX);
-        } else {
-            params.transition_numbers.cip43b = self
-                .raw_conf
-                .cip43_init_end_number
-                .unwrap_or(params.transition_numbers.cip43a);
-        }
-        params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
-            0u64
-        } else {
-            BN128_ENABLE_NUMBER
-        };
-        params.transition_numbers.cip64 = self
-            .raw_conf
-            .hydra_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip71 = self
-            .raw_conf
-            .hydra_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip78a = self
-            .raw_conf
-            .hydra_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip78b = self
-            .raw_conf
-            .cip78_patch_transition_number
-            .unwrap_or(params.transition_numbers.cip78a);
-        params.transition_numbers.cip90b = self
-            .raw_conf
-            .cip90_transition_number
-            .or(self.raw_conf.hydra_transition_number)
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip92 = self
-            .raw_conf
-            .hydra_transition_number
-            .unwrap_or(default_transition_time);
-
-        params.transition_heights.cip76 = self
-            .raw_conf
-            .hydra_transition_height
-            .unwrap_or(default_transition_time);
-        params.transition_heights.cip86 = self
-            .raw_conf
-            .hydra_transition_height
-            .unwrap_or(default_transition_time);
-        params.transition_heights.cip90a = self
-            .raw_conf
-            .cip90_transition_height
-            .or(self.raw_conf.hydra_transition_height)
-            .unwrap_or(default_transition_time);
-        params.transition_heights.cip94 = self
-            .raw_conf
-            .dao_vote_transition_height
-            .unwrap_or(non_genesis_default_transition_time);
-        params.transition_heights.cip112 =
-            *CIP112_TRANSITION_HEIGHT.get().expect("initialized");
-        params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
-
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
         base_block_rewards.insert(
@@ -1350,11 +1307,120 @@ impl Configuration {
         );
         params.base_block_rewards = base_block_rewards;
 
-        params
-    }
+        //
+        // Hydra hardfork (V2.0)
+        //
+        set_conf!(
+            self.raw_conf.hydra_transition_number.unwrap_or(default_transition_time);
+            params.transition_numbers => { cip43a, cip64, cip71, cip78a, cip92 }
+        );
+        set_conf!(
+            self.raw_conf.hydra_transition_height.unwrap_or(default_transition_time);
+            params.transition_heights => { cip76, cip86 }
+        );
+        params.transition_numbers.cip43b =
+            self.raw_conf.cip43_init_end_number.unwrap_or(
+                if self.is_test_or_dev_mode() {
+                    u64::MAX
+                } else {
+                    params.transition_numbers.cip43a
+                },
+            );
+        params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
+            0u64
+        } else {
+            BN128_ENABLE_NUMBER
+        };
+        params.transition_numbers.cip78b = self
+            .raw_conf
+            .cip78_patch_transition_number
+            .unwrap_or(params.transition_numbers.cip78a);
+        params.transition_heights.cip90a = self
+            .raw_conf
+            .cip90_transition_height
+            .or(self.raw_conf.hydra_transition_height)
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip90b = self
+            .raw_conf
+            .cip90_transition_number
+            .or(self.raw_conf.hydra_transition_number)
+            .unwrap_or(default_transition_time);
 
-    pub fn node_type(&self) -> NodeType {
-        self.raw_conf.node_type.unwrap_or(NodeType::Full)
+        //
+        // DAO vote hardfork (V2.1)
+        //
+        set_conf!(
+            self.raw_conf.dao_vote_transition_number.unwrap_or(default_transition_time);
+            params.transition_numbers => { cip97, cip98 }
+        );
+        params.transition_numbers.cip94n = self
+            .raw_conf
+            .dao_vote_transition_number
+            .unwrap_or(non_genesis_default_transition_time);
+        params.transition_heights.cip94h = self
+            .raw_conf
+            .dao_vote_transition_height
+            .unwrap_or(non_genesis_default_transition_time);
+        params.transition_numbers.cip105 = self
+            .raw_conf
+            .cip105_transition_number
+            .or(self.raw_conf.dao_vote_transition_number)
+            .unwrap_or(default_transition_time);
+
+        //
+        // Sigma protocol fix hardfork (V2.2)
+        //
+        params.transition_numbers.cip_sigma_fix = self
+            .raw_conf
+            .sigma_fix_transition_number
+            .unwrap_or(default_transition_time);
+
+        //
+        // Burn collateral hardfork (V2.3)
+        //
+        params.transition_numbers.cip107 = self
+            .raw_conf
+            .cip107_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_heights.cip112 =
+            *CIP112_TRANSITION_HEIGHT.get().expect("initialized");
+        params.transition_numbers.cip118 = self
+            .raw_conf
+            .cip118_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip119 = self
+            .raw_conf
+            .cip119_transition_number
+            .unwrap_or(default_transition_time);
+
+        //
+        // 1559 hardfork (V2.4)
+        //
+        set_conf!(
+            self.raw_conf.next_hardfork_transition_number.unwrap_or(default_transition_time);
+            params.transition_numbers => { cip131, cip132, cip133b, cip137, cip144, cip145 }
+        );
+        set_conf!(
+            self.raw_conf.next_hardfork_transition_height.unwrap_or(default_transition_time);
+            params.transition_heights => { cip130, cip133e }
+        );
+        // TODO: disable 1559 test during dev
+        params.transition_heights.cip1559 = self
+            .raw_conf
+            .cip1559_transition_height
+            .or(self.raw_conf.next_hardfork_transition_height)
+            .unwrap_or(non_genesis_default_transition_time);
+        params.transition_numbers.cancun_opcodes = self
+            .raw_conf
+            .cancun_opcodes_transition_number
+            .or(self.raw_conf.next_hardfork_transition_number)
+            .unwrap_or(default_transition_time);
+
+        if params.transition_heights.cip1559
+            < self.raw_conf.pos_reference_enable_height
+        {
+            panic!("1559 can not be activated earlier than pos reference: 1559 (epoch {}), pos (epoch {})", params.transition_heights.cip1559, self.raw_conf.pos_reference_enable_height);
+        }
     }
 
     pub fn pos_state_config(&self) -> PosStateConfig {
@@ -1375,6 +1441,10 @@ impl Configuration {
             self.raw_conf.pos_fix_cip99_out_queue_locked_views,
             self.raw_conf.nonce_limit_transition_view,
             20_000, // 2 * 10^7 CFX
+            self.raw_conf.pos_cip136_transition_view,
+            self.raw_conf.pos_cip136_in_queue_locked_views,
+            self.raw_conf.pos_cip136_out_queue_locked_views,
+            self.raw_conf.pos_cip136_round_per_term,
         )
     }
 }

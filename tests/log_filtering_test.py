@@ -21,6 +21,8 @@ NUM_CALLS = 20
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
+        # Disable 1559 because it has hardcore execution result not compatible with 1559
+        self.conf_parameters["cip1559_transition_height"] = str(99999999)
 
     def setup_network(self):
         self.setup_nodes()
@@ -140,11 +142,11 @@ class LogFilteringTest(ConfluxTestFramework):
         parent_hash = self.rpc.block_by_epoch("latest_mined")['hash']
         start_nonce = self.rpc.get_nonce(sender)
 
-        txs1 = [self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"bar()")), sender=sender, priv_key=priv_key, storage_limit=64, nonce = start_nonce + ii) for ii in range(0, NUM_CALLS)]
+        txs1 = [self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"bar()")), sender=sender, priv_key=priv_key, storage_limit=64, nonce = start_nonce + ii, gas=1_500_000) for ii in range(0, NUM_CALLS)]
         block_hash_1 = self.rpc.generate_custom_block(parent_hash = parent_hash, referee = [], txs = txs1)
         epoch_1 = self.rpc.block_by_hash(block_hash_1)["epochNumber"]
 
-        txs2 = [self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"bar()")), sender=sender, priv_key=priv_key, storage_limit=64, nonce = start_nonce + NUM_CALLS + ii) for ii in range(0, NUM_CALLS)]
+        txs2 = [self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"bar()")), sender=sender, priv_key=priv_key, storage_limit=64, nonce = start_nonce + NUM_CALLS + ii, gas=1_500_000) for ii in range(0, NUM_CALLS)]
         block_hash_2 = self.rpc.generate_custom_block(parent_hash = block_hash_1, referee = [], txs = txs2)
         epoch_2 = self.rpc.block_by_hash(block_hash_2)["epochNumber"]
 

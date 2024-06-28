@@ -16,6 +16,8 @@ class ExpireBlockTest(ConfluxTestFramework):
         self.conf_parameters["era_epoch_count"] = "100"
         self.conf_parameters["dev_snapshot_epoch_count"] = "50"
         self.conf_parameters["anticone_penalty_ratio"] = "10"
+        # Disable 1559 as it uses an incompatible old format.
+        self.conf_parameters["cip1559_transition_height"] = str(99999999)
         self.num_nodes = 2
 
     def setup_network(self):

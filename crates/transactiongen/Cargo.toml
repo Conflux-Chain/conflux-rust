@@ -4,7 +4,7 @@ homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "txgen"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 clap = "2"

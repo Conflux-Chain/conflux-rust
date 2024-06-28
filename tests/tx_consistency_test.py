@@ -148,7 +148,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
     # randomly select N nodes to send tx.
     def send_tx(self, sender: Account, receiver: Account):
         client = RpcClient(self.nodes[0])
-        tx = client.new_tx(sender.address, receiver.address, sender.nonce, value=9000, priv_key=sender.priv_key)
+        tx = client.new_tx(sender=sender.address, receiver=receiver.address, nonce=sender.nonce, value=9000, priv_key=sender.priv_key)
 
         def ensure_send_tx(node, tx):
             tx_hash = RpcClient(node).send_tx(tx)
