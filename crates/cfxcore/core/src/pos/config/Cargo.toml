@@ -19,19 +19,19 @@ serde_yaml = "0.8.17"
 thiserror = "1.0.24"
 
 bcs = "0.1.2"
-diem-crypto = { path = "../crypto/crypto" }
-diem-crypto-derive = { path = "../crypto/crypto-derive" }
-diem-global-constants = { path = "global-constants" }
-diem-logger = { path = "../common/logger" }
-diem-network-address-encryption = { path = "management/network-address-encryption" }
-diem-secure-storage = { path = "../secure/storage" }
-diem-temppath = { path = "../common/temppath" }
-diem-types = { path = "../types" }
-short-hex-str = { path = "../common/short-hex-str" }
+diem-crypto = { path = "../../../../pos/crypto/crypto" }
+diem-crypto-derive = { path = "../../../../pos/crypto/crypto-derive" }
+diem-global-constants = { path = "../../../../pos/config/global-constants" }
+diem-logger = { path = "../../../../pos/common/logger" }
+diem-network-address-encryption = { path = "../../../../pos/config/management/network-address-encryption" }
+diem-secure-storage = { path = "../../../../pos/secure/storage" }
+diem-temppath = { path = "../../../../pos/common/temppath" }
+diem-types = { path = "../../../../pos/types" }
+short-hex-str = { path = "../../../../pos/common/short-hex-str" }
 cfx-types = {path = "../../../../../cfx_types" }
 
 [dev-dependencies]
-diem-crypto = { path = "../crypto/crypto", features = ["fuzzing"] }
+diem-crypto = { path = "../../../../pos/crypto/crypto", features = ["fuzzing"] }
 
 [features]
 default = []

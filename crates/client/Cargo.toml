@@ -76,24 +76,24 @@ random-crash = { path = "../util/random_crash" }
 cfx-parameters = { path = "../cfxcore/parameters" }
 strum = "0.20"
 strum_macros = "0.20"
-crash-handler = { path = "../cfxcore/core/src/pos/common/crash-handler" }
-cached-pos-ledger-db = { path = "../cfxcore/core/src/pos/storage/cached-pos-ledger-db" }
-pos-ledger-db = { path = "../cfxcore/core/src/pos/storage/pos-ledger-db" }
-diem-channel = {path = "../cfxcore/core/src/pos/common/channel", package = "channel"}
+crash-handler = { path = "../cfxcore/pos/common/crash-handler" }
+cached-pos-ledger-db = { path = "../cfxcore/pos/storage/cached-pos-ledger-db" }
+pos-ledger-db = { path = "../cfxcore/pos/storage/pos-ledger-db" }
+diem-channel = {path = "../cfxcore/pos/common/channel", package = "channel"}
 diem-config = { path = "../cfxcore/core/src/pos/config" }
-diem-crypto = { path = "../cfxcore/core/src/pos/crypto/crypto" }
-diem-logger = { path = "../cfxcore/core/src/pos/common/logger" }
-diem-metrics = { path = "../cfxcore/core/src/pos/common/metrics" }
-diem-secure-storage = { path = "../cfxcore/core/src/pos/secure/storage" }
-diem-temppath = { path = "../cfxcore/core/src/pos/common/temppath" }
-diem-time-service = { path = "../cfxcore/core/src/pos/common/time-service" }
-diem-types = { path = "../cfxcore/core/src/pos/types" }
-pow-types = {path = "../cfxcore/core/src/pos/types/pow-types" }
-executor-types = { path = "../cfxcore/core/src/pos/types/executor-types" }
-executor = { path = "../cfxcore/core/src/pos/consensus/executor" }
+diem-crypto = { path = "../cfxcore/pos/crypto/crypto" }
+diem-logger = { path = "../cfxcore/pos/common/logger" }
+diem-metrics = { path = "../cfxcore/pos/common/metrics" }
+diem-secure-storage = { path = "../cfxcore/pos/secure/storage" }
+diem-temppath = { path = "../cfxcore/pos/common/temppath" }
+diem-time-service = { path = "../cfxcore/pos/common/time-service" }
+diem-types = { path = "../cfxcore/pos/types" }
+pow-types = {path = "../cfxcore/pos/pow-types" }
+executor-types = { path = "../cfxcore/pos/executor-types" }
+executor = { path = "../cfxcore/pos/consensus/executor" }
 fail = "0.4.0"
-storage-interface = { path = "../cfxcore/core/src/pos/storage/storage-interface" }
-consensus-types = {path = "../cfxcore/core/src/pos/consensus/consensus-types" }
+storage-interface = { path = "../cfxcore/pos/storage/storage-interface" }
+consensus-types = {path = "../cfxcore/pos/consensus/consensus-types" }
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
 parity-version = {path = "../util/version" }

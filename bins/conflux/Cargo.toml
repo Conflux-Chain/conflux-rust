@@ -55,13 +55,13 @@ parity-wordlist = "1.3.0"
 rustc-hex = "2.1"
 env_logger = "0.5"
 malloc_size_of = {path= "../../crates/util/malloc_size_of" }
-diem-crypto = { path= "../../crates/cfxcore/core/src/pos/crypto/crypto" }
-diem-types = { path= "../../crates/cfxcore/core/src/pos/types" }
-pos-ledger-db = { path = "../../crates/cfxcore/core/src/pos/storage/pos-ledger-db" }
-executor-types = { path = "../../crates/cfxcore/core/src/pos/types/executor-types" }
-executor = { path = "../../crates/cfxcore/core/src/pos/consensus/executor" }
-storage-interface = { path = "../../crates/cfxcore/core/src/pos/storage/storage-interface" }
-move-core-types = { path = "../../crates/cfxcore/core/src/pos/types/move-core-types" }
+diem-crypto = { path= "../../crates/cfxcore/pos/crypto/crypto" }
+diem-types = { path= "../../crates/cfxcore/pos/types" }
+pos-ledger-db = { path = "../../crates/cfxcore/pos/storage/pos-ledger-db" }
+executor-types = { path = "../../crates/cfxcore/pos/executor-types" }
+executor = { path = "../../crates/cfxcore/pos/consensus/executor" }
+storage-interface = { path = "../../crates/cfxcore/pos/storage/storage-interface" }
+move-core-types = { path = "../../crates/cfxcore/pos/move-core-types" }
 bcs = "0.1.3"
 tempdir = "0.3.7"
 hex = "0.3.0"

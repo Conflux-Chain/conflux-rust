@@ -48,7 +48,7 @@ strum_macros = "0.20"
 # tiny-keccak = {version = "2.0",  features = ["keccak"]}
 # diem-crypto = { path = "../src/pos/crypto/crypto" }
 # diem-types = { path = "../src/pos/types" }
-pow-types = {path = "../core/src/pos/types/pow-types" }
+pow-types = {path = "../pos/pow-types" }
 # impl-trait-for-tuples = "^0.2"
 # impl-tools = "^0.10"
 typemap = { package = "typemap-ors", version = "1.0"}

@@ -37,5 +37,5 @@ metrics = { path = "../util/metrics" }
 throttling = { path = "../util/throttling" }
 natpmp = "0.2"
 malloc_size_of = { path = "../util/malloc_size_of" }
-diem-crypto = { path= "../cfxcore/core/src/pos/crypto/crypto" }
-diem-types = { path= "../cfxcore/core/src/pos/types" }
+diem-crypto = { path= "../cfxcore/pos/crypto/crypto" }
+diem-types = { path= "../cfxcore/pos/types" }
