@@ -130,7 +130,7 @@ impl State {
             let mut kind = None;
 
             // for checkpoint in checkpoints.iter().skip(start_checkpoint_index) {
-            for checkpoint in checkpoints.checkpoint_storage_at(start_checkpoint_index).unwrap().iter() {
+            for checkpoint in checkpoints.elements_from_index(start_checkpoint_index) {
                 match checkpoint.entries().get(address) {
                     Some(Recorded(AccountEntry::Cached(ref account, _))) => {
                         if let Some(value) = account.cached_value_at(key) {

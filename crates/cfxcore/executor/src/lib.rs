@@ -62,3 +62,5 @@ pub mod state;
 
 pub use internal_contract::{InternalContractMap, InternalContractTrait};
 pub use observer as executive_observer;
+
+pub mod lazy_discarded_vec;
