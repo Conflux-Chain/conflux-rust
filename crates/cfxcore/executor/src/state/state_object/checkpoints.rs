@@ -97,8 +97,8 @@ impl Update<HashMap<AddressWithSpace, AccountEntry>> for CheckpointLayer {
 }
 
 impl OrInsert<AddressWithSpace, CheckpointEntry> for CheckpointLayer {
-    fn entry_or_insert(&mut self, key: AddressWithSpace, value: CheckpointEntry) {
-        self.entries.entry_or_insert(key, value);
+    fn entry_or_insert(&mut self, key: AddressWithSpace, value: CheckpointEntry) -> bool {
+        self.entries.entry_or_insert(key, value)
     }
 }
 
@@ -128,14 +128,17 @@ impl State {
 
     /// Insert a new overlay account to cache and incoroprating the old version
     /// to the checkpoint in needed.
-    pub(super) fn insert_to_cache(&mut self, account: OverlayAccount) {
+    pub(super) fn insert_to_cache(&mut self, mut account: OverlayAccount) {
         let address = *account.address();
         let old_account_entry = self
             .cache
             .get_mut()
-            .insert(address, AccountEntry::new_dirty(account));
+            .insert(address, AccountEntry::new_dirty(account)); // todo
 
-        unwrap_or_return!(self.checkpoints.get_mut().notify_last_element(address, CheckpointEntry::from_cache(old_account_entry)));
+        let require_account_checkpoint = unwrap_or_return!(self.checkpoints.get_mut().notify_last_element(address, CheckpointEntry::from_cache(old_account_entry)));
+        if let Some(state_checkpoint_id) = require_account_checkpoint {
+            account.add_checkpoint(state_checkpoint_id)
+        }
     }
 
     /// The caller has changed (or will change) an account in cache and notify

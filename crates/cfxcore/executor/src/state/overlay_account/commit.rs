@@ -10,7 +10,7 @@ use super::OverlayAccount;
 
 impl OverlayAccount {
     pub fn commit(
-        mut self, db: &mut StateDb, address: &AddressWithSpace,
+        self, db: &mut StateDb, address: &AddressWithSpace,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()> {
         // When committing an overlay account, the execution of an epoch has
@@ -21,7 +21,8 @@ impl OverlayAccount {
 
         // Commit storage entries
 
-        let value_cache = Arc::get_mut(&mut self.storage_write_cache).unwrap();
+        let write_cache = &mut self.storage_write_cache.write();
+        let value_cache = &mut write_cache.drain_cache();
         for (k, mut v) in value_cache.drain() {
             let address_key =
                 StorageKey::new_storage_key(&self.address.address, k.as_ref())

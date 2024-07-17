@@ -4,20 +4,30 @@ pub trait Update<P> {
     fn update(self, cache: &mut P);
 }
 
-pub trait  GetInfo<S> {
+pub trait GetInfo<S> {
     fn get_additional_info(&self) -> S;
 }
 
 pub trait OrInsert<K, V> {
-    fn entry_or_insert(&mut self, key: K, value: V);
+    fn entry_or_insert(&mut self, key: K, value: V) -> bool;
 }
 
 impl<K: PartialEq + Eq + Hash, V> OrInsert<K, V> for HashMap<K, V> {
-    fn entry_or_insert(&mut self, key: K, value: V) {
-        self.entry(key).or_insert_with(|| value);
+    fn entry_or_insert(&mut self, key: K, value: V) -> bool {
+        let entry = self.entry(key);
+        match entry {
+            std::collections::hash_map::Entry::Occupied(_) => {
+                false
+            },
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(value);
+                true
+            }
+        }
     }
 }
 
+#[derive(Debug)]
 pub struct LazyDiscardedVec<K, V, P, S, T: OrInsert<K, V> + Update<P>> {
     inner_vec: Vec<T>,
     last_undiscard_indices: Vec<usize>,
@@ -84,15 +94,20 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>> LazyDiscardedVec<K,
         Some(additional_info)
     }
 
-    pub fn notify_last_element(&mut self, key: K, value: V) -> Option<()>{
+    pub fn notify_last_element(&mut self, key: K, value: V) -> Option<Option<usize>> {
         if self.num_undiscard_elements == 0 {
             assert_eq!(self.inner_vec.len(), 0);
             return None
         }
 
         let last_element = self.inner_vec.last_mut().unwrap();
-        last_element.entry_or_insert(key, value);
-        Some(())
+        let update = last_element.entry_or_insert(key, value);
+        if update {
+            Some(Some(self.inner_vec.len() - 1))
+        }
+        else {
+            Some(None)
+        }
     }
 
     #[cfg(test)]

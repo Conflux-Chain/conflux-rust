@@ -43,6 +43,8 @@ mod staking;
 /// manipulation.
 mod storage;
 
+mod checkpoints;
+
 #[cfg(test)]
 mod tests;
 
@@ -63,6 +65,8 @@ use std::{collections::HashMap, sync::Arc};
 
 #[cfg(test)]
 use cfx_types::AddressSpaceUtil;
+
+use self::checkpoints::StorageWriteCache;
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
@@ -133,8 +137,8 @@ pub struct OverlayAccount {
 
     /// Write cache for the storage entries of this account for recording
     /// changed values.
-    storage_write_cache: Arc<HashMap<Vec<u8>, StorageValue>>,
-
+    storage_write_cache: Arc<RwLock<StorageWriteCache>>,
+    
     /// Transient storage from CIP-142
     transient_storage: Arc<HashMap<Vec<u8>, U256>>,
 

@@ -1,4 +1,4 @@
-use super::Substate;
+use super::{checkpoints::CheckpointStorageValue, Substate};
 
 #[cfg(test)]
 use super::StorageLayout;
@@ -17,6 +17,11 @@ use std::{collections::hash_map::Entry::*, sync::Arc};
 use super::OverlayAccount;
 
 impl OverlayAccount {
+
+    pub fn insert_write_cache(&mut self, key: Vec<u8>, value: StorageValue) {
+        self.storage_write_cache.write().insert_write_cache(key, value);
+    }
+
     pub fn set_storage(
         &mut self, key: Vec<u8>, value: U256, old_value: StorageValue,
         owner: Address, substate: &mut Substate,
@@ -45,15 +50,13 @@ impl OverlayAccount {
             owner: new_owner,
             value,
         };
-        Arc::make_mut(&mut self.storage_write_cache)
-            .insert(key.clone(), new_entry);
+        self.insert_write_cache(key.clone(), new_entry);
         Ok(())
     }
 
     #[cfg(test)]
     pub fn set_storage_simple(&mut self, key: Vec<u8>, value: U256) {
-        Arc::make_mut(&mut self.storage_write_cache)
-            .insert(key.clone(), StorageValue { value, owner: None });
+        self.insert_write_cache(key.clone(), StorageValue { value, owner: None });
     }
 
     pub fn delete_storage_range(
@@ -65,8 +68,9 @@ impl OverlayAccount {
 
         // Its strong count should be 1 and will not cause memory copy,
         // unless in test and gas estimation.
-        let write_cache = Arc::make_mut(&mut self.storage_write_cache);
-        for (k, v) in write_cache.iter_mut() {
+        let write_cache = &mut self.storage_write_cache.write();
+        let mut kvs_to_notify: Vec<(Vec<u8>, StorageValue)> = Vec::new();
+        for (k, v) in write_cache.cache_iter_mut() {
             if k.starts_with(key_prefix) && !v.value.is_zero() {
                 if let Some(old_owner) = v.owner {
                     substate.record_storage_release(
@@ -74,11 +78,17 @@ impl OverlayAccount {
                         COLLATERAL_UNITS_PER_STORAGE_KEY,
                     );
                 };
+                kvs_to_notify.push((k.to_vec(), v.clone()));
+                
                 *v = StorageValue::default();
             }
         }
+        for (k, v) in kvs_to_notify.into_iter() {
+            write_cache.notify_checkpoint(k, CheckpointStorageValue::Recorded(v));
+        }
 
         let read_cache = self.storage_read_cache.read();
+        let mut keys_to_notify: Vec<Vec<u8>> = Vec::new();
         for (key, raw_value) in db_deletion_log
             .into_iter()
             .filter_map(|(k, v)| Some((decode_storage_key(&k)?, v)))
@@ -89,6 +99,7 @@ impl OverlayAccount {
                     // However, if all keys are removed, we don't update
                     // cache since it will be cleared later.
                     if !delete_all {
+                        keys_to_notify.push(key.clone());
                         entry.insert(StorageValue::default());
                     }
 
@@ -117,11 +128,14 @@ impl OverlayAccount {
                 COLLATERAL_UNITS_PER_STORAGE_KEY,
             );
         }
+        for key in keys_to_notify.into_iter() {
+            write_cache.notify_checkpoint(key, CheckpointStorageValue::Unchanged);
+        }
 
         std::mem::drop(read_cache);
 
         if delete_all {
-            write_cache.clear();
+            write_cache.clear_cache();
             self.storage_read_cache.write().clear();
             self.pending_db_clear = true;
         }
@@ -129,7 +143,7 @@ impl OverlayAccount {
     }
 
     fn cached_entry_at(&self, key: &[u8]) -> Option<StorageValue> {
-        if let Some(entry) = self.storage_write_cache.get(key) {
+        if let Some(entry) = self.storage_write_cache.read().cache_get(key) {
             return Some(*entry);
         }
         if let Some(entry) = self.storage_read_cache.read().get(key) {
@@ -204,8 +218,7 @@ impl OverlayAccount {
         let mut entry = self.storage_entry_at(db, key)?;
         if !entry.value.is_zero() {
             entry.value = value;
-            Arc::make_mut(&mut self.storage_write_cache)
-                .insert(key.to_vec(), entry);
+            self.storage_write_cache.write().insert_write_cache(key.to_vec(), entry);
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
