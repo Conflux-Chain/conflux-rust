@@ -131,7 +131,7 @@ fn checkpoint_basic() {
         state.balance(&address_with_space).unwrap(),
         U256::from(1070u64)
     );
-    state.revert_to_checkpoint();
+    state.revert_to_checkpoint(); // ?
     assert_eq!(
         state.balance(&address_with_space).unwrap(),
         U256::from(69u64)
