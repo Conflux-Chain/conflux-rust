@@ -1,7 +1,7 @@
 use std::{hash::Hash, collections::HashMap, marker::PhantomData};
 
 pub trait Update<P> {
-    fn update(self, cache: &mut P);
+    fn update(self, cache: &mut P, self_id: usize);
 }
 
 pub trait GetInfo<S> {
@@ -59,6 +59,12 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>> LazyDiscardedVec<K,
         self.num_undiscard_elements - 1
     }
 
+    pub fn clear_elements(&mut self) {
+        self.inner_vec = Vec::new();
+        self.last_undiscard_indices = Vec::new();
+        self.num_undiscard_elements = 0;
+    }
+
     pub fn discard_element(&mut self, clear_empty: bool) -> Option<usize> {
         let num_elements = self.inner_vec.len();
         if num_elements > 0 {
@@ -84,14 +90,29 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>> LazyDiscardedVec<K,
 
     pub fn revert_element(&mut self, cache: &mut P) -> Option<S> {
         let current_discard_index = self.discard_element(false)?;
-        assert!(current_discard_index < self.last_undiscard_indices.len());
+        let last_element_id = self.last_undiscard_indices.len() - 1;
+        assert!(current_discard_index <= last_element_id);
         self.last_undiscard_indices.truncate(current_discard_index);
         let revert_elements = self.inner_vec.split_off(current_discard_index);
         let additional_info = revert_elements[0].get_additional_info();
-        for one_revert_element in revert_elements.into_iter().rev() {
-            one_revert_element.update(cache);
+        for (id_from_last, one_revert_element) in revert_elements.into_iter().rev().enumerate() {
+            one_revert_element.update(cache, last_element_id - id_from_last);
         }
         Some(additional_info)
+    }
+
+    pub fn get_info_of_last_element(&self) -> Option<S> {
+        if self.num_undiscard_elements == 0 {
+            assert_eq!(self.inner_vec.len(), 0);
+            return None
+        }
+
+        Some(self.inner_vec.last().unwrap().get_additional_info())
+    }
+
+    #[cfg(test)]
+    pub fn get_info_of_all_elements(&self) -> Vec<S> {
+        self.inner_vec.iter().map(|element| element.get_additional_info()).collect()
     }
 
     pub fn notify_last_element(&mut self, key: K, value: V) -> Option<Option<usize>> {
@@ -118,13 +139,13 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>> LazyDiscardedVec<K,
     #[cfg(test)]
     pub fn elements_from_index(
         &self, undiscard_element_index: usize)
-    -> impl Iterator<Item=&T> {
+    -> impl Iterator<Item=(&T, usize)> {
         let mut element_index = self.last_undiscard_indices.len();
         if undiscard_element_index < self.num_undiscard_elements {
             for _ in (undiscard_element_index..self.num_undiscard_elements).rev() {
                 element_index = self.last_undiscard_indices[element_index - 1];
             }
         }
-        self.inner_vec.iter().skip(element_index)
+        self.inner_vec.iter().skip(element_index).zip(element_index..self.last_undiscard_indices.len())
     }
 }

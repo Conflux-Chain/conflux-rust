@@ -130,10 +130,10 @@ impl State {
             let mut kind = None;
 
             // for checkpoint in checkpoints.iter().skip(start_checkpoint_index) {
-            for checkpoint in checkpoints.elements_from_index(start_checkpoint_index) {
+            for (checkpoint, state_checkpoint_id) in checkpoints.elements_from_index(start_checkpoint_index) {
                 match checkpoint.entries().get(address) {
                     Some(Recorded(AccountEntry::Cached(ref account, _))) => {
-                        if let Some(value) = account.cached_value_at(key) {
+                        if let Some(value) = account.cached_value_at(key, state_checkpoint_id) {
                             return Ok(Some(value));
                         } else if account.is_newly_created_contract() {
                             return Ok(Some(U256::zero()));

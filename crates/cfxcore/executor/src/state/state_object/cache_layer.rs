@@ -159,13 +159,18 @@ impl State {
             Self::fetch_account_mut(&mut cache, &self.db, address, require)?;
 
         // Save the value before modification into the checkpoint.
-        self.notify_checkpoint(*address, account_entry);
+        let require_account_checkpoint = self.notify_checkpoint(*address, account_entry);
 
         // Set the dirty flag in cache.
         if let AccountEntry::Cached(_, dirty_bit) = account_entry {
             *dirty_bit = true;
         } else {
             *account_entry = AccountEntry::new_dirty(default(address)?);
+        }
+
+        // safety of unwrap: account_entry is Cached
+        if let Some(state_checkpoint_id) = require_account_checkpoint {
+            account_entry.account_mut().unwrap().add_checkpoint(state_checkpoint_id);
         }
 
         Ok(RwLockWriteGuard::map(cache, |c| {

@@ -12,15 +12,11 @@ use cfx_types::{Address, Space, U256};
 use primitives::{
     SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
 };
-use std::{collections::hash_map::Entry::*, sync::Arc};
+use std::collections::hash_map::Entry::*;
 
 use super::OverlayAccount;
 
 impl OverlayAccount {
-
-    pub fn insert_write_cache(&mut self, key: Vec<u8>, value: StorageValue) {
-        self.storage_write_cache.write().insert_write_cache(key, value);
-    }
 
     pub fn set_storage(
         &mut self, key: Vec<u8>, value: U256, old_value: StorageValue,
@@ -50,13 +46,13 @@ impl OverlayAccount {
             owner: new_owner,
             value,
         };
-        self.insert_write_cache(key.clone(), new_entry);
+        self.storage_write_cache.write().cache_insert(key.clone(), new_entry);
         Ok(())
     }
 
     #[cfg(test)]
     pub fn set_storage_simple(&mut self, key: Vec<u8>, value: U256) {
-        self.insert_write_cache(key.clone(), StorageValue { value, owner: None });
+        self.storage_write_cache.write().cache_insert(key.clone(), StorageValue { value, owner: None });
     }
 
     pub fn delete_storage_range(
@@ -93,7 +89,7 @@ impl OverlayAccount {
             .into_iter()
             .filter_map(|(k, v)| Some((decode_storage_key(&k)?, v)))
         {
-            match write_cache.entry(key.clone()) {
+            match write_cache.cache_entry(key.clone()) {
                 Vacant(entry) => {
                     // Propogate the db changes to cache
                     // However, if all keys are removed, we don't update
@@ -152,9 +148,36 @@ impl OverlayAccount {
         None
     }
 
+    // write cache (considering its checkpoints)
     #[cfg(test)]
-    pub fn cached_value_at(&self, key: &[u8]) -> Option<U256> {
-        self.cached_entry_at(key).map(|e| e.value)
+    fn cached_entry_at_write(&self, key: &[u8], state_checkpoint_id: usize) 
+        -> Option<StorageValue>
+    {
+        // checkpoints, also including None
+        let checkpoint_value = self.storage_write_cache.read().checkpoints_get(key, state_checkpoint_id);
+        if let Some(storage_value) = checkpoint_value {
+            return storage_value.into_cache()
+        }
+        // cache
+        self.storage_write_cache.read().cache_get(key).cloned()
+    }
+    
+    #[cfg(test)]
+    fn cached_entry_at_checkpoint(&self, key: &[u8], state_checkpoint_id: usize)
+        -> Option<StorageValue>
+    {
+        if let Some(entry) = self.cached_entry_at_write(key, state_checkpoint_id) {
+            return Some(entry);
+        }
+        if let Some(entry) = self.storage_read_cache.read().get(key) {
+            return Some(*entry);
+        }
+        None
+    }
+
+    #[cfg(test)]
+    pub fn cached_value_at(&self, key: &[u8], state_checkpoint_id: usize) -> Option<U256> {
+        self.cached_entry_at_checkpoint(key, state_checkpoint_id).map(|e| e.value)   
     }
 
     // If a contract is removed, and then some one transfer balance to it,
@@ -182,7 +205,7 @@ impl OverlayAccount {
     }
 
     pub fn transient_storage_at(&self, key: &[u8]) -> U256 {
-        self.transient_storage.get(key).cloned().unwrap_or_default()
+        self.transient_storage.read().cache_get(key).cloned().unwrap_or_default()
     }
 
     fn get_and_cache_storage(
@@ -204,7 +227,7 @@ impl OverlayAccount {
     }
 
     pub fn transient_set_storage(&mut self, key: Vec<u8>, value: U256) {
-        Arc::make_mut(&mut self.transient_storage).insert(key, value);
+        self.transient_storage.write().cache_insert(key, value);
     }
 
     pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {
@@ -218,7 +241,7 @@ impl OverlayAccount {
         let mut entry = self.storage_entry_at(db, key)?;
         if !entry.value.is_zero() {
             entry.value = value;
-            self.storage_write_cache.write().insert_write_cache(key.to_vec(), entry);
+            self.storage_write_cache.write().cache_insert(key.to_vec(), entry);
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
