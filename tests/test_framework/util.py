@@ -888,7 +888,7 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
     # print("gas fee", gas_fee)
     
     # check gas fee and burnt gas fee computation
-    if receipt["outcomeStatus"] == "0x1": # tx fails becuase of not enough cash
+    if receipt["outcomeStatus"] == "0x1": # tx fails because of not enough cash
         assert "NotEnoughCash" in receipt["txExecErrorMsg"]
         # all gas is charged
         assert_equal(rpc.get_balance(tx_data["from"], receipt["epochNumber"]), 0)
