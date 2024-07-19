@@ -4,31 +4,14 @@
 use cfx_types::AddressWithSpace;
 use std::collections::{hash_map::Entry::*, HashMap};
 
-use super::{AccountEntry, GlobalStat, OverlayAccount, State};
-use crate::{
-    lazy_discarded_vec::{GetInfo, OrInsert, Update},
-    unwrap_or_return,
+use super::{
+    super::checkpoints::CheckpointEntry::{self, Recorded, Unchanged},
+    AccountEntry, GlobalStat, OverlayAccount, State,
 };
+use crate::{state::checkpoints::CheckpointLayerTrait, unwrap_or_return};
 
-/// An account entry in the checkpoint
-#[cfg_attr(test, derive(Clone))]
-pub(super) enum CheckpointEntry {
-    /// The account has not been read or modified from the database.
-    Unchanged,
-    /// The recorded state of the account at this checkpoint. It may be
-    /// modified or unmodified.
-    Recorded(AccountEntry),
-}
-use CheckpointEntry::*;
-
-impl CheckpointEntry {
-    fn from_cache(value: Option<AccountEntry>) -> Self {
-        match value {
-            Some(v) => Recorded(v),
-            None => Unchanged,
-        }
-    }
-}
+// lazy_discarded_vec::{GetInfo, OrInsert, Update},
+pub(super) type AccountCheckpointEntry = CheckpointEntry<AccountEntry>;
 
 /// Represents a recoverable point within a checkpoint. including
 /// and. The addition of account entries to the checkpoint is lazy; they are
@@ -46,30 +29,33 @@ pub(super) struct CheckpointLayer {
     /// An account will only be added only if its cache version is modified. If
     /// an account does not exist in the checkpoint, it is implied to be the
     /// same as in the cache.
-    entries: HashMap<AddressWithSpace, CheckpointEntry>,
+    entries: HashMap<AddressWithSpace, AccountCheckpointEntry>,
 }
 
 impl CheckpointLayer {
     #[cfg(test)]
-    pub fn entries(&self) -> &HashMap<AddressWithSpace, CheckpointEntry> {
+    pub fn entries(
+        &self,
+    ) -> &HashMap<AddressWithSpace, AccountCheckpointEntry> {
         &self.entries
     }
 }
 
-impl GetInfo<GlobalStat> for CheckpointLayer {
-    fn get_additional_info(&self) -> GlobalStat { self.global_stat }
-}
+impl CheckpointLayerTrait for CheckpointLayer {
+    type ExtInfo = GlobalStat;
+    type Key = AddressWithSpace;
+    type Value = AccountEntry;
 
-fn revert_account(entry: &mut AccountEntry, state_checkpoint_id: usize) {
-    if let AccountEntry::Cached(ref mut overlay_account, _) = entry {
-        overlay_account.revert_checkpoints(state_checkpoint_id);
+    fn get_additional_info(&self) -> Self::ExtInfo { self.global_stat }
+
+    fn as_hash_map(
+        &mut self,
+    ) -> &mut HashMap<Self::Key, CheckpointEntry<Self::Value>> {
+        &mut self.entries
     }
-}
 
-impl Update<HashMap<AddressWithSpace, AccountEntry>> for CheckpointLayer {
     fn update(
-        self, cache: &mut HashMap<AddressWithSpace, AccountEntry>,
-        self_id: usize,
+        self, cache: &mut HashMap<Self::Key, Self::Value>, self_id: usize,
     ) {
         for (k, v) in self.entries.into_iter() {
             let mut entry_in_cache = if let Occupied(e) = cache.entry(k) {
@@ -107,11 +93,9 @@ impl Update<HashMap<AddressWithSpace, AccountEntry>> for CheckpointLayer {
     }
 }
 
-impl OrInsert<AddressWithSpace, CheckpointEntry> for CheckpointLayer {
-    fn entry_or_insert(
-        &mut self, key: AddressWithSpace, value: CheckpointEntry,
-    ) -> bool {
-        self.entries.entry_or_insert(key, value)
+fn revert_account(entry: &mut AccountEntry, state_checkpoint_id: usize) {
+    if let AccountEntry::Cached(ref mut overlay_account, _) = entry {
+        overlay_account.revert_checkpoints(state_checkpoint_id);
     }
 }
 
@@ -164,7 +148,7 @@ impl State {
 
         unwrap_or_return!(self.checkpoints.get_mut().notify_last_element(
             address,
-            CheckpointEntry::from_cache(old_account_entry)
+            AccountCheckpointEntry::from_cache(old_account_entry)
         ));
     }
 

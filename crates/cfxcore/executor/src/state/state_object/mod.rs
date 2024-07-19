@@ -55,12 +55,13 @@ pub use self::{
 #[cfg(test)]
 pub use tests::get_state_for_genesis_write;
 
-use self::checkpoints::{CheckpointEntry, CheckpointLayer};
+use self::checkpoints::CheckpointLayer;
 use super::{
+    checkpoints::LazyDiscardedVec,
     global_stat::GlobalStat,
     overlay_account::{AccountEntry, OverlayAccount, RequireFields},
 };
-use crate::{lazy_discarded_vec::LazyDiscardedVec, substate::Substate};
+use crate::substate::Substate;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
 use cfx_types::AddressWithSpace;
 use parking_lot::RwLock;
@@ -84,15 +85,7 @@ pub struct State {
     global_stat: GlobalStat,
 
     /// Checkpoint layers for the account entries
-    checkpoints: RwLock<
-        LazyDiscardedVec<
-            AddressWithSpace,
-            CheckpointEntry,
-            HashMap<AddressWithSpace, AccountEntry>,
-            GlobalStat,
-            CheckpointLayer,
-        >,
-    >,
+    checkpoints: RwLock<LazyDiscardedVec<CheckpointLayer>>,
 }
 
 impl State {

@@ -110,7 +110,8 @@ impl State {
         &self, start_checkpoint_index: usize, address: &AddressWithSpace,
         key: &Vec<u8>,
     ) -> DbResult<Option<U256>> {
-        use super::{checkpoints::CheckpointEntry::*, AccountEntry};
+        use super::super::checkpoints::CheckpointEntry::*;
+        use crate::state::overlay_account::AccountEntry;
         use cfx_statedb::StateDbExt;
         use primitives::StorageKey;
 

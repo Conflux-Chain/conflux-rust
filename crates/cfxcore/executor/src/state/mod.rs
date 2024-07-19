@@ -18,6 +18,8 @@ mod overlay_account;
 /// State Object: Represents the core object of the state module.
 mod state_object;
 
+mod checkpoints;
+
 #[cfg(test)]
 pub use state_object::get_state_for_genesis_write;
 pub use state_object::{
