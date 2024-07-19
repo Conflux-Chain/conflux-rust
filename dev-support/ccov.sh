@@ -27,5 +27,5 @@ mkdir ccov
 zip -0 ccov/ccov.zip `find . \( -name "*.gc*" \) -print`
 grcov ccov/ccov.zip -s . -t html --llvm --branch --ignore-not-existing --ignore "/*" -o ccov
 echo "Code coverage result is saved to directory 'ccov'. 
-You can open 'ccov/index.html' with a web brower to start.
+You can open 'ccov/index.html' with a web browser to start.
 
