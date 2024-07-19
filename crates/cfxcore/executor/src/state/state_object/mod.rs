@@ -84,7 +84,15 @@ pub struct State {
     global_stat: GlobalStat,
 
     /// Checkpoint layers for the account entries
-    checkpoints: RwLock<LazyDiscardedVec<AddressWithSpace, CheckpointEntry, HashMap<AddressWithSpace, AccountEntry>, GlobalStat, CheckpointLayer>>,
+    checkpoints: RwLock<
+        LazyDiscardedVec<
+            AddressWithSpace,
+            CheckpointEntry,
+            HashMap<AddressWithSpace, AccountEntry>,
+            GlobalStat,
+            CheckpointLayer,
+        >,
+    >,
 }
 
 impl State {

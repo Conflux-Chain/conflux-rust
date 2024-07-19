@@ -138,7 +138,7 @@ pub struct OverlayAccount {
     /// Write cache for the storage entries of this account for recording
     /// changed values.
     storage_write_cache: Arc<RwLock<StorageWriteCache<StorageValue>>>,
-    
+
     /// Transient storage from CIP-142
     transient_storage: Arc<RwLock<StorageWriteCache<U256>>>,
 
