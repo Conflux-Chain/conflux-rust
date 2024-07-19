@@ -5,7 +5,10 @@ use cfx_types::AddressWithSpace;
 use std::collections::{hash_map::Entry::*, HashMap};
 
 use super::{AccountEntry, GlobalStat, OverlayAccount, State};
-use crate::{lazy_discarded_vec::{GetInfo, OrInsert, Update}, unwrap_or_return};
+use crate::{
+    lazy_discarded_vec::{GetInfo, OrInsert, Update},
+    unwrap_or_return,
+};
 
 /// An account entry in the checkpoint
 #[cfg_attr(test, derive(Clone))]
@@ -54,9 +57,7 @@ impl CheckpointLayer {
 }
 
 impl GetInfo<GlobalStat> for CheckpointLayer {
-    fn get_additional_info(&self) -> GlobalStat {
-        self.global_stat
-    }
+    fn get_additional_info(&self) -> GlobalStat { self.global_stat }
 }
 
 fn revert_account(entry: &mut AccountEntry, state_checkpoint_id: usize) {
@@ -66,11 +67,12 @@ fn revert_account(entry: &mut AccountEntry, state_checkpoint_id: usize) {
 }
 
 impl Update<HashMap<AddressWithSpace, AccountEntry>> for CheckpointLayer {
-    fn update(self, cache: &mut HashMap<AddressWithSpace, AccountEntry>, self_id: usize) {
+    fn update(
+        self, cache: &mut HashMap<AddressWithSpace, AccountEntry>,
+        self_id: usize,
+    ) {
         for (k, v) in self.entries.into_iter() {
-            let mut entry_in_cache = if let Occupied(e) =
-                cache.entry(k)
-            {
+            let mut entry_in_cache = if let Occupied(e) = cache.entry(k) {
                 e
             } else {
                 // All the entries in checkpoint must be copied from cache by
@@ -96,8 +98,7 @@ impl Update<HashMap<AddressWithSpace, AccountEntry>> for CheckpointLayer {
                     // we can keep it in cache to avoid an duplicate db load.
                     if entry_in_cache.get().is_dirty() {
                         entry_in_cache.remove();
-                    }
-                    else {
+                    } else {
                         revert_account(entry_in_cache.get_mut(), self_id);
                     }
                 }
@@ -107,7 +108,9 @@ impl Update<HashMap<AddressWithSpace, AccountEntry>> for CheckpointLayer {
 }
 
 impl OrInsert<AddressWithSpace, CheckpointEntry> for CheckpointLayer {
-    fn entry_or_insert(&mut self, key: AddressWithSpace, value: CheckpointEntry) -> bool {
+    fn entry_or_insert(
+        &mut self, key: AddressWithSpace, value: CheckpointEntry,
+    ) -> bool {
         self.entries.entry_or_insert(key, value)
     }
 }
@@ -126,9 +129,11 @@ impl State {
 
     /// Merge last checkpoint with previous.
     pub fn discard_checkpoint(&mut self) {
-        let num_checkpoints = unwrap_or_return!(self.checkpoints.get_mut().discard_element(true));
-        // if there is no checkpoint in state, the state's checkpoints are cleared directly,
-        // thus, the accounts in state's cache should all discard all checkpoints
+        let num_checkpoints =
+            unwrap_or_return!(self.checkpoints.get_mut().discard_element(true));
+        // if there is no checkpoint in state, the state's checkpoints are
+        // cleared directly, thus, the accounts in state's cache should
+        // all discard all checkpoints
         if num_checkpoints == 0 {
             let cache = self.cache.get_mut();
             for (_, v) in cache.iter_mut() {
@@ -141,8 +146,10 @@ impl State {
 
     /// Revert to the last checkpoint and discard it.
     pub fn revert_to_checkpoint(&mut self) {
-        let global_stat = 
-            unwrap_or_return!(self.checkpoints.get_mut().revert_element(self.cache.get_mut()));
+        let global_stat = unwrap_or_return!(self
+            .checkpoints
+            .get_mut()
+            .revert_element(self.cache.get_mut()));
         self.global_stat = global_stat;
     }
 
@@ -155,7 +162,10 @@ impl State {
             .get_mut()
             .insert(address, AccountEntry::new_dirty(account));
 
-        unwrap_or_return!(self.checkpoints.get_mut().notify_last_element(address, CheckpointEntry::from_cache(old_account_entry)));
+        unwrap_or_return!(self.checkpoints.get_mut().notify_last_element(
+            address,
+            CheckpointEntry::from_cache(old_account_entry)
+        ));
     }
 
     /// The caller has changed (or will change) an account in cache and notify
@@ -166,7 +176,10 @@ impl State {
     ) -> Option<usize> {
         let mut checkpoints = self.checkpoints.write();
 
-        unwrap_or_return!(checkpoints.notify_last_element(address, Recorded(old_account_entry.clone_cache_entry())))
+        unwrap_or_return!(checkpoints.notify_last_element(
+            address,
+            Recorded(old_account_entry.clone_cache_entry())
+        ))
     }
 
     #[cfg(any(test, feature = "testonly_code"))]
