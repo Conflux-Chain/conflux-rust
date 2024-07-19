@@ -1,4 +1,6 @@
-use super::{checkpoints::CheckpointStorageValue, Substate};
+use crate::state::checkpoints::CheckpointEntry;
+
+use super::Substate;
 
 #[cfg(test)]
 use super::StorageLayout;
@@ -83,8 +85,7 @@ impl OverlayAccount {
             }
         }
         for (k, v) in kvs_to_notify.into_iter() {
-            write_cache
-                .notify_checkpoint(k, CheckpointStorageValue::Recorded(v));
+            write_cache.notify_checkpoint(k, CheckpointEntry::Recorded(v));
         }
 
         let read_cache = self.storage_read_cache.read();
@@ -129,8 +130,7 @@ impl OverlayAccount {
             );
         }
         for key in keys_to_notify.into_iter() {
-            write_cache
-                .notify_checkpoint(key, CheckpointStorageValue::Unchanged);
+            write_cache.notify_checkpoint(key, CheckpointEntry::Unchanged);
         }
 
         std::mem::drop(read_cache);

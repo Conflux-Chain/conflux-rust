@@ -4,39 +4,18 @@ use std::{
 };
 
 use crate::{
-    lazy_discarded_vec::{GetInfo, LazyDiscardedVec, OrInsert, Update},
+    state::checkpoints::{
+        CheckpointEntry::{self, Recorded, Unchanged},
+        CheckpointLayerTrait, LazyDiscardedVec,
+    },
     unwrap_or_return,
 };
 
 use super::OverlayAccount;
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Clone))]
-pub enum CheckpointStorageValue<T: Clone> {
-    Unchanged,
-    Recorded(T),
-}
-
-impl<T: Clone> CheckpointStorageValue<T> {
-    pub fn from_cache(v: Option<T>) -> Self {
-        match v {
-            Some(storage_value) => Self::Recorded(storage_value),
-            None => Self::Unchanged,
-        }
-    }
-
-    #[cfg(test)]
-    pub fn into_cache(self) -> Option<T> {
-        match self {
-            Self::Recorded(storage_value) => Some(storage_value),
-            Self::Unchanged => None,
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct WriteCheckpointLayer<T: Clone> {
-    storage_write: HashMap<Vec<u8>, CheckpointStorageValue<T>>,
+    storage_write: HashMap<Vec<u8>, CheckpointEntry<T>>,
     state_checkpoint_id: usize,
 }
 
@@ -49,48 +28,40 @@ impl<T: Clone> WriteCheckpointLayer<T> {
     }
 
     #[cfg(test)]
-    pub fn get(&self, key: &[u8]) -> Option<CheckpointStorageValue<T>> {
+    pub fn get(&self, key: &[u8]) -> Option<CheckpointEntry<T>> {
         self.storage_write.get(key).cloned()
     }
 }
 
-impl<T: Clone> OrInsert<Vec<u8>, CheckpointStorageValue<T>>
-    for WriteCheckpointLayer<T>
-{
-    fn entry_or_insert(
-        &mut self, key: Vec<u8>, value: CheckpointStorageValue<T>,
-    ) -> bool {
-        self.storage_write.entry_or_insert(key, value)
-    }
-}
+impl<T: Clone> CheckpointLayerTrait for WriteCheckpointLayer<T> {
+    type ExtInfo = usize;
+    type Key = Vec<u8>;
+    type Value = T;
 
-impl<T: Clone> Update<HashMap<Vec<u8>, T>> for WriteCheckpointLayer<T> {
-    fn update(self, cache: &mut HashMap<Vec<u8>, T>, _self_id: usize) {
+    fn get_additional_info(&self) -> Self::ExtInfo { self.state_checkpoint_id }
+
+    fn as_hash_map(
+        &mut self,
+    ) -> &mut HashMap<Self::Key, CheckpointEntry<Self::Value>> {
+        &mut self.storage_write
+    }
+
+    fn update(
+        self, cache: &mut HashMap<Self::Key, Self::Value>, _self_id: usize,
+    ) {
         for (k, v) in self.storage_write.into_iter() {
             match v {
-                CheckpointStorageValue::Unchanged => cache.remove(&k),
-                CheckpointStorageValue::Recorded(storage_value) => {
-                    cache.insert(k, storage_value)
-                }
+                Unchanged => cache.remove(&k),
+                Recorded(storage_value) => cache.insert(k, storage_value),
             };
         }
     }
 }
 
-impl<T: Clone> GetInfo<usize> for WriteCheckpointLayer<T> {
-    fn get_additional_info(&self) -> usize { self.state_checkpoint_id }
-}
-
 #[derive(Debug, Default)]
 pub struct StorageWriteCache<T: Clone> {
     inner_cache: HashMap<Vec<u8>, T>,
-    inner_checkpoints: LazyDiscardedVec<
-        Vec<u8>,
-        CheckpointStorageValue<T>,
-        HashMap<Vec<u8>, T>,
-        usize,
-        WriteCheckpointLayer<T>,
-    >,
+    inner_checkpoints: LazyDiscardedVec<WriteCheckpointLayer<T>>,
 }
 
 impl<T: Clone> StorageWriteCache<T> {
@@ -110,14 +81,12 @@ impl<T: Clone> StorageWriteCache<T> {
 
     pub fn cache_insert(&mut self, key: Vec<u8>, value: T) {
         let old_value = self.inner_cache.insert(key.clone(), value);
-        self.inner_checkpoints.notify_last_element(
-            key,
-            CheckpointStorageValue::from_cache(old_value),
-        );
+        self.inner_checkpoints
+            .notify_last_element(key, CheckpointEntry::from_cache(old_value));
     }
 
     pub fn notify_checkpoint(
-        &mut self, key: Vec<u8>, old_value: CheckpointStorageValue<T>,
+        &mut self, key: Vec<u8>, old_value: CheckpointEntry<T>,
     ) {
         self.inner_checkpoints.notify_last_element(key, old_value);
     }
@@ -129,7 +98,7 @@ impl<T: Clone> StorageWriteCache<T> {
     pub fn clear_cache(&mut self) {
         for (k, v) in self.inner_cache.drain() {
             self.inner_checkpoints
-                .notify_last_element(k, CheckpointStorageValue::Recorded(v));
+                .notify_last_element(k, CheckpointEntry::Recorded(v));
         }
     }
 
@@ -153,7 +122,7 @@ impl<T: Clone> StorageWriteCache<T> {
     #[cfg(test)]
     pub fn checkpoints_get(
         &self, key: &[u8], state_checkpoint_id: usize,
-    ) -> Option<CheckpointStorageValue<T>> {
+    ) -> Option<CheckpointEntry<T>> {
         let account_state_checkpoint_ids =
             self.inner_checkpoints.get_info_of_all_elements();
         let num_checkpoints = account_state_checkpoint_ids

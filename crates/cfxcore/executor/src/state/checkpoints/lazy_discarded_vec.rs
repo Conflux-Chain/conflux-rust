@@ -1,23 +1,29 @@
-use std::{collections::HashMap, hash::Hash, marker::PhantomData};
+use std::{collections::HashMap, hash::Hash};
 
-pub trait Update<P> {
-    fn update(self, cache: &mut P, self_id: usize);
-}
+use super::CheckpointEntry;
 
-pub trait GetInfo<S> {
-    fn get_additional_info(&self) -> S;
-}
+pub trait CheckpointLayerTrait {
+    type Key: Eq + Hash;
+    type Value;
+    type ExtInfo;
 
-pub trait OrInsert<K, V> {
-    fn entry_or_insert(&mut self, key: K, value: V) -> bool;
-}
+    fn get_additional_info(&self) -> Self::ExtInfo;
 
-impl<K: PartialEq + Eq + Hash, V> OrInsert<K, V> for HashMap<K, V> {
-    fn entry_or_insert(&mut self, key: K, value: V) -> bool {
-        let entry = self.entry(key);
-        match entry {
-            std::collections::hash_map::Entry::Occupied(_) => false,
-            std::collections::hash_map::Entry::Vacant(e) => {
+    fn as_hash_map(
+        &mut self,
+    ) -> &mut HashMap<Self::Key, CheckpointEntry<Self::Value>>;
+
+    fn update(
+        self, cache: &mut HashMap<Self::Key, Self::Value>, self_id: usize,
+    );
+
+    fn insert_on_absent(
+        &mut self, key: Self::Key, value: CheckpointEntry<Self::Value>,
+    ) -> bool {
+        use std::collections::hash_map::Entry::*;
+        match self.as_hash_map().entry(key) {
+            Occupied(_) => false,
+            Vacant(e) => {
                 e.insert(value);
                 true
             }
@@ -26,29 +32,23 @@ impl<K: PartialEq + Eq + Hash, V> OrInsert<K, V> for HashMap<K, V> {
 }
 
 #[derive(Debug)]
-pub struct LazyDiscardedVec<K, V, P, S, T: OrInsert<K, V> + Update<P>> {
+pub struct LazyDiscardedVec<T: CheckpointLayerTrait> {
     inner_vec: Vec<T>,
     last_undiscard_indices: Vec<usize>,
     num_undiscard_elements: usize,
-    _phantom: PhantomData<(K, V, P, S)>,
 }
 
-impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>> Default
-    for LazyDiscardedVec<K, V, P, S, T>
-{
+impl<T: CheckpointLayerTrait> Default for LazyDiscardedVec<T> {
     fn default() -> Self {
         Self {
             inner_vec: Default::default(),
             last_undiscard_indices: Default::default(),
             num_undiscard_elements: Default::default(),
-            _phantom: Default::default(),
         }
     }
 }
 
-impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>>
-    LazyDiscardedVec<K, V, P, S, T>
-{
+impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
     pub fn is_empty(&self) -> bool { self.num_undiscard_elements == 0 }
 
     pub fn add_element(&mut self, new_element: T) -> usize {
@@ -67,28 +67,30 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>>
 
     pub fn discard_element(&mut self, clear_empty: bool) -> Option<usize> {
         let num_elements = self.inner_vec.len();
-        if num_elements > 0 {
-            let current_discard_index =
-                self.last_undiscard_indices[num_elements - 1];
-            if current_discard_index == 0 {
-                if clear_empty {
-                    self.inner_vec = Vec::new();
-                    self.last_undiscard_indices = Vec::new();
-                }
-                assert_eq!(self.num_undiscard_elements, 1);
-            } else {
-                self.last_undiscard_indices[num_elements - 1] =
-                    self.last_undiscard_indices[current_discard_index - 1];
-                assert!(self.num_undiscard_elements > 1);
-            }
-            self.num_undiscard_elements -= 1;
-            Some(current_discard_index)
-        } else {
-            None
+        if num_elements == 0 {
+            return None;
         }
+
+        let current_discard_index =
+            self.last_undiscard_indices[num_elements - 1];
+        if current_discard_index == 0 {
+            if clear_empty {
+                self.inner_vec = Vec::new();
+                self.last_undiscard_indices = Vec::new();
+            }
+            assert_eq!(self.num_undiscard_elements, 1);
+        } else {
+            self.last_undiscard_indices[num_elements - 1] =
+                self.last_undiscard_indices[current_discard_index - 1];
+            assert!(self.num_undiscard_elements > 1);
+        }
+        self.num_undiscard_elements -= 1;
+        Some(current_discard_index)
     }
 
-    pub fn revert_element(&mut self, cache: &mut P) -> Option<S> {
+    pub fn revert_element(
+        &mut self, cache: &mut HashMap<T::Key, T::Value>,
+    ) -> Option<T::ExtInfo> {
         let current_discard_index = self.discard_element(false)?;
         let last_element_id = self.last_undiscard_indices.len() - 1;
         assert!(current_discard_index <= last_element_id);
@@ -103,7 +105,7 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>>
         Some(additional_info)
     }
 
-    pub fn get_info_of_last_element(&self) -> Option<S> {
+    pub fn get_info_of_last_element(&self) -> Option<T::ExtInfo> {
         if self.num_undiscard_elements == 0 {
             assert_eq!(self.inner_vec.len(), 0);
             return None;
@@ -113,7 +115,7 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>>
     }
 
     #[cfg(test)]
-    pub fn get_info_of_all_elements(&self) -> Vec<S> {
+    pub fn get_info_of_all_elements(&self) -> Vec<T::ExtInfo> {
         self.inner_vec
             .iter()
             .map(|element| element.get_additional_info())
@@ -121,7 +123,7 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>>
     }
 
     pub fn notify_last_element(
-        &mut self, key: K, value: V,
+        &mut self, key: T::Key, value: CheckpointEntry<T::Value>,
     ) -> Option<Option<usize>> {
         if self.num_undiscard_elements == 0 {
             assert_eq!(self.inner_vec.len(), 0);
@@ -129,8 +131,8 @@ impl<K, V, P, S, T: OrInsert<K, V> + Update<P> + GetInfo<S>>
         }
 
         let last_element = self.inner_vec.last_mut().unwrap();
-        let update = last_element.entry_or_insert(key, value);
-        if update {
+        let updated = last_element.insert_on_absent(key, value);
+        if updated {
             Some(Some(self.inner_vec.len() - 1))
         } else {
             Some(None)
