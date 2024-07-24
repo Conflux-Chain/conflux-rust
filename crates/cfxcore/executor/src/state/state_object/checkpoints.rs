@@ -75,27 +75,29 @@ impl CheckpointLayerTrait for CheckpointLayer {
                 );
             };
             match v {
-                Recorded(entry_in_checkpoint) => {
+                Recorded(mut entry_in_checkpoint) => {
+                    if let AccountEntry::Cached(
+                        ref mut overlay_account,
+                        ref dirty,
+                    ) = &mut entry_in_checkpoint
+                    {
+                        if *dirty {
+                            overlay_account.revert_checkpoints(self_id);
+                        } else {
+                            overlay_account.clear_checkpoints();
+                        }
+                    }
                     *entry_in_cache.get_mut() = entry_in_checkpoint;
-                    revert_account(entry_in_cache.get_mut(), self_id);
                 }
                 Unchanged => {
                     // If the AccountEntry in cache does not have a dirty bit,
                     // we can keep it in cache to avoid an duplicate db load.
                     if entry_in_cache.get().is_dirty() {
                         entry_in_cache.remove();
-                    } else {
-                        revert_account(entry_in_cache.get_mut(), self_id);
                     }
                 }
             }
         }
-    }
-}
-
-fn revert_account(entry: &mut AccountEntry, state_checkpoint_id: usize) {
-    if let AccountEntry::Cached(ref mut overlay_account, _) = entry {
-        overlay_account.revert_checkpoints(state_checkpoint_id);
     }
 }
 
@@ -105,7 +107,7 @@ impl State {
     /// creation time of the checkpoint and updated after that and before
     /// the creation of the next checkpoint.
     pub fn checkpoint(&mut self) -> usize {
-        self.checkpoints.get_mut().add_element(CheckpointLayer {
+        self.checkpoints.get_mut().push_layer(CheckpointLayer {
             global_stat: self.global_stat,
             entries: HashMap::new(),
         })
@@ -113,17 +115,17 @@ impl State {
 
     /// Merge last checkpoint with previous.
     pub fn discard_checkpoint(&mut self) {
-        let num_checkpoints =
-            unwrap_or_return!(self.checkpoints.get_mut().discard_element(true));
+        let cleared_addresses =
+            unwrap_or_return!(self.checkpoints.get_mut().discard_layer());
+
         // if there is no checkpoint in state, the state's checkpoints are
         // cleared directly, thus, the accounts in state's cache should
         // all discard all checkpoints
-        if num_checkpoints == 0 {
-            let cache = self.cache.get_mut();
-            for (_, v) in cache.iter_mut() {
-                if let AccountEntry::Cached(ref mut overlay_account, _) = v {
-                    overlay_account.clear_checkpoints();
-                }
+        for addr in cleared_addresses {
+            if let Some(AccountEntry::Cached(ref mut overlay_account, true)) =
+                self.cache.get_mut().get_mut(&addr)
+            {
+                overlay_account.clear_checkpoints();
             }
         }
     }
@@ -133,9 +135,11 @@ impl State {
         let global_stat = unwrap_or_return!(self
             .checkpoints
             .get_mut()
-            .revert_element(self.cache.get_mut()));
+            .revert_layer(self.cache.get_mut()));
         self.global_stat = global_stat;
     }
+
+    pub fn no_checkpoint(&self) -> bool { self.checkpoints.read().is_empty() }
 
     /// Insert a new overlay account to cache and incoroprating the old version
     /// to the checkpoint in needed.
@@ -146,10 +150,10 @@ impl State {
             .get_mut()
             .insert(address, AccountEntry::new_dirty(account));
 
-        unwrap_or_return!(self.checkpoints.get_mut().notify_last_element(
+        self.checkpoints.get_mut().notify_element(
             address,
-            AccountCheckpointEntry::from_cache(old_account_entry)
-        ));
+            AccountCheckpointEntry::from_cache(old_account_entry),
+        );
     }
 
     /// The caller has changed (or will change) an account in cache and notify
@@ -160,10 +164,11 @@ impl State {
     ) -> Option<usize> {
         let mut checkpoints = self.checkpoints.write();
 
-        unwrap_or_return!(checkpoints.notify_last_element(
+        let updated = checkpoints.notify_element(
             address,
-            Recorded(old_account_entry.clone_cache_entry())
-        ))
+            Recorded(old_account_entry.clone_cache_entry()),
+        );
+        updated.then_some(checkpoints.last_layer_id())
     }
 
     #[cfg(any(test, feature = "testonly_code"))]

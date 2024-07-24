@@ -1,5 +1,3 @@
-use crate::state::checkpoints::CheckpointEntry;
-
 use super::Substate;
 
 #[cfg(test)]
@@ -49,7 +47,7 @@ impl OverlayAccount {
         };
         self.storage_write_cache
             .write()
-            .cache_insert(key.clone(), new_entry);
+            .insert(key.clone(), new_entry);
         Ok(())
     }
 
@@ -57,7 +55,7 @@ impl OverlayAccount {
     pub fn set_storage_simple(&mut self, key: Vec<u8>, value: U256) {
         self.storage_write_cache
             .write()
-            .cache_insert(key.clone(), StorageValue { value, owner: None });
+            .insert(key.clone(), StorageValue { value, owner: None });
     }
 
     pub fn delete_storage_range(
@@ -70,8 +68,9 @@ impl OverlayAccount {
         // Its strong count should be 1 and will not cause memory copy,
         // unless in test and gas estimation.
         let write_cache = &mut self.storage_write_cache.write();
-        let mut kvs_to_notify: Vec<(Vec<u8>, StorageValue)> = Vec::new();
-        for (k, v) in write_cache.cache_iter_mut() {
+        // Must have no checkpoint in range deletion
+        let write_cache_map = write_cache.as_map();
+        for (k, v) in write_cache_map.iter_mut() {
             if k.starts_with(key_prefix) && !v.value.is_zero() {
                 if let Some(old_owner) = v.owner {
                     substate.record_storage_release(
@@ -79,28 +78,21 @@ impl OverlayAccount {
                         COLLATERAL_UNITS_PER_STORAGE_KEY,
                     );
                 };
-                kvs_to_notify.push((k.to_vec(), v.clone()));
-
                 *v = StorageValue::default();
             }
         }
-        for (k, v) in kvs_to_notify.into_iter() {
-            write_cache.notify_checkpoint(k, CheckpointEntry::Recorded(v));
-        }
 
         let read_cache = self.storage_read_cache.read();
-        let mut keys_to_notify: Vec<Vec<u8>> = Vec::new();
         for (key, raw_value) in db_deletion_log
             .into_iter()
             .filter_map(|(k, v)| Some((decode_storage_key(&k)?, v)))
         {
-            match write_cache.cache_entry(key.clone()) {
+            match write_cache_map.entry(key.clone()) {
                 Vacant(entry) => {
                     // Propogate the db changes to cache
                     // However, if all keys are removed, we don't update
                     // cache since it will be cleared later.
                     if !delete_all {
-                        keys_to_notify.push(key.clone());
                         entry.insert(StorageValue::default());
                     }
 
@@ -129,14 +121,10 @@ impl OverlayAccount {
                 COLLATERAL_UNITS_PER_STORAGE_KEY,
             );
         }
-        for key in keys_to_notify.into_iter() {
-            write_cache.notify_checkpoint(key, CheckpointEntry::Unchanged);
-        }
-
         std::mem::drop(read_cache);
 
         if delete_all {
-            write_cache.clear_cache();
+            write_cache.clear();
             self.storage_read_cache.write().clear();
             self.pending_db_clear = true;
         }
@@ -144,7 +132,7 @@ impl OverlayAccount {
     }
 
     fn cached_entry_at(&self, key: &[u8]) -> Option<StorageValue> {
-        if let Some(entry) = self.storage_write_cache.read().cache_get(key) {
+        if let Some(entry) = self.storage_write_cache.read().get(key) {
             return Some(*entry);
         }
         if let Some(entry) = self.storage_read_cache.read().get(key) {
@@ -167,7 +155,7 @@ impl OverlayAccount {
             return storage_value.into_cache();
         }
         // cache
-        self.storage_write_cache.read().cache_get(key).cloned()
+        self.storage_write_cache.read().get(key).cloned()
     }
 
     #[cfg(test)]
@@ -220,7 +208,7 @@ impl OverlayAccount {
     pub fn transient_storage_at(&self, key: &[u8]) -> U256 {
         self.transient_storage
             .read()
-            .cache_get(key)
+            .get(key)
             .cloned()
             .unwrap_or_default()
     }
@@ -244,7 +232,7 @@ impl OverlayAccount {
     }
 
     pub fn transient_set_storage(&mut self, key: Vec<u8>, value: U256) {
-        self.transient_storage.write().cache_insert(key, value);
+        self.transient_storage.write().insert(key, value);
     }
 
     pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {
@@ -258,9 +246,7 @@ impl OverlayAccount {
         let mut entry = self.storage_entry_at(db, key)?;
         if !entry.value.is_zero() {
             entry.value = value;
-            self.storage_write_cache
-                .write()
-                .cache_insert(key.to_vec(), entry);
+            self.storage_write_cache.write().insert(key.to_vec(), entry);
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
