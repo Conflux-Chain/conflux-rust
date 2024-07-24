@@ -4,7 +4,6 @@ use cfx_types::AddressWithSpace;
 use primitives::{
     Account, CodeInfo, DepositList, StorageKey, StorageValue, VoteStakeList,
 };
-use std::sync::Arc;
 
 use super::OverlayAccount;
 
@@ -17,13 +16,11 @@ impl OverlayAccount {
         // finished. In this case, all the checkpoints except the bottom one
         // must be removed. (Each checkpoint is a mapping from addresses to
         // overlay accounts.)
-        assert_eq!(Arc::strong_count(&self.storage_write_cache), 1);
 
         // Commit storage entries
 
         let write_cache = &mut self.storage_write_cache.write();
-        let value_cache = &mut write_cache.drain_cache();
-        for (k, mut v) in value_cache.drain() {
+        for (k, mut v) in write_cache.drain() {
             let address_key =
                 StorageKey::new_storage_key(&self.address.address, k.as_ref())
                     .with_space(self.address.space);
