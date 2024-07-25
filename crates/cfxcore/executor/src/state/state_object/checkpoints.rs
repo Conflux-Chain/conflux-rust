@@ -74,6 +74,7 @@ impl CheckpointLayerTrait for CheckpointLayer {
                     "Cache should always have more keys than checkpoint"
                 );
             };
+            dbg!("mmm");
             match v {
                 Recorded(mut entry_in_checkpoint) => {
                     if let AccountEntry::Cached(
@@ -168,7 +169,7 @@ impl State {
             address,
             Recorded(old_account_entry.clone_cache_entry()),
         );
-        updated.then_some(checkpoints.last_layer_id())
+        updated.then(|| checkpoints.last_layer_id())
     }
 
     #[cfg(any(test, feature = "testonly_code"))]

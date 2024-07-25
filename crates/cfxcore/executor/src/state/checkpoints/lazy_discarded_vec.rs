@@ -53,7 +53,7 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
     #[inline]
     fn total_len(&self) -> usize { self.inner_vec.len() }
 
-    pub fn last_layer_id(&self) -> usize { self.inner_vec.len() }
+    pub fn last_layer_id(&self) -> usize { self.inner_vec.len() - 1 }
 
     pub fn is_empty(&self) -> bool {
         if self.undiscard_indices.is_empty() {
@@ -148,12 +148,12 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
     pub fn elements_from_index(
         &self, undiscard_element_index: usize,
     ) -> impl Iterator<Item = (&T, usize)> {
-        let mut element_index = self.undiscard_indices.len();
-        if undiscard_element_index < self.undiscarded_len() {
-            for _ in (undiscard_element_index..self.undiscarded_len()).rev() {
-                element_index = self.undiscard_indices[element_index - 1];
-            }
-        }
+        let element_index = if undiscard_element_index < self.undiscarded_len()
+        {
+            self.undiscard_indices[undiscard_element_index]
+        } else {
+            self.total_len()
+        };
         self.inner_vec
             .iter()
             .skip(element_index)
