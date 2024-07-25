@@ -316,7 +316,7 @@ class RpcClient:
     def clear_tx_pool(self):
         self.node.txpool_clear()
 
-    # a temporary patch for transaction compatibity
+    # a temporary patch for transaction compatibility
     def send_tx(self, tx: Union[Transaction, SignedTransaction], wait_for_receipt=False, wait_for_catchup=True) -> str:
         if isinstance(tx, SignedTransaction):
             encoded = cast(str, tx.rawTransaction.hex())
