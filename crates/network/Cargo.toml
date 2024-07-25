@@ -4,15 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cfx-addr = { path = "../cfx_addr" }
-cfx-bytes = { path = "../cfx_bytes" }
-cfx-types = { path = "../cfx_types" }
-cfxkey = { path = "../cfx_key" }
+cfx-addr = { workspace = true }
+cfx-bytes = { workspace = true }
+cfx-types = { workspace = true }
+cfxkey = { workspace = true }
 mio = "0.6.8"
 parking_lot = "0.11"
 log = "0.4"
 slab = "0.4"
-io = { path = "../util/io" }
+io = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
 bytes = "0.4"
 rlp = "0.4.0"
@@ -32,10 +32,10 @@ strum = "0.11.0"
 strum_macros = "0.11.0"
 lazy_static = "1.4"
 byte-unit = "1.1.0"
-priority-send-queue = { path = "../util/priority-send-queue" }
-metrics = { path = "../util/metrics" }
-throttling = { path = "../util/throttling" }
+priority-send-queue = { workspace = true }
+metrics = { workspace = true }
+throttling = { workspace = true }
 natpmp = "0.2"
-malloc_size_of = { path = "../util/malloc_size_of" }
+malloc_size_of = { workspace = true }
 diem-crypto = { path= "../cfxcore/core/src/pos/crypto/crypto" }
 diem-types = { path= "../cfxcore/core/src/pos/types" }

@@ -32,7 +32,7 @@ bcs = "0.1.2"
 diem-crypto = { path = "../crypto/crypto" }
 diem-crypto-derive = { path = "../crypto/crypto-derive" }
 move-core-types = { path = "move-core-types" }
-cfx-types = { path = "../../../../../cfx_types" }
+cfx-types = { workspace = true }
 pow-types = {path = "pow-types" }
 diem-logger = {path = "../common/logger" }
 
