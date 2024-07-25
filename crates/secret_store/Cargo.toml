@@ -7,10 +7,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cfx-types = { path = "../cfx_types" }
+cfx-types = { workspace = true }
 parking_lot = "0.11"
 rlp = "0.4.0"
 rand = "0.7"
-cfxkey = { path = "../cfx_key" }
-malloc_size_of_derive = {path = "../util/malloc_size_of_derive" }
+cfxkey = { workspace = true }
+malloc_size_of_derive = { workspace = true }
 malloc_size_of= {path = "../util/malloc_size_of" }

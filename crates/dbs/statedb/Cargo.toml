@@ -7,22 +7,22 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-cfx-internal-common = { path = "../../cfxcore/internal_common" }
-cfx-parameters = { path = "../../cfxcore/parameters" }
-cfx-db-errors = { path = "../db-errors" }
-cfx-storage = { path = "../storage" }
-cfx-types = { path = "../../cfx_types" }
+cfx-internal-common = { workspace = true }
+cfx-parameters = { workspace = true }
+cfx-db-errors = { workspace = true }
+cfx-storage = { workspace = true }
+cfx-types = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
 hashbrown = "0.7.1"
 log = "0.4"
 parking_lot = "0.11"
-primitives = { path = "../../primitives", optional = true }
+primitives = { workspace = true, optional = true }
 rlp = "0.4.0"
 tiny-keccak = "2.0.2"
 lazy_static = "1.4.0"
 
 [dev-dependencies]
-primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }
+primitives = { workspace = true, features = ["test_no_account_length_check"] }
 
 [features]
 default = ["primitives"]

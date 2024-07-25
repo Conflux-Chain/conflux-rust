@@ -16,4 +16,4 @@ license-file.workspace = true
 alloy-primitives = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["alloc"] }
-cfx-types = { path = "../cfx_types" }
+cfx-types = { workspace = true }

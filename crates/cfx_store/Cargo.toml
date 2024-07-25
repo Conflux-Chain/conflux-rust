@@ -8,8 +8,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 log = "0.4"
 libc = "0.2"
 rand = "0.7"
-cfx-types = { path = "../cfx_types" }
-cfxkey = { path = "../cfx_key" }
+cfx-types = { workspace = true }
+cfxkey = { workspace = true }
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
