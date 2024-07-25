@@ -5,9 +5,9 @@ edition = "2018"
 
 
 [dependencies]
-cfx-types = {path = "../../cfx_types" }
+cfx-types = { workspace = true }
 keccak-hash = "0.5"
-solidity-abi-derive = {path = "../solidity-abi-derive" }
+solidity-abi-derive = { workspace = true }
 
 [dev-dependencies]
 lazy_static = "1.4"
