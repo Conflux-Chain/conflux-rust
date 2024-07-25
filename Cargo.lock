@@ -1627,7 +1627,7 @@ dependencies = [
  "serde_json",
  "smallvec 1.10.0",
  "tempdir",
- "time 0.1.45",
+ "time 0.3.20",
  "tiny-keccak 1.5.0",
 ]
 
@@ -4312,7 +4312,7 @@ dependencies = [
  "num_cpus",
  "parking_lot 0.11.2",
  "slab",
- "time 0.1.45",
+ "time 0.3.20",
  "timer",
 ]
 
@@ -4979,7 +4979,7 @@ dependencies = [
  "log4rs",
  "parking_lot 0.11.2",
  "rand 0.7.3",
- "time 0.1.45",
+ "time 0.3.20",
  "timer",
  "tokio 1.26.0",
 ]
