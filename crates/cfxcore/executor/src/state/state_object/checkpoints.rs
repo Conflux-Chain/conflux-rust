@@ -74,7 +74,6 @@ impl CheckpointLayerTrait for CheckpointLayer {
                     "Cache should always have more keys than checkpoint"
                 );
             };
-            dbg!("mmm");
             // match v {
             //     Recorded(mut entry_in_checkpoint) => {
             //         if let AccountEntry::Cached(
@@ -119,7 +118,7 @@ impl CheckpointLayerTrait for CheckpointLayer {
 
 fn revert_account(entry: &mut AccountEntry, state_checkpoint_id: usize) {
     if let AccountEntry::Cached(ref mut overlay_account, _) = entry {
-        overlay_account.revert_checkpoints(state_checkpoint_id);
+        overlay_account.revert_checkpoint(state_checkpoint_id);
     }
 }
 
@@ -147,7 +146,7 @@ impl State {
             if let Some(AccountEntry::Cached(ref mut overlay_account, true)) =
                 self.cache.get_mut().get_mut(&addr)
             {
-                overlay_account.clear_checkpoints();
+                overlay_account.clear_checkpoint();
             }
         }
     }

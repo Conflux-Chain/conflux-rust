@@ -25,7 +25,7 @@ pub trait CheckpointLayerTrait {
     ) -> bool {
         use std::collections::hash_map::Entry::*;
         match self.as_hash_map().entry(key) {
-            Occupied(_) => false,
+            Occupied(_) => { false },
             Vacant(e) => {
                 e.insert(value);
                 true
@@ -112,8 +112,6 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
         Some(additional_info)
     }
 
-    pub fn last_layer(&self) -> Option<&T> { self.inner_vec.last() }
-
     pub fn notify_element(
         &mut self, key: T::Key, value: CheckpointEntry<T::Value>,
     ) -> bool {
@@ -134,20 +132,12 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
     fn undiscarded_len(&self) -> usize { self.undiscard_indices.len() }
 
     #[cfg(test)]
-    pub fn get_info_of_all_elements(&self) -> Vec<T::ExtInfo> {
-        self.inner_vec
-            .iter()
-            .map(|element| element.get_additional_info())
-            .collect()
-    }
-
-    #[cfg(test)]
     pub fn len(&self) -> usize { self.undiscarded_len() }
 
     #[cfg(test)]
     pub fn elements_from_index(
         &self, undiscard_element_index: usize,
-    ) -> impl Iterator<Item = (&T, usize)> {
+    ) -> impl Iterator<Item = &T> {
         let element_index = if undiscard_element_index < self.undiscarded_len()
         {
             self.undiscard_indices[undiscard_element_index]
@@ -157,6 +147,5 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
         self.inner_vec
             .iter()
             .skip(element_index)
-            .zip(element_index..self.total_len())
     }
 }

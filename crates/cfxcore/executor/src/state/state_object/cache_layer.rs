@@ -174,7 +174,7 @@ impl State {
             account_entry
                 .account_mut()
                 .unwrap()
-                .add_checkpoint(state_checkpoint_id);
+                .set_checkpoint(state_checkpoint_id);
         }
 
         Ok(RwLockWriteGuard::map(cache, |c| {

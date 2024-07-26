@@ -19,6 +19,7 @@ impl OverlayAccount {
 
         // Commit storage entries
 
+        assert!(self.storage_write_checkpoint.is_none());
         let write_cache = &mut self.storage_write_cache.write();
         for (k, mut v) in write_cache.drain() {
             let address_key =
