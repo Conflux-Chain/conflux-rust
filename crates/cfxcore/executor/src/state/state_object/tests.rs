@@ -131,7 +131,7 @@ fn checkpoint_basic() {
         state.balance(&address_with_space).unwrap(),
         U256::from(1070u64)
     );
-    state.revert_to_checkpoint(); // ?
+    state.revert_to_checkpoint();
     assert_eq!(
         state.balance(&address_with_space).unwrap(),
         U256::from(69u64)
@@ -616,7 +616,7 @@ fn checkpoint_get_storage_at() {
         .unwrap();
     let c5 = state.checkpoint();
     substates.push(Substate::new());
-
+    
     assert_eq!(
         state.checkpoint_storage_at(cm1, &contract_a_s, &k).unwrap(),
         Some(U256::from(0xffff))
