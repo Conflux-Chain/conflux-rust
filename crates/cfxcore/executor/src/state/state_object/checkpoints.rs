@@ -57,6 +57,7 @@ impl CheckpointLayerTrait for CheckpointLayer {
     fn update(
         self, cache: &mut HashMap<Self::Key, Self::Value>, self_id: usize,
     ) {
+        dbg!(self_id);
         for (k, v) in self.entries.into_iter() {
             let mut entry_in_cache = if let Occupied(e) = cache.entry(k) {
                 e
@@ -99,8 +100,8 @@ impl CheckpointLayerTrait for CheckpointLayer {
             // }
             match v {
                 Recorded(entry_in_checkpoint) => {
-                    *entry_in_cache.get_mut() = entry_in_checkpoint;
                     revert_account(entry_in_cache.get_mut(), self_id);
+                    *entry_in_cache.get_mut() = entry_in_checkpoint;
                 }
                 Unchanged => {
                     // If the AccountEntry in cache does not have a dirty bit,
@@ -117,6 +118,7 @@ impl CheckpointLayerTrait for CheckpointLayer {
 }
 
 fn revert_account(entry: &mut AccountEntry, state_checkpoint_id: usize) {
+    dbg!(state_checkpoint_id);
     if let AccountEntry::Cached(ref mut overlay_account, _) = entry {
         overlay_account.revert_checkpoint(state_checkpoint_id);
     }

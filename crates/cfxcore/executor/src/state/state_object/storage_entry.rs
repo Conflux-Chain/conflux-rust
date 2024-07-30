@@ -125,6 +125,7 @@ impl State {
         }
         let binding = self.cache.read();
         let cache = binding.get(address);
+        dbg!("outer cache");
         match cache {
             Some(AccountEntry::Cached(ref account, _)) => {
                 dbg!(account.cached_value_at_checkpoint(key, 0));

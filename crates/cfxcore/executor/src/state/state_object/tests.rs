@@ -616,6 +616,9 @@ fn checkpoint_get_storage_at() {
         .unwrap();
     let c5 = state.checkpoint();
     substates.push(Substate::new());
+
+    dbg!("before discard&revert");
+    state.debug_checkpoint_storage_at(&contract_a_s, &k);
     
     assert_eq!(
         state.checkpoint_storage_at(cm1, &contract_a_s, &k).unwrap(),
@@ -649,6 +652,10 @@ fn checkpoint_get_storage_at() {
     state.discard_checkpoint(); // Commit/discard c5.
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
+
+    dbg!("after discard");
+    state.debug_checkpoint_storage_at(&contract_a_s, &k);
+
     assert_eq!(state.balance(&contract_a_s).unwrap(), U256::zero());
     assert_eq!(
         state.checkpoint_storage_at(cm1, &contract_a_s, &k).unwrap(),
@@ -677,6 +684,8 @@ fn checkpoint_get_storage_at() {
 
     state.revert_to_checkpoint(); // Revert to c4.
     substates.pop();
+    dbg!("revert to c4");
+    state.debug_checkpoint_storage_at(&contract_a_s, &k);
     assert_eq!(state.balance(&contract_a_s).unwrap(), U256::zero());
     assert_eq!(
         state.checkpoint_storage_at(cm1, &contract_a_s, &k).unwrap(),
