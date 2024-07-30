@@ -80,36 +80,6 @@ pub fn revert_checkpoint<T: Clone>(
     }
 }
 
-#[derive(Debug, Default)]
-pub struct StorageWriteCache<T: Clone> {
-    inner_cache: HashMap<Vec<u8>, T>,
-    inner_checkpoint: Option<WriteCheckpointLayer<T>>,
-}
-
-impl<T: Clone> StorageWriteCache<T> {
-    pub fn revert_checkpoint(&mut self, state_checkpoint_id: usize) {
-        if self.inner_checkpoint.is_none() {
-            return ();
-        }
-        let last = self.inner_checkpoint.take().unwrap();
-        let account_state_checkpoint_id = last.state_checkpoint_id;
-        if account_state_checkpoint_id >= state_checkpoint_id {
-            last.update(&mut self.inner_cache, 0);
-        }
-    }
-
-    pub fn get(&self, key: &[u8]) -> Option<&T> { self.inner_cache.get(key) }
-
-    pub fn insert(&mut self, key: Vec<u8>, value: T) {
-        let old_value = self.inner_cache.insert(key.clone(), value);
-        if self.inner_checkpoint.is_none() {
-            return ();
-        }
-        let last = self.inner_checkpoint.as_mut().unwrap();
-        last.insert_on_absent(key, CheckpointEntry::from_cache(old_value));
-    }
-}
-
 pub fn insert_and_notify<T: Clone + std::fmt::Debug>(
     key: Vec<u8>, value: T, cache: &mut HashMap<Vec<u8>, T>,
     checkpoint: &mut Option<WriteCheckpointLayer<T>>,
@@ -126,13 +96,13 @@ impl OverlayAccount {
     pub fn set_checkpoint(&mut self, state_checkpoint_id: usize) {
         self.storage_write_checkpoint =
             Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
-        self.transient_storage.write().inner_checkpoint =
+        self.transient_storage_checkpoint =
             Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
     }
 
     pub fn clear_checkpoint(&mut self) {
         self.storage_write_checkpoint = None;
-        self.transient_storage.write().inner_checkpoint = None;
+        self.transient_storage_checkpoint = None;
     }
 
     pub fn revert_checkpoint(&mut self, state_checkpoint_id: usize) {
@@ -141,9 +111,11 @@ impl OverlayAccount {
             state_checkpoint_id,
             &mut self.storage_write_cache.write(),
         );
-        self.transient_storage
-            .write()
-            .revert_checkpoint(state_checkpoint_id);
+        revert_checkpoint(
+            self.transient_storage_checkpoint.take(),
+            state_checkpoint_id, 
+            &mut self.transient_storage_cache.write(),
+        )
     }
 }
 

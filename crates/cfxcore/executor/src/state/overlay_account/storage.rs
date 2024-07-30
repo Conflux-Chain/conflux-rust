@@ -213,7 +213,7 @@ impl OverlayAccount {
     }
 
     pub fn transient_storage_at(&self, key: &[u8]) -> U256 {
-        self.transient_storage
+        self.transient_storage_cache
             .read()
             .get(key)
             .cloned()
@@ -239,7 +239,12 @@ impl OverlayAccount {
     }
 
     pub fn transient_set_storage(&mut self, key: Vec<u8>, value: U256) {
-        self.transient_storage.write().insert(key, value);
+        insert_and_notify(
+            key,
+            value,
+            &mut self.transient_storage_cache.write(),
+            &mut self.transient_storage_checkpoint,
+        );
     }
 
     pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {
