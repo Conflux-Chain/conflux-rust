@@ -1,9 +1,9 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use crate::state::checkpoints::{
-        CheckpointEntry::{self, Recorded, Unchanged},
-        CheckpointLayerTrait,
-    };
+    CheckpointEntry::{self, Recorded, Unchanged},
+    CheckpointLayerTrait,
+};
 
 use super::OverlayAccount;
 
@@ -14,17 +14,16 @@ pub struct WriteCheckpointLayer<T: Clone> {
 }
 
 impl<T: Clone> WriteCheckpointLayer<T> {
-    pub fn get_key(&self, key: &[u8]) -> Option<CheckpointEntry<T>> {
-        self.storage_write.get(key).cloned()
-    }
-    pub fn get_state_cp_id(&self) -> usize {
-        self.state_checkpoint_id
-    }
+    #[cfg(test)]
+    pub fn get_state_cp_id(&self) -> usize { self.state_checkpoint_id }
 }
 
 impl<T: Clone> Default for WriteCheckpointLayer<T> {
     fn default() -> Self {
-        Self { storage_write: Default::default(), state_checkpoint_id: Default::default() }
+        Self {
+            storage_write: Default::default(),
+            state_checkpoint_id: Default::default(),
+        }
     }
 }
 
@@ -67,7 +66,10 @@ impl<T: Clone> CheckpointLayerTrait for WriteCheckpointLayer<T> {
     }
 }
 
-pub fn revert_checkpoint<T: Clone>(checkpoint: Option<WriteCheckpointLayer<T>>, state_checkpoint_id: usize, cache: &mut HashMap<Vec<u8>, T>) {
+pub fn revert_checkpoint<T: Clone>(
+    checkpoint: Option<WriteCheckpointLayer<T>>, state_checkpoint_id: usize,
+    cache: &mut HashMap<Vec<u8>, T>,
+) {
     if checkpoint.is_none() {
         return ();
     }
@@ -108,7 +110,10 @@ impl<T: Clone> StorageWriteCache<T> {
     }
 }
 
-pub fn insert_and_notify<T: Clone + std::fmt::Debug>(key: Vec<u8>, value: T, cache: &mut HashMap<Vec<u8>, T>, checkpoint: &mut Option<WriteCheckpointLayer<T>>) {
+pub fn insert_and_notify<T: Clone + std::fmt::Debug>(
+    key: Vec<u8>, value: T, cache: &mut HashMap<Vec<u8>, T>,
+    checkpoint: &mut Option<WriteCheckpointLayer<T>>,
+) {
     let old_value = cache.insert(key.clone(), value);
     if checkpoint.is_none() {
         return ();
@@ -119,12 +124,10 @@ pub fn insert_and_notify<T: Clone + std::fmt::Debug>(key: Vec<u8>, value: T, cac
 
 impl OverlayAccount {
     pub fn set_checkpoint(&mut self, state_checkpoint_id: usize) {
-        self.storage_write_checkpoint
-            = Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
-        self.transient_storage
-            .write()
-            .inner_checkpoint
-            = Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
+        self.storage_write_checkpoint =
+            Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
+        self.transient_storage.write().inner_checkpoint =
+            Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
     }
 
     pub fn clear_checkpoint(&mut self) {
@@ -133,7 +136,11 @@ impl OverlayAccount {
     }
 
     pub fn revert_checkpoint(&mut self, state_checkpoint_id: usize) {
-        revert_checkpoint(self.storage_write_checkpoint.take(), state_checkpoint_id, &mut self.storage_write_cache.write());
+        revert_checkpoint(
+            self.storage_write_checkpoint.take(),
+            state_checkpoint_id,
+            &mut self.storage_write_cache.write(),
+        );
         self.transient_storage
             .write()
             .revert_checkpoint(state_checkpoint_id);
