@@ -105,42 +105,6 @@ impl State {
 
 #[cfg(test)]
 impl State {
-    pub fn debug_checkpoint_storage_at(
-        &self, address: &AddressWithSpace, key: &Vec<u8>,
-    ) -> () {
-        use super::super::checkpoints::CheckpointEntry::*;
-        use crate::state::overlay_account::AccountEntry;
-
-        let checkpoints = self.checkpoints.read();
-        dbg!(key.last());
-        for (cp_id, checkpoint) in
-            checkpoints.elements_from_index(0).enumerate()
-        {
-            dbg!(cp_id);
-            match checkpoint.entries().get(address) {
-                Some(Recorded(AccountEntry::Cached(ref account, _))) => {
-                    dbg!(account.cached_value_at_checkpoint(key, 0));
-                    dbg!(account.cached_value_at_cache(key));
-                }
-                others => {
-                    dbg!(others);
-                }
-            }
-        }
-        let binding = self.cache.read();
-        let cache = binding.get(address);
-        dbg!("outer cache");
-        match cache {
-            Some(AccountEntry::Cached(ref account, _)) => {
-                dbg!(account.cached_value_at_checkpoint(key, 0));
-                dbg!(account.cached_value_at_cache(key));
-            }
-            others => {
-                dbg!(others);
-            }
-        }
-    }
-
     /// Get the value of storage at a specific checkpoint.
     pub fn checkpoint_storage_at(
         &self, start_checkpoint_index: usize, address: &AddressWithSpace,
@@ -277,7 +241,6 @@ impl State {
                 }
             }
 
-            dbg!(&kind);
             kind.expect("start_checkpoint_index is checked to be below checkpoints_len; for loop above must have been executed at least once; it will either early return, or set the kind value to Some; qed")
         };
 
