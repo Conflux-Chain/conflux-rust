@@ -66,7 +66,7 @@ use std::{collections::HashMap, sync::Arc};
 #[cfg(test)]
 use cfx_types::AddressSpaceUtil;
 
-use self::checkpoints::{StorageWriteCache, WriteCheckpointLayer};
+use self::checkpoints::WriteCheckpointLayer;
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
@@ -141,7 +141,8 @@ pub struct OverlayAccount {
     storage_write_checkpoint: Option<WriteCheckpointLayer<StorageValue>>,
 
     /// Transient storage from CIP-142
-    transient_storage: Arc<RwLock<StorageWriteCache<U256>>>,
+    transient_storage_cache: Arc<RwLock<HashMap<Vec<u8>, U256>>>,
+    transient_storage_checkpoint: Option<WriteCheckpointLayer<U256>>,
 
     /* ---------------
     -  Special flags -
