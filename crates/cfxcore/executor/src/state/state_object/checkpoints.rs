@@ -91,11 +91,11 @@ impl CheckpointLayerTrait for CheckpointLayer {
             //         *entry_in_cache.get_mut() = entry_in_checkpoint;
             //     }
             //     Unchanged => {
-            //         // If the AccountEntry in cache does not have a dirty bit,
-            //         // we can keep it in cache to avoid an duplicate db load.
-            //         if entry_in_cache.get().is_dirty() {
-            //             entry_in_cache.remove();
-            //         }
+            //         // If the AccountEntry in cache does not have a dirty
+            // bit,         // we can keep it in cache to avoid an
+            // duplicate db load.         if
+            // entry_in_cache.get().is_dirty() {             
+            // entry_in_cache.remove();         }
             //     }
             // }
             match v {

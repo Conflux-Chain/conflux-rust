@@ -619,7 +619,7 @@ fn checkpoint_get_storage_at() {
 
     dbg!("before discard&revert");
     state.debug_checkpoint_storage_at(&contract_a_s, &k);
-    
+
     assert_eq!(
         state.checkpoint_storage_at(cm1, &contract_a_s, &k).unwrap(),
         Some(U256::from(0xffff))

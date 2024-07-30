@@ -25,7 +25,7 @@ pub trait CheckpointLayerTrait {
     ) -> bool {
         use std::collections::hash_map::Entry::*;
         match self.as_hash_map().entry(key) {
-            Occupied(_) => { false },
+            Occupied(_) => false,
             Vacant(e) => {
                 e.insert(value);
                 true
@@ -144,8 +144,6 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
         } else {
             self.total_len()
         };
-        self.inner_vec
-            .iter()
-            .skip(element_index)
+        self.inner_vec.iter().skip(element_index)
     }
 }

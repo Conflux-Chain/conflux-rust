@@ -48,14 +48,24 @@ impl OverlayAccount {
             owner: new_owner,
             value,
         };
-        
-        insert_and_notify(key.clone(), new_entry, &mut self.storage_write_cache.write(), &mut self.storage_write_checkpoint);
+
+        insert_and_notify(
+            key.clone(),
+            new_entry,
+            &mut self.storage_write_cache.write(),
+            &mut self.storage_write_checkpoint,
+        );
         Ok(())
     }
 
     #[cfg(test)]
     pub fn set_storage_simple(&mut self, key: Vec<u8>, value: U256) {
-        insert_and_notify(key.clone(), StorageValue { value, owner: None }, &mut self.storage_write_cache.write(), &mut self.storage_write_checkpoint);
+        insert_and_notify(
+            key.clone(),
+            StorageValue { value, owner: None },
+            &mut self.storage_write_cache.write(),
+            &mut self.storage_write_checkpoint,
+        );
     }
 
     pub fn delete_storage_range(
@@ -153,7 +163,13 @@ impl OverlayAccount {
         if self.storage_write_checkpoint.is_none() {
             return None;
         }
-        if self.storage_write_checkpoint.as_ref().unwrap().get_state_cp_id() < state_checkpoint_id {
+        if self
+            .storage_write_checkpoint
+            .as_ref()
+            .unwrap()
+            .get_state_cp_id()
+            < state_checkpoint_id
+        {
             return None;
         }
         self.storage_write_checkpoint.as_ref().unwrap().get(key)
@@ -164,10 +180,10 @@ impl OverlayAccount {
         &self, key: &[u8], state_checkpoint_id: usize,
     ) -> Option<CheckpointEntry<U256>> {
         self.cached_entry_at_checkpoint(key, state_checkpoint_id)
-            .map(|e: CheckpointEntry<StorageValue>| {
-                match e {
-                   CheckpointEntry::Unchanged => CheckpointEntry::Unchanged,
-                   CheckpointEntry::Recorded(sv) => CheckpointEntry::Recorded(sv.value)
+            .map(|e: CheckpointEntry<StorageValue>| match e {
+                CheckpointEntry::Unchanged => CheckpointEntry::Unchanged,
+                CheckpointEntry::Recorded(sv) => {
+                    CheckpointEntry::Recorded(sv.value)
                 }
             })
     }
@@ -237,7 +253,12 @@ impl OverlayAccount {
         let mut entry = self.storage_entry_at(db, key)?;
         if !entry.value.is_zero() {
             entry.value = value;
-            insert_and_notify(key.to_vec(), entry, &mut self.storage_write_cache.write(), &mut self.storage_write_checkpoint);
+            insert_and_notify(
+                key.to_vec(),
+                entry,
+                &mut self.storage_write_cache.write(),
+                &mut self.storage_write_checkpoint,
+            );
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
