@@ -148,7 +148,9 @@ impl OverlayAccount {
             storage_write_checkpoint: self.storage_write_checkpoint.clone(),
             storage_read_cache: self.storage_read_cache.clone(),
             transient_storage_cache: self.transient_storage_cache.clone(),
-            transient_storage_checkpoint: self.transient_storage_checkpoint.clone(),
+            transient_storage_checkpoint: self
+                .transient_storage_checkpoint
+                .clone(),
             storage_layout_change: self.storage_layout_change.clone(),
         }
     }

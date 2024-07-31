@@ -113,7 +113,7 @@ impl OverlayAccount {
         );
         revert_checkpoint(
             self.transient_storage_checkpoint.take(),
-            state_checkpoint_id, 
+            state_checkpoint_id,
             &mut self.transient_storage_cache.write(),
         )
     }
