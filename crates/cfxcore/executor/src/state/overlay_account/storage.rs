@@ -1,4 +1,4 @@
-use super::{checkpoints::insert_and_notify, Substate};
+use super::{checkpoints::notify_after_insert, Substate};
 
 #[cfg(test)]
 use super::StorageLayout;
@@ -49,10 +49,13 @@ impl OverlayAccount {
             value,
         };
 
-        insert_and_notify(
-            key.clone(),
-            new_entry,
-            &mut self.storage_write_cache.write(),
+        let value_to_notify = self
+            .storage_write_cache
+            .write()
+            .insert(key.clone(), new_entry);
+        notify_after_insert(
+            key,
+            value_to_notify,
             &mut self.storage_write_checkpoint,
         );
         Ok(())
@@ -60,10 +63,13 @@ impl OverlayAccount {
 
     #[cfg(test)]
     pub fn set_storage_simple(&mut self, key: Vec<u8>, value: U256) {
-        insert_and_notify(
-            key.clone(),
-            StorageValue { value, owner: None },
-            &mut self.storage_write_cache.write(),
+        let value_to_notify = self
+            .storage_write_cache
+            .write()
+            .insert(key.clone(), StorageValue { value, owner: None });
+        notify_after_insert(
+            key,
+            value_to_notify,
             &mut self.storage_write_checkpoint,
         );
     }
@@ -239,10 +245,13 @@ impl OverlayAccount {
     }
 
     pub fn transient_set_storage(&mut self, key: Vec<u8>, value: U256) {
-        insert_and_notify(
+        let value_to_notify = self
+            .transient_storage_cache
+            .write()
+            .insert(key.clone(), value);
+        notify_after_insert(
             key,
-            value,
-            &mut self.transient_storage_cache.write(),
+            value_to_notify,
             &mut self.transient_storage_checkpoint,
         );
     }
@@ -258,10 +267,11 @@ impl OverlayAccount {
         let mut entry = self.storage_entry_at(db, key)?;
         if !entry.value.is_zero() {
             entry.value = value;
-            insert_and_notify(
+            let value_to_notify =
+                self.storage_write_cache.write().insert(key.to_vec(), entry);
+            notify_after_insert(
                 key.to_vec(),
-                entry,
-                &mut self.storage_write_cache.write(),
+                value_to_notify,
                 &mut self.storage_write_checkpoint,
             );
         } else {

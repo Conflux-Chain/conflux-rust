@@ -80,11 +80,10 @@ pub fn revert_checkpoint<T: Clone>(
     }
 }
 
-pub fn insert_and_notify<T: Clone + std::fmt::Debug>(
-    key: Vec<u8>, value: T, cache: &mut HashMap<Vec<u8>, T>,
+pub fn notify_after_insert<T: Clone>(
+    key: Vec<u8>, old_value: Option<T>,
     checkpoint: &mut Option<WriteCheckpointLayer<T>>,
 ) {
-    let old_value = cache.insert(key.clone(), value);
     if checkpoint.is_none() {
         return ();
     }
