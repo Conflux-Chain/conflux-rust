@@ -16,6 +16,11 @@ pub struct WriteCheckpointLayer<T: Clone> {
 impl<T: Clone> WriteCheckpointLayer<T> {
     #[cfg(test)]
     pub fn get_state_cp_id(&self) -> usize { self.state_checkpoint_id }
+
+    #[cfg(test)]
+    pub fn get(&self, key: &[u8]) -> Option<CheckpointEntry<T>> {
+        self.storage_write.get(key).cloned()
+    }
 }
 
 impl<T: Clone> Default for WriteCheckpointLayer<T> {
@@ -33,11 +38,6 @@ impl<T: Clone> WriteCheckpointLayer<T> {
             storage_write: HashMap::new(),
             state_checkpoint_id,
         }
-    }
-
-    #[cfg(test)]
-    pub fn get(&self, key: &[u8]) -> Option<CheckpointEntry<T>> {
-        self.storage_write.get(key).cloned()
     }
 }
 
