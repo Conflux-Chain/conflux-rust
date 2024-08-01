@@ -590,9 +590,6 @@ mod tests {
         substate::Substate,
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
-    use cfx_storage::{
-        new_storage_manager_for_testing, tests::FakeStateManager,
-    };
     use cfx_types::{
         address_util::AddressUtil, Address, AddressSpaceUtil, Space, H256, U256,
     };
@@ -637,7 +634,6 @@ mod tests {
     // database directory.
     #[allow(unused)]
     struct TestSetup {
-        storage_manager: FakeStateManager,
         state: State,
         machine: Machine,
         spec: Spec,
@@ -648,8 +644,7 @@ mod tests {
 
     impl TestSetup {
         fn new() -> Self {
-            let storage_manager = new_storage_manager_for_testing();
-            let state = get_state_for_genesis_write(&*storage_manager);
+            let state = get_state_for_genesis_write();
             let machine = new_machine_with_builtin(
                 Default::default(),
                 Default::default(),
@@ -659,7 +654,7 @@ mod tests {
             let callstack = CallStackInfo::new();
 
             let mut setup = Self {
-                storage_manager,
+                // storage_manager,
                 state,
                 machine,
                 spec,

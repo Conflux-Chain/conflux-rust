@@ -8,6 +8,8 @@ extern crate error_chain;
 extern crate log;
 
 pub mod global_params;
+#[cfg(feature = "testonly_code")]
+mod in_memory_storage;
 mod statedb_ext;
 
 use cfx_db_errors::statedb as error;
@@ -74,6 +76,22 @@ mod impls {
                 storage,
                 checkpoints: Default::default(),
             }
+        }
+
+        #[cfg(feature = "testonly_code")]
+        pub fn new_for_unit_test() -> Self {
+            use self::in_memory_storage::InmemoryStorage;
+
+            Self::new(Box::new(InmemoryStorage::default()))
+        }
+
+        #[cfg(feature = "testonly_code")]
+        pub fn new_for_unit_test_with_epoch(epoch_id: &EpochId) -> Self {
+            use self::in_memory_storage::InmemoryStorage;
+
+            Self::new(Box::new(
+                InmemoryStorage::from_epoch_id(epoch_id).unwrap(),
+            ))
         }
 
         /// Set `key` to `value` in latest checkpoint if not set previously.
