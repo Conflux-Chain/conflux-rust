@@ -53,7 +53,7 @@ pub use self::{
     staking::initialize_or_update_dao_voted_params,
 };
 #[cfg(test)]
-pub use tests::get_state_for_genesis_write;
+pub use tests::{get_state_by_epoch_id, get_state_for_genesis_write};
 
 use self::checkpoints::CheckpointLayer;
 use super::{
