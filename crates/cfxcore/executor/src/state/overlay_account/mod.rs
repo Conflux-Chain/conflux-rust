@@ -192,13 +192,11 @@ impl OverlayAccount {
 mod tests_another {
     use super::*;
     use crate::state::get_state_for_genesis_write;
-    use cfx_storage::tests::new_state_manager_for_unit_test;
     use primitives::is_default::IsDefault;
     use std::str::FromStr;
 
     fn test_account_is_default(account: &mut OverlayAccount) {
-        let storage_manager = new_state_manager_for_unit_test();
-        let state = get_state_for_genesis_write(&storage_manager);
+        let state = get_state_for_genesis_write();
 
         assert!(account.as_account().is_default());
 
