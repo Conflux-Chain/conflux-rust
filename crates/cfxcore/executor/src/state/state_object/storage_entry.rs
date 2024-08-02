@@ -111,7 +111,10 @@ impl State {
         key: &Vec<u8>,
     ) -> DbResult<Option<U256>> {
         use super::super::checkpoints::CheckpointEntry::*;
-        use crate::state::overlay_account::{AccountEntry, OverlayAccount};
+        use crate::state::{
+            checkpoints::CheckpointLayerTrait,
+            overlay_account::{AccountEntry, OverlayAccount},
+        };
         use cfx_statedb::StateDbExt;
         use primitives::StorageKey;
 
@@ -136,7 +139,7 @@ impl State {
             let mut checkpoints_iter =
                 checkpoints.elements_from_index(start_checkpoint_index);
             for checkpoint in &mut checkpoints_iter {
-                match checkpoint.entries().get(address) {
+                match checkpoint.as_hash_map().get(address) {
                     Some(Recorded(AccountEntry::Cached(ref account, _))) => {
                         first_account = Some(account);
                         break;
@@ -181,7 +184,7 @@ impl State {
                     if let Some(Recorded(AccountEntry::Cached(
                         ref account,
                         _,
-                    ))) = checkpoint.entries().get(address)
+                    ))) = checkpoint.as_hash_map().get(address)
                     {
                         if !first_account.unwrap().eq_write_cache(account) {
                             account_changed = true;

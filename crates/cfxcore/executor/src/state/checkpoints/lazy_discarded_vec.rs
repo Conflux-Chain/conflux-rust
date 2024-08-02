@@ -8,40 +8,36 @@ use super::CheckpointEntry;
 pub trait CheckpointLayerTrait {
     type Key: Eq + Hash + Clone;
     type Value;
-    type ExtInfo;
-
-    fn get_additional_info(&self) -> Self::ExtInfo;
 
     fn as_hash_map(
+        & self,
+    ) -> & HashMap<Self::Key, CheckpointEntry<Self::Value>>;
+
+    fn as_hash_map_mut(
         &mut self,
     ) -> &mut HashMap<Self::Key, CheckpointEntry<Self::Value>>;
-
-    fn update(
-        self, cache: &mut HashMap<Self::Key, Self::Value>, self_id: usize,
-    );
 }
 
 #[derive(Debug, Clone)]
 pub struct LazyDiscardedVec<T: CheckpointLayerTrait> {
     inner_vec: Vec<T>,
-    undiscard_indices: Vec<usize>,
+    bundle_start_indices: Vec<usize>,
 }
 
 impl<T: CheckpointLayerTrait> Default for LazyDiscardedVec<T> {
     fn default() -> Self {
         Self {
             inner_vec: Default::default(),
-            undiscard_indices: Default::default(),
+            bundle_start_indices: Default::default(),
         }
     }
 }
 
 impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
-    #[inline]
     fn total_len(&self) -> usize { self.inner_vec.len() }
 
     pub fn is_empty(&self) -> bool {
-        if self.undiscard_indices.is_empty() {
+        if self.bundle_start_indices.is_empty() {
             assert!(self.inner_vec.is_empty());
             true
         } else {
@@ -49,62 +45,57 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
         }
     }
 
-    pub fn push_layer(&mut self, new_element: T) -> usize {
-        self.undiscard_indices.push(self.total_len());
+    pub fn push_checkpoint(&mut self, new_element: T) -> usize {
+        self.bundle_start_indices.push(self.total_len());
         self.inner_vec.push(new_element);
-        self.undiscard_indices.len() - 1
+        self.bundle_start_indices.len() - 1
     }
 
-    pub fn discard_layer(&mut self) -> Option<HashSet<T::Key>> {
-        self.undiscard_indices.pop()?;
+    pub fn discard_checkpoint(&mut self) -> Option<HashSet<T::Key>> {
+        self.bundle_start_indices.pop()?;
 
-        let mut cleared_keys = HashSet::default();
-
-        if self.undiscard_indices.is_empty() {
-            cleared_keys = self
-                .inner_vec
-                .iter_mut()
-                .flat_map(|x| x.as_hash_map().keys())
-                .cloned()
-                .collect();
-            self.clear();
+        if self.bundle_start_indices.is_empty() {
+            Some(self.discard_all_checkpoints())
+        } else {
+            None
         }
-        Some(cleared_keys)
     }
 
-    fn pop_lazy_discarded_layers(&mut self) -> Option<(usize, Vec<T>)> {
-        let index = self.undiscard_indices.pop()?;
-        assert!(index < self.total_len());
-        let reverted_layers = self.inner_vec.split_off(index);
-        Some((index, reverted_layers))
+    fn discard_all_checkpoints(&mut self) -> HashSet<T::Key> {
+        let cleared_keys = self
+            .inner_vec
+            .iter()
+            .flat_map(|x| x.as_hash_map().keys())
+            .cloned()
+            .collect();
+        self.clear();
+        cleared_keys
     }
 
-    pub fn revert_layer(
-        &mut self, cache: &mut HashMap<T::Key, T::Value>,
-    ) -> Option<T::ExtInfo> {
+    pub fn revert_to_checkpoint(
+        &mut self,
+    ) -> Option<impl Iterator<Item = (usize, T)>> {
+        let first_layer_id = self.bundle_start_indices.pop()?;
+        assert!(first_layer_id < self.total_len());
         let last_layer_id = self.total_len() - 1;
-        let (first_layer_id, reverted_layers) =
-            self.pop_lazy_discarded_layers()?;
 
-        let additional_info = reverted_layers[0].get_additional_info();
-        for (id, one_revert_element) in (first_layer_id..=last_layer_id)
-            .rev()
-            .zip(reverted_layers.into_iter().rev())
-        {
-            one_revert_element.update(cache, id);
-        }
+        let reverted_layers = self.inner_vec.split_off(first_layer_id);
 
-        Some(additional_info)
+        Some(
+            (first_layer_id..=last_layer_id)
+                .rev()
+                .zip(reverted_layers.into_iter().rev()),
+        )
     }
 
     pub fn clear(&mut self) {
         self.inner_vec.clear();
-        self.undiscard_indices.clear();
+        self.bundle_start_indices.clear();
     }
 
-    pub fn notify_element(
+    pub fn insert_element(
         &mut self, key: T::Key,
-        make_value: impl FnOnce(usize) -> CheckpointEntry<T::Value>,
+        value: impl FnOnce(usize) -> CheckpointEntry<T::Value>,
     ) {
         if self.is_empty() {
             return;
@@ -112,13 +103,14 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
 
         let last_layer_id = self.inner_vec.len() - 1;
         let last_element = self.inner_vec.last_mut().unwrap();
-        last_element.as_hash_map().entry(key).or_insert_with(|| make_value(last_layer_id));
+        last_element
+            .as_hash_map_mut()
+            .entry(key)
+            .or_insert_with(|| value(last_layer_id));
     }
 
- 
-
     #[cfg(test)]
-    fn undiscarded_len(&self) -> usize { self.undiscard_indices.len() }
+    fn undiscarded_len(&self) -> usize { self.bundle_start_indices.len() }
 
     #[cfg(test)]
     pub fn len(&self) -> usize { self.undiscarded_len() }
@@ -129,7 +121,7 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
     ) -> impl Iterator<Item = &T> {
         let element_index = if undiscard_element_index < self.undiscarded_len()
         {
-            self.undiscard_indices[undiscard_element_index]
+            self.bundle_start_indices[undiscard_element_index]
         } else {
             self.total_len()
         };
