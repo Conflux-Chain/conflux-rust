@@ -13,39 +13,20 @@ use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP, genesis::DEV_GENESIS_KEY_PAIR, staking::*,
 };
 use cfx_statedb::StateDb;
-use cfx_storage::{
-    tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
-    StorageManagerTrait,
-};
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, U256,
 };
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{EpochId, StorageKey, StorageLayout};
-use std::sync::Arc;
 
-fn get_state(
-    storage_manager: &Arc<StorageManager>, epoch_id: &EpochId,
-) -> State {
-    State::new(StateDb::new(
-        storage_manager
-            .get_state_for_next_epoch(
-                StateIndex::new_for_test_only_delta_mpt(epoch_id),
-                false,
-            )
-            .unwrap()
-            .unwrap(),
-    ))
-    .expect("Failed to initialize state")
+pub fn get_state_by_epoch_id(epoch_id: &EpochId) -> State {
+    State::new(StateDb::new_for_unit_test_with_epoch(epoch_id)).unwrap()
 }
 
 #[cfg(test)]
-pub fn get_state_for_genesis_write(
-    storage_manager: &Arc<StorageManager>,
-) -> State {
-    let mut state =
-        State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
-            .expect("Failed to initialize state");
+pub fn get_state_for_genesis_write() -> State {
+    let mut state = State::new(StateDb::new_for_unit_test())
+        .expect("Failed to initialize state");
 
     initialize_internal_contract_accounts(
         &mut state,
@@ -53,24 +34,12 @@ pub fn get_state_for_genesis_write(
     )
     .expect("no db error");
     let genesis_epoch_id = EpochId::default();
-    state
-        .commit(genesis_epoch_id, /* debug_record = */ None)
-        .expect(
-            // This is a comment to let cargo format the rest in a single line.
-            &concat!(file!(), ":", line!(), ":", column!()),
-        );
+    state.commit_for_test(genesis_epoch_id).expect(
+        // This is a comment to let cargo format the rest in a single line.
+        &concat!(file!(), ":", line!(), ":", column!()),
+    );
 
-    State::new(StateDb::new(
-        storage_manager
-            .get_state_for_next_epoch(
-                StateIndex::new_for_test_only_delta_mpt(&genesis_epoch_id),
-                false,
-            )
-            .expect(&concat!(file!(), ":", line!(), ":", column!()))
-            // Unwrap is safe because Genesis state exists.
-            .unwrap(),
-    ))
-    .expect("Failed to initialize state")
+    state
 }
 
 fn u256_to_vec(val: &U256) -> Vec<u8> {
@@ -81,8 +50,7 @@ fn u256_to_vec(val: &U256) -> Vec<u8> {
 
 #[test]
 fn checkpoint_basic() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut address = Address::zero();
     address.set_user_account_type_bits();
     let address_with_space = address.with_native_space();
@@ -145,8 +113,7 @@ fn checkpoint_basic() {
 
 #[test]
 fn checkpoint_nested() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut address = Address::zero();
     address.set_user_account_type_bits();
     let address_with_space = address.with_native_space();
@@ -198,8 +165,7 @@ fn checkpoint_nested() {
 
 #[test]
 fn checkpoint_revert_to_get_storage_at() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut address = Address::zero();
     address.set_contract_type_bits();
     let address_with_space = address.with_native_space();
@@ -251,8 +217,7 @@ fn checkpoint_revert_to_get_storage_at() {
 
 #[test]
 fn checkpoint_from_empty_get_storage_at() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut a = Address::zero();
     a.set_contract_type_bits();
     let a_s = a.with_native_space();
@@ -474,8 +439,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
 #[test]
 fn checkpoint_get_storage_at() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut a = Address::zero();
     a.set_user_account_type_bits();
     let a_s = a.with_native_space();
@@ -529,16 +493,11 @@ fn checkpoint_get_storage_at() {
         )
         .unwrap();
     state
-        .commit(BigEndianHash::from_uint(&U256::from(1u64)), None)
+        .commit_for_test(BigEndianHash::from_uint(&U256::from(1u64)))
         .unwrap();
 
     substates.clear();
     substates.push(Substate::new());
-
-    state = get_state(
-        &storage_manager,
-        &BigEndianHash::from_uint(&U256::from(1u64)),
-    );
 
     assert_eq!(
         state.storage_at(&contract_a_s, &k).unwrap(),
@@ -772,8 +731,7 @@ fn checkpoint_get_storage_at() {
 
 #[test]
 fn kill_account_with_checkpoints() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state_0 = get_state_for_genesis_write(&storage_manager);
+    let mut state_0 = get_state_for_genesis_write();
     let mut a = Address::zero();
     a.set_contract_type_bits();
     let a_s = a.with_native_space();
@@ -803,7 +761,7 @@ fn kill_account_with_checkpoints() {
         .commit(epoch_id_1, /* debug_record = */ None)
         .unwrap();
 
-    let mut state = get_state(&storage_manager, &epoch_id_1);
+    let mut state = get_state_by_epoch_id(&epoch_id_1);
     // Storage before the account is killed.
     assert_eq!(state.storage_at(&a_s, &k).unwrap(), U256::one());
     state.remove_contract(&a_s).unwrap();
@@ -816,11 +774,11 @@ fn kill_account_with_checkpoints() {
     // Commit the state and repeat the assertion.
     let epoch_id = EpochId::from_uint(&U256::from(2));
     state.commit(epoch_id, /* debug_record = */ None).unwrap();
-    let state = get_state(&storage_manager, &epoch_id);
+    let state = get_state_by_epoch_id(&epoch_id);
     assert_eq!(state.storage_at(&a_s, &k).unwrap(), U256::zero());
 
     // Test checkpoint.
-    let mut state = get_state(&storage_manager, &epoch_id_1);
+    let mut state = get_state_by_epoch_id(&epoch_id_1);
     state.checkpoint();
     state.remove_contract(&a_s).unwrap();
     // The new contract in the same place should have empty storage.
@@ -838,8 +796,7 @@ fn kill_account_with_checkpoints() {
 
 #[test]
 fn check_result_of_simple_payment_to_killed_account() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state_0 = get_state_for_genesis_write(&storage_manager);
+    let mut state_0 = get_state_for_genesis_write();
     let sender_addr = DEV_GENESIS_KEY_PAIR.address();
     let sender_addr_s = sender_addr.with_native_space();
     state_0
@@ -876,7 +833,7 @@ fn check_result_of_simple_payment_to_killed_account() {
         .commit(epoch_id_1, /* debug_record = */ None)
         .unwrap();
 
-    let mut state = get_state(&storage_manager, &epoch_id_1);
+    let mut state = get_state_by_epoch_id(&epoch_id_1);
     state.remove_contract(&a_s).unwrap();
     // The account is killed. The storage should be empty.
     // assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
@@ -897,7 +854,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     state.commit(epoch_id, /* debug_record = */ None).unwrap();
 
     // Commit the state and assert that the account has no storage and no code.
-    let state = get_state(&storage_manager, &epoch_id);
+    let state = get_state_by_epoch_id(&epoch_id);
     assert_eq!(state.code_hash(&a_s).unwrap(), KECCAK_EMPTY);
     assert_eq!(state.code(&a_s).unwrap(), None);
     assert_eq!(state.db.get_raw_test(code_key).unwrap(), None);
@@ -906,9 +863,8 @@ fn check_result_of_simple_payment_to_killed_account() {
 
 #[test]
 fn create_contract_fail() {
-    let storage_manager = new_state_manager_for_unit_test();
     let mut substate = Substate::new();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let a = Address::from_low_u64_be(1000);
     let a_s = a.with_native_space();
 
@@ -936,8 +892,7 @@ fn create_contract_fail() {
 
 #[test]
 fn create_contract_fail_previous_storage() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut a = Address::from_low_u64_be(1000);
     a.set_user_account_type_bits();
     let a_s = a.with_native_space();
@@ -1009,8 +964,7 @@ fn create_contract_fail_previous_storage() {
     state.clear();
     substates.clear();
     substates.push(Substate::new());
-    state =
-        get_state(&storage_manager, &BigEndianHash::from_uint(&U256::from(1)));
+    state = get_state_by_epoch_id(&BigEndianHash::from_uint(&U256::from(1)));
     assert_eq!(
         state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
@@ -1073,8 +1027,7 @@ fn create_contract_fail_previous_storage() {
 
 #[test]
 fn test_automatic_collateral_normal_account() {
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut normal_account = Address::from_low_u64_be(0);
     normal_account.set_user_account_type_bits();
     let normal_account_s = normal_account.with_native_space();
