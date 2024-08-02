@@ -138,11 +138,12 @@ pub struct OverlayAccount {
     /// Write cache for the storage entries of this account for recording
     /// changed values.
     storage_write_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
-    storage_write_checkpoint: Option<WriteCheckpointLayer<StorageValue>>,
+    storage_write_checkpoint:
+        Option<WriteCheckpointLayer<Vec<u8>, StorageValue>>,
 
     /// Transient storage from CIP-142
     transient_storage_cache: Arc<RwLock<HashMap<Vec<u8>, U256>>>,
-    transient_storage_checkpoint: Option<WriteCheckpointLayer<U256>>,
+    transient_storage_checkpoint: Option<WriteCheckpointLayer<Vec<u8>, U256>>,
 
     /* ---------------
     -  Special flags -
