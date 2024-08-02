@@ -9,9 +9,7 @@ pub trait CheckpointLayerTrait {
     type Key: Eq + Hash + Clone;
     type Value;
 
-    fn as_hash_map(
-        & self,
-    ) -> & HashMap<Self::Key, CheckpointEntry<Self::Value>>;
+    fn as_hash_map(&self) -> &HashMap<Self::Key, CheckpointEntry<Self::Value>>;
 
     fn as_hash_map_mut(
         &mut self,
