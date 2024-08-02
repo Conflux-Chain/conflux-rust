@@ -55,9 +55,16 @@ impl AccountEntry {
         }
     }
 
-    pub fn try_into_dirty_account(self) -> Option<OverlayAccount> {
+    pub fn dirty_account_mut(&mut self) -> Option<&mut OverlayAccount> {
+        match self {
+            Cached(acc, true) => Some(acc),
+            _ => None,
+        }
+    }
+
+    pub fn into_to_commit_account(self) -> Option<OverlayAccount> {
         // Due to an existing bug, the genesis account is very special. It is
-        // always dirty.
+        // always considered to be committed even if it is not dirty.
         const SPECIAL_ADDRESS: AddressWithSpace = AddressWithSpace {
             address: GENESIS_ACCOUNT_ADDRESS,
             space: cfx_types::Space::Native,

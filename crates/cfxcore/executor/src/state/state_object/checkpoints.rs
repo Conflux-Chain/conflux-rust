@@ -10,7 +10,6 @@ use super::{
 };
 use crate::{state::checkpoints::CheckpointLayerTrait, unwrap_or_return};
 
-// lazy_discarded_vec::{GetInfo, OrInsert, Update},
 pub(super) type AccountCheckpointEntry = CheckpointEntry<AccountEntry>;
 
 /// Represents a recoverable point within a checkpoint. including
@@ -32,66 +31,18 @@ pub(super) struct CheckpointLayer {
     entries: HashMap<AddressWithSpace, AccountCheckpointEntry>,
 }
 
-impl CheckpointLayer {
-    #[cfg(test)]
-    pub fn entries(
-        &self,
-    ) -> &HashMap<AddressWithSpace, AccountCheckpointEntry> {
-        &self.entries
-    }
-}
-
 impl CheckpointLayerTrait for CheckpointLayer {
-    type ExtInfo = GlobalStat;
     type Key = AddressWithSpace;
     type Value = AccountEntry;
 
-    fn get_additional_info(&self) -> Self::ExtInfo { self.global_stat }
+    fn as_hash_map(&self) -> &HashMap<Self::Key, CheckpointEntry<Self::Value>> {
+        &self.entries
+    }
 
-    fn as_hash_map(
+    fn as_hash_map_mut(
         &mut self,
     ) -> &mut HashMap<Self::Key, CheckpointEntry<Self::Value>> {
         &mut self.entries
-    }
-
-    fn update(
-        self, cache: &mut HashMap<Self::Key, Self::Value>, self_id: usize,
-    ) {
-        for (k, v) in self.entries.into_iter() {
-            let mut entry_in_cache = if let Occupied(e) = cache.entry(k) {
-                e
-            } else {
-                // All the entries in checkpoint must be copied from cache by
-                // the following function `insert_to_cache` and
-                // `clone_to_checkpoint`.
-                // A cache entries will never be removed, except it is revert to
-                // an `Unchanged` checkpoint. If this exceptional case happens,
-                // this entry has never be loaded or written during transaction
-                // execution (regardless the reverted operations), and thus
-                // cannot have keys in the checkpoint.
-
-                unreachable!(
-                    "Cache should always have more keys than checkpoint"
-                );
-            };
-            match v {
-                Recorded(entry_in_checkpoint) => {
-                    if let AccountEntry::Cached(ref mut overlay_account, true) =
-                        &mut entry_in_cache.get_mut()
-                    {
-                        overlay_account.revert_checkpoint(self_id);
-                    }
-                    *entry_in_cache.get_mut() = entry_in_checkpoint;
-                }
-                Unchanged => {
-                    // If the AccountEntry in cache does not have a dirty bit,
-                    // we can keep it in cache to avoid an duplicate db load.
-                    if entry_in_cache.get().is_dirty() {
-                        entry_in_cache.remove();
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -101,7 +52,7 @@ impl State {
     /// creation time of the checkpoint and updated after that and before
     /// the creation of the next checkpoint.
     pub fn checkpoint(&mut self) -> usize {
-        self.checkpoints.get_mut().push_layer(CheckpointLayer {
+        self.checkpoints.get_mut().push_checkpoint(CheckpointLayer {
             global_stat: self.global_stat,
             entries: HashMap::new(),
         })
@@ -110,7 +61,7 @@ impl State {
     /// Merge last checkpoint with previous.
     pub fn discard_checkpoint(&mut self) {
         let cleared_addresses =
-            unwrap_or_return!(self.checkpoints.get_mut().discard_layer());
+            unwrap_or_return!(self.checkpoints.get_mut().discard_checkpoint());
 
         // if there is no checkpoint in state, the state's checkpoints are
         // cleared directly, thus, the accounts in state's cache should
@@ -126,11 +77,16 @@ impl State {
 
     /// Revert to the last checkpoint and discard it.
     pub fn revert_to_checkpoint(&mut self) {
-        let global_stat = unwrap_or_return!(self
-            .checkpoints
-            .get_mut()
-            .revert_layer(self.cache.get_mut()));
-        self.global_stat = global_stat;
+        for (layer_id, reverted_layer) in
+            unwrap_or_return!(self.checkpoints.get_mut().revert_to_checkpoint())
+        {
+            self.global_stat = reverted_layer.global_stat;
+            apply_checkpoint_layer_to_cache(
+                reverted_layer.entries,
+                self.cache.get_mut(),
+                layer_id,
+            );
+        }
     }
 
     pub fn no_checkpoint(&self) -> bool { self.checkpoints.read().is_empty() }
@@ -144,20 +100,22 @@ impl State {
             .get_mut()
             .insert(address, AccountEntry::new_dirty(account));
 
-        self.checkpoints.get_mut().notify_element(address, move |_| {
-            AccountCheckpointEntry::from_cache(old_account_entry)
-        });
+        self.checkpoints
+            .get_mut()
+            .insert_element(address, move |_| {
+                AccountCheckpointEntry::from_cache(old_account_entry)
+            });
     }
 
     /// The caller has changed (or will change) an account in cache and notify
     /// this function to incoroprates the old version to the checkpoint in
     /// needed.
-    pub(super) fn push_cache_to_checkpoint(
+    pub(super) fn copy_cache_entry_to_checkpoint(
         &self, address: AddressWithSpace, entry_in_cache: &mut AccountEntry,
     ) {
         self.checkpoints
             .write()
-            .notify_element(address, |checkpoint_id| {
+            .insert_element(address, |checkpoint_id| {
                 let mut new_entry_in_cache =
                     entry_in_cache.clone_cache_entry(checkpoint_id);
 
@@ -174,5 +132,43 @@ impl State {
         assert!(self.checkpoints.get_mut().is_empty());
         self.cache.get_mut().clear();
         self.global_stat = GlobalStat::loaded(&self.db).expect("no db error");
+    }
+}
+
+fn apply_checkpoint_layer_to_cache(
+    entries: HashMap<AddressWithSpace, AccountCheckpointEntry>,
+    cache: &mut HashMap<AddressWithSpace, AccountEntry>, checkpoint_id: usize,
+) {
+    for (k, v) in entries.into_iter() {
+        let mut entry_in_cache = if let Occupied(e) = cache.entry(k) {
+            e
+        } else {
+            // All the entries in checkpoint must be copied from cache by the
+            // following function `insert_to_cache` and `clone_to_checkpoint`.
+            //
+            // A cache entries will never be removed, except it is revert to an
+            // `Unchanged` checkpoint. If this exceptional case happens, this
+            // entry has never be loaded or written during transaction execution
+            // (regardless the reverted operations), and thus cannot have keys
+            // in the checkpoint.
+
+            unreachable!("Cache should always have more keys than checkpoint");
+        };
+        match v {
+            Recorded(entry_in_checkpoint) => {
+                if let Some(acc) = entry_in_cache.get_mut().dirty_account_mut()
+                {
+                    acc.revert_checkpoint(checkpoint_id);
+                }
+                *entry_in_cache.get_mut() = entry_in_checkpoint;
+            }
+            Unchanged => {
+                // If the AccountEntry in cache does not have a dirty bit, we
+                // can keep it in cache to avoid an duplicate db load.
+                if entry_in_cache.get().is_dirty() {
+                    entry_in_cache.remove();
+                }
+            }
+        }
     }
 }

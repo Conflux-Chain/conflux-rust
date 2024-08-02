@@ -85,26 +85,9 @@ impl OverlayAccount {
             .notify_cache_change(key, old_value);
     }
 
-    pub fn set_checkpoint(&mut self, state_checkpoint_id: usize) {
-        self.storage_write_checkpoint =
-            Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
-        self.transient_storage_checkpoint =
-            Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
-    }
-
     pub fn clear_checkpoint(&mut self) {
         self.storage_write_checkpoint = None;
         self.transient_storage_checkpoint = None;
-    }
-
-    pub fn empty_checkpoint(&self) -> bool {
-        self.storage_write_checkpoint
-            .as_ref()
-            .map_or(true, |x| x.storage_write.is_empty())
-            && self
-                .storage_write_checkpoint
-                .as_ref()
-                .map_or(true, |x| x.storage_write.is_empty())
     }
 
     pub fn revert_checkpoint(&mut self, state_checkpoint_id: usize) {
