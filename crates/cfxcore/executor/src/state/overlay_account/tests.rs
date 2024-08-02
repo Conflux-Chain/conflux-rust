@@ -755,7 +755,7 @@ fn test_clone_overwrite() {
     overlay_account1.set_storage_simple(vec![0; 32], U256::zero());
     assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(overlay_account1.storage_write_cache.read().len(), 1);
-    let overlay_account = overlay_account1.clone_account();
+    let overlay_account = overlay_account1.clone_account(0);
     assert_eq!(account1, overlay_account.as_account());
     assert_eq!(overlay_account.storage_write_cache.read().len(), 1);
 

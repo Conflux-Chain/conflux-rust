@@ -19,19 +19,6 @@ pub trait CheckpointLayerTrait {
     fn update(
         self, cache: &mut HashMap<Self::Key, Self::Value>, self_id: usize,
     );
-
-    fn insert_on_absent(
-        &mut self, key: Self::Key, value: CheckpointEntry<Self::Value>,
-    ) -> bool {
-        use std::collections::hash_map::Entry::*;
-        match self.as_hash_map().entry(key) {
-            Occupied(_) => false,
-            Vacant(e) => {
-                e.insert(value);
-                true
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -52,8 +39,6 @@ impl<T: CheckpointLayerTrait> Default for LazyDiscardedVec<T> {
 impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
     #[inline]
     fn total_len(&self) -> usize { self.inner_vec.len() }
-
-    pub fn last_layer_id(&self) -> usize { self.inner_vec.len() - 1 }
 
     pub fn is_empty(&self) -> bool {
         if self.undiscard_indices.is_empty() {
@@ -112,21 +97,25 @@ impl<T: CheckpointLayerTrait> LazyDiscardedVec<T> {
         Some(additional_info)
     }
 
-    pub fn notify_element(
-        &mut self, key: T::Key, value: CheckpointEntry<T::Value>,
-    ) -> bool {
-        if self.is_empty() {
-            return false;
-        }
-
-        let last_element = self.inner_vec.last_mut().unwrap();
-        last_element.insert_on_absent(key, value)
-    }
-
     pub fn clear(&mut self) {
         self.inner_vec.clear();
         self.undiscard_indices.clear();
     }
+
+    pub fn notify_element(
+        &mut self, key: T::Key,
+        make_value: impl FnOnce(usize) -> CheckpointEntry<T::Value>,
+    ) {
+        if self.is_empty() {
+            return;
+        }
+
+        let last_layer_id = self.inner_vec.len() - 1;
+        let last_element = self.inner_vec.last_mut().unwrap();
+        last_element.as_hash_map().entry(key).or_insert_with(|| make_value(last_layer_id));
+    }
+
+ 
 
     #[cfg(test)]
     fn undiscarded_len(&self) -> usize { self.undiscard_indices.len() }

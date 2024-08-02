@@ -70,10 +70,12 @@ impl AccountEntry {
         }
     }
 
-    pub fn clone_cache_entry(&self) -> AccountEntry {
+    pub fn clone_cache_entry(&self, checkpoint_id: usize) -> AccountEntry {
         match self {
             DbAbsent => DbAbsent,
-            Cached(acc, dirty_bit) => Cached(acc.clone_account(), *dirty_bit),
+            Cached(acc, dirty_bit) => {
+                Cached(acc.clone_account(checkpoint_id), *dirty_bit)
+            }
         }
     }
 }

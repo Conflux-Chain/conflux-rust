@@ -74,32 +74,13 @@ impl CheckpointLayerTrait for CheckpointLayer {
                     "Cache should always have more keys than checkpoint"
                 );
             };
-            // match v {
-            //     Recorded(mut entry_in_checkpoint) => {
-            //         if let AccountEntry::Cached(
-            //             ref mut overlay_account,
-            //             ref dirty,
-            //         ) = &mut entry_in_checkpoint
-            //         {
-            //             if *dirty {
-            //                 overlay_account.revert_checkpoints(self_id);
-            //             } else {
-            //                 overlay_account.clear_checkpoints();
-            //             }
-            //         }
-            //         *entry_in_cache.get_mut() = entry_in_checkpoint;
-            //     }
-            //     Unchanged => {
-            //         // If the AccountEntry in cache does not have a dirty
-            // bit,         // we can keep it in cache to avoid an
-            // duplicate db load.         if
-            // entry_in_cache.get().is_dirty() {
-            // entry_in_cache.remove();         }
-            //     }
-            // }
             match v {
                 Recorded(entry_in_checkpoint) => {
-                    revert_account(entry_in_cache.get_mut(), self_id);
+                    if let AccountEntry::Cached(ref mut overlay_account, true) =
+                        &mut entry_in_cache.get_mut()
+                    {
+                        overlay_account.revert_checkpoint(self_id);
+                    }
                     *entry_in_cache.get_mut() = entry_in_checkpoint;
                 }
                 Unchanged => {
@@ -107,18 +88,10 @@ impl CheckpointLayerTrait for CheckpointLayer {
                     // we can keep it in cache to avoid an duplicate db load.
                     if entry_in_cache.get().is_dirty() {
                         entry_in_cache.remove();
-                    } else {
-                        revert_account(entry_in_cache.get_mut(), self_id);
                     }
                 }
             }
         }
-    }
-}
-
-fn revert_account(entry: &mut AccountEntry, state_checkpoint_id: usize) {
-    if let AccountEntry::Cached(ref mut overlay_account, _) = entry {
-        overlay_account.revert_checkpoint(state_checkpoint_id);
     }
 }
 
@@ -171,25 +144,29 @@ impl State {
             .get_mut()
             .insert(address, AccountEntry::new_dirty(account));
 
-        self.checkpoints.get_mut().notify_element(
-            address,
-            AccountCheckpointEntry::from_cache(old_account_entry),
-        );
+        self.checkpoints.get_mut().notify_element(address, move |_| {
+            AccountCheckpointEntry::from_cache(old_account_entry)
+        });
     }
 
     /// The caller has changed (or will change) an account in cache and notify
     /// this function to incoroprates the old version to the checkpoint in
     /// needed.
-    pub(super) fn notify_checkpoint(
-        &self, address: AddressWithSpace, old_account_entry: &AccountEntry,
-    ) -> Option<usize> {
-        let mut checkpoints = self.checkpoints.write();
+    pub(super) fn push_cache_to_checkpoint(
+        &self, address: AddressWithSpace, entry_in_cache: &mut AccountEntry,
+    ) {
+        self.checkpoints
+            .write()
+            .notify_element(address, |checkpoint_id| {
+                let mut new_entry_in_cache =
+                    entry_in_cache.clone_cache_entry(checkpoint_id);
 
-        let updated = checkpoints.notify_element(
-            address,
-            Recorded(old_account_entry.clone_cache_entry()),
-        );
-        updated.then(|| checkpoints.last_layer_id())
+                std::mem::swap(&mut new_entry_in_cache, entry_in_cache);
+                // Rename after memswap
+                let old_entry_in_cache = new_entry_in_cache;
+
+                Recorded(old_entry_in_cache)
+            });
     }
 
     #[cfg(any(test, feature = "testonly_code"))]

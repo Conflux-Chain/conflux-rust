@@ -26,7 +26,7 @@ impl<K: Hash + Clone + Eq, T: Clone> Default for WriteCheckpointLayer<K, T> {
 }
 
 impl<K: Hash + Clone + Eq, T: Clone> WriteCheckpointLayer<K, T> {
-    fn new_empty(state_checkpoint_id: usize) -> Self {
+    pub(super) fn new_empty(state_checkpoint_id: usize) -> Self {
         Self {
             storage_write: HashMap::new(),
             state_checkpoint_id,
@@ -95,6 +95,16 @@ impl OverlayAccount {
     pub fn clear_checkpoint(&mut self) {
         self.storage_write_checkpoint = None;
         self.transient_storage_checkpoint = None;
+    }
+
+    pub fn empty_checkpoint(&self) -> bool {
+        self.storage_write_checkpoint
+            .as_ref()
+            .map_or(true, |x| x.storage_write.is_empty())
+            && self
+                .storage_write_checkpoint
+                .as_ref()
+                .map_or(true, |x| x.storage_write.is_empty())
     }
 
     pub fn revert_checkpoint(&mut self, state_checkpoint_id: usize) {
