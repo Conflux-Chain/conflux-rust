@@ -5,6 +5,8 @@
 //! Ledger State: Acts as a caching and checkpoint layer built upon semantically
 //! meaningful database interfaces for the execution.
 
+mod checkpoints;
+
 /// Global Statistic Variables: Manages global variables with different
 /// checkpoint and caching mechanisms compared to other state variables, such
 /// as, `total_issued_tokens`.
@@ -17,7 +19,6 @@ mod overlay_account;
 
 /// State Object: Represents the core object of the state module.
 mod state_object;
-
 
 pub use state_object::{
     distribute_pos_interest, initialize_cip107, initialize_cip137,
