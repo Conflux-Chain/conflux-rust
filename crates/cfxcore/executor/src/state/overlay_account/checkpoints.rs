@@ -1,29 +1,22 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::state::checkpoints::{
-    CheckpointEntry::{self, Recorded, Unchanged},
-    CheckpointLayerTrait,
+use cfx_types::U256;
+use primitives::StorageValue;
+
+use crate::{
+    state::checkpoints::CheckpointEntry::{self, Recorded, Unchanged},
+    unwrap_or_return,
 };
 
 use super::OverlayAccount;
 
 #[derive(Debug, Clone)]
-pub struct WriteCheckpointLayer<T: Clone> {
-    storage_write: HashMap<Vec<u8>, CheckpointEntry<T>>,
+pub struct WriteCheckpointLayer<K: Hash + Clone + Eq, T: Clone> {
+    storage_write: HashMap<K, CheckpointEntry<T>>,
     state_checkpoint_id: usize,
 }
 
-impl<T: Clone> WriteCheckpointLayer<T> {
-    #[cfg(test)]
-    pub fn get_state_cp_id(&self) -> usize { self.state_checkpoint_id }
-
-    #[cfg(test)]
-    pub fn get(&self, key: &[u8]) -> Option<CheckpointEntry<T>> {
-        self.storage_write.get(key).cloned()
-    }
-}
-
-impl<T: Clone> Default for WriteCheckpointLayer<T> {
+impl<K: Hash + Clone + Eq, T: Clone> Default for WriteCheckpointLayer<K, T> {
     fn default() -> Self {
         Self {
             storage_write: Default::default(),
@@ -32,66 +25,66 @@ impl<T: Clone> Default for WriteCheckpointLayer<T> {
     }
 }
 
-impl<T: Clone> WriteCheckpointLayer<T> {
+impl<K: Hash + Clone + Eq, T: Clone> WriteCheckpointLayer<K, T> {
     fn new_empty(state_checkpoint_id: usize) -> Self {
         Self {
             storage_write: HashMap::new(),
             state_checkpoint_id,
         }
     }
-}
 
-impl<T: Clone> CheckpointLayerTrait for WriteCheckpointLayer<T> {
-    type ExtInfo = usize;
-    type Key = Vec<u8>;
-    type Value = T;
-
-    fn get_additional_info(&self) -> Self::ExtInfo { self.state_checkpoint_id }
-
-    fn as_hash_map(
-        &mut self,
-    ) -> &mut HashMap<Self::Key, CheckpointEntry<Self::Value>> {
-        &mut self.storage_write
-    }
-
-    fn update(
-        self, cache: &mut HashMap<Self::Key, Self::Value>, _self_id: usize,
+    fn revert_checkpoint(
+        self, state_checkpoint_id: usize, cache: &mut HashMap<K, T>,
     ) {
-        for (k, v) in self.storage_write.into_iter() {
-            match v {
-                Unchanged => cache.remove(&k),
-                Recorded(storage_value) => cache.insert(k, storage_value),
-            };
+        if self.state_checkpoint_id >= state_checkpoint_id {
+            for (k, v) in self.storage_write.into_iter() {
+                match v {
+                    Unchanged => cache.remove(&k),
+                    Recorded(storage_value) => cache.insert(k, storage_value),
+                };
+            }
         }
     }
-}
 
-pub fn revert_checkpoint<T: Clone>(
-    checkpoint: Option<WriteCheckpointLayer<T>>, state_checkpoint_id: usize,
-    cache: &mut HashMap<Vec<u8>, T>,
-) {
-    if checkpoint.is_none() {
-        return ();
+    fn notify_cache_change(&mut self, key: K, old_value: Option<T>) {
+        self.storage_write
+            .entry(key)
+            .or_insert(CheckpointEntry::from_cache(old_value));
     }
-    let last = checkpoint.unwrap();
-    let account_state_checkpoint_id = last.state_checkpoint_id;
-    if account_state_checkpoint_id >= state_checkpoint_id {
-        last.update(cache, 0);
-    }
-}
 
-pub fn notify_after_insert<T: Clone>(
-    key: Vec<u8>, old_value: Option<T>,
-    checkpoint: &mut Option<WriteCheckpointLayer<T>>,
-) {
-    if checkpoint.is_none() {
-        return ();
+    #[cfg(test)]
+    pub fn get_state_cp_id(&self) -> usize { self.state_checkpoint_id }
+
+    #[cfg(test)]
+    pub fn get<Q: ?Sized + Hash + Eq>(
+        &self, key: &Q,
+    ) -> Option<CheckpointEntry<T>>
+    where K: std::borrow::Borrow<Q> {
+        self.storage_write.get(key).cloned()
     }
-    let last = checkpoint.as_mut().unwrap();
-    last.insert_on_absent(key, CheckpointEntry::from_cache(old_value));
 }
 
 impl OverlayAccount {
+    pub(super) fn insert_storage_write_cache(
+        &mut self, key: Vec<u8>, value: StorageValue,
+    ) {
+        let old_value =
+            self.storage_write_cache.write().insert(key.clone(), value);
+        unwrap_or_return!(self.storage_write_checkpoint.as_mut())
+            .notify_cache_change(key, old_value);
+    }
+
+    pub(super) fn insert_transient_write_cache(
+        &mut self, key: Vec<u8>, value: U256,
+    ) {
+        let old_value = self
+            .transient_storage_cache
+            .write()
+            .insert(key.clone(), value);
+        unwrap_or_return!(self.transient_storage_checkpoint.as_mut())
+            .notify_cache_change(key, old_value);
+    }
+
     pub fn set_checkpoint(&mut self, state_checkpoint_id: usize) {
         self.storage_write_checkpoint =
             Some(WriteCheckpointLayer::new_empty(state_checkpoint_id));
@@ -105,16 +98,19 @@ impl OverlayAccount {
     }
 
     pub fn revert_checkpoint(&mut self, state_checkpoint_id: usize) {
-        revert_checkpoint(
-            self.storage_write_checkpoint.take(),
-            state_checkpoint_id,
-            &mut self.storage_write_cache.write(),
-        );
-        revert_checkpoint(
-            self.transient_storage_checkpoint.take(),
-            state_checkpoint_id,
-            &mut self.transient_storage_cache.write(),
-        )
+        if let Some(ct) = self.storage_write_checkpoint.take() {
+            ct.revert_checkpoint(
+                state_checkpoint_id,
+                &mut self.storage_write_cache.write(),
+            )
+        };
+
+        if let Some(ct) = self.transient_storage_checkpoint.take() {
+            ct.revert_checkpoint(
+                state_checkpoint_id,
+                &mut self.transient_storage_cache.write(),
+            )
+        };
     }
 }
 

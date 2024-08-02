@@ -1,4 +1,4 @@
-use super::{checkpoints::notify_after_insert, Substate};
+use super::Substate;
 
 #[cfg(test)]
 use super::StorageLayout;
@@ -43,34 +43,21 @@ impl OverlayAccount {
             None
         };
 
-        // Insert in cache
-        let new_entry = StorageValue {
-            owner: new_owner,
-            value,
-        };
-
-        let value_to_notify = self
-            .storage_write_cache
-            .write()
-            .insert(key.clone(), new_entry);
-        notify_after_insert(
+        self.insert_storage_write_cache(
             key,
-            value_to_notify,
-            &mut self.storage_write_checkpoint,
+            StorageValue {
+                owner: new_owner,
+                value,
+            },
         );
         Ok(())
     }
 
     #[cfg(test)]
     pub fn set_storage_simple(&mut self, key: Vec<u8>, value: U256) {
-        let value_to_notify = self
-            .storage_write_cache
-            .write()
-            .insert(key.clone(), StorageValue { value, owner: None });
-        notify_after_insert(
+        self.insert_storage_write_cache(
             key,
-            value_to_notify,
-            &mut self.storage_write_checkpoint,
+            StorageValue { owner: None, value },
         );
     }
 
@@ -245,15 +232,7 @@ impl OverlayAccount {
     }
 
     pub fn transient_set_storage(&mut self, key: Vec<u8>, value: U256) {
-        let value_to_notify = self
-            .transient_storage_cache
-            .write()
-            .insert(key.clone(), value);
-        notify_after_insert(
-            key,
-            value_to_notify,
-            &mut self.transient_storage_checkpoint,
-        );
+        self.insert_transient_write_cache(key, value);
     }
 
     pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {
@@ -267,13 +246,7 @@ impl OverlayAccount {
         let mut entry = self.storage_entry_at(db, key)?;
         if !entry.value.is_zero() {
             entry.value = value;
-            let value_to_notify =
-                self.storage_write_cache.write().insert(key.to_vec(), entry);
-            notify_after_insert(
-                key.to_vec(),
-                value_to_notify,
-                &mut self.storage_write_checkpoint,
-            );
+            self.insert_storage_write_cache(key.to_vec(), entry);
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
