@@ -66,9 +66,7 @@ impl From<Error> for JsonRpcError {
             },
             // We exhausted all possible ErrorKinds here, however
             // https://stackoverflow.com/questions/36440021/whats-purpose-of-errorkind-nonexhaustive
-            ErrorKind::__Nonexhaustive {} => unsafe {
-                std::hint::unreachable_unchecked()
-            },
+            ErrorKind::__Nonexhaustive {} => unreachable!(),
         }
     }
 }
