@@ -217,7 +217,8 @@ impl AtomicBlock {
 
     fn add(&self, id: Index) -> bool {
         if self.atom.is_none() {
-            let v = Box::new(unsafe { ::std::mem::zeroed() });
+            const ZERO: AtomicUsize = AtomicUsize::new(0);
+            let v = Box::new([ZERO; 1 << BITS]);
             self.atom.set_if_none(v);
         }
 
