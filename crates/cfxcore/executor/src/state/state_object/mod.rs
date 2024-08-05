@@ -57,6 +57,7 @@ pub use tests::{get_state_by_epoch_id, get_state_for_genesis_write};
 
 use self::checkpoints::CheckpointLayer;
 use super::{
+    checkpoints::LazyDiscardedVec,
     global_stat::GlobalStat,
     overlay_account::{AccountEntry, OverlayAccount, RequireFields},
 };
@@ -84,7 +85,7 @@ pub struct State {
     global_stat: GlobalStat,
 
     /// Checkpoint layers for the account entries
-    checkpoints: RwLock<Vec<CheckpointLayer>>,
+    checkpoints: RwLock<LazyDiscardedVec<CheckpointLayer>>,
 }
 
 impl State {

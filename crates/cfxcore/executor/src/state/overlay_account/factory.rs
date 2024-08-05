@@ -2,7 +2,7 @@ use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
 use keccak_hash::KECCAK_EMPTY;
 use primitives::{Account, SponsorInfo, StorageLayout};
 
-use super::OverlayAccount;
+use super::{checkpoints::WriteCheckpointLayer, OverlayAccount};
 
 impl Default for OverlayAccount {
     fn default() -> Self {
@@ -14,7 +14,9 @@ impl Default for OverlayAccount {
             sponsor_info: Default::default(),
             storage_read_cache: Default::default(),
             storage_write_cache: Default::default(),
-            transient_storage: Default::default(),
+            storage_write_checkpoint: Default::default(),
+            transient_storage_cache: Default::default(),
+            transient_storage_checkpoint: Default::default(),
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -126,7 +128,7 @@ impl OverlayAccount {
     ///
     /// Thus, this manual implementation ensures that the cloning of an account
     /// is traceable and controlled。
-    pub fn clone_account(&self) -> Self {
+    pub fn clone_account(&self, checkpoint_id: usize) -> Self {
         OverlayAccount {
             address: self.address,
             balance: self.balance,
@@ -143,8 +145,14 @@ impl OverlayAccount {
             is_newly_created_contract: self.is_newly_created_contract,
             pending_db_clear: self.pending_db_clear,
             storage_write_cache: self.storage_write_cache.clone(),
+            storage_write_checkpoint: Some(WriteCheckpointLayer::new_empty(
+                checkpoint_id,
+            )),
             storage_read_cache: self.storage_read_cache.clone(),
-            transient_storage: self.transient_storage.clone(),
+            transient_storage_cache: self.transient_storage_cache.clone(),
+            transient_storage_checkpoint: Some(
+                WriteCheckpointLayer::new_empty(checkpoint_id),
+            ),
             storage_layout_change: self.storage_layout_change.clone(),
         }
     }

@@ -5,6 +5,8 @@
 //! Ledger State: Acts as a caching and checkpoint layer built upon semantically
 //! meaningful database interfaces for the execution.
 
+mod checkpoints;
+
 /// Global Statistic Variables: Manages global variables with different
 /// checkpoint and caching mechanisms compared to other state variables, such
 /// as, `total_issued_tokens`.

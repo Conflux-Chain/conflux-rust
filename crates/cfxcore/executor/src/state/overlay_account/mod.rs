@@ -43,6 +43,8 @@ mod staking;
 /// manipulation.
 mod storage;
 
+mod checkpoints;
+
 #[cfg(test)]
 mod tests;
 
@@ -64,7 +66,10 @@ use std::{collections::HashMap, sync::Arc};
 #[cfg(test)]
 use cfx_types::AddressSpaceUtil;
 
+use self::checkpoints::WriteCheckpointLayer;
+
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 /// The access and manipulation object during execution, which includes both
 /// database-stored information and in-execution data of an account. It is a
 /// basic unit of state caching map and the checkpoint layers (more
@@ -132,10 +137,13 @@ pub struct OverlayAccount {
 
     /// Write cache for the storage entries of this account for recording
     /// changed values.
-    storage_write_cache: Arc<HashMap<Vec<u8>, StorageValue>>,
+    storage_write_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
+    storage_write_checkpoint:
+        Option<WriteCheckpointLayer<Vec<u8>, StorageValue>>,
 
     /// Transient storage from CIP-142
-    transient_storage: Arc<HashMap<Vec<u8>, U256>>,
+    transient_storage_cache: Arc<RwLock<HashMap<Vec<u8>, U256>>>,
+    transient_storage_checkpoint: Option<WriteCheckpointLayer<Vec<u8>, U256>>,
 
     /* ---------------
     -  Special flags -
