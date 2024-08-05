@@ -65,7 +65,7 @@ use crate::substate::Substate;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
 use cfx_types::AddressWithSpace;
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 /// A caching and checkpoint layer built upon semantically meaningful database
 /// interfaces, providing interfaces and logics for managing accounts and global
@@ -107,7 +107,15 @@ impl State {
         })
     }
 
-    pub fn prefetch_account(&self, address: &AddressWithSpace) -> DbResult<()> {
-        self.prefetch(address, RequireFields::Code)
+    pub fn prefetch_accounts(
+        &self, addresses: BTreeSet<AddressWithSpace>, pool: &rayon::ThreadPool,
+    ) -> DbResult<()> {
+        use rayon::prelude::*;
+        pool.install(|| {
+            addresses
+                .into_par_iter()
+                .map(|addr| self.prefetch(&addr, RequireFields::Code))
+        })
+        .collect::<DbResult<()>>()
     }
 }
