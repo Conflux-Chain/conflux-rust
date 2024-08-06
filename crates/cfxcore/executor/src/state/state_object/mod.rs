@@ -30,6 +30,8 @@ mod global_statistics;
 /// Implements functions for the PoS rewarding of `State`.
 mod pos;
 
+mod save;
+
 /// Implements functions for the sponsorship mechanism of `State`.
 mod sponsor;
 

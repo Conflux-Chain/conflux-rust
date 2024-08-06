@@ -51,7 +51,7 @@ impl State {
     fn commit_dirty_accounts(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<Vec<Account>> {
-        assert!(self.checkpoints.get_mut().is_empty());
+        assert!(self.no_checkpoint());
 
         let cache_items = self.cache.get_mut().drain();
         let mut to_commit_accounts = cache_items
