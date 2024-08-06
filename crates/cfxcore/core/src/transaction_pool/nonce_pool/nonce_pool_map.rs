@@ -7,10 +7,7 @@ use treap_map::{
     SharedKeyTreapMapConfig, TreapMap,
 };
 
-use super::{
-    super::error::SAME_NONCE_HIGH_GAS_PRICE_NEEED, weight::NoncePoolWeight,
-    InsertResult, TxWithReadyInfo,
-};
+use super::{weight::NoncePoolWeight, InsertResult, TxWithReadyInfo};
 
 struct NoncePoolConfig;
 
@@ -57,29 +54,29 @@ impl NoncePoolMap {
             .update(
                 tx.transaction.nonce(),
                 |node| -> Result<_, Infallible> {
-                    if tx.should_replace(&node.value, force) {
-                        let old_value =
-                            std::mem::replace(&mut node.value, tx.clone());
-                        node.weight =
-                            NoncePoolWeight::from_tx_info(&node.value);
-                        Ok(ApplyOpOutcome {
-                            out: InsertResult::Updated(old_value),
-                            update_weight: true,
-                            update_key: false,
-                            delete_item: false,
-                        })
-                    } else {
-                        let err_msg = format!(
-                            "{SAME_NONCE_HIGH_GAS_PRICE_NEEED} > {}",
-                            &node.value.transaction.gas_price()
-                        );
-                        Ok(ApplyOpOutcome {
-                            out: InsertResult::Failed(err_msg),
-                            update_weight: false,
-                            update_key: false,
-                            delete_item: false,
-                        })
-                    }
+                    let insert_result;
+                    let update_weight;
+                    match tx.should_replace(&node.value, force) {
+                        Ok(_reason) => {
+                            let old_value =
+                                std::mem::replace(&mut node.value, tx.clone());
+                            node.weight =
+                                NoncePoolWeight::from_tx_info(&node.value);
+                            insert_result = InsertResult::Updated(old_value);
+                            update_weight = true;
+                        }
+                        Err(e) => {
+                            insert_result = InsertResult::Failed(e);
+                            update_weight = false;
+                        }
+                    };
+
+                    Ok(ApplyOpOutcome {
+                        out: insert_result,
+                        update_weight,
+                        update_key: false,
+                        delete_item: false,
+                    })
                 },
                 |rng| {
                     let weight = NoncePoolWeight::from_tx_info(&tx);
