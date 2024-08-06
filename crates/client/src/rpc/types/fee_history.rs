@@ -141,6 +141,8 @@ pub struct FeeHistoryEntry {
     pub gas_limit: u64,
     /// Hash of the block.
     pub header_hash: H256,
+    ///
+    pub parent_hash: H256,
     /// Approximated rewards for the configured percentiles.
     pub rewards: Vec<u128>,
     /// The timestamp of the block.
@@ -185,6 +187,7 @@ impl FeeHistoryEntry {
             gas_used,
             gas_limit,
             header_hash: pivot_header.hash(),
+            parent_hash: *pivot_header.parent_hash(),
             rewards,
             timestamp: pivot_header.timestamp(),
         }

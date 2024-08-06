@@ -85,8 +85,6 @@ impl EthHandler {
         If the cache is empty, fetch the FeeHistoryEntry data for the latest q blocks directly from the DB and cache them (q is the number of blocks to be queried this time).
         If the cache is not empty, get the upper bound of the cache and update from that block number to the latest block.
         If the number of blocks in the cache exceeds 1024, delete the oldest block data until the number of blocks in the cache is 1024.
-
-        TODO: update cache if block changes due to reorg
     */
     fn update_fee_history_cache_to_latest(
         &self, latest_block: u64, query_len: u64,
@@ -113,6 +111,32 @@ impl EthHandler {
                     block.transactions.iter().map(|x| &**x),
                 ),
             )?;
+        }
+
+        // update cache if block changes due to reorg
+        if self.fee_history_cache.lower_bound() < start_block {
+            let mut check = start_block - 1;
+            let mut curr = self
+                .fee_history_cache
+                .get(start_block)
+                .ok_or_else(|| "fee_history_entry not found")?;
+            while check >= self.fee_history_cache.lower_bound() {
+                let item = self
+                    .fee_history_cache
+                    .get(check)
+                    .ok_or_else(|| "fee_history_entry not found")?;
+                if curr.parent_hash == item.header_hash {
+                    break;
+                }
+                let block = self.fetch_block_by_height(check)?;
+                curr = FeeHistoryEntry::from_block(
+                    Space::Ethereum,
+                    &block.pivot_header,
+                    block.transactions.iter().map(|x| &**x),
+                );
+                self.fee_history_cache.update(check, curr.clone());
+                check -= 1;
+            }
         }
 
         Ok(())

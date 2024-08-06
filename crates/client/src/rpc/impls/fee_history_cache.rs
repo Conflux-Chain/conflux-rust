@@ -1,31 +1,27 @@
 use crate::rpc::types::{FeeHistoryEntry, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
-
 use parking_lot::RwLock;
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::{
-        atomic::{AtomicU64, Ordering::SeqCst},
-        Arc,
-    },
+    sync::Arc,
 };
 
 #[derive(Debug, Clone)]
 pub struct FeeHistoryCache {
-    inner: Arc<FeeHistoryCacheInner>,
+    inner: Arc<RwLock<FeeHistoryCacheInner>>,
 }
 
 impl FeeHistoryCache {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(FeeHistoryCacheInner::new()),
+            inner: Arc::new(RwLock::new(FeeHistoryCacheInner::new())),
         }
     }
 
-    pub fn max_blocks(&self) -> u64 { self.inner.max_blocks }
+    pub fn max_blocks(&self) -> u64 { self.inner.read().max_blocks }
 
-    pub fn lower_bound(&self) -> u64 { self.inner.lower_bound.load(SeqCst) }
+    pub fn lower_bound(&self) -> u64 { self.inner.read().lower_bound }
 
-    pub fn upper_bound(&self) -> u64 { self.inner.upper_bound.load(SeqCst) }
+    pub fn upper_bound(&self) -> u64 { self.inner.read().upper_bound }
 
     pub fn is_empty(&self) -> bool {
         self.lower_bound() == self.upper_bound() && self.lower_bound() == 0
@@ -37,8 +33,10 @@ impl FeeHistoryCache {
         let lower_bound = self.lower_bound();
         let upper_bound = self.upper_bound();
         if start_block >= lower_bound && end_block <= upper_bound {
-            let entries = self.inner.entries.read();
-            let result = entries
+            let result = self
+                .inner
+                .read()
+                .entries
                 .range(start_block..=end_block)
                 .map(|(_, fee_entry)| fee_entry.clone())
                 .collect::<Vec<_>>();
@@ -53,21 +51,42 @@ impl FeeHistoryCache {
         }
     }
 
+    pub fn get(&self, index: u64) -> Option<FeeHistoryEntry> {
+        if index < self.lower_bound() || index > self.upper_bound() {
+            return None;
+        }
+        self.inner
+            .read()
+            .entries
+            .get(&index)
+            .map(|item| item.clone())
+    }
+
+    pub fn update(&self, block_number: u64, entry: FeeHistoryEntry) {
+        if block_number < self.lower_bound()
+            || block_number > self.upper_bound()
+        {
+            return;
+        }
+        let mut inner = self.inner.write();
+        inner.entries.insert(block_number, entry);
+    }
+
     pub fn get_history_with_missing_info(
         &self, start_block: u64, end_block: u64,
     ) -> Vec<Option<FeeHistoryEntry>> {
-        let entries = self.inner.entries.read();
+        let inner = self.inner.read();
         (start_block..=end_block)
-            .map(|block_number| entries.get(&block_number).cloned())
+            .map(|block_number| inner.entries.get(&block_number).cloned())
             .collect()
     }
 
     #[allow(dead_code)]
     fn missing_consecutive_blocks(&self) -> VecDeque<u64> {
-        let entries = self.inner.entries.read();
+        let inner = self.inner.read();
         (self.lower_bound()..self.upper_bound())
             .rev()
-            .filter(|&block_number| !entries.contains_key(&block_number))
+            .filter(|&block_number| !inner.entries.contains_key(&block_number))
             .collect()
     }
 
@@ -85,18 +104,18 @@ impl FeeHistoryCache {
             return Err("block number is not consecutive".to_string());
         }
 
-        let mut entries = self.inner.entries.write();
+        let mut inner = self.inner.write();
 
-        entries.insert(block_number, entry);
+        inner.entries.insert(block_number, entry);
 
         if self.lower_bound() == 0 {
-            self.inner.lower_bound.store(block_number, SeqCst);
+            inner.lower_bound = block_number;
         }
-        self.inner.upper_bound.store(block_number, SeqCst);
+        inner.upper_bound = block_number;
 
-        if entries.len() > self.max_blocks() as usize {
-            entries.pop_first();
-            self.inner.lower_bound.fetch_add(1, SeqCst);
+        if inner.entries.len() > self.max_blocks() as usize {
+            inner.entries.pop_first();
+            inner.lower_bound += 1;
         }
 
         Ok(())
@@ -107,33 +126,33 @@ impl FeeHistoryCache {
             return;
         }
 
-        let mut entries = self.inner.entries.write();
-        entries.clear();
+        let mut inner = self.inner.write();
 
-        self.inner.lower_bound.store(0, SeqCst);
-        self.inner.upper_bound.store(0, SeqCst);
+        inner.entries.clear();
+        inner.lower_bound = 0;
+        inner.upper_bound = 0;
     }
 }
 
 #[derive(Debug)]
 pub struct FeeHistoryCacheInner {
     /// Stores the lower bound of the cache
-    lower_bound: AtomicU64,
+    lower_bound: u64,
     /// Stores the upper bound of the cache
-    upper_bound: AtomicU64,
+    upper_bound: u64,
     /// maximum number of blocks to store in the cache
     max_blocks: u64,
     /// Stores the entries of the cache
-    entries: RwLock<BTreeMap<u64, FeeHistoryEntry>>,
+    entries: BTreeMap<u64, FeeHistoryEntry>,
 }
 
 impl FeeHistoryCacheInner {
     pub fn new() -> Self {
         Self {
-            lower_bound: AtomicU64::new(0),
-            upper_bound: AtomicU64::new(0),
+            lower_bound: 0,
+            upper_bound: 0,
             max_blocks: MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
-            entries: RwLock::new(BTreeMap::new()),
+            entries: BTreeMap::new(),
         }
     }
 }
