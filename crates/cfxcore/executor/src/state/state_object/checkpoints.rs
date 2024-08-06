@@ -51,7 +51,7 @@ impl State {
     /// index. The checkpoint records any old value which is alive at the
     /// creation time of the checkpoint and updated after that and before
     /// the creation of the next checkpoint.
-    pub fn checkpoint(&mut self) -> usize {
+    pub(crate) fn checkpoint(&mut self) -> usize {
         self.checkpoints.get_mut().push_checkpoint(CheckpointLayer {
             global_stat: self.global_stat,
             entries: HashMap::new(),
@@ -59,7 +59,7 @@ impl State {
     }
 
     /// Merge last checkpoint with previous.
-    pub fn discard_checkpoint(&mut self) {
+    pub(crate) fn discard_checkpoint(&mut self) {
         let cleared_addresses =
             unwrap_or_return!(self.checkpoints.get_mut().discard_checkpoint());
 
@@ -76,7 +76,7 @@ impl State {
     }
 
     /// Revert to the last checkpoint and discard it.
-    pub fn revert_to_checkpoint(&mut self) {
+    pub(crate) fn revert_to_checkpoint(&mut self) {
         for (layer_id, reverted_layer) in
             unwrap_or_return!(self.checkpoints.get_mut().revert_to_checkpoint())
         {
@@ -116,8 +116,8 @@ impl State {
         self.checkpoints
             .write()
             .insert_element(address, |checkpoint_id| {
-                let mut new_entry_in_cache =
-                    entry_in_cache.clone_cache_entry(checkpoint_id);
+                let mut new_entry_in_cache = entry_in_cache
+                    .clone_cache_entry_for_checkpoint(checkpoint_id);
 
                 std::mem::swap(&mut new_entry_in_cache, entry_in_cache);
                 // Rename after memswap
@@ -129,7 +129,7 @@ impl State {
 
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn clear(&mut self) {
-        assert!(self.checkpoints.get_mut().is_empty());
+        assert!(self.no_checkpoint());
         self.cache.get_mut().clear();
         self.global_stat = GlobalStat::loaded(&self.db).expect("no db error");
     }
