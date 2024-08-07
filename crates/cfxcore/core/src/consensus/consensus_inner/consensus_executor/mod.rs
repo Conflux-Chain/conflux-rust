@@ -222,6 +222,17 @@ impl ConsensusExecutor {
                     // will be discarded.
                     break;
                 }
+
+                let get_optimistic_task = || {
+                    let mut inner = consensus_inner.try_write()?;
+
+                    let task = executor_thread
+                        .get_optimistic_execution_task(&mut *inner)?;
+
+                    debug!("Get optimistic_execution_task {:?}", task);
+                    Some(ExecutionTask::ExecuteEpoch(task))
+                };
+
                 let maybe_task = {
                     // Here we use `try_write` because some thread
                     // may wait for execution results while holding the
@@ -232,21 +243,7 @@ impl ConsensusExecutor {
                         Err(TryRecvError::Empty) => {
                             // The channel is empty, so we try to optimistically
                             // get later epochs to execute.
-                            consensus_inner
-                                .try_write()
-                                .and_then(|mut inner| {
-                                    executor_thread
-                                        .get_optimistic_execution_task(
-                                            &mut *inner,
-                                        )
-                                })
-                                .map(|task| {
-                                    debug!(
-                                        "Get optimistic_execution_task {:?}",
-                                        task
-                                    );
-                                    ExecutionTask::ExecuteEpoch(task)
-                                })
+                            get_optimistic_task()
                         }
                         Err(TryRecvError::Disconnected) => {
                             info!("Channel disconnected, stop thread");
