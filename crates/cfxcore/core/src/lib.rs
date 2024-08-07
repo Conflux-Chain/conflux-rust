@@ -40,7 +40,6 @@ pub mod pos;
 pub mod pow;
 pub mod rpc_errors;
 pub mod state_exposer;
-mod state_prefetcher;
 pub mod statistics;
 pub mod sync;
 pub mod transaction_pool;

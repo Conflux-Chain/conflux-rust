@@ -19,6 +19,7 @@ use std::{
 
 use hash::KECCAK_EMPTY_LIST_RLP;
 use parking_lot::{Mutex, RwLock};
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use rustc_hex::ToHex;
 
 use cfx_internal_common::{
@@ -51,7 +52,6 @@ use crate::{
         ConsensusGraphInner,
     },
     rpc_errors::{invalid_params_check, Result as RpcResult},
-    state_prefetcher::ExecutionStatePrefetcher,
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
@@ -830,7 +830,7 @@ pub struct ConsensusExecutionHandler {
     verification_config: VerificationConfig,
     machine: Arc<Machine>,
     pos_verifier: Arc<PosVerifier>,
-    execution_state_prefetcher: Option<Arc<ExecutionStatePrefetcher>>,
+    execution_state_prefetcher: Option<ThreadPool>,
 }
 
 impl ConsensusExecutionHandler {
@@ -851,13 +851,10 @@ impl ConsensusExecutionHandler {
                 > 0
             {
                 Some(
-                    ExecutionStatePrefetcher::new(
-                        DEFAULT_EXECUTION_PREFETCH_THREADS,
-                    )
-                    .expect(
-                        // Do not accept error at starting up.
-                        &concat!(file!(), ":", line!(), ":", column!()),
-                    ),
+                    ThreadPoolBuilder::new()
+                        .num_threads(DEFAULT_EXECUTION_PREFETCH_THREADS)
+                        .build()
+                        .unwrap(),
                 )
             } else {
                 None
@@ -1055,7 +1052,6 @@ impl ConsensusExecutionHandler {
 
         let epoch_receipts = self
             .process_epoch_transactions(
-                *epoch_hash,
                 &mut state,
                 &epoch_blocks,
                 start_block_number,
@@ -1575,7 +1571,6 @@ impl ConsensusExecutionHandler {
         let pivot_block = epoch_blocks.last().expect("Not empty");
         let mut state = self.new_state(&pivot_block, false)?;
         self.process_epoch_transactions(
-            *pivot_hash,
             &mut state,
             &epoch_blocks,
             start_block_number,
@@ -1701,7 +1696,6 @@ impl ConsensusExecutionHandler {
             answer: &mut answer,
         });
         self.process_epoch_transactions(
-            epoch_id,
             &mut state,
             blocks,
             start_block_number,
