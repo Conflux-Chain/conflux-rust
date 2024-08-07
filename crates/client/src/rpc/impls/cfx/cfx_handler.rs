@@ -34,6 +34,7 @@ use cfx_vm_types::Error as VmError;
 use cfxcore::{
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
+    transaction_pool::TransactionPoolError,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
     ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
@@ -546,27 +547,33 @@ impl RpcImpl {
         }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
-        // FIXME: how is it possible?
-        if signed_trans.len() + failed_trans.len() > 1 {
-            // This should never happen
-            error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
-            Ok(H256::zero().into())
-        } else if signed_trans.len() + failed_trans.len() == 0 {
-            // For tx in transactions_pubkey_cache, we simply ignore them
-            debug!("insert_new_transactions ignores inserted transactions");
-            // FIXME: this is not invalid params
-            bail!(invalid_params_detail(
-                "tx",
-                String::from("tx already exist")
-            ))
-        } else if signed_trans.is_empty() {
-            let tx_err = failed_trans.iter().next().expect("Not empty").1;
-            // FIXME: this is not invalid params
-            bail!(invalid_params_detail("tx", tx_err.to_string()))
-        } else {
-            let tx_hash = signed_trans[0].hash();
-            self.sync.append_received_transactions(signed_trans);
-            Ok(tx_hash.into())
+
+        match (signed_trans.len(), failed_trans.len()) {
+            (0, 0) => {
+                debug!("insert_new_transactions ignores inserted transactions");
+                bail!(invalid_params_detail("tx", "tx already exist"))
+            }
+            (0, 1) => {
+                let tx_err = failed_trans.values().next().unwrap();
+                if let TransactionPoolError::StateDbError(err) = tx_err {
+                    bail!(internal_error(err))
+                } else {
+                    bail!(invalid_params_detail("tx", tx_err.to_string()))
+                }
+            }
+            (1, 0) => {
+                let tx_hash = signed_trans[0].hash();
+                self.sync.append_received_transactions(signed_trans);
+                Ok(tx_hash.into())
+            }
+            _ => {
+                // This should never happen
+                error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
+                bail!(internal_error(format!(
+                    "unexpected insert result, {} returned items",
+                    signed_trans.len() + failed_trans.len()
+                )))
+            }
         }
     }
 
