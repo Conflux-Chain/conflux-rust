@@ -30,7 +30,16 @@ pub enum TransactionPoolError {
 
     #[error("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {expected:?}")]
     HigherGasPriceNeeded { expected: U256 },
-    /// all other errors
-    #[error("{0}")]
-    Other(String),
+
+    #[error("db error: {0}")]
+    StateDbError(String),
+}
+
+impl From<cfx_statedb::Error> for TransactionPoolError {
+    fn from(value: cfx_statedb::Error) -> Self {
+        TransactionPoolError::StateDbError(format!(
+            "Failed to read account_cache from storage: {}",
+            value
+        ))
+    }
 }

@@ -1378,7 +1378,7 @@ impl RpcImpl {
                 None,
                 None,
                 self.consensus.best_epoch_number(),
-            );
+            )?;
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
         for tx in pending_txs.iter() {
@@ -1438,7 +1438,7 @@ impl RpcImpl {
                 maybe_start_nonce,
                 maybe_limit.map(|limit| limit.as_usize()),
                 self.consensus.best_epoch_number(),
-            );
+            )?;
         Ok(AccountPendingTransactions {
             pending_transactions: pending_txs
                 .into_iter()

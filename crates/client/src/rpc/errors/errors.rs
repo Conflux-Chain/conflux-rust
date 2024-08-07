@@ -204,7 +204,7 @@ impl From<TransactionPoolError> for EthApiError {
             TransactionPoolError::OutOfBalance { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::InsufficientFundsForTransfer),
             TransactionPoolError::TxPoolFull => Self::PoolError(RpcPoolError::TxPoolOverflow),
             TransactionPoolError::HigherGasPriceNeeded {..} => Self::PoolError(RpcPoolError::ReplaceUnderpriced),
-            TransactionPoolError::Other(msg) => Self::Other(msg),
+            TransactionPoolError::StateDbError(_) => Self::InternalEthError,
         }
     }
 }
