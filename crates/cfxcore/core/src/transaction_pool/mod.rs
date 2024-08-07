@@ -33,7 +33,7 @@ use cfx_types::{
     AddressWithSpace as Address, AllChainID, Space, SpaceMap, H256, U256,
 };
 use cfx_vm_types::Spec;
-pub use error::{TransactionPoolError, SAME_NONCE_HIGH_GAS_PRICE_NEEED};
+pub use error::TransactionPoolError;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -435,29 +435,28 @@ impl TransactionPool {
                 let mut to_prop = self.to_propagate_trans.write();
 
                 for tx in signed_trans {
-                    if inner.get(&tx.hash).is_none() {
-                        if let Err(e) = self
-                            .add_transaction_with_readiness_check(
-                                &mut *inner,
-                                &account_cache,
-                                tx.clone(),
-                                false,
-                                false,
-                            )
-                        {
-                            debug!(
+                    if inner.get(&tx.hash).is_some() {
+                        continue;
+                    }
+
+                    if let Err(e) = self.add_transaction_with_readiness_check(
+                        &mut *inner,
+                        &account_cache,
+                        tx.clone(),
+                        false,
+                        false,
+                    ) {
+                        debug!(
                             "tx {:?} fails to be inserted to pool, err={:?}",
                             &tx.hash, e
                         );
-                            failure.insert(tx.hash(), e);
-                            continue;
-                        }
-                        passed_transactions.push(tx.clone());
-                        if !to_prop.contains_key(&tx.hash)
-                            && to_prop.len() < inner.capacity()
-                        {
-                            to_prop.insert(tx.hash, tx);
-                        }
+                        failure.insert(tx.hash(), e);
+                        continue;
+                    }
+
+                    passed_transactions.push(tx.clone());
+                    if to_prop.len() < inner.capacity() {
+                        to_prop.entry(tx.hash).or_insert(tx);
                     }
                 }
             }

@@ -52,7 +52,7 @@ pub type TxPropagateId = u32;
 // FIXME: Most errors here are bounded for TransactionPool and intended for rpc,
 // FIXME: however these are unused, they are not errors for transaction itself.
 // FIXME: Transaction verification and consensus related error can be separated.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 /// Errors concerning transaction processing.
 pub enum TransactionError {
     /// Transaction is already imported to the queue

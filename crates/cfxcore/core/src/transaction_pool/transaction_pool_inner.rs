@@ -2,7 +2,7 @@ use super::{
     account_cache::AccountCache,
     garbage_collector::GarbageCollector,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
-    TransactionPoolError, SAME_NONCE_HIGH_GAS_PRICE_NEEED,
+    TransactionPoolError,
 };
 
 use crate::verification::{PackingCheckResult, VerificationConfig};
@@ -828,7 +828,7 @@ impl TransactionPoolInner {
         ) {
             self.collect_garbage(transaction.as_ref());
             if self.is_full(transaction.space()) {
-                return InsertResult::Failed("txpool is full".into());
+                return InsertResult::Failed(TransactionPoolError::TxPoolFull);
             }
         }
         let result = {
@@ -1436,17 +1436,7 @@ impl TransactionPoolInner {
             (state_nonce, state_balance),
             (sponsored_gas, sponsored_storage),
         );
-        if let InsertResult::Failed(info) = result {
-            let err = match info.as_str() {
-                "txpool is full" => TransactionPoolError::TxPoolFull,
-                _ if info.starts_with(SAME_NONCE_HIGH_GAS_PRICE_NEEED) => {
-                    TransactionPoolError::HigherGasPriceNeeded
-                }
-                _ => TransactionPoolError::Other(format!(
-                    "Failed imported to deferred pool: {}",
-                    info
-                )),
-            };
+        if let InsertResult::Failed(err) = result {
             return Err(err);
         }
 
@@ -1535,7 +1525,7 @@ impl TransactionPoolInner {
 #[cfg(test)]
 mod tests {
     use crate::{
-        transaction_pool::SAME_NONCE_HIGH_GAS_PRICE_NEEED,
+        transaction_pool::TransactionPoolError,
         verification::PackingCheckResult,
     };
 
@@ -1666,10 +1656,9 @@ mod tests {
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
-            InsertResult::Failed(format!(
-                "{SAME_NONCE_HIGH_GAS_PRICE_NEEED} > {}",
-                bob_tx2_new.gas_price()
-            ))
+            InsertResult::Failed(TransactionPoolError::HigherGasPriceNeeded {
+                expected: *bob_tx2_new.gas_price() + U256::one()
+            })
         );
 
         assert_eq!(
