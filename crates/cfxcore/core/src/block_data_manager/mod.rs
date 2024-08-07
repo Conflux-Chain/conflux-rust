@@ -1231,136 +1231,133 @@ impl BlockDataManager {
             return false;
         }
 
-        if on_local_pivot {
-            // Check if all blocks receipts and traces are from this epoch
-            let mut epoch_receipts = Vec::new();
-            let mut epoch_staking_events = Vec::new();
-            for h in epoch_block_hashes {
-                if let Some(r) = self.block_execution_result_by_hash_with_epoch(
-                    h, epoch_hash, true, /* update_pivot_assumption */
-                    true, /* update_cache */
-                ) {
-                    epoch_receipts.push(r.block_receipts);
-                } else {
-                    return false;
-                }
-                if update_trace {
-                    // Update block traces in db if needed.
-                    if self
-                        .block_traces_by_hash_with_epoch(
-                            h, epoch_hash,
-                            true, /* update_pivot_assumption */
-                            true, /* update_cache */
-                        )
-                        .is_none()
-                    {
-                        return false;
-                    }
-                }
+        if !on_local_pivot {
+            return true;
+        }
+        // Check if all blocks receipts and traces are from this epoch
+        let mut epoch_receipts = Vec::new();
+        let mut epoch_staking_events = Vec::new();
+        for h in epoch_block_hashes {
+            if let Some(r) = self.block_execution_result_by_hash_with_epoch(
+                h, epoch_hash, true, /* update_pivot_assumption */
+                true, /* update_cache */
+            ) {
+                epoch_receipts.push(r.block_receipts);
+            } else {
+                return false;
             }
-
-            let mut evm_tx_index = 0;
-
-            // Recover tx address if we will skip pivot chain execution
-            for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
-            {
-                let mut cfx_tx_index = 0;
-
-                let block = self
-                    .block_by_hash(block_hash, true /* update_cache */)
-                    .expect("block exists");
-
-                for (tx_idx, tx) in block.transactions.iter().enumerate() {
-                    let Receipt {
-                        outcome_status,
-                        logs,
-                        ..
-                    } = epoch_receipts[block_idx].receipts.get(tx_idx).unwrap();
-
-                    let rpc_index = match tx.space() {
-                        Space::Native => {
-                            let rpc_index = cfx_tx_index;
-                            cfx_tx_index += 1;
-                            rpc_index
-                        }
-                        Space::Ethereum
-                            if *outcome_status
-                                != TransactionStatus::Skipped =>
-                        {
-                            let rpc_index = evm_tx_index;
-                            evm_tx_index += 1;
-                            rpc_index
-                        }
-                        _ => usize::MAX, // this will not be used
-                    };
-
-                    let (phantom_txs, _) =
-                        build_bloom_and_recover_phantom(logs, tx.hash());
-
-                    match outcome_status {
-                        TransactionStatus::Success
-                        | TransactionStatus::Failure => {
-                            self.insert_transaction_index(
-                                &tx.hash,
-                                &TransactionIndex {
-                                    block_hash: *block_hash,
-                                    real_index: tx_idx,
-                                    is_phantom: false,
-                                    rpc_index: Some(rpc_index),
-                                },
-                            );
-
-                            for ptx in phantom_txs {
-                                self.insert_transaction_index(
-                                    &ptx.into_eip155(evm_chain_id).hash(),
-                                    &TransactionIndex {
-                                        block_hash: *block_hash,
-                                        real_index: tx_idx,
-                                        is_phantom: true,
-                                        rpc_index: Some(evm_tx_index),
-                                    },
-                                );
-
-                                evm_tx_index += 1;
-                            }
-
-                            epoch_staking_events
-                                .extend(make_staking_events(logs));
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            if let Some(reward_execution_info) = reward_execution_info {
-                for block in &reward_execution_info.epoch_blocks {
-                    let h = block.as_ref().hash();
-                    if self
-                        .block_reward_result_by_hash_with_epoch(
-                            &h, epoch_hash, true, true,
-                        )
-                        .is_none()
-                    {
-                        return false;
-                    }
-                }
-            }
-            let me_height = self.block_height_by_hash(epoch_hash).unwrap();
-            if pos_verifier.pos_option().is_some() && me_height != 0 {
-                trace!(
-                    "staking events update: height={}, new={}",
-                    me_height,
-                    epoch_hash,
-                );
-                if let Err(e) = pos_verifier.consensus_db().put_staking_events(
-                    me_height,
-                    *epoch_hash,
-                    epoch_staking_events,
-                ) {
-                    error!("epoch_executed err={:?}", e);
+            if update_trace {
+                // Update block traces in db if needed.
+                if self
+                    .block_traces_by_hash_with_epoch(
+                        h, epoch_hash, true, /* update_pivot_assumption */
+                        true, /* update_cache */
+                    )
+                    .is_none()
+                {
                     return false;
                 }
             }
         }
+
+        let mut evm_tx_index = 0;
+
+        // Recover tx address if we will skip pivot chain execution
+        for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate() {
+            let mut cfx_tx_index = 0;
+
+            let block = self
+                .block_by_hash(block_hash, true /* update_cache */)
+                .expect("block exists");
+
+            for (tx_idx, tx) in block.transactions.iter().enumerate() {
+                let Receipt {
+                    outcome_status,
+                    logs,
+                    ..
+                } = epoch_receipts[block_idx].receipts.get(tx_idx).unwrap();
+
+                let rpc_index = match tx.space() {
+                    Space::Native => {
+                        let rpc_index = cfx_tx_index;
+                        cfx_tx_index += 1;
+                        rpc_index
+                    }
+                    Space::Ethereum
+                        if *outcome_status != TransactionStatus::Skipped =>
+                    {
+                        let rpc_index = evm_tx_index;
+                        evm_tx_index += 1;
+                        rpc_index
+                    }
+                    _ => usize::MAX, // this will not be used
+                };
+
+                let (phantom_txs, _) =
+                    build_bloom_and_recover_phantom(logs, tx.hash());
+
+                match outcome_status {
+                    TransactionStatus::Success | TransactionStatus::Failure => {
+                        self.insert_transaction_index(
+                            &tx.hash,
+                            &TransactionIndex {
+                                block_hash: *block_hash,
+                                real_index: tx_idx,
+                                is_phantom: false,
+                                rpc_index: Some(rpc_index),
+                            },
+                        );
+
+                        for ptx in phantom_txs {
+                            self.insert_transaction_index(
+                                &ptx.into_eip155(evm_chain_id).hash(),
+                                &TransactionIndex {
+                                    block_hash: *block_hash,
+                                    real_index: tx_idx,
+                                    is_phantom: true,
+                                    rpc_index: Some(evm_tx_index),
+                                },
+                            );
+
+                            evm_tx_index += 1;
+                        }
+
+                        epoch_staking_events.extend(make_staking_events(logs));
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Some(reward_execution_info) = reward_execution_info {
+            for block in &reward_execution_info.epoch_blocks {
+                let h = block.as_ref().hash();
+                if self
+                    .block_reward_result_by_hash_with_epoch(
+                        &h, epoch_hash, true, true,
+                    )
+                    .is_none()
+                {
+                    return false;
+                }
+            }
+        }
+        let me_height = self.block_height_by_hash(epoch_hash).unwrap();
+        if pos_verifier.pos_option().is_some() && me_height != 0 {
+            trace!(
+                "staking events update: height={}, new={}",
+                me_height,
+                epoch_hash,
+            );
+            if let Err(e) = pos_verifier.consensus_db().put_staking_events(
+                me_height,
+                *epoch_hash,
+                epoch_staking_events,
+            ) {
+                error!("epoch_executed err={:?}", e);
+                return false;
+            }
+        }
+
         true
     }
 
@@ -1685,58 +1682,66 @@ impl BlockDataManager {
     fn gc_base_epoch(&self, base_epoch: u64) {
         // We must GC tx index before block body, otherwise we may be unable to
         // get the transactions in this epoch.
-        if let Some(defer_epochs) = self
-            .config
-            .additional_maintained_transaction_index_epoch_count
-        {
-            if base_epoch > defer_epochs as u64 {
-                let epoch_to_remove = base_epoch - defer_epochs as u64;
+
+        let gc_tx_index = || {
+            let defer_epochs = match self
+                .config
+                .additional_maintained_transaction_index_epoch_count
+            {
+                Some(x) => x,
+                None => return,
+            };
+            if base_epoch <= defer_epochs as u64 {
+                return;
+            }
+            let epoch_to_remove = base_epoch - defer_epochs as u64;
+            let epoch_blocks =
                 match self.all_epoch_set_hashes_from_db(epoch_to_remove) {
-                    None => warn!(
-                        "GC epoch set is missing! epoch_to_remove: {}",
-                        epoch_to_remove
-                    ),
-                    Some(epoch_blocks) => {
-                        // Store all packed transactions in a set first to
-                        // deduplicate transactions for database operations.
-                        let mut transaction_set = HashSet::new();
-                        for b in &epoch_blocks {
-                            if let Some(transactions) =
-                                self.db_manager.block_body_from_db(&b)
-                            {
-                                for tx in transactions {
-                                    transaction_set.insert(tx.hash());
-                                }
-                            }
-                        }
-                        let epoch_block_set: HashSet<H256> =
-                            epoch_blocks.into_iter().collect();
-                        for tx in transaction_set {
-                            if self.config.strict_tx_index_gc {
-                                // Check if this tx is actually executed in the
-                                // processed epoch.
-                                if let Some(tx_index) = self
-                                    .db_manager
-                                    .transaction_index_from_db(&tx)
-                                {
-                                    if epoch_block_set
-                                        .contains(&tx_index.block_hash)
-                                    {
-                                        self.db_manager
-                                            .remove_transaction_index_from_db(
-                                                &tx,
-                                            );
-                                    }
-                                }
-                            } else {
-                                self.db_manager
-                                    .remove_transaction_index_from_db(&tx);
-                            }
-                        }
+                    None => {
+                        warn!(
+                            "GC epoch set is missing! epoch_to_remove: {}",
+                            epoch_to_remove
+                        );
+                        return;
                     }
+                    Some(epoch_blocks) => epoch_blocks,
+                };
+            // Store all packed transactions in a set first to
+            // deduplicate transactions for database operations.
+            let mut transaction_set = HashSet::new();
+            for transactions in epoch_blocks
+                .iter()
+                .filter_map(|b| self.db_manager.block_body_from_db(&b))
+            {
+                transaction_set.extend(transactions.iter().map(|tx| tx.hash()));
+            }
+            let epoch_block_set: HashSet<H256> =
+                epoch_blocks.into_iter().collect();
+
+            let should_remove = |tx_hash| {
+                if self.config.strict_tx_index_gc {
+                    // Check if this tx is actually executed in the
+                    // processed epoch.
+                    if let Some(tx_index) =
+                        self.db_manager.transaction_index_from_db(&tx_hash)
+                    {
+                        epoch_block_set.contains(&tx_index.block_hash)
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                }
+            };
+            for tx in transaction_set {
+                if should_remove(tx) {
+                    self.db_manager.remove_transaction_index_from_db(&tx);
                 }
             }
         };
+
+        gc_tx_index();
+
         self.gc_epoch_with_defer(
             base_epoch,
             self.config.additional_maintained_block_body_epoch_count,

@@ -32,6 +32,7 @@ use cfx_types::{
 };
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
+    block_data_manager::BlockExecutionResult,
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
@@ -49,9 +50,9 @@ use network::{
 use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block, BlockHeader,
-    BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
-    StorageValue, Transaction, TransactionIndex, TransactionStatus,
-    TransactionWithSignature, VoteStakeInfo,
+    BlockReceipts, DepositInfo, Receipt, SignedTransaction, StorageKey,
+    StorageRoot, StorageValue, Transaction, TransactionIndex,
+    TransactionStatus, TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -2083,11 +2084,6 @@ impl RpcImpl {
     fn get_transactions_for_block(
         &self, b: &Arc<Block>, pivot: &Arc<Block>, epoch_number: u64,
     ) -> Result<Vec<WrapTransaction>, String> {
-        let maybe_state_root = self
-            .consensus
-            .get_data_manager()
-            .get_executed_state_root(&b.hash());
-
         let exec_info = self
             .consensus
             .get_data_manager()
@@ -2097,148 +2093,144 @@ impl RpcImpl {
                 false,
                 false,
             );
+        if let Some(execution_result) = exec_info {
+            self.get_transactions_for_executed_block(
+                b,
+                pivot,
+                epoch_number,
+                execution_result,
+            )
+        } else {
+            self.get_transactions_for_non_executed_block(b, pivot)
+        }
+    }
 
+    fn get_transactions_for_non_executed_block(
+        &self, b: &Arc<Block>, pivot: &Arc<Block>,
+    ) -> Result<Vec<WrapTransaction>, String> {
         let network = *self.sync.network.get_network_type();
+
         let mut eth_transaction_idx = 0;
-        let mut new_index = 0;
+        let mut make_eth_wrap_tx = |tx| {
+            let block_info = (
+                Some(pivot.hash()),
+                Some(pivot.block_header.height().into()),
+                Some(eth_transaction_idx.into()),
+            );
+            eth_transaction_idx += 1;
+            WrapTransaction::EthTransaction(EthTransaction::from_signed(
+                tx,
+                block_info,
+                (None, None),
+            ))
+        };
+
+        let make_cfx_wrap_tx = |tx| -> Result<WrapTransaction, String> {
+            Ok(WrapTransaction::NativeTransaction(
+                RpcTransaction::from_signed(tx, None, network)?,
+            ))
+        };
 
         let mut res = vec![];
+        for (_, tx) in b.transactions.iter().enumerate() {
+            res.push(match tx.space() {
+                Space::Ethereum => make_eth_wrap_tx(tx),
+                Space::Native => make_cfx_wrap_tx(tx)?,
+            });
+        }
+        Ok(res)
+    }
 
-        match exec_info {
-            Some(execution_result) => {
-                let block_receipts = &execution_result.block_receipts.receipts;
+    fn get_transactions_for_executed_block(
+        &self, b: &Arc<Block>, pivot: &Arc<Block>, epoch_number: u64,
+        execution_result: BlockExecutionResult,
+    ) -> Result<Vec<WrapTransaction>, String> {
+        let network = *self.sync.network.get_network_type();
+        let maybe_state_root = self
+            .consensus
+            .get_data_manager()
+            .get_executed_state_root(&b.hash());
+        let block_receipts = &execution_result.block_receipts.receipts;
 
-                for (id, tx) in b.transactions.iter().enumerate() {
-                    let receipt = &block_receipts[id];
+        let mut eth_transaction_idx = 0;
+        let mut make_eth_wrap_tx = |tx, id: usize| {
+            let receipt = &block_receipts[id];
 
-                    match tx.space() {
-                        Space::Ethereum => {
-                            let status = receipt
-                                .outcome_status
-                                .in_space(Space::Ethereum);
-                            let contract_address = match status
-                                == EVM_SPACE_SUCCESS
-                            {
-                                true => {
-                                    EthTransaction::deployed_contract_address(
-                                        &tx,
-                                    )
-                                }
-                                false => None,
-                            };
+            let status = receipt.outcome_status.in_space(Space::Ethereum);
+            let contract_address = match status == EVM_SPACE_SUCCESS {
+                true => EthTransaction::deployed_contract_address(tx),
+                false => None,
+            };
+            let block_info = (
+                Some(pivot.hash()),
+                Some(pivot.block_header.height().into()),
+                Some(eth_transaction_idx.into()),
+            );
+            eth_transaction_idx += 1;
 
-                            res.push(WrapTransaction::EthTransaction(
-                                EthTransaction::from_signed(
-                                    tx,
-                                    (
-                                        Some(pivot.hash()),
-                                        Some(
-                                            pivot.block_header.height().into(),
-                                        ),
-                                        Some(eth_transaction_idx.into()),
-                                    ),
-                                    (Some(status.into()), contract_address),
-                                ),
-                            ));
-                            eth_transaction_idx += 1;
-                        }
+            WrapTransaction::EthTransaction(EthTransaction::from_signed(
+                tx,
+                block_info,
+                (Some(status.into()), contract_address),
+            ))
+        };
 
-                        Space::Native => {
-                            let prior_gas_used = if id == 0 {
-                                U256::zero()
-                            } else {
-                                block_receipts[id - 1].accumulated_gas_used
-                            };
+        let mut cfx_transaction_index = 0;
+        let mut make_cfx_wrap_tx = |tx, id: usize| -> Result<_, String> {
+            let receipt = &block_receipts[id];
+            let prior_gas_used = if id == 0 {
+                U256::zero()
+            } else {
+                block_receipts[id - 1].accumulated_gas_used
+            };
 
-                            match receipt.outcome_status {
-                                TransactionStatus::Success
-                                | TransactionStatus::Failure => {
-                                    let tx_index = TransactionIndex {
-                                        block_hash: b.hash(),
-                                        real_index: id,
-                                        is_phantom: false,
-                                        rpc_index: Some(new_index),
-                                    };
-                                    let tx_exec_error_msg = &execution_result
-                                        .block_receipts
-                                        .tx_execution_error_messages[id];
-                                    let receipt = RpcReceipt::new(
-                                        (**tx).clone(),
-                                        receipt.clone(),
-                                        tx_index,
-                                        prior_gas_used,
-                                        Some(epoch_number),
-                                        execution_result
-                                            .block_receipts
-                                            .block_number,
-                                        b.block_header.base_price(),
-                                        maybe_state_root,
-                                        if tx_exec_error_msg.is_empty() {
-                                            None
-                                        } else {
-                                            Some(tx_exec_error_msg.clone())
-                                        },
-                                        network,
-                                        false,
-                                        false,
-                                    )?;
-                                    res.push(
-                                        WrapTransaction::NativeTransaction(
-                                            RpcTransaction::from_signed(
-                                                tx,
-                                                Some(
-                                                    PackedOrExecuted::Executed(
-                                                        receipt,
-                                                    ),
-                                                ),
-                                                network,
-                                            )?,
-                                        ),
-                                    );
-                                }
-                                TransactionStatus::Skipped => {
-                                    res.push(
-                                        WrapTransaction::NativeTransaction(
-                                            RpcTransaction::from_signed(
-                                                tx, None, network,
-                                            )?,
-                                        ),
-                                    );
-                                }
-                            }
-
-                            new_index += 1;
-                        }
-                    }
-                }
+            if receipt.outcome_status == TransactionStatus::Skipped {
+                cfx_transaction_index += 1;
+                return Ok(WrapTransaction::NativeTransaction(
+                    RpcTransaction::from_signed(tx, None, network)?,
+                ));
             }
-            None => {
-                for (_, tx) in b.transactions.iter().enumerate() {
-                    match tx.space() {
-                        Space::Ethereum => {
-                            res.push(WrapTransaction::EthTransaction(
-                                EthTransaction::from_signed(
-                                    tx,
-                                    (
-                                        Some(pivot.hash()),
-                                        Some(
-                                            pivot.block_header.height().into(),
-                                        ),
-                                        Some(eth_transaction_idx.into()),
-                                    ),
-                                    (None, None),
-                                ),
-                            ));
-                            eth_transaction_idx += 1;
-                        }
-                        Space::Native => {
-                            res.push(WrapTransaction::NativeTransaction(
-                                RpcTransaction::from_signed(tx, None, network)?,
-                            ));
-                        }
-                    }
-                }
-            }
+
+            let tx_index = TransactionIndex {
+                block_hash: b.hash(),
+                real_index: id,
+                is_phantom: false,
+                rpc_index: Some(cfx_transaction_index),
+            };
+            let tx_exec_error_msg = &execution_result
+                .block_receipts
+                .tx_execution_error_messages[id];
+            let receipt = RpcReceipt::new(
+                tx.clone(),
+                receipt.clone(),
+                tx_index,
+                prior_gas_used,
+                Some(epoch_number),
+                execution_result.block_receipts.block_number,
+                b.block_header.base_price(),
+                maybe_state_root,
+                if tx_exec_error_msg.is_empty() {
+                    None
+                } else {
+                    Some(tx_exec_error_msg.clone())
+                },
+                network,
+                false,
+                false,
+            )?;
+            cfx_transaction_index += 1;
+            let executed = Some(PackedOrExecuted::Executed(receipt));
+            Ok(WrapTransaction::NativeTransaction(
+                RpcTransaction::from_signed(tx, executed, network)?,
+            ))
+        };
+
+        let mut res = vec![];
+        for (id, tx) in b.transactions.iter().enumerate() {
+            res.push(match tx.space() {
+                Space::Ethereum => make_eth_wrap_tx(&**tx, id),
+                Space::Native => make_cfx_wrap_tx(&**tx, id)?,
+            })
         }
 
         Ok(res)

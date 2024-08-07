@@ -392,22 +392,23 @@ mod impls {
             let accessed_entries = &*self.accessed_entries.get_mut();
             // First of all, apply all changes to the underlying storage.
             for (k, v) in accessed_entries {
-                if v.is_modified() {
-                    let storage_key = StorageKeyWithSpace::from_key_bytes::<
-                        SkipInputCheck,
-                    >(k);
-                    match &v.current_value {
-                        Some(v) => {
-                            self.storage.set(storage_key, (&**v).into())?;
-                        }
-                        None => {
-                            self.storage.delete(storage_key)?;
-                        }
-                    }
+                if !v.is_modified() {
+                    continue;
+                }
 
-                    if let StorageKey::StorageKey { address_bytes, .. } =
-                        &storage_key.key
-                    {
+                let storage_key =
+                    StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(k);
+                match &v.current_value {
+                    Some(v) => {
+                        self.storage.set(storage_key, (&**v).into())?;
+                    }
+                    None => {
+                        self.storage.delete(storage_key)?;
+                    }
+                }
+
+                match &storage_key.key {
+                    StorageKey::StorageKey { address_bytes, .. } => {
                         Self::load_storage_layout(
                             &mut storage_layouts_to_rewrite,
                             /* accept_account_deletion = */
@@ -417,52 +418,42 @@ mod impls {
                             self.storage.as_ref(),
                             &accessed_entries,
                         )?;
-                    } else if let StorageKey::AccountKey(address_bytes) =
-                        &storage_key.key
-                    {
-                        // Contract initialization must set StorageLayout.
+                    }
+                    StorageKey::AccountKey(address_bytes)
                         if (address_bytes.is_builtin_address()
                             || address_bytes.is_contract_address()
                             || storage_key.space == Space::Ethereum)
-                            && v.original_value.is_none()
-                        {
-                            let result = Self::load_storage_layout(
-                                &mut storage_layouts_to_rewrite,
-                                /* accept_account_deletion = */ false,
-                                address_bytes,
-                                storage_key.space,
-                                self.storage.as_ref(),
-                                &accessed_entries,
-                            );
-                            if result.is_err() {
-                                if storage_key.space == Space::Native {
-                                    warn!(
-                                        "Contract address {:?} is created without storage_layout. \
-                                        It's probably created by a balance transfer.",
-                                        Address::from_slice(address_bytes),
-                                    );
-                                }
-                            }
-                        }
-                    } else if let StorageKey::CodeKey {
-                        address_bytes, ..
-                    } = &storage_key.key
+                            && v.original_value.is_none() =>
                     {
-                        // The code key is only set in contract creation, so we
-                        // do not need to check it again.
-                        // Contract initialization must set StorageLayout
-                        if v.original_value.is_none() {
-                            // To assert that we have already set StorageLayout.
-                            Self::load_storage_layout(
-                                &mut storage_layouts_to_rewrite,
-                                /* accept_account_deletion = */ false,
-                                address_bytes,
-                                storage_key.space,
-                                self.storage.as_ref(),
-                                &accessed_entries,
-                            )?;
+                        let result = Self::load_storage_layout(
+                            &mut storage_layouts_to_rewrite,
+                            /* accept_account_deletion = */ false,
+                            address_bytes,
+                            storage_key.space,
+                            self.storage.as_ref(),
+                            &accessed_entries,
+                        );
+                        if result.is_err() {
+                            debug!(
+                                "Contract address {:?} (space {:?}) is created without storage_layout. \
+                                It's probably created by a balance transfer.",
+                                Address::from_slice(address_bytes), storage_key.space
+                            );
                         }
                     }
+                    StorageKey::CodeKey { address_bytes, .. }
+                        if v.original_value.is_none() =>
+                    {
+                        Self::load_storage_layout(
+                            &mut storage_layouts_to_rewrite,
+                            /* accept_account_deletion = */ false,
+                            address_bytes,
+                            storage_key.space,
+                            self.storage.as_ref(),
+                            &accessed_entries,
+                        )?;
+                    }
+                    _ => {}
                 }
             }
             // Set storage layout for contracts with storage modification or
