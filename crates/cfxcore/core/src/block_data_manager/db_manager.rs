@@ -112,8 +112,7 @@ impl DBManager {
             let table_str = sqlite_db_table(table);
             let (_, sqlite_db) = KvdbSqlite::open_or_create(
                 &db_path.join(table_str.as_str()), /* Use separate database
-                                                    * for
-                                                    * different table */
+                                                    * for different table */
                 Arc::new(
                     KvdbSqliteStatements::make_statements(
                         &[&"value"],
