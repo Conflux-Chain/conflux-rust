@@ -1200,13 +1200,15 @@ impl Eth for EthHandler {
         info!("RPC Request: eth_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
               address, maybe_start_nonce, maybe_limit);
 
-        let (pending_txs, tx_status, pending_count) =
-            self.tx_pool.get_account_pending_transactions(
+        let (pending_txs, tx_status, pending_count) = self
+            .tx_pool
+            .get_account_pending_transactions(
                 &Address::from(address).with_evm_space(),
                 maybe_start_nonce,
                 maybe_limit.map(|limit| limit.as_usize()),
                 self.consensus.best_epoch_number(),
-            );
+            )
+            .map_err(|e| internal_error(e))?;
         Ok(AccountPendingTransactions {
             pending_transactions: pending_txs
                 .into_iter()
