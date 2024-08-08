@@ -17,7 +17,8 @@ use crate::rpc::{
         BlockHashOrEpochNumber, Bytes, CfxFeeHistory,
         CheckBalanceAgainstTransactionResponse, EpochNumber, FeeHistory,
         RpcAddress, Status as RpcStatus, Transaction as RpcTransaction,
-        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo, U64 as HexU64,
+        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
+        MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, U64 as HexU64,
     },
     RpcErrorKind, RpcResult,
 };
@@ -529,10 +530,9 @@ impl RpcImpl {
         )
     }
 
-    // TODO: cache the history to improve performance
     pub fn fee_history(
-        &self, block_count: HexU64, newest_block: EpochNumber,
-        reward_percentiles: Vec<f64>,
+        &self, mut block_count: HexU64, newest_block: EpochNumber,
+        reward_percentiles: Option<Vec<f64>>,
     ) -> RpcResult<CfxFeeHistory> {
         if newest_block == EpochNumber::LatestMined {
             return Err(RpcError::invalid_params(
@@ -548,6 +548,10 @@ impl RpcImpl {
 
         if block_count.as_u64() == 0 {
             return Ok(FeeHistory::new().to_cfx_fee_history());
+        }
+
+        if block_count.as_u64() > MAX_FEE_HISTORY_CACHE_BLOCK_COUNT {
+            block_count = HexU64::from(MAX_FEE_HISTORY_CACHE_BLOCK_COUNT);
         }
         // keep read lock to ensure consistent view
         let inner = self.consensus_graph().inner.read();
@@ -576,6 +580,7 @@ impl RpcImpl {
             .get_height_from_epoch_number(newest_block.into())
             .map_err(RpcError::invalid_params)?;
 
+        let reward_percentiles = reward_percentiles.unwrap_or_default();
         let mut current_height = start_height;
 
         let mut fee_history = FeeHistory::new();
@@ -630,7 +635,7 @@ impl RpcImpl {
         let fee_history = self.fee_history(
             HexU64::from(300),
             EpochNumber::LatestState,
-            vec![50f64],
+            Some(vec![50f64]),
         )?;
 
         let total_reward: U256 = fee_history
