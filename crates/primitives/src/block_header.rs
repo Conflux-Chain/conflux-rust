@@ -30,7 +30,7 @@ const HEADER_LIST_MIN_LEN: usize = 13;
 /// field.
 pub static CIP112_TRANSITION_HEIGHT: OnceCell<u64> = OnceCell::new();
 
-const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
+pub const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
 
 #[derive(Clone, Debug, Eq)]
 pub struct BlockHeaderRlpPart {

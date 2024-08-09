@@ -25,7 +25,6 @@ pub use self::{
             self, sign_call, CallRequest,
             CheckBalanceAgainstTransactionResponse,
             EstimateGasAndCollateralResponse, SendTxRequest,
-            MAX_GAS_CALL_REQUEST,
         },
         consensus_graph_states::ConsensusGraphStates,
         epoch_number::{BlockHashOrEpochNumber, EpochNumber},

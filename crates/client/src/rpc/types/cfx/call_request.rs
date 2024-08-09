@@ -15,6 +15,7 @@ use crate::rpc::{
     RpcResult,
 };
 use cfx_addr::Network;
+use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
@@ -27,13 +28,11 @@ use primitives::{
     },
     SignedTransaction, Transaction, TransactionWithSignature,
 };
-use std::{cmp::min, convert::Into, sync::Arc};
+use std::{convert::Into, sync::Arc};
 
-/// The MAX_GAS_CALL_REQUEST is used as max value of cfx_call or cfx_estimate's
-/// gas value to prevent call_virtual consumes too much resource.
-/// The tx_pool will reject the tx if the gas is larger than half of the block
-/// gas limit. which is 30_000_000 before 1559, and 60_000_000 after 1559.
-pub const MAX_GAS_CALL_REQUEST: u64 = 15_000_000;
+/// The maximum gas limit accepted by most tx pools.
+pub const DEFAULT_CFX_GAS_CALL_REQUEST: u64 =
+    DEFAULT_TARGET_BLOCK_GAS_LIMIT * 9 / 10;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -155,10 +154,17 @@ impl SendTxRequest {
 }
 
 pub fn sign_call(
-    epoch_height: u64, chain_id: u32, request: CallRequest,
+    epoch_height: u64, chain_id: u32, max_gas: Option<U256>,
+    request: CallRequest,
 ) -> RpcResult<SignedTransaction> {
-    let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
-    let gas = min(request.gas.unwrap_or(max_gas), max_gas);
+    let max_gas = max_gas.unwrap_or(DEFAULT_CFX_GAS_CALL_REQUEST.into());
+    let gas = request.gas.unwrap_or(max_gas);
+    if gas > max_gas {
+        bail!(invalid_params(
+            "gas",
+            format!("specified gas is larger than max gas {:?}", max_gas)
+        ))
+    }
 
     let nonce = request.nonce.unwrap_or_default();
     let action = request.to.map_or(Action::Create, |rpc_addr| {
