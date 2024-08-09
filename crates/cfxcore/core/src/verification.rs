@@ -780,6 +780,7 @@ impl VerificationConfig {
 
         Self::check_gas_limit(tx, cip76, &mode)?;
         Self::check_gas_limit_with_calldata(tx, cip130)?;
+
         Ok(())
     }
 

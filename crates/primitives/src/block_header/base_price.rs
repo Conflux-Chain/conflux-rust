@@ -7,7 +7,10 @@ pub fn compute_next_price(
     min_base_price: U256,
 ) -> U256 {
     let gas_actual = if gas_actual > gas_target * 2 {
-        warn!("gas target is larger than expected");
+        // This case may happen if block_gas_limit is an odd number.
+        if gas_actual > gas_target * 2 + 1 {
+            warn!("gas target is larger than expected");
+        }
         gas_target * 2
     } else {
         gas_actual

@@ -207,6 +207,7 @@ build_config! {
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
+        (max_estimation_gas_limit, (Option<u64>), None)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
@@ -275,9 +276,11 @@ build_config! {
         (tx_pool_min_native_tx_gas_price, (Option<u64>), None)
         (tx_pool_min_eth_tx_gas_price, (Option<u64>), None)
         (tx_pool_nonce_bits, (usize), TXPOOL_DEFAULT_NONCE_BITS)
+        (tx_pool_allow_gas_over_half_block, (bool), false)
         (max_packing_batch_gas_limit, (u64), 3_000_000)
         (max_packing_batch_size, (usize), 50)
         (packing_pool_degree, (u8), 4)
+
 
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
@@ -1044,16 +1047,16 @@ impl Configuration {
             };
         TxPoolConfig {
             capacity: self.raw_conf.tx_pool_size,
-            max_tx_gas: RwLock::new(U256::from(
+            half_block_gas_limit: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
             min_native_tx_price: self
                 .raw_conf
                 .tx_pool_min_native_tx_gas_price
                 .unwrap_or(min_native_tx_price_default),
-            packing_gas_limit_block_count: self
+            allow_gas_over_half_block: self
                 .raw_conf
-                .packing_gas_limit_block_count,
+                .tx_pool_allow_gas_over_half_block,
             target_block_gas_limit: self.raw_conf.target_block_gas_limit,
             min_eth_tx_price: self
                 .raw_conf
@@ -1080,6 +1083,10 @@ impl Configuration {
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
             enable_metrics: self.raw_conf.rpc_enable_metrics,
             poll_lifetime_in_seconds: self.raw_conf.poll_lifetime_in_seconds,
+            max_estimation_gas_limit: self
+                .raw_conf
+                .max_estimation_gas_limit
+                .map(U256::from),
         }
     }
 

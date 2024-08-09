@@ -41,8 +41,9 @@ use metrics::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    block::BlockHeight, block_header::compute_next_price_tuple, Account,
-    SignedTransaction, Transaction, TransactionWithSignature,
+    block::BlockHeight,
+    block_header::{compute_next_price, compute_next_price_tuple},
+    Account, SignedTransaction, Transaction, TransactionWithSignature,
 };
 use std::{
     cmp::{max, min},
@@ -93,8 +94,8 @@ pub struct TxPoolConfig {
     pub capacity: usize,
     pub min_native_tx_price: u64,
     pub min_eth_tx_price: u64,
-    pub max_tx_gas: RwLock<U256>,
-    pub packing_gas_limit_block_count: u64,
+    pub half_block_gas_limit: RwLock<U256>,
+    pub allow_gas_over_half_block: bool,
     pub target_block_gas_limit: u64,
     pub max_packing_batch_gas_limit: u64,
     pub max_packing_batch_size: usize,
@@ -111,15 +112,87 @@ impl Default for TxPoolConfig {
             capacity: 500_000,
             min_native_tx_price: 1,
             min_eth_tx_price: 1,
-            max_tx_gas: RwLock::new(U256::from(
+            half_block_gas_limit: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
-            packing_gas_limit_block_count: 10,
+            allow_gas_over_half_block: true,
             max_packing_batch_size: 20,
             max_packing_batch_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT / 10,
             packing_pool_degree: 4,
             target_block_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT,
         }
+    }
+}
+
+impl TxPoolConfig {
+    pub fn check_gas_price_and_limit(
+        &self, tx: &TransactionWithSignature,
+    ) -> Result<(), TransactionPoolError> {
+        // If the actual block gas limit is less than the miners' preference,
+        // the miner chooses the actual limit to ensure compatibility with other
+        // nodes. If the actual block gas limit exceeds the miners'
+        // preference, the miner adheres to their own settings since this does
+        // not result in incompatibility with others.
+        let half_block_gas_limit = std::cmp::min(
+            *self.half_block_gas_limit.read(),
+            U256::from(self.target_block_gas_limit) / 2,
+        );
+
+        // The current implementation is designed for after the activation of
+        // CIP-1559. However, it is also compatible with the system before
+        // CIP-1559 was activated, although there are some minor behavioral
+        // differences.
+        let block_gas_target = half_block_gas_limit;
+
+        let min_tx_price = match tx.space() {
+            Space::Native => self.min_native_tx_price,
+            Space::Ethereum => self.min_eth_tx_price,
+        };
+
+        let space_gas_target: U256 = match tx.space() {
+            Space::Native => block_gas_target * 9 / 10,
+            Space::Ethereum => block_gas_target * 5 / 10,
+        };
+
+        let space_gas_limit = space_gas_target * 2;
+        let max_tx_gas = if self.allow_gas_over_half_block {
+            space_gas_limit
+        } else {
+            space_gas_limit / 2
+        };
+
+        let tx_gas = *tx.gas();
+        let tx_gas_price = *tx.gas_price();
+
+        if tx_gas > max_tx_gas {
+            warn!(
+                "Transaction discarded due to above gas limit: {} > {:?}",
+                tx.gas(),
+                max_tx_gas
+            );
+            return Err(TransactionPoolError::GasLimitExceeded {
+                max: max_tx_gas,
+                have: tx_gas,
+            });
+        }
+
+        let minimum_price = compute_next_price(
+            space_gas_target,
+            tx_gas,
+            min_tx_price.into(),
+            min_tx_price.into(),
+        );
+
+        // check transaction gas price
+        if tx_gas_price < minimum_price {
+            trace!("Transaction {} discarded due to below minimal gas price: price {}", tx.hash(), tx_gas_price);
+            return Err(TransactionPoolError::GasPriceLessThanMinimum {
+                min: minimum_price,
+                have: tx_gas_price,
+            });
+        }
+
+        Ok(())
     }
 }
 
@@ -329,15 +402,11 @@ impl TransactionPool {
         account_cache.get_nonce_and_balance(address)
     }
 
-    pub fn calc_max_tx_gas(&self) -> U256 {
+    pub fn calc_half_block_gas_limit(&self) -> Option<U256> {
         let current_best_info = self.consensus_best_info.lock().clone();
-        match self
-            .data_man
+        self.data_man
             .block_from_db(&current_best_info.best_block_hash)
-        {
-            Some(pivot_block) => pivot_block.block_header.gas_limit() / 2,
-            None => *self.config.max_tx_gas.read(),
-        }
+            .map(|pivot_block| pivot_block.block_header.gas_limit() / 2)
     }
 
     /// Try to insert `transactions` into transaction pool.
@@ -605,31 +674,7 @@ impl TransactionPool {
         // best info is initialized here.
 
         // check transaction gas limit
-        let max_tx_gas = *self.config.max_tx_gas.read();
-        if *transaction.gas() > max_tx_gas {
-            warn!(
-                "Transaction discarded due to above gas limit: {} > {:?}",
-                transaction.gas(),
-                max_tx_gas
-            );
-            return Err(TransactionPoolError::GasLimitExceeded {
-                max: max_tx_gas.as_u64(),
-                have: transaction.gas().as_u64(),
-            });
-        }
-
-        let min_tx_price = match transaction.space() {
-            Space::Native => self.config.min_native_tx_price,
-            Space::Ethereum => self.config.min_eth_tx_price,
-        };
-        // check transaction gas price
-        if *transaction.gas_price() < min_tx_price.into() {
-            trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price());
-            return Err(TransactionPoolError::GasPriceLessThanMinimum {
-                min: min_tx_price.into(),
-                have: *transaction.gas_price(),
-            });
-        }
+        self.config.check_gas_price_and_limit(transaction)?;
 
         Ok(())
     }
@@ -881,7 +926,9 @@ impl TransactionPool {
             let mut consensus_best_info = self.consensus_best_info.lock();
             *consensus_best_info = best_info.clone();
         }
-        *self.config.max_tx_gas.write() = self.calc_max_tx_gas();
+        if let Some(half_block_gas_limit) = self.calc_half_block_gas_limit() {
+            *self.config.half_block_gas_limit.write() = half_block_gas_limit;
+        }
 
         let account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
