@@ -131,7 +131,7 @@ impl<T> SpaceMap<T> {
     pub const fn new(native: T, evm: T) -> Self { SpaceMap { native, evm } }
 
     #[inline]
-    pub fn in_space(&self, space: Space) -> &T {
+    pub const fn in_space(&self, space: Space) -> &T {
         match space {
             Space::Native => &self.native,
             Space::Ethereum => &self.evm,

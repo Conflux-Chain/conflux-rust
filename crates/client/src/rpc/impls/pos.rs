@@ -5,14 +5,9 @@
 use crate::{
     common::delegate_convert::into_jsonrpc_result,
     rpc::{
-        errors::{
-            build_rpc_server_error, call_execution_error,
-            codes::POS_NOT_ENABLED,
-        },
+        errors::{build_rpc_server_error, codes::POS_NOT_ENABLED},
         traits::pos::Pos,
         types::{
-            call_request::rpc_call_request_network,
-            cfx::check_rpc_address_network,
             pos::{
                 tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
                 EpochState as RpcEpochState,
@@ -21,20 +16,18 @@ use crate::{
                 RpcTransactionStatus, RpcTransactionType, Signature, Status,
                 Transaction, VotePowerState,
             },
-            sign_call, Bytes, CallRequest, EpochNumber, RpcAddress,
+            EpochNumber, RpcAddress,
         },
         RpcInterceptor, RpcResult,
     },
 };
 use cfx_addr::Network;
-use cfx_execute_helper::estimation::{EstimateExt, EstimateRequest};
-use cfx_executor::executive::ExecutionOutcome;
+use cfx_executor::internal_contract;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
-use cfx_types::{hexstr_to_h256, Address, H256, U64};
+use cfx_statedb::StateDbExt;
+use cfx_types::{hexstr_to_h256, BigEndianHash, H256, U64};
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
-    SharedConsensusGraph,
+    consensus::pos_handler::PosVerifier, BlockDataManager, SharedConsensusGraph,
 };
 use consensus_types::block::Block as ConsensusBlock;
 use diem_crypto::hash::HashValue;
@@ -47,8 +40,7 @@ use diem_types::{
 };
 use itertools::Itertools;
 use jsonrpc_core::Result as JsonRpcResult;
-use rustc_hex::FromHex;
-use solidity_abi::ABIEncodable;
+use primitives::{StorageKey, StorageValue};
 use std::sync::Arc;
 use storage_interface::{DBReaderForPoW, DbReader};
 
@@ -174,98 +166,29 @@ impl PosHandler {
             "Get pos account by pow address {:?}, view {:?}",
             address, view
         );
-        let account_addr: Address = address.hex_address;
-        let mut call_data: Vec<u8> = "6a06ea96".from_hex().unwrap();
-        call_data.extend_from_slice(&account_addr.abi_encode());
 
-        let call_request = CallRequest {
-            to: Some(RpcAddress::try_from_h160(
-                POS_REGISTER_CONTRACT_ADDRESS,
-                self.network_type,
-            )?),
-            data: Some(Bytes(call_data)),
-            ..Default::default()
-        };
+        let state_db = self.consensus.get_state_db_by_epoch_number(
+            EpochNumber::LatestState.into(),
+            "view",
+        )?;
 
-        let epoch = match view {
-            Some(number) => Some(EpochNumber::Num(number)),
-            None => None,
-        };
+        let identifier_entry =
+            internal_contract::pos_internal_entries::identifier_entry(
+                &address.hex_address,
+            );
+        let storage_key = StorageKey::new_storage_key(
+            &POS_REGISTER_CONTRACT_ADDRESS,
+            identifier_entry.as_ref(),
+        )
+        .with_native_space();
+        let StorageValue { value, .. } = state_db
+            .get::<StorageValue>(storage_key)?
+            .unwrap_or_default();
+        let addr = BigEndianHash::from_uint(&value);
 
-        let (execution_outcome, _estimation) =
-            self.exec_transaction(call_request, epoch)?;
-        let executed = match execution_outcome {
-            ExecutionOutcome::NotExecutedDrop(e) => {
-                bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
-                    format! {"{:?}", e}
-                ))
-            }
-            ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
-                    format! {"{:?}", e}
-                ))
-            }
-            ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
-                bail!(call_execution_error(
-                    format! {"Can not estimate: transaction execution failed, \
-                    all gas will be charged (execution error: {:?})", e}
-                    .into(),
-                    format! {"{:?}", e}
-                ))
-            }
-            ExecutionOutcome::Finished(executed) => executed,
-        };
-
-        let pos_address = executed.output;
-        let addr = H256::from_slice(&pos_address[..]);
         debug!("Pos Address: {:?}", addr);
 
         self.account_impl(addr, view)
-    }
-
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
-
-    fn exec_transaction(
-        &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
-        let rpc_request_network = invalid_params_check(
-            "request",
-            rpc_call_request_network(
-                request.from.as_ref(),
-                request.to.as_ref(),
-            ),
-        )?;
-        invalid_params_check(
-            "request",
-            check_rpc_address_network(rpc_request_network, &self.network_type),
-        )?;
-
-        let consensus_graph = self.consensus_graph();
-        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
-
-        let estimate_request = EstimateRequest {
-            has_sender: request.from.is_some(),
-            has_gas_limit: request.gas.is_some(),
-            has_gas_price: request.gas_price.is_some(),
-            has_nonce: request.nonce.is_some(),
-            has_storage_limit: request.storage_limit.is_some(),
-        };
-
-        let epoch_height = consensus_graph
-            .get_height_from_epoch_number(epoch.clone().into())?;
-        let chain_id = consensus_graph.best_chain_id();
-        let signed_tx =
-            sign_call(epoch_height, chain_id.in_native_space(), request)?;
-        debug!("call tx {:?}", signed_tx);
-
-        consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
     }
 
     fn pos_state_by_view(
