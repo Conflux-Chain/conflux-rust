@@ -113,7 +113,7 @@ impl Default for TxPoolConfig {
             min_native_tx_price: 1,
             min_eth_tx_price: 1,
             half_block_gas_limit: RwLock::new(U256::from(
-                DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
+                DEFAULT_TARGET_BLOCK_GAS_LIMIT,
             )),
             allow_gas_over_half_block: true,
             max_packing_batch_size: 20,
@@ -135,7 +135,7 @@ impl TxPoolConfig {
         // not result in incompatibility with others.
         let half_block_gas_limit = std::cmp::min(
             *self.half_block_gas_limit.read(),
-            U256::from(self.target_block_gas_limit) / 2,
+            U256::from(self.target_block_gas_limit),
         );
 
         // The current implementation is designed for after the activation of

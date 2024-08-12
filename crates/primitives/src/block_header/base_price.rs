@@ -149,7 +149,6 @@ mod tests {
         let mut next_start = 0usize;
 
         for price in start..=end {
-            // dbg!(gas_target, price, last_base_price);
             let (lo, up) = estimate_gas_used_boundary(
                 gas_target.into(),
                 price.into(),
