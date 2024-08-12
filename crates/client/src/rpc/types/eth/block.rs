@@ -27,6 +27,10 @@ use serde::{Serialize, Serializer};
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
     "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
 
+// sha3 hash of empty tx, state, receipt
+const SHA3_HASH_OF_EMPTY: &str =
+    "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
+
 /// Block Transactions
 #[derive(Debug)]
 pub enum BlockTransactions {
@@ -180,6 +184,21 @@ impl Block {
             )
         };
 
+        // If there are no transactions, we use the empty hash for txRoot and
+        // receiptRoot. Another way to calculate transactions_root and
+        // receipts_root from transactions.
+        let (transactions_root, receipts_root) = if pb.transactions.len() > 0 {
+            (
+                pb.pivot_header.transactions_root().clone(),
+                pb.pivot_header.deferred_receipts_root().clone(),
+            )
+        } else {
+            (
+                hexstr_to_h256(SHA3_HASH_OF_EMPTY),
+                hexstr_to_h256(SHA3_HASH_OF_EMPTY),
+            )
+        };
+
         Block {
             hash: pb.pivot_header.hash(),
             parent_hash: pb.pivot_header.parent_hash().clone(),
@@ -187,8 +206,8 @@ impl Block {
             author: pb.pivot_header.author().clone(),
             miner: pb.pivot_header.author().clone(),
             state_root: pb.pivot_header.deferred_state_root().clone(),
-            transactions_root: pb.pivot_header.transactions_root().clone(),
-            receipts_root: pb.pivot_header.deferred_receipts_root().clone(),
+            transactions_root,
+            receipts_root,
             // We use height to replace block number for ETH interface.
             // Note: this will correspond to the epoch number.
             number: pb.pivot_header.height().into(),

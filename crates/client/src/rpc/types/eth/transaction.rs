@@ -101,6 +101,19 @@ impl Transaction {
     ) -> Transaction {
         let signature = t.signature();
 
+        let (v, y_parity) = if t.is_2718() {
+            (U256::from(signature.v()), Some(U64::from(signature.v())))
+        } else {
+            (
+                eip155_signature::add_chain_replay_protection(
+                    signature.v(),
+                    t.chain_id().map(|x| x as u64),
+                )
+                .into(),
+                None,
+            )
+        };
+
         Transaction {
             hash: t.hash(),
             nonce: *t.nonce(),
@@ -121,11 +134,7 @@ impl Transaction {
             public_key: t.public().map(Into::into),
             chain_id: t.chain_id().map(|x| U64::from(x as u64)),
             standard_v: Some(signature.v().into()),
-            v: eip155_signature::add_chain_replay_protection(
-                signature.v(),
-                t.chain_id().map(|x| x as u64),
-            )
-            .into(), /* The protected EIP155 v */
+            v, /* The protected EIP155 v */
             r: signature.r().into(),
             s: signature.s().into(),
             status: exec_info.0,
@@ -134,7 +143,7 @@ impl Transaction {
             max_priority_fee_per_gas: t
                 .after_1559()
                 .then_some(*t.max_priority_gas_price()),
-            y_parity: t.is_2718().then_some(U64::from(signature.v())),
+            y_parity,
             transaction_type: Some(U64::from(t.type_id())),
         }
     }
@@ -155,74 +164,3 @@ impl Transaction {
         }
     }
 }
-
-/*#[cfg(test)]
-mod tests {
-    use super::{LocalTransactionStatus, Transaction};
-    use ethereum_types::H256;
-    use serde_json;
-    use types::transaction::TypedTxId;
-    use v1::types::AccessListItem;
-
-    #[test]
-    fn test_transaction_serialize() {
-        let mut t = Transaction::default();
-        t.transaction_type = TypedTxId::AccessList.to_U64_option_id();
-        t.access_list = Some(vec![AccessListItem::default()]);
-        let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(
-            serialized,
-            r#"{"type":"0x1","hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","input":"0x","creates":null,"raw":"0x","publicKey":null,"chainId":null,"v":"0x0","r":"0x0","s":"0x0","condition":null,"accessList":[{"address":"0x0000000000000000000000000000000000000000","storageKeys":[]}]}"#
-        );
-    }
-
-    #[test]
-    fn test_local_transaction_status_serialize() {
-        let tx_ser = serde_json::to_string(&Transaction::default()).unwrap();
-        let status1 = LocalTransactionStatus::Pending;
-        let status2 = LocalTransactionStatus::Future;
-        let status3 = LocalTransactionStatus::Mined(Transaction::default());
-        let status4 = LocalTransactionStatus::Dropped(Transaction::default());
-        let status5 = LocalTransactionStatus::Invalid(Transaction::default());
-        let status6 =
-            LocalTransactionStatus::Rejected(Transaction::default(), "Just because".into());
-        let status7 = LocalTransactionStatus::Replaced(
-            Transaction::default(),
-            5.into(),
-            H256::from_low_u64_be(10),
-        );
-
-        assert_eq!(
-            serde_json::to_string(&status1).unwrap(),
-            r#"{"status":"pending"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status2).unwrap(),
-            r#"{"status":"future"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status3).unwrap(),
-            r#"{"status":"mined","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status4).unwrap(),
-            r#"{"status":"dropped","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status5).unwrap(),
-            r#"{"status":"invalid","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status6).unwrap(),
-            r#"{"status":"rejected","transaction":"#.to_owned()
-                + &format!("{}", tx_ser)
-                + r#","error":"Just because"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status7).unwrap(),
-            r#"{"status":"replaced","transaction":"#.to_owned()
-                + &format!("{}", tx_ser)
-                + r#","hash":"0x000000000000000000000000000000000000000000000000000000000000000a","gasPrice":"0x5"}"#
-        );
-    }
-}*/
