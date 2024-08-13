@@ -247,6 +247,9 @@ pub trait Eth {
     #[rpc(name = "eth_submitHashrate")]
     fn submit_hashrate(&self, _: U256, _: H256) -> Result<bool>;
 
+    #[rpc(name = "eth_getBlockReceipts")]
+    fn eth_block_receipts(&self, block: BlockNumber) -> Result<Vec<Receipt>>;
+
     #[rpc(name = "parity_getBlockReceipts")]
     fn block_receipts(
         &self, block: Option<BlockNumber>,

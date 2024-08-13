@@ -1142,6 +1142,12 @@ impl Eth for EthHandler {
         Ok(false)
     }
 
+    fn eth_block_receipts(
+        &self, block: BlockNumber,
+    ) -> RpcResult<Vec<Receipt>> {
+        self.block_receipts(Some(block))
+    }
+
     fn block_receipts(
         &self, block_num: Option<BlockNumber>,
     ) -> RpcResult<Vec<Receipt>> {
