@@ -333,6 +333,50 @@ impl EthHandler {
             None
         }
     }
+
+    fn get_block_receipts(
+        &self, block_num: BlockNumber,
+    ) -> RpcResult<Vec<Receipt>> {
+        let b = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+
+            let phantom_block = match block_num {
+                BlockNumber::Hash { hash, .. } => self
+                    .consensus_graph()
+                    .get_phantom_block_by_hash(
+                        &hash, false, /* include_traces */
+                    )
+                    .map_err(RpcError::invalid_params)?,
+                _ => self
+                    .consensus_graph()
+                    .get_phantom_block_by_number(
+                        block_num.try_into()?,
+                        None,
+                        false, /* include_traces */
+                    )
+                    .map_err(RpcError::invalid_params)?,
+            };
+
+            match phantom_block {
+                None => return Err(unknown_block()),
+                Some(b) => b,
+            }
+        };
+
+        let mut block_receipts = vec![];
+        let mut prior_log_index = 0;
+
+        for idx in 0..b.receipts.len() {
+            block_receipts.push(self.construct_rpc_receipt(
+                &b,
+                idx,
+                &mut prior_log_index,
+            )?);
+        }
+
+        return Ok(block_receipts);
+    }
 }
 
 impl Eth for EthHandler {
@@ -1145,7 +1189,9 @@ impl Eth for EthHandler {
     fn eth_block_receipts(
         &self, block: BlockNumber,
     ) -> RpcResult<Vec<Receipt>> {
-        self.block_receipts(Some(block))
+        info!("RPC Request: eth_getBlockReceipts block_number={:?}", block);
+
+        self.get_block_receipts(block)
     }
 
     fn block_receipts(
@@ -1158,45 +1204,7 @@ impl Eth for EthHandler {
 
         let block_num = block_num.unwrap_or_default();
 
-        let b = {
-            // keep read lock to ensure consistent view
-            let _inner = self.consensus_graph().inner.read();
-
-            let phantom_block = match block_num {
-                BlockNumber::Hash { hash, .. } => self
-                    .consensus_graph()
-                    .get_phantom_block_by_hash(
-                        &hash, false, /* include_traces */
-                    )
-                    .map_err(RpcError::invalid_params)?,
-                _ => self
-                    .consensus_graph()
-                    .get_phantom_block_by_number(
-                        block_num.try_into()?,
-                        None,
-                        false, /* include_traces */
-                    )
-                    .map_err(RpcError::invalid_params)?,
-            };
-
-            match phantom_block {
-                None => return Err(unknown_block()),
-                Some(b) => b,
-            }
-        };
-
-        let mut block_receipts = vec![];
-        let mut prior_log_index = 0;
-
-        for idx in 0..b.receipts.len() {
-            block_receipts.push(self.construct_rpc_receipt(
-                &b,
-                idx,
-                &mut prior_log_index,
-            )?);
-        }
-
-        Ok(block_receipts)
+        self.get_block_receipts(block_num)
     }
 
     fn account_pending_transactions(
