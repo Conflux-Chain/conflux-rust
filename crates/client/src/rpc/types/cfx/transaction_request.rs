@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    errors::{invalid_params, invalid_params_msg},
+    errors::invalid_params,
     types::{
         address::RpcAddress,
         cfx::{
@@ -108,8 +108,8 @@ impl TransactionRequest {
         self, epoch_height: u64, chain_id: u32, password: Option<String>,
         accounts: Arc<AccountProvider>,
     ) -> RpcResult<TransactionWithSignature> {
-        let gas = self.gas.ok_or(invalid_params_msg("gas"))?;
-        let nonce = self.nonce.ok_or(invalid_params_msg("nonce"))?;
+        let gas = self.gas.ok_or("should have gas")?;
+        let nonce = self.nonce.ok_or("should have nonce")?;
         let action = self.to.map_or(Action::Create, |rpc_addr| {
             Action::Call(rpc_addr.hex_address)
         });
@@ -118,7 +118,7 @@ impl TransactionRequest {
         let storage_limit = self
             .storage_limit
             .map(|v| v.as_u64())
-            .ok_or(invalid_params_msg("storage_limit"))?;
+            .ok_or("should have storage_limit")?;
         let data = self.data.unwrap_or_default().into_vec();
 
         let default_type_id = if self.max_fee_per_gas.is_some()
@@ -137,7 +137,7 @@ impl TransactionRequest {
         let typed_native_tx = match transaction_type.as_usize() as u8 {
             LEGACY_TX_TYPE => {
                 let gas_price =
-                    self.gas_price.ok_or(invalid_params_msg("gas_price"))?;
+                    self.gas_price.ok_or("should have gas_price")?;
                 Cip155(NativeTransaction {
                     nonce,
                     action,
@@ -152,7 +152,7 @@ impl TransactionRequest {
             }
             CIP2930_TYPE => {
                 let gas_price =
-                    self.gas_price.ok_or(invalid_params_msg("gas_price"))?;
+                    self.gas_price.ok_or("should have gas_price")?;
                 Cip2930(Cip2930Transaction {
                     nonce,
                     gas_price,
@@ -169,10 +169,10 @@ impl TransactionRequest {
             CIP1559_TYPE => {
                 let max_fee_per_gas = self
                     .max_fee_per_gas
-                    .ok_or(invalid_params_msg("max_fee_per_gas"))?;
+                    .ok_or("should have max_fee_per_gas")?;
                 let max_priority_fee_per_gas = self
                     .max_priority_fee_per_gas
-                    .ok_or(invalid_params_msg("max_priority_fee_per_gas"))?;
+                    .ok_or("should have max_priority_fee_per_gas")?;
                 Cip1559(Cip1559Transaction {
                     nonce,
                     action,

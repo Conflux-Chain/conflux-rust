@@ -542,7 +542,7 @@ impl RpcImpl {
                 // to track the nonce
 
                 let address =
-                    tx.from.clone().expect("from should exist").into();
+                    tx.from.clone().ok_or("from should exist")?.into();
                 let epoch = EpochNumber::LatestState.into_primitive();
 
                 let nonce = light
