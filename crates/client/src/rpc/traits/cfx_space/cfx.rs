@@ -5,12 +5,12 @@
 use crate::rpc::types::{
     pos::PoSEpochReward, Account as RpcAccount, AccountPendingInfo,
     AccountPendingTransactions, Block, BlockHashOrEpochNumber, Bytes,
-    CallRequest, CfxFeeHistory, CfxFilterChanges, CfxRpcLogFilter,
+    CfxFeeHistory, CfxFilterChanges, CfxRpcLogFilter,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, StorageCollateralInfo, TokenSupplyInfo,
-    Transaction, VoteParamsInfo, U64 as HexU64,
+    Transaction, TransactionRequest, VoteParamsInfo, U64 as HexU64,
 };
 use cfx_types::{H128, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
@@ -168,7 +168,7 @@ pub trait Cfx {
     /// Call contract, returning the output data.
     #[rpc(name = "cfx_call")]
     fn call(
-        &self, tx: CallRequest,
+        &self, tx: TransactionRequest,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> JsonRpcResult<Bytes>;
 
@@ -198,7 +198,7 @@ pub trait Cfx {
     /// Return estimated gas and collateral usage.
     #[rpc(name = "cfx_estimateGasAndCollateral")]
     fn estimate_gas_and_collateral(
-        &self, request: CallRequest, epoch_number: Option<EpochNumber>,
+        &self, request: TransactionRequest, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
 
     #[rpc(name = "cfx_feeHistory")]
