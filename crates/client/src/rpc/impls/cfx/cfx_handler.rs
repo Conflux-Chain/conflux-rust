@@ -591,7 +591,7 @@ impl RpcImpl {
 
         if tx.nonce.is_none() {
             let nonce = consensus_graph.next_nonce(
-                Address::from(tx.from.clone().expect("from should have"))
+                Address::from(tx.from.clone().ok_or("from should have")?)
                     .with_native_space(),
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
                     .into_primitive(),
