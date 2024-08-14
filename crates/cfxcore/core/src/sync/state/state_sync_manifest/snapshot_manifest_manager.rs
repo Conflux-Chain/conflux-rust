@@ -23,7 +23,7 @@ use cfx_storage::{
     storage_db::{SnapshotInfo, SnapshotKeptToProvideSyncStatus},
     TrieProof,
 };
-use cfx_types::H256;
+use cfx_types::{option_vec_to_hex, H256};
 use network::node_table::NodeId;
 use primitives::{
     BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
@@ -114,9 +114,9 @@ impl SnapshotManifestManager {
 
         info!(
             "Snapshot manifest received, checkpoint = {:?}, chunk_boundaries.len()={}, \
-            start={:?}, next={:?}",
+            start={}, next={}",
             self.snapshot_candidate, response.manifest.chunk_boundaries.len(),
-            request.start_chunk, response.manifest.next
+            option_vec_to_hex(request.start_chunk.as_ref()), option_vec_to_hex(response.manifest.next.as_ref())
         );
 
         // validate blame state if requested
