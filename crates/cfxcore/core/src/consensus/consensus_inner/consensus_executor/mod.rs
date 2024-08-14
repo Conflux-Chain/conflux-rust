@@ -321,7 +321,7 @@ impl ConsensusExecutor {
                     sender,
                 }))
                 .expect("Cannot fail");
-            receiver.recv().unwrap().ok_or(
+            receiver.recv().map_err(|e| e.to_string())?.ok_or(
                 "Waiting for an execution result that is not enqueued!"
                     .to_string(),
             )
