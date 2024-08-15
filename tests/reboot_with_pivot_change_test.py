@@ -44,7 +44,7 @@ class ExampleTest(ConfluxTestFramework):
         self.log.info("Node 1 epoch {}".format(client1.epoch_number()))
 
         # generate common blocks
-        self.nodes[0].generate_empty_blocks(20)
+        self.nodes[0].test_generateEmptyBlocks(20)
         sync_blocks(self.nodes[0:2])
 
         e1 = client1.epoch_number()
@@ -67,7 +67,7 @@ class ExampleTest(ConfluxTestFramework):
         block_hash1 = client1.generate_block(1)
         self.log.info("Node 1 block hash {}".format(block_hash1))
 
-        blocks = self.nodes[0].generate_empty_blocks(6)
+        blocks = self.nodes[0].test_generateEmptyBlocks(6)
         last_block = blocks[-1]
 
         tx_info = client1.get_tx(tx_hash)
@@ -87,7 +87,7 @@ class ExampleTest(ConfluxTestFramework):
         block_hash2 = client2.generate_block(1)
         self.log.info("Node 2 block hash {}".format(block_hash2))
 
-        self.nodes[1].generate_empty_blocks(12)
+        self.nodes[1].test_generateEmptyBlocks(12)
 
         tx_info = client2.get_tx(tx_hash)
         block_contains_tx2 = tx_info["blockHash"]

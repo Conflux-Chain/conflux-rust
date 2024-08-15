@@ -438,8 +438,8 @@ def set_node_times(nodes, t):
 
 def disconnect_nodes(nodes, from_connection, node_num):
     try:
-        nodes[from_connection].removenode(nodes[node_num].key, get_peer_addr(nodes[node_num]))
-        nodes[node_num].removenode(nodes[from_connection].key, get_peer_addr(nodes[from_connection]))
+        nodes[from_connection].test_removeNode(nodes[node_num].key, get_peer_addr(nodes[node_num]))
+        nodes[node_num].test_removeNode(nodes[from_connection].key, get_peer_addr(nodes[from_connection]))
     except JSONRPCException as e:
         # If this node is disconnected between calculating the peer id
         # and issuing the disconnect, don't worry about it.
@@ -448,8 +448,8 @@ def disconnect_nodes(nodes, from_connection, node_num):
             raise
 
     # wait to disconnect
-    wait_until(lambda: [peer for peer in nodes[from_connection].getpeerinfo() if peer["nodeid"] == nodes[node_num].key] == [], timeout=5)
-    wait_until(lambda: [peer for peer in nodes[node_num].getpeerinfo() if peer["nodeid"] == nodes[from_connection].key] == [], timeout=5)
+    wait_until(lambda: [peer for peer in nodes[from_connection].test_getPeerInfo() if peer["nodeid"] == nodes[node_num].key] == [], timeout=5)
+    wait_until(lambda: [peer for peer in nodes[node_num].test_getPeerInfo() if peer["nodeid"] == nodes[from_connection].key] == [], timeout=5)
 
 
 def check_handshake(from_connection, target_node_id):
@@ -457,7 +457,7 @@ def check_handshake(from_connection, target_node_id):
     Check whether node 'from_connection' has already
     added node 'target_node_id' into its peer set.
     """
-    peers = from_connection.getpeerinfo()
+    peers = from_connection.test_getPeerInfo()
     for peer in peers:
         if peer["nodeid"] == target_node_id and len(peer['protocols']) > 0:
             return True
@@ -476,7 +476,7 @@ def connect_nodes(nodes, a, node_num, timeout=60):
     to_connection = nodes[node_num]
     key = nodes[node_num].key
     peer_addr = get_peer_addr(to_connection)
-    from_connection.addnode(key, peer_addr)
+    from_connection.test_addNode(key, peer_addr)
     # poll until hello handshake complete to avoid race conditions
     # with transaction relaying
     wait_until(lambda: check_handshake(from_connection, to_connection.key), timeout=timeout)
@@ -494,7 +494,7 @@ def sync_blocks(rpc_connections, *, sync_count=True, sync_state=True, wait=1, ti
     while time.time() <= stop_time:
         best_hash = [x.best_block_hash() for x in rpc_connections]
         best_executed = [x.cfx_epochNumber("latest_state") if sync_state else 0 for x in rpc_connections]
-        block_count = [x.getblockcount() for x in rpc_connections]
+        block_count = [x.test_getBlockCount() for x in rpc_connections]
         if best_hash.count(best_hash[0]) == len(rpc_connections) \
             and (not sync_state or best_executed.count(best_executed[0]) == len(rpc_connections)) \
                 and (not sync_count or block_count.count(block_count[0]) == len(rpc_connections)):
@@ -524,7 +524,7 @@ def sync_mempools(rpc_connections, *, wait=1, timeout=60,
 
 
 def wait_for_block_count(node, count, timeout=10):
-    wait_until(lambda: node.getblockcount() >= count, timeout=timeout)
+    wait_until(lambda: node.test_getBlockCount() >= count, timeout=timeout)
 
 
 class WaitHandler:
@@ -682,7 +682,7 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
 def assert_blocks_valid(nodes, blocks):
     for node in nodes:
         for block in blocks:
-            r = node.get_block_status(block)
+            r = node.test_getBlockStatus(block)
             assert_equal(r[0], 0)  # block status is valid
             assert_equal(r[1], True)  # state_valid is True
 
@@ -705,8 +705,8 @@ class ConnectThread(threading.Thread):
                     p = self.peers[i]
                     connect_nodes(self.nodes, self.a, p)
                 for p in self.latencies[self.a]:
-                    self.nodes[self.a].addlatency(self.nodes[p].key, self.latencies[self.a][p])
-                if len(self.nodes[self.a].getpeerinfo()) >= self.min_peers:
+                    self.nodes[self.a].test_addLatency(self.nodes[p].key, self.latencies[self.a][p])
+                if len(self.nodes[self.a].test_getPeerInfo()) >= self.min_peers:
                     break
                 else:
                     time.sleep(1)
