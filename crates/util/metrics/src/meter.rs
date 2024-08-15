@@ -14,7 +14,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
     time::Instant,
 };
-use time::Duration;
+use chrono::Duration;
 use timer::Timer;
 
 // Meters count events to produce exponentially-weighted moving average rates
