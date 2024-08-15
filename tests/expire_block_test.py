@@ -41,15 +41,15 @@ class ExpireBlockTest(ConfluxTestFramework):
 
         blocks = [node.best_block_hash()]
         for i in range(400):
-            new_hash = node.generatefixedblock(blocks[-1], [], 0, False)
+            new_hash = node.test_generateFixedBlock(blocks[-1], [], 0, False)
             blocks.append(new_hash)
             self.log.info("generate block={}".format(new_hash))
         wait_until(lambda: node.best_block_hash() == new_hash)
         out_block = create_block(parent_hash=bytes.fromhex(blocks[50][2:]), height=51, referee_hashes=[bytes.fromhex(blocks[400][2:])])
         self.send_msg(node, NewBlock(block=out_block))
         time.sleep(3)
-        node.expireblockgc(2)
-        wait_until(lambda: node.getblockcount() == 402)
+        node.test_expireBlockGc(2)
+        wait_until(lambda: node.test_getBlockCount() == 402)
 
     def test_expire_block_gc(self):
         node = self.nodes[0]
@@ -67,7 +67,7 @@ class ExpireBlockTest(ConfluxTestFramework):
             self.send_msg(node, NewBlock(block=blocks[i]))
             wait_until(lambda: node.best_block_hash() == blocks[5].hash_hex())
         time.sleep(3)
-        node.expireblockgc(2)
+        node.test_expireBlockGc(2)
         for i in range(7, 9):
             self.send_msg(node, NewBlock(block=blocks[i]))
             wait_until(lambda: node.best_block_hash() == blocks[5].hash_hex())

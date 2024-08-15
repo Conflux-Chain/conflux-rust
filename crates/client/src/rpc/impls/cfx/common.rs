@@ -677,7 +677,7 @@ impl RpcImpl {
     }
 
     pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
-        info!("RPC Request: cfx_getChain");
+        info!("RPC Request: test_getChain");
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
 

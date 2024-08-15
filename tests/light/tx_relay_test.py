@@ -56,7 +56,7 @@ class TxRelayTest(ConfluxTestFramework):
         blame_info['blame'] = "0x1"
         blame_info['deferredStateRoot'] = "0x1111111111111111111111111111111111111111111111111111111111111111"
 
-        return self.nodes[node].test_generateblockwithblameinfo(1, 0, blame_info)
+        return self.nodes[node].test_generateBlockWithBlameInfo(1, 0, blame_info)
 
     def run_test(self):
         num_blocks = 100
