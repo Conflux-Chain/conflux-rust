@@ -28,7 +28,7 @@ class FullHistoryStateTest(ConfluxTestFramework):
 
     def run_test(self):
         client = RpcClient(self.nodes[0])
-        client.generate_empty_blocks(500)
+        client.test_generateEmptyBlocks(500)
         # This should not raise error if the state is available.
         client.call("0x0000000000000000000000000000000000000000", "0x00", epoch="0x1")
         assert_equal(client.get_balance(eth_utils.encode_hex(priv_to_addr(default_config["GENESIS_PRI_KEY"])), epoch="0x1"), default_config["TOTAL_COIN"])

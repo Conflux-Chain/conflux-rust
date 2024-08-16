@@ -98,7 +98,7 @@ class RpcClient:
     def generate_block(self, num_txs: int = 0,
                        block_size_limit_bytes: int = default_config["MAX_BLOCK_SIZE_IN_BYTES"]) -> str:
         assert_greater_than_or_equal(num_txs, 0)
-        block_hash = self.node.generateoneblock(num_txs, block_size_limit_bytes)
+        block_hash = self.node.test_generateOneBlock(num_txs, block_size_limit_bytes)
         assert_is_hash_string(block_hash)
         return block_hash
 
@@ -114,8 +114,8 @@ class RpcClient:
 
         return blocks
 
-    def generate_empty_blocks(self, num_blocks: int):
-        return self.node.generate_empty_blocks(num_blocks)
+    def test_generateEmptyBlocks(self, num_blocks: int):
+        return self.node.test_generateEmptyBlocks(num_blocks)
 
     def generate_blocks_to_state(self, num_blocks: int = 5, num_txs: int = 1) -> list:
         return self.generate_blocks(num_blocks, num_txs)
@@ -133,7 +133,7 @@ class RpcClient:
 
         assert_greater_than_or_equal(num_txs, 0)
         # print(parent_hash)
-        block_hash = self.node.generatefixedblock(parent_hash, referee, num_txs, adaptive, difficulty, pos_reference)
+        block_hash = self.node.test_generateFixedBlock(parent_hash, referee, num_txs, adaptive, difficulty, pos_reference)
         assert_is_hash_string(block_hash)
         return block_hash
 
@@ -154,13 +154,13 @@ class RpcClient:
         
         encoded_txs = eth_utils.encode_hex(rlp.encode(raw_txs))
 
-        block_hash = self.node.test_generatecustomblock(parent_hash, referee, encoded_txs)
+        block_hash = self.node.test_generateCustomBlock(parent_hash, referee, encoded_txs)
         assert_is_hash_string(block_hash)
         return block_hash
 
     def generate_block_with_fake_txs(self, txs: list, adaptive=False, tx_data_len: int = 0) -> str:
         encoded_txs = eth_utils.encode_hex(rlp.encode(txs))
-        block_hash = self.node.test_generateblockwithfaketxs(encoded_txs, adaptive, tx_data_len)
+        block_hash = self.node.test_generateBlockWithFakeTxs(encoded_txs, adaptive, tx_data_len)
         assert_is_hash_string(block_hash)
         return block_hash
 
@@ -314,7 +314,7 @@ class RpcClient:
         return tx_hash
 
     def clear_tx_pool(self):
-        self.node.txpool_clear()
+        self.node.debug_clearTxPool()
 
     # a temporary patch for transaction compatibility
     def send_tx(self, tx: Union[Transaction, SignedTransaction], wait_for_receipt=False, wait_for_catchup=True) -> str:
@@ -496,7 +496,7 @@ class RpcClient:
         return blocks
 
     def get_peers(self) -> list:
-        return self.node.getpeerinfo()
+        return self.node.test_getPeerInfo()
 
     def get_peer(self, node_id: str):
         for p in self.get_peers():
@@ -506,16 +506,16 @@ class RpcClient:
         return None
 
     def get_node(self, node_id: str):
-        return self.node.net_node(node_id)
+        return self.node.debug_getNetNode(node_id)
 
     def add_node(self, node_id: str, ip: str, port: int):
-        self.node.addnode(node_id, "{}:{}".format(ip, port))
+        self.node.test_addNode(node_id, "{}:{}".format(ip, port))
 
     def disconnect_peer(self, node_id: str, node_op: str = None) -> int:
-        return self.node.net_disconnect_node(node_id, node_op)
+        return self.node.debug_disconnectNetNode(node_id, node_op)
 
     def chain(self) -> list:
-        return self.node.cfx_getChain()
+        return self.node.test_getChain()
 
     def get_transaction_receipt(self, tx_hash: str) -> dict[str, Any]:
         assert_is_hash_string(tx_hash)
@@ -613,7 +613,7 @@ class RpcClient:
             return self.node.cfx_getParamsFromVote(epoch)
 
     def get_block_count(self):
-        return self.node.getblockcount()
+        return self.node.test_getBlockCount()
 
     def get_account(self, addr: str, epoch: str = None):
         addr = hex_to_b32_address(addr)
@@ -629,12 +629,12 @@ class RpcClient:
 
     def get_node_id(self):
         challenge = random.randint(0, 2 ** 32 - 1)
-        signature = self.node.getnodeid(list(int_to_bytes(challenge)))
+        signature = self.node.test_getNodeId(list(int_to_bytes(challenge)))
         node_id, _, _ = convert_to_nodeid(signature, challenge)
         return node_id
 
     def current_sync_phase(self):
-        return self.node.current_sync_phase()
+        return self.node.debug_currentSyncPhase()
 
     def get_status(self):
         return self.node.cfx_getStatus()
@@ -671,7 +671,7 @@ class RpcClient:
         stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(stake_value), value=0,
                                receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(stake_tx, wait_for_receipt=True)
-        data, pos_identifier = self.node.pos_register(int_to_hex(voting_power), 0 if legacy else 1)
+        data, pos_identifier = self.node.test_posRegister(int_to_hex(voting_power), 0 if legacy else 1)
         register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0,
                                   receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS,
                                   storage_limit=1024)
@@ -709,19 +709,19 @@ class RpcClient:
             return self.node.pos_getBlockByNumber(block)
 
     def pos_proposal_timeout(self):
-        return self.node.pos_trigger_timeout("proposal")
+        return self.node.test_posTriggerTimeout("proposal")
 
     def pos_local_timeout(self):
-        return self.node.pos_trigger_timeout("local")
+        return self.node.test_posTriggerTimeout("local")
 
     def pos_new_round_timeout(self):
-        return self.node.pos_trigger_timeout("new_round")
+        return self.node.test_posTriggerTimeout("new_round")
 
     def pos_force_sign_pivot_decision(self, block_hash, height):
-        return self.node.pos_force_sign_pivot_decision(block_hash, height)
+        return self.node.test_posForceSignPivotDecision(block_hash, height)
 
     def pos_get_chosen_proposal(self):
-        return self.node.pos_get_chosen_proposal()
+        return self.node.test_posGetChosenProposal()
 
     def pos_get_account(self, account_address, view=None):
         if view is None:

@@ -51,7 +51,7 @@ class Issue2159Test(ConfluxTestFramework):
         epoch = self.rpc.block_by_hash(hash)["epochNumber"]
 
         # make sure block is executed
-        self.rpc.generate_empty_blocks(5)
+        self.rpc.test_generateEmptyBlocks(5)
 
         # getting epoch receipts should result in error
         try:

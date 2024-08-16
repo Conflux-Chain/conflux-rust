@@ -10,7 +10,7 @@ class TestGetPosRewardByPowEpoch(RpcClient):
     def test_epoch_has_reward(self):
         while True:
             time.sleep(2)
-            self.generate_empty_blocks(4)
+            self.test_generateEmptyBlocks(4)
             pos_status = self.node.pos_getStatus()
             current_pos_epoch = int(pos_status['epoch'], 0)
             if current_pos_epoch > 2:

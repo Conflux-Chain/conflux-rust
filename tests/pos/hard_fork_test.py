@@ -73,7 +73,7 @@ class HardforkTest(ConfluxTestFramework):
     def run_test(self):
         # Pos contract enabled, stake and register in the first hard-fork phase.
         client = RpcClient(self.nodes[self.num_nodes - 1])
-        client.generate_empty_blocks(300)
+        client.test_generateEmptyBlocks(300)
         sync_blocks(self.nodes)
         node_pos_identifier_list = []
         for i in range(self.num_nodes - 1):
@@ -85,7 +85,7 @@ class HardforkTest(ConfluxTestFramework):
 
         # generate blocks until we are after pos initialization and before pos start.
         best_epoch = client.epoch_number()
-        client.generate_empty_blocks(600 - best_epoch)
+        client.test_generateEmptyBlocks(600 - best_epoch)
         sync_blocks(self.nodes)
 
         voting_power_map = {}
@@ -108,20 +108,20 @@ class HardforkTest(ConfluxTestFramework):
                              pkfile="public_keys")
 
         # generate blocks until pos start
-        self.nodes[0].generate_empty_blocks(500)
+        self.nodes[0].test_generateEmptyBlocks(500)
         sync_blocks(self.nodes)
         pos_identifier, _ = client.wait_for_pos_register()
-        client.generate_empty_blocks(400)
+        client.test_generateEmptyBlocks(400)
         sync_blocks(self.nodes)
         time.sleep(2)
         parent_hash = client.best_block_hash()
         for _ in range(100):
-            parent_hash = client.node.test_generatecustomblock(parent_hash, [], eth_utils.encode_hex(rlp.encode([])), False, ["0x01", "0x8804"])
+            parent_hash = client.node.test_generateCustomBlock(parent_hash, [], eth_utils.encode_hex(rlp.encode([])), False, ["0x01", "0x8804"])
         sync_blocks(self.nodes)
 
         # Check if stopped node will be retired
         STOP_INDEX = 0
-        final_serving_round = self.nodes[0].pos_stop_election()
+        final_serving_round = self.nodes[0].test_posStopElection()
         stopped = False
         print("final_serving_round", final_serving_round)
 
@@ -148,10 +148,10 @@ class HardforkTest(ConfluxTestFramework):
                 self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
             # Generate enough PoW block for PoS to progress
-            client.generate_empty_blocks(60)
+            client.test_generateEmptyBlocks(60)
             # Leave some time for PoS to reach consensus
             time.sleep(3)
-            client.generate_empty_blocks(1)
+            client.test_generateEmptyBlocks(1)
             new_pos_ref = self.latest_pos_ref()
             if i >= 10:
                 assert_ne(latest_pos_ref, new_pos_ref)

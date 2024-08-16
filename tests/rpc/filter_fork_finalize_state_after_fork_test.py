@@ -54,14 +54,14 @@ class FilterForkTest(DefaultConfluxTestFramework):
         # create filter
         filter = self.nodes[0].cfx_newBlockFilter()
 
-        blocks = clients[0].generate_empty_blocks(4)
+        blocks = clients[0].test_generateEmptyBlocks(4)
         last_block = blocks[-1]
 
         # query block
         filter_blocks = self.nodes[0].cfx_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 0)
 
-        blocks.extend(clients[0].generate_empty_blocks(6))
+        blocks.extend(clients[0].test_generateEmptyBlocks(6))
         filter_blocks = self.nodes[0].cfx_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 6)
 
@@ -71,7 +71,7 @@ class FilterForkTest(DefaultConfluxTestFramework):
             blocks.append(last_block)
 
         chain_len = 270
-        blocks.extend(clients[0].generate_empty_blocks(chain_len + 1))
+        blocks.extend(clients[0].test_generateEmptyBlocks(chain_len + 1))
         sync_blocks(self.nodes)
         pivot_decision_height = (
             (300 - int(self.conf_parameters["pos_pivot_decision_defer_epoch_count"]))

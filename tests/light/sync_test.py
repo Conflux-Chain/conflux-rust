@@ -166,7 +166,7 @@ class LightSyncTest(ConfluxTestFramework):
                 blame_info = {}
                 blame_info['blame'] = "0x1"
                 blame_info['deferredStateRoot'] = "0x1111111111111111111111111111111111111111111111111111111111111111"
-                parent_hash = self.nodes[FULLNODE0].test_generateblockwithblameinfo(1, 0, blame_info)
+                parent_hash = self.nodes[FULLNODE0].test_generateBlockWithBlameInfo(1, 0, blame_info)
 
                 num_blamed += 1
 
@@ -182,7 +182,7 @@ class LightSyncTest(ConfluxTestFramework):
         for _ in range(0, BLAMED_SECTION_LENGTH):
             blame_info = {}
             blame_info['blame'] = "0x1"
-            parent_hash = self.nodes[FULLNODE0].test_generateblockwithblameinfo(1, 0, blame_info)
+            parent_hash = self.nodes[FULLNODE0].test_generateBlockWithBlameInfo(1, 0, blame_info)
 
         num_blamed += BLAMED_SECTION_LENGTH // 2
 

@@ -45,7 +45,7 @@ class PosDecisionCrossCheckpoint(DefaultConfluxTestFramework):
         wait_until(lambda: clients[0].pos_status()["latestCommitted"] is not None)
 
         chain_len = 300
-        clients[0].generate_empty_blocks(chain_len + 1)
+        clients[0].test_generateEmptyBlocks(chain_len + 1)
         sync_blocks(self.nodes)
         pivot_decision_height = (chain_len - int(self.conf_parameters["pos_pivot_decision_defer_epoch_count"])) // 60 * 60
         # generate_empty_blocks may not generate a chain if the node is slow.

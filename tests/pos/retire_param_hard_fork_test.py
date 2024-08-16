@@ -52,14 +52,14 @@ class RetireParamHardforkTest(ConfluxTestFramework):
 
     def run_test(self):
         client = RpcClient(self.nodes[0])
-        _, pos_identifier = client.node.pos_register(int_to_hex(1000))
+        _, pos_identifier = client.node.test_posRegister(int_to_hex(1000))
 
         def unlock_list():
             client.generate_blocks(60)
             return client.pos_get_account(pos_identifier)["status"]["outQueue"]
 
         def wait():
-            client.generate_empty_blocks(60)
+            client.test_generateEmptyBlocks(60)
             return int(client.pos_status()["epoch"], 0) > 6
         wait_until(wait, timeout=120)
         self.log.info("Retire half votes")
@@ -84,7 +84,7 @@ class RetireParamHardforkTest(ConfluxTestFramework):
         assert_greater_than(self.conf_parameters["pos_out_queue_locked_views"], unlock_view - old_view)
 
         old_epoch = int(client.pos_status()["epoch"], 0)
-        client.node.pos_stop_voting()
+        client.node.test_posStopVoting()
         wait_until(lambda: client.pos_get_account(pos_identifier)["status"]["forceRetired"] is not None)
         new_epoch = int(client.pos_status()["epoch"], 0)
         print(new_epoch, old_epoch)

@@ -41,7 +41,7 @@ class EvmFullHistoryStateTest(ConfluxTestFramework):
 
     def run_test(self):
         client = RpcClient(self.nodes[0])
-        client.generate_empty_blocks(500)
+        client.test_generateEmptyBlocks(500)
         # This should not raise error if the state is available.
         assert_raises_rpc_error(None, None, client.call, "0x0000000000000000000000000000000000000000", "0x00", None, "0x33")
         self.nodes[0].eth_call({"to": "0x0000000000000000000000000000000000000000", "data": "0x00"}, "0x33")
@@ -51,7 +51,7 @@ class EvmFullHistoryStateTest(ConfluxTestFramework):
         # value = default_config["TOTAL_COIN"]
         value = 10 ** 18
         self.cross_space_transfer(evm_genesis_account, value)
-        client.generate_empty_blocks(500)
+        client.test_generateEmptyBlocks(500)
         assert_equal(int(self.nodes[0].eth_getBalance(evm_genesis_account, int_to_hex(505)), 0), value)
         assert_raises_rpc_error(None, None, client.get_balance, evm_genesis_account, int_to_hex(505))
 

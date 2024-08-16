@@ -33,7 +33,7 @@ class AutoDiscovery(ConfluxTestFramework):
     def run_test(self):
         # nodes 0,1,2,3 will auto discover each other
         self.log.info("Test AutoDiscovery")
-        wait_until(lambda: [len(i.getpeerinfo()) for i in self.nodes].count(self.num_nodes - 1) == self.num_nodes)
+        wait_until(lambda: [len(i.test_getPeerInfo()) for i in self.nodes].count(self.num_nodes - 1) == self.num_nodes)
         self.log.info("Passed")
 
 if __name__ == "__main__":

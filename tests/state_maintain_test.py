@@ -34,7 +34,7 @@ class StateMaintainTest(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         genesis_address = "0x" + encode_hex(priv_to_addr(default_config['GENESIS_PRI_KEY']))
         genesis_balance = default_config["TOTAL_COIN"]
-        client.generate_empty_blocks(ERA_EPOCH_COUNT * 10)
+        client.test_generateEmptyBlocks(ERA_EPOCH_COUNT * 10)
         print(client.epoch_number("latest_checkpoint"))
         assert client.epoch_number("latest_checkpoint") > 0
         # Just assert we can still get the balance

@@ -26,11 +26,11 @@ class PosRegisterTest(ConfluxTestFramework):
         priv2 = "3" * 64
         priv3 = "4" * 64
 
-        client0.generate_empty_blocks(30)
+        client0.test_generateEmptyBlocks(30)
         pos_identifier0, priv_key0 = client0.wait_for_pos_register(priv_key=priv0, legacy=True)
         _, priv_key1 = client1.wait_for_pos_register(priv_key=priv1, legacy=False, should_fail=True)
 
-        client0.generate_empty_blocks(1000)
+        client0.test_generateEmptyBlocks(1000)
         pos_identifier2, priv_key2 = client2.wait_for_pos_register(priv_key=priv2, legacy=False)
         client3.wait_for_pos_register(priv_key=priv3, legacy=True, should_fail=True)
 
