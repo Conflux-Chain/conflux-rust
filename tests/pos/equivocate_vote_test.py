@@ -37,17 +37,17 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
             self.nodes[self.num_nodes - 1].test_posForceVoteProposal(b)
             # wait for the vote to be processed.
             time.sleep(0.2)
-        client.test_generateEmptyBlocks(300)
+        client.generate_empty_blocks(300)
         client.pos_retire_self(2000)
 
         for i in range(40):
             print(i)
             # Retire node 3 after 2 min.
             # Generate enough PoW block for PoS to progress
-            client.test_generateEmptyBlocks(60)
+            client.generate_empty_blocks(60)
             # Leave some time for PoS to reach consensus
             time.sleep(3)
-            b = client.test_generateEmptyBlocks(1)[0]
+            b = client.generate_empty_blocks(1)[0]
             print(client.block_by_hash(b)["posReference"])
 
         self.log.info("balance before unstake %s", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))

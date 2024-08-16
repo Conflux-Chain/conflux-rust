@@ -33,7 +33,7 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         for node in self.nodes:
             clients.append(RpcClient(node))
 
-        blocks = clients[0].test_generateEmptyBlocks(CHAIN_LEN)
+        blocks = clients[0].generate_empty_blocks(CHAIN_LEN)
         sync_blocks(self.nodes)
         last_block = clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 60 * 60))
         clients[0].pos_force_sign_pivot_decision(last_block["hash"], last_block["height"])
@@ -61,14 +61,14 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         assert_equal(fork_pivot_block["posReference"], "0x"+"0"*64)
 
         # generate a block to refer new pos blocks.
-        clients[0].test_generateEmptyBlocks(1)
+        clients[0].generate_empty_blocks(1)
 
         # Generate blocks with the latest pos_reference. They will be partially invalid.
         fork_parent = fork_pivot_block["parentHash"]
         for _ in range(2 * CHAIN_LEN):
             fork_parent = clients[0].generate_block_with_parent(fork_parent)
         # generate blocks to activate these partially invalid blocks.
-        clients[0].test_generateEmptyBlocks(100)
+        clients[0].generate_empty_blocks(100)
         assert_equal(clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], fork_pivot_block["hash"])
 
         # Generate blocks with old pos_reference. They are valid but in a fork before the latest pivot decision.

@@ -19,7 +19,7 @@ class DevModeTest(ConfluxTestFramework):
         tx = rpc.new_tx()
         tx_hash = rpc.send_tx(tx)
         wait_until(lambda: checktx(self.nodes[0], tx_hash))
-        rpc.test_generateEmptyBlocks(1000)
+        rpc.generate_empty_blocks(1000)
 
 
 if __name__ == '__main__':

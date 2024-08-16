@@ -114,7 +114,7 @@ class RpcClient:
 
         return blocks
 
-    def test_generateEmptyBlocks(self, num_blocks: int):
+    def generate_empty_blocks(self, num_blocks: int):
         return self.node.test_generateEmptyBlocks(num_blocks)
 
     def generate_blocks_to_state(self, num_blocks: int = 5, num_txs: int = 1) -> list:

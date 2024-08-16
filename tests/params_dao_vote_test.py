@@ -78,8 +78,8 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         params_control_contract = get_contract_instance(contract_dict=control_contract_dict)
 
         client = RpcClient(self.nodes[0])
-        client.test_generateEmptyBlocks(1)[0]
-        client.test_generateEmptyBlocks(40)
+        client.generate_empty_blocks(1)[0]
+        client.generate_empty_blocks(40)
         current_interest_rate = int(client.get_interest_rate("0x1"), 0) // BLOCKS_PER_YEAR
         current_base_reward = int(client.get_block_reward_info("0x1")[0]["baseReward"], 0)
 
@@ -123,7 +123,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
 
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
-        client.test_generateEmptyBlocks(40)
+        client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
         current_base_reward = current_base_reward * 2
         current_interest_rate = current_interest_rate * 2
@@ -140,7 +140,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
                            gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
-        client.test_generateEmptyBlocks(40)
+        client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
         current_interest_rate = current_interest_rate // 2
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
@@ -167,7 +167,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         client.wait_for_receipt(tx_hash1, state_before_wait=True)
         client.wait_for_receipt(tx_hash2)
         # Generate enough blocks to get pow reward with new parameters.
-        client.test_generateEmptyBlocks(40)
+        client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
         # half vote for decrease
         current_base_reward = update_value(current_base_reward, lock_value, lock_value * 2, True)
@@ -195,7 +195,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
                            gas=CONTRACT_DEFAULT_GAS, storage_limit=1024, nonce=next_nonce)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
-        client.test_generateEmptyBlocks(40)
+        client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
         current_base_reward = update_value(current_base_reward, lock_value // 2, lock_value * 3 // 4, True)
         current_interest_rate = update_value(current_interest_rate, lock_value // 2, lock_value * 3 // 4, True)
@@ -257,7 +257,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
                            gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
-        client.test_generateEmptyBlocks(40)
+        client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
                      current_base_reward)
@@ -277,7 +277,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
                            gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         current_interest_rate = current_interest_rate * 2
-        client.test_generateEmptyBlocks(40)
+        client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
                      current_base_reward)

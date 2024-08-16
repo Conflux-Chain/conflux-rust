@@ -28,7 +28,7 @@ class SameHeightTest(ConfluxTestFramework):
         n_generate_batch = 1000
         n_attack_blocks = 1000
         self.log.info(f"Attacker start to prepare {n_attack_blocks} blocks")
-        fork_point = attacker.test_generateEmptyBlocks(1000)[-1]
+        fork_point = attacker.generate_empty_blocks(1000)[-1]
         for _ in range(n_attack_blocks):
             attacker.generate_block_with_parent(fork_point)
         attacker_cnt = self.nodes[0].test_getBlockCount()
@@ -57,7 +57,7 @@ class SameHeightTest(ConfluxTestFramework):
 
 def batch_generate(node, n_blocks, log):
     start = time.time()
-    node.test_generateEmptyBlocks(n_blocks)
+    node.generate_empty_blocks(n_blocks)
     elapsed = time.time() - start
     log.info(f"process {n_blocks} blocks with {elapsed} seconds")
 

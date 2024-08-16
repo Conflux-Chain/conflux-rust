@@ -349,7 +349,7 @@ class TestSendTx(RpcClient):
         assert_equal(self.send_tx(tx), tx.hash_hex())
         assert_equal(self.txpool_status(), (1, 0))
         for i in range(102):
-            self.test_generateEmptyBlocks(1000)
+            self.generate_empty_blocks(1000)
 
         # replace with lower gas price and epoch gap being 2*epoch_height_bound + 1
         new_tx = self.new_tx(nonce=cur_nonce + 1, gas_price=7, epoch_height=200001)

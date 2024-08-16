@@ -73,7 +73,7 @@ class HardforkTest(ConfluxTestFramework):
     def run_test(self):
         # Pos contract enabled, stake and register in the first hard-fork phase.
         client = RpcClient(self.nodes[self.num_nodes - 1])
-        client.test_generateEmptyBlocks(300)
+        client.generate_empty_blocks(300)
         sync_blocks(self.nodes)
         node_pos_identifier_list = []
         for i in range(self.num_nodes - 1):
@@ -85,7 +85,7 @@ class HardforkTest(ConfluxTestFramework):
 
         # generate blocks until we are after pos initialization and before pos start.
         best_epoch = client.epoch_number()
-        client.test_generateEmptyBlocks(600 - best_epoch)
+        client.generate_empty_blocks(600 - best_epoch)
         sync_blocks(self.nodes)
 
         voting_power_map = {}
@@ -111,7 +111,7 @@ class HardforkTest(ConfluxTestFramework):
         self.nodes[0].test_generateEmptyBlocks(500)
         sync_blocks(self.nodes)
         pos_identifier, _ = client.wait_for_pos_register()
-        client.test_generateEmptyBlocks(400)
+        client.generate_empty_blocks(400)
         sync_blocks(self.nodes)
         time.sleep(2)
         parent_hash = client.best_block_hash()
@@ -148,10 +148,10 @@ class HardforkTest(ConfluxTestFramework):
                 self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
             # Generate enough PoW block for PoS to progress
-            client.test_generateEmptyBlocks(60)
+            client.generate_empty_blocks(60)
             # Leave some time for PoS to reach consensus
             time.sleep(3)
-            client.test_generateEmptyBlocks(1)
+            client.generate_empty_blocks(1)
             new_pos_ref = self.latest_pos_ref()
             if i >= 10:
                 assert_ne(latest_pos_ref, new_pos_ref)

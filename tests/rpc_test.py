@@ -146,7 +146,7 @@ class RpcTest(ConfluxTestFramework):
     def _test_stop(self):
         self.log.info("Test stop")
         try:
-            self.nodes[0].stop()
+            self.nodes[0].test_stop()
             self.nodes[0].test_getPeerInfo()
             assert False
         except Exception:

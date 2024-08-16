@@ -59,7 +59,7 @@ class RetireParamHardforkTest(ConfluxTestFramework):
             return client.pos_get_account(pos_identifier)["status"]["outQueue"]
 
         def wait():
-            client.test_generateEmptyBlocks(60)
+            client.generate_empty_blocks(60)
             return int(client.pos_status()["epoch"], 0) > 6
         wait_until(wait, timeout=120)
         self.log.info("Retire half votes")

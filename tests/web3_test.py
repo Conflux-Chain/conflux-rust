@@ -191,7 +191,7 @@ class Web3Test(ConfluxTestFramework):
             {"to": receiver, "value": 1 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 3, "chainId": 2**33})
         assert_raises(ValueError, self.w3.eth.sendRawTransaction,signed["rawTransaction"])
 
-        self.nodes[0].stop()
+        self.nodes[0].test_stop()
 
 
 if __name__ == "__main__":

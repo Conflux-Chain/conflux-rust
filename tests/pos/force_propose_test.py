@@ -41,7 +41,7 @@ class PosForceProposeTest(DefaultConfluxTestFramework):
         wait_until(lambda: clients[0].pos_status()["latestCommitted"] is not None)
 
         chain_len = 1000
-        clients[0].test_generateEmptyBlocks(chain_len + 1)
+        clients[0].generate_empty_blocks(chain_len + 1)
         pivot_decision_height = (chain_len - int(self.conf_parameters["pos_pivot_decision_defer_epoch_count"])) // 60 * 60
         # generate_empty_blocks may not generate a chain if the node is slow.
         chosen_decision = clients[0].block_by_epoch(int_to_hex(pivot_decision_height))["hash"]
@@ -82,12 +82,12 @@ class PosForceProposeTest(DefaultConfluxTestFramework):
             for client in clients:
                 client.pos_new_round_timeout()
             time.sleep(0.5)
-            clients[0].test_generateEmptyBlocks(1)
+            clients[0].generate_empty_blocks(1)
             sync_blocks(self.nodes)
         wait_until(lambda: int(clients[0].pos_status()["pivotDecision"]["height"], 0) > 0)
         # Make new pos block referred and processed
         assert_equal(clients[0].block_by_epoch(int_to_hex(pivot_decision_height))["hash"], chosen_decision)
-        b = clients[0].test_generateEmptyBlocks(1)
+        b = clients[0].generate_empty_blocks(1)
         assert_equal(int(clients[0].block_by_hash(b[0])["blame"], 0), 0)
 
 
