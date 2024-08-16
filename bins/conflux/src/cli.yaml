@@ -504,6 +504,21 @@ subcommands:
                         long: gas-price
                         takes_value: true
                         value_name: HEX
+                    - type:
+                        help: Transaction type
+                        long: type
+                        takes_value: true
+                        value_name: HEX
+                    - maxFeePerGas:
+                        help: Transaction max fee per gas
+                        long: max-fee-per-gas
+                        takes_value: true
+                        value_name: HEX
+                    - maxPriorityFeePerGas:
+                        help: Transaction max priority fee per gas
+                        long: max-prirority-fee-per-gas
+                        takes_value: true
+                        value_name: HEX
                     - gas:
                         help: Gas provided for transaction execution
                         long: gas
@@ -525,7 +540,7 @@ subcommands:
                         takes_value: true
                         value_name: HEX
                     - epoch:
-                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        help: Epoch (latest_mined, latest_state, latest_confirm, latest_finalized, earliest or epoch number in HEX format)
                         long: epoch
                         takes_value: true
                         value_name: EPOCH
@@ -553,6 +568,21 @@ subcommands:
                     - gasPrice:
                         help: Transaction gas price
                         long: gas-price
+                        takes_value: true
+                        value_name: HEX
+                    - type:
+                        help: Transaction type
+                        long: type
+                        takes_value: true
+                        value_name: HEX
+                    - maxFeePerGas:
+                        help: Transaction max fee per gas
+                        long: max-fee-per-gas
+                        takes_value: true
+                        value_name: HEX
+                    - maxPriorityFeePerGas:
+                        help: Transaction max priority fee per gas
+                        long: max-prirority-fee-per-gas
                         takes_value: true
                         value_name: HEX
                     - gas:
@@ -612,6 +642,21 @@ subcommands:
                                 takes_value: true
                                 value_name: HEX
                                 default_value: "0x2540BE400" # 10 GDrip
+                            - type:
+                                help: Transaction type
+                                long: type
+                                takes_value: true
+                                value_name: HEX
+                            - maxFeePerGas:
+                                help: Transaction max fee per gas
+                                long: max-fee-per-gas
+                                takes_value: true
+                                value_name: HEX
+                            - maxPriorityFeePerGas:
+                                help: Transaction max priority fee per gas
+                                long: max-prirority-fee-per-gas
+                                takes_value: true
+                                value_name: HEX
                             - gas:
                                 help: Gas provided for transaction execution
                                 long: gas
