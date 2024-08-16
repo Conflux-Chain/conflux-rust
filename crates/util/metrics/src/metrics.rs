@@ -6,6 +6,7 @@ use crate::{
     report::{report_async, FileReporter, Reportable},
     report_influxdb::{InfluxdbReportable, InfluxdbReporter},
 };
+use serde::{Deserialize, Serialize};
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
@@ -23,6 +24,8 @@ pub trait Metric: Send + Sync + Reportable + InfluxdbReportable {
     fn get_type(&self) -> &str;
 }
 
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct MetricsConfiguration {
     pub enabled: bool,
     pub report_interval: Duration,
