@@ -144,7 +144,7 @@ class GenerateSampleChain(DefaultConfluxTestFramework):
             return False
 
     def register_test(self, file_name):
-        chain = self.nodes[0].cfx_getChain()
+        chain = self.nodes[0].test_getChain()
         test_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "blockchain_tests")
         test_file = os.path.join(test_file_path, file_name)
         if not os.path.exists(test_file_path):

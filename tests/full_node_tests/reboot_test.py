@@ -78,8 +78,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
         self.nodes[full_node_index].wait_for_phase(["NormalSyncPhase"], wait_time=240)
 
         for block_hash in blocks_in_era[:-4]:
-            executed_info1 = self.nodes[full_node_index].getExecutedInfo(block_hash)
-            executed_info2 = self.nodes[0].getExecutedInfo(block_hash)
+            executed_info1 = self.nodes[full_node_index].test_getExecutedInfo(block_hash)
+            executed_info2 = self.nodes[0].test_getExecutedInfo(block_hash)
             assert_equal(executed_info1, executed_info2)
 
 
