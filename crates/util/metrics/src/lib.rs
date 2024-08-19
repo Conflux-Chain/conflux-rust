@@ -21,9 +21,9 @@ pub use self::{
     histogram::{Histogram, Sample},
     lock::{Lock, MutexExtensions, RwLockExtensions},
     meter::{register_meter, register_meter_with_group, Meter, MeterTimer},
-    metrics::{initialize, MetricsConfiguration},
+    metrics::{initialize, is_enabled, Metric, MetricsConfiguration},
     queue::{register_queue, register_queue_with_group, Queue},
-    registry::DEFAULT_REGISTRY,
-    report::Reportable,
+    registry::{DEFAULT_REGISTRY, Registry},
+    report::{report_async, Reportable, Reporter},
     timer::{register_timer, register_timer_with_group, ScopeTimer, Timer},
 };
