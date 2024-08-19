@@ -23,5 +23,7 @@ pub use self::{
     meter::{register_meter, register_meter_with_group, Meter, MeterTimer},
     metrics::{initialize, MetricsConfiguration},
     queue::{register_queue, register_queue_with_group, Queue},
+    registry::DEFAULT_REGISTRY,
+    report::Reportable,
     timer::{register_timer, register_timer_with_group, ScopeTimer, Timer},
 };
