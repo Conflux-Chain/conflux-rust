@@ -105,19 +105,18 @@ pub fn check_rpc_address_network(
 pub fn check_two_rpc_address_network_match(
     from: Option<&RpcAddress>, to: Option<&RpcAddress>,
 ) -> Result<Option<Network>, RcpAddressNetworkInconsistent> {
-    let request_network = from.map(|rpc_addr| rpc_addr.network);
-    match request_network {
-        None => Ok(to.map(|rpc_addr| rpc_addr.network)),
-        Some(network) => {
-            if let Some(to) = to {
-                if to.network != network {
-                    return Err(RcpAddressNetworkInconsistent {
-                        from_network: network,
-                        to_network: to.network,
-                    });
-                }
+    match (from, to) {
+        (None, None) => Ok(None),
+        (None, Some(b)) => Ok(Some(b.network)),
+        (Some(a), None) => Ok(Some(a.network)),
+        (Some(a), Some(b)) => {
+            if a.network != b.network {
+                return Err(RcpAddressNetworkInconsistent {
+                    from_network: a.network,
+                    to_network: b.network,
+                });
             }
-            Ok(Some(network))
+            Ok(Some(a.network))
         }
     }
 }
