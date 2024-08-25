@@ -4,8 +4,8 @@
 
 use crate::rpc::types::{
     BlockHashOrEpochNumber, Bytes as RpcBytes, ConsensusGraphStates,
-    EpochNumber, Receipt as RpcReceipt, RpcAddress, SendTxRequest,
-    StatOnGasLoad, SyncGraphStates, Transaction as RpcTransaction,
+    EpochNumber, Receipt as RpcReceipt, RpcAddress, StatOnGasLoad,
+    SyncGraphStates, Transaction as RpcTransaction, TransactionRequest,
     WrapTransaction,
 };
 use cfx_types::{H256, H520, U128, U64};
@@ -76,7 +76,7 @@ pub trait LocalRpc {
 
     #[rpc(name = "cfx_sendTransaction")]
     fn send_transaction(
-        &self, tx: SendTxRequest, password: Option<String>,
+        &self, tx: TransactionRequest, password: Option<String>,
     ) -> BoxFuture<H256>;
 
     /// Returns accounts list.
@@ -104,7 +104,7 @@ pub trait LocalRpc {
 
     #[rpc(name = "cfx_signTransaction")]
     fn sign_transaction(
-        &self, tx: SendTxRequest, password: Option<String>,
+        &self, tx: TransactionRequest, password: Option<String>,
     ) -> JsonRpcResult<String>;
 
     #[rpc(name = "cfx_getEpochReceipts")]

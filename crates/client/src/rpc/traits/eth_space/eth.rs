@@ -26,8 +26,9 @@ use jsonrpc_derive::rpc;
 
 use crate::rpc::types::{
     eth::{
-        AccountPendingTransactions, Block, BlockNumber, CallRequest,
-        EthRpcLogFilter, FilterChanges, Log, Receipt, SyncStatus, Transaction,
+        AccountPendingTransactions, Block, BlockNumber, EthRpcLogFilter,
+        FilterChanges, Log, Receipt, SyncStatus, Transaction,
+        TransactionRequest,
     },
     Bytes, FeeHistory, Index,
 };
@@ -166,13 +167,13 @@ pub trait Eth {
     /// Call contract, returning the output data.
     #[rpc(name = "eth_call")]
     fn call(
-        &self, transaction: CallRequest, block: Option<BlockNumber>,
+        &self, transaction: TransactionRequest, block: Option<BlockNumber>,
     ) -> Result<Bytes>;
 
     /// Estimate gas needed for execution of given contract.
     #[rpc(name = "eth_estimateGas")]
     fn estimate_gas(
-        &self, transaction: CallRequest, block: Option<BlockNumber>,
+        &self, transaction: TransactionRequest, block: Option<BlockNumber>,
     ) -> Result<U256>;
 
     /// Get transaction by its hash.

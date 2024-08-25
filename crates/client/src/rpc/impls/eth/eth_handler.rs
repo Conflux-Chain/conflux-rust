@@ -13,8 +13,8 @@ use crate::rpc::{
     types::{
         eth::{
             AccountPendingTransactions, Block as RpcBlock, BlockNumber,
-            CallRequest, EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus,
-            Transaction,
+            EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus, Transaction,
+            TransactionRequest,
         },
         Bytes, FeeHistory, Index, MAX_GAS_CALL_REQUEST, U64 as HexU64,
     },
@@ -106,7 +106,7 @@ fn block_tx_by_index(
 
 impl EthHandler {
     fn exec_transaction(
-        &self, mut request: CallRequest,
+        &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
     ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
@@ -775,7 +775,8 @@ impl Eth for EthHandler {
     }
 
     fn call(
-        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
+        &self, request: TransactionRequest,
+        block_number_or_hash: Option<BlockNumber>,
     ) -> RpcResult<Bytes> {
         info!(
             "RPC Request: eth_call request={:?}, block_num={:?}",
@@ -832,7 +833,8 @@ impl Eth for EthHandler {
     }
 
     fn estimate_gas(
-        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
+        &self, request: TransactionRequest,
+        block_number_or_hash: Option<BlockNumber>,
     ) -> RpcResult<U256> {
         info!(
             "RPC Request: eth_estimateGas request={:?}, block_num={:?}",
