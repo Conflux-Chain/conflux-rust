@@ -38,7 +38,6 @@ pub use self::{
         transaction_request::{
             self, CheckBalanceAgainstTransactionResponse,
             EstimateGasAndCollateralResponse, TransactionRequest,
-            MAX_GAS_CALL_REQUEST,
         },
         tx_pool::{
             AccountPendingInfo, AccountPendingTransactions,
