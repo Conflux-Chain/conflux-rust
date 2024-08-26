@@ -38,7 +38,7 @@ pub const DEFAULT_ETH_GAS_CALL_REQUEST: u64 =
 /// Call request
 #[derive(Debug, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CallRequest {
+pub struct TransactionRequest {
     /// From
     pub from: Option<H160>,
     /// To
@@ -62,7 +62,7 @@ pub struct CallRequest {
     pub transaction_type: Option<U64>,
 }
 
-impl CallRequest {
+impl TransactionRequest {
     pub fn unset_zero_gas_price(&mut self) {
         if self.gas_price == Some(U256::zero()) {
             self.gas_price = None;

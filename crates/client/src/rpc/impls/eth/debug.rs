@@ -3,7 +3,7 @@ use std::{convert::TryInto, sync::Arc};
 use crate::rpc::{
     errors::invalid_params_msg,
     traits::eth_space::debug::Debug,
-    types::eth::{BlockNumber, CallRequest},
+    types::eth::{BlockNumber, TransactionRequest},
 };
 use alloy_rpc_types_trace::geth::{
     GethDebugBuiltInTracerType,
@@ -192,7 +192,7 @@ impl Debug for GethDebugHandler {
 
     // TODO: implement state and block override
     fn debug_trace_call(
-        &self, request: CallRequest, block_number: Option<BlockNumber>,
+        &self, request: TransactionRequest, block_number: Option<BlockNumber>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> JsonRpcResult<GethTrace> {
         let opts = opts.unwrap_or_default();
