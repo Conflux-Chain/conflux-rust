@@ -351,7 +351,10 @@ fn setup_rpc_apis(
             }
             Api::EthDebug => {
                 info!("Add geth debug method");
-                let geth_debug = GethDebugHandler::new(rpc.consensus.clone());
+                let geth_debug = GethDebugHandler::new(
+                    rpc.consensus.clone(),
+                    rpc.config.max_estimation_gas_limit,
+                );
                 handler.extend_with(geth_debug.to_delegate());
             }
             Api::Test => {
