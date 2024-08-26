@@ -101,6 +101,7 @@ impl Transaction {
     ) -> Transaction {
         let signature = t.signature();
 
+        // for 2718 tx, the v should be equal to the signature.v and y_parity
         let (v, y_parity) = if t.is_2718() {
             (U256::from(signature.v()), Some(U64::from(signature.v())))
         } else {
