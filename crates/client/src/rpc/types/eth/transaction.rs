@@ -114,6 +114,20 @@ impl Transaction {
             )
         };
 
+        // for phantom tx, it's r and s are set to 'tx.from', which lead some
+        // txs r and s to 0 which is not valid in some ethereum tools,
+        // so we set them to chain_id
+        let mut r: U256 = signature.r().into();
+        let mut s: U256 = signature.s().into();
+        if r == U256::zero() || s == U256::zero() {
+            let chain_id = t
+                .chain_id()
+                .map(|x| U256::from(x as u64))
+                .expect("should have chain_id");
+            r = chain_id;
+            s = chain_id;
+        }
+
         Transaction {
             hash: t.hash(),
             nonce: *t.nonce(),
@@ -134,9 +148,9 @@ impl Transaction {
             public_key: t.public().map(Into::into),
             chain_id: t.chain_id().map(|x| U64::from(x as u64)),
             standard_v: Some(signature.v().into()),
-            v, /* The protected EIP155 v */
-            r: signature.r().into(),
-            s: signature.s().into(),
+            v,
+            r,
+            s,
             status: exec_info.0,
             access_list: t.access_list().cloned(),
             max_fee_per_gas: t.after_1559().then_some(*t.gas_price()),

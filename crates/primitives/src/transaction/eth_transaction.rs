@@ -15,19 +15,18 @@ impl Eip155Transaction {
     pub fn fake_sign_phantom(
         self, from: AddressWithSpace,
     ) -> SignedTransaction {
-        let chain_id = U256::from(self.chain_id.expect("chain_id is required"));
         SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
                     unsigned: Transaction::Ethereum(
                         EthereumTransaction::Eip155(self),
                     ),
-                    // we use sender address + chain_id for `r` and `s` so that
+                    // we use sender address for `r` and `s` so that
                     // phantom transactions with matching
                     // fields from different senders
                     // will have different hashes
-                    r: U256::from(from.address.as_ref()) + chain_id,
-                    s: U256::from(from.address.as_ref()) + chain_id,
+                    r: U256::from(from.address.as_ref()),
+                    s: U256::from(from.address.as_ref()),
                     v: 0,
                 },
                 hash: H256::zero(),
