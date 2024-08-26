@@ -38,6 +38,7 @@ pub use self::{
         transaction_request::{
             self, CheckBalanceAgainstTransactionResponse,
             EstimateGasAndCollateralResponse, TransactionRequest,
+            DEFAULT_CFX_GAS_CALL_REQUEST,
         },
         tx_pool::{
             AccountPendingInfo, AccountPendingTransactions,

@@ -158,19 +158,18 @@ Current Version: {}
     client_handle = match conf.node_type() {
         NodeType::Archive => {
             info!("Starting archive client...");
-            ArchiveClient::start(conf, exit.clone()).map_err(|e| {
-                format!("failed to start archive client: {:?}", e)
-            })?
+            ArchiveClient::start(conf, exit.clone())
+                .map_err(|e| format!("failed to start archive client: {}", e))?
         }
         NodeType::Full => {
             info!("Starting full client...");
             FullClient::start(conf, exit.clone())
-                .map_err(|e| format!("failed to start full client: {:?}", e))?
+                .map_err(|e| format!("failed to start full client: {}", e))?
         }
         NodeType::Light => {
             info!("Starting light client...");
             LightClient::start(conf, exit.clone())
-                .map_err(|e| format!("failed to start light client: {:?}", e))?
+                .map_err(|e| format!("failed to start light client: {}", e))?
         }
         NodeType::Unknown => return Err("Unknown node type".into()),
     };

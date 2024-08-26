@@ -10,11 +10,12 @@ use crate::rpc::{
             check_rpc_address_network, check_two_rpc_address_network_match,
             to_primitive_access_list, CfxAccessList,
         },
-        Bytes, MAX_GAS_CALL_REQUEST,
+        Bytes,
     },
     RpcResult,
 };
 use cfx_addr::Network;
+use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
@@ -26,7 +27,11 @@ use primitives::{
     },
     SignedTransaction, Transaction, TransactionWithSignature,
 };
-use std::{cmp::min, convert::Into, sync::Arc};
+use std::{convert::Into, sync::Arc};
+
+/// The maximum gas limit accepted by most tx pools.
+pub const DEFAULT_CFX_GAS_CALL_REQUEST: u64 =
+    DEFAULT_TARGET_BLOCK_GAS_LIMIT * 9 / 10;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -199,10 +204,16 @@ impl TransactionRequest {
     }
 
     pub fn sign_call(
-        self, epoch_height: u64, chain_id: u32,
+        self, epoch_height: u64, chain_id: u32, max_gas: Option<U256>,
     ) -> RpcResult<SignedTransaction> {
-        let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
-        let gas = min(self.gas.unwrap_or(max_gas), max_gas);
+        let max_gas = max_gas.unwrap_or(DEFAULT_CFX_GAS_CALL_REQUEST.into());
+        let gas = self.gas.unwrap_or(max_gas);
+        if gas > max_gas {
+            bail!(invalid_params(
+                "gas",
+                format!("specified gas is larger than max gas {:?}", max_gas)
+            ))
+        }
 
         let nonce = self.nonce.unwrap_or_default();
         let action = self.to.map_or(Action::Create, |rpc_addr| {

@@ -11,7 +11,7 @@ use alloy_rpc_types_trace::geth::{
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace, NoopFrame,
     TraceResult,
 };
-use cfx_types::{Space, H256};
+use cfx_types::{Space, H256, U256};
 use cfxcore::{ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph};
 use geth_tracer::to_alloy_h256;
 use jsonrpc_core::Result as JsonRpcResult;
@@ -19,11 +19,17 @@ use primitives::{Block, BlockHeaderBuilder, EpochNumber};
 
 pub struct GethDebugHandler {
     consensus: SharedConsensusGraph,
+    max_estimation_gas_limit: Option<U256>,
 }
 
 impl GethDebugHandler {
-    pub fn new(consensus: SharedConsensusGraph) -> Self {
-        GethDebugHandler { consensus }
+    pub fn new(
+        consensus: SharedConsensusGraph, max_estimation_gas_limit: Option<U256>,
+    ) -> Self {
+        GethDebugHandler {
+            consensus,
+            max_estimation_gas_limit,
+        }
     }
 
     fn consensus_graph(&self) -> &ConsensusGraph {
@@ -210,9 +216,11 @@ impl Debug for GethDebugHandler {
 
         // construct blocks from call_request
         let chain_id = self.consensus.best_chain_id();
-        let signed_tx = request
-            .sign_call(chain_id.in_evm_space())
-            .map_err(|e| invalid_params_msg(&e))?;
+        // debug trace call has a fixed large gas limit.
+        let signed_tx = request.sign_call(
+            chain_id.in_evm_space(),
+            self.max_estimation_gas_limit,
+        )?;
         let epoch_blocks = self
             .consensus_graph()
             .data_man

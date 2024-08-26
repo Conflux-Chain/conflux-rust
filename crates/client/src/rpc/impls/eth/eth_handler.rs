@@ -17,7 +17,7 @@ use crate::rpc::{
             TransactionRequest,
         },
         Bytes, FeeHistory, FeeHistoryEntry, Index,
-        MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, MAX_GAS_CALL_REQUEST, U64 as HexU64,
+        MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, U64 as HexU64,
     },
 };
 use cfx_execute_helper::estimation::{
@@ -253,7 +253,9 @@ impl EthHandler {
         };
 
         let chain_id = self.consensus.best_chain_id();
-        let signed_tx = request.sign_call(chain_id.in_evm_space())?;
+
+        let max_gas = self.config.max_estimation_gas_limit;
+        let signed_tx = request.sign_call(chain_id.in_evm_space(), max_gas)?;
 
         trace!("call tx {:?}, request {:?}", signed_tx, estimate_request);
         consensus_graph.call_virtual(&signed_tx, epoch, estimate_request)
@@ -933,22 +935,20 @@ impl Eth for EthHandler {
                 expected,
                 got,
             )) => bail!(invalid_input_rpc_err(
-                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: nonce is too old expected {:?} got {:?}", expected, got}
+                format! {"nonce is too old expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::InvalidRecipientAddress(recipient),
             ) => bail!(invalid_input_rpc_err(
-                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: invalid recipient address {:?}", recipient}
+                format! {"invalid recipient address {:?}", recipient}
             )),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::NotEnoughGasLimit { expected, got },
             ) => bail!(invalid_input_rpc_err(
-                format! {"failed with {MAX_GAS_CALL_REQUEST} gas: not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(invalid_input_rpc_err(
-                    format! {"failed with {MAX_GAS_CALL_REQUEST} gas: {:?}", e}
-                ))
+                bail!(invalid_input_rpc_err(format! {"not executed: {:?}", e}))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(VmError::Reverted),
@@ -959,15 +959,33 @@ impl Eth for EthHandler {
 
                 bail!(geth_call_execution_error(
                     format!(
-                        "failed with {MAX_GAS_CALL_REQUEST} gas: {} {}",
+                        "failed with vm reverted: {} {}",
                         revert_error, innermost_error
                     ),
                     errors.join("\n"),
                 ))
             }
-            ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(VmError::StateDbError(e)),
+                _,
+            ) => {
+                bail!(internal_error(e));
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(e),
+                _,
+            ) => {
                 bail!(geth_call_execution_error(
-                    format!("failed with {MAX_GAS_CALL_REQUEST} gas: {:?})", e),
+                    format!("failed with execution error: {:?})", e),
+                    "".into()
+                ))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                e @ ExecutionError::NotEnoughCash { .. },
+                _,
+            ) => {
+                bail!(geth_call_execution_error(
+                    format!("failed with not enough cash: {:?})", e),
                     "".into()
                 ))
             }
