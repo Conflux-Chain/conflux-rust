@@ -11,8 +11,9 @@ use crate::{
         },
         traits::pos::Pos,
         types::{
-            call_request::rpc_call_request_network,
-            cfx::check_rpc_address_network,
+            cfx::{
+                check_rpc_address_network, check_two_rpc_address_network_match,
+            },
             pos::{
                 tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
                 EpochState as RpcEpochState,
@@ -21,7 +22,7 @@ use crate::{
                 RpcTransactionStatus, RpcTransactionType, Signature, Status,
                 Transaction, VotePowerState,
             },
-            sign_call, Bytes, CallRequest, EpochNumber, RpcAddress,
+            Bytes, EpochNumber, RpcAddress, TransactionRequest,
         },
         RpcInterceptor, RpcResult,
     },
@@ -178,7 +179,7 @@ impl PosHandler {
         let mut call_data: Vec<u8> = "6a06ea96".from_hex().unwrap();
         call_data.extend_from_slice(&account_addr.abi_encode());
 
-        let call_request = CallRequest {
+        let call_request = TransactionRequest {
             to: Some(RpcAddress::try_from_h160(
                 POS_REGISTER_CONTRACT_ADDRESS,
                 self.network_type,
@@ -233,11 +234,11 @@ impl PosHandler {
     }
 
     fn exec_transaction(
-        &self, request: CallRequest, epoch: Option<EpochNumber>,
+        &self, request: TransactionRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
         let rpc_request_network = invalid_params_check(
             "request",
-            rpc_call_request_network(
+            check_two_rpc_address_network_match(
                 request.from.as_ref(),
                 request.to.as_ref(),
             ),
@@ -262,7 +263,7 @@ impl PosHandler {
             .get_height_from_epoch_number(epoch.clone().into())?;
         let chain_id = consensus_graph.best_chain_id();
         let signed_tx =
-            sign_call(epoch_height, chain_id.in_native_space(), request)?;
+            request.sign_call(epoch_height, chain_id.in_native_space())?;
         debug!("call tx {:?}", signed_tx);
 
         consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)

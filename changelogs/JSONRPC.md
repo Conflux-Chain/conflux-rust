@@ -1,5 +1,9 @@
 # JSON-RPC CHANGELOG
 
+## vNext
+
+1. eSpace add new RPC method `eth_getBlockReceipts`
+
 ## v2.4.0
 
 This RPC upgrade is primarily to support Conflux 1559 transactions, with the main changes as follows:

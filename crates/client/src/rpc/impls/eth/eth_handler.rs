@@ -13,8 +13,8 @@ use crate::rpc::{
     types::{
         eth::{
             AccountPendingTransactions, Block as RpcBlock, BlockNumber,
-            CallRequest, EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus,
-            Transaction,
+            EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus, Transaction,
+            TransactionRequest,
         },
         Bytes, FeeHistory, Index, MAX_GAS_CALL_REQUEST, U64 as HexU64,
     },
@@ -106,7 +106,7 @@ fn block_tx_by_index(
 
 impl EthHandler {
     fn exec_transaction(
-        &self, mut request: CallRequest,
+        &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
     ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
@@ -332,6 +332,50 @@ impl EthHandler {
         } else {
             None
         }
+    }
+
+    fn get_block_receipts(
+        &self, block_num: BlockNumber,
+    ) -> RpcResult<Vec<Receipt>> {
+        let b = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+
+            let phantom_block = match block_num {
+                BlockNumber::Hash { hash, .. } => self
+                    .consensus_graph()
+                    .get_phantom_block_by_hash(
+                        &hash, false, /* include_traces */
+                    )
+                    .map_err(RpcError::invalid_params)?,
+                _ => self
+                    .consensus_graph()
+                    .get_phantom_block_by_number(
+                        block_num.try_into()?,
+                        None,
+                        false, /* include_traces */
+                    )
+                    .map_err(RpcError::invalid_params)?,
+            };
+
+            match phantom_block {
+                None => return Err(unknown_block()),
+                Some(b) => b,
+            }
+        };
+
+        let mut block_receipts = vec![];
+        let mut prior_log_index = 0;
+
+        for idx in 0..b.receipts.len() {
+            block_receipts.push(self.construct_rpc_receipt(
+                &b,
+                idx,
+                &mut prior_log_index,
+            )?);
+        }
+
+        return Ok(block_receipts);
     }
 }
 
@@ -731,7 +775,8 @@ impl Eth for EthHandler {
     }
 
     fn call(
-        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
+        &self, request: TransactionRequest,
+        block_number_or_hash: Option<BlockNumber>,
     ) -> RpcResult<Bytes> {
         info!(
             "RPC Request: eth_call request={:?}, block_num={:?}",
@@ -788,7 +833,8 @@ impl Eth for EthHandler {
     }
 
     fn estimate_gas(
-        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
+        &self, request: TransactionRequest,
+        block_number_or_hash: Option<BlockNumber>,
     ) -> RpcResult<U256> {
         info!(
             "RPC Request: eth_estimateGas request={:?}, block_num={:?}",
@@ -1142,6 +1188,14 @@ impl Eth for EthHandler {
         Ok(false)
     }
 
+    fn eth_block_receipts(
+        &self, block: BlockNumber,
+    ) -> RpcResult<Vec<Receipt>> {
+        info!("RPC Request: eth_getBlockReceipts block_number={:?}", block);
+
+        self.get_block_receipts(block)
+    }
+
     fn block_receipts(
         &self, block_num: Option<BlockNumber>,
     ) -> RpcResult<Vec<Receipt>> {
@@ -1152,45 +1206,7 @@ impl Eth for EthHandler {
 
         let block_num = block_num.unwrap_or_default();
 
-        let b = {
-            // keep read lock to ensure consistent view
-            let _inner = self.consensus_graph().inner.read();
-
-            let phantom_block = match block_num {
-                BlockNumber::Hash { hash, .. } => self
-                    .consensus_graph()
-                    .get_phantom_block_by_hash(
-                        &hash, false, /* include_traces */
-                    )
-                    .map_err(RpcError::invalid_params)?,
-                _ => self
-                    .consensus_graph()
-                    .get_phantom_block_by_number(
-                        block_num.try_into()?,
-                        None,
-                        false, /* include_traces */
-                    )
-                    .map_err(RpcError::invalid_params)?,
-            };
-
-            match phantom_block {
-                None => return Err(unknown_block()),
-                Some(b) => b,
-            }
-        };
-
-        let mut block_receipts = vec![];
-        let mut prior_log_index = 0;
-
-        for idx in 0..b.receipts.len() {
-            block_receipts.push(self.construct_rpc_receipt(
-                &b,
-                idx,
-                &mut prior_log_index,
-            )?);
-        }
-
-        Ok(block_receipts)
+        self.get_block_receipts(block_num)
     }
 
     fn account_pending_transactions(

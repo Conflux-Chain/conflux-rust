@@ -26,8 +26,9 @@ use jsonrpc_derive::rpc;
 
 use crate::rpc::types::{
     eth::{
-        AccountPendingTransactions, Block, BlockNumber, CallRequest,
-        EthRpcLogFilter, FilterChanges, Log, Receipt, SyncStatus, Transaction,
+        AccountPendingTransactions, Block, BlockNumber, EthRpcLogFilter,
+        FilterChanges, Log, Receipt, SyncStatus, Transaction,
+        TransactionRequest,
     },
     Bytes, FeeHistory, Index,
 };
@@ -167,13 +168,13 @@ pub trait Eth {
     /// TODO support state_overrides and block_overrides
     #[rpc(name = "eth_call")]
     fn call(
-        &self, transaction: CallRequest, block: Option<BlockNumber>,
+        &self, transaction: TransactionRequest, block: Option<BlockNumber>,
     ) -> Result<Bytes>;
 
     /// Estimate gas needed for execution of given contract.
     #[rpc(name = "eth_estimateGas")]
     fn estimate_gas(
-        &self, transaction: CallRequest, block: Option<BlockNumber>,
+        &self, transaction: TransactionRequest, block: Option<BlockNumber>,
     ) -> Result<U256>;
 
     /// Get transaction by its hash.
@@ -247,6 +248,9 @@ pub trait Eth {
     /// Used for submitting mining hashrate.
     #[rpc(name = "eth_submitHashrate")]
     fn submit_hashrate(&self, _: U256, _: H256) -> Result<bool>;
+
+    #[rpc(name = "eth_getBlockReceipts")]
+    fn eth_block_receipts(&self, block: BlockNumber) -> Result<Vec<Receipt>>;
 
     #[rpc(name = "parity_getBlockReceipts")]
     fn block_receipts(

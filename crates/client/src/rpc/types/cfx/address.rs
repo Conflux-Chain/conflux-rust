@@ -102,6 +102,25 @@ pub fn check_rpc_address_network(
     Ok(())
 }
 
+pub fn check_two_rpc_address_network_match(
+    from: Option<&RpcAddress>, to: Option<&RpcAddress>,
+) -> Result<Option<Network>, RcpAddressNetworkInconsistent> {
+    match (from, to) {
+        (None, None) => Ok(None),
+        (None, Some(b)) => Ok(Some(b.network)),
+        (Some(a), None) => Ok(Some(a.network)),
+        (Some(a), Some(b)) => {
+            if a.network != b.network {
+                return Err(RcpAddressNetworkInconsistent {
+                    from_network: a.network,
+                    to_network: b.network,
+                });
+            }
+            Ok(Some(a.network))
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct UnexpectedRpcAddressNetwork {
     pub expected: Network,

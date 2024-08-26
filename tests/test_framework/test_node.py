@@ -236,12 +236,12 @@ class TestNode:
         retry = 0
         max_retry = wait_time / sleep_time
 
-        while self.current_sync_phase() not in phases and retry <= max_retry:
+        while self.debug_currentSyncPhase() not in phases and retry <= max_retry:
             time.sleep(0.1)
             retry += 1
 
         if retry > max_retry:
-            current_phase = self.current_sync_phase()
+            current_phase = self.debug_currentSyncPhase()
             raise AssertionError(f"Node did not reach any of {phases} after {wait_time} seconds, current phase is {current_phase}")
 
     def wait_for_nodeid(self):

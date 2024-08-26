@@ -93,7 +93,7 @@ class ReorgTest(ConfluxTestFramework):
             for idx in range(self.shard_size):
                 connect_nodes(self.nodes, s * self.shard_size - 1 + idx, s * self.shard_size + idx)
         # generate new blocks to trigger block sync.
-        self.nodes[0].generate_empty_blocks(100)
+        self.nodes[0].test_generateEmptyBlocks(100)
         sync_blocks(self.nodes)
 
         ''' Check if the balance state of every node matches '''
