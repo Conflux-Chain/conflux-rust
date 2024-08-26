@@ -18,9 +18,11 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::types::MAX_GAS_CALL_REQUEST;
 use alloy_rpc_types::TransactionInput;
+use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_types::{Address, AddressSpaceUtil, H160, U256, U64};
+use cfxcore::rpc_errors::invalid_params;
+use jsonrpc_core::Result as JsonRpcResult;
 use primitives::{
     transaction::{
         Action, Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
@@ -29,7 +31,9 @@ use primitives::{
     },
     AccessList,
 };
-use std::cmp::min;
+
+pub const DEFAULT_ETH_GAS_CALL_REQUEST: u64 =
+    DEFAULT_TARGET_BLOCK_GAS_LIMIT * 5 / 10;
 
 /// Call request
 #[derive(Debug, Default, PartialEq, Deserialize)]
@@ -66,10 +70,19 @@ impl TransactionRequest {
         }
     }
 
-    pub fn sign_call(self, chain_id: u32) -> Result<SignedTransaction, String> {
+    pub fn sign_call(
+        self, chain_id: u32, max_gas: Option<U256>,
+    ) -> JsonRpcResult<SignedTransaction> {
         let request = self;
-        let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
-        let gas = min(request.gas.unwrap_or(max_gas), max_gas);
+        let max_gas = max_gas.unwrap_or(DEFAULT_ETH_GAS_CALL_REQUEST.into());
+        let gas = request.gas.unwrap_or(max_gas);
+        if gas > max_gas {
+            bail!(invalid_params(
+                "gas",
+                format!("specified gas is larger than max gas {:?}", max_gas)
+            ))
+        }
+
         let nonce = request.nonce.unwrap_or_default();
         let action =
             request.to.map_or(Action::Create, |addr| Action::Call(addr));
@@ -99,7 +112,7 @@ impl TransactionRequest {
         let data = request
             .input
             .try_into_unique_input()
-            .map_err(|e| e.to_string())?
+            .map_err(|e| invalid_params("tx.input", e.to_string()))?
             .unwrap_or_default()
             .into();
 
@@ -134,10 +147,8 @@ impl TransactionRequest {
                 data,
                 access_list,
             }),
-            x => {
-                return Err(
-                    format!("Unrecognized transaction type: {x}").into()
-                );
+            _ => {
+                bail!(invalid_params("type", "Unrecognized transaction type"))
             }
         };
 

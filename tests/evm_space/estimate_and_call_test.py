@@ -21,7 +21,7 @@ class EstimateAndCallTest(Web3Base):
         assert_equal(call_result, "0x")
 
         call_request["from"] = self.evmAccount.address
-        assert_raises_rpc_error(-32000, "failed with 15000000 gas: SenderDoesNotExist", self.nodes[0].eth_estimateGas, call_request)
+        assert_raises_rpc_error(-32000, "SenderDoesNotExist", self.nodes[0].eth_estimateGas, call_request)
         assert_raises_rpc_error(-32000, None, self.nodes[0].eth_call, call_request)
 
 if __name__ == "__main__":

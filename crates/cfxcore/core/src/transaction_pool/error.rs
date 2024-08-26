@@ -7,8 +7,8 @@ pub enum TransactionPoolError {
     #[error("{0:?}")]
     TransactionError(TransactionError),
     /// gas limit exceeded maximum value
-    #[error("transaction gas {have} exceeds the maximum value {max:?}, the half of pivot block gas limit")]
-    GasLimitExceeded { max: u64, have: u64 },
+    #[error("transaction gas {have} exceeds the maximum value {max:?}")]
+    GasLimitExceeded { max: U256, have: U256 },
 
     #[error("transaction gas price {have} less than the minimum value {min}")]
     GasPriceLessThanMinimum { min: U256, have: U256 },

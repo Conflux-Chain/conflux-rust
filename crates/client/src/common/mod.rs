@@ -255,9 +255,14 @@ pub fn initialize_common_modules(
                 Some(p) => p,
                 None => rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
             };
-            let (sk, vrf_sk): (ConsensusPrivateKey, ConsensusVRFPrivateKey) =
-                load_pri_key(key_path, &passwd).unwrap();
-            (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
+            match load_pri_key(key_path, &passwd) {
+                Ok((sk, vrf_sk)) => {
+                    (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
+                }
+                Err(e) => {
+                    bail!("Load pos_key failed: {}", e);
+                }
+            }
         } else {
             create_dir_all(key_path.parent().unwrap()).unwrap();
             let passwd = match default_passwd {
