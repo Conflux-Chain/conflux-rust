@@ -207,7 +207,7 @@ impl<'a> EstimationContext<'a> {
         &mut self, tx: &SignedTransaction, request: EstimateRequest,
     ) -> DbResult<Result<(Executed, Option<u64>), ExecutionOutcome>> {
         // First pass
-        self.state.checkpoint();
+        let saved = self.state.save();
         let sender_pay_executed = match self
             .as_executive()
             .transact(&tx, request.first_pass_options())?
@@ -221,7 +221,7 @@ impl<'a> EstimationContext<'a> {
             "Transaction estimate first pass outcome {:?}",
             sender_pay_executed
         );
-        self.state.revert_to_checkpoint();
+        self.state.restore(saved);
 
         // Second pass
         let contract_pay_executed: Option<Executed>;
@@ -233,11 +233,11 @@ impl<'a> EstimationContext<'a> {
 
         let contract_pay_executed =
             if collateral_sponsored_contract_if_eligible_sender.is_some() {
-                self.state.checkpoint();
+                let saved = self.state.save();
                 let res = self
                     .as_executive()
                     .transact(&tx, request.second_pass_options())?;
-                self.state.revert_to_checkpoint();
+                self.state.restore(saved);
 
                 contract_pay_executed = match res {
                     ExecutionOutcome::Finished(executed) => Some(executed),

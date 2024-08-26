@@ -62,5 +62,5 @@ class RpcCaller:
                     raise e
             else:
                 if isinstance(e, ReceivedErrorResponseError):
-                    print(f"rpc exception code {e.response.code}, message: {e.response.message}, data: {e.response.data}")
+                    print(f"rpc exception method {self.method} code {e.response.code}, message: {e.response.message}, data: {e.response.data}")
                 raise e

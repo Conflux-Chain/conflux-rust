@@ -42,15 +42,15 @@ use crate::{
             pos::{Block as PosBlock, PoSEpochReward},
             Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest, CfxFeeHistory,
-            CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
-            ConsensusGraphStates, EpochNumber,
-            EstimateGasAndCollateralResponse, FeeHistory, Log as RpcLog,
-            PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-            RpcAddress, SendTxRequest, SponsorInfo, StatOnGasLoad,
-            Status as RpcStatus, StorageCollateralInfo, SyncGraphStates,
-            TokenSupplyInfo, Transaction as RpcTransaction, VoteParamsInfo,
-            WrapTransaction, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, U64 as HexU64,
+            BlockHashOrEpochNumber, Bytes, CfxFeeHistory, CfxRpcLogFilter,
+            CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
+            EpochNumber, EstimateGasAndCollateralResponse, FeeHistory,
+            Log as RpcLog, PoSEconomics, Receipt as RpcReceipt,
+            RewardInfo as RpcRewardInfo, RpcAddress, SponsorInfo,
+            StatOnGasLoad, Status as RpcStatus, StorageCollateralInfo,
+            SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
+            TransactionRequest, VoteParamsInfo, WrapTransaction,
+            MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, U64 as HexU64,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -527,7 +527,7 @@ impl RpcImpl {
     }
 
     fn send_transaction(
-        &self, mut tx: SendTxRequest, password: Option<String>,
+        &self, mut tx: TransactionRequest, password: Option<String>,
     ) -> RpcBoxFuture<H256> {
         info!("RPC Request: cfx_sendTransaction tx={:?}", tx);
 
@@ -542,7 +542,8 @@ impl RpcImpl {
                 // TODO(thegaram): consider adding a light node specific tx pool
                 // to track the nonce
 
-                let address = tx.from.clone().into();
+                let address =
+                    tx.from.clone().ok_or("from should exist")?.into();
                 let epoch = EpochNumber::LatestState.into_primitive();
 
                 let nonce = light
@@ -1261,8 +1262,8 @@ impl Cfx for CfxHandler {
     not_supported! {
         fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
         fn block_by_block_number(&self, block_number: U64, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
-        fn call(&self, request: CallRequest, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> JsonRpcResult<Bytes>;
-        fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
+        fn call(&self, request: TransactionRequest, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> JsonRpcResult<Bytes>;
+        fn estimate_gas_and_collateral(&self, request: TransactionRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
         fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
@@ -1367,7 +1368,7 @@ impl LocalRpc for DebugRpcImpl {
         }
 
         to self.rpc_impl {
-            fn send_transaction(&self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
+            fn send_transaction(&self, tx: TransactionRequest, password: Option<String>) -> BoxFuture<H256>;
         }
     }
 
@@ -1377,7 +1378,7 @@ impl LocalRpc for DebugRpcImpl {
         fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
         fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<EpochReceiptProof>>;
         fn stat_on_gas_load(&self, epoch: EpochNumber, time_window: U64) -> JsonRpcResult<Option<StatOnGasLoad>>;
-        fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
+        fn sign_transaction(&self, tx: TransactionRequest, password: Option<String>) -> JsonRpcResult<String>;
         fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
         fn transactions_by_epoch(&self, epoch_number: U64) -> JsonRpcResult<Vec<WrapTransaction>>;
         fn transactions_by_block(&self, block_hash: H256) -> JsonRpcResult<Vec<WrapTransaction>>;

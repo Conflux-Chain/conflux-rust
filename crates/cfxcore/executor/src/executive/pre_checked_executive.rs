@@ -348,6 +348,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         let spec = self.context.spec;
         let mut tracer = self.observer.as_tracer();
 
+        assert!(state.no_checkpoint());
+
         let mut substate = Substate::new();
         for address in parent_substate
             .suicides

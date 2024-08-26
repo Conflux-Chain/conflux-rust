@@ -110,7 +110,11 @@ impl State {
         &self, start_checkpoint_index: usize, address: &AddressWithSpace,
         key: &Vec<u8>,
     ) -> DbResult<Option<U256>> {
-        use super::{checkpoints::CheckpointEntry::*, AccountEntry};
+        use super::super::checkpoints::CheckpointEntry::*;
+        use crate::state::{
+            checkpoints::CheckpointLayerTrait,
+            overlay_account::{AccountEntry, OverlayAccount},
+        };
         use cfx_statedb::StateDbExt;
         use primitives::StorageKey;
 
@@ -129,17 +133,16 @@ impl State {
 
             let mut kind = None;
 
-            for checkpoint in checkpoints.iter().skip(start_checkpoint_index) {
-                match checkpoint.entries().get(address) {
+            let mut first_account: Option<&OverlayAccount> = None;
+            // outer checkpoints with state_checkpoint_id >=
+            // start_checkpoint_index
+            let mut checkpoints_iter =
+                checkpoints.elements_from_index(start_checkpoint_index);
+            for checkpoint in &mut checkpoints_iter {
+                match checkpoint.as_hash_map().get(address) {
                     Some(Recorded(AccountEntry::Cached(ref account, _))) => {
-                        if let Some(value) = account.cached_value_at(key) {
-                            return Ok(Some(value));
-                        } else if account.is_newly_created_contract() {
-                            return Ok(Some(U256::zero()));
-                        } else {
-                            kind = Some(ReturnKind::OriginalAt);
-                            break;
-                        }
+                        first_account = Some(account);
+                        break;
                     }
                     Some(Recorded(AccountEntry::DbAbsent)) => {
                         return Ok(Some(U256::zero()));
@@ -152,6 +155,92 @@ impl State {
                     None => {
                         kind = Some(ReturnKind::SameAsNext);
                     }
+                }
+            }
+
+            let require_further_iter = {
+                if first_account.is_none() {
+                    false
+                } else {
+                    match first_account
+                        .unwrap()
+                        .cached_value_at_checkpoint(key, start_checkpoint_index)
+                    {
+                        Some(Recorded(value)) => return Ok(Some(value)),
+                        Some(Unchanged) => {
+                            kind = Some(ReturnKind::OriginalAt);
+                            false
+                        }
+                        None => true,
+                    }
+                }
+            };
+
+            if require_further_iter {
+                assert!(first_account.is_some());
+                let mut account_changed = false;
+                let mut require_cache = true;
+                for checkpoint in checkpoints_iter {
+                    if let Some(Recorded(AccountEntry::Cached(
+                        ref account,
+                        _,
+                    ))) = checkpoint.as_hash_map().get(address)
+                    {
+                        if !first_account.unwrap().eq_write_cache(account) {
+                            account_changed = true;
+                            break;
+                        }
+                        match account.cached_value_at_checkpoint(
+                            key,
+                            start_checkpoint_index,
+                        ) {
+                            Some(Recorded(value)) => return Ok(Some(value)),
+                            Some(Unchanged) => {
+                                require_cache = false;
+                                break;
+                            }
+                            None => {}
+                        }
+                    }
+                }
+
+                // in outer cache, the account may have a valid inner checkpoint
+                // if not breaked by further iter of outer checkpoints
+                if !account_changed && require_cache {
+                    let outer_cache = self.cache.read();
+                    if let Some(AccountEntry::Cached(ref account, _)) =
+                        outer_cache.get(address)
+                    {
+                        if !first_account.unwrap().eq_write_cache(account) {
+                            account_changed = true;
+                        }
+                        match account.cached_value_at_checkpoint(
+                            key,
+                            start_checkpoint_index,
+                        ) {
+                            Some(Recorded(value)) => return Ok(Some(value)),
+                            Some(Unchanged) => {
+                                require_cache = false;
+                            }
+                            None => {}
+                        }
+                    }
+                }
+
+                // try to use cache
+                if account_changed || require_cache {
+                    let first_cached_value =
+                        first_account.unwrap().cached_value_at_cache(key);
+                    if let Some(value) = first_cached_value {
+                        return Ok(Some(value));
+                    }
+                }
+
+                // do not use cache || fail to use cache
+                if first_account.unwrap().is_newly_created_contract() {
+                    return Ok(Some(U256::zero()));
+                } else {
+                    kind = Some(ReturnKind::OriginalAt);
                 }
             }
 

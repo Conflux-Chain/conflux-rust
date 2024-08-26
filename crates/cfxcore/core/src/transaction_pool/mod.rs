@@ -33,7 +33,7 @@ use cfx_types::{
     AddressWithSpace as Address, AllChainID, Space, SpaceMap, H256, U256,
 };
 use cfx_vm_types::Spec;
-pub use error::{TransactionPoolError, SAME_NONCE_HIGH_GAS_PRICE_NEEED};
+pub use error::TransactionPoolError;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -242,11 +242,13 @@ impl TransactionPool {
     pub fn get_account_pending_transactions(
         &self, address: &Address, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<usize>, best_height: BlockHeight,
-    ) -> (
+    ) -> StateDbResult<(
         Vec<Arc<SignedTransaction>>,
         Option<TransactionStatus>,
         usize,
-    ) {
+    )> {
+        use TransactionStatus::{Pending, Ready};
+
         let inner = self.inner.read();
         let (txs, mut first_tx_status, pending_count) = inner
             .get_account_pending_transactions(
@@ -254,86 +256,60 @@ impl TransactionPool {
                 maybe_start_nonce,
                 maybe_limit,
             );
-        if txs.is_empty() {
-            return (txs, first_tx_status, pending_count);
-        }
 
-        let first_tx = txs.first().expect("non empty");
-        if address.space == Space::Native {
-            if let Transaction::Native(tx) = &first_tx.unsigned {
-                if VerificationConfig::check_transaction_epoch_bound(
-                    tx,
-                    best_height,
-                    self.verification_config.transaction_epoch_bound,
-                ) == -1
-                {
-                    // If the epoch height is out of bound, overwrite the
-                    // pending reason.
-                    first_tx_status = Some(TransactionStatus::Pending(
-                        PendingReason::OldEpochHeight,
-                    ));
-                }
-            }
-        }
+        let first_tx = if let Some(first) = txs.first() {
+            first
+        } else {
+            return Ok((txs, first_tx_status, pending_count));
+        };
 
-        if matches!(
-            first_tx_status,
-            Some(TransactionStatus::Ready)
-                | Some(TransactionStatus::Pending(
-                    PendingReason::NotEnoughCash
-                ))
-        ) {
-            // The sponsor status may have changed, check again.
-            // This is not applied to the tx pool state because this check is
-            // only triggered on the RPC server.
-            let account_cache = self.get_best_state_account_cache();
-            match inner.get_sponsored_gas_and_storage(&account_cache, &first_tx)
+        if let Transaction::Native(tx) = &first_tx.unsigned {
+            if VerificationConfig::check_transaction_epoch_bound(
+                tx,
+                best_height,
+                self.verification_config.transaction_epoch_bound,
+            ) == -1
             {
-                Ok((sponsored_gas, sponsored_storage)) => {
-                    if let Ok((_, balance)) =
-                        account_cache.get_nonce_and_balance(&first_tx.sender())
-                    {
-                        let tx_info = TxWithReadyInfo::new(
-                            first_tx.clone(),
-                            false,
-                            sponsored_gas,
-                            sponsored_storage,
-                        );
-                        if tx_info.calc_tx_cost() <= balance {
-                            // The tx should have been ready now.
-                            if matches!(
-                                first_tx_status,
-                                Some(TransactionStatus::Pending(
-                                    PendingReason::NotEnoughCash
-                                ))
-                            ) {
-                                first_tx_status =
-                                    Some(TransactionStatus::Pending(
-                                        PendingReason::OutdatedStatus,
-                                    ));
-                            }
-                        } else {
-                            if matches!(
-                                first_tx_status,
-                                Some(TransactionStatus::Ready)
-                            ) {
-                                first_tx_status =
-                                    Some(TransactionStatus::Pending(
-                                        PendingReason::OutdatedStatus,
-                                    ));
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!(
-                        "error in get_account_pending_transactions: e={:?}",
-                        e
-                    );
-                }
+                // If the epoch height is out of bound, overwrite the
+                // pending reason.
+                first_tx_status = Some(Pending(PendingReason::OldEpochHeight));
             }
         }
-        (txs, first_tx_status, pending_count)
+
+        if !matches!(
+            first_tx_status,
+            Some(Ready | Pending(PendingReason::NotEnoughCash))
+        ) {
+            return Ok((txs, first_tx_status, pending_count));
+        }
+
+        // The sponsor status may have changed, check again.
+        // This is not applied to the tx pool state because this check is
+        // only triggered on the RPC server.
+        let account_cache = self.get_best_state_account_cache();
+
+        let (sponsored_gas, sponsored_storage) =
+            inner.get_sponsored_gas_and_storage(&account_cache, &first_tx)?;
+        let (_, balance) =
+            account_cache.get_nonce_and_balance(&first_tx.sender())?;
+        let tx_cost = TxWithReadyInfo::new(
+            first_tx.clone(),
+            false,
+            sponsored_gas,
+            sponsored_storage,
+        )
+        .calc_tx_cost();
+
+        let outdated = match (tx_cost <= balance, &first_tx_status) {
+            (true, Some(Pending(PendingReason::NotEnoughCash)))
+            | (false, Some(Ready)) => true,
+            _ => false,
+        };
+        if outdated {
+            first_tx_status = Some(Pending(PendingReason::OutdatedStatus));
+        }
+
+        return Ok((txs, first_tx_status, pending_count));
     }
 
     pub fn get_pending_transaction_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
@@ -435,29 +411,28 @@ impl TransactionPool {
                 let mut to_prop = self.to_propagate_trans.write();
 
                 for tx in signed_trans {
-                    if inner.get(&tx.hash).is_none() {
-                        if let Err(e) = self
-                            .add_transaction_with_readiness_check(
-                                &mut *inner,
-                                &account_cache,
-                                tx.clone(),
-                                false,
-                                false,
-                            )
-                        {
-                            debug!(
+                    if inner.get(&tx.hash).is_some() {
+                        continue;
+                    }
+
+                    if let Err(e) = self.add_transaction_with_readiness_check(
+                        &mut *inner,
+                        &account_cache,
+                        tx.clone(),
+                        false,
+                        false,
+                    ) {
+                        debug!(
                             "tx {:?} fails to be inserted to pool, err={:?}",
                             &tx.hash, e
                         );
-                            failure.insert(tx.hash(), e);
-                            continue;
-                        }
-                        passed_transactions.push(tx.clone());
-                        if !to_prop.contains_key(&tx.hash)
-                            && to_prop.len() < inner.capacity()
-                        {
-                            to_prop.insert(tx.hash, tx);
-                        }
+                        failure.insert(tx.hash(), e);
+                        continue;
+                    }
+
+                    passed_transactions.push(tx.clone());
+                    if to_prop.len() < inner.capacity() {
+                        to_prop.entry(tx.hash).or_insert(tx);
                     }
                 }
             }
@@ -1147,17 +1122,18 @@ impl TransactionPool {
     fn best_executed_state(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
     ) -> StateDbResult<Arc<State>> {
-        Ok(Arc::new(State::new(StateDb::new(
-            data_man
-                .storage_manager
-                .get_state_no_commit(
-                    best_executed_epoch,
-                    /* try_open = */ false,
-                    None,
-                )?
-                // Safe because the state is guaranteed to be available
-                .unwrap(),
-        ))?))
+        let storage = data_man
+            .storage_manager
+            .get_state_no_commit(
+                best_executed_epoch,
+                /* try_open = */ false,
+                None,
+            )?
+            // Safe because the state is guaranteed to be available
+            .unwrap();
+        let state_db = StateDb::new(storage);
+        let state = State::new(state_db)?;
+        Ok(Arc::new(state))
     }
 
     pub fn set_best_executed_epoch(

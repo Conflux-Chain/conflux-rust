@@ -144,7 +144,7 @@ def convert_to_nodeid(signature, challenge):
 
 def get_nodeid(node):
     challenge = random.randint(0, 2**32-1)
-    signature = node.getnodeid(list(int_to_bytes(challenge)))
+    signature = node.test_getNodeId(list(int_to_bytes(challenge)))
     return convert_to_nodeid(signature, challenge)
 
 

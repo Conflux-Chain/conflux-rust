@@ -7,10 +7,10 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-cfx-types = { path = "../../cfx_types" }
-cfx-vm-types = { path = "../vm-types" }
-cfxkey = { path = "../../cfx_key" }
-cfx-bytes = { path = "../../cfx_bytes" }
+cfx-types = { workspace = true }
+cfx-vm-types = { workspace = true }
+cfxkey = { workspace = true }
+cfx-bytes = { workspace = true }
 
 lazy_static = "1.4"
 hex-literal = "0.4.1"

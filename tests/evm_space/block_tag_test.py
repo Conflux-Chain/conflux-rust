@@ -12,7 +12,7 @@ class BlockTagTest(Web3Base):
 
     def run_test(self):
         # super().run_test()
-        self.nodes[0].generate_empty_blocks(2000)
+        self.nodes[0].test_generateEmptyBlocks(2000)
         blocks = [
             self.w3.eth.get_block("finalized"),
             self.w3.eth.get_block("safe"),

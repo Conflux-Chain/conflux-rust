@@ -4,7 +4,6 @@
 
 mod block;
 mod block_number;
-mod call_request;
 pub mod eth_pubsub;
 mod filter;
 mod log;
@@ -13,12 +12,12 @@ mod sync;
 mod trace;
 mod trace_filter;
 mod transaction;
+mod transaction_request;
 mod tx_pool;
 
 pub use self::{
     block::{Block, Header},
     block_number::BlockNumber,
-    call_request::CallRequest,
     filter::{EthRpcLogFilter, FilterChanges},
     log::Log,
     receipt::Receipt,
@@ -26,5 +25,6 @@ pub use self::{
     trace::{LocalizedTrace, Res},
     trace_filter::TraceFilter,
     transaction::Transaction,
+    transaction_request::TransactionRequest,
     tx_pool::AccountPendingTransactions,
 };

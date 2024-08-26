@@ -19,6 +19,8 @@ use std::{ops::Deref, sync::Arc};
 
 use self::nonce_pool_map::NoncePoolMap;
 
+use super::TransactionPoolError;
+
 #[derive(Clone, Debug, DeriveMallocSizeOf)]
 pub struct TxWithReadyInfo {
     pub transaction: Arc<SignedTransaction>,
@@ -63,45 +65,45 @@ impl TxWithReadyInfo {
 
     pub fn calc_tx_cost(&self) -> U256 { self.tx_cost }
 
-    pub fn should_replace(&self, x: &Self, force: bool) -> bool {
+    pub fn should_replace(
+        &self, x: &Self, force: bool,
+    ) -> Result<&'static str, TransactionPoolError> {
         if force {
-            return true;
+            return Ok("force tx replace");
         }
+
         if x.is_already_packed() {
-            return false;
+            return Err(TransactionPoolError::NonceTooStale {
+                hash: self.hash,
+                nonce: self.nonce().saturating_add(1.into()),
+            });
         }
+
         if self.is_already_packed() {
-            return true;
+            // Note: currently, the `packed` is marked only if tx has been
+            // executed locally
+            return Ok("tx has been executed");
         }
-        let higher_epoch_height =
-            if let Transaction::Native(ref tx) = self.unsigned {
-                if let Transaction::Native(ref other) = x.unsigned {
-                    // FIXME: Use epoch_bound in spec. It's still a part of
-                    // normal config.
-                    if *tx.epoch_height()
-                        > other.epoch_height().saturating_add(
-                            TRANSACTION_DEFAULT_EPOCH_BOUND.saturating_mul(2),
-                        )
-                    {
-                        // the epoch_height between `self` and `other` has been
-                        // more than
-                        // twice `TRANSACTION_DEFAULT_EPOCH_BOUND`. Since `self`
-                        // has passed epoch height
-                        // verification, it's sure that `other` cannot pass this
-                        // verification anymore and should be dropped.
-                        return true;
-                    }
-                    tx.epoch_height() > other.epoch_height()
-                } else {
-                    // Should be unreachable. But I'm not very sure about this.
-                    // Return false is safe.
-                    false
-                }
-            } else {
-                false
-            };
-        self.gas_price() >= &Self::compute_next_price(*x.gas_price())
-            || self.gas_price() >= x.gas_price() && higher_epoch_height
+        if let (Transaction::Native(ref tx), Transaction::Native(ref other)) =
+            (&self.unsigned, &x.unsigned)
+        {
+            if *tx.epoch_height()
+                > other
+                    .epoch_height()
+                    .saturating_add(TRANSACTION_DEFAULT_EPOCH_BOUND)
+            {
+                return Ok("too old epoch height");
+            }
+        }
+
+        let next_gas_price = Self::compute_next_price(*x.gas_price());
+        if self.gas_price() >= &next_gas_price {
+            Ok("higher gas price")
+        } else {
+            Err(TransactionPoolError::HigherGasPriceNeeded {
+                expected: next_gas_price,
+            })
+        }
     }
 
     #[inline]
@@ -158,7 +160,7 @@ pub enum InsertResult {
     /// new item added
     NewAdded,
     /// failed to update with lower gas price tx
-    Failed(String),
+    Failed(TransactionPoolError),
     /// succeeded to update with higher gas price tx
     Updated(TxWithReadyInfo),
 }
@@ -386,7 +388,7 @@ impl NoncePool {
 #[cfg(test)]
 mod nonce_pool_test {
     use super::{InsertResult, NoncePool, TxWithReadyInfo};
-    use crate::transaction_pool::SAME_NONCE_HIGH_GAS_PRICE_NEEED;
+    use crate::transaction_pool::TransactionPoolError;
     use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
     use cfx_types::{Address, U128, U256};
     use keylib::{Generator, KeyPair, Random};
@@ -605,10 +607,11 @@ mod nonce_pool_test {
             );
             assert_eq!(
                 nonce_pool.insert(&tx2[i as usize], false /* force */),
-                InsertResult::Failed(format!(
-                    "{SAME_NONCE_HIGH_GAS_PRICE_NEEED} > {}",
-                    &tx1[i as usize].gas_price()
-                ))
+                InsertResult::Failed(
+                    TransactionPoolError::HigherGasPriceNeeded {
+                        expected: tx1[i as usize].gas_price() + 1
+                    }
+                )
             );
             assert_eq!(
                 nonce_pool.insert(&tx2[i as usize], true /* force */),

@@ -84,7 +84,7 @@ impl Runtime {
         Self::new(&mut runtime_bldr)
     }
 
-    /// Spawns a new tokio runtime with a the specified thread count on a
+    /// Spawns a new tokio runtime with the specified thread count on a
     /// background thread and returns a `Runtime` which can be used to spawn
     /// tasks via its executor.
     pub fn with_thread_count(thread_count: usize) -> Self {

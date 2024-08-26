@@ -2,7 +2,7 @@ use super::{
     account_cache::AccountCache,
     garbage_collector::GarbageCollector,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
-    TransactionPoolError, SAME_NONCE_HIGH_GAS_PRICE_NEEED,
+    TransactionPoolError,
 };
 
 use crate::verification::{PackingCheckResult, VerificationConfig};
@@ -828,7 +828,7 @@ impl TransactionPoolInner {
         ) {
             self.collect_garbage(transaction.as_ref());
             if self.is_full(transaction.space()) {
-                return InsertResult::Failed("txpool is full".into());
+                return InsertResult::Failed(TransactionPoolError::TxPoolFull);
             }
         }
         let result = {
@@ -1345,18 +1345,11 @@ impl TransactionPoolInner {
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), TransactionPoolError> {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
-        let (sponsored_gas, sponsored_storage) = self
-            .get_sponsored_gas_and_storage(account_cache, &transaction)
-            .map_err(|e| TransactionPoolError::Other(e))?;
+        let (sponsored_gas, sponsored_storage) =
+            self.get_sponsored_gas_and_storage(account_cache, &transaction)?;
 
-        let (state_nonce, state_balance) = account_cache
-            .get_nonce_and_balance(&transaction.sender())
-            .map_err(|e| {
-                TransactionPoolError::Other(format!(
-                    "Failed to read account_cache from storage: {}",
-                    e
-                ))
-            })?;
+        let (state_nonce, state_balance) =
+            account_cache.get_nonce_and_balance(&transaction.sender())?;
 
         if transaction.hash[0] & 254 == 0 {
             trace!(
@@ -1436,30 +1429,14 @@ impl TransactionPoolInner {
             (state_nonce, state_balance),
             (sponsored_gas, sponsored_storage),
         );
-        if let InsertResult::Failed(info) = result {
-            let err = match info.as_str() {
-                "txpool is full" => TransactionPoolError::TxPoolFull,
-                _ if info.starts_with(SAME_NONCE_HIGH_GAS_PRICE_NEEED) => {
-                    TransactionPoolError::HigherGasPriceNeeded
-                }
-                _ => TransactionPoolError::Other(format!(
-                    "Failed imported to deferred pool: {}",
-                    info
-                )),
-            };
+        if let InsertResult::Failed(err) = result {
             return Err(err);
         }
 
         self.recalculate_readiness_with_state(
             &transaction.sender(),
             account_cache,
-        )
-        .map_err(|e| {
-            TransactionPoolError::Other(format!(
-                "Failed to read account_cache from storage: {}",
-                e
-            ))
-        })?;
+        )?;
 
         Ok(())
     }
@@ -1478,64 +1455,72 @@ impl TransactionPoolInner {
 
     pub fn get_sponsored_gas_and_storage(
         &self, account_cache: &AccountCache, transaction: &SignedTransaction,
-    ) -> Result<(U256, u64), String> {
-        let mut sponsored_gas = U256::from(0);
-        let mut sponsored_storage = 0;
+    ) -> StateDbResult<(U256, u64)> {
         let sender = transaction.sender();
 
-        // Compute sponsored_gas for `transaction`
-        if let Transaction::Native(ref utx) = transaction.unsigned {
-            if let Action::Call(ref callee) = utx.action().clone() {
-                // FIXME: This is a quick fix for performance issue.
-                if callee.is_contract_address() {
-                    if let Some(sponsor_info) =
-                        account_cache.get_sponsor_info(callee).map_err(|e| {
-                            format!(
-                                "Failed to read account_cache from storage: {}",
-                                e
-                            )
-                        })?
-                    {
-                        if account_cache
-                            .check_commission_privilege(
-                                &callee,
-                                &sender.address,
-                            )
-                            .map_err(|e| {
-                                format!(
-                                    "Failed to read account_cache from storage: {}",
-                                    e
-                                )
-                            })?
-                        {
-                            let estimated_gas = Self::estimated_gas_fee(transaction.gas().clone(), transaction.gas_price().clone());
-                            if estimated_gas <= sponsor_info.sponsor_gas_bound
-                                && estimated_gas
-                                <= sponsor_info.sponsor_balance_for_gas
-                            {
-                                sponsored_gas = utx.gas().clone();
-                            }
-                            let estimated_collateral =
-                                U256::from(*utx.storage_limit())
-                                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                            if estimated_collateral
-                                <= sponsor_info.sponsor_balance_for_collateral + sponsor_info.unused_storage_points()
-                            {
-                                sponsored_storage = *utx.storage_limit();
-                            }
-                        }
-                    }
-                }
+        // Filter out espace transactions
+        let utx = if let Transaction::Native(ref utx) = transaction.unsigned {
+            utx
+        } else {
+            return Ok(Default::default());
+        };
+
+        // Keep contract call only
+        let contract_address = match utx.action() {
+            Action::Call(callee) if callee.is_contract_address() => *callee,
+            _ => {
+                return Ok(Default::default());
             }
+        };
+
+        // Get sponsor info
+        let sponsor_info = if let Some(sponsor_info) =
+            account_cache.get_sponsor_info(&contract_address)?
+        {
+            sponsor_info
+        } else {
+            return Ok(Default::default());
+        };
+
+        // Check if sender is eligible for sponsor
+        if !account_cache
+            .check_commission_privilege(&contract_address, &sender.address)?
+        {
+            return Ok(Default::default());
         }
-        Ok((sponsored_gas, sponsored_storage))
+
+        // Detailed logics
+        let estimated_gas = Self::estimated_gas_fee(
+            transaction.gas().clone(),
+            transaction.gas_price().clone(),
+        );
+        let sponsored_gas = if estimated_gas <= sponsor_info.sponsor_gas_bound
+            && estimated_gas <= sponsor_info.sponsor_balance_for_gas
+        {
+            utx.gas().clone()
+        } else {
+            0.into()
+        };
+
+        let estimated_collateral = U256::from(*utx.storage_limit())
+            * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        let sponsored_collateral = if estimated_collateral
+            <= sponsor_info.sponsor_balance_for_collateral
+                + sponsor_info.unused_storage_points()
+        {
+            *utx.storage_limit()
+        } else {
+            0
+        };
+
+        Ok((sponsored_gas, sponsored_collateral))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        transaction_pool::SAME_NONCE_HIGH_GAS_PRICE_NEEED,
+        transaction_pool::TransactionPoolError,
         verification::PackingCheckResult,
     };
 
@@ -1666,10 +1651,9 @@ mod tests {
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
-            InsertResult::Failed(format!(
-                "{SAME_NONCE_HIGH_GAS_PRICE_NEEED} > {}",
-                bob_tx2_new.gas_price()
-            ))
+            InsertResult::Failed(TransactionPoolError::HigherGasPriceNeeded {
+                expected: *bob_tx2_new.gas_price() + U256::one()
+            })
         );
 
         assert_eq!(

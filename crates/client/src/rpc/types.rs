@@ -19,14 +19,9 @@ pub use self::{
     bytes::Bytes,
     cfx::{
         address,
-        address::RpcAddress,
+        address::{check_two_rpc_address_network_match, RpcAddress},
         blame_info::BlameInfo,
         block::{Block, BlockTransactions, Header},
-        call_request::{
-            self, sign_call, CallRequest,
-            CheckBalanceAgainstTransactionResponse,
-            EstimateGasAndCollateralResponse, SendTxRequest,
-        },
         consensus_graph_states::ConsensusGraphStates,
         epoch_number::{BlockHashOrEpochNumber, EpochNumber},
         filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
@@ -40,6 +35,10 @@ pub use self::{
         sync_graph_states::SyncGraphStates,
         token_supply_info::TokenSupplyInfo,
         transaction::{PackedOrExecuted, Transaction, WrapTransaction},
+        transaction_request::{
+            self, CheckBalanceAgainstTransactionResponse,
+            EstimateGasAndCollateralResponse, TransactionRequest,
+        },
         tx_pool::{
             AccountPendingInfo, AccountPendingTransactions,
             TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,

@@ -112,6 +112,7 @@ build_config! {
         // Controls block generation speed.
         // Only effective in `dev` mode
         (dev_block_interval_ms, (Option<u64>), None)
+        (dev_pack_tx_immediately, (Option<bool>), None)
         (enable_state_expose, (bool), false)
         (generate_tx, (bool), false)
         (generate_tx_period_us, (Option<u64>), Some(100_000))
@@ -1069,8 +1070,13 @@ impl Configuration {
     pub fn rpc_impl_config(&self) -> RpcImplConfiguration {
         RpcImplConfiguration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
-            dev_pack_tx_immediately: self.is_dev_mode()
-                && self.raw_conf.dev_block_interval_ms.is_none(),
+            dev_pack_tx_immediately: self
+                .raw_conf
+                .dev_pack_tx_immediately
+                .unwrap_or_else(|| {
+                    self.is_dev_mode()
+                        && self.raw_conf.dev_block_interval_ms.is_none()
+                }),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
             enable_metrics: self.raw_conf.rpc_enable_metrics,
             poll_lifetime_in_seconds: self.raw_conf.poll_lifetime_in_seconds,

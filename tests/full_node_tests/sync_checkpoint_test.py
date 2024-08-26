@@ -110,8 +110,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
             full_balance = full_node_client.get_balance(full_node_client.GENESIS_ADDR, full_node_client.EPOCH_NUM(i))
             archive_balance = archive_node_client.get_balance(archive_node_client.GENESIS_ADDR, archive_node_client.EPOCH_NUM(i))
             assert_equal(full_balance, archive_balance)
-            executed_info1 = self.nodes[full_node_index].getExecutedInfo(blocks_in_era[idx])
-            executed_info2 = self.nodes[0].getExecutedInfo(blocks_in_era[idx])
+            executed_info1 = self.nodes[full_node_index].test_getExecutedInfo(blocks_in_era[idx])
+            executed_info2 = self.nodes[0].test_getExecutedInfo(blocks_in_era[idx])
             assert_equal(executed_info1, executed_info2)
             idx += 1
 

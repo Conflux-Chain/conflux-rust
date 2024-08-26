@@ -36,14 +36,14 @@ class GHASTTest(ConfluxTestFramework):
 
         self.log.info("Generating two invalid blocks")
 
-        invalid = self.nodes[0].generatefixedblock(genesis, [a2], 0, False, INITIAL_DIFFICULTY)
-        invalid2 = self.nodes[0].generatefixedblock(a2, [invalid], 0, False, INITIAL_DIFFICULTY)
+        invalid = self.nodes[0].test_generateFixedBlock(genesis, [a2], 0, False, INITIAL_DIFFICULTY)
+        invalid2 = self.nodes[0].test_generateFixedBlock(a2, [invalid], 0, False, INITIAL_DIFFICULTY)
 
         self.log.info("Sync two nodes")
         connect_nodes(self.nodes, 0, 1)
-        wait_until(lambda: self.nodes[1].getblockcount() >= 3, timeout = 10)
-        self.log.info("Node0 block count " + str(self.nodes[0].getblockcount()))
-        self.log.info("Node1 block count " + str(self.nodes[1].getblockcount()))
+        wait_until(lambda: self.nodes[1].test_getBlockCount() >= 3, timeout = 10)
+        self.log.info("Node0 block count " + str(self.nodes[0].test_getBlockCount()))
+        self.log.info("Node1 block count " + str(self.nodes[1].test_getBlockCount()))
 
         self.log.info("Generating a block without referencing partial invalid blocks")
 
@@ -54,8 +54,8 @@ class GHASTTest(ConfluxTestFramework):
 
         self.log.info("Sync two nodes")
         connect_nodes(self.nodes, 1, 0)
-        wait_until(lambda: self.nodes[0].getblockcount() >= 6, timeout = 40)
-        wait_until(lambda: self.nodes[1].getblockcount() >= 4, timeout = 40)
+        wait_until(lambda: self.nodes[0].test_getBlockCount() >= 6, timeout = 40)
+        wait_until(lambda: self.nodes[1].test_getBlockCount() >= 4, timeout = 40)
 
         timer_cnt = 0
         diff = int(block_b1['difficulty'], 16)

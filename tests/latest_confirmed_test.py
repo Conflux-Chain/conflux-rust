@@ -24,7 +24,7 @@ class LatestConfirmedTest(ConfluxTestFramework):
 
         # generate blocks in 0.5 sec interval like default
         for i in range(0, 160):
-            self.nodes[0].generate_empty_blocks(1)
+            self.nodes[0].test_generateEmptyBlocks(1)
             time.sleep(0.5)
             last_mined = client.epoch_number(client.EPOCH_LATEST_MINED)
             confirmed = client.epoch_number(client.EPOCH_LATEST_CONFIRMED)
