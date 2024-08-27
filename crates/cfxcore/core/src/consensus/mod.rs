@@ -118,6 +118,7 @@ pub struct PhantomBlock {
     pub errors: Vec<String>,
     pub bloom: Bloom,
     pub traces: Vec<TransactionExecTraces>,
+    pub total_gas_limit: U256, // real gas limit of the block
 }
 
 #[derive(Clone)]
@@ -1899,6 +1900,7 @@ impl ConsensusGraph {
                 errors: vec![],
                 bloom: Bloom::zero(),
                 traces: vec![],
+                total_gas_limit: U256::from(0),
             }));
         }
 
@@ -1927,10 +1929,12 @@ impl ConsensusGraph {
             errors: vec![],
             bloom: Default::default(),
             traces: vec![],
+            total_gas_limit: U256::from(0),
         };
 
         let mut accumulated_gas_used = U256::from(0);
         let mut gas_used_offset;
+        let mut total_gas_limit = U256::from(0);
 
         let iter_blocks = if only_pivot {
             &blocks[blocks.len() - 1..]
@@ -1952,6 +1956,12 @@ impl ConsensusGraph {
                 ) {
                 None => return Ok(None),
                 Some(r) => r,
+            };
+
+            // note: we only include gas limit for blocks that will pack eSpace
+            // tx(multiples of 5)
+            if b.block_header.height() % 5 == 0 {
+                total_gas_limit += b.block_header.gas_limit() * 5 / 10
             };
 
             let block_receipts = &exec_info.block_receipts.receipts;
@@ -2079,6 +2089,7 @@ impl ConsensusGraph {
             }
         }
 
+        phantom_block.total_gas_limit = total_gas_limit;
         Ok(Some(phantom_block))
     }
 
