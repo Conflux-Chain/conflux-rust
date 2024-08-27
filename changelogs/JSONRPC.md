@@ -3,6 +3,8 @@
 ## vNext
 
 1. eSpace add new RPC method `eth_getBlockReceipts`
+2. RPC method `eth_call`, `eth_estimateGas`'s Transaction object add a new field `input` to keep compatibility with Ethereum.
+3. eSpace `block` and `transaction` object field value changed: `block.transactionsRoot(when tx is empty)`, `block.receiptsRoot(when tx is empty)`, `post-155 tx.v`, `phantom tx.r, tx.s`.
 
 ## v2.4.0
 

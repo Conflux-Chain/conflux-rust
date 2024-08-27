@@ -18,7 +18,7 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::types::Bytes;
+use alloy_rpc_types::TransactionInput;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_types::{Address, AddressSpaceUtil, H160, U256, U64};
 use cfxcore::rpc_errors::invalid_params;
@@ -51,8 +51,9 @@ pub struct TransactionRequest {
     pub gas: Option<U256>,
     /// Value
     pub value: Option<U256>,
-    /// Data
-    pub data: Option<Bytes>,
+    ///
+    #[serde(default, flatten)]
+    pub input: TransactionInput,
     /// Nonce
     pub nonce: Option<U256>,
     /// Miner bribe
@@ -108,7 +109,12 @@ impl TransactionRequest {
         let max_priority_fee_per_gas =
             request.max_priority_fee_per_gas.unwrap_or(U256::zero());
         let access_list = request.access_list.unwrap_or(vec![]);
-        let data = request.data.unwrap_or_default().into_vec();
+        let data = request
+            .input
+            .try_into_unique_input()
+            .map_err(|e| invalid_params("tx.input", e.to_string()))?
+            .unwrap_or_default()
+            .into();
 
         let transaction = match transaction_type.as_usize() as u8 {
             LEGACY_TX_TYPE => Eip155(Eip155Transaction {

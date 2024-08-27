@@ -21,8 +21,9 @@ impl Eip155Transaction {
                     unsigned: Transaction::Ethereum(
                         EthereumTransaction::Eip155(self),
                     ),
-                    // we use sender address for `r` and `s` so that phantom
-                    // transactions with matching fields from different senders
+                    // we use sender address for `r` and `s` so that
+                    // phantom transactions with matching
+                    // fields from different senders
                     // will have different hashes
                     r: U256::from(from.address.as_ref()),
                     s: U256::from(from.address.as_ref()),

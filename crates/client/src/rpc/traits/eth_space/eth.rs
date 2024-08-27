@@ -165,6 +165,7 @@ pub trait Eth {
     fn submit_transaction(&self, transaction: Bytes) -> Result<H256>;
 
     /// Call contract, returning the output data.
+    /// TODO support state_overrides and block_overrides
     #[rpc(name = "eth_call")]
     fn call(
         &self, transaction: TransactionRequest, block: Option<BlockNumber>,
