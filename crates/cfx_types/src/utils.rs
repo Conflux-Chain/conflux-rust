@@ -1,4 +1,5 @@
 use ethereum_types::{Address, H256};
+use std::str::FromStr;
 
 pub fn maybe_address(address: &Address) -> Option<Address> {
     if address.is_zero() {
@@ -26,4 +27,8 @@ pub fn option_vec_to_hex(data: Option<&Vec<u8>>) -> String {
         }
         None => String::from("None"),
     }
+}
+
+pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
+    hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
 }
