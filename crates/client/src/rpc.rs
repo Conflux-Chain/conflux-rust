@@ -52,7 +52,8 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::{Cfx, CfxFilter},
+        cfx::Cfx,
+        cfx_filter::CfxFilter,
         debug::LocalRpc,
         eth_space::{
             eth::Eth, eth_filter::EthFilter, eth_pubsub::EthPubSub,

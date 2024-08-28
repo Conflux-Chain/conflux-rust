@@ -13,7 +13,7 @@ use crate::rpc::{
         limit_logs, PollFilter, PollManager, SyncPollFilter,
         MAX_BLOCK_HISTORY_SIZE,
     },
-    traits::cfx::CfxFilter,
+    traits::cfx_filter::CfxFilter,
     types::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, Log, RevertTo},
 };
 use cfx_addr::Network;
