@@ -147,6 +147,10 @@ thiserror = "1.0.61"
 anyhow = "1.0.38"
 chrono = "=0.4.38"
 
+keccak-hash = "0.5"
+rlp = "0.4.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+
 alloy-sol-types = "0.7.2"
 alloy-primitives = "0.7.2"
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }

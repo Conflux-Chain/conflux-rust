@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 extern crate ethereum_types;
+extern crate keccak_hash;
 extern crate rlp;
 extern crate rlp_derive;
 extern crate serde;
@@ -29,6 +30,9 @@ pub mod address_util;
 
 pub mod space_util;
 pub use space_util::AddressSpaceUtil;
+
+pub mod contract_address;
+pub use contract_address::{cal_contract_address, CreateContractAddressType};
 
 /// The KECCAK hash of an empty bloom filter (0x00 * 256)
 pub const KECCAK_EMPTY_BLOOM: H256 = H256([

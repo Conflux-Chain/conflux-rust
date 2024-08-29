@@ -256,10 +256,16 @@ pub mod block {
         block_height: u64, block_gas_limit: U256,
     ) -> U256 {
         if block_height % EVM_TRANSACTION_BLOCK_RATIO == 0 {
-            block_gas_limit / EVM_TRANSACTION_GAS_RATIO
+            espace_block_gas_limit_of_enabled_block(block_gas_limit)
         } else {
             U256::zero()
         }
+    }
+
+    pub fn espace_block_gas_limit_of_enabled_block(
+        block_gas_limit: U256,
+    ) -> U256 {
+        block_gas_limit / EVM_TRANSACTION_GAS_RATIO
     }
 
     pub fn cspace_block_gas_limit(

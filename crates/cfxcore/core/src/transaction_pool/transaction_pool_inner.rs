@@ -9,6 +9,7 @@ use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 use cfx_parameters::{
+    block::cspace_block_gas_limit_after_cip1559,
     consensus_internal::ELASTICITY_MULTIPLIER,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
@@ -1226,7 +1227,9 @@ impl TransactionPoolInner {
         };
 
         {
-            let gas_target = block_gas_limit * 9 / 10 / ELASTICITY_MULTIPLIER;
+            let gas_target =
+                cspace_block_gas_limit_after_cip1559(block_gas_limit)
+                    / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Native];
             let min_base_price =
                 machine.params().min_base_price()[Space::Native];
@@ -1531,6 +1534,9 @@ mod tests {
         machine::{new_machine, Machine, VmFactory},
         spec::CommonParams,
     };
+    use cfx_parameters::block::{
+        cspace_block_gas_limit_after_cip1559, espace_block_gas_limit,
+    };
     use cfx_types::{Address, AddressSpaceUtil, Space, SpaceMap, U256};
     use itertools::Itertools;
     use keylib::{Generator, KeyPair, Random};
@@ -1824,13 +1830,10 @@ mod tests {
 
         let params = machine.params();
 
-        let core_gas_limit = block_gas_limit * 9 / 10;
+        let core_gas_limit =
+            cspace_block_gas_limit_after_cip1559(block_gas_limit);
         let eth_gas_limit =
-            if params.can_pack_evm_transaction(best_epoch_height) {
-                block_gas_limit * 5 / 10
-            } else {
-                U256::zero()
-            };
+            espace_block_gas_limit(best_epoch_height, block_gas_limit);
 
         let gas_target =
             SpaceMap::new(core_gas_limit, eth_gas_limit).map_all(|x| x / 2);

@@ -1960,9 +1960,7 @@ impl ConsensusGraph {
 
             // note: we only include gas limit for blocks that will pack eSpace
             // tx(multiples of 5)
-            if b.block_header.height() % 5 == 0 {
-                total_gas_limit += b.block_header.gas_limit() * 5 / 10
-            };
+            total_gas_limit += b.block_header.espace_gas_limit();
 
             let block_receipts = &exec_info.block_receipts.receipts;
             let errors = &exec_info.block_receipts.tx_execution_error_messages;

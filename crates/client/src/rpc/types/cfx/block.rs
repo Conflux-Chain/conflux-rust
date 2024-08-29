@@ -286,11 +286,7 @@ impl Block {
 
         // if a block is 1559 block(has base_fee_per_gas) then it's
         // block.gas_limit is 90% of the actual block.gas_limit
-        let gas_limit: U256 = if base_fee_per_gas.is_none() {
-            b.block_header.gas_limit().into()
-        } else {
-            b.block_header.gas_limit() * U256::from(9) / U256::from(10)
-        };
+        let gas_limit: U256 = b.block_header.core_space_gas_limit();
 
         Ok(Block {
             hash: H256::from(block_hash),
