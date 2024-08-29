@@ -170,6 +170,25 @@ impl BlockHeader {
     /// Get the gas limit field of the header.
     pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
 
+    pub fn core_space_gas_limit(&self) -> U256 {
+        if self.base_price.is_none() {
+            self.gas_limit().to_owned()
+        } else {
+            // After CIP-1559, 90% of the block gas limit is for core space.
+            self.gas_limit() * 9 / 10
+        }
+    }
+
+    pub fn espace_gas_limit(&self) -> U256 {
+        if self.height() % 5 == 0 {
+            // if this block can pack eSpace transactions, 50% of the block gas
+            // limit is for eSpace.
+            self.gas_limit() * 5 / 10
+        } else {
+            U256::zero()
+        }
+    }
+
     /// Get the referee hashes field of the header.
     pub fn referee_hashes(&self) -> &Vec<H256> { &self.referee_hashes }
 

@@ -564,13 +564,8 @@ impl VerificationConfig {
 
         assert!(block_height >= cip1559_init);
 
-        let core_gas_limit = block.block_header.gas_limit() * 9 / 10;
-        let espace_gas_limit =
-            if self.machine.params().can_pack_evm_transaction(block_height) {
-                block.block_header.gas_limit() * 5 / 10
-            } else {
-                U256::zero()
-            };
+        let core_gas_limit = block.block_header.core_space_gas_limit();
+        let espace_gas_limit = block.block_header.espace_gas_limit();
 
         if total_gas[Ethereum] > espace_gas_limit {
             return Err(From::from(BlockError::InvalidPackedGasLimit(
