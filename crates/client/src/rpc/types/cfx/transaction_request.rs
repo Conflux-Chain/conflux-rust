@@ -15,7 +15,12 @@ use crate::rpc::{
     RpcResult,
 };
 use cfx_addr::Network;
-use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
+use cfx_parameters::{
+    block::{
+        CIP1559_CORE_TRANSACTION_GAS_RATIO, DEFAULT_TARGET_BLOCK_GAS_LIMIT,
+    },
+    RATIO_BASE_TEN,
+};
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
@@ -30,8 +35,9 @@ use primitives::{
 use std::{convert::Into, sync::Arc};
 
 /// The maximum gas limit accepted by most tx pools.
-pub const DEFAULT_CFX_GAS_CALL_REQUEST: u64 =
-    DEFAULT_TARGET_BLOCK_GAS_LIMIT * 9 / 10;
+pub const DEFAULT_CFX_GAS_CALL_REQUEST: u64 = DEFAULT_TARGET_BLOCK_GAS_LIMIT
+    * CIP1559_CORE_TRANSACTION_GAS_RATIO
+    / RATIO_BASE_TEN;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

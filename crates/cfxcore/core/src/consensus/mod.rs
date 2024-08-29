@@ -43,7 +43,9 @@ use cfx_execute_helper::{
     },
     phantom_tx::build_bloom_and_recover_phantom,
 };
-use cfx_executor::{executive::ExecutionOutcome, state::State};
+use cfx_executor::{
+    executive::ExecutionOutcome, spec::CommonParams, state::State,
+};
 use geth_tracer::GethTraceWithHash;
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
@@ -1960,9 +1962,9 @@ impl ConsensusGraph {
 
             // note: we only include gas limit for blocks that will pack eSpace
             // tx(multiples of 5)
-            if b.block_header.height() % 5 == 0 {
-                total_gas_limit += b.block_header.gas_limit() * 5 / 10
-            };
+            total_gas_limit += b.block_header.espace_gas_limit(
+                self.machine_params().evm_transaction_block_ratio,
+            );
 
             let block_receipts = &exec_info.block_receipts.receipts;
             let errors = &exec_info.block_receipts.tx_execution_error_messages;
@@ -2125,6 +2127,10 @@ impl ConsensusGraph {
         Ok(StateDb::new(
             self.get_state_by_height_and_hash(height, &hash, space)?,
         ))
+    }
+
+    pub fn machine_params(&self) -> &CommonParams {
+        self.executor.handler.params()
     }
 }
 

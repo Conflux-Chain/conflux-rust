@@ -20,7 +20,7 @@ cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
-keccak-hash = "0.5"
+keccak-hash = { workspace = true }
 lazy_static = "1.4"
 log = "0.4"
 malloc_size_of = { workspace = true }
@@ -29,8 +29,8 @@ num = "0.2"
 parity-crypto = "0.9.0"
 parking_lot = "0.11"
 primitives = { workspace = true }
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+rlp ={ workspace = true }
+rlp_derive = { workspace = true }
 rustc-hex = "2.1"
 serde = { version = "1.0", features = ["rc"] }
 serde_derive = "1.0"

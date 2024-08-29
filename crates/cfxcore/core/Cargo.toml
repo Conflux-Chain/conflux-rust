@@ -40,7 +40,7 @@ hibitset = { workspace = true }
 itertools = "0.9"
 io = { workspace = true }
 jsonrpc-core = "15.1.0"
-keccak-hash = "0.5"
+keccak-hash = { workspace = true }
 kvdb = "0.4"
 kvdb-rocksdb = { workspace = true }
 lazy_static = "1.4"
@@ -68,8 +68,8 @@ rand_08 = {package = "rand", version = "0.8"}
 rand_xorshift="0.2"
 random-crash = { workspace = true }
 rayon = "1.0"
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
 rustc-hex = "2.1"
 secret-store = { workspace = true }
 serde = { version = "1.0", features = ["rc"] }

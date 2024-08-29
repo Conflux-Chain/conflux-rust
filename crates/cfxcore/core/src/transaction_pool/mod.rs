@@ -24,7 +24,11 @@ use cfx_executor::{
     machine::Machine, spec::TransitionsEpochHeight, state::State,
 };
 use cfx_parameters::{
-    block::DEFAULT_TARGET_BLOCK_GAS_LIMIT,
+    block::{
+        cspace_block_gas_limit_after_cip1559, espace_block_gas_limit,
+        espace_block_gas_limit_of_enabled_block,
+        DEFAULT_TARGET_BLOCK_GAS_LIMIT,
+    },
     consensus_internal::ELASTICITY_MULTIPLIER,
 };
 use cfx_statedb::{Result as StateDbResult, StateDb};
@@ -150,8 +154,12 @@ impl TxPoolConfig {
         };
 
         let space_gas_target: U256 = match tx.space() {
-            Space::Native => block_gas_target * 9 / 10,
-            Space::Ethereum => block_gas_target * 5 / 10,
+            Space::Native => {
+                cspace_block_gas_limit_after_cip1559(block_gas_target)
+            }
+            Space::Ethereum => {
+                espace_block_gas_limit_of_enabled_block(block_gas_target)
+            }
         };
 
         let space_gas_limit = space_gas_target * 2;
@@ -832,12 +840,14 @@ impl TransactionPool {
                 min_gas_price[tx.space()].min(*tx.gas_limit());
         }
 
-        let core_gas_limit = block_gas_limit * 9 / 10;
-        let eth_gas_limit = if params.can_pack_evm_transaction(current_height) {
-            block_gas_limit * 5 / 10
-        } else {
-            U256::zero()
-        };
+        let core_gas_limit =
+            cspace_block_gas_limit_after_cip1559(block_gas_limit);
+        let eth_gas_limit = espace_block_gas_limit(
+            current_height,
+            params.evm_transaction_block_ratio,
+            block_gas_limit,
+        );
+
         let gas_target =
             SpaceMap::new(core_gas_limit, eth_gas_limit).map_all(|x| x / 2);
 
