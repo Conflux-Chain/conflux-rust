@@ -150,6 +150,7 @@ chrono = "=0.4.38"
 keccak-hash = "0.5"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+hex = "0.4.3"
 
 alloy-sol-types = "0.7.2"
 alloy-primitives = "0.7.2"
