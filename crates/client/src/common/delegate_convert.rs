@@ -52,28 +52,3 @@ impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcResult<T> {
         into_jsonrpc_result(x).into_future().boxed()
     }
 }
-
-/*
-/// It's a bad idea to convert a BoxFuture return type to a JsonRpcResult
-/// return type for rpc call. Simply imagine how the code below runs.
-impl<T: Send + Sync + 'static> Into<JsonRpcResult<T>> for BoxFuture<T> {
-    fn into(x: Self) -> JsonRpcResult<T> {
-        thread::Builder::new()
-            .name("rpc async waiter".into())
-            .spawn(move || x.wait())
-            .map_err(|e| {
-                let mut rpc_err = JsonRpcError::internal_error();
-                rpc_err.message = format!("thread creation error: {}", e);
-
-                rpc_err
-            })?
-            .join()
-            .map_err(|_| {
-                let mut rpc_err = JsonRpcError::internal_error();
-                rpc_err.message = format!("thread join error.");
-
-                rpc_err
-            })?
-    }
-}
-*/

@@ -12,7 +12,7 @@ use cfxcore::NodeType;
 use clap::{crate_version, load_yaml, App, ArgMatches};
 use client::{
     archive::ArchiveClient,
-    common::{client_methods, ClientTrait},
+    common::{shutdown_handler, ClientTrait},
     configuration::Configuration,
     full::FullClient,
     light::LightClient,
@@ -174,7 +174,7 @@ Current Version: {}
         NodeType::Unknown => return Err("Unknown node type".into()),
     };
     info!("Conflux client started");
-    client_methods::run(client_handle, exit);
+    shutdown_handler::run(client_handle, exit);
 
     Ok(())
 }

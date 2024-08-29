@@ -69,8 +69,8 @@ use crate::{
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
-pub mod client_methods;
 pub mod delegate_convert;
+pub mod shutdown_handler;
 
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
