@@ -1221,6 +1221,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-parameters",
  "cfx-types",
+ "cfx-vm-types",
  "derivative",
  "lazy_static",
  "log",
@@ -1272,7 +1273,6 @@ version = "1.0.0"
 dependencies = [
  "cfx-bytes",
  "cfx-types",
- "cfx-vm-types",
  "cfxkey",
  "hex-literal",
  "lazy_static",
@@ -1362,6 +1362,7 @@ version = "0.2.0"
 dependencies = [
  "ethereum-types 0.9.2",
  "hex 0.4.3",
+ "keccak-hash",
  "rlp 0.4.6",
  "rlp_derive",
  "serde",
@@ -6154,6 +6155,7 @@ version = "0.2.0"
 dependencies = [
  "byteorder",
  "cfx-bytes",
+ "cfx-parameters",
  "cfx-types",
  "cfxkey",
  "criterion",

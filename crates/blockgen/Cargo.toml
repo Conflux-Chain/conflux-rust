@@ -20,7 +20,7 @@ metrics = { workspace = true }
 network = { workspace = true }
 primitives = { workspace = true }
 parking_lot = "0.11"
-rlp = "0.4.0"
+rlp = { workspace = true }
 rand = "0.7"
 secret-store = { workspace = true }
 toml = "0.5.8"

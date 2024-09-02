@@ -9,6 +9,7 @@ use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 use cfx_parameters::{
+    block::cspace_block_gas_limit_after_cip1559,
     consensus_internal::ELASTICITY_MULTIPLIER,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
@@ -1226,7 +1227,9 @@ impl TransactionPoolInner {
         };
 
         {
-            let gas_target = block_gas_limit * 9 / 10 / ELASTICITY_MULTIPLIER;
+            let gas_target =
+                cspace_block_gas_limit_after_cip1559(block_gas_limit)
+                    / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Native];
             let min_base_price =
                 machine.params().min_base_price()[Space::Native];
@@ -1528,8 +1531,11 @@ mod tests {
         DeferredPool, InsertResult, TransactionPoolInner, TxWithReadyInfo,
     };
     use cfx_executor::{
-        machine::{new_machine, Machine, VmFactory},
+        machine::{Machine, VmFactory},
         spec::CommonParams,
+    };
+    use cfx_parameters::block::{
+        cspace_block_gas_limit_after_cip1559, espace_block_gas_limit,
     };
     use cfx_types::{Address, AddressSpaceUtil, Space, SpaceMap, U256};
     use itertools::Itertools;
@@ -1824,13 +1830,12 @@ mod tests {
 
         let params = machine.params();
 
-        let core_gas_limit = block_gas_limit * 9 / 10;
-        let eth_gas_limit =
-            if params.can_pack_evm_transaction(best_epoch_height) {
-                block_gas_limit * 5 / 10
-            } else {
-                U256::zero()
-            };
+        let core_gas_limit =
+            cspace_block_gas_limit_after_cip1559(block_gas_limit);
+        let eth_gas_limit = espace_block_gas_limit(
+            params.can_pack_evm_transaction(best_epoch_height),
+            block_gas_limit,
+        );
 
         let gas_target =
             SpaceMap::new(core_gas_limit, eth_gas_limit).map_all(|x| x / 2);
@@ -1871,7 +1876,7 @@ mod tests {
         let mut params = CommonParams::default();
         params.min_base_price = SpaceMap::new(100, 200).map_all(U256::from);
 
-        let machine = Arc::new(new_machine(params, VmFactory::default()));
+        let machine = Arc::new(Machine::new(params, VmFactory::default()));
 
         let test_block_limit = SpaceMap::new(5400, 3000);
 

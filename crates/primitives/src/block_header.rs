@@ -12,6 +12,7 @@ use crate::{
     block::BlockHeight, bytes::Bytes, hash::keccak, pos::PosBlockId,
     receipt::BlockReceipts, MERKLE_NULL_NODE, NULL_EPOCH,
 };
+use cfx_parameters::block::{cspace_block_gas_limit, espace_block_gas_limit};
 use cfx_types::{
     Address, Bloom, Space, SpaceMap, H256, KECCAK_EMPTY_BLOOM, U256,
 };
@@ -169,6 +170,17 @@ impl BlockHeader {
 
     /// Get the gas limit field of the header.
     pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
+
+    pub fn core_space_gas_limit(&self) -> U256 {
+        cspace_block_gas_limit(
+            self.base_price.is_some(),
+            self.gas_limit().to_owned(),
+        )
+    }
+
+    pub fn espace_gas_limit(&self, can_pack: bool) -> U256 {
+        espace_block_gas_limit(can_pack, self.gas_limit().to_owned())
+    }
 
     /// Get the referee hashes field of the header.
     pub fn referee_hashes(&self) -> &Vec<H256> { &self.referee_hashes }

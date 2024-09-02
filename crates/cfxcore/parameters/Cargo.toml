@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 cfx-types = { workspace = true }
-cfx-vm-types = { workspace = true }
 cfxkey = { workspace = true }
 cfx-bytes = { workspace = true }
 

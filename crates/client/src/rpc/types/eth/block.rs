@@ -216,7 +216,7 @@ impl Block {
                 .last()
                 .map(|r| r.accumulated_gas_used)
                 .unwrap_or_default(),
-            gas_limit: pb.pivot_header.gas_limit().into(),
+            gas_limit: pb.total_gas_limit,
             extra_data: Default::default(),
             logs_bloom: pb.bloom,
             timestamp: pb.pivot_header.timestamp().into(),

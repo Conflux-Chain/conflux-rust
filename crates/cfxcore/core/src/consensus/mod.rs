@@ -43,7 +43,9 @@ use cfx_execute_helper::{
     },
     phantom_tx::build_bloom_and_recover_phantom,
 };
-use cfx_executor::{executive::ExecutionOutcome, state::State};
+use cfx_executor::{
+    executive::ExecutionOutcome, spec::CommonParams, state::State,
+};
 use geth_tracer::GethTraceWithHash;
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
@@ -118,6 +120,7 @@ pub struct PhantomBlock {
     pub errors: Vec<String>,
     pub bloom: Bloom,
     pub traces: Vec<TransactionExecTraces>,
+    pub total_gas_limit: U256, // real gas limit of the block
 }
 
 #[derive(Clone)]
@@ -231,6 +234,7 @@ pub struct ConsensusGraph {
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
     pub config: ConsensusConfig,
+    pub params: CommonParams,
 }
 
 impl MallocSizeOf for ConsensusGraph {
@@ -255,7 +259,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
-        pos_verifier: Arc<PosVerifier>,
+        pos_verifier: Arc<PosVerifier>, params: CommonParams,
     ) -> Self {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
@@ -299,6 +303,7 @@ impl ConsensusGraph {
             ready_for_mining: AtomicBool::new(false),
             synced_epoch_id: Default::default(),
             config: conf,
+            params,
         };
         graph.update_best_info(false /* ready_for_mining */);
         graph
@@ -319,7 +324,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
-        pos_verifier: Arc<PosVerifier>,
+        pos_verifier: Arc<PosVerifier>, params: CommonParams,
     ) -> Self {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let stable_hash = data_man.get_cur_consensus_era_stable_hash();
@@ -337,6 +342,7 @@ impl ConsensusGraph {
             verification_conf,
             node_type,
             pos_verifier,
+            params,
         )
     }
 
@@ -1899,6 +1905,7 @@ impl ConsensusGraph {
                 errors: vec![],
                 bloom: Bloom::zero(),
                 traces: vec![],
+                total_gas_limit: U256::from(0),
             }));
         }
 
@@ -1927,10 +1934,12 @@ impl ConsensusGraph {
             errors: vec![],
             bloom: Default::default(),
             traces: vec![],
+            total_gas_limit: U256::from(0),
         };
 
         let mut accumulated_gas_used = U256::from(0);
         let mut gas_used_offset;
+        let mut total_gas_limit = U256::from(0);
 
         let iter_blocks = if only_pivot {
             &blocks[blocks.len() - 1..]
@@ -1953,6 +1962,13 @@ impl ConsensusGraph {
                 None => return Ok(None),
                 Some(r) => r,
             };
+
+            // note: we only include gas limit for blocks that will pack eSpace
+            // tx(multiples of 5)
+            total_gas_limit += b.block_header.espace_gas_limit(
+                self.params
+                    .can_pack_evm_transaction(b.block_header.height()),
+            );
 
             let block_receipts = &exec_info.block_receipts.receipts;
             let errors = &exec_info.block_receipts.tx_execution_error_messages;
@@ -2079,6 +2095,7 @@ impl ConsensusGraph {
             }
         }
 
+        phantom_block.total_gas_limit = total_gas_limit;
         Ok(Some(phantom_block))
     }
 

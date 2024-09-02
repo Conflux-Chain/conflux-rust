@@ -61,8 +61,7 @@ use self::{
         cfx::{Cfx, CfxFilter},
         debug::LocalRpc,
         eth_space::{
-            eth::{Eth, EthFilter},
-            eth_pubsub::EthPubSub,
+            eth::Eth, eth_filter::EthFilter, eth_pubsub::EthPubSub,
             trace::Trace as EthTrace,
         },
         pool::TransactionPool,

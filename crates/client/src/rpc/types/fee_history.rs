@@ -1,5 +1,9 @@
 use std::collections::VecDeque;
 
+use cfx_parameters::block::{
+    cspace_block_gas_limit_after_cip1559,
+    espace_block_gas_limit_of_enabled_block,
+};
 use cfx_types::{Space, SpaceMap, U256};
 use primitives::{transaction::SignedTransaction, BlockHeader};
 
@@ -55,8 +59,12 @@ impl FeeHistory {
         self.base_fee_per_gas.push_front(base_price);
 
         let gas_limit: U256 = match space {
-            Space::Native => pivot_header.gas_limit() * 9 / 10,
-            Space::Ethereum => pivot_header.gas_limit() * 5 / 10,
+            Space::Native => cspace_block_gas_limit_after_cip1559(
+                pivot_header.gas_limit().to_owned(),
+            ),
+            Space::Ethereum => espace_block_gas_limit_of_enabled_block(
+                pivot_header.gas_limit().to_owned(),
+            ),
         };
 
         let gas_used = transactions

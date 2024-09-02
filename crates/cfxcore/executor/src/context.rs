@@ -584,7 +584,7 @@ impl<'a> Context<'a> {
 mod tests {
     use super::{FrameLocal, OriginInfo};
     use crate::{
-        machine::{new_machine_with_builtin, Machine},
+        machine::Machine,
         stack::{CallStackInfo, OwnedRuntimeRes},
         state::{get_state_for_genesis_write, State},
         substate::Substate,
@@ -645,7 +645,7 @@ mod tests {
     impl TestSetup {
         fn new() -> Self {
             let state = get_state_for_genesis_write();
-            let machine = new_machine_with_builtin(
+            let machine = Machine::new_with_builtin(
                 Default::default(),
                 Default::default(),
             );

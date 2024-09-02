@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 primitives = { workspace = true }
 cfx-types = { workspace = true }
-rlp = "0.4.0"
+rlp = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
 sqlite = "0.25"
 strfmt = "0.1"
