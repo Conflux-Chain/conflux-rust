@@ -178,12 +178,8 @@ impl BlockHeader {
         )
     }
 
-    pub fn espace_gas_limit(&self, block_ratio: u64) -> U256 {
-        espace_block_gas_limit(
-            self.height(),
-            block_ratio,
-            self.gas_limit().to_owned(),
-        )
+    pub fn espace_gas_limit(&self, can_pack: bool) -> U256 {
+        espace_block_gas_limit(can_pack, self.gas_limit().to_owned())
     }
 
     /// Get the referee hashes field of the header.

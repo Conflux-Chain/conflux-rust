@@ -234,6 +234,7 @@ pub struct ConsensusGraph {
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
     pub config: ConsensusConfig,
+    pub params: CommonParams,
 }
 
 impl MallocSizeOf for ConsensusGraph {
@@ -258,7 +259,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
-        pos_verifier: Arc<PosVerifier>,
+        pos_verifier: Arc<PosVerifier>, params: CommonParams,
     ) -> Self {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
@@ -302,6 +303,7 @@ impl ConsensusGraph {
             ready_for_mining: AtomicBool::new(false),
             synced_epoch_id: Default::default(),
             config: conf,
+            params,
         };
         graph.update_best_info(false /* ready_for_mining */);
         graph
@@ -322,7 +324,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
-        pos_verifier: Arc<PosVerifier>,
+        pos_verifier: Arc<PosVerifier>, params: CommonParams,
     ) -> Self {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let stable_hash = data_man.get_cur_consensus_era_stable_hash();
@@ -340,6 +342,7 @@ impl ConsensusGraph {
             verification_conf,
             node_type,
             pos_verifier,
+            params,
         )
     }
 
@@ -1963,7 +1966,8 @@ impl ConsensusGraph {
             // note: we only include gas limit for blocks that will pack eSpace
             // tx(multiples of 5)
             total_gas_limit += b.block_header.espace_gas_limit(
-                self.machine_params().evm_transaction_block_ratio,
+                self.params
+                    .can_pack_evm_transaction(b.block_header.height()),
             );
 
             let block_receipts = &exec_info.block_receipts.receipts;
@@ -2127,10 +2131,6 @@ impl ConsensusGraph {
         Ok(StateDb::new(
             self.get_state_by_height_and_hash(height, &hash, space)?,
         ))
-    }
-
-    pub fn machine_params(&self) -> &CommonParams {
-        self.executor.handler.params()
     }
 }
 

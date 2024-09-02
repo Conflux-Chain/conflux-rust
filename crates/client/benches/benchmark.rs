@@ -5,7 +5,7 @@
 use cfx_bytes::Bytes;
 use cfx_executor::{
     executive::{ExecutiveContext, TransactOptions},
-    machine::{new_machine_with_builtin, VmFactory},
+    machine::{Machine, VmFactory},
     state::State,
 };
 use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
@@ -47,8 +47,10 @@ fn txexe_benchmark(c: &mut Criterion) {
         data: Bytes::new(),
     });
     let tx = tx.sign(kp.secret());
-    let machine =
-        new_machine_with_builtin(Default::default(), VmFactory::new(1024 * 32));
+    let machine = Machine::new_with_builtin(
+        Default::default(),
+        VmFactory::new(1024 * 32),
+    );
     let env = Env {
         chain_id: machine.params().chain_id_map(0),
         number: 0,

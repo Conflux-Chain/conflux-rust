@@ -843,8 +843,7 @@ impl TransactionPool {
         let core_gas_limit =
             cspace_block_gas_limit_after_cip1559(block_gas_limit);
         let eth_gas_limit = espace_block_gas_limit(
-            current_height,
-            params.evm_transaction_block_ratio,
+            params.can_pack_evm_transaction(current_height),
             block_gas_limit,
         );
 

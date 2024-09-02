@@ -37,7 +37,7 @@ use std::{
 
 #[cfg(test)]
 fn make_byzantium_machine(max_depth: usize) -> Machine {
-    let mut machine = crate::machine::new_machine_with_builtin(
+    let mut machine = crate::machine::Machine::new_with_builtin(
         Default::default(),
         VmFactory::new(1024 * 32),
     );

@@ -9,9 +9,9 @@ use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 use cfx_parameters::{
-    block::CIP1559_CORE_TRANSACTION_GAS_RATIO,
+    block::cspace_block_gas_limit_after_cip1559,
     consensus_internal::ELASTICITY_MULTIPLIER,
-    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT, RATIO_BASE_TEN,
+    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 
 use cfx_statedb::Result as StateDbResult;
@@ -1227,10 +1227,9 @@ impl TransactionPoolInner {
         };
 
         {
-            let gas_target = block_gas_limit
-                * CIP1559_CORE_TRANSACTION_GAS_RATIO
-                / RATIO_BASE_TEN
-                / ELASTICITY_MULTIPLIER;
+            let gas_target =
+                cspace_block_gas_limit_after_cip1559(block_gas_limit)
+                    / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Native];
             let min_base_price =
                 machine.params().min_base_price()[Space::Native];
@@ -1532,7 +1531,7 @@ mod tests {
         DeferredPool, InsertResult, TransactionPoolInner, TxWithReadyInfo,
     };
     use cfx_executor::{
-        machine::{new_machine, Machine, VmFactory},
+        machine::{Machine, VmFactory},
         spec::CommonParams,
     };
     use cfx_parameters::block::{
@@ -1834,8 +1833,7 @@ mod tests {
         let core_gas_limit =
             cspace_block_gas_limit_after_cip1559(block_gas_limit);
         let eth_gas_limit = espace_block_gas_limit(
-            best_epoch_height,
-            params.evm_transaction_block_ratio,
+            params.can_pack_evm_transaction(best_epoch_height),
             block_gas_limit,
         );
 
@@ -1878,7 +1876,7 @@ mod tests {
         let mut params = CommonParams::default();
         params.min_base_price = SpaceMap::new(100, 200).map_all(U256::from);
 
-        let machine = Arc::new(new_machine(params, VmFactory::default()));
+        let machine = Arc::new(Machine::new(params, VmFactory::default()));
 
         let test_block_limit = SpaceMap::new(5400, 3000);
 

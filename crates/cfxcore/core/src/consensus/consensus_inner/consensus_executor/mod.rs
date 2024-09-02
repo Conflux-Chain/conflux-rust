@@ -22,7 +22,6 @@ use parking_lot::{Mutex, RwLock};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use rustc_hex::ToHex;
 
-use cfx_executor::spec::CommonParams;
 use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
@@ -859,8 +858,6 @@ impl ConsensusExecutionHandler {
             },
         }
     }
-
-    pub fn params(&self) -> &CommonParams { &self.machine.params() }
 
     /// Always return `true` for now
     fn handle_execution_work(&self, task: ExecutionTask) -> bool {

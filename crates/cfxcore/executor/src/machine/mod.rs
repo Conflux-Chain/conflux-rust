@@ -31,6 +31,34 @@ pub struct Machine {
 }
 
 impl Machine {
+    pub fn new(params: CommonParams, vm_factory: VmFactory) -> Machine {
+        Machine {
+            params,
+            vm_factory,
+            builtins: Arc::new(BTreeMap::new()),
+            builtins_evm: Arc::new(Default::default()),
+            internal_contracts: Arc::new(InternalContractMap::default()),
+            spec_rules: None,
+        }
+    }
+
+    pub fn new_with_builtin(
+        params: CommonParams, vm_factory: VmFactory,
+    ) -> Machine {
+        let builtin = new_builtin_map(&params, Space::Native);
+        let builtin_evm = new_builtin_map(&params, Space::Ethereum);
+
+        let internal_contracts = InternalContractMap::new(&params);
+        Machine {
+            params,
+            vm_factory,
+            builtins: Arc::new(builtin),
+            builtins_evm: Arc::new(builtin_evm),
+            internal_contracts: Arc::new(internal_contracts),
+            spec_rules: None,
+        }
+    }
+
     pub fn builtin(
         &self, address: &AddressWithSpace, block_number: BlockNumber,
     ) -> Option<&Builtin> {
@@ -84,17 +112,6 @@ impl Machine {
     pub fn vm_factory(&self) -> VmFactory { self.vm_factory.clone() }
 
     pub fn vm_factory_ref(&self) -> &VmFactory { &self.vm_factory }
-}
-
-pub fn new_machine(params: CommonParams, vm_factory: VmFactory) -> Machine {
-    Machine {
-        params,
-        vm_factory,
-        builtins: Arc::new(BTreeMap::new()),
-        builtins_evm: Arc::new(Default::default()),
-        internal_contracts: Arc::new(InternalContractMap::default()),
-        spec_rules: None,
-    }
 }
 
 fn new_builtin_map(
@@ -186,21 +203,4 @@ fn new_builtin_map(
         ),
     );
     btree
-}
-
-pub fn new_machine_with_builtin(
-    params: CommonParams, vm_factory: VmFactory,
-) -> Machine {
-    let builtin = new_builtin_map(&params, Space::Native);
-    let builtin_evm = new_builtin_map(&params, Space::Ethereum);
-
-    let internal_contracts = InternalContractMap::new(&params);
-    Machine {
-        params,
-        vm_factory,
-        builtins: Arc::new(builtin),
-        builtins_evm: Arc::new(builtin_evm),
-        internal_contracts: Arc::new(internal_contracts),
-        spec_rules: None,
-    }
 }

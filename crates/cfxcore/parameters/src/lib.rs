@@ -251,11 +251,15 @@ pub mod block {
     // core space after CIP1559 is enabled. Setting it to N means that only N/10
     // of the block gas limit can be used for core space transactions.
     pub const CIP1559_CORE_TRANSACTION_GAS_RATIO: u64 = 9;
+    // The following parameter controls the ratio of block gas limit for the
+    // espace after CIP1559 is enabled. Setting it to N means that only N/10
+    // of the block gas limit can be used for  espace transactions.
+    pub const CIP1559_ESPACE_TRANSACTION_GAS_RATIO: u64 = 5;
 
     pub fn espace_block_gas_limit(
-        block_height: u64, block_ratio: u64, block_gas_limit: U256,
+        can_pack_espace_tx: bool, block_gas_limit: U256,
     ) -> U256 {
-        if block_height % block_ratio == 0 {
+        if can_pack_espace_tx {
             espace_block_gas_limit_of_enabled_block(block_gas_limit)
         } else {
             U256::zero()
@@ -265,7 +269,8 @@ pub mod block {
     pub fn espace_block_gas_limit_of_enabled_block(
         block_gas_limit: U256,
     ) -> U256 {
-        block_gas_limit / EVM_TRANSACTION_GAS_RATIO
+        block_gas_limit * CIP1559_ESPACE_TRANSACTION_GAS_RATIO
+            / super::RATIO_BASE_TEN
     }
 
     pub fn cspace_block_gas_limit(
