@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    errors::{internal_error_msg, invalid_params_detail, invalid_params_msg},
+    errors::{
+        internal_error_msg, invalid_params_check, invalid_params_detail,
+        invalid_params_msg,
+    },
     types::{
         cfx::{
             check_rpc_address_network, check_two_rpc_address_network_match,
@@ -35,7 +38,7 @@ use cfx_types::{
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     block_data_manager::BlockExecutionResult,
-    rpc_errors::{account_result_to_rpc_result, invalid_params_check},
+    errors::account_result_to_rpc_result,
     state_exposer::STATE_EXPOSER,
     transaction_pool::TransactionPoolError,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
@@ -169,6 +172,7 @@ impl RpcImpl {
                 self.sync.network.get_network_type(),
             ),
         )
+        .map_err(|e| e.into())
     }
 
     /// This function is used to simplify the replacement of current EpochNumber

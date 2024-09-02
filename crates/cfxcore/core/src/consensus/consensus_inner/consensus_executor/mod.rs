@@ -51,7 +51,7 @@ use crate::{
         pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
-    rpc_errors::{invalid_params_check, Result as RpcResult},
+    errors::{invalid_params_check, Result as CoreResult},
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
@@ -637,14 +637,14 @@ impl ConsensusExecutor {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
         request: EstimateRequest,
-    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
+    ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         self.handler.call_virtual(tx, epoch_id, epoch_size, request)
     }
 
     pub fn collect_blocks_geth_trace(
         &self, epoch_id: H256, epoch_num: u64, blocks: &Vec<Arc<Block>>,
         opts: GethDebugTracingOptions, tx_hash: Option<H256>,
-    ) -> RpcResult<Vec<GethTraceWithHash>> {
+    ) -> CoreResult<Vec<GethTraceWithHash>> {
         self.handler.collect_blocks_geth_trace(
             epoch_id, epoch_num, blocks, opts, tx_hash,
         )
@@ -1579,7 +1579,7 @@ impl ConsensusExecutionHandler {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
         request: EstimateRequest,
-    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
+    ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
             bail!("invalid epoch id");
@@ -1672,7 +1672,7 @@ impl ConsensusExecutionHandler {
     pub fn collect_blocks_geth_trace(
         &self, epoch_id: H256, epoch_num: u64, blocks: &Vec<Arc<Block>>,
         opts: GethDebugTracingOptions, tx_hash: Option<H256>,
-    ) -> RpcResult<Vec<GethTraceWithHash>> {
+    ) -> CoreResult<Vec<GethTraceWithHash>> {
         let state_space = None;
         let mut state = self.get_state_by_epoch_id_and_space(
             &epoch_id,

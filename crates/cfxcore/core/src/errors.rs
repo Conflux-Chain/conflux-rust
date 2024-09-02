@@ -1,91 +1,94 @@
 // Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+use thiserror::Error;
 
 pub const EXCEPTION_ERROR: i64 = -32016;
 
-error_chain! {
-    links {
-    }
-
-    foreign_links {
-        FilterError(FilterError);
-        Storage(StorageError);
-        StateDb(StateDbError);
-        Decoder(DecoderError);
-        LightProtocol(LightProtocolError);
-    }
-
-    errors {
-        JsonRpcError(e: JsonRpcError) {
-            description("JsonRpcError directly constructed to return to Rpc peer.")
-            display("JsonRpcError directly constructed to return to Rpc peer. Error: {}", e)
-        }
-
-        InvalidParam(param: String, details: String) {
-            description("Error as jsonrpc error InvalidParam.")
-            display("Jsonrpc error InvalidParam {}: {}.", param, details)
-        }
-
-        Custom(details: String) {
-            description("Server custom error")
-            display("error detail: {}", details)
-        }
-    }
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    FilterError(#[from] FilterError),
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+    #[error(transparent)]
+    StateDb(#[from] StateDbError),
+    #[error(transparent)]
+    Decoder(#[from] DecoderError),
+    #[error(transparent)]
+    LightProtocol(#[from] LightProtocolError),
+    #[error(
+        "JsonRpcError directly constructed to return to Rpc peer. Error: {0}"
+    )]
+    JsonRpcError(#[from] JsonRpcError),
+    #[error("Jsonrpc error InvalidParam {0}: {1}.")]
+    InvalidParam(String, String),
+    #[error("Custom error detail: {0}")]
+    Custom(String),
+    #[error("Msg error detail: {0}")]
+    Msg(String),
 }
 
 pub type BoxFuture<T> = Box<
     dyn jsonrpc_core::futures::future::Future<Item = T, Error = Error> + Send,
 >;
 
-impl From<JsonRpcError> for Error {
-    fn from(j: JsonRpcError) -> Self { ErrorKind::JsonRpcError(j).into() }
-}
+pub type Result<T> = std::result::Result<T, Error>;
 
 impl From<Error> for JsonRpcError {
     fn from(e: Error) -> JsonRpcError {
-        match e.0 {
-            ErrorKind::JsonRpcError(j) => j,
-            ErrorKind::InvalidParam(param, details) => {
-                invalid_params(&param, details)
+        match e {
+            Error::JsonRpcError(j) => j,
+            Error::InvalidParam(param, details) => {
+                JsonRpcError {
+                    code: jsonrpc_core::ErrorCode::InvalidParams,
+                    message: format!("Invalid parameters: {}", param),
+                    data: Some(Value::String(format!("{:?}", details))),
+                }
             }
-            ErrorKind::Msg(_)
-            | ErrorKind::Decoder(_)
+            Error::Msg(_)
+            | Error::Decoder(_)
 
             // TODO(thegaram): consider returning InvalidParams instead
-            | ErrorKind::FilterError(_)
+            | Error::FilterError(_)
 
             // TODO(thegaram): make error conversion more fine-grained here
-            | ErrorKind::LightProtocol(_)
-            | ErrorKind::StateDb(_)
-            | ErrorKind::Storage(_)
-            | ErrorKind::Custom(_) => JsonRpcError {
+            | Error::LightProtocol(_)
+            | Error::StateDb(_)
+            | Error::Storage(_)
+            | Error::Custom(_) => JsonRpcError {
                 code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
                 message: format!("Error processing request: {}", e),
                 data: None,
             },
-            // We exhausted all possible ErrorKinds here, however
-            // https://stackoverflow.com/questions/36440021/whats-purpose-of-errorkind-nonexhaustive
-            ErrorKind::__Nonexhaustive {} => unreachable!(),
         }
     }
 }
 
-pub fn invalid_params<T: Debug>(param: &str, details: T) -> JsonRpcError {
-    JsonRpcError {
+impl From<&str> for Error {
+    fn from(s: &str) -> Error { Error::Msg(s.into()) }
+}
+
+impl From<String> for Error {
+    fn from(s: String) -> Error { Error::Msg(s) }
+}
+
+pub(crate) fn invalid_params<T: Debug>(param: &str, details: T) -> Error {
+    Error::JsonRpcError(JsonRpcError {
         code: jsonrpc_core::ErrorCode::InvalidParams,
         message: format!("Invalid parameters: {}", param),
         data: Some(Value::String(format!("{:?}", details))),
-    }
+    })
+    .into()
 }
 
-pub fn invalid_params_check<T, E: Display>(
+pub(crate) fn invalid_params_check<T, E: Display>(
     param: &str, r: std::result::Result<T, E>,
 ) -> Result<T> {
     match r {
         Ok(t) => Ok(t),
         Err(e) => {
-            Err(ErrorKind::InvalidParam(param.into(), format!("{}", e)).into())
+            Err(Error::InvalidParam(param.into(), format!("{}", e)).into())
         }
     }
 }

@@ -18,10 +18,10 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::rpc::errors::invalid_params;
 use alloy_rpc_types::TransactionInput;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_types::{Address, AddressSpaceUtil, H160, U256, U64};
-use cfxcore::rpc_errors::invalid_params;
 use jsonrpc_core::Result as JsonRpcResult;
 use primitives::{
     transaction::{

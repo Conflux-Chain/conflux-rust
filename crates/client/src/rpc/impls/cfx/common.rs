@@ -10,6 +10,7 @@ use std::{
 };
 
 use crate::rpc::{
+    errors::invalid_params_check,
     impls::pos::hash_value_to_h256,
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
@@ -19,7 +20,7 @@ use crate::rpc::{
         RpcAddress, Status as RpcStatus, Transaction as RpcTransaction,
         TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo, U64 as HexU64,
     },
-    RpcErrorKind, RpcResult,
+    RpcResult,
 };
 
 use bigdecimal::BigDecimal;
@@ -40,8 +41,8 @@ use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, genesis_block::register_transaction,
-    rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
+    consensus::pos_handler::PosVerifier, errors::Error as CoreError,
+    genesis_block::register_transaction, BlockDataManager, ConsensusGraph,
     ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
@@ -194,6 +195,7 @@ impl RpcImpl {
                 self.network.get_network_type(),
             ),
         )
+        .map_err(|e| e.into())
     }
 }
 
@@ -907,7 +909,7 @@ impl RpcImpl {
         info!("RPC Request: pos_start_voting, initialize={}", initialize);
         self.pos_handler.start_voting(initialize).map_err(|e| {
             warn!("start_voting: err={:?}", e);
-            RpcErrorKind::Custom(e.to_string()).into()
+            CoreError::Custom(e.to_string())
         })
     }
 
@@ -915,14 +917,14 @@ impl RpcImpl {
         info!("RPC Request: pos_stop_voting");
         self.pos_handler.stop_voting().map_err(|e| {
             warn!("stop_voting: err={:?}", e);
-            RpcErrorKind::Custom(e.to_string()).into()
+            CoreError::Custom(e.to_string())
         })
     }
 
     pub fn pos_voting_status(&self) -> RpcResult<bool> {
         self.pos_handler.voting_status().map_err(|e| {
             warn!("voting_status: err={:?}", e);
-            RpcErrorKind::Custom(e.to_string()).into()
+            CoreError::Custom(e.to_string())
         })
     }
 

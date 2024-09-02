@@ -8,10 +8,10 @@ use cfx_types::{
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::ConsensusConfig,
+    errors::account_result_to_rpc_result,
     light_protocol::{
         self, query_service::TxInfo, Error as LightError, ErrorKind,
     },
-    rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     verification::EpochReceiptProof,
     ConsensusGraph, ConsensusGraphTrait, LightQueryService, PeerInfo,
     SharedConsensusGraph,
@@ -34,7 +34,7 @@ use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use crate::{
     common::delegate_convert,
     rpc::{
-        errors,
+        errors::{self, invalid_params_check},
         impls::common::{self, RpcImpl as CommonImpl},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
@@ -56,9 +56,7 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
-use cfxcore::{
-    light_protocol::QueryService, rpc_errors::ErrorKind::LightProtocol,
-};
+use cfxcore::{errors::Error::LightProtocol, light_protocol::QueryService};
 use diem_types::account_address::AccountAddress;
 
 // macro for reducing boilerplate for unsupported methods
@@ -119,6 +117,7 @@ impl RpcImpl {
             "address",
             check_rpc_address_network(Some(network), light.get_network_type()),
         )
+        .map_err(|e| e.into())
     }
 
     fn get_epoch_number_with_pivot_check(
@@ -744,6 +743,7 @@ impl RpcImpl {
                 .get_height_from_epoch_number(epoch.into())
                 .map(|height| height.into()),
         )
+        .map_err(|e| e.into())
     }
 
     pub fn next_nonce(
@@ -1183,7 +1183,7 @@ async fn fetch_block_for_fee_history(
         dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
     >,
     light: Arc<QueryService>, height: u64,
-) -> cfxcore::rpc_errors::Result<primitives::Block> {
+) -> cfxcore::errors::Result<primitives::Block> {
     let hash = consensus_graph
         .as_any()
         .downcast_ref::<ConsensusGraph>()

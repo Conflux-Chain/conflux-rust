@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    errors::invalid_params,
+    errors::{invalid_params, invalid_params_check},
     types::{
         address::RpcAddress,
         cfx::{
@@ -22,7 +22,6 @@ use cfx_parameters::{
     RATIO_BASE_TEN,
 };
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
-use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use primitives::{
@@ -107,6 +106,7 @@ impl TransactionRequest {
             param_name,
             check_rpc_address_network(rpc_request_network, expected),
         )
+        .map_err(|e| e.into())
     }
 
     pub fn sign_with(

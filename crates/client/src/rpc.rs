@@ -35,12 +35,11 @@ pub mod rpc_apis;
 mod traits;
 pub mod types;
 
-pub use cfxcore::rpc_errors::{
-    invalid_params, invalid_params_check, BoxFuture as RpcBoxFuture,
-    Error as RpcError, ErrorKind as RpcErrorKind,
-    ErrorKind::JsonRpcError as JsonRpcErrorKind, Result as RpcResult,
+pub use cfxcore::errors::{
+    BoxFuture as RpcBoxFuture, Error as RpcError,
+    Error::JsonRpcError as JsonRpcErrorKind, Result as RpcResult,
 };
-pub use errors::error_codes;
+pub use errors::{error_codes, invalid_params};
 
 use self::{
     impls::{

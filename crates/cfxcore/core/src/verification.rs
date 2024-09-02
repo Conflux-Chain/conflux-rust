@@ -4,7 +4,7 @@
 
 use crate::{
     consensus::pos_handler::PosVerifier,
-    error::{BlockError, Error},
+    core_error::{BlockError, CoreError as Error},
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
 };
