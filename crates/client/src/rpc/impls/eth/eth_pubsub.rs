@@ -564,7 +564,7 @@ impl PubSub for PubSubClient {
             (pubsub::Kind::Logs, Some(pubsub::Params::Logs(filter))) => {
                 info!("eth pubsub logs with filter");
                 match filter.into_primitive(self.consensus.clone()) {
-                    Err(e) => e,
+                    Err(e) => e.into(),
                     Ok(filter) => {
                         let id = self
                             .logs_subscribers

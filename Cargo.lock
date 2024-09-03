@@ -1280,6 +1280,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-rpc-eth-types"
+version = "2.4.0"
+dependencies = [
+ "alloy-rpc-types",
+ "cfx-parameters",
+ "cfx-types",
+ "cfxcore",
+ "jsonrpc-core",
+ "primitives",
+ "rlp 0.4.6",
+ "rustc-hex",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "cfx-statedb"
 version = "1.0.0"
 dependencies = [
@@ -1738,6 +1755,7 @@ dependencies = [
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
+ "cfx-rpc-eth-types",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",

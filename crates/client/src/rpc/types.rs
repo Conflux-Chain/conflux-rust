@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod bytes;
 pub mod cfx;
 pub mod eth;
 mod fee_history;
@@ -14,8 +13,9 @@ mod trace;
 mod trace_filter;
 mod variadic_u64;
 
+pub use cfx_rpc_eth_types::Bytes;
+
 pub use self::{
-    bytes::Bytes,
     cfx::{
         address,
         address::{check_two_rpc_address_network_match, RpcAddress},

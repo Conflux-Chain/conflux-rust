@@ -18,17 +18,14 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::{
-    errors::{internal_error, invalid_params},
-    types::Bytes,
-};
+use crate::{Bytes, Error};
 use cfx_types::{H160, H256, U256};
 use cfxcore::SharedConsensusGraph;
-use jsonrpc_core::Error as RpcError;
 use primitives::{
     log_entry::{LocalizedLogEntry, LogEntry},
     EpochNumber,
 };
+use serde::Serialize;
 
 /// Log
 #[derive(Debug, Serialize, PartialEq, Eq, Hash, Clone)]
@@ -60,18 +57,27 @@ pub struct Log {
 impl Log {
     pub fn try_from_localized(
         e: LocalizedLogEntry, consensus: SharedConsensusGraph, removed: bool,
-    ) -> Result<Log, RpcError> {
+    ) -> Result<Log, Error> {
         // find pivot hash
-        let epoch = consensus
-            .get_block_epoch_number(&e.block_hash)
-            .ok_or(invalid_params("blockHash", "Unknown block"))?;
+        let epoch = consensus.get_block_epoch_number(&e.block_hash).ok_or(
+            Error::InvalidParams(
+                "blockHash".to_string(),
+                "Unknown block".to_string(),
+            ),
+        )?;
 
         let hashes = consensus
             .get_block_hashes_by_epoch(EpochNumber::Number(epoch))
-            .map_err(|_| invalid_params("blockHash", "Unknown block"))?;
+            .map_err(|_| {
+                Error::InvalidParams(
+                    "blockHash".to_string(),
+                    "Unknown block".to_string(),
+                )
+            })?;
 
-        let pivot_hash =
-            hashes.last().ok_or(internal_error("Inconsistent state"))?;
+        let pivot_hash = hashes
+            .last()
+            .ok_or(Error::InternalError("Inconsistent state".to_string()))?;
 
         // construct RPC log
         Ok(Log {
@@ -104,42 +110,3 @@ impl Log {
         // })
     }
 }
-
-/*
-#[cfg(test)]
-mod tests {
-    use ethereum_types::{H160, H256, U256};
-    use serde_json;
-    use std::str::FromStr;
-    use v1::types::Log;
-
-    #[test]
-    fn log_serialization() {
-        let s = r#"{"address":"0x33990122638b9132ca29c723bdf037f1a891a70c","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","blockNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1","type":"mined","removed":false}"#;
-
-        let log = Log {
-            address: H160::from_str("33990122638b9132ca29c723bdf037f1a891a70c").unwrap(),
-            topics: vec![
-                H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc")
-                    .unwrap(),
-                H256::from_str("4861736852656700000000000000000000000000000000000000000000000000")
-                    .unwrap(),
-            ],
-            data: vec![].into(),
-            block_hash: Some(
-                H256::from_str("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5")
-                    .unwrap(),
-            ),
-            block_number: Some(U256::from(0x4510c)),
-            transaction_hash: Some(H256::default()),
-            transaction_index: Some(U256::default()),
-            transaction_log_index: Some(1.into()),
-            log_index: Some(U256::from(1)),
-            removed: false,
-        };
-
-        let serialized = serde_json::to_string(&log).unwrap();
-        assert_eq!(serialized, s);
-    }
-}
- */

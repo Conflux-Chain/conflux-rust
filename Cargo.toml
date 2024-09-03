@@ -54,6 +54,7 @@ members = [
     "crates/util/version",
     "crates/serde_utils",
     "crates/cfxcore/geth-tracer",
+    "crates/rpc/rpc_eth_types",
 ]
 
 resolver = "2"
@@ -139,6 +140,7 @@ cfx-vm-interpreter = { path = "./crates/cfxcore/vm-interpreter" }
 geth-tracer = { path = "./crates/cfxcore/geth-tracer" }
 cfx-vm-types = { path = "./crates/cfxcore/vm-types" }
 cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
+cfx-rpc-eth-types = { path = "./crates/rpc/rpc_eth_types" }
 
 serde = { version = "1.0", features = ["derive", "alloc"] }
 serde_json = "1.0"
@@ -151,6 +153,7 @@ keccak-hash = "0.5"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 hex = "0.4.3"
+rustc-hex = "2.1"
 
 alloy-sol-types = "0.7.2"
 alloy-primitives = "0.7.2"

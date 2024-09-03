@@ -18,8 +18,9 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::types::eth::Log;
+use crate::Log;
 use cfx_types::{Bloom as H2048, H160, H256, U256, U64};
+use serde::Serialize;
 
 /// Receipt
 #[derive(Debug, Serialize)]

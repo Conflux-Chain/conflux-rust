@@ -18,7 +18,7 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::types::{eth::Transaction, Bytes};
+use crate::{Bytes, Transaction};
 use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
 use cfxcore::consensus::PhantomBlock;
 use primitives::receipt::EVM_SPACE_SUCCESS;
@@ -353,7 +353,7 @@ impl Header {
 #[cfg(test)]
 mod tests {
     use super::{Block, BlockTransactions};
-    use crate::rpc::types::Bytes;
+    use crate::Bytes;
     use cfx_types::{Bloom as H2048, H160, H256, H64, U256};
     //     use super::{Block, BlockTransactions, Header, RichBlock, RichHeader};
     //     use ethereum_types::{Bloom as H2048, H160, H256, H64, U256};

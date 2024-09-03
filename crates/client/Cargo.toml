@@ -56,7 +56,7 @@ rand = "0.7.2"
 rand_08 = {package = "rand", version = "0.8.0"}
 kvdb-rocksdb = { workspace = true }
 tempdir = "0.3"
-rustc-hex = "2.1"
+rustc-hex = { workspace = true }
 threadpool = "1.0"
 metrics = { workspace = true }
 delegate = { workspace = true }
@@ -109,6 +109,7 @@ alloy-sol-types = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
 alloy-rpc-types = { workspace = true }
 revm = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"
