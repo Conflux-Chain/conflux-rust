@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 cfx-types = { workspace = true }
-keccak-hash = "0.5"
+keccak-hash = { workspace = true }
 solidity-abi-derive = { workspace = true }
 
 [dev-dependencies]

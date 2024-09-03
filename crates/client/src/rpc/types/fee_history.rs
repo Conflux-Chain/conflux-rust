@@ -1,6 +1,11 @@
+use std::collections::VecDeque;
+
+use cfx_parameters::block::{
+    cspace_block_gas_limit_after_cip1559,
+    espace_block_gas_limit_of_enabled_block,
+};
 use cfx_types::{Space, SpaceMap, H256, U256};
 use primitives::{transaction::SignedTransaction, BlockHeader};
-use std::collections::VecDeque;
 
 use super::CfxFeeHistory;
 
@@ -53,7 +58,15 @@ impl FeeHistory {
             };
         self.base_fee_per_gas.push_front(base_price);
 
-        let gas_limit = pivot_header.space_gas_limit(space);
+        let gas_limit: U256 = match space {
+            Space::Native => cspace_block_gas_limit_after_cip1559(
+                pivot_header.gas_limit().to_owned(),
+            ),
+            Space::Ethereum => espace_block_gas_limit_of_enabled_block(
+                pivot_header.gas_limit().to_owned(),
+            ),
+        };
+
         let gas_used = transactions
             .clone()
             .map(|x| *x.gas_limit())
@@ -154,7 +167,11 @@ impl FeeHistoryEntry {
         space: Space, pivot_header: &BlockHeader, transactions: I,
     ) -> Self
     where I: Clone + Iterator<Item = &'a SignedTransaction> {
-        let gas_limit: u64 = pivot_header.space_gas_limit(space).as_u64();
+        let gas_limit: u64 = if space == Space::Native {
+            pivot_header.core_space_gas_limit().as_u64()
+        } else {
+            pivot_header.espace_gas_limit(true).as_u64()
+        };
 
         let gas_used = transactions
             .clone()

@@ -26,7 +26,7 @@ use crate::rpc::{
         limit_logs, PollFilter, PollManager, SyncPollFilter,
         MAX_BLOCK_HISTORY_SIZE,
     },
-    traits::eth_space::eth::EthFilter,
+    traits::eth_space::eth_filter::EthFilter,
     types::eth::{BlockNumber, EthRpcLogFilter, FilterChanges, Log},
 };
 use cfxcore::rpc_errors::Error as CfxRpcError;

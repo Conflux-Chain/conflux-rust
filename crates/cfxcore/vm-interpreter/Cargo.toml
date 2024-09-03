@@ -11,7 +11,7 @@ bit-set = "0.4"
 cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
-keccak-hash = "0.5"
+keccak-hash = { workspace = true }
 lazy_static = "1.4"
 log = "0.4"
 malloc_size_of = { workspace = true }

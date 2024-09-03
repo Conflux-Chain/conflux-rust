@@ -81,7 +81,7 @@ class Web3Base(ConfluxTestFramework):
             "to": None,
             "value": 0,
             "gasPrice": 1,
-            "gas": 500000,
+            "gas": 5000000,
             "nonce": nonce,
             "chainId": int(self.conf_parameters["evm_chain_id"], 10),
             "data": bytecode,
@@ -97,6 +97,21 @@ class Web3Base(ConfluxTestFramework):
         assert_equal(receipt["status"], 1)
         addr = receipt["contractAddress"]
         return addr
+    
+    def deploy_evm_space_erc20(self):
+        addr = self.deploy_evm_space("../contracts/erc20_bytecode.dat")
+        return addr
+    
+    def load_abi_from_contracts_folder(self, name):
+        abi_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "contracts", name + "_abi.json")
+        with open(abi_file, 'r') as abi_file:
+            abi = json.loads(abi_file.read())
+            return abi
+        
+    def load_contract(self, addr, name):
+        abi = self.load_abi_from_contracts_folder(name)
+        return self.w3.eth.contract(address=addr, abi=abi)
+
 
     def run_test(self):
         self.cfxPrivkey = default_config['GENESIS_PRI_KEY']

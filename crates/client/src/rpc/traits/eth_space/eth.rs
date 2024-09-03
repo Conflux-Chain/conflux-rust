@@ -20,15 +20,14 @@
 
 //! Eth rpc interface.
 use crate::rpc::types::U64 as HexU64;
-use cfx_types::{H128, H160, H256, U256, U64};
+use cfx_types::{H160, H256, U256, U64};
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 
 use crate::rpc::types::{
     eth::{
-        AccountPendingTransactions, Block, BlockNumber, EthRpcLogFilter,
-        FilterChanges, Log, Receipt, SyncStatus, Transaction,
-        TransactionRequest,
+        AccountPendingTransactions, Block, BlockNumber, EthRpcLogFilter, Log,
+        Receipt, SyncStatus, Transaction, TransactionRequest,
     },
     Bytes, FeeHistory, Index,
 };
@@ -96,11 +95,6 @@ pub trait Eth {
         &self, address: H160, block: Option<BlockNumber>,
     ) -> Result<U256>;
 
-    // /// Returns the account- and storage-values of the specified account
-    // including the Merkle-proof #[rpc(name = "eth_getProof")]
-    // fn proof(&self, _: H160, _: Vec<H256>, _: Option<BlockNumber>) ->
-    // BoxFuture<EthAccount>;
-
     /// Returns content of the storage at given address.
     #[rpc(name = "eth_getStorageAt")]
     fn storage_at(
@@ -165,6 +159,7 @@ pub trait Eth {
     fn submit_transaction(&self, transaction: Bytes) -> Result<H256>;
 
     /// Call contract, returning the output data.
+    /// TODO support state_overrides and block_overrides
     #[rpc(name = "eth_call")]
     fn call(
         &self, transaction: TransactionRequest, block: Option<BlockNumber>,
@@ -212,37 +207,9 @@ pub trait Eth {
         &self, block: BlockNumber, _: Index,
     ) -> Result<Option<Block>>;
 
-    // /// Returns available compilers.
-    // /// @deprecated
-    // #[rpc(name = "eth_getCompilers")]
-    // fn compilers(&self) -> Result<Vec<String>>;
-    //
-    // /// Compiles lll code.
-    // /// @deprecated
-    // #[rpc(name = "eth_compileLLL")]
-    // fn compile_lll(&self, _: String) -> Result<Bytes>;
-    //
-    // /// Compiles solidity.
-    // /// @deprecated
-    // #[rpc(name = "eth_compileSolidity")]
-    // fn compile_solidity(&self, _: String) -> Result<Bytes>;
-    //
-    // /// Compiles serpent.
-    // /// @deprecated
-    // #[rpc(name = "eth_compileSerpent")]
-    // fn compile_serpent(&self, _: String) -> Result<Bytes>;
-
     /// Returns logs matching given filter object.
     #[rpc(name = "eth_getLogs")]
     fn logs(&self, filter: EthRpcLogFilter) -> Result<Vec<Log>>;
-
-    // /// Returns the hash of the current block, the seedHash, and the boundary
-    // condition to be met. #[rpc(name = "eth_getWork")]
-    // fn work(&self, _: Option<u64>) -> Result<Work>;
-
-    // /// Used for submitting a proof-of-work solution.
-    // #[rpc(name = "eth_submitWork")]
-    // fn submit_work(&self, _: H64, _: H256, _: H256) -> Result<bool>;
 
     /// Used for submitting mining hashrate.
     #[rpc(name = "eth_submitHashrate")]
@@ -261,32 +228,4 @@ pub trait Eth {
         &self, address: H160, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
     ) -> Result<AccountPendingTransactions>;
-}
-
-/// Eth filters rpc api (polling).
-#[rpc(server)]
-pub trait EthFilter {
-    /// Returns id of new filter.
-    #[rpc(name = "eth_newFilter")]
-    fn new_filter(&self, filter: EthRpcLogFilter) -> Result<H128>;
-
-    /// Returns id of new block filter.
-    #[rpc(name = "eth_newBlockFilter")]
-    fn new_block_filter(&self) -> Result<H128>;
-
-    /// Returns id of new block filter.
-    #[rpc(name = "eth_newPendingTransactionFilter")]
-    fn new_pending_transaction_filter(&self) -> Result<H128>;
-
-    /// Returns filter changes since last poll.
-    #[rpc(name = "eth_getFilterChanges")]
-    fn filter_changes(&self, identifier: H128) -> Result<FilterChanges>;
-
-    /// Returns all logs matching given filter (in a range 'from' - 'to').
-    #[rpc(name = "eth_getFilterLogs")]
-    fn filter_logs(&self, identifier: H128) -> Result<Vec<Log>>;
-
-    /// Uninstalls filter.
-    #[rpc(name = "eth_uninstallFilter")]
-    fn uninstall_filter(&self, identifier: H128) -> Result<bool>;
 }

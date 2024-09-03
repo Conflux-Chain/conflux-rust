@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 cfx-types = { workspace = true }
-keccak-hash = "0.5"
+keccak-hash = { workspace = true }
 jsonrpc-core = "15.1.0"
 jsonrpc-tcp-server = "15.1.0"
 log = "0.4"

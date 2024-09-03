@@ -88,6 +88,8 @@ class Eip1559Test(Web3Base):
 
         tx = self.w3.eth.get_transaction(return_tx_hash)
 
+        assert_equal(Web3.toHex(tx["v"]), tx["yParity"])
+
         return tx, receipt
     
     def send_large_cheap_transactions(self):
