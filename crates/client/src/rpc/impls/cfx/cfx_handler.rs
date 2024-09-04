@@ -1479,8 +1479,7 @@ impl RpcImpl {
         let estimate_request = EstimateRequest {
             has_sender: request.from.is_some(),
             has_gas_limit: request.gas.is_some(),
-            has_gas_price: request.gas_price.is_some()
-                || request.max_priority_fee_per_gas.is_some(),
+            has_gas_price: request.has_gas_price(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: request.storage_limit.is_some(),
         };

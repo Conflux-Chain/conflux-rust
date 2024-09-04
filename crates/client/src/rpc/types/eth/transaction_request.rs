@@ -73,6 +73,29 @@ impl TransactionRequest {
         }
     }
 
+    pub fn transaction_type(&self) -> u8 {
+        let request = self;
+        if request.transaction_type.is_some() {
+            request.transaction_type.unwrap().as_usize() as u8
+        } else {
+            if request.max_fee_per_gas.is_some()
+                || request.max_priority_fee_per_gas.is_some()
+            {
+                EIP1559_TYPE
+            } else if request.access_list.is_some() {
+                EIP2930_TYPE
+            } else {
+                LEGACY_TX_TYPE
+            }
+        }
+    }
+
+    pub fn has_gas_price(&self) -> bool {
+        self.gas_price.is_some()
+            || self.max_fee_per_gas.is_some()
+            || self.max_priority_fee_per_gas.is_some()
+    }
+
     pub fn sign_call(
         self, chain_id: u32, max_gas: Option<U256>,
     ) -> JsonRpcResult<SignedTransaction> {
@@ -91,18 +114,7 @@ impl TransactionRequest {
             request.to.map_or(Action::Create, |addr| Action::Call(addr));
         let value = request.value.unwrap_or_default();
 
-        let default_type_id = if request.max_fee_per_gas.is_some()
-            || request.max_priority_fee_per_gas.is_some()
-        {
-            EIP1559_TYPE
-        } else if request.access_list.is_some() {
-            EIP2930_TYPE
-        } else {
-            LEGACY_TX_TYPE
-        };
-        let transaction_type = request
-            .transaction_type
-            .unwrap_or(U64::from(default_type_id));
+        let transaction_type = request.transaction_type();
 
         let gas_price = request.gas_price.unwrap_or(1.into());
         let max_fee_per_gas = request
@@ -119,7 +131,7 @@ impl TransactionRequest {
             .unwrap_or_default()
             .into();
 
-        let transaction = match transaction_type.as_usize() as u8 {
+        let transaction = match transaction_type {
             LEGACY_TX_TYPE => Eip155(Eip155Transaction {
                 nonce,
                 gas_price,
