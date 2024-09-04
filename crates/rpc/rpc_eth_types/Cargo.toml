@@ -24,4 +24,5 @@ cfxcore = { workspace = true }
 rlp = { workspace = true }
 cfx-parameters = { workspace = true }
 alloy-rpc-types = { workspace = true }
+serde-utils = { workspace = true }
 

@@ -11,9 +11,8 @@ mod provenance;
 pub mod pubsub;
 mod trace;
 mod trace_filter;
-mod variadic_u64;
 
-pub use cfx_rpc_eth_types::Bytes;
+pub use cfx_rpc_eth_types::{Bytes, U64};
 
 pub use self::{
     cfx::{
@@ -54,5 +53,4 @@ pub use self::{
         LocalizedTransactionTrace,
     },
     trace_filter::TraceFilter,
-    variadic_u64::U64,
 };

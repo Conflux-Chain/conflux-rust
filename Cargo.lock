@@ -1292,6 +1292,7 @@ dependencies = [
  "rlp 0.4.6",
  "rustc-hex",
  "serde",
+ "serde-utils",
  "serde_json",
  "thiserror",
 ]
