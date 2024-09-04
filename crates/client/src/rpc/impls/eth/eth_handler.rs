@@ -23,7 +23,7 @@ use cfx_execute_helper::estimation::{
     decode_error, EstimateExt, EstimateRequest,
 };
 use cfx_executor::executive::{
-    revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
+    string_revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_statedb::StateDbExt;
@@ -813,7 +813,7 @@ impl Eth for EthHandler {
             ) => bail!(geth_call_execution_error(
                 format!(
                     "execution reverted: {}",
-                    revert_reason_decode(&executed.output)
+                    string_revert_reason_decode(&executed.output)
                 ),
                 format!("0x{}", executed.output.to_hex::<String>())
             )),

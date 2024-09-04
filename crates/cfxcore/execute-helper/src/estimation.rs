@@ -1,7 +1,8 @@
 use cfx_executor::{
     executive::{
-        revert_reason_decode, ChargeCollateral, Executed, ExecutionError,
-        ExecutionOutcome, ExecutiveContext, TransactOptions, TransactSettings,
+        string_revert_reason_decode, ChargeCollateral, Executed,
+        ExecutionError, ExecutionOutcome, ExecutiveContext, TransactOptions,
+        TransactSettings,
     },
     machine::Machine,
     state::{CleanupMode, State},
@@ -427,7 +428,7 @@ where F: Fn(&Address) -> Addr {
         .collect::<Vec<String>>();
 
     // Decode revert error
-    let revert_error = revert_reason_decode(&executed.output);
+    let revert_error = string_revert_reason_decode(&executed.output);
     let revert_error = if !revert_error.is_empty() {
         format!(": {}.", revert_error)
     } else {
