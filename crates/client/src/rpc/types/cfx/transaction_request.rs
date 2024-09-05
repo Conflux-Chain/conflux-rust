@@ -12,7 +12,7 @@ use crate::rpc::{
         },
         Bytes,
     },
-    RpcResult,
+    CoreResult,
 };
 use cfx_addr::Network;
 use cfx_parameters::{
@@ -94,7 +94,7 @@ pub struct CheckBalanceAgainstTransactionResponse {
 impl TransactionRequest {
     pub fn check_rpc_address_network(
         &self, param_name: &str, expected: &Network,
-    ) -> RpcResult<()> {
+    ) -> CoreResult<()> {
         let rpc_request_network = invalid_params_check(
             param_name,
             check_two_rpc_address_network_match(
@@ -112,7 +112,7 @@ impl TransactionRequest {
     pub fn sign_with(
         self, epoch_height: u64, chain_id: u32, password: Option<String>,
         accounts: Arc<AccountProvider>,
-    ) -> RpcResult<TransactionWithSignature> {
+    ) -> CoreResult<TransactionWithSignature> {
         let gas = self.gas.ok_or("should have gas")?;
         let nonce = self.nonce.ok_or("should have nonce")?;
         let action = self.to.map_or(Action::Create, |rpc_addr| {
@@ -211,7 +211,7 @@ impl TransactionRequest {
 
     pub fn sign_call(
         self, epoch_height: u64, chain_id: u32, max_gas: Option<U256>,
-    ) -> RpcResult<SignedTransaction> {
+    ) -> CoreResult<SignedTransaction> {
         let max_gas = max_gas.unwrap_or(DEFAULT_CFX_GAS_CALL_REQUEST.into());
         let gas = self.gas.unwrap_or(max_gas);
         if gas > max_gas {

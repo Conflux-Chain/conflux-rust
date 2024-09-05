@@ -92,7 +92,7 @@ use crate::{
             StorageCollateralInfo, SyncGraphStates,
             Transaction as RpcTransaction, TransactionRequest,
         },
-        RpcResult,
+        CoreResult,
     },
 };
 use cfx_addr::Network;
@@ -164,7 +164,7 @@ impl RpcImpl {
             .expect("downcast should succeed")
     }
 
-    fn check_address_network(&self, network: Network) -> RpcResult<()> {
+    fn check_address_network(&self, network: Network) -> CoreResult<()> {
         invalid_params_check(
             "address",
             check_rpc_address_network(
@@ -181,7 +181,7 @@ impl RpcImpl {
     /// more optimization could be made if some perfermance throttle is met
     fn get_epoch_number_with_pivot_check(
         &self, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<EpochNumber> {
+    ) -> CoreResult<EpochNumber> {
         match block_hash_or_epoch_number {
             Some(BlockHashOrEpochNumber::BlockHashWithOption {
                 hash,
@@ -206,7 +206,7 @@ impl RpcImpl {
     fn code(
         &self, address: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<Bytes> {
+    ) -> CoreResult<Bytes> {
         self.check_address_network(address.network)?;
         let epoch_num = self
             .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
@@ -237,7 +237,7 @@ impl RpcImpl {
     fn balance(
         &self, address: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<U256> {
+    ) -> CoreResult<U256> {
         self.check_address_network(address.network)?;
         let epoch_num = self
             .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
@@ -260,7 +260,7 @@ impl RpcImpl {
 
     fn admin(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcResult<Option<RpcAddress>> {
+    ) -> CoreResult<Option<RpcAddress>> {
         self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
@@ -284,7 +284,7 @@ impl RpcImpl {
 
     fn sponsor_info(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcResult<SponsorInfo> {
+    ) -> CoreResult<SponsorInfo> {
         self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
@@ -306,7 +306,7 @@ impl RpcImpl {
 
     fn staking_balance(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcResult<U256> {
+    ) -> CoreResult<U256> {
         self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -326,7 +326,7 @@ impl RpcImpl {
 
     fn deposit_list(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcResult<Vec<DepositInfo>> {
+    ) -> CoreResult<Vec<DepositInfo>> {
         self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -349,7 +349,7 @@ impl RpcImpl {
 
     fn vote_list(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcResult<Vec<VoteStakeInfo>> {
+    ) -> CoreResult<Vec<VoteStakeInfo>> {
         self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -372,7 +372,7 @@ impl RpcImpl {
 
     fn collateral_for_storage(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcResult<U256> {
+    ) -> CoreResult<U256> {
         self.check_address_network(address.network)?;
         let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -395,7 +395,7 @@ impl RpcImpl {
     /// Return account related states of the given account
     fn account(
         &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<RpcAccount> {
+    ) -> CoreResult<RpcAccount> {
         self.check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
@@ -428,7 +428,9 @@ impl RpcImpl {
     }
 
     /// Returns interest rate of the given epoch
-    fn interest_rate(&self, epoch_num: Option<EpochNumber>) -> RpcResult<U256> {
+    fn interest_rate(
+        &self, epoch_num: Option<EpochNumber>,
+    ) -> CoreResult<U256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
         let state_db = self
             .consensus
@@ -440,7 +442,7 @@ impl RpcImpl {
     /// Returns accumulate interest rate of the given epoch
     fn accumulate_interest_rate(
         &self, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<U256> {
+    ) -> CoreResult<U256> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
         let state_db = self
             .consensus
@@ -454,7 +456,7 @@ impl RpcImpl {
     /// Returns accumulate interest rate of the given epoch
     fn pos_economics(
         &self, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<PoSEconomics> {
+    ) -> CoreResult<PoSEconomics> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
         let state_db = self
             .consensus
@@ -471,7 +473,7 @@ impl RpcImpl {
         })
     }
 
-    fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
+    fn send_raw_transaction(&self, raw: Bytes) -> CoreResult<H256> {
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
@@ -516,7 +518,7 @@ impl RpcImpl {
     fn storage_at(
         &self, address: RpcAddress, position: U256,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<Option<H256>> {
+    ) -> CoreResult<Option<H256>> {
         self.check_address_network(address.network)?;
         let epoch_num = self
             .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
@@ -547,7 +549,7 @@ impl RpcImpl {
 
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         if self.sync.catch_up_mode() {
             warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
             bail!(request_rejected_in_catch_up_mode(None));
@@ -586,7 +588,7 @@ impl RpcImpl {
 
     fn prepare_transaction(
         &self, mut tx: TransactionRequest, password: Option<String>,
-    ) -> RpcResult<TransactionWithSignature> {
+    ) -> CoreResult<TransactionWithSignature> {
         let consensus_graph = self.consensus_graph();
         tx.check_rpc_address_network(
             "tx",
@@ -642,7 +644,7 @@ impl RpcImpl {
 
     fn send_transaction(
         &self, tx: TransactionRequest, password: Option<String>,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         info!("RPC Request: cfx_sendTransaction, tx = {:?}", tx);
 
         self.prepare_transaction(tx, password)
@@ -651,7 +653,7 @@ impl RpcImpl {
 
     pub fn sign_transaction(
         &self, tx: TransactionRequest, password: Option<String>,
-    ) -> RpcResult<String> {
+    ) -> CoreResult<String> {
         let tx = self.prepare_transaction(tx, password).map_err(|e| {
             invalid_params("tx", format!("failed to sign transaction: {:?}", e))
         })?;
@@ -661,7 +663,7 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Option<StorageRoot>> {
+    ) -> CoreResult<Option<StorageRoot>> {
         self.check_address_network(address.network)?;
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
@@ -682,7 +684,7 @@ impl RpcImpl {
 
     fn send_usable_genesis_accounts(
         &self, account_start_index: usize,
-    ) -> RpcResult<Bytes> {
+    ) -> CoreResult<Bytes> {
         info!(
             "RPC Request: send_usable_genesis_accounts start from {:?}",
             account_start_index
@@ -703,7 +705,7 @@ impl RpcImpl {
 
     pub fn transaction_by_hash(
         &self, hash: H256,
-    ) -> RpcResult<Option<RpcTransaction>> {
+    ) -> CoreResult<Option<RpcTransaction>> {
         let hash: H256 = hash.into();
         info!("RPC Request: cfx_getTransactionByHash({:?})", hash);
 
@@ -787,7 +789,7 @@ impl RpcImpl {
 
     fn get_block_execution_info(
         &self, block_hash: &H256,
-    ) -> RpcResult<Option<BlockExecInfo>> {
+    ) -> CoreResult<Option<BlockExecInfo>> {
         let consensus_graph = self.consensus_graph();
 
         let (pivot_hash, block_receipts, maybe_state_root) =
@@ -845,7 +847,7 @@ impl RpcImpl {
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
         include_eth_receipt: bool, include_accumulated_gas_used: bool,
-    ) -> RpcResult<Option<RpcReceipt>> {
+    ) -> CoreResult<Option<RpcReceipt>> {
         let id = tx_index.real_index;
 
         if id >= exec_info.block.transactions.len()
@@ -894,7 +896,7 @@ impl RpcImpl {
         Ok(Some(receipt))
     }
 
-    fn prepare_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>> {
+    fn prepare_receipt(&self, tx_hash: H256) -> CoreResult<Option<RpcReceipt>> {
         // Note: `transaction_index_by_hash` might return outdated results if
         // there was a pivot chain reorg but the tx was not re-executed yet. In
         // this case, `block_execution_results_by_hash` will detect that the
@@ -936,7 +938,7 @@ impl RpcImpl {
     fn prepare_block_receipts(
         &self, block_hash: H256, pivot_assumption: H256,
         include_eth_receipt: bool,
-    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
+    ) -> CoreResult<Option<Vec<RpcReceipt>>> {
         let exec_info = match self.get_block_execution_info(&block_hash)? {
             None => return Ok(None), // not executed
             Some(res) => res,
@@ -987,13 +989,15 @@ impl RpcImpl {
 
     fn transaction_receipt(
         &self, tx_hash: H256,
-    ) -> RpcResult<Option<RpcReceipt>> {
+    ) -> CoreResult<Option<RpcReceipt>> {
         let hash: H256 = tx_hash.into();
         info!("RPC Request: cfx_getTransactionReceipt({:?})", hash);
         self.prepare_receipt(hash)
     }
 
-    fn generate_empty_blocks(&self, num_blocks: usize) -> RpcResult<Vec<H256>> {
+    fn generate_empty_blocks(
+        &self, num_blocks: usize,
+    ) -> CoreResult<Vec<H256>> {
         info!("RPC Request: generate({:?})", num_blocks);
         let mut hashes = Vec::new();
         for _i in 0..num_blocks {
@@ -1014,7 +1018,7 @@ impl RpcImpl {
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         info!(
             "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?}, {:?})",
             parent_hash, referee, num_txs, difficulty, pos_reference,
@@ -1032,7 +1036,7 @@ impl RpcImpl {
 
     fn generate_one_block(
         &self, num_txs: usize, block_size_limit: usize,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         info!("RPC Request: generate_one_block()");
         Ok(self
             .block_gen
@@ -1042,7 +1046,7 @@ impl RpcImpl {
     fn generate_one_block_with_direct_txgen(
         &self, num_txs: usize, mut block_size_limit: usize,
         num_txs_simple: usize, num_txs_erc20: usize,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         info!("RPC Request: generate_one_block_with_direct_txgen()");
 
         let block_gen = &self.block_gen;
@@ -1074,7 +1078,7 @@ impl RpcImpl {
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
         adaptive: Option<bool>, custom: Option<Vec<Bytes>>,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         info!("RPC Request: generate_custom_block()");
 
         let transactions = self.decode_raw_txs(raw_txs, 0)?;
@@ -1091,7 +1095,7 @@ impl RpcImpl {
     fn generate_block_with_nonce_and_timestamp(
         &self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256,
         timestamp: u64, adaptive: bool,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         let transactions = self.decode_raw_txs(raw, 0)?;
         Ok(self.block_gen.generate_block_with_nonce_and_timestamp(
             parent,
@@ -1105,7 +1109,7 @@ impl RpcImpl {
 
     fn decode_raw_txs(
         &self, raw_txs: Bytes, tx_data_len: usize,
-    ) -> RpcResult<Vec<Arc<SignedTransaction>>> {
+    ) -> CoreResult<Vec<Arc<SignedTransaction>>> {
         let txs: Vec<TransactionWithSignature> =
             Rlp::new(&raw_txs.into_vec()).as_list().map_err(|err| {
                 invalid_params("raw_txs", format!("Decode error: {:?}", err))
@@ -1170,7 +1174,7 @@ impl RpcImpl {
     fn generate_block_with_fake_txs(
         &self, raw_txs_without_data: Bytes, adaptive: Option<bool>,
         tx_data_len: Option<usize>,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         let transactions = self
             .decode_raw_txs(raw_txs_without_data, tx_data_len.unwrap_or(0))?;
         Ok(self.block_gen.generate_custom_block(transactions, adaptive))
@@ -1178,7 +1182,7 @@ impl RpcImpl {
 
     fn generate_block_with_blame_info(
         &self, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         Ok(self.block_gen.generate_block_with_blame_info(
             num_txs,
             block_size_limit,
@@ -1190,7 +1194,7 @@ impl RpcImpl {
         ))
     }
 
-    fn get_logs(&self, filter: CfxRpcLogFilter) -> RpcResult<Vec<RpcLog>> {
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> CoreResult<Vec<RpcLog>> {
         // all addresses specified should be for the correct network
         if let Some(addresses) = &filter.address {
             for address in addresses.iter() {
@@ -1233,7 +1237,7 @@ impl RpcImpl {
 
     fn get_block_reward_info(
         &self, epoch: EpochNumber,
-    ) -> RpcResult<Vec<RpcRewardInfo>> {
+    ) -> CoreResult<Vec<RpcRewardInfo>> {
         info!(
             "RPC Request: cfx_getBlockRewardInfo epoch_number={:?}",
             epoch
@@ -1289,7 +1293,7 @@ impl RpcImpl {
     fn call(
         &self, request: TransactionRequest,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<Bytes> {
+    ) -> CoreResult<Bytes> {
         let epoch = Some(
             self.get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?,
         );
@@ -1340,7 +1344,7 @@ impl RpcImpl {
 
     fn estimate_gas_and_collateral(
         &self, request: TransactionRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<EstimateGasAndCollateralResponse> {
+    ) -> CoreResult<EstimateGasAndCollateralResponse> {
         info!(
             "RPC Request: cfx_estimateGasAndCollateral request={:?}, epoch={:?}",request,epoch
         );
@@ -1418,7 +1422,7 @@ impl RpcImpl {
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
         epoch: Option<EpochNumber>,
-    ) -> RpcResult<CheckBalanceAgainstTransactionResponse> {
+    ) -> CoreResult<CheckBalanceAgainstTransactionResponse> {
         self.check_address_network(account_addr.network)?;
         self.check_address_network(contract_addr.network)?;
 
@@ -1461,7 +1465,7 @@ impl RpcImpl {
 
     fn exec_transaction(
         &self, request: TransactionRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
+    ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         let rpc_request_network = invalid_params_check(
             "request",
             check_two_rpc_address_network_match(
@@ -1502,7 +1506,7 @@ impl RpcImpl {
         consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
     }
 
-    fn current_sync_phase(&self) -> RpcResult<String> {
+    fn current_sync_phase(&self) -> CoreResult<String> {
         Ok(self.sync.current_sync_phase().name().into())
     }
 
@@ -1513,7 +1517,7 @@ impl RpcImpl {
     /// Note that this should note query blocks before `cur_era_genesis`.
     fn get_pivot_chain_and_weight(
         &self, height_range: Option<(u64, u64)>,
-    ) -> RpcResult<Vec<(H256, U256)>> {
+    ) -> CoreResult<Vec<(H256, U256)>> {
         let consensus_graph = self.consensus_graph();
         Ok(consensus_graph
             .inner
@@ -1521,7 +1525,7 @@ impl RpcImpl {
             .get_pivot_chain_and_weight(height_range)?)
     }
 
-    fn get_executed_info(&self, block_hash: H256) -> RpcResult<(H256, H256)> {
+    fn get_executed_info(&self, block_hash: H256) -> CoreResult<(H256, H256)> {
         let commitment = self
             .consensus
             .get_data_manager()
@@ -1538,25 +1542,25 @@ impl RpcImpl {
         ))
     }
 
-    fn expire_block_gc(&self, timeout: u64) -> RpcResult<()> {
+    fn expire_block_gc(&self, timeout: u64) -> CoreResult<()> {
         self.sync.expire_block_gc(timeout);
         Ok(())
     }
 
-    pub fn consensus_graph_state(&self) -> RpcResult<ConsensusGraphStates> {
+    pub fn consensus_graph_state(&self) -> CoreResult<ConsensusGraphStates> {
         let consensus_graph_states =
             STATE_EXPOSER.consensus_graph.lock().retrieve();
         Ok(ConsensusGraphStates::new(consensus_graph_states))
     }
 
-    pub fn sync_graph_state(&self) -> RpcResult<SyncGraphStates> {
+    pub fn sync_graph_state(&self) -> CoreResult<SyncGraphStates> {
         let sync_graph_states = STATE_EXPOSER.sync_graph.lock().retrieve();
         Ok(SyncGraphStates::new(sync_graph_states))
     }
 
     /// Return (block_info.status, state_valid)
     /// Return Error if either field is missing
-    pub fn get_block_status(&self, block_hash: H256) -> RpcResult<(u8, bool)> {
+    pub fn get_block_status(&self, block_hash: H256) -> CoreResult<(u8, bool)> {
         let consensus_graph = self.consensus_graph();
         let status = consensus_graph
             .data_man
@@ -1577,7 +1581,7 @@ impl RpcImpl {
 
     pub fn get_supply_info(
         &self, epoch: Option<EpochNumber>,
-    ) -> RpcResult<TokenSupplyInfo> {
+    ) -> CoreResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state = State::new(
             self.consensus
@@ -1608,7 +1612,7 @@ impl RpcImpl {
 
     pub fn get_collateral_info(
         &self, epoch: Option<EpochNumber>,
-    ) -> RpcResult<StorageCollateralInfo> {
+    ) -> CoreResult<StorageCollateralInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state = State::new(
             self.consensus
@@ -1628,7 +1632,7 @@ impl RpcImpl {
 
     pub fn get_vote_params(
         &self, epoch: Option<EpochNumber>,
-    ) -> RpcResult<VoteParamsInfo> {
+    ) -> CoreResult<VoteParamsInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state_db = self
             .consensus
@@ -1649,7 +1653,9 @@ impl RpcImpl {
         })
     }
 
-    pub fn get_fee_burnt(&self, epoch: Option<EpochNumber>) -> RpcResult<U256> {
+    pub fn get_fee_burnt(
+        &self, epoch: Option<EpochNumber>,
+    ) -> CoreResult<U256> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state_db = self
             .consensus
@@ -1660,7 +1666,7 @@ impl RpcImpl {
 
     pub fn set_db_crash(
         &self, crash_probability: f64, crash_exit_code: i32,
-    ) -> RpcResult<()> {
+    ) -> CoreResult<()> {
         if crash_probability == 0.0 {
             *CRASH_EXIT_PROBABILITY.lock() = None;
         } else {
@@ -1672,7 +1678,9 @@ impl RpcImpl {
 
     // estimate response size, return error if it is too large
     // note: this is a potentially expensive check
-    fn check_response_size<T: Serialize>(&self, response: &T) -> RpcResult<()> {
+    fn check_response_size<T: Serialize>(
+        &self, response: &T,
+    ) -> CoreResult<()> {
         // account for the enclosing JSON object
         // {"jsonrpc":"2.0","id":1,"result": ... }
         // note: this is a rough estimation
@@ -1708,7 +1716,7 @@ impl RpcImpl {
 
     fn epoch_receipts(
         &self, epoch: BlockHashOrEpochNumber, include_eth_receipt: Option<bool>,
-    ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
+    ) -> CoreResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
         let hashes = match epoch {
@@ -1868,7 +1876,7 @@ impl RpcImpl {
 
     fn stat_on_gas_load(
         &self, last_epoch: EpochNumber, time_window: U64,
-    ) -> RpcResult<Option<StatOnGasLoad>> {
+    ) -> CoreResult<Option<StatOnGasLoad>> {
         let mut stat = StatOnGasLoad::default();
         stat.time_elapsed = time_window;
 

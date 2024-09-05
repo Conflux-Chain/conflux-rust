@@ -4,7 +4,7 @@
 
 use crate::{
     pos::protocol::sync_protocol::RpcResponse,
-    sync::{Error, ErrorKind, ProtocolConfiguration},
+    sync::{Error, ProtocolConfiguration},
 };
 use cfx_parameters::sync::REQUEST_START_WAITING_TIME;
 use diem_logger::prelude::diem_debug;
@@ -73,7 +73,7 @@ impl RequestManager {
         };
 
         if peer.is_none() {
-            request.notify_error(ErrorKind::RpcCancelledByDisconnection.into());
+            request.notify_error(Error::RpcCancelledByDisconnection.into());
             return;
         }
 
@@ -99,7 +99,7 @@ impl RequestManager {
             Some(next_delay),
         ) {
             debug!("request_with_delay: send_request fails, peer={:?}, request={:?}", peer, req);
-            req.notify_error(ErrorKind::RpcCancelledByDisconnection.into());
+            req.notify_error(Error::RpcCancelledByDisconnection.into());
         }
     }
 
@@ -116,7 +116,7 @@ impl RequestManager {
         let timeout_requests = self.request_handler.get_timeout_requests(io);
         for mut req in timeout_requests {
             debug!("Timeout requests: {:?}", req);
-            req.request.notify_error(ErrorKind::RpcTimeout.into());
+            req.request.notify_error(Error::RpcTimeout.into());
         }
     }
 
@@ -144,7 +144,7 @@ impl RequestManager {
                 request,
                 Some(next_delay),
             ) {
-                req.notify_error(ErrorKind::RpcCancelledByDisconnection.into());
+                req.notify_error(Error::RpcCancelledByDisconnection.into());
             }
         }
     }
@@ -160,9 +160,8 @@ impl RequestManager {
             self.request_handler.remove_peer(peer)
         {
             for mut msg in unfinished_requests {
-                msg.request.notify_error(
-                    ErrorKind::RpcCancelledByDisconnection.into(),
-                );
+                msg.request
+                    .notify_error(Error::RpcCancelledByDisconnection.into());
             }
         } else {
             debug!("Peer already removed form request manager when disconnected peer={}", peer);

@@ -31,8 +31,7 @@ mod traits;
 pub mod types;
 
 pub use cfxcore::errors::{
-    BoxFuture as RpcBoxFuture, Error as RpcError,
-    Error::JsonRpcError as JsonRpcErrorKind, Result as RpcResult,
+    BoxFuture as CoreBoxFuture, Error as CoreError, Result as CoreResult,
 };
 pub use errors::{error_codes, invalid_params};
 

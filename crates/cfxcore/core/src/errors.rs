@@ -1,6 +1,14 @@
 // Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+use crate::light_protocol::Error as LightProtocolError;
+use cfx_statedb::Error as StateDbError;
+use cfx_storage::Error as StorageError;
+use jsonrpc_core::{futures::future, Error as JsonRpcError, ErrorCode};
+use primitives::{account::AccountError, filter::FilterError};
+use rlp::DecoderError;
+use serde_json::Value;
+use std::fmt::{Debug, Display};
 use thiserror::Error;
 
 pub const EXCEPTION_ERROR: i64 = -32016;
@@ -29,9 +37,7 @@ pub enum Error {
     Msg(String),
 }
 
-pub type BoxFuture<T> = Box<
-    dyn jsonrpc_core::futures::future::Future<Item = T, Error = Error> + Send,
->;
+pub type BoxFuture<T> = Box<dyn future::Future<Item = T, Error = Error> + Send>;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -41,7 +47,7 @@ impl From<Error> for JsonRpcError {
             Error::JsonRpcError(j) => j,
             Error::InvalidParam(param, details) => {
                 JsonRpcError {
-                    code: jsonrpc_core::ErrorCode::InvalidParams,
+                    code: ErrorCode::InvalidParams,
                     message: format!("Invalid parameters: {}", param),
                     data: Some(Value::String(format!("{:?}", details))),
                 }
@@ -57,7 +63,7 @@ impl From<Error> for JsonRpcError {
             | Error::StateDb(_)
             | Error::Storage(_)
             | Error::Custom(_) => JsonRpcError {
-                code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
+                code: ErrorCode::ServerError(EXCEPTION_ERROR),
                 message: format!("Error processing request: {}", e),
                 data: None,
             },
@@ -75,7 +81,7 @@ impl From<String> for Error {
 
 pub(crate) fn invalid_params<T: Debug>(param: &str, details: T) -> Error {
     Error::JsonRpcError(JsonRpcError {
-        code: jsonrpc_core::ErrorCode::InvalidParams,
+        code: ErrorCode::InvalidParams,
         message: format!("Invalid parameters: {}", param),
         data: Some(Value::String(format!("{:?}", details))),
     })
@@ -101,20 +107,6 @@ pub fn account_result_to_rpc_result<T>(
         Err(AccountError::InvalidRlp(decoder_error)) => {
             Err(decoder_error.into())
         }
-        Err(AccountError::AddressSpaceMismatch(_, _)) => {
-            invalid_params_check(param, result)
-        }
-        Err(AccountError::ReservedAddressSpace(_)) => {
-            invalid_params_check(param, result)
-        }
+        Err(e) => Err(invalid_params(param, format!("{}", e))),
     }
 }
-
-use crate::light_protocol::Error as LightProtocolError;
-use cfx_statedb::Error as StateDbError;
-use cfx_storage::Error as StorageError;
-use jsonrpc_core::Error as JsonRpcError;
-use primitives::{account::AccountError, filter::FilterError};
-use rlp::DecoderError;
-use serde_json::Value;
-use std::fmt::{Debug, Display};

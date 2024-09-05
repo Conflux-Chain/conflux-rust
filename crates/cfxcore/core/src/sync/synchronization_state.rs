@@ -8,7 +8,7 @@ use crate::{
     message::MsgId,
     sync::{
         message::{DynamicCapability, DynamicCapabilitySet},
-        random, Error, ErrorKind,
+        random, Error,
     },
     NodeType,
 };
@@ -152,7 +152,7 @@ impl SynchronizationState {
             .peers
             .read()
             .get(node_id)
-            .ok_or(ErrorKind::UnknownPeer)?
+            .ok_or(Error::UnknownPeer)?
             .clone())
     }
 

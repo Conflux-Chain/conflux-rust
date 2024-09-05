@@ -17,7 +17,7 @@ mod synchronization_state;
 pub mod utils;
 
 pub use self::{
-    error::{Error, ErrorKind},
+    error::Error,
     state::StateSyncConfiguration,
     synchronization_graph::{
         SharedSynchronizationGraph, SyncGraphConfig, SyncGraphStatistics,
