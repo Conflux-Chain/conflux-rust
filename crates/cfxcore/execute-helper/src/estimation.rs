@@ -430,9 +430,9 @@ where F: Fn(&Address) -> Addr {
     // Decode revert error
     let revert_error = string_revert_reason_decode(&executed.output);
     let revert_error = if !revert_error.is_empty() {
-        format!(": {}.", revert_error)
+        format!(": {}", revert_error)
     } else {
-        format!(".")
+        format!("")
     };
 
     // Try to fetch the innermost error.

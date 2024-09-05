@@ -19,11 +19,10 @@ use crate::rpc::{
         Bytes, FeeHistory, Index, U64 as HexU64,
     },
 };
-use cfx_execute_helper::estimation::{
-    decode_error, EstimateExt, EstimateRequest,
-};
+use cfx_execute_helper::estimation::EstimateRequest;
 use cfx_executor::executive::{
-    string_revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
+    string_revert_reason_decode, Executed, ExecutionError, ExecutionOutcome,
+    TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_statedb::StateDbExt;
@@ -108,7 +107,7 @@ impl EthHandler {
     fn exec_transaction(
         &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
-    ) -> CfxRpcResult<(ExecutionOutcome, EstimateExt)> {
+    ) -> CfxRpcResult<(Executed, U256)> {
         let consensus_graph = self.consensus_graph();
 
         if request.gas_price.is_some()
@@ -172,7 +171,65 @@ impl EthHandler {
         let signed_tx = request.sign_call(chain_id.in_evm_space(), max_gas)?;
 
         trace!("call tx {:?}, request {:?}", signed_tx, estimate_request);
-        consensus_graph.call_virtual(&signed_tx, epoch, estimate_request)
+        let (execution_outcome, estimation) = consensus_graph.call_virtual(
+            &signed_tx,
+            epoch,
+            estimate_request,
+        )?;
+
+        let executed = match execution_outcome {
+            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
+                expected,
+                got,
+            )) => bail!(invalid_input_rpc_err(
+                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::InvalidRecipientAddress(recipient),
+            ) => bail!(invalid_input_rpc_err(
+                format! {"invalid recipient address {:?}", recipient}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit { expected, got },
+            ) => bail!(invalid_input_rpc_err(
+                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            )),
+            ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
+                bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                e @ ExecutionError::NotEnoughCash { .. },
+                executed,
+            ) => {
+                bail!(geth_call_execution_error(
+                    format!(
+                        "insufficient funds for gas * price + value: {:?})",
+                        e
+                    ),
+                    format!("0x{}", executed.output.to_hex::<String>())
+                ))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(VmError::Reverted),
+                executed,
+            ) => bail!(geth_call_execution_error(
+                format!(
+                    "execution reverted: revert: {}",
+                    string_revert_reason_decode(&executed.output)
+                ),
+                format!("0x{}", executed.output.to_hex::<String>())
+            )),
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(e),
+                executed,
+            ) => bail!(geth_call_execution_error(
+                format!("execution reverted: {}", e),
+                format!("0x{}", executed.output.to_hex::<String>())
+            )),
+            ExecutionOutcome::Finished(executed) => executed,
+        };
+
+        Ok((executed, estimation.estimated_gas_limit))
     }
 
     fn send_transaction_with_signature(
@@ -785,53 +842,10 @@ impl Eth for EthHandler {
             request, block_number_or_hash
         );
 
-        let (execution_outcome, _estimation) =
+        let (execution, _estimation) =
             self.exec_transaction(request, block_number_or_hash)?;
-        match execution_outcome {
-            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
-                expected,
-                got,
-            )) => bail!(invalid_input_rpc_err(
-                format! {"err: nonce is too old expected {:?} got {:?}", expected, got}
-            )),
-            ExecutionOutcome::NotExecutedDrop(
-                TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(invalid_input_rpc_err(
-                format! {"err: invalid recipient address {:?}", recipient}
-            )),
-            ExecutionOutcome::NotExecutedDrop(
-                TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(invalid_input_rpc_err(
-                format! {"err: not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
-            )),
-            ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
-            }
-            ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(VmError::Reverted),
-                executed,
-            ) => bail!(geth_call_execution_error(
-                format!(
-                    "execution reverted: {}",
-                    string_revert_reason_decode(&executed.output)
-                ),
-                format!("0x{}", executed.output.to_hex::<String>())
-            )),
-            ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(e),
-                executed,
-            ) => bail!(geth_call_execution_error(
-                format!("execution reverted: {}", e),
-                format!("0x{}", executed.output.to_hex::<String>())
-            )),
-            ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
-                bail!(geth_call_execution_error(
-                    format! {"execution failed: {:?}", e},
-                    "".into()
-                ))
-            }
-            ExecutionOutcome::Finished(executed) => Ok(executed.output.into()),
-        }
+
+        Ok(execution.output.into())
     }
 
     fn estimate_gas(
@@ -842,71 +856,10 @@ impl Eth for EthHandler {
             "RPC Request: eth_estimateGas request={:?}, block_num={:?}",
             request, block_number_or_hash
         );
-        let (execution_outcome, estimation) =
+        let (_, estimated_gas) =
             self.exec_transaction(request, block_number_or_hash)?;
-        match execution_outcome {
-            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
-                expected,
-                got,
-            )) => bail!(invalid_input_rpc_err(
-                format! {"nonce is too old expected {:?} got {:?}", expected, got}
-            )),
-            ExecutionOutcome::NotExecutedDrop(
-                TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(invalid_input_rpc_err(
-                format! {"invalid recipient address {:?}", recipient}
-            )),
-            ExecutionOutcome::NotExecutedDrop(
-                TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(invalid_input_rpc_err(
-                format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
-            )),
-            ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(invalid_input_rpc_err(format! {"not executed: {:?}", e}))
-            }
-            ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(VmError::Reverted),
-                executed,
-            ) => {
-                let (revert_error, innermost_error, errors) =
-                    decode_error(&executed, |addr| *addr);
 
-                bail!(geth_call_execution_error(
-                    format!(
-                        "failed with vm reverted: {} {}",
-                        revert_error, innermost_error
-                    ),
-                    errors.join("\n"),
-                ))
-            }
-            ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(VmError::StateDbError(e)),
-                _,
-            ) => {
-                bail!(internal_error(e));
-            }
-            ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(e),
-                _,
-            ) => {
-                bail!(geth_call_execution_error(
-                    format!("failed with execution error: {:?})", e),
-                    "".into()
-                ))
-            }
-            ExecutionOutcome::ExecutionErrorBumpNonce(
-                e @ ExecutionError::NotEnoughCash { .. },
-                _,
-            ) => {
-                bail!(geth_call_execution_error(
-                    format!("failed with not enough cash: {:?})", e),
-                    "".into()
-                ))
-            }
-            ExecutionOutcome::Finished(executed) => executed,
-        };
-
-        Ok(estimation.estimated_gas_limit)
+        Ok(estimated_gas)
     }
 
     fn fee_history(
