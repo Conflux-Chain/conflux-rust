@@ -23,7 +23,7 @@ pub mod vote_params_info;
 
 pub use access_list::*;
 pub use account::Account;
-pub use cfx_rpc_primitives::{
+pub use cfx_rpc_cfx_types::{
     address,
     address::{
         check_rpc_address_network, check_two_rpc_address_network_match,

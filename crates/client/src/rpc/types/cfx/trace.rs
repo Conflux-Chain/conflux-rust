@@ -4,9 +4,11 @@
 
 use cfx_executor::internal_contract::evm_map;
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
-use cfx_rpc_cfx_types::trace::{Action, LocalizedTrace};
+use cfx_rpc_cfx_types::{
+    trace::{Action, LocalizedTrace},
+    RpcAddress,
+};
 use cfx_rpc_eth_types::trace::LocalizedTrace as EthLocalizedTrace;
-use cfx_rpc_primitives::RpcAddress;
 use cfx_types::H160;
 use serde::Serialize;
 use std::collections::HashMap;

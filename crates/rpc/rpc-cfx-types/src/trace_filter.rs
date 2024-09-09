@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use super::trace::ActionType;
+use crate::EpochNumber;
 use cfx_execute_helper::exec_tracer::TraceFilter as PrimitiveTraceFilter;
-use cfx_rpc_primitives::{maybe_vec_into, EpochNumber, VariadicValue};
+use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
 use cfx_types::{Address, Space, H256, U64};
 use jsonrpc_core::Error as RpcError;
 use serde::{Deserialize, Serialize};

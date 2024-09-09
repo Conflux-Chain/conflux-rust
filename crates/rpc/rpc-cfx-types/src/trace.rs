@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::RpcAddress;
 use cfx_addr::Network;
 use cfx_execute_helper::exec_tracer::{
     Action as VmAction, ActionType as VmActionType, BlockExecTraces,
@@ -10,7 +11,7 @@ use cfx_execute_helper::exec_tracer::{
     InternalTransferAction as VmInternalTransferAction,
     LocalizedTrace as PrimitiveLocalizedTrace, Outcome, TransactionExecTraces,
 };
-use cfx_rpc_primitives::{Bytes, RpcAddress};
+use cfx_rpc_primitives::Bytes;
 use cfx_types::{Space, H256, U256, U64};
 use cfx_vm_types::{CallType, CreateType};
 use primitives::SignedTransaction;
