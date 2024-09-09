@@ -54,7 +54,9 @@ members = [
     "crates/util/version",
     "crates/serde_utils",
     "crates/cfxcore/geth-tracer",
-    "crates/rpc/rpc_eth_types",
+    "crates/rpc/rpc-eth-types", 
+    "crates/rpc/rpc-primitives", 
+    "crates/rpc/rpc-cfx-types",
 ]
 
 resolver = "2"
@@ -140,7 +142,9 @@ cfx-vm-interpreter = { path = "./crates/cfxcore/vm-interpreter" }
 geth-tracer = { path = "./crates/cfxcore/geth-tracer" }
 cfx-vm-types = { path = "./crates/cfxcore/vm-types" }
 cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
-cfx-rpc-eth-types = { path = "./crates/rpc/rpc_eth_types" }
+cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
+cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
+cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
 
 serde = { version = "1.0", features = ["derive", "alloc"] }
 serde_json = "1.0"
@@ -148,6 +152,8 @@ serde_derive = "1.0"
 thiserror = "1.0.61"
 anyhow = "1.0.38"
 chrono = "=0.4.38"
+error-chain = { version = "0.12" }
+jsonrpc-core = { version = "15.1.0" }
 
 keccak-hash = "0.5"
 rlp = "0.4.0"

@@ -6,7 +6,6 @@ mod epoch_queue;
 mod poll_filter;
 mod poll_manager;
 mod subscribers;
-mod variadic_value;
 
 pub use self::{
     poll_filter::{
@@ -14,6 +13,6 @@ pub use self::{
     },
     poll_manager::PollManager,
 };
+pub use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
 pub use epoch_queue::EpochQueue;
 pub use subscribers::{Id as SubscriberId, Subscribers};
-pub use variadic_value::{maybe_vec_into, VariadicValue};

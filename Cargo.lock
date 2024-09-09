@@ -1280,13 +1280,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-rpc-cfx-types"
+version = "2.4.0"
+dependencies = [
+ "cfx-addr",
+ "cfx-execute-helper",
+ "cfx-executor",
+ "cfx-parameters",
+ "cfx-rpc-primitives",
+ "cfx-types",
+ "cfx-vm-types",
+ "error-chain",
+ "jsonrpc-core",
+ "primitives",
+ "serde",
+ "serde_json",
+ "strum_macros 0.20.1",
+]
+
+[[package]]
 name = "cfx-rpc-eth-types"
 version = "2.4.0"
 dependencies = [
  "alloy-rpc-types",
+ "cfx-execute-helper",
  "cfx-parameters",
+ "cfx-rpc-cfx-types",
+ "cfx-rpc-primitives",
  "cfx-types",
+ "cfx-vm-types",
  "cfxcore",
+ "error-chain",
  "jsonrpc-core",
  "primitives",
  "rlp 0.4.6",
@@ -1295,6 +1319,19 @@ dependencies = [
  "serde-utils",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "cfx-rpc-primitives"
+version = "2.4.0"
+dependencies = [
+ "cfx-addr",
+ "cfx-types",
+ "primitives",
+ "rustc-hex",
+ "serde",
+ "serde-utils",
+ "serde_json",
 ]
 
 [[package]]
@@ -1756,7 +1793,9 @@ dependencies = [
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
+ "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
+ "cfx-rpc-primitives",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",

@@ -9,10 +9,8 @@ mod index;
 pub mod pos;
 mod provenance;
 pub mod pubsub;
-mod trace;
-mod trace_filter;
 
-pub use cfx_rpc_eth_types::{Bytes, U64};
+pub use cfx_rpc_primitives::{Bytes, U64};
 
 pub use self::{
     cfx::{
@@ -32,6 +30,7 @@ pub use self::{
         storage_collateral_info::StorageCollateralInfo,
         sync_graph_states::SyncGraphStates,
         token_supply_info::TokenSupplyInfo,
+        trace::EpochTrace,
         transaction::{PackedOrExecuted, Transaction, WrapTransaction},
         transaction_request::{
             self, CheckBalanceAgainstTransactionResponse,
@@ -48,9 +47,10 @@ pub use self::{
     fee_history::FeeHistory,
     index::Index,
     provenance::Origin,
+};
+pub use cfx_rpc_cfx_types::{
     trace::{
-        Action, EpochTrace, LocalizedBlockTrace, LocalizedTrace,
-        LocalizedTransactionTrace,
+        Action, LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace,
     },
     trace_filter::TraceFilter,
 };

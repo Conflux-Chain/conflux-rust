@@ -110,6 +110,8 @@ alloy-rpc-types-trace = { workspace = true }
 alloy-rpc-types = { workspace = true }
 revm = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }
+cfx-rpc-primitives = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"

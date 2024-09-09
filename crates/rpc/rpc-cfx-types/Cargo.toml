@@ -1,5 +1,5 @@
 [package]
-name = "cfx-rpc-eth-types"
+name = "cfx-rpc-cfx-types"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
@@ -13,16 +13,16 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rustc-hex = { workspace = true }
+cfx-rpc-primitives = { workspace = true }
+cfx-addr = { workspace = true }
+cfx-execute-helper = { workspace = true }
+cfx-executor = { workspace = true }
+cfx-parameters = { workspace = true }
+cfx-types = { workspace = true }
+cfx-vm-types = { workspace = true }
+primitives = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-cfx-types = { workspace = true }
-thiserror = { workspace = true }
-jsonrpc-core = "15.1.0"
-primitives = { workspace = true }
-cfxcore = { workspace = true }
-rlp = { workspace = true }
-cfx-parameters = { workspace = true }
-alloy-rpc-types = { workspace = true }
-serde-utils = { workspace = true }
-
+strum_macros = "0.20"
+jsonrpc-core = { workspace = true }
+error-chain = { workspace = true }
