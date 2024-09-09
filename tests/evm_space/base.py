@@ -69,12 +69,8 @@ class Web3Base(ConfluxTestFramework):
         addr = receipt["contractCreated"]
         assert_is_hex_string(addr)
         return addr
-
-    def deploy_evm_space(self, bytecode_path):
-        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), bytecode_path)
-        assert(os.path.isfile(bytecode_file))
-        bytecode = open(bytecode_file).read()
-
+    
+    def deploy_evm_space_by_code(self, bytecode):
         nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
 
         signed = self.evmAccount.signTransaction({
@@ -98,12 +94,29 @@ class Web3Base(ConfluxTestFramework):
         addr = receipt["contractAddress"]
         return addr
     
+    def deploy_evm_space(self, bytecode_path):
+        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), bytecode_path)
+        assert(os.path.isfile(bytecode_file))
+        bytecode = open(bytecode_file).read()
+
+        addr = self.deploy_evm_space_by_code(bytecode)
+        return addr
+    
     def deploy_evm_space_erc20(self):
         addr = self.deploy_evm_space("../contracts/erc20_bytecode.dat")
         return addr
     
     def load_abi_from_contracts_folder(self, name):
-        abi_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "contracts", name + "_abi.json")
+        currFolder = os.path.dirname(os.path.realpath(__file__))
+        abi_file = os.path.join(currFolder, "..", "contracts", name + "_abi.json")
+        with open(abi_file, 'r') as abi_file:
+            abi = json.loads(abi_file.read())
+            return abi
+    
+    # expect contrace name is same as file name
+    def load_abi_from_tests_contracts_folder(self, name):
+        currFolder = os.path.dirname(os.path.realpath(__file__))
+        abi_file = os.path.join(currFolder, "../test_contracts/artifacts/contracts", name + ".sol", name + ".json")
         with open(abi_file, 'r') as abi_file:
             abi = json.loads(abi_file.read())
             return abi
@@ -111,7 +124,6 @@ class Web3Base(ConfluxTestFramework):
     def load_contract(self, addr, name):
         abi = self.load_abi_from_contracts_folder(name)
         return self.w3.eth.contract(address=addr, abi=abi)
-
 
     def run_test(self):
         self.cfxPrivkey = default_config['GENESIS_PRI_KEY']

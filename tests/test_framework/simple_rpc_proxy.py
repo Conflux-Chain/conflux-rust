@@ -2,6 +2,7 @@ import time
 from typing import Any
 
 import jsonrpcclient.client
+from jsonrpcclient.requests import Request
 from jsonrpcclient.exceptions import ReceivedErrorResponseError
 
 jsonrpcclient.client.request_log.propagate = False
@@ -29,7 +30,7 @@ class RpcCaller:
     def __call__(self, *args, **argsn) -> Any:
         if argsn:
             raise ValueError('json rpc 2 only supports array arguments')
-        from jsonrpcclient.requests import Request
+        
         request = Request(self.method, *args)
         try:
             response = self.client.send(request, timeout=self.timeout)
