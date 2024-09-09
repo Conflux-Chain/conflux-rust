@@ -700,9 +700,6 @@ impl SynchronizationProtocolHandler {
             },
             Error::Storage(_) => disconnect = false,
             Error::Msg(_) => op = Some(UpdateNodeOperation::Failure),
-            // Error::__Nonexhaustive {} => {
-            //     op = Some(UpdateNodeOperation::Failure)
-            // }
             Error::InternalError(_) => {}
             Error::RpcCancelledByDisconnection => {}
             Error::RpcTimeout => {}
