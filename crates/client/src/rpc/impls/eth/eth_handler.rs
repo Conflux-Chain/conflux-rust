@@ -199,14 +199,14 @@ impl EthHandler {
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 e @ ExecutionError::NotEnoughCash { .. },
-                executed,
+                _executed,
             ) => {
                 bail!(geth_call_execution_error(
                     format!(
                         "insufficient funds for gas * price + value: {:?})",
                         e
                     ),
-                    format!("0x{}", executed.output.to_hex::<String>())
+                    "".into()
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -221,10 +221,10 @@ impl EthHandler {
             )),
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(e),
-                executed,
+                _executed,
             ) => bail!(geth_call_execution_error(
                 format!("execution reverted: {}", e),
-                format!("0x{}", executed.output.to_hex::<String>())
+                "".into()
             )),
             ExecutionOutcome::Finished(executed) => executed,
         };
