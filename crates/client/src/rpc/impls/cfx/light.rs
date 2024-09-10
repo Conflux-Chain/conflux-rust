@@ -35,7 +35,10 @@ use crate::{
     common::delegate_convert,
     rpc::{
         errors,
-        impls::common::{self, RpcImpl as CommonImpl},
+        impls::{
+            common::{self, RpcImpl as CommonImpl},
+            MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+        },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
             cfx::check_rpc_address_network,
@@ -49,8 +52,7 @@ use crate::{
             RewardInfo as RpcRewardInfo, RpcAddress, SponsorInfo,
             StatOnGasLoad, Status as RpcStatus, StorageCollateralInfo,
             SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
-            TransactionRequest, VoteParamsInfo, WrapTransaction,
-            MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, U64 as HexU64,
+            TransactionRequest, VoteParamsInfo, WrapTransaction, U64 as HexU64,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1103,9 +1105,7 @@ impl RpcImpl {
 
         if block_count.as_u64() == 0 {
             return Box::new(
-                async { Ok(FeeHistory::new().to_cfx_fee_history()) }
-                    .boxed()
-                    .compat(),
+                async { Ok(FeeHistory::new().into()) }.boxed().compat(),
             );
         }
 
@@ -1177,7 +1177,7 @@ impl RpcImpl {
                 block.block_header.base_price().as_ref(),
                 Space::Native,
             );
-            Ok(fee_history.to_cfx_fee_history())
+            Ok(fee_history.into())
         };
 
         Box::new(fut.boxed().compat())

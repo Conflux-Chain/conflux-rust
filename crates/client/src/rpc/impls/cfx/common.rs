@@ -10,15 +10,14 @@ use std::{
 };
 
 use crate::rpc::{
-    impls::pos::hash_value_to_h256,
+    impls::{pos::hash_value_to_h256, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT},
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CfxFeeHistory,
         CheckBalanceAgainstTransactionResponse, EpochNumber, FeeHistory,
         RpcAddress, Status as RpcStatus, Transaction as RpcTransaction,
-        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
-        MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, U64 as HexU64,
+        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo, U64 as HexU64,
     },
     RpcErrorKind, RpcResult,
 };
@@ -547,7 +546,7 @@ impl RpcImpl {
         );
 
         if block_count.as_u64() == 0 {
-            return Ok(FeeHistory::new().to_cfx_fee_history());
+            return Ok(FeeHistory::new().into());
         }
 
         if block_count.as_u64() > MAX_FEE_HISTORY_CACHE_BLOCK_COUNT {
@@ -626,7 +625,7 @@ impl RpcImpl {
             Space::Native,
         );
 
-        Ok(fee_history.to_cfx_fee_history())
+        Ok(fee_history.into())
     }
 
     pub fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {

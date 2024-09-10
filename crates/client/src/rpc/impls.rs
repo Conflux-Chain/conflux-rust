@@ -31,4 +31,6 @@ pub mod trace;
 pub use cfx::{cfx_filter, common, light, pool, pubsub};
 use cfx_types::U256;
 pub use eth::{debug, eth_filter, eth_handler::EthHandler, eth_pubsub};
-pub use fee_history_cache::FeeHistoryCache;
+pub use fee_history_cache::{
+    FeeHistoryCache, FeeHistoryEntry, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+};

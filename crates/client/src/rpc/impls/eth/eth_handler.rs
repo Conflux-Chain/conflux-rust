@@ -8,7 +8,10 @@ use crate::rpc::{
         invalid_params, request_rejected_in_catch_up_mode, unknown_block,
         EthApiError, RpcInvalidTransactionError, RpcPoolError,
     },
-    impls::{FeeHistoryCache, RpcImplConfiguration},
+    impls::{
+        FeeHistoryCache, RpcImplConfiguration,
+        MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+    },
     traits::eth_space::eth::Eth,
     types::{
         eth::{
@@ -16,8 +19,7 @@ use crate::rpc::{
             EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus, Transaction,
             TransactionRequest,
         },
-        Bytes, FeeHistory, FeeHistoryEntry, Index,
-        MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, U64 as HexU64,
+        Bytes, FeeHistory, Index, U64 as HexU64,
     },
 };
 use cfx_execute_helper::estimation::{
@@ -77,72 +79,7 @@ impl EthHandler {
             .expect("downcast should succeed")
     }
 
-    /*
-        This cache is used to store the FeeHistoryEntry data for the latest 1024 blocks, enabling quick queries.
-
-        Update Logic:
-        If the cached block data is outdated, clear the cache first.
-        If the cache is empty, fetch the FeeHistoryEntry data for the latest q blocks directly from the DB and cache them (q is the number of blocks to be queried this time).
-        If the cache is not empty, get the upper bound of the cache and update from that block number to the latest block.
-        If the number of blocks in the cache exceeds 1024, delete the oldest block data until the number of blocks in the cache is 1024.
-    */
-    fn update_fee_history_cache_to_latest(
-        &self, latest_block: u64, query_len: u64,
-    ) -> Result<(), String> {
-        self.fee_history_cache.check_and_clear_cache(latest_block);
-
-        let start_block = if self.fee_history_cache.is_empty() {
-            if latest_block <= query_len {
-                0
-            } else {
-                latest_block - query_len + 1
-            }
-        } else {
-            self.fee_history_cache.upper_bound() + 1
-        };
-
-        for i in start_block..=latest_block {
-            let block = self.fetch_block_by_height(i)?;
-            self.fee_history_cache.push_back(
-                i,
-                FeeHistoryEntry::from_block(
-                    Space::Ethereum,
-                    &block.pivot_header,
-                    block.transactions.iter().map(|x| &**x),
-                ),
-            )?;
-        }
-
-        // update cache if block changes due to reorg
-        if self.fee_history_cache.lower_bound() < start_block {
-            let mut check = start_block - 1;
-            let mut curr = self
-                .fee_history_cache
-                .get(start_block)
-                .ok_or_else(|| "fee_history_entry not found")?;
-            while check >= self.fee_history_cache.lower_bound() {
-                let item = self
-                    .fee_history_cache
-                    .get(check)
-                    .ok_or_else(|| "fee_history_entry not found")?;
-                if curr.parent_hash == item.header_hash {
-                    break;
-                }
-                let block = self.fetch_block_by_height(check)?;
-                curr = FeeHistoryEntry::from_block(
-                    Space::Ethereum,
-                    &block.pivot_header,
-                    block.transactions.iter().map(|x| &**x),
-                );
-                self.fee_history_cache.update(check, curr.clone());
-                check -= 1;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn fetch_block_by_height(
+    pub fn fetch_block_by_height(
         &self, height: u64,
     ) -> Result<PhantomBlock, String> {
         let maybe_block = self
@@ -159,38 +96,7 @@ impl EthHandler {
             Err("Specified block header does not exist".into())
         }
     }
-}
 
-fn block_tx_by_index(
-    phantom_block: Option<PhantomBlock>, idx: usize,
-) -> Option<Transaction> {
-    match phantom_block {
-        None => None,
-        Some(pb) => match pb.transactions.get(idx) {
-            None => None,
-            Some(tx) => {
-                let block_number = Some(pb.pivot_header.height().into());
-                let receipt = pb.receipts.get(idx).unwrap();
-                let status = receipt.outcome_status.in_space(Space::Ethereum);
-                let contract_address = match status == EVM_SPACE_SUCCESS {
-                    true => Transaction::deployed_contract_address(&tx),
-                    false => None,
-                };
-                Some(Transaction::from_signed(
-                    &tx,
-                    (
-                        Some(pb.pivot_header.hash()),
-                        block_number,
-                        Some(idx.into()),
-                    ),
-                    (Some(status.into()), contract_address),
-                ))
-            }
-        },
-    }
-}
-
-impl EthHandler {
     fn exec_transaction(
         &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
@@ -464,6 +370,36 @@ impl EthHandler {
         }
 
         return Ok(block_receipts);
+    }
+
+    fn block_tx_by_index(
+        phantom_block: Option<PhantomBlock>, idx: usize,
+    ) -> Option<Transaction> {
+        match phantom_block {
+            None => None,
+            Some(pb) => match pb.transactions.get(idx) {
+                None => None,
+                Some(tx) => {
+                    let block_number = Some(pb.pivot_header.height().into());
+                    let receipt = pb.receipts.get(idx).unwrap();
+                    let status =
+                        receipt.outcome_status.in_space(Space::Ethereum);
+                    let contract_address = match status == EVM_SPACE_SUCCESS {
+                        true => Transaction::deployed_contract_address(&tx),
+                        false => None,
+                    };
+                    Some(Transaction::from_signed(
+                        &tx,
+                        (
+                            Some(pb.pivot_header.hash()),
+                            block_number,
+                            Some(idx.into()),
+                        ),
+                        (Some(status.into()), contract_address),
+                    ))
+                }
+            },
+        }
     }
 }
 
@@ -1028,11 +964,28 @@ impl Eth for EthHandler {
             .map_err(RpcError::invalid_params)?;
 
         if newest_block == BlockNumber::Latest {
-            self.update_fee_history_cache_to_latest(
-                newest_height,
-                block_count.as_u64(),
-            )
-            .map_err(RpcError::invalid_params)?;
+            let fetch_block_by_height = |height| {
+                let maybe_block = self
+                    .consensus_graph()
+                    .get_phantom_block_by_number(
+                        EpochNumber::Number(height),
+                        None,
+                        false,
+                    )
+                    .map_err(|e| e.to_string())?;
+                if let Some(block) = maybe_block {
+                    Ok(block)
+                } else {
+                    Err("Specified block header does not exist".into())
+                }
+            };
+            self.fee_history_cache
+                .update_to_latest_block(
+                    newest_height,
+                    block_count.as_u64(),
+                    fetch_block_by_height,
+                )
+                .map_err(RpcError::invalid_params)?;
         }
 
         let mut fee_history = FeeHistory::new();
@@ -1122,7 +1075,7 @@ impl Eth for EthHandler {
 
         for (idx, tx) in phantom_block.transactions.iter().enumerate() {
             if tx.hash() == hash {
-                let tx = block_tx_by_index(Some(phantom_block), idx);
+                let tx = Self::block_tx_by_index(Some(phantom_block), idx);
                 if let Some(tx_ref) = &tx {
                     if tx_ref.status
                         == Some(
@@ -1159,7 +1112,7 @@ impl Eth for EthHandler {
                 .map_err(RpcError::invalid_params)?
         };
 
-        Ok(block_tx_by_index(phantom_block, idx.value()))
+        Ok(Self::block_tx_by_index(phantom_block, idx.value()))
     }
 
     fn transaction_by_block_number_and_index(
@@ -1180,7 +1133,7 @@ impl Eth for EthHandler {
                 .map_err(RpcError::invalid_params)?
         };
 
-        Ok(block_tx_by_index(phantom_block, idx.value()))
+        Ok(Self::block_tx_by_index(phantom_block, idx.value()))
     }
 
     fn transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<Receipt>> {

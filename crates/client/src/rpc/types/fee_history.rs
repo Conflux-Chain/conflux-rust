@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
 
+use crate::rpc::impls::FeeHistoryEntry;
 use cfx_parameters::block::{
     cspace_block_gas_limit_after_cip1559,
     espace_block_gas_limit_of_enabled_block,
 };
-use cfx_types::{Space, SpaceMap, H256, U256};
+use cfx_types::{Space, SpaceMap, U256};
 use primitives::{transaction::SignedTransaction, BlockHeader};
 
 use super::CfxFeeHistory;
@@ -29,15 +30,6 @@ impl FeeHistory {
     pub fn new() -> Self { Default::default() }
 
     pub fn reward(&self) -> &VecDeque<Vec<U256>> { &self.reward }
-
-    pub fn to_cfx_fee_history(self) -> CfxFeeHistory {
-        CfxFeeHistory::new(
-            self.oldest_block,
-            self.base_fee_per_gas,
-            self.gas_used_ratio,
-            self.reward,
-        )
-    }
 
     pub fn push_front_block<'a, I>(
         &mut self, space: Space, percentiles: &Vec<f64>,
@@ -93,7 +85,7 @@ impl FeeHistory {
             .collect();
         rewards.sort_unstable();
         self.reward
-            .push_front(compute_reward(percentiles, &rewards));
+            .push_front(Self::compute_reward(percentiles, &rewards));
 
         Ok(())
     }
@@ -108,7 +100,7 @@ impl FeeHistory {
         let rewards: Vec<U256> =
             entry.rewards.iter().map(|x| U256::from(*x)).collect();
         self.reward
-            .push_front(compute_reward(percentiles, &rewards));
+            .push_front(Self::compute_reward(percentiles, &rewards));
 
         Ok(())
     }
@@ -121,92 +113,36 @@ impl FeeHistory {
         self.base_fee_per_gas
             .push_back(last_base_price.map_or(U256::zero(), |x| x[space]));
     }
-}
 
-// note rewards is required to be sorted
-fn compute_reward(percentiles: &Vec<f64>, rewards: &Vec<U256>) -> Vec<U256> {
-    if rewards.is_empty() {
-        return vec![U256::zero(); percentiles.len()];
-    }
-
-    let n = rewards.len();
-    percentiles
-        .into_iter()
-        .map(|per| {
-            let mut index = ((*per) * (n as f64) / 100f64) as usize;
-            if index >= n {
-                index = n - 1;
-            }
-            rewards[index]
-        })
-        .collect()
-}
-
-#[derive(Debug, Clone)]
-pub struct FeeHistoryEntry {
-    /// The base fee per gas for this block.
-    pub base_fee_per_gas: u64,
-    /// Gas used ratio this block.
-    pub gas_used_ratio: f64,
-    /// Gas used by this block.
-    pub gas_used: u64,
-    /// Gas limit by this block.
-    pub gas_limit: u64,
-    /// Hash of the block.
-    pub header_hash: H256,
-    ///
-    pub parent_hash: H256,
-    /// Approximated rewards for the configured percentiles.
-    pub rewards: Vec<u128>,
-    /// The timestamp of the block.
-    pub timestamp: u64,
-}
-
-impl FeeHistoryEntry {
-    pub fn from_block<'a, I>(
-        space: Space, pivot_header: &BlockHeader, transactions: I,
-    ) -> Self
-    where I: Clone + Iterator<Item = &'a SignedTransaction> {
-        let gas_limit: u64 = if space == Space::Native {
-            pivot_header.core_space_gas_limit().as_u64()
-        } else {
-            pivot_header.espace_gas_limit(true).as_u64()
-        };
-
-        let gas_used = transactions
-            .clone()
-            .map(|x| *x.gas_limit())
-            .reduce(|x, y| x + y)
-            .unwrap_or_default()
-            .as_u64();
-
-        let gas_used_ratio = gas_used as f64 / gas_limit as f64;
-
-        let base_fee_per_gas =
-            pivot_header.space_base_price(space).unwrap_or_default();
-
-        let mut rewards: Vec<_> = transactions
-            .map(|tx| {
-                if *tx.gas_price() < base_fee_per_gas {
-                    U256::zero()
-                } else {
-                    tx.effective_gas_price(&base_fee_per_gas)
-                }
-            })
-            .map(|x| x.as_u128())
-            .collect();
-
-        rewards.sort_unstable();
-
-        Self {
-            base_fee_per_gas: base_fee_per_gas.as_u64(),
-            gas_used_ratio,
-            gas_used,
-            gas_limit,
-            header_hash: pivot_header.hash(),
-            parent_hash: *pivot_header.parent_hash(),
-            rewards,
-            timestamp: pivot_header.timestamp(),
+    // note rewards is required to be sorted
+    fn compute_reward(
+        percentiles: &Vec<f64>, rewards: &Vec<U256>,
+    ) -> Vec<U256> {
+        if rewards.is_empty() {
+            return vec![U256::zero(); percentiles.len()];
         }
+
+        let n = rewards.len();
+        percentiles
+            .into_iter()
+            .map(|per| {
+                let mut index = ((*per) * (n as f64) / 100f64) as usize;
+                if index >= n {
+                    index = n - 1;
+                }
+                rewards[index]
+            })
+            .collect()
+    }
+}
+
+impl Into<CfxFeeHistory> for FeeHistory {
+    fn into(self) -> CfxFeeHistory {
+        CfxFeeHistory::new(
+            self.oldest_block,
+            self.base_fee_per_gas,
+            self.gas_used_ratio,
+            self.reward,
+        )
     }
 }

@@ -47,8 +47,8 @@ pub use self::{
         vote_params_info::VoteParamsInfo,
         Account, CfxFeeHistory, SponsorInfo,
     },
-    constants::{MAX_FEE_HISTORY_CACHE_BLOCK_COUNT, MAX_GAS_CALL_REQUEST},
-    fee_history::{FeeHistory, FeeHistoryEntry},
+    constants::MAX_GAS_CALL_REQUEST,
+    fee_history::FeeHistory,
     index::Index,
     provenance::Origin,
     trace::{
