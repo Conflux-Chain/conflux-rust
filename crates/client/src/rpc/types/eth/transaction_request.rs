@@ -47,7 +47,7 @@ pub struct TransactionRequest {
     pub gas_price: Option<U256>,
     /// Max fee per gas
     pub max_fee_per_gas: Option<U256>,
-    /// Miner bribe
+    ///
     pub max_priority_fee_per_gas: Option<U256>,
     /// Gas
     pub gas: Option<U256>,
@@ -74,15 +74,14 @@ impl TransactionRequest {
     }
 
     pub fn transaction_type(&self) -> u8 {
-        let request = self;
-        if request.transaction_type.is_some() {
-            request.transaction_type.unwrap().as_usize() as u8
+        if let Some(tx_type) = self.transaction_type {
+            tx_type.as_usize() as u8
         } else {
-            if request.max_fee_per_gas.is_some()
-                || request.max_priority_fee_per_gas.is_some()
+            if self.max_fee_per_gas.is_some()
+                || self.max_priority_fee_per_gas.is_some()
             {
                 EIP1559_TYPE
-            } else if request.access_list.is_some() {
+            } else if self.access_list.is_some() {
                 EIP2930_TYPE
             } else {
                 LEGACY_TX_TYPE

@@ -110,8 +110,8 @@ impl TransactionRequest {
     }
 
     pub fn transaction_type(&self) -> u8 {
-        if self.transaction_type.is_some() {
-            self.transaction_type.unwrap().as_usize() as u8
+        if let Some(tx_type) = self.transaction_type {
+            tx_type.as_usize() as u8
         } else {
             if self.max_fee_per_gas.is_some()
                 || self.max_priority_fee_per_gas.is_some()
