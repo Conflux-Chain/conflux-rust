@@ -20,7 +20,9 @@ use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{Address, AllChainID, Space, SpaceMap, H256, U256};
+use cfx_types::{
+    parse_hex_string, Address, AllChainID, Space, SpaceMap, H256, U256,
+};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -1478,10 +1480,6 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
         Some(_) => Ok(vec![]),
         None => Ok(vec![]),
     }
-}
-
-pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
-    hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
 }
 
 pub fn parse_config_address_string(

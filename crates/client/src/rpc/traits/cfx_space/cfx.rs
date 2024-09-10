@@ -5,14 +5,13 @@
 use crate::rpc::types::{
     pos::PoSEpochReward, Account as RpcAccount, AccountPendingInfo,
     AccountPendingTransactions, Block, BlockHashOrEpochNumber, Bytes,
-    CfxFeeHistory, CfxFilterChanges, CfxRpcLogFilter,
-    CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
+    CfxFeeHistory, CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
+    EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, StorageCollateralInfo, TokenSupplyInfo,
     Transaction, TransactionRequest, VoteParamsInfo, U64 as HexU64,
 };
-use cfx_types::{H128, H256, U256, U64};
+use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
 use primitives::{DepositInfo, StorageRoot, VoteStakeInfo};
@@ -318,32 +317,4 @@ pub trait Cfx {
     //        #[rpc(name = "cfx_getUnclesByBlockNumberAndIndex")]
     //        fn uncles_by_block_number_and_index(&self, BlockNumber, Index) ->
     // BoxFuture<Option<Block>>;
-}
-
-/// Eth filters rpc api (polling).
-#[rpc(server)]
-pub trait CfxFilter {
-    /// Returns id of new filter.
-    #[rpc(name = "cfx_newFilter")]
-    fn new_filter(&self, _: CfxRpcLogFilter) -> JsonRpcResult<H128>;
-
-    /// Returns id of new block filter.
-    #[rpc(name = "cfx_newBlockFilter")]
-    fn new_block_filter(&self) -> JsonRpcResult<H128>;
-
-    /// Returns id of new block filter.
-    #[rpc(name = "cfx_newPendingTransactionFilter")]
-    fn new_pending_transaction_filter(&self) -> JsonRpcResult<H128>;
-
-    /// Returns filter changes since last poll.
-    #[rpc(name = "cfx_getFilterChanges")]
-    fn filter_changes(&self, _: H128) -> JsonRpcResult<CfxFilterChanges>;
-
-    /// Returns all logs matching given filter (in a range 'from' - 'to').
-    #[rpc(name = "cfx_getFilterLogs")]
-    fn filter_logs(&self, _: H128) -> JsonRpcResult<Vec<RpcLog>>;
-
-    /// Uninstalls filter.
-    #[rpc(name = "cfx_uninstallFilter")]
-    fn uninstall_filter(&self, _: H128) -> JsonRpcResult<bool>;
 }
