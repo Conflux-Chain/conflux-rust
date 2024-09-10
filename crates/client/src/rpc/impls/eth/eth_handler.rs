@@ -81,14 +81,24 @@ impl EthHandler {
     pub fn fetch_block_by_height(
         &self, height: u64,
     ) -> Result<PhantomBlock, String> {
+        let maybe_block = self.consensus_graph().get_phantom_block_by_number(
+            EpochNumber::Number(height),
+            None,
+            false,
+        )?;
+        if let Some(block) = maybe_block {
+            Ok(block)
+        } else {
+            Err("Specified block header does not exist".into())
+        }
+    }
+
+    pub fn fetch_block_by_hash(
+        &self, hash: &H256,
+    ) -> Result<PhantomBlock, String> {
         let maybe_block = self
             .consensus_graph()
-            .get_phantom_block_by_number(
-                EpochNumber::Number(height),
-                None,
-                false,
-            )
-            .map_err(|e| e.to_string())?;
+            .get_phantom_block_by_hash(hash, false)?;
         if let Some(block) = maybe_block {
             Ok(block)
         } else {
@@ -917,26 +927,19 @@ impl Eth for EthHandler {
             .map_err(RpcError::invalid_params)?;
 
         if newest_block == BlockNumber::Latest {
-            let fetch_block_by_height = |height| {
-                let maybe_block = self
-                    .consensus_graph()
-                    .get_phantom_block_by_number(
-                        EpochNumber::Number(height),
-                        None,
-                        false,
-                    )
-                    .map_err(|e| e.to_string())?;
-                if let Some(block) = maybe_block {
-                    Ok(block)
-                } else {
-                    Err("Specified block header does not exist".into())
-                }
-            };
+            let fetch_block_by_hash =
+                |height| self.fetch_block_by_hash(&height);
+
+            let latest_block = self
+                .fetch_block_by_height(newest_height)
+                .map_err(RpcError::invalid_params)?;
+
             self.fee_history_cache
                 .update_to_latest_block(
                     newest_height,
+                    latest_block.pivot_header.hash(),
                     block_count.as_u64(),
-                    fetch_block_by_height,
+                    fetch_block_by_hash,
                 )
                 .map_err(RpcError::invalid_params)?;
         }

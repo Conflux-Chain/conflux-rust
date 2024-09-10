@@ -2,10 +2,7 @@ use cfx_types::{Space, H256, U256};
 use cfxcore::consensus::PhantomBlock;
 use parking_lot::RwLock;
 use primitives::{transaction::SignedTransaction, BlockHeader};
-use std::{
-    collections::{BTreeMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::VecDeque, sync::Arc};
 
 pub const MAX_FEE_HISTORY_CACHE_BLOCK_COUNT: u64 = 1024;
 
@@ -31,54 +28,65 @@ impl FeeHistoryCache {
         If the number of blocks in the cache exceeds 1024, delete the oldest block data until the number of blocks in the cache is 1024.
     */
     pub fn update_to_latest_block<F>(
-        &self, latest_block: u64, query_len: u64, fetch_block_by_height: F,
+        &self, latest_block: u64, latest_hash: H256, query_len: u64,
+        fetch_block_by_hash: F,
     ) -> Result<(), String>
-    where F: Fn(u64) -> Result<PhantomBlock, String> {
-        self.check_and_clear_cache(latest_block);
+    where
+        F: Fn(H256) -> Result<PhantomBlock, String>,
+    {
+        let mut inner = self.inner.write();
 
-        let start_block = if self.is_empty() {
+        // if the cached block data is outdated, clear the cache first
+        inner.check_and_clear_cache(latest_block);
+
+        let start_block = if inner.is_empty() {
             if latest_block <= query_len {
                 0
             } else {
                 latest_block - query_len + 1
             }
         } else {
-            self.upper_bound() + 1
+            inner.upper_bound() + 1
         };
 
-        for i in start_block..=latest_block {
-            let block = fetch_block_by_height(i)?;
-            self.push_back(
+        let mut curr_hash = latest_hash;
+        let mut container = VecDeque::new();
+        for i in (start_block..=latest_block).rev() {
+            let block = fetch_block_by_hash(curr_hash)?;
+            container.push_front((
                 i,
                 FeeHistoryEntry::from_block(
                     Space::Ethereum,
                     &block.pivot_header,
                     block.transactions.iter().map(|x| &**x),
                 ),
-            )?;
+            ));
+            curr_hash = block.pivot_header.parent_hash().clone();
+        }
+
+        for (block_number, entry) in container {
+            inner.push_back(block_number, entry)?;
         }
 
         // update cache if block changes due to reorg
-        if self.lower_bound() < start_block {
-            let mut check = start_block - 1;
-            let mut curr = self
-                .get(start_block)
-                .ok_or_else(|| "fee_history_entry not found")?;
-            while check >= self.lower_bound() {
-                let item = self
-                    .get(check)
+        if inner.lower_bound < start_block {
+            for i in (inner.lower_bound..start_block).rev() {
+                let item = inner
+                    .get(i)
                     .ok_or_else(|| "fee_history_entry not found")?;
-                if curr.parent_hash == item.header_hash {
+                if item.header_hash == curr_hash {
                     break;
                 }
-                let block = fetch_block_by_height(check)?;
-                curr = FeeHistoryEntry::from_block(
-                    Space::Ethereum,
-                    &block.pivot_header,
-                    block.transactions.iter().map(|x| &**x),
+                let block = fetch_block_by_hash(curr_hash)?;
+                inner.update(
+                    i,
+                    FeeHistoryEntry::from_block(
+                        Space::Ethereum,
+                        &block.pivot_header,
+                        block.transactions.iter().map(|x| &**x),
+                    ),
                 );
-                self.update(check, curr.clone());
-                check -= 1;
+                curr_hash = block.pivot_header.parent_hash().clone();
             }
         }
 
@@ -89,24 +97,21 @@ impl FeeHistoryCache {
 
     pub fn lower_bound(&self) -> u64 { self.inner.read().lower_bound }
 
-    pub fn upper_bound(&self) -> u64 { self.inner.read().upper_bound }
-
-    pub fn is_empty(&self) -> bool {
-        let inner = self.inner.read();
-        inner.lower_bound == inner.upper_bound && inner.lower_bound == 0
-    }
+    pub fn upper_bound(&self) -> u64 { self.inner.read().upper_bound() }
 
     pub fn get_history(
         &self, start_block: u64, end_block: u64,
     ) -> Option<Vec<FeeHistoryEntry>> {
         let inner = self.inner.read();
         let lower_bound = inner.lower_bound;
-        let upper_bound = inner.upper_bound;
+        let upper_bound = inner.upper_bound();
         if start_block >= lower_bound && end_block <= upper_bound {
+            let start = (start_block - lower_bound) as usize;
+            let end = (end_block - lower_bound) as usize;
             let result = inner
                 .entries
-                .range(start_block..=end_block)
-                .map(|(_, fee_entry)| fee_entry.clone())
+                .range(start..=end)
+                .map(|fee_entry| fee_entry.clone())
                 .collect::<Vec<_>>();
 
             if result.is_empty() {
@@ -119,85 +124,19 @@ impl FeeHistoryCache {
         }
     }
 
-    pub fn get(&self, index: u64) -> Option<FeeHistoryEntry> {
-        if index < self.lower_bound() || index > self.upper_bound() {
-            return None;
-        }
-        self.inner
-            .read()
-            .entries
-            .get(&index)
-            .map(|item| item.clone())
-    }
-
-    pub fn update(&self, block_number: u64, entry: FeeHistoryEntry) {
-        let mut inner = self.inner.write();
-        if block_number < inner.lower_bound || block_number > inner.upper_bound
-        {
-            return;
-        }
-        inner.entries.insert(block_number, entry);
-    }
-
     pub fn get_history_with_missing_info(
         &self, start_block: u64, end_block: u64,
     ) -> Vec<Option<FeeHistoryEntry>> {
         let inner = self.inner.read();
+        let lower_bound = inner.lower_bound;
         (start_block..=end_block)
-            .map(|block_number| inner.entries.get(&block_number).cloned())
+            .map(|block_number| {
+                inner
+                    .entries
+                    .get((block_number - lower_bound) as usize)
+                    .cloned()
+            })
             .collect()
-    }
-
-    #[allow(dead_code)]
-    fn missing_consecutive_blocks(&self) -> VecDeque<u64> {
-        let inner = self.inner.read();
-        (inner.lower_bound..inner.upper_bound)
-            .rev()
-            .filter(|&block_number| !inner.entries.contains_key(&block_number))
-            .collect()
-    }
-
-    // if the cached history is outdated, clear the cache
-    pub fn check_and_clear_cache(&self, latest_block: u64) {
-        if self.upper_bound() + self.max_blocks() <= latest_block {
-            self.clear_cache();
-        }
-    }
-
-    pub fn push_back(
-        &self, block_number: u64, entry: FeeHistoryEntry,
-    ) -> Result<(), String> {
-        if !self.is_empty() && block_number - self.upper_bound() != 1 {
-            return Err("block number is not consecutive".to_string());
-        }
-
-        let mut inner = self.inner.write();
-
-        inner.entries.insert(block_number, entry);
-
-        if inner.lower_bound == 0 {
-            inner.lower_bound = block_number;
-        }
-        inner.upper_bound = block_number;
-
-        if inner.entries.len() > inner.max_blocks as usize {
-            inner.entries.pop_first();
-            inner.lower_bound += 1;
-        }
-
-        Ok(())
-    }
-
-    fn clear_cache(&self) {
-        if self.is_empty() {
-            return;
-        }
-
-        let mut inner = self.inner.write();
-
-        inner.entries.clear();
-        inner.lower_bound = 0;
-        inner.upper_bound = 0;
     }
 }
 
@@ -205,21 +144,78 @@ impl FeeHistoryCache {
 struct FeeHistoryCacheInner {
     /// Stores the lower bound of the cache
     lower_bound: u64,
-    /// Stores the upper bound of the cache
-    upper_bound: u64,
     /// maximum number of blocks to store in the cache
     max_blocks: u64,
     /// Stores the entries of the cache
-    entries: BTreeMap<u64, FeeHistoryEntry>,
+    entries: VecDeque<FeeHistoryEntry>,
 }
 
 impl FeeHistoryCacheInner {
     pub fn new() -> Self {
         Self {
             lower_bound: 0,
-            upper_bound: 0,
             max_blocks: MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
-            entries: BTreeMap::new(),
+            entries: VecDeque::new(),
+        }
+    }
+
+    pub fn upper_bound(&self) -> u64 {
+        self.lower_bound + self.entries.len() as u64 - 1
+    }
+
+    // if the cached history is outdated, clear the cache
+    fn check_and_clear_cache(&mut self, latest_block: u64) {
+        if !self.is_empty()
+            && self.upper_bound() <= latest_block - self.max_blocks
+        {
+            self.clear_cache();
+        }
+    }
+
+    pub fn clear_cache(&mut self) {
+        self.entries.clear();
+        self.lower_bound = 0;
+    }
+
+    fn push_back(
+        &mut self, block_number: u64, entry: FeeHistoryEntry,
+    ) -> Result<(), String> {
+        if !self.is_empty() && block_number - self.upper_bound() != 1 {
+            return Err("block number is not consecutive".to_string());
+        }
+
+        self.entries.push_back(entry);
+
+        // the first entry
+        if self.lower_bound == 0 {
+            self.lower_bound = block_number;
+        }
+
+        if self.entries.len() > self.max_blocks as usize {
+            self.entries.pop_front();
+            self.lower_bound += 1;
+        }
+
+        Ok(())
+    }
+
+    pub fn is_empty(&self) -> bool { self.entries.is_empty() }
+
+    pub fn get(&self, height: u64) -> Option<FeeHistoryEntry> {
+        if height < self.lower_bound || height > self.upper_bound() {
+            return None;
+        }
+        let key = height - self.lower_bound;
+        self.entries.get(key as usize).map(|item| item.clone())
+    }
+
+    pub fn update(&mut self, height: u64, entry: FeeHistoryEntry) {
+        if height < self.lower_bound || height > self.upper_bound() {
+            return;
+        }
+        let key = height - self.lower_bound;
+        if let Some(item) = self.entries.get_mut(key as usize) {
+            *item = entry;
         }
     }
 }
