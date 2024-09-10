@@ -19,7 +19,7 @@ use crate::rpc::{
 use cfx_addr::Network;
 use cfx_types::{Space, H128, H256};
 use cfxcore::{
-    channel::Channel, rpc_errors::Error as CfxRpcError, BlockDataManager,
+    channel::Channel, errors::Error as CfxRpcError, BlockDataManager,
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedTransactionPool,
 };

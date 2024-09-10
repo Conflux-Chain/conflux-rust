@@ -32,7 +32,7 @@ use cfx_types::{
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     consensus::PhantomBlock,
-    rpc_errors::{Error as CfxRpcError, Result as CfxRpcResult},
+    errors::{Error as CfxRpcError, Result as CfxRpcResult},
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };

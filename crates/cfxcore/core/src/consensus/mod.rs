@@ -28,8 +28,8 @@ use crate::{
         },
         pos_handler::PosVerifier,
     },
+    errors::{invalid_params, invalid_params_check, Result as CoreResult},
     pow::{PowComputer, ProofOfWorkConfig},
-    rpc_errors::{invalid_params, invalid_params_check, Result as RpcResult},
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
@@ -703,7 +703,7 @@ impl ConsensusGraph {
 
     pub fn get_block_epoch_number_with_pivot_check(
         &self, hash: &H256, require_pivot: bool,
-    ) -> RpcResult<u64> {
+    ) -> CoreResult<u64> {
         let inner = &*self.inner.read();
         // TODO: block not found error
         let epoch_number =
@@ -734,7 +734,7 @@ impl ConsensusGraph {
         &self, address: AddressWithSpace,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
         rpc_param_name: &str,
-    ) -> RpcResult<U256> {
+    ) -> CoreResult<U256> {
         let epoch_number = match block_hash_or_epoch_number {
             BlockHashOrEpochNumber::BlockHashWithOption {
                 hash,
@@ -1429,7 +1429,7 @@ impl ConsensusGraph {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
         request: EstimateRequest,
-    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
+    ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let (epoch_id, epoch_size) = if let Ok(v) =
@@ -1446,7 +1446,7 @@ impl ConsensusGraph {
     pub fn collect_epoch_geth_trace(
         &self, epoch_num: u64, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
-    ) -> RpcResult<Vec<GethTraceWithHash>> {
+    ) -> CoreResult<Vec<GethTraceWithHash>> {
         let epoch = EpochNumber::Number(epoch_num);
         self.validate_stated_epoch(&epoch)?;
 
@@ -1482,7 +1482,7 @@ impl ConsensusGraph {
     pub fn collect_blocks_geth_trace(
         &self, epoch_id: H256, epoch_num: u64, blocks: &Vec<Arc<Block>>,
         opts: GethDebugTracingOptions, tx_hash: Option<H256>,
-    ) -> RpcResult<Vec<GethTraceWithHash>> {
+    ) -> CoreResult<Vec<GethTraceWithHash>> {
         self.executor.collect_blocks_geth_trace(
             epoch_id, epoch_num, blocks, opts, tx_hash,
         )
@@ -1496,7 +1496,7 @@ impl ConsensusGraph {
 
     fn get_storage_state_by_height_and_hash(
         &self, height: u64, hash: &H256,
-    ) -> RpcResult<StorageState> {
+    ) -> CoreResult<StorageState> {
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -1541,7 +1541,7 @@ impl ConsensusGraph {
 
     fn get_state_by_height_and_hash(
         &self, height: u64, hash: &H256, space: Option<Space>,
-    ) -> RpcResult<Box<dyn StateTrait>> {
+    ) -> CoreResult<Box<dyn StateTrait>> {
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -2117,7 +2117,7 @@ impl ConsensusGraph {
     fn get_state_db_by_epoch_number_with_space(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
         space: Option<Space>,
-    ) -> RpcResult<StateDb> {
+    ) -> CoreResult<StateDb> {
         invalid_params_check(
             rpc_param_name,
             self.validate_stated_epoch(&epoch_number),
@@ -2389,7 +2389,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_storage_state_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StorageState> {
+    ) -> CoreResult<StorageState> {
         invalid_params_check(
             rpc_param_name,
             self.validate_stated_epoch(&epoch_number),
@@ -2405,7 +2405,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StateDb> {
+    ) -> CoreResult<StateDb> {
         self.get_state_db_by_epoch_number_with_space(
             epoch_number,
             rpc_param_name,
@@ -2415,7 +2415,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_eth_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StateDb> {
+    ) -> CoreResult<StateDb> {
         self.get_state_db_by_epoch_number_with_space(
             epoch_number,
             rpc_param_name,

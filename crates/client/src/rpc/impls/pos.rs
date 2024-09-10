@@ -18,7 +18,7 @@ use crate::{
             },
             EpochNumber, RpcAddress,
         },
-        RpcInterceptor, RpcResult,
+        CoreResult, RpcInterceptor,
     },
 };
 use cfx_addr::Network;
@@ -122,7 +122,7 @@ impl PosHandler {
 
     fn account_impl(
         &self, address: H256, view: Option<U64>,
-    ) -> RpcResult<Account> {
+    ) -> CoreResult<Account> {
         let state = self.pos_state_by_view(view)?;
 
         let account_address = AccountAddress::from_bytes(address);
@@ -161,7 +161,7 @@ impl PosHandler {
 
     fn account_by_pow_address_impl(
         &self, address: RpcAddress, view: Option<U64>,
-    ) -> RpcResult<Account> {
+    ) -> CoreResult<Account> {
         debug!(
             "Get pos account by pow address {:?}, view {:?}",
             address, view
@@ -223,7 +223,7 @@ impl PosHandler {
 
     fn committee_by_block_number(
         &self, view: Option<U64>,
-    ) -> RpcResult<CommitteeState> {
+    ) -> CoreResult<CommitteeState> {
         let pos_state = self.pos_state_by_view(view)?;
 
         let current_committee =

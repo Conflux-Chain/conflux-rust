@@ -13,7 +13,7 @@ use crate::{
             Handleable, Key, KeyContainer,
         },
         request_manager::{AsAny, Request},
-        Error, ErrorKind, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
+        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
 use cfx_types::H256;
@@ -74,7 +74,7 @@ impl Handleable for Transactions {
         };
 
         if should_disconnect {
-            bail!(ErrorKind::TooManyTrans);
+            bail!(Error::TooManyTrans);
         }
 
         // The transaction pool will rely on the execution state information to
@@ -109,7 +109,7 @@ impl Handleable for Transactions {
             Ok(())
         } else {
             debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", transactions.len());
-            Err(ErrorKind::InCatchUpMode("ignore transaction_digests message because still in the catch up mode".to_string()).into())
+            Err(Error::InCatchUpMode("ignore transaction_digests message because still in the catch up mode".to_string()).into())
         }
     }
 }
@@ -144,7 +144,7 @@ impl Handleable for TransactionDigests {
                         .max_trans_count_received_in_catch_up
                         as usize
                 {
-                    bail!(ErrorKind::TooManyTrans);
+                    bail!(Error::TooManyTrans);
                 }
             }
         }
@@ -161,7 +161,7 @@ impl Handleable for TransactionDigests {
                 );
             Ok(())
         } else {
-            Err(ErrorKind::InCatchUpMode("ignore transaction_digests message because still in the catch up mode".to_string()).into())
+            Err(Error::InCatchUpMode("ignore transaction_digests message because still in the catch up mode".to_string()).into())
         }
     }
 }
@@ -627,7 +627,7 @@ impl Handleable for GetTransactionsResponse {
             Ok(())
         } else {
             debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", self.transactions.len());
-            Err(ErrorKind::InCatchUpMode("transactions discarded for handling on_get_transactions_response messages".to_string()).into())
+            Err(Error::InCatchUpMode("transactions discarded for handling on_get_transactions_response messages".to_string()).into())
         }
     }
 }
@@ -694,7 +694,7 @@ impl Handleable for GetTransactionsFromTxHashesResponse {
             Ok(())
         } else {
             debug!("All {} transactions are not inserted to the transaction pool, because the node is still in the catch up mode", self.transactions.len());
-            Err(ErrorKind::InCatchUpMode("transactions discarded for handling on_get_transactions_response messages".to_string()).into())
+            Err(Error::InCatchUpMode("transactions discarded for handling on_get_transactions_response messages".to_string()).into())
         }
     }
 }

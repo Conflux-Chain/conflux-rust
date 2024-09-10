@@ -10,7 +10,7 @@ use crate::{
             Handleable,
         },
         synchronization_state::PeerFilter,
-        Error, ErrorKind,
+        Error,
     },
 };
 use cfx_parameters::{
@@ -90,7 +90,7 @@ impl Handleable for GetBlockHeadersResponse {
                 });
                 if original_size != self.headers.len() {
                     // Some headers are removed because of invalid timestamps.
-                    Err(ErrorKind::InvalidTimestamp.into())
+                    Err(Error::InvalidTimestamp.into())
                 } else {
                     Ok(())
                 }
@@ -283,7 +283,7 @@ impl GetBlockHeadersResponse {
             ctx.manager.relay_blocks(ctx.io, need_to_relay).ok();
         }
         if has_invalid_header {
-            return Err(ErrorKind::InvalidBlock.into());
+            return Err(Error::InvalidBlock.into());
         }
         Ok(())
     }

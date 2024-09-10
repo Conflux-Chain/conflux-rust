@@ -4,9 +4,9 @@
 
 use crate::{
     consensus::pos_handler::PosVerifier,
-    error::{BlockError, Error},
+    core_error::{BlockError, CoreError as Error},
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
-    sync::{Error as SyncError, ErrorKind as SyncErrorKind},
+    sync::Error as SyncError,
 };
 use cfx_executor::{
     executive::gas_required_for, machine::Machine, spec::TransitionsEpochHeight,
@@ -335,7 +335,7 @@ impl VerificationConfig {
         let invalid_threshold = now + VALID_TIME_DRIFT;
         if header.timestamp() > invalid_threshold {
             warn!("block {} has incorrect timestamp", header.hash());
-            return Err(SyncErrorKind::InvalidTimestamp.into());
+            return Err(SyncError::InvalidTimestamp.into());
         }
         Ok(())
     }

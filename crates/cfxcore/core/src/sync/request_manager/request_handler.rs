@@ -8,7 +8,7 @@ use crate::{
         message::{DynamicCapability, KeyContainer},
         request_manager::RequestManager,
         synchronization_protocol_handler::ProtocolConfiguration,
-        Error, ErrorKind,
+        Error,
     },
     NodeType,
 };
@@ -79,7 +79,7 @@ impl RequestHandler {
         if let Some(peer) = peers.get_mut(peer_id) {
             peer.match_request(request_id)
         } else {
-            bail!(ErrorKind::UnknownPeer);
+            bail!(Error::UnknownPeer);
         }
     }
 
@@ -383,7 +383,7 @@ impl RequestContainer {
                 .store(true, AtomicOrdering::Relaxed);
             Ok(removed_req.message)
         } else {
-            bail!(ErrorKind::RequestNotFound)
+            bail!(Error::RequestNotFound)
         }
     }
 
@@ -486,7 +486,7 @@ impl RequestMessage {
                         &RequestMessage::new(resent_request, self.delay),
                     );
                 }
-                Err(ErrorKind::UnexpectedResponse.into())
+                Err(Error::UnexpectedResponse.into())
             }
         }
     }
@@ -498,7 +498,7 @@ impl RequestMessage {
             Some(req) => Ok(req),
             None => {
                 warn!("failed to downcast general request to concrete request type");
-                Err(ErrorKind::UnexpectedResponse.into())
+                Err(Error::UnexpectedResponse.into())
             }
         }
     }

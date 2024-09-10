@@ -29,7 +29,7 @@ use crate::rpc::{
     traits::eth_space::eth_filter::EthFilter,
     types::eth::{BlockNumber, EthRpcLogFilter, FilterChanges, Log},
 };
-use cfxcore::rpc_errors::Error as CfxRpcError;
+use cfxcore::errors::Error as CfxRpcError;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as RpcResult};
 
 /// Something which provides data that can be filtered over.

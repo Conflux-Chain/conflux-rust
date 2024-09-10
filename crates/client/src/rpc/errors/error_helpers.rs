@@ -51,6 +51,15 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
     }
 }
 
+pub fn invalid_params_check<T, E: std::fmt::Display>(
+    param: &str, r: std::result::Result<T, E>,
+) -> Result<T, Error> {
+    match r {
+        Ok(t) => Ok(t),
+        Err(e) => Err(invalid_params(param.into(), format!("{}", e)).into()),
+    }
+}
+
 pub fn invalid_params_msg(param: &str) -> Error {
     invalid_params_rpc_err(format!("Invalid parameters: {}", param))
 }
