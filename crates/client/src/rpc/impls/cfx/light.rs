@@ -8,10 +8,10 @@ use cfx_types::{
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::ConsensusConfig,
+    errors::account_result_to_rpc_result,
     light_protocol::{
         self, query_service::TxInfo, Error as LightError, ErrorKind,
     },
-    rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     verification::EpochReceiptProof,
     ConsensusGraph, ConsensusGraphTrait, LightQueryService, PeerInfo,
     SharedConsensusGraph,
@@ -30,11 +30,11 @@ use primitives::{
 };
 use rlp::Encodable;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
-// To convert from RpcResult to BoxFuture by delegate! macro automatically.
+// To convert from CoreResult to BoxFuture by delegate! macro automatically.
 use crate::{
     common::delegate_convert,
     rpc::{
-        errors,
+        errors::{self, invalid_params_check},
         impls::{
             common::{self, RpcImpl as CommonImpl},
             MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
@@ -54,14 +54,12 @@ use crate::{
             SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
             TransactionRequest, VoteParamsInfo, WrapTransaction, U64 as HexU64,
         },
-        RpcBoxFuture, RpcResult,
+        CoreBoxFuture, CoreResult,
     },
 };
 use cfx_addr::Network;
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
-use cfxcore::{
-    light_protocol::QueryService, rpc_errors::ErrorKind::LightProtocol,
-};
+use cfxcore::{errors::Error::LightProtocol, light_protocol::QueryService};
 use diem_types::account_address::AccountAddress;
 
 // macro for reducing boilerplate for unsupported methods
@@ -117,17 +115,18 @@ impl RpcImpl {
 
     fn check_address_network(
         network: Network, light: &QueryService,
-    ) -> RpcResult<()> {
+    ) -> CoreResult<()> {
         invalid_params_check(
             "address",
             check_rpc_address_network(Some(network), light.get_network_type()),
         )
+        .map_err(|e| e.into())
     }
 
     fn get_epoch_number_with_pivot_check(
         consensus_graph: SharedConsensusGraph,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<EpochNumber> {
+    ) -> CoreResult<EpochNumber> {
         match block_hash_or_epoch_number {
             Some(BlockHashOrEpochNumber::BlockHashWithOption {
                 hash,
@@ -152,7 +151,7 @@ impl RpcImpl {
 
     fn account(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<RpcAccount> {
+    ) -> CoreBoxFuture<RpcAccount> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -190,7 +189,7 @@ impl RpcImpl {
     fn balance(
         &self, address: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcBoxFuture<U256> {
+    ) -> CoreBoxFuture<U256> {
         info!(
             "RPC Request: cfx_getBalance address={:?} epoch={:?}",
             address,
@@ -226,7 +225,7 @@ impl RpcImpl {
 
     fn admin(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Option<RpcAddress>> {
+    ) -> CoreBoxFuture<Option<RpcAddress>> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
 
@@ -259,7 +258,7 @@ impl RpcImpl {
 
     fn sponsor_info(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<SponsorInfo> {
+    ) -> CoreBoxFuture<SponsorInfo> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -292,7 +291,7 @@ impl RpcImpl {
 
     fn staking_balance(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<U256> {
+    ) -> CoreBoxFuture<U256> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -321,7 +320,7 @@ impl RpcImpl {
 
     fn deposit_list(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Vec<DepositInfo>> {
+    ) -> CoreBoxFuture<Vec<DepositInfo>> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -351,7 +350,7 @@ impl RpcImpl {
 
     pub fn account_pending_info(
         &self, address: RpcAddress,
-    ) -> RpcBoxFuture<Option<AccountPendingInfo>> {
+    ) -> CoreBoxFuture<Option<AccountPendingInfo>> {
         info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
 
         let fut = async move {
@@ -363,7 +362,7 @@ impl RpcImpl {
 
     fn vote_list(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Vec<VoteStakeInfo>> {
+    ) -> CoreBoxFuture<Vec<VoteStakeInfo>> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -393,7 +392,7 @@ impl RpcImpl {
 
     fn collateral_for_storage(
         &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<U256> {
+    ) -> CoreBoxFuture<U256> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -423,7 +422,7 @@ impl RpcImpl {
     fn code(
         &self, address: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcBoxFuture<Bytes> {
+    ) -> CoreBoxFuture<Bytes> {
         info!(
             "RPC Request: cfx_getCode address={:?} epoch={:?}",
             address,
@@ -460,7 +459,7 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    fn get_logs(&self, filter: CfxRpcLogFilter) -> RpcBoxFuture<Vec<RpcLog>> {
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> CoreBoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs filter={:?}", filter);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
@@ -501,7 +500,7 @@ impl RpcImpl {
 
     fn send_tx_helper(
         light: Arc<LightQueryService>, raw: Bytes,
-    ) -> RpcResult<H256> {
+    ) -> CoreResult<H256> {
         let raw: Vec<u8> = raw.into_vec();
 
         // decode tx so that we have its hash
@@ -523,14 +522,14 @@ impl RpcImpl {
         }
     }
 
-    fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
+    fn send_raw_transaction(&self, raw: Bytes) -> CoreResult<H256> {
         info!("RPC Request: cfx_sendRawTransaction bytes={:?}", raw);
         Self::send_tx_helper(self.light.clone(), raw)
     }
 
     fn send_transaction(
         &self, mut tx: TransactionRequest, password: Option<String>,
-    ) -> RpcBoxFuture<H256> {
+    ) -> CoreBoxFuture<H256> {
         info!("RPC Request: cfx_sendTransaction tx={:?}", tx);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
@@ -579,7 +578,7 @@ impl RpcImpl {
 
     fn storage_root(
         &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Option<StorageRoot>> {
+    ) -> CoreBoxFuture<Option<StorageRoot>> {
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
         info!(
@@ -609,7 +608,7 @@ impl RpcImpl {
     fn storage_at(
         &self, address: RpcAddress, position: U256,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> RpcBoxFuture<Option<H256>> {
+    ) -> CoreBoxFuture<Option<H256>> {
         let position: H256 = H256::from_uint(&position);
         // let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
@@ -647,7 +646,7 @@ impl RpcImpl {
 
     fn transaction_by_hash(
         &self, hash: H256,
-    ) -> RpcBoxFuture<Option<RpcTransaction>> {
+    ) -> CoreBoxFuture<Option<RpcTransaction>> {
         info!("RPC Request: cfx_getTransactionByHash hash={:?}", hash);
 
         // TODO(thegaram): try to retrieve from local tx pool or cache first
@@ -674,7 +673,7 @@ impl RpcImpl {
 
     fn transaction_receipt(
         &self, tx_hash: H256,
-    ) -> RpcBoxFuture<Option<RpcReceipt>> {
+    ) -> CoreBoxFuture<Option<RpcReceipt>> {
         let hash: H256 = tx_hash.into();
         info!("RPC Request: cfx_getTransactionReceipt hash={:?}", hash);
 
@@ -737,7 +736,7 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    pub fn epoch_number(&self, epoch: Option<EpochNumber>) -> RpcResult<U256> {
+    pub fn epoch_number(&self, epoch: Option<EpochNumber>) -> CoreResult<U256> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestMined);
         info!("RPC Request: cfx_epochNumber epoch={:?}", epoch);
 
@@ -747,11 +746,12 @@ impl RpcImpl {
                 .get_height_from_epoch_number(epoch.into())
                 .map(|height| height.into()),
         )
+        .map_err(|e| e.into())
     }
 
     pub fn next_nonce(
         &self, address: RpcAddress, num: Option<BlockHashOrEpochNumber>,
-    ) -> RpcBoxFuture<U256> {
+    ) -> CoreBoxFuture<U256> {
         info!(
             "RPC Request: cfx_getNextNonce address={:?} num={:?}",
             address, num
@@ -783,7 +783,7 @@ impl RpcImpl {
 
     pub fn block_by_hash(
         &self, hash: H256, include_txs: bool,
-    ) -> RpcBoxFuture<Option<RpcBlock>> {
+    ) -> CoreBoxFuture<Option<RpcBlock>> {
         let hash = hash.into();
 
         info!(
@@ -825,7 +825,7 @@ impl RpcImpl {
 
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: H256, pivot_hash: H256, epoch_number: U64,
-    ) -> RpcBoxFuture<RpcBlock> {
+    ) -> CoreBoxFuture<RpcBlock> {
         let block_hash = block_hash.into();
         let pivot_hash = pivot_hash.into();
         let epoch_number = epoch_number.as_u64();
@@ -881,7 +881,7 @@ impl RpcImpl {
 
     pub fn block_by_epoch_number(
         &self, epoch: EpochNumber, include_txs: bool,
-    ) -> RpcBoxFuture<Option<RpcBlock>> {
+    ) -> CoreBoxFuture<Option<RpcBlock>> {
         info!(
             "RPC Request: cfx_getBlockByEpochNumber epoch={:?} include_txs={:?}",
             epoch, include_txs
@@ -935,7 +935,7 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    pub fn blocks_by_epoch(&self, epoch: EpochNumber) -> RpcResult<Vec<H256>> {
+    pub fn blocks_by_epoch(&self, epoch: EpochNumber) -> CoreResult<Vec<H256>> {
         info!("RPC Request: cfx_getBlocksByEpoch epoch_number={:?}", epoch);
 
         let height = self
@@ -958,7 +958,7 @@ impl RpcImpl {
         Ok(hashes)
     }
 
-    pub fn gas_price(&self) -> RpcBoxFuture<U256> {
+    pub fn gas_price(&self) -> CoreBoxFuture<U256> {
         info!("RPC Request: cfx_gasPrice");
 
         let light = self.light.clone();
@@ -977,7 +977,7 @@ impl RpcImpl {
 
     pub fn interest_rate(
         &self, epoch: Option<EpochNumber>,
-    ) -> RpcBoxFuture<U256> {
+    ) -> CoreBoxFuture<U256> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         info!("RPC Request: cfx_getInterestRate epoch={:?}", epoch);
 
@@ -997,7 +997,7 @@ impl RpcImpl {
 
     pub fn accumulate_interest_rate(
         &self, epoch: Option<EpochNumber>,
-    ) -> RpcBoxFuture<U256> {
+    ) -> CoreBoxFuture<U256> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
@@ -1021,7 +1021,7 @@ impl RpcImpl {
 
     pub fn pos_economics(
         &self, epoch: Option<EpochNumber>,
-    ) -> RpcBoxFuture<PoSEconomics> {
+    ) -> CoreBoxFuture<PoSEconomics> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
 
         info!("RPC Request: cfx_getPoSEconomics epoch={:?}", epoch);
@@ -1049,7 +1049,7 @@ impl RpcImpl {
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
         epoch: Option<EpochNumber>,
-    ) -> RpcBoxFuture<CheckBalanceAgainstTransactionResponse> {
+    ) -> CoreBoxFuture<CheckBalanceAgainstTransactionResponse> {
         let epoch: primitives::EpochNumber =
             epoch.unwrap_or(EpochNumber::LatestState).into();
 
@@ -1097,7 +1097,7 @@ impl RpcImpl {
     fn fee_history(
         &self, mut block_count: HexU64, newest_block: EpochNumber,
         reward_percentiles: Option<Vec<f64>>,
-    ) -> RpcBoxFuture<CfxFeeHistory> {
+    ) -> CoreBoxFuture<CfxFeeHistory> {
         info!(
             "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
             block_count, newest_block, reward_percentiles
@@ -1189,7 +1189,7 @@ async fn fetch_block_for_fee_history(
         dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
     >,
     light: Arc<QueryService>, height: u64,
-) -> cfxcore::rpc_errors::Result<primitives::Block> {
+) -> cfxcore::errors::Result<primitives::Block> {
     let hash = consensus_graph
         .as_any()
         .downcast_ref::<ConsensusGraph>()

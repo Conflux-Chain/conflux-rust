@@ -42,7 +42,7 @@ use crate::{
             },
         },
     },
-    sync::{Error, ErrorKind, ProtocolConfiguration, CHECK_RPC_REQUEST_TIMER},
+    sync::{Error, ProtocolConfiguration, CHECK_RPC_REQUEST_TIMER},
 };
 
 use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
@@ -151,9 +151,7 @@ impl<'a> Context<'a> {
     }
 
     pub fn get_peer_account_address(&self) -> Result<AccountAddress, Error> {
-        let k = self
-            .get_pos_public_key()
-            .ok_or(Error::from_kind(ErrorKind::UnknownPeer))?;
+        let k = self.get_pos_public_key().ok_or(Error::UnknownPeer)?;
         Ok(from_consensus_public_key(&k.0, &k.1))
     }
 
@@ -267,53 +265,49 @@ impl HotStuffSynchronizationProtocol {
     ) {
         let mut disconnect = true;
         let mut warn = false;
-        let reason = format!("{}", e.0);
+        let reason = format!("{}", e);
         let error_reason = format!("{:?}", e);
         let mut op = None;
 
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
         // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
-        match e.0 {
-            ErrorKind::InvalidBlock => op = Some(UpdateNodeOperation::Demotion),
-            ErrorKind::InvalidGetBlockTxn(_) => {
+        match e {
+            Error::InvalidBlock => op = Some(UpdateNodeOperation::Demotion),
+            Error::InvalidGetBlockTxn(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::InvalidStatus(_) => {
-                op = Some(UpdateNodeOperation::Failure)
-            }
-            ErrorKind::InvalidMessageFormat => {
+            Error::InvalidStatus(_) => op = Some(UpdateNodeOperation::Failure),
+            Error::InvalidMessageFormat => {
                 op = Some(UpdateNodeOperation::Remove)
             }
-            ErrorKind::UnknownPeer => {
+            Error::UnknownPeer => {
                 warn = false;
                 op = Some(UpdateNodeOperation::Failure)
             }
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
-            ErrorKind::UnexpectedResponse => disconnect = true,
-            ErrorKind::RequestNotFound => {
+            Error::UnexpectedResponse => disconnect = true,
+            Error::RequestNotFound => {
                 warn = false;
                 disconnect = false;
             }
-            ErrorKind::InCatchUpMode(_) => {
+            Error::InCatchUpMode(_) => {
                 disconnect = false;
                 warn = false;
             }
-            ErrorKind::TooManyTrans => {}
-            ErrorKind::InvalidTimestamp => {
+            Error::TooManyTrans => {}
+            Error::InvalidTimestamp => op = Some(UpdateNodeOperation::Demotion),
+            Error::InvalidSnapshotManifest(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::InvalidSnapshotManifest(_) => {
+            Error::InvalidSnapshotChunk(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::InvalidSnapshotChunk(_) => {
-                op = Some(UpdateNodeOperation::Demotion)
-            }
-            ErrorKind::AlreadyThrottled(_) => {
+            Error::AlreadyThrottled(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
-            ErrorKind::EmptySnapshotChunk => disconnect = false,
-            ErrorKind::Throttled(_, msg) => {
+            Error::EmptySnapshotChunk => disconnect = false,
+            Error::Throttled(_, msg) => {
                 disconnect = false;
 
                 if let Err(e) = msg.send(io, peer) {
@@ -321,9 +315,9 @@ impl HotStuffSynchronizationProtocol {
                     disconnect = true;
                 }
             }
-            ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
-            ErrorKind::Io(_) => disconnect = false,
-            ErrorKind::Network(kind) => match kind {
+            Error::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+            Error::Io(_) => disconnect = false,
+            Error::Network(kind) => match kind.0 {
                 network::ErrorKind::AddressParse => disconnect = false,
                 network::ErrorKind::AddressResolve(_) => disconnect = false,
                 network::ErrorKind::Auth => disconnect = false,
@@ -356,18 +350,18 @@ impl HotStuffSynchronizationProtocol {
                     op = Some(UpdateNodeOperation::Failure)
                 }
             },
-            ErrorKind::Storage(_) => {}
-            ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
-            ErrorKind::__Nonexhaustive {} => {
-                op = Some(UpdateNodeOperation::Failure)
-            }
-            ErrorKind::InternalError(_) => {}
-            ErrorKind::RpcTimeout => {}
-            ErrorKind::RpcCancelledByDisconnection => {}
-            ErrorKind::UnexpectedMessage(_) => {
+            Error::Storage(_) => {}
+            Error::Msg(_) => op = Some(UpdateNodeOperation::Failure),
+            // Error::__Nonexhaustive {} => {
+            //     op = Some(UpdateNodeOperation::Failure)
+            // }
+            Error::InternalError(_) => {}
+            Error::RpcTimeout => {}
+            Error::RpcCancelledByDisconnection => {}
+            Error::UnexpectedMessage(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
-            ErrorKind::NotSupported(_) => disconnect = false,
+            Error::NotSupported(_) => disconnect = false,
         }
 
         if warn {
@@ -394,11 +388,11 @@ impl HotStuffSynchronizationProtocol {
         trace!("Dispatching message: peer={:?}, msg_id={:?}", peer, msg_id);
         let peer_hash = if !io.is_peer_self(peer) {
             if *peer == NodeId::default() {
-                return Err(ErrorKind::UnknownPeer.into());
+                return Err(Error::UnknownPeer.into());
             }
             let peer_hash = keccak(peer);
             if !self.peers.contains(&peer_hash) {
-                return Err(ErrorKind::UnknownPeer.into());
+                return Err(Error::UnknownPeer.into());
             }
             peer_hash
         } else {
@@ -468,7 +462,7 @@ where M: Deserialize<'a> + Handleable + Message {
     if let Err(e) = msg.handle(ctx) {
         info!(
             "failed to handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}, error_kind = {:?}",
-            ctx.peer, msg_id, msg_name, req_id, e.0,
+            ctx.peer, msg_id, msg_name, req_id, e,
         );
 
         return Err(e);
@@ -498,7 +492,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
                 io,
                 peer,
                 msgid::INVALID,
-                ErrorKind::InvalidMessageFormat.into(),
+                Error::InvalidMessageFormat.into(),
             );
         }
 
@@ -671,11 +665,11 @@ pub trait Handleable {
 pub trait RpcResponse: Send + Sync + Debug + AsAny {}
 
 impl From<bcs::Error> for Error {
-    fn from(_: bcs::Error) -> Self { ErrorKind::InvalidMessageFormat.into() }
+    fn from(_: bcs::Error) -> Self { Error::InvalidMessageFormat.into() }
 }
 
 impl From<anyhow::Error> for Error {
     fn from(error: anyhow::Error) -> Self {
-        ErrorKind::InternalError(format!("{}", error)).into()
+        Error::InternalError(format!("{}", error)).into()
     }
 }

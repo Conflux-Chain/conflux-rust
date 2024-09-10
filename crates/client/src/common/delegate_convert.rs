@@ -5,7 +5,7 @@ use jsonrpc_core::{
     BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
 };
 
-use crate::rpc::{RpcBoxFuture, RpcError, RpcResult};
+use crate::rpc::{CoreBoxFuture, CoreError, CoreResult};
 
 pub trait Into<T> {
     fn into(x: Self) -> T;
@@ -19,24 +19,24 @@ impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for BoxFuture<T> {
     fn into(x: Self) -> BoxFuture<T> { x }
 }
 
-impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcBoxFuture<T> {
+impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for CoreBoxFuture<T> {
     fn into(x: Self) -> BoxFuture<T> {
         Box::new(x.map_err(|rpc_error| Into::into(rpc_error)))
     }
 }
 
-impl Into<JsonRpcError> for RpcError {
+impl Into<JsonRpcError> for CoreError {
     fn into(e: Self) -> JsonRpcError { e.into() }
 }
 
-pub fn into_jsonrpc_result<T>(r: RpcResult<T>) -> JsonRpcResult<T> {
+pub fn into_jsonrpc_result<T>(r: CoreResult<T>) -> JsonRpcResult<T> {
     match r {
         Ok(t) => Ok(t),
         Err(e) => Err(Into::into(e)),
     }
 }
 
-impl<T> Into<JsonRpcResult<T>> for RpcResult<T> {
+impl<T> Into<JsonRpcResult<T>> for CoreResult<T> {
     fn into(x: Self) -> JsonRpcResult<T> { into_jsonrpc_result(x) }
 }
 
@@ -47,7 +47,7 @@ impl<T> Into<JsonRpcResult<T>> for RpcResult<T> {
 /// return RpcResult straight-forward. The delegate! macro with  #\[into\]
 /// attribute will automatically call this method to do the return type
 /// conversion.
-impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcResult<T> {
+impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for CoreResult<T> {
     fn into(x: Self) -> BoxFuture<T> {
         into_jsonrpc_result(x).into_future().boxed()
     }

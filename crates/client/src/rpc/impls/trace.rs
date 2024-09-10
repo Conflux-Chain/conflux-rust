@@ -16,7 +16,7 @@ use crate::{
             LocalizedTrace as RpcLocalizedTrace, LocalizedTrace,
             TraceFilter as RpcTraceFilter,
         },
-        RpcResult,
+        CoreResult,
     },
 };
 use cfx_addr::Network;
@@ -67,7 +67,7 @@ impl TraceHandler {
 
     fn block_traces_impl(
         &self, block_hash: H256,
-    ) -> RpcResult<Option<LocalizedBlockTrace>> {
+    ) -> CoreResult<Option<LocalizedBlockTrace>> {
         // Note: an alternative to `into_jsonrpc_result` is the delegate! macro.
         let block = match self
             .data_man
@@ -105,7 +105,7 @@ impl TraceHandler {
 
     fn filter_traces_impl(
         &self, filter: PrimitiveTraceFilter,
-    ) -> RpcResult<Option<Vec<RpcLocalizedTrace>>> {
+    ) -> CoreResult<Option<Vec<RpcLocalizedTrace>>> {
         let consensus_graph = self.consensus_graph();
         let traces: Vec<_> = consensus_graph
             .filter_traces(filter)?
@@ -184,7 +184,7 @@ impl TraceHandler {
 
     fn epoch_trace_impl(
         &self, epoch_number: EpochNumber,
-    ) -> RpcResult<EpochTrace> {
+    ) -> CoreResult<EpochTrace> {
         // Make sure we use the same epoch_hash in two spaces. Using
         // epoch_number cannot guarantee the atomicity.
         let epoch_hash = self
@@ -201,7 +201,7 @@ impl TraceHandler {
 
     fn space_epoch_traces(
         &self, space: Space, epoch_hash: H256,
-    ) -> RpcResult<Vec<LocalizedTrace>> {
+    ) -> CoreResult<Vec<LocalizedTrace>> {
         let consensus = self.consensus_graph();
         let epoch = consensus
             .get_block_epoch_number(&epoch_hash)

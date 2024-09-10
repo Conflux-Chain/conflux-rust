@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    random, request_manager::RequestManager, Error, ErrorKind,
-    SharedSynchronizationGraph, SynchronizationState,
+    random, request_manager::RequestManager, Error, SharedSynchronizationGraph,
+    SynchronizationState,
 };
 use crate::{
     block_data_manager::BlockStatus,
@@ -599,57 +599,53 @@ impl SynchronizationProtocolHandler {
     ) {
         let mut disconnect = true;
         let mut warn = true;
-        let reason = format!("{}", e.0);
+        let reason = format!("{}", e);
         let error_reason = format!("{:?}", e);
         let mut op = None;
 
         // NOTE, DO NOT USE WILDCARD IN THE FOLLOWING MATCH STATEMENT!
         // COMPILER WILL HELP TO FIND UNHANDLED ERROR CASES.
-        match e.0 {
-            ErrorKind::InvalidBlock => op = Some(UpdateNodeOperation::Failure),
-            ErrorKind::InvalidGetBlockTxn(_) => {
+        match e {
+            Error::InvalidBlock => op = Some(UpdateNodeOperation::Failure),
+            Error::InvalidGetBlockTxn(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::InvalidStatus(_) => {
-                op = Some(UpdateNodeOperation::Demotion)
-            }
-            ErrorKind::InvalidMessageFormat => {
+            Error::InvalidStatus(_) => op = Some(UpdateNodeOperation::Demotion),
+            Error::InvalidMessageFormat => {
                 // TODO: Shall we blacklist a node when the message format is
                 // wrong? maybe it's a different version of sync protocol?
                 op = Some(UpdateNodeOperation::Remove)
             }
-            ErrorKind::UnknownPeer => {
+            Error::UnknownPeer => {
                 warn = false;
                 op = Some(UpdateNodeOperation::Failure)
             }
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
-            ErrorKind::UnexpectedResponse => {
+            Error::UnexpectedResponse => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::RequestNotFound => {
+            Error::RequestNotFound => {
                 disconnect = false;
                 warn = false;
             }
-            ErrorKind::InCatchUpMode(_) => {
+            Error::InCatchUpMode(_) => {
                 disconnect = false;
                 warn = false;
             }
-            ErrorKind::TooManyTrans => {}
-            ErrorKind::InvalidTimestamp => {
+            Error::TooManyTrans => {}
+            Error::InvalidTimestamp => op = Some(UpdateNodeOperation::Demotion),
+            Error::InvalidSnapshotManifest(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::InvalidSnapshotManifest(_) => {
+            Error::InvalidSnapshotChunk(_) => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::InvalidSnapshotChunk(_) => {
-                op = Some(UpdateNodeOperation::Demotion)
-            }
-            ErrorKind::EmptySnapshotChunk => disconnect = false,
-            ErrorKind::AlreadyThrottled(_) => {
+            Error::EmptySnapshotChunk => disconnect = false,
+            Error::AlreadyThrottled(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
-            ErrorKind::Throttled(_, msg) => {
+            Error::Throttled(_, msg) => {
                 disconnect = false;
 
                 if let Err(e) = msg.send(io, peer) {
@@ -657,9 +653,9 @@ impl SynchronizationProtocolHandler {
                     disconnect = true;
                 }
             }
-            ErrorKind::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
-            ErrorKind::Io(_) => disconnect = false,
-            ErrorKind::Network(kind) => match kind {
+            Error::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
+            Error::Io(_) => disconnect = false,
+            Error::Network(kind) => match kind.0 {
                 network::ErrorKind::SendUnsupportedMessage { .. } => {
                     unreachable!(
                         "This is a bug in protocol version maintenance. {:?}",
@@ -702,18 +698,15 @@ impl SynchronizationProtocolHandler {
                     op = Some(UpdateNodeOperation::Failure)
                 }
             },
-            ErrorKind::Storage(_) => disconnect = false,
-            ErrorKind::Msg(_) => op = Some(UpdateNodeOperation::Failure),
-            ErrorKind::__Nonexhaustive {} => {
-                op = Some(UpdateNodeOperation::Failure)
-            }
-            ErrorKind::InternalError(_) => {}
-            ErrorKind::RpcCancelledByDisconnection => {}
-            ErrorKind::RpcTimeout => {}
-            ErrorKind::UnexpectedMessage(_) => {
+            Error::Storage(_) => disconnect = false,
+            Error::Msg(_) => op = Some(UpdateNodeOperation::Failure),
+            Error::InternalError(_) => {}
+            Error::RpcCancelledByDisconnection => {}
+            Error::RpcTimeout => {}
+            Error::UnexpectedMessage(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
-            ErrorKind::NotSupported(_) => disconnect = false,
+            Error::NotSupported(_) => disconnect = false,
         }
 
         if warn {
@@ -1849,7 +1842,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
                     io,
                     peer,
                     msgid::INVALID,
-                    ErrorKind::InvalidMessageFormat.into(),
+                    Error::InvalidMessageFormat.into(),
                 )
             }
         };
