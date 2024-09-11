@@ -1,6 +1,7 @@
 import os, sys
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from base import Web3Base
+from web3 import Web3
 from test_framework.util import *
 from conflux.config import default_config
 
@@ -23,7 +24,7 @@ class EstimateAndCallTest(Web3Base):
         call_request = {
             "to": "0x007a026f3fe3c8252f0adb915f0d924aef942f53",
             "value": "0x100",
-            "chainId": self.TEST_CHAIN_ID
+            "chainId": Web3.toHex(self.TEST_CHAIN_ID)
         }
         estimate_result = self.nodes[0].eth_estimateGas(call_request)
         assert_equal(estimate_result, "0x5208")
