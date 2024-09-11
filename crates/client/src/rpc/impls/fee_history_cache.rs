@@ -70,21 +70,17 @@ impl FeeHistoryCache {
 
         // update cache if block changes due to reorg
         if inner.lower_bound < start_block {
-            for i in (inner.lower_bound..start_block).rev() {
-                let item = inner
-                    .get(i)
-                    .ok_or_else(|| "fee_history_entry not found")?;
+            let need_check = start_block - inner.lower_bound;
+            for item in inner.entries.iter_mut().take(need_check as usize).rev()
+            {
                 if item.header_hash == curr_hash {
                     break;
                 }
                 let block = fetch_block_by_hash(curr_hash)?;
-                inner.update(
-                    i,
-                    FeeHistoryEntry::from_block(
-                        Space::Ethereum,
-                        &block.pivot_header,
-                        block.transactions.iter().map(|x| &**x),
-                    ),
+                *item = FeeHistoryEntry::from_block(
+                    Space::Ethereum,
+                    &block.pivot_header,
+                    block.transactions.iter().map(|x| &**x),
                 );
                 curr_hash = block.pivot_header.parent_hash().clone();
             }
@@ -201,6 +197,7 @@ impl FeeHistoryCacheInner {
 
     pub fn is_empty(&self) -> bool { self.entries.is_empty() }
 
+    #[allow(dead_code)]
     pub fn get(&self, height: u64) -> Option<FeeHistoryEntry> {
         if height < self.lower_bound || height > self.upper_bound() {
             return None;
@@ -209,6 +206,7 @@ impl FeeHistoryCacheInner {
         self.entries.get(key as usize).map(|item| item.clone())
     }
 
+    #[allow(dead_code)]
     pub fn update(&mut self, height: u64, entry: FeeHistoryEntry) {
         if height < self.lower_bound || height > self.upper_bound() {
             return;
