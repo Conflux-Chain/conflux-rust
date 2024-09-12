@@ -504,6 +504,21 @@ subcommands:
                         long: gas-price
                         takes_value: true
                         value_name: HEX
+                    - type:
+                        help: Transaction type
+                        long: type
+                        takes_value: true
+                        value_name: HEX
+                    - maxFeePerGas:
+                        help: Transaction max fee per gas
+                        long: max-fee-per-gas
+                        takes_value: true
+                        value_name: HEX
+                    - maxPriorityFeePerGas:
+                        help: Transaction max priority fee per gas
+                        long: max-prirority-fee-per-gas
+                        takes_value: true
+                        value_name: HEX
                     - gas:
                         help: Gas provided for transaction execution
                         long: gas
@@ -525,7 +540,7 @@ subcommands:
                         takes_value: true
                         value_name: HEX
                     - epoch:
-                        help: Epoch (latest_mined, latest_state, earliest or epoch number in HEX format)
+                        help: Epoch (latest_mined, latest_state, latest_confirm, latest_finalized, earliest or epoch number in HEX format)
                         long: epoch
                         takes_value: true
                         value_name: EPOCH
@@ -553,6 +568,21 @@ subcommands:
                     - gasPrice:
                         help: Transaction gas price
                         long: gas-price
+                        takes_value: true
+                        value_name: HEX
+                    - type:
+                        help: Transaction type
+                        long: type
+                        takes_value: true
+                        value_name: HEX
+                    - maxFeePerGas:
+                        help: Transaction max fee per gas
+                        long: max-fee-per-gas
+                        takes_value: true
+                        value_name: HEX
+                    - maxPriorityFeePerGas:
+                        help: Transaction max priority fee per gas
+                        long: max-prirority-fee-per-gas
                         takes_value: true
                         value_name: HEX
                     - gas:
@@ -612,6 +642,21 @@ subcommands:
                                 takes_value: true
                                 value_name: HEX
                                 default_value: "0x2540BE400" # 10 GDrip
+                            - type:
+                                help: Transaction type
+                                long: type
+                                takes_value: true
+                                value_name: HEX
+                            - maxFeePerGas:
+                                help: Transaction max fee per gas
+                                long: max-fee-per-gas
+                                takes_value: true
+                                value_name: HEX
+                            - maxPriorityFeePerGas:
+                                help: Transaction max priority fee per gas
+                                long: max-prirority-fee-per-gas
+                                takes_value: true
+                                value_name: HEX
                             - gas:
                                 help: Gas provided for transaction execution
                                 long: gas
@@ -648,13 +693,13 @@ subcommands:
                                 about: List all accounts
                                 args:
                                     - rpc-method:
-                                        default_value: accounts
+                                        default_value: cfx_accounts
                                         hidden: true
                             - new:
                                 about: Create a new account
                                 args:
                                     - rpc-method:
-                                        default_value: new_account
+                                        default_value: cfx_newAccount
                                         hidden: true
                                     - rpc-args:
                                         multiple: true
@@ -665,7 +710,7 @@ subcommands:
                                 about: Unlock an account
                                 args:
                                     - rpc-method:
-                                        default_value: unlock_account
+                                        default_value: cfx_unlockAccount
                                         hidden: true
                                     - rpc-args:
                                         multiple: true
@@ -686,7 +731,7 @@ subcommands:
                                 about: Lock an unlocked account
                                 args:
                                     - rpc-method:
-                                        default_value: lock_account
+                                        default_value: cfx_lockAccount
                                         hidden: true
                                     - rpc-args:
                                         multiple: true
@@ -728,7 +773,7 @@ subcommands:
                                 about: List textual summary of all transactions
                                 args:
                                     - rpc-method:
-                                        default_value: txpool_inspect
+                                        default_value: debug_inspectTxPool
                                         hidden: true
                                     - rpc-args:
                                           multiple: true
@@ -744,7 +789,7 @@ subcommands:
                                 about: List exact details of all transactions
                                 args:
                                     - rpc-method:
-                                        default_value: txpool_content
+                                        default_value: debug_txPoolContent
                                         hidden: true
                                     - rpc-args:
                                           multiple: true
@@ -760,7 +805,7 @@ subcommands:
                                 about: Remove all transactions
                                 args:
                                     - rpc-method:
-                                        default_value: txpool_clear
+                                        default_value: debug_clearTxPool
                                         hidden: true
                     - net:
                         about: Network subcommands
@@ -770,13 +815,13 @@ subcommands:
                                 about: Get the current throttling information
                                 args:
                                     - rpc-method:
-                                        default_value: net_throttling
+                                        default_value: debug_getNetThrottling
                                         hidden: true
                             - node:
                                 about: Get node information by ID
                                 args:
                                     - rpc-method:
-                                        default_value: net_node
+                                        default_value: debug_getNetNode
                                         hidden: true
                                     - rpc-args:
                                         multiple: true
@@ -792,7 +837,7 @@ subcommands:
                                 about: Disconnect a node
                                 args:
                                     - rpc-method:
-                                        default_value: net_disconnect_node
+                                        default_value: debug_disconnectNetNode
                                         hidden: true
                                     - rpc-args:
                                         multiple: true
@@ -813,7 +858,7 @@ subcommands:
                                 about: Get active session(s)
                                 args:
                                     - rpc-method:
-                                        default_value: net_sessions
+                                        default_value: debug_getNetSessions
                                         hidden: true
                                     - rpc-args:
                                         multiple: true
@@ -828,13 +873,13 @@ subcommands:
                         about: Get the current synchronization phase
                         args:
                             - rpc-method:
-                                default_value: current_sync_phase
+                                default_value: debug_currentSyncPhase
                                 hidden: true
                     - consensus-graph-state:
                         about: Get the consensus graph state
                         args:
                             - rpc-method:
-                                default_value: consensus_graph_state
+                                default_value: debug_consensusGraphState
                                 hidden: true
                     - test:
                         about: Test subcommands (used for test purpose only)
@@ -844,25 +889,25 @@ subcommands:
                                 about: Get the total block count
                                 args:
                                     - rpc-method:
-                                        default_value: getblockcount
+                                        default_value: test_getBlockCount
                                         hidden: true
                             - goodput:
                                 about: Get the recent transaction good TPS
                                 args:
                                     - rpc-method:
-                                        default_value: getgoodput
+                                        default_value: test_getGoodPut
                                         hidden: true
                             - chain:
                                 about: List "ALL" blocks in topological order
                                 args:
                                     - rpc-method:
-                                        default_value: cfx_getChain
+                                        default_value: test_getChain
                                         hidden: true
                             - stop:
                                 about: Stop the conflux program
                                 args:
                                     - rpc-method:
-                                        default_value: stop
+                                        default_value: test_stop
                                         hidden: true
                             - status:
                                 about: Get the current status of Conflux
@@ -878,7 +923,7 @@ subcommands:
                                 about: Return the transaction data needed to register the PoS keys used by this Conflux node.
                                 args:
                                     - rpc-method:
-                                          default_value: pos_register
+                                          default_value: test_posRegister
                                           hidden: true
                                     - rpc-args:
                                           multiple: true
@@ -894,13 +939,13 @@ subcommands:
                                   about: Stop sending PoS election transactions.
                                   args:
                                       - rpc-method:
-                                            default_value: pos_stop_election
+                                            default_value: test_posStopElection
                                             hidden: true
                             - start_voting:
                                   about: Start PoS voting.
                                   args:
                                       - rpc-method:
-                                            default_value: pos_start_voting
+                                            default_value: test_posStartVoting
                                             hidden: true
                                       - rpc-args:
                                             default_value: initialize:bool
@@ -913,11 +958,11 @@ subcommands:
                                   about: Stop PoS voting.
                                   args:
                                       - rpc-method:
-                                            default_value: pos_stop_voting
+                                            default_value: test_posStopVoting
                                             hidden: true
                             - voting_status:
                                   about: Show if the node is voting.
                                   args:
                                       - rpc-method:
-                                            default_value: pos_voting_status
+                                            default_value: test_posVotingStatus
                                             hidden: true

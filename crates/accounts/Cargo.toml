@@ -8,9 +8,9 @@ authors = ["Conflux Foundation"]
 edition = "2021"
 
 [dependencies]
-cfxkey = { path = "../cfx_key" }
-cfxstore = { path = "../cfx_store" }
-cfx-types = { path = "../cfx_types" }
+cfxkey = { workspace = true }
+cfxstore = { workspace = true }
+cfx-types = { workspace = true }
 log = "0.4"
 parking_lot = "0.11"
 serde = "1.0"

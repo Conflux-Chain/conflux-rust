@@ -21,15 +21,15 @@ use primitives::{
 use runtime::Executor;
 
 use crate::rpc::{
-    error_codes::codes,
+    errors::codes,
     helpers::{
         limit_logs, PollFilter, PollManager, SyncPollFilter,
         MAX_BLOCK_HISTORY_SIZE,
     },
-    traits::eth_space::eth::EthFilter,
+    traits::eth_space::eth_filter::EthFilter,
     types::eth::{BlockNumber, EthRpcLogFilter, FilterChanges, Log},
 };
-use cfxcore::rpc_errors::Error as CfxRpcError;
+use cfxcore::errors::Error as CfxRpcError;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as RpcResult};
 
 /// Something which provides data that can be filtered over.

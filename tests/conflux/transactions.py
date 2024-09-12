@@ -97,6 +97,62 @@ class UnsignedTransaction(rlp.Serializable):
         ret._sender = utils.priv_to_addr(key)
         return ret
 
+class UnsignedTransaction1559(rlp.Serializable):
+    fields = [
+        ('nonce', big_endian_int),
+        ('max_priority_fee_per_gas', big_endian_int),
+        ('max_fee_per_gas', big_endian_int),
+        ('gas', big_endian_int),
+        ('action', address),
+        ('value', big_endian_int),
+        ('storage_limit', big_endian_int),
+        ('epoch_height', big_endian_int),
+        ('chain_id', big_endian_int),
+        ('data', binary),
+    ]
+
+    def __init__(self, nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id):
+        if gas_price >= TT256 or \
+                value >= TT256 or nonce >= TT256:
+            raise InvalidTransaction("Values way too high!")
+
+        self.eth_like = (epoch_height == 0xffff_ffff_ffff_ffff)
+
+        super(UnsignedTransaction1559, self).__init__(
+            nonce=nonce,
+            gas_price=gas_price,
+            gas=gas,
+            value=value,
+            action=action,
+            data=data,
+            storage_limit=storage_limit,
+            epoch_height=epoch_height,
+            chain_id=chain_id
+        )
+
+    @property
+    def gas_price(self):
+        return self.max
+
+    def get_rawhash(self):
+        if not self.eth_like:
+            return utils.sha3(
+                rlp.encode(self, UnsignedTransaction))
+        else:
+            eth_like_tx = EthLikeUnsignedTransaction(self)
+            return utils.sha3(
+                rlp.encode(eth_like_tx, EthLikeUnsignedTransaction))
+
+    def sign(self, key):
+        rawhash = self.get_rawhash()
+
+        key = normalize_key(key)
+
+        v, r, s = ecsign(rawhash, key)
+        v = v - 27
+        ret = Transaction(transaction=copy.deepcopy(self), v=v, r=r, s=s)
+        ret._sender = utils.priv_to_addr(key)
+        return ret
 
 class Transaction(rlp.Serializable):
     """

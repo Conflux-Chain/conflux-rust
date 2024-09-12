@@ -23,7 +23,7 @@ use serde_json::Value;
 use std::{convert::TryInto, sync::Arc};
 
 use crate::rpc::types::{
-    transaction::PackedOrExecuted, Bytes, Receipt, Transaction,
+    cfx::transaction::PackedOrExecuted, Bytes, Receipt, Transaction,
 };
 use primitives::pos::PosBlockId;
 
@@ -281,6 +281,13 @@ impl Block {
             (gas_used_sum, transactions)
         };
 
+        let base_fee_per_gas: Option<U256> =
+            b.block_header.base_price().map(|x| x[Space::Native]).into();
+
+        // if a block is 1559 block(has base_fee_per_gas) then it's
+        // block.gas_limit is 90% of the actual block.gas_limit
+        let gas_limit: U256 = b.block_header.core_space_gas_limit();
+
         Ok(Block {
             hash: H256::from(block_hash),
             parent_hash: H256::from(b.block_header.parent_hash().clone()),
@@ -307,12 +314,8 @@ impl Block {
             block_number,
             // fee system
             gas_used,
-            gas_limit: b.block_header.gas_limit().into(),
-            base_fee_per_gas: b
-                .block_header
-                .base_price()
-                .map(|x| x[Space::Native])
-                .into(),
+            gas_limit,
+            base_fee_per_gas,
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().clone().into(),
             pow_quality: b

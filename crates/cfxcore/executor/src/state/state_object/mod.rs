@@ -30,6 +30,8 @@ mod global_statistics;
 /// Implements functions for the PoS rewarding of `State`.
 mod pos;
 
+mod save;
+
 /// Implements functions for the sponsorship mechanism of `State`.
 mod sponsor;
 
@@ -53,10 +55,11 @@ pub use self::{
     staking::initialize_or_update_dao_voted_params,
 };
 #[cfg(test)]
-pub use tests::get_state_for_genesis_write;
+pub use tests::{get_state_by_epoch_id, get_state_for_genesis_write};
 
 use self::checkpoints::CheckpointLayer;
 use super::{
+    checkpoints::LazyDiscardedVec,
     global_stat::GlobalStat,
     overlay_account::{AccountEntry, OverlayAccount, RequireFields},
 };
@@ -64,7 +67,7 @@ use crate::substate::Substate;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
 use cfx_types::AddressWithSpace;
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 /// A caching and checkpoint layer built upon semantically meaningful database
 /// interfaces, providing interfaces and logics for managing accounts and global
@@ -84,7 +87,7 @@ pub struct State {
     global_stat: GlobalStat,
 
     /// Checkpoint layers for the account entries
-    checkpoints: RwLock<Vec<CheckpointLayer>>,
+    checkpoints: RwLock<LazyDiscardedVec<CheckpointLayer>>,
 }
 
 impl State {
@@ -106,7 +109,15 @@ impl State {
         })
     }
 
-    pub fn prefetch_account(&self, address: &AddressWithSpace) -> DbResult<()> {
-        self.prefetch(address, RequireFields::Code)
+    pub fn prefetch_accounts(
+        &self, addresses: BTreeSet<AddressWithSpace>, pool: &rayon::ThreadPool,
+    ) -> DbResult<()> {
+        use rayon::prelude::*;
+        pool.install(|| {
+            addresses
+                .into_par_iter()
+                .map(|addr| self.prefetch(&addr, RequireFields::Code))
+        })
+        .collect::<DbResult<()>>()
     }
 }

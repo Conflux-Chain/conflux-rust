@@ -43,7 +43,7 @@ use crate::{
     ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
 use cfx_executor::{
-    machine::{new_machine_with_builtin, VmFactory},
+    machine::{Machine, VmFactory},
     spec::CommonParams,
 };
 
@@ -145,7 +145,7 @@ pub fn initialize_data_manager(
         U256::from(0),
     );
 
-    let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
+    let machine = Arc::new(Machine::new_with_builtin(Default::default(), vm));
 
     let genesis_block = Arc::new(genesis_block(
         &storage_manager,
@@ -186,7 +186,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>) {
     let mut params = CommonParams::default();
     params.transition_heights.cip1559 = u64::MAX;
-    let machine = Arc::new(new_machine_with_builtin(params, vm));
+    let machine = Arc::new(Machine::new_with_builtin(params.clone(), vm));
     let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_verifier = Arc::new(PosVerifier::new(
         None,
@@ -281,6 +281,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         verification_config.clone(),
         NodeType::Archive,
         pos_verifier.clone(),
+        params,
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(

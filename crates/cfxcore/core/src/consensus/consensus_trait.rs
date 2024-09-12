@@ -5,7 +5,7 @@
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::{BestInformation, ConsensusConfig, TransactionInfo},
-    rpc_errors::Result as RpcResult,
+    errors::Result as CoreResult,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
     ConsensusGraph,
@@ -94,21 +94,22 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StateDb>;
+    ) -> CoreResult<StateDb>;
 
     fn get_eth_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StateDb>;
+    ) -> CoreResult<StateDb>;
 
     fn get_storage_state_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StorageState>;
+    ) -> CoreResult<StorageState>;
 
     fn get_blocks_needing_bodies(&self) -> HashSet<H256>;
 
     fn catch_up_completed(&self, peer_median_epoch: u64) -> bool;
 
     fn enter_normal_phase(&self);
+
     fn reset(&self);
 }
 

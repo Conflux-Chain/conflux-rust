@@ -28,8 +28,8 @@ use crate::{
         },
         pos_handler::PosVerifier,
     },
+    errors::{invalid_params, invalid_params_check, Result as CoreResult},
     pow::{PowComputer, ProofOfWorkConfig},
-    rpc_errors::{invalid_params, invalid_params_check, Result as RpcResult},
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
@@ -43,7 +43,9 @@ use cfx_execute_helper::{
     },
     phantom_tx::build_bloom_and_recover_phantom,
 };
-use cfx_executor::{executive::ExecutionOutcome, state::State};
+use cfx_executor::{
+    executive::ExecutionOutcome, spec::CommonParams, state::State,
+};
 use geth_tracer::GethTraceWithHash;
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
@@ -76,8 +78,8 @@ use primitives::{
     log_entry::LocalizedLogEntry,
     pos::PosBlockId,
     receipt::Receipt,
-    BlockHeader, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-    TransactionStatus,
+    Block, BlockHeader, EpochId, EpochNumber, SignedTransaction,
+    TransactionIndex, TransactionStatus,
 };
 use rayon::prelude::*;
 use std::{
@@ -118,6 +120,7 @@ pub struct PhantomBlock {
     pub errors: Vec<String>,
     pub bloom: Bloom,
     pub traces: Vec<TransactionExecTraces>,
+    pub total_gas_limit: U256, // real gas limit of the block
 }
 
 #[derive(Clone)]
@@ -231,6 +234,7 @@ pub struct ConsensusGraph {
     /// This is always `None` for archive nodes.
     pub synced_epoch_id: Mutex<Option<EpochId>>,
     pub config: ConsensusConfig,
+    pub params: CommonParams,
 }
 
 impl MallocSizeOf for ConsensusGraph {
@@ -255,7 +259,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
-        pos_verifier: Arc<PosVerifier>,
+        pos_verifier: Arc<PosVerifier>, params: CommonParams,
     ) -> Self {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
@@ -299,6 +303,7 @@ impl ConsensusGraph {
             ready_for_mining: AtomicBool::new(false),
             synced_epoch_id: Default::default(),
             config: conf,
+            params,
         };
         graph.update_best_info(false /* ready_for_mining */);
         graph
@@ -319,7 +324,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
-        pos_verifier: Arc<PosVerifier>,
+        pos_verifier: Arc<PosVerifier>, params: CommonParams,
     ) -> Self {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let stable_hash = data_man.get_cur_consensus_era_stable_hash();
@@ -337,6 +342,7 @@ impl ConsensusGraph {
             verification_conf,
             node_type,
             pos_verifier,
+            params,
         )
     }
 
@@ -587,7 +593,7 @@ impl ConsensusGraph {
         }
     }
 
-    fn validate_stated_epoch(
+    pub fn validate_stated_epoch(
         &self, epoch_number: &EpochNumber,
     ) -> Result<(), String> {
         match epoch_number {
@@ -697,7 +703,7 @@ impl ConsensusGraph {
 
     pub fn get_block_epoch_number_with_pivot_check(
         &self, hash: &H256, require_pivot: bool,
-    ) -> RpcResult<u64> {
+    ) -> CoreResult<u64> {
         let inner = &*self.inner.read();
         // TODO: block not found error
         let epoch_number =
@@ -728,7 +734,7 @@ impl ConsensusGraph {
         &self, address: AddressWithSpace,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
         rpc_param_name: &str,
-    ) -> RpcResult<U256> {
+    ) -> CoreResult<U256> {
         let epoch_number = match block_hash_or_epoch_number {
             BlockHashOrEpochNumber::BlockHashWithOption {
                 hash,
@@ -1423,7 +1429,7 @@ impl ConsensusGraph {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
         request: EstimateRequest,
-    ) -> RpcResult<(ExecutionOutcome, EstimateExt)> {
+    ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let (epoch_id, epoch_size) = if let Ok(v) =
@@ -1440,8 +1446,7 @@ impl ConsensusGraph {
     pub fn collect_epoch_geth_trace(
         &self, epoch_num: u64, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
-    ) -> RpcResult<Vec<GethTraceWithHash>> {
-        // only allow to call against stated epoch
+    ) -> CoreResult<Vec<GethTraceWithHash>> {
         let epoch = EpochNumber::Number(epoch_num);
         self.validate_stated_epoch(&epoch)?;
 
@@ -1453,10 +1458,33 @@ impl ConsensusGraph {
             bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
         };
 
-        self.executor.collect_epoch_geth_trace(
-            epoch_block_hashes,
-            tx_hash,
+        let blocks = self
+            .data_man
+            .blocks_by_hash_list(
+                &epoch_block_hashes,
+                true, /* update_cache */
+            )
+            .expect("blocks exist");
+
+        let pivot_block = blocks.last().expect("Not empty");
+        let parent_pivot_block_hash = pivot_block.block_header.parent_hash();
+        let parent_epoch_num = pivot_block.block_header.height() - 1;
+
+        self.collect_blocks_geth_trace(
+            *parent_pivot_block_hash,
+            parent_epoch_num,
+            &blocks,
             opts,
+            tx_hash,
+        )
+    }
+
+    pub fn collect_blocks_geth_trace(
+        &self, epoch_id: H256, epoch_num: u64, blocks: &Vec<Arc<Block>>,
+        opts: GethDebugTracingOptions, tx_hash: Option<H256>,
+    ) -> CoreResult<Vec<GethTraceWithHash>> {
+        self.executor.collect_blocks_geth_trace(
+            epoch_id, epoch_num, blocks, opts, tx_hash,
         )
     }
 
@@ -1468,7 +1496,7 @@ impl ConsensusGraph {
 
     fn get_storage_state_by_height_and_hash(
         &self, height: u64, hash: &H256,
-    ) -> RpcResult<StorageState> {
+    ) -> CoreResult<StorageState> {
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -1513,7 +1541,7 @@ impl ConsensusGraph {
 
     fn get_state_by_height_and_hash(
         &self, height: u64, hash: &H256, space: Option<Space>,
-    ) -> RpcResult<Box<dyn StateTrait>> {
+    ) -> CoreResult<Box<dyn StateTrait>> {
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -1877,6 +1905,7 @@ impl ConsensusGraph {
                 errors: vec![],
                 bloom: Bloom::zero(),
                 traces: vec![],
+                total_gas_limit: U256::from(0),
             }));
         }
 
@@ -1905,10 +1934,12 @@ impl ConsensusGraph {
             errors: vec![],
             bloom: Default::default(),
             traces: vec![],
+            total_gas_limit: U256::from(0),
         };
 
         let mut accumulated_gas_used = U256::from(0);
         let mut gas_used_offset;
+        let mut total_gas_limit = U256::from(0);
 
         let iter_blocks = if only_pivot {
             &blocks[blocks.len() - 1..]
@@ -1931,6 +1962,13 @@ impl ConsensusGraph {
                 None => return Ok(None),
                 Some(r) => r,
             };
+
+            // note: we only include gas limit for blocks that will pack eSpace
+            // tx(multiples of 5)
+            total_gas_limit += b.block_header.espace_gas_limit(
+                self.params
+                    .can_pack_evm_transaction(b.block_header.height()),
+            );
 
             let block_receipts = &exec_info.block_receipts.receipts;
             let errors = &exec_info.block_receipts.tx_execution_error_messages;
@@ -2057,6 +2095,7 @@ impl ConsensusGraph {
             }
         }
 
+        phantom_block.total_gas_limit = total_gas_limit;
         Ok(Some(phantom_block))
     }
 
@@ -2078,7 +2117,7 @@ impl ConsensusGraph {
     fn get_state_db_by_epoch_number_with_space(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
         space: Option<Space>,
-    ) -> RpcResult<StateDb> {
+    ) -> CoreResult<StateDb> {
         invalid_params_check(
             rpc_param_name,
             self.validate_stated_epoch(&epoch_number),
@@ -2350,7 +2389,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_storage_state_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StorageState> {
+    ) -> CoreResult<StorageState> {
         invalid_params_check(
             rpc_param_name,
             self.validate_stated_epoch(&epoch_number),
@@ -2366,7 +2405,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StateDb> {
+    ) -> CoreResult<StateDb> {
         self.get_state_db_by_epoch_number_with_space(
             epoch_number,
             rpc_param_name,
@@ -2376,7 +2415,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn get_eth_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StateDb> {
+    ) -> CoreResult<StateDb> {
         self.get_state_db_by_epoch_number_with_space(
             epoch_number,
             rpc_param_name,

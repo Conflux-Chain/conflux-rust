@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod account_cache;
+mod error;
 mod garbage_collector;
 mod nonce_pool;
 mod transaction_pool_inner;
@@ -23,7 +24,11 @@ use cfx_executor::{
     machine::Machine, spec::TransitionsEpochHeight, state::State,
 };
 use cfx_parameters::{
-    block::DEFAULT_TARGET_BLOCK_GAS_LIMIT,
+    block::{
+        cspace_block_gas_limit_after_cip1559, espace_block_gas_limit,
+        espace_block_gas_limit_of_enabled_block,
+        DEFAULT_TARGET_BLOCK_GAS_LIMIT,
+    },
     consensus_internal::ELASTICITY_MULTIPLIER,
 };
 use cfx_statedb::{Result as StateDbResult, StateDb};
@@ -32,6 +37,7 @@ use cfx_types::{
     AddressWithSpace as Address, AllChainID, Space, SpaceMap, H256, U256,
 };
 use cfx_vm_types::Spec;
+pub use error::TransactionPoolError;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -39,8 +45,9 @@ use metrics::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    block::BlockHeight, block_header::compute_next_price_tuple, Account,
-    SignedTransaction, Transaction, TransactionWithSignature,
+    block::BlockHeight,
+    block_header::{compute_next_price, compute_next_price_tuple},
+    Account, SignedTransaction, Transaction, TransactionWithSignature,
 };
 use std::{
     cmp::{max, min},
@@ -91,8 +98,8 @@ pub struct TxPoolConfig {
     pub capacity: usize,
     pub min_native_tx_price: u64,
     pub min_eth_tx_price: u64,
-    pub max_tx_gas: RwLock<U256>,
-    pub packing_gas_limit_block_count: u64,
+    pub half_block_gas_limit: RwLock<U256>,
+    pub allow_gas_over_half_block: bool,
     pub target_block_gas_limit: u64,
     pub max_packing_batch_gas_limit: u64,
     pub max_packing_batch_size: usize,
@@ -109,15 +116,91 @@ impl Default for TxPoolConfig {
             capacity: 500_000,
             min_native_tx_price: 1,
             min_eth_tx_price: 1,
-            max_tx_gas: RwLock::new(U256::from(
-                DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
+            half_block_gas_limit: RwLock::new(U256::from(
+                DEFAULT_TARGET_BLOCK_GAS_LIMIT,
             )),
-            packing_gas_limit_block_count: 10,
+            allow_gas_over_half_block: true,
             max_packing_batch_size: 20,
             max_packing_batch_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT / 10,
             packing_pool_degree: 4,
             target_block_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT,
         }
+    }
+}
+
+impl TxPoolConfig {
+    pub fn check_gas_price_and_limit(
+        &self, tx: &TransactionWithSignature,
+    ) -> Result<(), TransactionPoolError> {
+        // If the actual block gas limit is less than the miners' preference,
+        // the miner chooses the actual limit to ensure compatibility with other
+        // nodes. If the actual block gas limit exceeds the miners'
+        // preference, the miner adheres to their own settings since this does
+        // not result in incompatibility with others.
+        let half_block_gas_limit = std::cmp::min(
+            *self.half_block_gas_limit.read(),
+            U256::from(self.target_block_gas_limit),
+        );
+
+        // The current implementation is designed for after the activation of
+        // CIP-1559. However, it is also compatible with the system before
+        // CIP-1559 was activated, although there are some minor behavioral
+        // differences.
+        let block_gas_target = half_block_gas_limit;
+
+        let min_tx_price = match tx.space() {
+            Space::Native => self.min_native_tx_price,
+            Space::Ethereum => self.min_eth_tx_price,
+        };
+
+        let space_gas_target: U256 = match tx.space() {
+            Space::Native => {
+                cspace_block_gas_limit_after_cip1559(block_gas_target)
+            }
+            Space::Ethereum => {
+                espace_block_gas_limit_of_enabled_block(block_gas_target)
+            }
+        };
+
+        let space_gas_limit = space_gas_target * 2;
+        let max_tx_gas = if self.allow_gas_over_half_block {
+            space_gas_limit
+        } else {
+            space_gas_limit / 2
+        };
+
+        let tx_gas = *tx.gas();
+        let tx_gas_price = *tx.gas_price();
+
+        if tx_gas > max_tx_gas {
+            warn!(
+                "Transaction discarded due to above gas limit: {} > {:?}",
+                tx.gas(),
+                max_tx_gas
+            );
+            return Err(TransactionPoolError::GasLimitExceeded {
+                max: max_tx_gas,
+                have: tx_gas,
+            });
+        }
+
+        let minimum_price = compute_next_price(
+            space_gas_target,
+            tx_gas,
+            min_tx_price.into(),
+            min_tx_price.into(),
+        );
+
+        // check transaction gas price
+        if tx_gas_price < minimum_price {
+            trace!("Transaction {} discarded due to below minimal gas price: price {}", tx.hash(), tx_gas_price);
+            return Err(TransactionPoolError::GasPriceLessThanMinimum {
+                min: minimum_price,
+                have: tx_gas_price,
+            });
+        }
+
+        Ok(())
     }
 }
 
@@ -240,11 +323,13 @@ impl TransactionPool {
     pub fn get_account_pending_transactions(
         &self, address: &Address, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<usize>, best_height: BlockHeight,
-    ) -> (
+    ) -> StateDbResult<(
         Vec<Arc<SignedTransaction>>,
         Option<TransactionStatus>,
         usize,
-    ) {
+    )> {
+        use TransactionStatus::{Pending, Ready};
+
         let inner = self.inner.read();
         let (txs, mut first_tx_status, pending_count) = inner
             .get_account_pending_transactions(
@@ -252,86 +337,60 @@ impl TransactionPool {
                 maybe_start_nonce,
                 maybe_limit,
             );
-        if txs.is_empty() {
-            return (txs, first_tx_status, pending_count);
-        }
 
-        let first_tx = txs.first().expect("non empty");
-        if address.space == Space::Native {
-            if let Transaction::Native(tx) = &first_tx.unsigned {
-                if VerificationConfig::check_transaction_epoch_bound(
-                    tx,
-                    best_height,
-                    self.verification_config.transaction_epoch_bound,
-                ) == -1
-                {
-                    // If the epoch height is out of bound, overwrite the
-                    // pending reason.
-                    first_tx_status = Some(TransactionStatus::Pending(
-                        PendingReason::OldEpochHeight,
-                    ));
-                }
-            }
-        }
+        let first_tx = if let Some(first) = txs.first() {
+            first
+        } else {
+            return Ok((txs, first_tx_status, pending_count));
+        };
 
-        if matches!(
-            first_tx_status,
-            Some(TransactionStatus::Ready)
-                | Some(TransactionStatus::Pending(
-                    PendingReason::NotEnoughCash
-                ))
-        ) {
-            // The sponsor status may have changed, check again.
-            // This is not applied to the tx pool state because this check is
-            // only triggered on the RPC server.
-            let account_cache = self.get_best_state_account_cache();
-            match inner.get_sponsored_gas_and_storage(&account_cache, &first_tx)
+        if let Transaction::Native(tx) = &first_tx.unsigned {
+            if VerificationConfig::check_transaction_epoch_bound(
+                tx,
+                best_height,
+                self.verification_config.transaction_epoch_bound,
+            ) == -1
             {
-                Ok((sponsored_gas, sponsored_storage)) => {
-                    if let Ok((_, balance)) =
-                        account_cache.get_nonce_and_balance(&first_tx.sender())
-                    {
-                        let tx_info = TxWithReadyInfo::new(
-                            first_tx.clone(),
-                            false,
-                            sponsored_gas,
-                            sponsored_storage,
-                        );
-                        if tx_info.calc_tx_cost() <= balance {
-                            // The tx should have been ready now.
-                            if matches!(
-                                first_tx_status,
-                                Some(TransactionStatus::Pending(
-                                    PendingReason::NotEnoughCash
-                                ))
-                            ) {
-                                first_tx_status =
-                                    Some(TransactionStatus::Pending(
-                                        PendingReason::OutdatedStatus,
-                                    ));
-                            }
-                        } else {
-                            if matches!(
-                                first_tx_status,
-                                Some(TransactionStatus::Ready)
-                            ) {
-                                first_tx_status =
-                                    Some(TransactionStatus::Pending(
-                                        PendingReason::OutdatedStatus,
-                                    ));
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    error!(
-                        "error in get_account_pending_transactions: e={:?}",
-                        e
-                    );
-                }
+                // If the epoch height is out of bound, overwrite the
+                // pending reason.
+                first_tx_status = Some(Pending(PendingReason::OldEpochHeight));
             }
         }
-        (txs, first_tx_status, pending_count)
+
+        if !matches!(
+            first_tx_status,
+            Some(Ready | Pending(PendingReason::NotEnoughCash))
+        ) {
+            return Ok((txs, first_tx_status, pending_count));
+        }
+
+        // The sponsor status may have changed, check again.
+        // This is not applied to the tx pool state because this check is
+        // only triggered on the RPC server.
+        let account_cache = self.get_best_state_account_cache();
+
+        let (sponsored_gas, sponsored_storage) =
+            inner.get_sponsored_gas_and_storage(&account_cache, &first_tx)?;
+        let (_, balance) =
+            account_cache.get_nonce_and_balance(&first_tx.sender())?;
+        let tx_cost = TxWithReadyInfo::new(
+            first_tx.clone(),
+            false,
+            sponsored_gas,
+            sponsored_storage,
+        )
+        .calc_tx_cost();
+
+        let outdated = match (tx_cost <= balance, &first_tx_status) {
+            (true, Some(Pending(PendingReason::NotEnoughCash)))
+            | (false, Some(Ready)) => true,
+            _ => false,
+        };
+        if outdated {
+            first_tx_status = Some(Pending(PendingReason::OutdatedStatus));
+        }
+
+        return Ok((txs, first_tx_status, pending_count));
     }
 
     pub fn get_pending_transaction_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
@@ -351,15 +410,11 @@ impl TransactionPool {
         account_cache.get_nonce_and_balance(address)
     }
 
-    pub fn calc_max_tx_gas(&self) -> U256 {
+    pub fn calc_half_block_gas_limit(&self) -> Option<U256> {
         let current_best_info = self.consensus_best_info.lock().clone();
-        match self
-            .data_man
+        self.data_man
             .block_from_db(&current_best_info.best_block_hash)
-        {
-            Some(pivot_block) => pivot_block.block_header.gas_limit() / 2,
-            None => *self.config.max_tx_gas.read(),
-        }
+            .map(|pivot_block| pivot_block.block_header.gas_limit() / 2)
     }
 
     /// Try to insert `transactions` into transaction pool.
@@ -370,7 +425,10 @@ impl TransactionPool {
     /// `failure` and will not be propagated.
     pub fn insert_new_transactions(
         &self, mut transactions: Vec<TransactionWithSignature>,
-    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
+    ) -> (
+        Vec<Arc<SignedTransaction>>,
+        HashMap<H256, TransactionPoolError>,
+    ) {
         INSERT_TPS.mark(1);
         INSERT_TXS_TPS.mark(transactions.len());
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
@@ -430,35 +488,40 @@ impl TransactionPool {
                 let mut to_prop = self.to_propagate_trans.write();
 
                 for tx in signed_trans {
-                    if inner.get(&tx.hash).is_none() {
-                        if let Err(e) = self
-                            .add_transaction_with_readiness_check(
-                                &mut *inner,
-                                &account_cache,
-                                tx.clone(),
-                                false,
-                                false,
-                            )
-                        {
-                            debug!(
+                    if inner.get(&tx.hash).is_some() {
+                        continue;
+                    }
+
+                    if let Err(e) = self.add_transaction_with_readiness_check(
+                        &mut *inner,
+                        &account_cache,
+                        tx.clone(),
+                        false,
+                        false,
+                    ) {
+                        debug!(
                             "tx {:?} fails to be inserted to pool, err={:?}",
                             &tx.hash, e
                         );
-                            failure.insert(tx.hash(), e);
-                            continue;
-                        }
-                        passed_transactions.push(tx.clone());
-                        if !to_prop.contains_key(&tx.hash)
-                            && to_prop.len() < inner.capacity()
-                        {
-                            to_prop.insert(tx.hash, tx);
-                        }
+                        failure.insert(tx.hash(), e);
+                        continue;
+                    }
+
+                    passed_transactions.push(tx.clone());
+                    if to_prop.len() < inner.capacity() {
+                        to_prop.entry(tx.hash).or_insert(tx);
                     }
                 }
             }
             Err(e) => {
                 for tx in transactions {
-                    failure.insert(tx.hash(), format!("{:?}", e).into());
+                    failure.insert(
+                        tx.hash(),
+                        TransactionPoolError::RlpDecodeError(format!(
+                            "{:?}",
+                            e
+                        )),
+                    );
                 }
             }
         }
@@ -481,7 +544,10 @@ impl TransactionPool {
     /// `failure` and will not be propagated.
     pub fn insert_new_signed_transactions(
         &self, mut signed_transactions: Vec<Arc<SignedTransaction>>,
-    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
+    ) -> (
+        Vec<Arc<SignedTransaction>>,
+        HashMap<H256, TransactionPoolError>,
+    ) {
         INSERT_TPS.mark(1);
         INSERT_TXS_TPS.mark(signed_transactions.len());
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
@@ -531,7 +597,7 @@ impl TransactionPool {
         if quota < signed_transactions.len() {
             for tx in signed_transactions.split_off(quota) {
                 trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
-                failure.insert(tx.hash, "txpool is full".into());
+                failure.insert(tx.hash, TransactionPoolError::TxPoolFull);
             }
         }
 
@@ -590,14 +656,14 @@ impl TransactionPool {
         &self, transaction: &TransactionWithSignature, basic_check: bool,
         chain_id: AllChainID, best_height: u64,
         transitions: &TransitionsEpochHeight, spec: &Spec,
-    ) -> Result<(), String> {
+    ) -> Result<(), TransactionPoolError> {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
         let mode = VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
 
         if basic_check {
             self.verification_config
                 .check_tx_size(transaction)
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| TransactionPoolError::TransactionError(e))?;
             if let Err(e) = self.verification_config.verify_transaction_common(
                 transaction,
                 chain_id,
@@ -606,7 +672,7 @@ impl TransactionPool {
                 mode,
             ) {
                 warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
-                return Err(format!("{:?}", e));
+                return Err(TransactionPoolError::TransactionError(e));
             }
         }
 
@@ -616,32 +682,7 @@ impl TransactionPool {
         // best info is initialized here.
 
         // check transaction gas limit
-        let max_tx_gas = *self.config.max_tx_gas.read();
-        if *transaction.gas() > max_tx_gas {
-            warn!(
-                "Transaction discarded due to above gas limit: {} > {:?}",
-                transaction.gas(),
-                max_tx_gas
-            );
-            return Err(format!(
-                "transaction gas {} exceeds the maximum value {:?}, the half of pivot block gas limit",
-                transaction.gas(), max_tx_gas
-            ));
-        }
-
-        let min_tx_price = match transaction.space() {
-            Space::Native => self.config.min_native_tx_price,
-            Space::Ethereum => self.config.min_eth_tx_price,
-        };
-        // check transaction gas price
-        if *transaction.gas_price() < min_tx_price.into() {
-            trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price());
-            return Err(format!(
-                "transaction gas price {} less than the minimum value {}",
-                transaction.gas_price(),
-                min_tx_price
-            ));
-        }
+        self.config.check_gas_price_and_limit(transaction)?;
 
         Ok(())
     }
@@ -652,7 +693,7 @@ impl TransactionPool {
     pub fn add_transaction_with_readiness_check(
         &self, inner: &mut TransactionPoolInner, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), TransactionPoolError> {
         inner.insert_transaction_with_readiness_check(
             account_cache,
             transaction,
@@ -799,12 +840,13 @@ impl TransactionPool {
                 min_gas_price[tx.space()].min(*tx.gas_limit());
         }
 
-        let core_gas_limit = block_gas_limit * 9 / 10;
-        let eth_gas_limit = if params.can_pack_evm_transaction(current_height) {
-            block_gas_limit * 5 / 10
-        } else {
-            U256::zero()
-        };
+        let core_gas_limit =
+            cspace_block_gas_limit_after_cip1559(block_gas_limit);
+        let eth_gas_limit = espace_block_gas_limit(
+            params.can_pack_evm_transaction(current_height),
+            block_gas_limit,
+        );
+
         let gas_target =
             SpaceMap::new(core_gas_limit, eth_gas_limit).map_all(|x| x / 2);
 
@@ -893,7 +935,9 @@ impl TransactionPool {
             let mut consensus_best_info = self.consensus_best_info.lock();
             *consensus_best_info = best_info.clone();
         }
-        *self.config.max_tx_gas.write() = self.calc_max_tx_gas();
+        if let Some(half_block_gas_limit) = self.calc_half_block_gas_limit() {
+            *self.config.half_block_gas_limit.write() = half_block_gas_limit;
+        }
 
         let account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
@@ -1110,7 +1154,7 @@ impl TransactionPool {
                         warn!("Should not happen");
                     }
                     Err(e) => {
-                        error!("Cannot compute base price with additinal transactions: {}", e);
+                        error!("Cannot compute base price with additional transactions: {}", e);
                     }
                 }
             }
@@ -1134,17 +1178,18 @@ impl TransactionPool {
     fn best_executed_state(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
     ) -> StateDbResult<Arc<State>> {
-        Ok(Arc::new(State::new(StateDb::new(
-            data_man
-                .storage_manager
-                .get_state_no_commit(
-                    best_executed_epoch,
-                    /* try_open = */ false,
-                    None,
-                )?
-                // Safe because the state is guaranteed to be available
-                .unwrap(),
-        ))?))
+        let storage = data_man
+            .storage_manager
+            .get_state_no_commit(
+                best_executed_epoch,
+                /* try_open = */ false,
+                None,
+            )?
+            // Safe because the state is guaranteed to be available
+            .unwrap();
+        let state_db = StateDb::new(storage);
+        let state = State::new(state_db)?;
+        Ok(Arc::new(state))
     }
 
     pub fn set_best_executed_epoch(

@@ -45,7 +45,7 @@ pub struct CacheManagerDeltaMpts<
     /// read the child's access key by loading the current node, then check
     /// NodeRefMap, if actual missing load it from disk for the second
     /// time.
-    /// b) create NodeRef for some children of cached node, store a the 64B key
+    /// b) create NodeRef for some children of cached node, store the 64B key
     /// for disk access, and keep the reference count so that we don't store
     /// NodeRef for nodes which later becomes irrelevant indefinitely.
     ///

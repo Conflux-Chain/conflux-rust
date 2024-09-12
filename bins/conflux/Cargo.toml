@@ -19,12 +19,12 @@ parking_lot = "0.11"
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-cfxstore = { path = "../../crates/cfx_store" }
-cfxcore-accounts = { path = "../../crates/accounts" }
+cfxstore = { workspace = true }
+cfxcore-accounts = { workspace = true }
 home = "0.5.0"
 rpassword = "4.0.1"
-io = { path = "../../crates/util/io" }
-runtime = { path = "../../crates/util/runtime" }
+io = { workspace = true }
+runtime = { workspace = true }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 jsonrpc-core = "15.1.0"
 jsonrpc-tcp-server = "15.1.0"
@@ -33,28 +33,28 @@ jsonrpc-core-client = { version = "15.1.0", features = ["http"] }
 error-chain = { version = "0.12" }
 log = "0.4"
 slab = "0.4"
-cfxcore = { path = "../../crates/cfxcore/core" }
-network = { path = "../../crates/network" }
-db = { path = "../../crates/dbs/db" }
-blockgen = { path = "../../crates/blockgen" }
-txgen = { path = "../../crates/transactiongen" }
-secret-store = { path = "../../crates/secret_store" }
-primitives = { path = "../../crates/primitives" }
+cfxcore = { workspace = true }
+network = { workspace = true }
+db = { workspace = true }
+blockgen = { workspace = true }
+txgen = { workspace = true }
+secret-store = { workspace = true }
+primitives = { workspace = true }
 log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
-rlp = "0.4.0"
-keccak-hash = "0.5"
+rlp = { workspace = true }
+keccak-hash = { workspace = true }
 rand = "0.8.3"
-kvdb-rocksdb = {path= "../../crates/dbs/kvdb-rocksdb" }
-client = { path = "../../crates/client" }
-cfx-types = { path = "../../crates/cfx_types" }
+kvdb-rocksdb = { workspace = true }
+client = { workspace = true }
+cfx-types = { workspace = true }
 threadpool = "1.7"
 futures = "0.1.29"
 docopt = "1.0"
-cfxkey = { path = "../../crates/cfx_key" }
+cfxkey = { workspace = true }
 parity-wordlist = "1.3.0"
 rustc-hex = "2.1"
 env_logger = "0.5"
-malloc_size_of = {path= "../../crates/util/malloc_size_of" }
+malloc_size_of = { workspace = true }
 diem-crypto = { path= "../../crates/cfxcore/core/src/pos/crypto/crypto" }
 diem-types = { path= "../../crates/cfxcore/core/src/pos/types" }
 pos-ledger-db = { path = "../../crates/cfxcore/core/src/pos/storage/pos-ledger-db" }
@@ -66,7 +66,7 @@ bcs = "0.1.3"
 tempdir = "0.3.7"
 hex = "0.3.0"
 base64ct = "=1.1.1"
-parity-version = {path = "../../crates/util/version" }
+parity-version = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
 version = "0.3.2"
@@ -85,10 +85,7 @@ name = "pos-genesis-tool"
 path = "../pos-genesis-tool/main.rs"
 
 [features]
-default = ["jemalloc-global", "bls-blst"]
+default = ["jemalloc-global"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
-bls-blst = ["cfxcore/bls-blst", "diem-crypto/bls-blst"]
-bls-pairing = ["cfxcore/bls-pairing", "diem-crypto/bls-pairing"]
-blst-portable = ["cfxcore/blst-portable", "diem-crypto/blst-portable"]
 u64-mpt-db-key = ["client/u64_mpt_db_key"]

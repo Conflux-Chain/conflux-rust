@@ -36,7 +36,7 @@ Conflux eSpace has implemented main features of geth style trace, include:
 - `debug_traceTransaction`
 - `debug_traceBlockByNumber`
 - `debug_traceBlockByHash`
-- `debug_traceCall` (Working)
+- `debug_traceCall`
 
 Currently supported tracers:
 
@@ -59,6 +59,10 @@ public_evm_rpc_apis = "eth,ethdebug"
 Currently the opcode trace's structLogs `error` field is not implemented.
 
 Conflux does not have refund mechanism, so the `refund` field is omitted.
+
+### state override
+
+Currently we do not support state override in `debug_traceCall` method.
 
 ## FAQs
 

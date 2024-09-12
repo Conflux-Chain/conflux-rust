@@ -8,22 +8,22 @@ edition = "2021"
 
 [dependencies]
 clap = "2"
-cfxcore = { path = "../cfxcore/core" }
-cfx-types = { path = "../cfx_types" }
-cfx-vm-types = { path = "../cfxcore/vm-types" }
-cfx-bytes = { path = "../cfx_bytes" }
-primitives = { path = "../primitives" }
+cfxcore = { workspace = true }
+cfx-types = { workspace = true }
+cfx-vm-types = { workspace = true }
+cfx-bytes = { workspace = true }
+primitives = { workspace = true }
 parking_lot = "0.11"
-rlp = "0.4.0"
+rlp = { workspace = true }
 rand = "0.7"
 rustc-hex = "2.1"
-secret-store = { path = "../secret_store" }
-network = { path = "../network" }
-cfxkey = { path = "../cfx_key" }
+secret-store = { workspace = true }
+network = { workspace = true }
+cfxkey = { workspace = true }
 log = "0.4"
-db = { path = "../dbs/db" }
+db = { workspace = true }
 toml = "0.5.8"
-io = { path = "../util/io" }
-priority-send-queue = { path = "../util/priority-send-queue" }
-metrics = { path = "../util/metrics" }
+io = { workspace = true }
+priority-send-queue = { workspace = true }
+metrics = { workspace = true }
 lazy_static = "1.4"

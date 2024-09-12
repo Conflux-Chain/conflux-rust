@@ -6,6 +6,7 @@ use crate::message::Bytes;
 use cfx_types::{Address, SpaceMap, H256, U256};
 use primitives::{filter::FilterError, transaction::TransactionError};
 use std::{error, fmt, time::SystemTime};
+use thiserror::Error;
 use unexpected::{Mismatch, OutOfBounds};
 
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -144,22 +145,14 @@ impl error::Error for BlockError {
     fn description(&self) -> &str { "Block error" }
 }
 
-error_chain! {
-    types {
-        Error, ErrorKind, ErrorResultExt, CoreResult;
-    }
-
-    foreign_links {
-        Block(BlockError) #[doc = "Error concerning block processing."];
-        Transaction(TransactionError) #[doc = "Error concerning transaction processing."];
-        Filter(FilterError) #[doc = "Error concerning log filtering."];
-    }
-
-    errors {
-        #[doc = "PoW hash is invalid or out of date."]
-        PowHashInvalid {
-            description("PoW hash is invalid or out of date.")
-            display("PoW hash is invalid or out of date.")
-        }
-    }
+#[derive(Error, Debug)]
+pub enum CoreError {
+    #[error(transparent)]
+    Block(#[from] BlockError),
+    #[error(transparent)]
+    Transaction(#[from] TransactionError),
+    #[error(transparent)]
+    Filter(#[from] FilterError),
+    #[error("PoW hash is invalid or out of date.")]
+    PowHashInvalid,
 }

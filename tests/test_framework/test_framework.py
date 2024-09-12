@@ -362,7 +362,7 @@ class ConfluxTestFramework:
         node.wait_for_rpc_connection()
         node.wait_for_nodeid()
         # try:
-        #     node.pos_start()
+        #     node.test_posStart()
         # except Exception as e:
         #     print(e)
         if phase_to_wait is not None:
@@ -461,6 +461,7 @@ class ConfluxTestFramework:
     def before_test(self):
         pass
 
+    # wait for core space tx
     def wait_for_tx(self, all_txs, check_status=False):
         for tx in all_txs:
             self.log.debug("Wait for tx to confirm %s", tx.hash_hex())

@@ -1,4 +1,4 @@
-use super::Transaction;
+use crate::rpc::types::Transaction;
 use cfx_types::{H256, U256, U64};
 use cfxcore::transaction_pool::TransactionStatus;
 

@@ -35,14 +35,14 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         for i in range(1, self.num_nodes):
             self.start_node(i, extra_args=self.node_extra_args)
         for i in range(self.num_nodes):
-            wait_until(lambda: len(self.nodes[i].getpeerinfo()) >= 4)
+            wait_until(lambda: len(self.nodes[i].test_getPeerInfo()) >= 4)
 
     def run_test(self):
         block_number = 10
 
         for i in range(1, block_number):
             chosen_peer = random.randint(0, self.num_nodes - 1)
-            block_hash = self.nodes[chosen_peer].generate_empty_blocks(1)
+            block_hash = self.nodes[chosen_peer].test_generateEmptyBlocks(1)
             self.log.info("generate block %s", block_hash)
         wait_for_block_count(self.nodes[0], block_number, timeout=30)
         sync_blocks(self.nodes, timeout=30)
@@ -50,7 +50,7 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
 
         self.stop_node(0, kill=True)
         self.log.info("node 0 stopped")
-        block_hash = self.nodes[-1].generate_empty_blocks(1)
+        block_hash = self.nodes[-1].test_generateEmptyBlocks(1)
         self.log.info("generate block %s", block_hash)
         wait_for_block_count(self.nodes[1], block_number + 1)
         sync_blocks(self.nodes[1:], timeout=30)
@@ -86,7 +86,7 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         sender_balance = default_config["TOTAL_COIN"] - value - gas_price * 21000
         # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
         for _ in range(2000):
-            self.nodes[0].generate_empty_blocks(1)
+            self.nodes[0].test_generateEmptyBlocks(1)
         client = RpcClient(self.nodes[0])
         assert_equal(client.get_balance(sender_addr), sender_balance)
         assert_equal(client.get_balance(receiver_addr), value)

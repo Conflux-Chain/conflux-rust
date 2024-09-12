@@ -1,4 +1,4 @@
-use super::executed::{revert_reason_decode, Executed};
+use super::executed::{string_revert_reason_decode, Executed};
 use crate::unwrap_or_return;
 use cfx_types::{Address, H256, U256, U512};
 use cfx_vm_types as vm;
@@ -215,7 +215,8 @@ impl ExecutionOutcome {
             }
             ExecutionErrorBumpNonce(error, executed) => {
                 if error == &ExecutionError::VmError(vm::Error::Reverted) {
-                    let revert_reason = revert_reason_decode(&executed.output);
+                    let revert_reason =
+                        string_revert_reason_decode(&executed.output);
                     format!("Vm reverted, {}", revert_reason)
                 } else {
                     format!("{:?}", error)

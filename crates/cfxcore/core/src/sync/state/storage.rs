@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{Error, ErrorKind};
+use crate::sync::Error;
 use cfx_storage::{
     rlp_key_value_len,
     storage_db::{
@@ -175,13 +175,13 @@ impl RangedManifest {
     /// not be empty, and the proofs of all chunk keys are valid.
     pub fn validate(&self, snapshot_root: &MerkleHash) -> Result<(), Error> {
         if self.chunk_boundaries.len() != self.chunk_boundary_proofs.len() {
-            bail!(ErrorKind::InvalidSnapshotManifest(
+            bail!(Error::InvalidSnapshotManifest(
                 "chunk and proof number do not match".into(),
             ));
         }
         if let Some(next) = &self.next {
             if next != self.chunk_boundaries.last().unwrap() {
-                bail!(ErrorKind::InvalidSnapshotManifest(
+                bail!(Error::InvalidSnapshotManifest(
                     "next does not match last boundary".into(),
                 ));
             }
@@ -197,14 +197,12 @@ impl RangedManifest {
                     snapshot_root,
                     proof.get_merkle_root()
                 );
-                bail!(ErrorKind::InvalidSnapshotManifest(
+                bail!(Error::InvalidSnapshotManifest(
                     "invalid proof merkle root".into(),
                 ));
             }
             if !proof.if_proves_key(&self.chunk_boundaries[chunk_index]).0 {
-                bail!(ErrorKind::InvalidSnapshotManifest(
-                    "invalid proof".into(),
-                ));
+                bail!(Error::InvalidSnapshotManifest("invalid proof".into(),));
             }
         }
         Ok(())
@@ -343,10 +341,10 @@ impl Chunk {
             // maximal number of snapshots and cannot give a
             // response temporarily, we should differentiate this
             // from dishonest behaviors.
-            return Err(ErrorKind::EmptySnapshotChunk.into());
+            return Err(Error::EmptySnapshotChunk.into());
         }
         if self.keys.len() != self.values.len() {
-            return Err(ErrorKind::InvalidSnapshotChunk(
+            return Err(Error::InvalidSnapshotChunk(
                 "keys and values do not match".into(),
             )
             .into());
@@ -354,10 +352,9 @@ impl Chunk {
         // the key of first item in chunk should match with the requested key
         if let Some(ref start_key) = key.lower_bound_incl {
             if start_key != &self.keys[0] {
-                return Err(ErrorKind::InvalidSnapshotChunk(
-                    "key mismatch".into(),
-                )
-                .into());
+                return Err(
+                    Error::InvalidSnapshotChunk("key mismatch".into()).into()
+                );
             }
         }
 
@@ -407,7 +404,7 @@ impl Chunk {
                 let msg =
                     format!("Exceed max allowed chunk size {}", max_chunk_size);
                 error!("{}", msg);
-                return Err(ErrorKind::InvalidSnapshotChunk(msg).into());
+                return Err(Error::InvalidSnapshotChunk(msg).into());
             }
 
             keys.push(key);

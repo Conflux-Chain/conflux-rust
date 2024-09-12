@@ -88,9 +88,74 @@ overflow-checks = true
 debug-assertions = true
 
 [workspace.dependencies]
-serde_derive = "1.0"
+cfxkey = { path = "./crates/cfx_key" }
+cfx-math = { path = "./crates/cfx_math" }
+solidity-abi = { path = "./crates/util/solidity-abi" }
+random-crash = { path = "./crates/util/random_crash" }
+memory-cache = { path = "./crates/util/memory-cache" }
+priority-send-queue = { path = "./crates/util/priority-send-queue" }
+heap-map = { path = "./crates/util/heap-map" }
+treap-map = { path = "./crates/util/treap-map" }
+hibitset = { path = "./crates/util/hibitset" }
+runtime = { path = "./crates/util/runtime" }
+malloc_size_of = { path = "./crates/util/malloc_size_of" }
+delegate = { path = "./crates/util/delegate" }
+throttling = { path = "./crates/util/throttling" }
+malloc_size_of_derive = { path = "./crates/util/malloc_size_of_derive" }
+link-cut-tree = { path = "./crates/util/link-cut-tree" }
+sha3-macro = { path = "./crates/util/sha3-macro" }
+dag = { path = "./crates/util/dag" }
+cfx-vm-tracer-derive = { path = "./crates/util/cfx-vm-tracer-derive" }
+parity-version = { path = "./crates/util/version" }
+log-device = { path = "./crates/util/log_device" }
+solidity-abi-derive = { path = "./crates/util/solidity-abi-derive" }
+io = { path = "./crates/util/io" }
+metrics = { path = "./crates/util/metrics" }
+cfx-bytes = { path = "./crates/cfx_bytes" }
+primitives = { path = "./crates/primitives" }
+cfx-types = { path = "./crates/cfx_types" }
+client = { path = "./crates/client" }
+cfx-stratum = { path = "./crates/stratum" }
+txgen = { path = "./crates/transactiongen" }
+blockgen = { path = "./crates/blockgen" }
+serde-utils = { path = "./crates/serde_utils" }
+db = { path = "./crates/dbs/db" }
+cfx-db-errors = { path = "./crates/dbs/db-errors" }
+cfx-statedb = { path = "./crates/dbs/statedb" }
+cfx-storage = { path = "./crates/dbs/storage" }
+kvdb-rocksdb = { path = "./crates/dbs/kvdb-rocksdb" }
+cfx-addr = { path = "./crates/cfx_addr" }
+cfxcore-accounts = { path = "./crates/accounts" }
+secret-store = { path = "./crates/secret_store" }
+cfxstore = { path = "./crates/cfx_store" }
+network = { path = "./crates/network" }
+cfx-utils = { path = "./crates/cfx_utils" }
+cfxcore = { path = "./crates/cfxcore/core" }
+cfx-parameters = { path = "./crates/cfxcore/parameters" }
+cfx-execute-helper = { path = "./crates/cfxcore/execute-helper" }
+cfx-executor = { path = "./crates/cfxcore/executor" }
+cfx-packing-pool = { path = "./crates/cfxcore/packing-pool" }
+cfx-vm-interpreter = { path = "./crates/cfxcore/vm-interpreter" }
+geth-tracer = { path = "./crates/cfxcore/geth-tracer" }
+cfx-vm-types = { path = "./crates/cfxcore/vm-types" }
+cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
+
 serde = { version = "1.0", features = ["derive", "alloc"] }
 serde_json = "1.0"
+serde_derive = "1.0"
+thiserror = "1.0.63"
+anyhow = "1.0"
+chrono = "=0.4.38"
 
-alloy-primitives = "0.7.1"
+keccak-hash = "0.5"
+rlp = "0.4.0"
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+hex = "0.4.3"
+
+alloy-sol-types = "0.7.2"
+alloy-primitives = "0.7.2"
+alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
+revm = "8.0"
+
+bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore", "blst"] }

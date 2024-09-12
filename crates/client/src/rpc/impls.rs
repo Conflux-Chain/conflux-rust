@@ -15,6 +15,8 @@ pub struct RpcImplConfiguration {
     // other APIs will disconnect on oversized response
     pub max_payload_bytes: usize,
 
+    pub max_estimation_gas_limit: Option<U256>,
+
     pub enable_metrics: bool,
 
     pub poll_lifetime_in_seconds: Option<u32>,
@@ -22,8 +24,13 @@ pub struct RpcImplConfiguration {
 
 pub mod cfx;
 pub mod eth;
+mod fee_history_cache;
 pub mod pos;
 pub mod trace;
 
 pub use cfx::{cfx_filter, common, light, pool, pubsub};
+use cfx_types::U256;
 pub use eth::{debug, eth_filter, eth_handler::EthHandler, eth_pubsub};
+pub use fee_history_cache::{
+    FeeHistoryCache, FeeHistoryEntry, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+};

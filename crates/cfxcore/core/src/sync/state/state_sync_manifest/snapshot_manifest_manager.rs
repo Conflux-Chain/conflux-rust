@@ -4,7 +4,7 @@ use crate::{
     block_data_manager::BlockExecutionResult,
     message::NetworkContext,
     sync::{
-        error::{Error, ErrorKind},
+        error::Error,
         message::{
             msgid, Context, SnapshotManifestRequest, SnapshotManifestResponse,
         },
@@ -23,7 +23,7 @@ use cfx_storage::{
     storage_db::{SnapshotInfo, SnapshotKeptToProvideSyncStatus},
     TrieProof,
 };
-use cfx_types::H256;
+use cfx_types::{option_vec_to_hex, H256};
 use network::node_table::NodeId;
 use primitives::{
     BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
@@ -114,15 +114,15 @@ impl SnapshotManifestManager {
 
         info!(
             "Snapshot manifest received, checkpoint = {:?}, chunk_boundaries.len()={}, \
-            start={:?}, next={:?}",
+            start={}, next={}",
             self.snapshot_candidate, response.manifest.chunk_boundaries.len(),
-            request.start_chunk, response.manifest.next
+            option_vec_to_hex(request.start_chunk.as_ref()), option_vec_to_hex(response.manifest.next.as_ref())
         );
 
         // validate blame state if requested
         if request.is_initial_request() {
             if !self.chunk_boundaries.is_empty() {
-                bail!(ErrorKind::InvalidSnapshotManifest(
+                bail!(Error::InvalidSnapshotManifest(
                     "Initial manifest is not expected".into(),
                 ));
             }
@@ -143,7 +143,7 @@ impl SnapshotManifestManager {
                 None => {
                     warn!("failed to validate the blame state, re-sync manifest from other peer");
                     self.resync_manifest(ctx);
-                    bail!(ErrorKind::InvalidSnapshotManifest(
+                    bail!(Error::InvalidSnapshotManifest(
                         "invalid blame state in manifest".into(),
                     ));
                 }
@@ -162,7 +162,7 @@ impl SnapshotManifestManager {
                     None => {
                         warn!("failed to validate the epoch receipts, re-sync manifest from other peer");
                         self.resync_manifest(ctx);
-                        bail!(ErrorKind::InvalidSnapshotManifest(
+                        bail!(Error::InvalidSnapshotManifest(
                             "invalid epoch receipts in manifest".into(),
                         ));
                     }
@@ -173,7 +173,7 @@ impl SnapshotManifestManager {
                 response.manifest.validate(&snapshot_info.merkle_root)
             {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
-                bail!(ErrorKind::InvalidSnapshotManifest(
+                bail!(Error::InvalidSnapshotManifest(
                     "invalid chunk proofs in manifest".into(),
                 ));
             }
@@ -188,7 +188,7 @@ impl SnapshotManifestManager {
             });
         } else {
             if self.chunk_boundaries.is_empty() {
-                bail!(ErrorKind::InvalidSnapshotManifest(
+                bail!(Error::InvalidSnapshotManifest(
                     "Non-initial manifest is not expected".into()
                 ));
             }
@@ -206,7 +206,7 @@ impl SnapshotManifestManager {
                         "failed to validate snapshot manifest, error = {:?}",
                         e
                     );
-                    bail!(ErrorKind::InvalidSnapshotManifest(
+                    bail!(Error::InvalidSnapshotManifest(
                         "invalid chunk proofs in manifest".into(),
                     ));
                 }

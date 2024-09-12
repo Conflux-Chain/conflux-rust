@@ -92,8 +92,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
 
         # There should be states after checkpoint
         for block_hash in blocks[1000: -4]:
-            executed_info1 = self.nodes[full_node_index].getExecutedInfo(block_hash)
-            executed_info2 = self.nodes[0].getExecutedInfo(block_hash)
+            executed_info1 = self.nodes[full_node_index].test_getExecutedInfo(block_hash)
+            executed_info2 = self.nodes[0].test_getExecutedInfo(block_hash)
             assert_equal(executed_info1, executed_info2)
 
         self.nodes[full_node_index].stop_node()
@@ -121,8 +121,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
         time.sleep(1)
 
         for block_hash in blocks[3000: -4]:
-            executed_info1 = self.nodes[full_node_index].getExecutedInfo(block_hash)
-            executed_info2 = self.nodes[0].getExecutedInfo(block_hash)
+            executed_info1 = self.nodes[full_node_index].test_getExecutedInfo(block_hash)
+            executed_info2 = self.nodes[0].test_getExecutedInfo(block_hash)
             assert_equal(executed_info1, executed_info2)
 
 

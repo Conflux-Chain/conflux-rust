@@ -16,7 +16,7 @@ use crate::{
             LocalizedTrace as RpcLocalizedTrace, LocalizedTrace,
             TraceFilter as RpcTraceFilter,
         },
-        RpcResult,
+        CoreResult,
     },
 };
 use cfx_addr::Network;
@@ -67,7 +67,7 @@ impl TraceHandler {
 
     fn block_traces_impl(
         &self, block_hash: H256,
-    ) -> RpcResult<Option<LocalizedBlockTrace>> {
+    ) -> CoreResult<Option<LocalizedBlockTrace>> {
         // Note: an alternative to `into_jsonrpc_result` is the delegate! macro.
         let block = match self
             .data_man
@@ -105,7 +105,7 @@ impl TraceHandler {
 
     fn filter_traces_impl(
         &self, filter: PrimitiveTraceFilter,
-    ) -> RpcResult<Option<Vec<RpcLocalizedTrace>>> {
+    ) -> CoreResult<Option<Vec<RpcLocalizedTrace>>> {
         let consensus_graph = self.consensus_graph();
         let traces: Vec<_> = consensus_graph
             .filter_traces(filter)?
@@ -124,80 +124,67 @@ impl TraceHandler {
 
     fn transaction_trace_impl(
         &self, tx_hash: &H256,
-    ) -> RpcResult<Option<Vec<RpcLocalizedTrace>>> {
-        Ok(self
+    ) -> Option<Vec<RpcLocalizedTrace>> {
+        let tx_index = self
             .data_man
-            .transaction_index_by_hash(tx_hash, true /* update_cache */)
-            .and_then(|tx_index| {
-                // FIXME(thegaram): do we support traces for phantom txs?
-                if tx_index.is_phantom {
-                    return None;
-                }
-                let block = match self
-                    .data_man
-                    .block_by_hash(&tx_index.block_hash, false)
-                {
-                    None => return None,
-                    Some(block) => block,
-                };
-                if block
-                    .transactions
-                    .get(tx_index.real_index)
-                    .map(|tx| tx.space() == Space::Ethereum)
-                    // This default value is just added in case.
-                    .unwrap_or(true)
-                {
-                    // If it's a Ethereum space tx, we return `Ok(None)` here
-                    // instead of returning `Ok(Some(vec![]))` later.
-                    return None;
-                }
+            .transaction_index_by_hash(tx_hash, true /* update_cache */)?;
 
-                self.data_man
-                    .transactions_traces_by_block_hash(&tx_index.block_hash)
-                    .and_then(|(pivot_hash, traces)| {
-                        traces
-                            .into_iter()
-                            .nth(tx_index.real_index)
-                            .map(|tx_trace| {
-                                tx_trace.filter_space(Space::Native).0
-                            })
-                            .map(|traces| {
-                                traces
-                                    .into_iter()
-                                    .map(|trace| RpcLocalizedTrace {
-                                        action: RpcAction::try_from(
-                                            trace.action,
-                                            self.network,
-                                        )
-                                        .expect("local address convert error"),
-                                        valid: trace.valid,
-                                        epoch_hash: Some(pivot_hash),
-                                        epoch_number: Some(
-                                            self.data_man
-                                                .block_height_by_hash(
-                                                    &pivot_hash,
-                                                )
-                                                .expect("pivot block missing")
-                                                .into(),
-                                        ),
-                                        block_hash: Some(tx_index.block_hash),
-                                        transaction_position: Some(
-                                            tx_index
-                                                .rpc_index
-                                                .unwrap_or(tx_index.real_index)
-                                                .into(),
-                                        ),
-                                        transaction_hash: Some(*tx_hash),
-                                    })
-                                    .collect()
-                            })
-                    })
-            }))
+        // FIXME(thegaram): do we support traces for phantom txs?
+        if tx_index.is_phantom {
+            return None;
+        }
+
+        let block = self.data_man.block_by_hash(&tx_index.block_hash, false)?;
+
+        if block
+            .transactions
+            .get(tx_index.real_index)
+            .map(|tx| tx.space() == Space::Ethereum)
+            // This default value is just added in case.
+            .unwrap_or(true)
+        {
+            // If it's a Ethereum space tx, we return `Ok(None)` here
+            // instead of returning `Ok(Some(vec![]))` later.
+            return None;
+        }
+
+        let (pivot_hash, block_traces) = self
+            .data_man
+            .transactions_traces_by_block_hash(&tx_index.block_hash)?;
+
+        let traces = block_traces
+            .into_iter()
+            .nth(tx_index.real_index)?
+            .filter_space(Space::Native)
+            .0;
+
+        let answer = traces
+            .into_iter()
+            .map(|trace| RpcLocalizedTrace {
+                action: RpcAction::try_from(trace.action, self.network)
+                    .expect("local address convert error"),
+                valid: trace.valid,
+                epoch_hash: Some(pivot_hash),
+                epoch_number: Some(
+                    self.data_man
+                        .block_height_by_hash(&pivot_hash)
+                        .expect("pivot block missing")
+                        .into(),
+                ),
+                block_hash: Some(tx_index.block_hash),
+                transaction_position: Some(
+                    tx_index.rpc_index.unwrap_or(tx_index.real_index).into(),
+                ),
+                transaction_hash: Some(*tx_hash),
+            })
+            .collect();
+
+        Some(answer)
     }
 
     fn epoch_trace_impl(
         &self, epoch_number: EpochNumber,
-    ) -> RpcResult<EpochTrace> {
+    ) -> CoreResult<EpochTrace> {
         // Make sure we use the same epoch_hash in two spaces. Using
         // epoch_number cannot guarantee the atomicity.
         let epoch_hash = self
@@ -214,7 +201,7 @@ impl TraceHandler {
 
     fn space_epoch_traces(
         &self, space: Space, epoch_hash: H256,
-    ) -> RpcResult<Vec<LocalizedTrace>> {
+    ) -> CoreResult<Vec<LocalizedTrace>> {
         let consensus = self.consensus_graph();
         let epoch = consensus
             .get_block_epoch_number(&epoch_hash)
@@ -256,7 +243,7 @@ impl Trace for TraceHandler {
     fn transaction_traces(
         &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>> {
-        into_jsonrpc_result(self.transaction_trace_impl(&tx_hash))
+        into_jsonrpc_result(Ok(self.transaction_trace_impl(&tx_hash)))
     }
 
     fn epoch_traces(&self, epoch: RpcEpochNumber) -> JsonRpcResult<EpochTrace> {

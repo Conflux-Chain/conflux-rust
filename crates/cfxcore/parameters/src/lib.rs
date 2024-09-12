@@ -210,6 +210,7 @@ pub mod tx_pool {
 
 pub mod block {
     use crate::consensus::GENESIS_GAS_LIMIT;
+    use cfx_types::U256;
 
     // The maximum block size limit in bytes
     // Consider that the simple payment transaction consumes only 100 bytes per
@@ -246,6 +247,46 @@ pub mod block {
     // space in the cross space call. Setting it to N means that only 1/N of gas
     // left can be passed to the cross space call.
     pub const CROSS_SPACE_GAS_RATIO: u64 = 10;
+    // The following parameter controls the ratio of block gas limit for the
+    // core space after CIP1559 is enabled. Setting it to N means that only N/10
+    // of the block gas limit can be used for core space transactions.
+    pub const CIP1559_CORE_TRANSACTION_GAS_RATIO: u64 = 9;
+    // The following parameter controls the ratio of block gas limit for the
+    // espace after CIP1559 is enabled. Setting it to N means that only N/10
+    // of the block gas limit can be used for  espace transactions.
+    pub const CIP1559_ESPACE_TRANSACTION_GAS_RATIO: u64 = 5;
+
+    pub fn espace_block_gas_limit(
+        can_pack_espace_tx: bool, block_gas_limit: U256,
+    ) -> U256 {
+        if can_pack_espace_tx {
+            espace_block_gas_limit_of_enabled_block(block_gas_limit)
+        } else {
+            U256::zero()
+        }
+    }
+
+    pub fn espace_block_gas_limit_of_enabled_block(
+        block_gas_limit: U256,
+    ) -> U256 {
+        block_gas_limit * CIP1559_ESPACE_TRANSACTION_GAS_RATIO
+            / super::RATIO_BASE_TEN
+    }
+
+    pub fn cspace_block_gas_limit(
+        cip1559_enabled: bool, block_gas_limit: U256,
+    ) -> U256 {
+        if cip1559_enabled {
+            cspace_block_gas_limit_after_cip1559(block_gas_limit)
+        } else {
+            block_gas_limit
+        }
+    }
+
+    pub fn cspace_block_gas_limit_after_cip1559(block_gas_limit: U256) -> U256 {
+        block_gas_limit * CIP1559_CORE_TRANSACTION_GAS_RATIO
+            / super::RATIO_BASE_TEN
+    }
 }
 
 pub mod staking {
@@ -423,6 +464,8 @@ pub mod light {
 }
 
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;
+pub const RATIO_BASE_TEN: u64 = 10;
+pub const RATIO_BASE_HUNDRED: u64 = 100;
 
 pub struct DaoControlParameters {
     pub pow_base_reward: U256,

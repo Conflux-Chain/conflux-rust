@@ -42,7 +42,7 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
             node.wait_for_recovery(["NormalSyncPhase"], 30)
 
     def run_test(self):
-        self.nodes[0].generate_empty_blocks(5000)
+        self.nodes[0].test_generateEmptyBlocks(5000)
         self.stop_node(0)
         self.start_node(0, phase_to_wait=None)
         self.stop_node(0)
