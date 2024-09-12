@@ -141,6 +141,7 @@ mod tests {
     use super::RpcAddress;
     use cfx_addr::{cfx_addr_encode, EncodingOptions, Network};
     use cfx_types::H160;
+    use log::debug;
     use serde_json;
 
     fn check_deserialize(base32_address: &str, hex: &str, network: Network) {

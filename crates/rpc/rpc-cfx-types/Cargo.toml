@@ -26,3 +26,4 @@ serde_json = { workspace = true }
 strum_macros = "0.20"
 jsonrpc-core = { workspace = true }
 error-chain = { workspace = true }
+log = { workspace = true }

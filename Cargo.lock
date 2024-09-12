@@ -1292,6 +1292,7 @@ dependencies = [
  "cfx-vm-types",
  "error-chain",
  "jsonrpc-core",
+ "log",
  "primitives",
  "serde",
  "serde_json",
