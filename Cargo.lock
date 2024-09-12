@@ -1304,8 +1304,8 @@ name = "cfx-rpc-cfx-types"
 version = "2.4.0"
 dependencies = [
  "cfx-addr",
- "cfx-execute-helper",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-rpc-primitives",
  "cfx-types",
  "cfx-vm-types",
@@ -1323,8 +1323,8 @@ name = "cfx-rpc-eth-types"
 version = "2.4.0"
 dependencies = [
  "alloy-rpc-types",
- "cfx-execute-helper",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
  "cfx-rpc-primitives",
  "cfx-types",

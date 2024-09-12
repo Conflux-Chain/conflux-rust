@@ -26,8 +26,8 @@ cfx-parameters = { workspace = true }
 alloy-rpc-types = { workspace = true }
 serde-utils = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
-cfx-execute-helper = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 error-chain = { workspace = true }
+cfx-parity-trace-types = { workspace = true }
 

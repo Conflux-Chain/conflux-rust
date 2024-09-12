@@ -4,7 +4,7 @@
 
 use crate::RpcAddress;
 use cfx_addr::Network;
-use cfx_execute_helper::exec_tracer::{
+use cfx_parity_trace_types::{
     Action as VmAction, ActionType as VmActionType, BlockExecTraces,
     Call as VmCall, CallResult as VmCallResult, Create as VmCreate,
     CreateResult as VmCreateResult, ExecTrace,

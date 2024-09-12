@@ -15,14 +15,14 @@ license-file.workspace = true
 [dependencies]
 cfx-rpc-primitives = { workspace = true }
 cfx-addr = { workspace = true }
-cfx-execute-helper = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 primitives = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-strum_macros = "0.20"
+strum_macros = { workspace = true }
 jsonrpc-core = { workspace = true }
 error-chain = { workspace = true }
 log = { workspace = true }
+cfx-parity-trace-types = { workspace = true }
