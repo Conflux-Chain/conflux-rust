@@ -10,7 +10,7 @@ use crate::{
             KeyContainer,
         },
         request_manager::{AsAny, Request},
-        Error, ErrorKind, ProtocolConfiguration,
+        Error, ProtocolConfiguration,
     },
 };
 use cfx_types::H256;
@@ -85,7 +85,7 @@ impl Handleable for GetBlockTxn {
                             ctx.node_id,
                             block.hash()
                         );
-                        return Err(ErrorKind::InvalidGetBlockTxn(
+                        return Err(Error::InvalidGetBlockTxn(
                             "index out-of-bound".into(),
                         )
                         .into());

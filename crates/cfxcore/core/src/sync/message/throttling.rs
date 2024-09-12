@@ -6,7 +6,7 @@ use crate::{
     message::{Message, MsgId, RequestId},
     sync::{
         message::{Context, Handleable},
-        Error, ErrorKind,
+        Error,
     },
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};
@@ -77,10 +77,10 @@ impl<T: Message> Throttle for T {
                     request_id: self.get_request_id(),
                 };
 
-                Err(ErrorKind::Throttled(self.msg_name(), throttled).into())
+                Err(Error::Throttled(self.msg_name(), throttled).into())
             }
             ThrottleResult::AlreadyThrottled => {
-                Err(ErrorKind::AlreadyThrottled(self.msg_name()).into())
+                Err(Error::AlreadyThrottled(self.msg_name()).into())
             }
         }
     }

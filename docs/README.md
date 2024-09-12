@@ -1,4 +1,4 @@
-## Conflux-rust Contributor Documentation
+# Conflux-rust Contributor Documentation
 
 This directory contains documentation for contributors.
 

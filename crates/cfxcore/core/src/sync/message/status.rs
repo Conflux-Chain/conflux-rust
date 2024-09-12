@@ -8,7 +8,7 @@ use crate::{
             handleable::{Context, Handleable},
             DynamicCapability,
         },
-        Error, ErrorKind, SynchronizationPeerState,
+        Error, SynchronizationPeerState,
     },
     NodeType,
 };
@@ -42,7 +42,7 @@ impl Handleable for StatusV2 {
                 "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, chain_id, self.chain_id,
             );
-            bail!(ErrorKind::InvalidStatus("chain_id mismatches".into()));
+            bail!(Error::InvalidStatus("chain_id mismatches".into()));
         }
         let genesis_hash = ctx.manager.graph.data_man.true_genesis.hash();
         if ctx.manager.protocol_config.check_status_genesis {
@@ -51,9 +51,7 @@ impl Handleable for StatusV2 {
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, genesis_hash, self.genesis_hash
             );
-                bail!(ErrorKind::InvalidStatus(
-                    "genesis hash mismatches".into()
-                ));
+                bail!(Error::InvalidStatus("genesis hash mismatches".into()));
             }
         }
 
@@ -81,7 +79,7 @@ impl Handleable for StatusV2 {
                             "Unexpected Status message from peer={}",
                             ctx.node_id
                         );
-                        return Err(ErrorKind::UnknownPeer.into());
+                        return Err(Error::UnknownPeer.into());
                     }
                     Some(protocol_version) => protocol_version,
                 };
@@ -159,7 +157,7 @@ impl Handleable for StatusV3 {
                 "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, chain_id, self.chain_id,
             );
-            bail!(ErrorKind::InvalidStatus("chain_id mismatches".into()));
+            bail!(Error::InvalidStatus("chain_id mismatches".into()));
         }
         drop(chain_id);
 
@@ -170,9 +168,7 @@ impl Handleable for StatusV3 {
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, genesis_hash, self.genesis_hash
             );
-                bail!(ErrorKind::InvalidStatus(
-                    "genesis hash mismatches".into()
-                ));
+                bail!(Error::InvalidStatus("genesis hash mismatches".into()));
             }
         }
 
@@ -210,7 +206,7 @@ impl Handleable for StatusV3 {
                             "Unexpected Status message from peer={}",
                             ctx.node_id
                         );
-                        return Err(ErrorKind::UnknownPeer.into());
+                        return Err(Error::UnknownPeer.into());
                     }
                     Some(protocol_version) => protocol_version,
                 };

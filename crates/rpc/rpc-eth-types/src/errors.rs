@@ -1,4 +1,4 @@
-use cfxcore::rpc_errors::Error as CfxCoreError;
+use cfxcore::errors::Error as CfxCoreError;
 use jsonrpc_core::{Error as JsonRpcError, ErrorCode, Value};
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ impl From<Error> for JsonRpcError {
 }
 
 impl From<Error> for CfxCoreError {
-    fn from(e: Error) -> cfxcore::rpc_errors::Error {
+    fn from(e: Error) -> CfxCoreError {
         let e: JsonRpcError = e.into();
         e.into()
     }

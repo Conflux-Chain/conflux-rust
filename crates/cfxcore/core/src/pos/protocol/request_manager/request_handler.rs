@@ -7,7 +7,7 @@ use crate::{
     pos::protocol::{
         request_manager::RequestManager, sync_protocol::RpcResponse,
     },
-    sync::{Error, ErrorKind, ProtocolConfiguration},
+    sync::{Error, ProtocolConfiguration},
 };
 use futures::channel::oneshot;
 use network::{
@@ -76,7 +76,7 @@ impl RequestHandler {
                 &self.protocol_config,
             )
         } else {
-            bail!(ErrorKind::UnknownPeer);
+            bail!(Error::UnknownPeer);
         }
     }
 
@@ -358,7 +358,7 @@ impl RequestContainer {
             }
             Ok(removed_req.message)
         } else {
-            bail!(ErrorKind::RequestNotFound)
+            bail!(Error::RequestNotFound)
         }
     }
 
@@ -426,7 +426,7 @@ impl RequestMessage {
             Some(req) => Ok(req),
             None => {
                 warn!("failed to downcast general request to concrete request type");
-                Err(ErrorKind::UnexpectedResponse.into())
+                Err(Error::UnexpectedResponse.into())
             }
         }
     }

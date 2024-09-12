@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    errors::invalid_params,
+    errors::{invalid_params, invalid_params_check},
     types::{
         address::RpcAddress,
         cfx::{
@@ -12,7 +12,7 @@ use crate::rpc::{
         },
         Bytes,
     },
-    RpcResult,
+    CoreResult,
 };
 use cfx_addr::Network;
 use cfx_parameters::{
@@ -22,7 +22,6 @@ use cfx_parameters::{
     RATIO_BASE_TEN,
 };
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
-use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use primitives::{
@@ -95,7 +94,7 @@ pub struct CheckBalanceAgainstTransactionResponse {
 impl TransactionRequest {
     pub fn check_rpc_address_network(
         &self, param_name: &str, expected: &Network,
-    ) -> RpcResult<()> {
+    ) -> CoreResult<()> {
         let rpc_request_network = invalid_params_check(
             param_name,
             check_two_rpc_address_network_match(
@@ -107,14 +106,38 @@ impl TransactionRequest {
             param_name,
             check_rpc_address_network(rpc_request_network, expected),
         )
+        .map_err(|e| e.into())
+    }
+
+    pub fn transaction_type(&self) -> u8 {
+        if let Some(tx_type) = self.transaction_type {
+            tx_type.as_usize() as u8
+        } else {
+            if self.max_fee_per_gas.is_some()
+                || self.max_priority_fee_per_gas.is_some()
+            {
+                CIP1559_TYPE
+            } else if self.access_list.is_some() {
+                CIP2930_TYPE
+            } else {
+                LEGACY_TX_TYPE
+            }
+        }
+    }
+
+    pub fn has_gas_price(&self) -> bool {
+        self.gas_price.is_some()
+            || self.max_fee_per_gas.is_some()
+            || self.max_priority_fee_per_gas.is_some()
     }
 
     pub fn sign_with(
         self, epoch_height: u64, chain_id: u32, password: Option<String>,
         accounts: Arc<AccountProvider>,
-    ) -> RpcResult<TransactionWithSignature> {
+    ) -> CoreResult<TransactionWithSignature> {
         let gas = self.gas.ok_or("should have gas")?;
         let nonce = self.nonce.ok_or("should have nonce")?;
+        let transaction_type = self.transaction_type();
         let action = self.to.map_or(Action::Create, |rpc_addr| {
             Action::Call(rpc_addr.hex_address)
         });
@@ -126,20 +149,9 @@ impl TransactionRequest {
             .ok_or("should have storage_limit")?;
         let data = self.data.unwrap_or_default().into_vec();
 
-        let default_type_id = if self.max_fee_per_gas.is_some()
-            || self.max_priority_fee_per_gas.is_some()
-        {
-            CIP1559_TYPE
-        } else if self.access_list.is_some() {
-            CIP2930_TYPE
-        } else {
-            LEGACY_TX_TYPE
-        };
-        let transaction_type =
-            self.transaction_type.unwrap_or(U64::from(default_type_id));
         let access_list = self.access_list.unwrap_or(vec![]);
 
-        let typed_native_tx = match transaction_type.as_usize() as u8 {
+        let typed_native_tx = match transaction_type {
             LEGACY_TX_TYPE => {
                 let gas_price =
                     self.gas_price.ok_or("should have gas_price")?;
@@ -211,7 +223,7 @@ impl TransactionRequest {
 
     pub fn sign_call(
         self, epoch_height: u64, chain_id: u32, max_gas: Option<U256>,
-    ) -> RpcResult<SignedTransaction> {
+    ) -> CoreResult<SignedTransaction> {
         let max_gas = max_gas.unwrap_or(DEFAULT_CFX_GAS_CALL_REQUEST.into());
         let gas = self.gas.unwrap_or(max_gas);
         if gas > max_gas {
@@ -220,7 +232,7 @@ impl TransactionRequest {
                 format!("specified gas is larger than max gas {:?}", max_gas)
             ))
         }
-
+        let transaction_type = self.transaction_type();
         let nonce = self.nonce.unwrap_or_default();
         let action = self.to.map_or(Action::Create, |rpc_addr| {
             Action::Call(rpc_addr.hex_address)
@@ -233,18 +245,6 @@ impl TransactionRequest {
             .unwrap_or(std::u64::MAX);
         let data = self.data.unwrap_or_default().into_vec();
 
-        let default_type_id = if self.max_fee_per_gas.is_some()
-            || self.max_priority_fee_per_gas.is_some()
-        {
-            CIP1559_TYPE
-        } else if self.access_list.is_some() {
-            CIP2930_TYPE
-        } else {
-            LEGACY_TX_TYPE
-        };
-        let transaction_type =
-            self.transaction_type.unwrap_or(U64::from(default_type_id));
-
         let gas_price = self.gas_price.unwrap_or(1.into());
         let max_fee_per_gas = self
             .max_fee_per_gas
@@ -254,7 +254,7 @@ impl TransactionRequest {
             self.max_priority_fee_per_gas.unwrap_or(U256::zero());
         let access_list = self.access_list.unwrap_or(vec![]);
 
-        let transaction = match transaction_type.as_usize() as u8 {
+        let transaction = match transaction_type {
             LEGACY_TX_TYPE => Cip155(NativeTransaction {
                 nonce,
                 action,
