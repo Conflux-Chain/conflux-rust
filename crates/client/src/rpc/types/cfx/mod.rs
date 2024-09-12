@@ -3,10 +3,10 @@ pub mod account;
 pub mod blame_info;
 pub mod block;
 pub mod consensus_graph_states;
-mod fee_history;
 pub mod filter;
 pub mod log;
 pub mod pos_economics;
+pub mod pubsub;
 pub mod receipt;
 pub mod reward_info;
 pub mod sponsor_info;
@@ -29,8 +29,7 @@ pub use cfx_rpc_cfx_types::{
         check_rpc_address_network, check_two_rpc_address_network_match,
         RcpAddressNetworkInconsistent, RpcAddress, UnexpectedRpcAddressNetwork,
     },
-    epoch_number,
+    epoch_number, CfxFeeHistory,
 };
-pub use fee_history::CfxFeeHistory;
 pub use sponsor_info::SponsorInfo;
 pub use tx_pool::*;
