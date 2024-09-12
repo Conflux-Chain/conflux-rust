@@ -56,7 +56,7 @@ members = [
     "crates/cfxcore/geth-tracer",
     "crates/rpc/rpc-eth-types", 
     "crates/rpc/rpc-primitives", 
-    "crates/rpc/rpc-cfx-types",
+    "crates/rpc/rpc-cfx-types", "crates/rpc/rpc-eth-api",
 ]
 
 resolver = "2"
