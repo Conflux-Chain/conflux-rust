@@ -23,4 +23,4 @@ serde = { version = "1.0.124", features = ["derive"] }
 serde_json = "1.0.64"
 prometheus = { version = "0.12.0", default-features = false }
 pipe-logger-lib = {git = "https://github.com/aleksuss/pipe-logger-lib.git", rev = "3ff3550fc7e46d6e530daf1a47471c6628baa43d", default-features = false, features = ["gzip"]}
-parking_lot = "0.11"
+parking_lot = { workspace = true }

@@ -13,7 +13,7 @@ toml = "0.5.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_derive = "1.0"
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 io = { workspace = true }
 cfxkey = { workspace = true }
 cfxcore-accounts = { workspace = true }

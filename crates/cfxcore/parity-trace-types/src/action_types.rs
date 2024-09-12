@@ -2,12 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::AddressPocket;
 use cfx_bytes::Bytes;
-use cfx_executor::stack::FrameReturn;
 
 use cfx_types::{Address, Bloom, BloomInput, Space, U256};
-use cfx_vm_types::{ActionParams, CallType, CreateType, Result as VmResult};
+use cfx_vm_types::{ActionParams, AddressPocket, CallType, CreateType};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{ser::SerializeStruct, Serialize, Serializer};
@@ -145,38 +143,6 @@ pub struct CallResult {
     pub return_data: Bytes,
 }
 
-impl From<&VmResult<FrameReturn>> for CallResult {
-    fn from(r: &VmResult<FrameReturn>) -> Self {
-        match r {
-            Ok(FrameReturn {
-                gas_left,
-                return_data,
-                apply_state: true,
-                ..
-            }) => CallResult {
-                outcome: Outcome::Success,
-                gas_left: gas_left.clone(),
-                return_data: return_data.to_vec(),
-            },
-            Ok(FrameReturn {
-                gas_left,
-                return_data,
-                apply_state: false,
-                ..
-            }) => CallResult {
-                outcome: Outcome::Reverted,
-                gas_left: gas_left.clone(),
-                return_data: return_data.to_vec(),
-            },
-            Err(err) => CallResult {
-                outcome: Outcome::Fail,
-                gas_left: U256::zero(),
-                return_data: format!("{:?}", err).into(),
-            },
-        }
-    }
-}
-
 /// Description of a _create_ action, either a `CREATE` operation or a create
 /// transaction.
 #[derive(Debug, Clone, PartialEq, RlpEncodable, Serialize)]
@@ -253,44 +219,6 @@ pub struct CreateResult {
     pub gas_left: U256,
     /// Output data
     pub return_data: Bytes,
-}
-
-impl From<&VmResult<FrameReturn>> for CreateResult {
-    fn from(r: &VmResult<FrameReturn>) -> Self {
-        match r {
-            Ok(FrameReturn {
-                gas_left,
-                return_data,
-                apply_state: true,
-                create_address,
-                ..
-            }) => CreateResult {
-                outcome: Outcome::Success,
-                addr: create_address.expect(
-                    "Address should not be none in executive result of create",
-                ),
-                gas_left: gas_left.clone(),
-                return_data: return_data.to_vec(),
-            },
-            Ok(FrameReturn {
-                gas_left,
-                return_data,
-                apply_state: false,
-                ..
-            }) => CreateResult {
-                outcome: Outcome::Reverted,
-                addr: Address::zero(),
-                gas_left: gas_left.clone(),
-                return_data: return_data.to_vec(),
-            },
-            Err(err) => CreateResult {
-                outcome: Outcome::Fail,
-                addr: Address::zero(),
-                gas_left: U256::zero(),
-                return_data: format!("{:?}", err).into(),
-            },
-        }
-    }
 }
 
 impl CreateResult {

@@ -27,7 +27,7 @@ heapsize = "0.4"
 kvdb = "0.4"
 lazy_static = "1.4"
 log = "0.4"
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 rlp = { version = "0.3.0", feature = ["ethereum"] }
 serde_json = "1.0"
 base64ct = "=1.1.1"

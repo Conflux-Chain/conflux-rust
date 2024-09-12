@@ -1,5 +1,5 @@
 [package]
-name = "cfx-rpc-cfx-types"
+name = "cfx-parity-trace-types"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
@@ -13,16 +13,15 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cfx-rpc-primitives = { workspace = true }
-cfx-addr = { workspace = true }
-cfx-execute-helper = { workspace = true }
-cfx-parameters = { workspace = true }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
+cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
-cfx-vm-types = { workspace = true }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
 primitives = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+cfx-internal-common = { workspace = true }
+cfx-vm-types = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
 strum_macros = "0.20"
-jsonrpc-core = { workspace = true }
 error-chain = { workspace = true }
-log = { workspace = true }
