@@ -28,13 +28,13 @@ use cfx_executor::executive::{
     TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
+use cfx_rpc_cfx_types::{traits::Provider, PhantomBlock};
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
 };
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
-    consensus::PhantomBlock,
     errors::{Error as CfxRpcError, Result as CfxRpcResult},
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
@@ -467,6 +467,19 @@ impl EthHandler {
                 }
             },
         }
+    }
+}
+
+impl Provider for &EthHandler {
+    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        self.consensus_graph().get_block_epoch_number(hash)
+    }
+
+    fn get_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.consensus_graph()
+            .get_block_hashes_by_epoch(epoch_number)
     }
 }
 
@@ -1179,8 +1192,7 @@ impl Eth for EthHandler {
     fn logs(&self, filter: EthRpcLogFilter) -> RpcResult<Vec<Log>> {
         debug!("RPC Request: eth_getLogs(filter={:?})", filter);
 
-        let filter: LogFilter =
-            filter.into_primitive(self.consensus.clone())?;
+        let filter: LogFilter = filter.into_primitive(self)?;
 
         let logs = self
             .consensus_graph()
@@ -1197,7 +1209,7 @@ impl Eth for EthHandler {
         Ok(logs
             .iter()
             .cloned()
-            .map(|l| Log::try_from_localized(l, self.consensus.clone(), false))
+            .map(|l| Log::try_from_localized(l, self, false))
             .collect::<Result<_, _>>()?)
     }
 

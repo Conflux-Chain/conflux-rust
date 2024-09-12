@@ -19,8 +19,8 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{BlockNumber, Error as SelfError, Log};
+use cfx_rpc_cfx_types::traits::Provider;
 use cfx_types::{Space, H160, H256};
-use cfxcore::SharedConsensusGraph;
 use primitives::{
     filter::{LogFilter as PrimitiveFilter, LogFilterParams},
     EpochNumber,
@@ -112,7 +112,7 @@ pub struct EthRpcLogFilter {
 
 impl EthRpcLogFilter {
     pub fn into_primitive(
-        self, consensus: SharedConsensusGraph,
+        self, consensus: impl Provider,
     ) -> Result<PrimitiveFilter, SelfError> {
         let params = LogFilterParams {
             address: self.address.map(|v| v.to_vec()),

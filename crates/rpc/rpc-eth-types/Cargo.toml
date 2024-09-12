@@ -20,7 +20,6 @@ cfx-types = { workspace = true }
 thiserror = { workspace = true }
 jsonrpc-core = "15.1.0"
 primitives = { workspace = true }
-cfxcore = { workspace = true }
 rlp = { workspace = true }
 cfx-parameters = { workspace = true }
 alloy-rpc-types = { workspace = true }

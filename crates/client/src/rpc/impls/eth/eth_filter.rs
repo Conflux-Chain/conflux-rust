@@ -29,6 +29,8 @@ use crate::rpc::{
     traits::eth_space::eth_filter::EthFilter,
     types::eth::{BlockNumber, EthRpcLogFilter, FilterChanges, Log},
 };
+use cfx_rpc_cfx_types::traits::Provider;
+use cfx_rpc_eth_types::Error as EthRpcError;
 use cfxcore::errors::Error as CfxRpcError;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as RpcResult};
 
@@ -68,6 +70,10 @@ pub trait Filterable {
         &self, last_epoch_number: u64,
         recent_reported_epochs: &VecDeque<(u64, Vec<H256>)>,
     ) -> RpcResult<(u64, Vec<(u64, Vec<H256>)>)>;
+
+    fn into_primitive_filter(
+        &self, filter: EthRpcLogFilter,
+    ) -> Result<LogFilter, EthRpcError>;
 }
 
 /// Eth filter rpc implementation for a full node.
@@ -198,7 +204,7 @@ impl Filterable for EthFilterClient {
         Ok(logs
             .iter()
             .cloned()
-            .map(|l| Log::try_from_localized(l, self.consensus.clone(), false))
+            .map(|l| Log::try_from_localized(l, self, false))
             .collect::<Result<_, _>>()?)
     }
 
@@ -220,9 +226,7 @@ impl Filterable for EthFilterClient {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| {
-                Log::try_from_localized(l, self.consensus.clone(), removed)
-            })
+            .map(|l| Log::try_from_localized(l, self, removed))
             .collect::<Result<_, _>>()?;
         result.extend(logs);
 
@@ -369,6 +373,24 @@ impl Filterable for EthFilterClient {
         );
         Ok((reorg_len, reorg_epochs))
     }
+
+    fn into_primitive_filter(
+        &self, filter: EthRpcLogFilter,
+    ) -> Result<LogFilter, EthRpcError> {
+        filter.into_primitive(self)
+    }
+}
+
+impl Provider for &EthFilterClient {
+    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        self.consensus.get_block_epoch_number(hash)
+    }
+
+    fn get_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.consensus.get_block_hashes_by_epoch(epoch_number)
+    }
 }
 
 impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
@@ -387,8 +409,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
             })
         }
 
-        let filter: LogFilter =
-            filter.into_primitive(self.shared_consensus_graph())?;
+        let filter: LogFilter = self.into_primitive_filter(filter)?;
 
         let id = polls.create_poll(SyncPollFilter::new(PollFilter::Logs {
             last_epoch_number: if epoch_number == 0 {

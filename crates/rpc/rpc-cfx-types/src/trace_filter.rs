@@ -99,7 +99,7 @@ mod tests {
     use super::{
         super::trace::ActionType, EpochNumber, TraceFilter, VariadicValue,
     };
-    use cfx_execute_helper::exec_tracer::{
+    use cfx_parity_trace_types::{
         ActionType as PrimitiveActionType, TraceFilter as PrimitiveTraceFilter,
     };
     use cfx_types::{Address, Space, H256, U64};

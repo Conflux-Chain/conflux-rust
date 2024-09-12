@@ -139,6 +139,8 @@ treap-map = { workspace = true }
 cfx-packing-pool = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
 geth-tracer = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
 
 
 [dev-dependencies]

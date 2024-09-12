@@ -19,8 +19,8 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, Transaction};
+use cfx_rpc_cfx_types::PhantomBlock;
 use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
-use cfxcore::consensus::PhantomBlock;
 use primitives::receipt::EVM_SPACE_SUCCESS;
 use serde::{Serialize, Serializer};
 

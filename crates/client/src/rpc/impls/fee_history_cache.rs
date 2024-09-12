@@ -1,6 +1,5 @@
-use cfx_rpc_cfx_types::FeeHistoryCacheEntry;
+use cfx_rpc_cfx_types::{FeeHistoryCacheEntry, PhantomBlock};
 use cfx_types::{Space, H256};
-use cfxcore::consensus::PhantomBlock;
 use parking_lot::RwLock;
 use std::{collections::VecDeque, sync::Arc};
 
