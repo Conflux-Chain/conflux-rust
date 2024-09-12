@@ -35,7 +35,10 @@ use crate::{
     common::delegate_convert,
     rpc::{
         errors::{self, invalid_params_check},
-        impls::common::{self, RpcImpl as CommonImpl},
+        impls::{
+            common::{self, RpcImpl as CommonImpl},
+            MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+        },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
             cfx::check_rpc_address_network,
@@ -1092,8 +1095,8 @@ impl RpcImpl {
     }
 
     fn fee_history(
-        &self, block_count: HexU64, newest_block: EpochNumber,
-        reward_percentiles: Vec<f64>,
+        &self, mut block_count: HexU64, newest_block: EpochNumber,
+        reward_percentiles: Option<Vec<f64>>,
     ) -> CoreBoxFuture<CfxFeeHistory> {
         info!(
             "RPC Request: cfx_feeHistory: block_count={}, newest_block={:?}, reward_percentiles={:?}",
@@ -1102,15 +1105,18 @@ impl RpcImpl {
 
         if block_count.as_u64() == 0 {
             return Box::new(
-                async { Ok(FeeHistory::new().to_cfx_fee_history()) }
-                    .boxed()
-                    .compat(),
+                async { Ok(FeeHistory::new().into()) }.boxed().compat(),
             );
+        }
+
+        if block_count.as_u64() > MAX_FEE_HISTORY_CACHE_BLOCK_COUNT {
+            block_count = HexU64::from(MAX_FEE_HISTORY_CACHE_BLOCK_COUNT);
         }
 
         // clone to avoid lifetime issues due to capturing `self`
         let consensus_graph = self.consensus.clone();
         let light = self.light.clone();
+        let reward_percentiles = reward_percentiles.unwrap_or_default();
 
         let fut = async move {
             let start_height: u64 = light
@@ -1171,7 +1177,7 @@ impl RpcImpl {
                 block.block_header.base_price().as_ref(),
                 Space::Native,
             );
-            Ok(fee_history.to_cfx_fee_history())
+            Ok(fee_history.into())
         };
 
         Box::new(fut.boxed().compat())
@@ -1248,7 +1254,7 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
-            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Vec<f64>) -> BoxFuture<CfxFeeHistory>;
+            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Option<Vec<f64>>) -> BoxFuture<CfxFeeHistory>;
         }
     }
 

@@ -4,6 +4,7 @@
 
 mod bytes;
 pub mod cfx;
+mod constants;
 pub mod eth;
 mod fee_history;
 mod index;
@@ -46,6 +47,7 @@ pub use self::{
         vote_params_info::VoteParamsInfo,
         Account, CfxFeeHistory, SponsorInfo,
     },
+    constants::MAX_GAS_CALL_REQUEST,
     fee_history::FeeHistory,
     index::Index,
     provenance::Origin,
