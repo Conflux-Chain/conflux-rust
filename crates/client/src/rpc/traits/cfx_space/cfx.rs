@@ -203,7 +203,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_feeHistory")]
     fn fee_history(
         &self, block_count: HexU64, newest_block: EpochNumber,
-        reward_percentiles: Vec<f64>,
+        reward_percentiles: Option<Vec<f64>>,
     ) -> BoxFuture<CfxFeeHistory>;
 
     /// Check if user balance is enough for the transaction.

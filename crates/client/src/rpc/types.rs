@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub mod cfx;
+mod constants;
 pub mod eth;
 pub mod pos;
 mod provenance;
@@ -42,6 +43,7 @@ pub use self::{
         vote_params_info::VoteParamsInfo,
         Account, CfxFeeHistory, SponsorInfo,
     },
+    constants::MAX_GAS_CALL_REQUEST,
     provenance::Origin,
 };
 pub use cfx_rpc_cfx_types::{

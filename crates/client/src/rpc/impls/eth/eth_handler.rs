@@ -8,7 +8,10 @@ use crate::rpc::{
         invalid_params, request_rejected_in_catch_up_mode, unknown_block,
         EthApiError, RpcInvalidTransactionError, RpcPoolError,
     },
-    impls::RpcImplConfiguration,
+    impls::{
+        FeeHistoryCache, RpcImplConfiguration,
+        MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+    },
     traits::eth_space::eth::Eth,
     types::{
         eth::{
@@ -51,6 +54,7 @@ pub struct EthHandler {
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
+    fee_history_cache: FeeHistoryCache,
 }
 
 impl EthHandler {
@@ -63,6 +67,7 @@ impl EthHandler {
             consensus,
             sync,
             tx_pool,
+            fee_history_cache: FeeHistoryCache::new(),
         }
     }
 
@@ -72,38 +77,35 @@ impl EthHandler {
             .downcast_ref::<ConsensusGraph>()
             .expect("downcast should succeed")
     }
-}
 
-fn block_tx_by_index(
-    phantom_block: Option<PhantomBlock>, idx: usize,
-) -> Option<Transaction> {
-    match phantom_block {
-        None => None,
-        Some(pb) => match pb.transactions.get(idx) {
-            None => None,
-            Some(tx) => {
-                let block_number = Some(pb.pivot_header.height().into());
-                let receipt = pb.receipts.get(idx).unwrap();
-                let status = receipt.outcome_status.in_space(Space::Ethereum);
-                let contract_address = match status == EVM_SPACE_SUCCESS {
-                    true => Transaction::deployed_contract_address(&tx),
-                    false => None,
-                };
-                Some(Transaction::from_signed(
-                    &tx,
-                    (
-                        Some(pb.pivot_header.hash()),
-                        block_number,
-                        Some(idx.into()),
-                    ),
-                    (Some(status.into()), contract_address),
-                ))
-            }
-        },
+    pub fn fetch_block_by_height(
+        &self, height: u64,
+    ) -> Result<PhantomBlock, String> {
+        let maybe_block = self.consensus_graph().get_phantom_block_by_number(
+            EpochNumber::Number(height),
+            None,
+            false,
+        )?;
+        if let Some(block) = maybe_block {
+            Ok(block)
+        } else {
+            Err("Specified block header does not exist".into())
+        }
     }
-}
 
-impl EthHandler {
+    pub fn fetch_block_by_hash(
+        &self, hash: &H256,
+    ) -> Result<PhantomBlock, String> {
+        let maybe_block = self
+            .consensus_graph()
+            .get_phantom_block_by_hash(hash, false)?;
+        if let Some(block) = maybe_block {
+            Ok(block)
+        } else {
+            Err("Specified block header does not exist".into())
+        }
+    }
+
     fn exec_transaction(
         &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
@@ -436,6 +438,36 @@ impl EthHandler {
 
         return Ok(block_receipts);
     }
+
+    fn block_tx_by_index(
+        phantom_block: Option<PhantomBlock>, idx: usize,
+    ) -> Option<Transaction> {
+        match phantom_block {
+            None => None,
+            Some(pb) => match pb.transactions.get(idx) {
+                None => None,
+                Some(tx) => {
+                    let block_number = Some(pb.pivot_header.height().into());
+                    let receipt = pb.receipts.get(idx).unwrap();
+                    let status =
+                        receipt.outcome_status.in_space(Space::Ethereum);
+                    let contract_address = match status == EVM_SPACE_SUCCESS {
+                        true => Transaction::deployed_contract_address(&tx),
+                        false => None,
+                    };
+                    Some(Transaction::from_signed(
+                        &tx,
+                        (
+                            Some(pb.pivot_header.hash()),
+                            block_number,
+                            Some(idx.into()),
+                        ),
+                        (Some(status.into()), contract_address),
+                    ))
+                }
+            },
+        }
+    }
 }
 
 impl Eth for EthHandler {
@@ -526,7 +558,7 @@ impl Eth for EthHandler {
         let fee_history = self.fee_history(
             HexU64::from(300),
             BlockNumber::Latest,
-            vec![50f64],
+            Some(vec![50f64]),
         )?;
 
         let total_reward: U256 = fee_history
@@ -551,7 +583,7 @@ impl Eth for EthHandler {
         let epoch_num = EpochNumber::LatestState;
         match consensus_graph.get_height_from_epoch_number(epoch_num.into()) {
             Ok(height) => Ok(height.into()),
-            Err(e) => Err(jsonrpc_core::Error::invalid_params(e)),
+            Err(e) => Err(RpcError::invalid_params(e)),
         }
     }
 
@@ -859,83 +891,103 @@ impl Eth for EthHandler {
     }
 
     fn fee_history(
-        &self, block_count: HexU64, newest_block: BlockNumber,
-        reward_percentiles: Vec<f64>,
+        &self, mut block_count: HexU64, newest_block: BlockNumber,
+        reward_percentiles: Option<Vec<f64>>,
     ) -> RpcResult<FeeHistory> {
         debug!(
             "RPC Request: eth_feeHistory(block_count={}, newest_block={:?}, reward_percentiles={:?})",
             block_count, newest_block, reward_percentiles
         );
 
-        if block_count.as_u64() == 0 {
+        if block_count.as_u64() == 0 || newest_block == BlockNumber::Pending {
             return Ok(FeeHistory::new());
         }
+
+        if block_count.as_u64() > MAX_FEE_HISTORY_CACHE_BLOCK_COUNT {
+            block_count = HexU64::from(MAX_FEE_HISTORY_CACHE_BLOCK_COUNT);
+        }
+
+        if let Some(percentiles) = &reward_percentiles {
+            if percentiles.windows(2).any(|w| w[0] > w[1] || w[0] > 100.) {
+                return Err(EthApiError::InvalidRewardPercentiles.into());
+            }
+        }
+        let reward_percentiles = reward_percentiles.unwrap_or_default();
 
         // keep read lock to ensure consistent view
         let _consensus = self.consensus_graph().inner.read();
 
-        let fetch_block = |height| {
-            let maybe_block = self
-                .consensus_graph()
-                .get_phantom_block_pivot_by_number(
-                    EpochNumber::Number(height),
-                    None,
-                    false,
-                )
-                .map_err(RpcError::invalid_params)?;
-            if let Some(block) = maybe_block {
-                // Internal error happens only if the fetch header has
-                // inconsistent block height
-                Ok(block)
-            } else {
-                Err(RpcError::invalid_params(
-                    "Specified block header does not exist",
-                ))
-            }
-        };
-
-        let start_height: u64 = self
+        let newest_height: u64 = self
             .consensus_graph()
-            .get_height_from_epoch_number(newest_block.try_into()?)
+            .get_height_from_epoch_number(newest_block.clone().try_into()?)
             .map_err(RpcError::invalid_params)?;
 
-        let mut current_height = start_height;
+        if newest_block == BlockNumber::Latest {
+            let fetch_block_by_hash =
+                |height| self.fetch_block_by_hash(&height);
+
+            let latest_block = self
+                .fetch_block_by_height(newest_height)
+                .map_err(RpcError::invalid_params)?;
+
+            self.fee_history_cache
+                .update_to_latest_block(
+                    newest_height,
+                    latest_block.pivot_header.hash(),
+                    block_count.as_u64(),
+                    fetch_block_by_hash,
+                )
+                .map_err(RpcError::invalid_params)?;
+        }
 
         let mut fee_history = FeeHistory::new();
-        while current_height
-            >= start_height.saturating_sub(block_count.as_u64() - 1)
-        {
-            let block = fetch_block(current_height)?;
 
-            // Internal error happens only if the fetch header has inconsistent
-            // block height
-            fee_history
-                .push_front_block(
-                    Space::Ethereum,
-                    &reward_percentiles,
-                    &block.pivot_header,
-                    block.transactions.iter().map(|x| &**x),
-                )
-                .map_err(|_| RpcError::internal_error())?;
+        let end_block = newest_height;
+        let start_block = if end_block >= block_count.as_u64() {
+            end_block - block_count.as_u64() + 1
+        } else {
+            0
+        };
 
-            if current_height == 0 {
-                break;
+        let mut cached_fee_history_entries = self
+            .fee_history_cache
+            .get_history_with_missing_info(start_block, end_block);
+
+        cached_fee_history_entries.reverse();
+        for (i, entry) in cached_fee_history_entries.into_iter().enumerate() {
+            if entry.is_none() {
+                let height = end_block - i as u64;
+                let block = self
+                    .fetch_block_by_height(height)
+                    .map_err(RpcError::invalid_params)?;
+
+                // Internal error happens only if the fetch header has
+                // inconsistent block height
+                fee_history
+                    .push_front_block(
+                        Space::Ethereum,
+                        &reward_percentiles,
+                        &block.pivot_header,
+                        block.transactions.iter().map(|x| &**x),
+                    )
+                    .map_err(|_| RpcError::internal_error())?;
             } else {
-                current_height -= 1;
+                fee_history
+                    .push_front_entry(&entry.unwrap(), &reward_percentiles)
+                    .expect("always success");
             }
         }
 
-        let block = fetch_block(start_height + 1)?;
-        let oldest_block = if current_height == 0 {
-            0
-        } else {
-            current_height + 1
-        };
+        let block = self
+            .fetch_block_by_height(end_block + 1)
+            .map_err(RpcError::invalid_params)?;
+
         fee_history.finish(
-            oldest_block,
+            start_block,
             block.pivot_header.base_price().as_ref(),
             Space::Ethereum,
         );
+
         Ok(fee_history)
     }
 
@@ -975,7 +1027,7 @@ impl Eth for EthHandler {
 
         for (idx, tx) in phantom_block.transactions.iter().enumerate() {
             if tx.hash() == hash {
-                let tx = block_tx_by_index(Some(phantom_block), idx);
+                let tx = Self::block_tx_by_index(Some(phantom_block), idx);
                 if let Some(tx_ref) = &tx {
                     if tx_ref.status
                         == Some(
@@ -1012,7 +1064,7 @@ impl Eth for EthHandler {
                 .map_err(RpcError::invalid_params)?
         };
 
-        Ok(block_tx_by_index(phantom_block, idx.value()))
+        Ok(Self::block_tx_by_index(phantom_block, idx.value()))
     }
 
     fn transaction_by_block_number_and_index(
@@ -1033,7 +1085,7 @@ impl Eth for EthHandler {
                 .map_err(RpcError::invalid_params)?
         };
 
-        Ok(block_tx_by_index(phantom_block, idx.value()))
+        Ok(Self::block_tx_by_index(phantom_block, idx.value()))
     }
 
     fn transaction_receipt(&self, tx_hash: H256) -> RpcResult<Option<Receipt>> {

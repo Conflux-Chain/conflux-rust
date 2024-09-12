@@ -78,7 +78,7 @@ pub trait Eth {
     #[rpc(name = "eth_feeHistory")]
     fn fee_history(
         &self, block_count: HexU64, newest_block: BlockNumber,
-        reward_percentiles: Vec<f64>,
+        reward_percentiles: Option<Vec<f64>>,
     ) -> Result<FeeHistory>;
 
     /// Returns accounts list.
