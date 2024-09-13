@@ -13,7 +13,7 @@ extern crate error_chain;
 extern crate sha3_macro;
 
 /// Ethereum Builtins: Implements Ethereum's builtin contracts, ranging from
-/// address `0x1` to `0x9``.
+/// address `0x1` to `0x9`.
 mod builtin;
 
 /// Execution Context: Implements the context during the execution, like
