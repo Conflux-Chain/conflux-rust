@@ -14,7 +14,7 @@ license-file.workspace = true
 
 [dependencies]
 cfx-rpc-eth-types = { workspace = true }
-jsonrpsee = { version = "0.24.4", features = ["server", "macros"] }
+jsonrpsee = { workspace = true, features = ["server", "macros"] }
 cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
