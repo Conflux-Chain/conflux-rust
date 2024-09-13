@@ -1150,6 +1150,7 @@ dependencies = [
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-statedb",
  "cfx-types",
  "cfx-vm-interpreter",
@@ -1184,6 +1185,7 @@ dependencies = [
  "cfx-internal-common",
  "cfx-math",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
@@ -1292,13 +1294,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-parity-trace-types"
+version = "2.4.0"
+dependencies = [
+ "cfx-bytes",
+ "cfx-internal-common",
+ "cfx-types",
+ "cfx-vm-types",
+ "error-chain",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "primitives",
+ "rlp 0.4.6",
+ "rlp_derive",
+ "serde",
+ "strum_macros 0.20.1",
+]
+
+[[package]]
 name = "cfx-rpc-cfx-types"
 version = "2.4.0"
 dependencies = [
  "cfx-addr",
- "cfx-execute-helper",
- "cfx-executor",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-rpc-primitives",
  "cfx-types",
  "cfx-vm-types",
@@ -1316,13 +1335,12 @@ name = "cfx-rpc-eth-types"
 version = "2.4.0"
 dependencies = [
  "alloy-rpc-types",
- "cfx-execute-helper",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
  "cfx-rpc-primitives",
  "cfx-types",
  "cfx-vm-types",
- "cfxcore",
  "error-chain",
  "jsonrpc-core",
  "primitives",
@@ -1509,6 +1527,8 @@ dependencies = [
  "cfx-math",
  "cfx-packing-pool",
  "cfx-parameters",
+ "cfx-rpc-cfx-types",
+ "cfx-rpc-eth-types",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",

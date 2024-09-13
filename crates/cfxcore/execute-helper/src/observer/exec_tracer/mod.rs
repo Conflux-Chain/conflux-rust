@@ -1,24 +1,24 @@
-mod action_types;
 mod error_unwind;
-mod filter;
 mod phantom_traces;
-mod trace_types;
 
-#[cfg(test)]
-mod tests;
-
-pub use action_types::{
-    Action, ActionType, Call, CallResult, Create, CreateResult,
-    InternalTransferAction, Outcome,
-};
 pub use error_unwind::ErrorUnwind;
-pub use filter::TraceFilter;
 pub use phantom_traces::{
     recover_phantom_trace_for_call, recover_phantom_trace_for_withdraw,
     recover_phantom_traces,
 };
-pub use trace_types::{
-    BlockExecTraces, ExecTrace, LocalizedTrace, TransactionExecTraces,
+
+pub use cfx_parity_trace_types::{
+    action_types,
+    action_types::{
+        Action, ActionType, Call, CallResult, Create, CreateResult,
+        InternalTransferAction, Outcome,
+    },
+    filter,
+    filter::TraceFilter,
+    trace_types,
+    trace_types::{
+        BlockExecTraces, ExecTrace, LocalizedTrace, TransactionExecTraces,
+    },
 };
 
 use super::utils::CheckpointLog;
@@ -30,7 +30,7 @@ use cfx_executor::{
     },
     stack::{FrameResult, FrameReturn},
 };
-use cfx_types::U256;
+use cfx_types::{Address, U256};
 use cfx_vm_types::ActionParams;
 use typemap::ShareDebugMap;
 
@@ -105,7 +105,7 @@ impl CallTracer for ExecTracer {
     }
 
     fn record_call_result(&mut self, result: &FrameResult) {
-        let action = Action::CallResult(CallResult::from(result));
+        let action = Action::CallResult(frame_result_to_call_result(result));
         let success = matches!(
             result,
             Ok(FrameReturn {
@@ -132,7 +132,8 @@ impl CallTracer for ExecTracer {
     }
 
     fn record_create_result(&mut self, result: &FrameResult) {
-        let action = Action::CreateResult(CreateResult::from(result));
+        let action =
+            Action::CreateResult(frame_result_to_create_result(result));
         let success = matches!(
             result,
             Ok(FrameReturn {
@@ -153,3 +154,70 @@ impl CallTracer for ExecTracer {
 
 impl StorageTracer for ExecTracer {}
 impl OpcodeTracer for ExecTracer {}
+
+fn frame_result_to_call_result(r: &FrameResult) -> CallResult {
+    match r {
+        Ok(FrameReturn {
+            gas_left,
+            return_data,
+            apply_state: true,
+            ..
+        }) => CallResult {
+            outcome: Outcome::Success,
+            gas_left: gas_left.clone(),
+            return_data: return_data.to_vec(),
+        },
+        Ok(FrameReturn {
+            gas_left,
+            return_data,
+            apply_state: false,
+            ..
+        }) => CallResult {
+            outcome: Outcome::Reverted,
+            gas_left: gas_left.clone(),
+            return_data: return_data.to_vec(),
+        },
+        Err(err) => CallResult {
+            outcome: Outcome::Fail,
+            gas_left: U256::zero(),
+            return_data: format!("{:?}", err).into(),
+        },
+    }
+}
+
+fn frame_result_to_create_result(r: &FrameResult) -> CreateResult {
+    match r {
+        Ok(FrameReturn {
+            gas_left,
+            return_data,
+            apply_state: true,
+            create_address,
+            ..
+        }) => CreateResult {
+            outcome: Outcome::Success,
+            addr: create_address.expect(
+                "Address should not be none in executive result of
+create",
+            ),
+            gas_left: gas_left.clone(),
+            return_data: return_data.to_vec(),
+        },
+        Ok(FrameReturn {
+            gas_left,
+            return_data,
+            apply_state: false,
+            ..
+        }) => CreateResult {
+            outcome: Outcome::Reverted,
+            addr: Address::zero(),
+            gas_left: gas_left.clone(),
+            return_data: return_data.to_vec(),
+        },
+        Err(err) => CreateResult {
+            outcome: Outcome::Fail,
+            addr: Address::zero(),
+            gas_left: U256::zero(),
+            return_data: format!("{:?}", err).into(),
+        },
+    }
+}

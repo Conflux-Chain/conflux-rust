@@ -1,5 +1,5 @@
 [package]
-name = "cfx-rpc-eth-types"
+name = "cfx-parity-trace-types"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
@@ -13,20 +13,15 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rustc-hex = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
+cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
-thiserror = { workspace = true }
-jsonrpc-core = "15.1.0"
-primitives = { workspace = true }
 rlp = { workspace = true }
-cfx-parameters = { workspace = true }
-alloy-rpc-types = { workspace = true }
-serde-utils = { workspace = true }
-cfx-rpc-primitives = { workspace = true }
+rlp_derive = { workspace = true }
+primitives = { workspace = true }
+cfx-internal-common = { workspace = true }
 cfx-vm-types = { workspace = true }
-cfx-rpc-cfx-types = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
+strum_macros = "0.20"
 error-chain = { workspace = true }
-cfx-parity-trace-types = { workspace = true }
-

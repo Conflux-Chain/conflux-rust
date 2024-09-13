@@ -19,7 +19,7 @@ log = "0.4"
 metrics = { workspace = true }
 network = { workspace = true }
 primitives = { workspace = true }
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 rlp = { workspace = true }
 rand = "0.7"
 secret-store = { workspace = true }

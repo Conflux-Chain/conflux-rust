@@ -4,7 +4,7 @@
 
 use crate::RpcAddress;
 use cfx_addr::Network;
-use cfx_execute_helper::exec_tracer::{
+use cfx_parity_trace_types::{
     Action as VmAction, ActionType as VmActionType, BlockExecTraces,
     Call as VmCall, CallResult as VmCallResult, Create as VmCreate,
     CreateResult as VmCreateResult, ExecTrace,
@@ -367,34 +367,3 @@ impl LocalizedBlockTrace {
         })
     }
 }
-
-// #[derive(Debug, Serialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct EpochTrace {
-//     cfx_traces: Vec<LocalizedTrace>,
-//     eth_traces: Vec<EthLocalizedTrace>,
-//     mirror_address_map: HashMap<H160, RpcAddress>,
-// }
-
-// impl EpochTrace {
-//     pub fn new(
-//         cfx_traces: Vec<LocalizedTrace>, eth_traces: Vec<EthLocalizedTrace>,
-//     ) -> Self {
-//         let mut mirror_address_map = HashMap::new();
-//         for t in &cfx_traces {
-//             if let Action::Call(action) = &t.action {
-//                 if action.to.hex_address == CROSS_SPACE_CONTRACT_ADDRESS {
-//                     mirror_address_map.insert(
-//                         evm_map(action.from.hex_address).address,
-//                         action.from.clone(),
-//                     );
-//                 }
-//             }
-//         }
-//         Self {
-//             cfx_traces,
-//             eth_traces,
-//             mirror_address_map,
-//         }
-//     }
-// }

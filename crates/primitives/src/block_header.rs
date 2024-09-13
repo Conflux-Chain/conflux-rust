@@ -203,6 +203,14 @@ impl BlockHeader {
         )
     }
 
+    // Get the base price for the given space after 1559 hardfork.
+    pub fn space_base_price(&self, space: Space) -> Option<U256> {
+        self.base_price.map(|x| match space {
+            Space::Native => x.core_base_price,
+            Space::Ethereum => x.espace_base_price,
+        })
+    }
+
     /// Set the nonce field of the header.
     pub fn set_nonce(&mut self, nonce: U256) { self.nonce = nonce; }
 

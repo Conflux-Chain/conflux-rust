@@ -19,8 +19,8 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, Error};
+use cfx_rpc_cfx_types::traits::Provider;
 use cfx_types::{H160, H256, U256};
-use cfxcore::SharedConsensusGraph;
 use primitives::{
     log_entry::{LocalizedLogEntry, LogEntry},
     EpochNumber,
@@ -56,7 +56,7 @@ pub struct Log {
 
 impl Log {
     pub fn try_from_localized(
-        e: LocalizedLogEntry, consensus: SharedConsensusGraph, removed: bool,
+        e: LocalizedLogEntry, consensus: impl Provider, removed: bool,
     ) -> Result<Log, Error> {
         // find pivot hash
         let epoch = consensus.get_block_epoch_number(&e.block_hash).ok_or(

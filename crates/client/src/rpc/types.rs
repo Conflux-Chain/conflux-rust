@@ -3,14 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 pub mod cfx;
+mod constants;
 pub mod eth;
-mod fee_history;
-mod index;
 pub mod pos;
 mod provenance;
-pub mod pubsub;
 
-pub use cfx_rpc_primitives::{Bytes, U64};
+pub use cfx_rpc_primitives::{Bytes, Index, U64};
 
 pub use self::{
     cfx::{
@@ -23,6 +21,7 @@ pub use self::{
         filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
         log::Log,
         pos_economics::PoSEconomics,
+        pubsub,
         receipt::Receipt,
         reward_info::RewardInfo,
         stat_on_gas_load::StatOnGasLoad,
@@ -44,8 +43,7 @@ pub use self::{
         vote_params_info::VoteParamsInfo,
         Account, CfxFeeHistory, SponsorInfo,
     },
-    fee_history::FeeHistory,
-    index::Index,
+    constants::MAX_GAS_CALL_REQUEST,
     provenance::Origin,
 };
 pub use cfx_rpc_cfx_types::{
@@ -54,3 +52,5 @@ pub use cfx_rpc_cfx_types::{
     },
     trace_filter::TraceFilter,
 };
+
+pub use cfx_rpc_eth_types::FeeHistory;

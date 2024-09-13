@@ -56,7 +56,9 @@ members = [
     "crates/cfxcore/geth-tracer",
     "crates/rpc/rpc-eth-types", 
     "crates/rpc/rpc-primitives", 
-    "crates/rpc/rpc-cfx-types", "crates/rpc/rpc-eth-api",
+    "crates/rpc/rpc-cfx-types", 
+    "crates/rpc/rpc-eth-api",
+    "crates/cfxcore/parity-trace-types",
 ]
 
 resolver = "2"
@@ -145,6 +147,7 @@ cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
 cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
 cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
 cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
+cfx-parity-trace-types = { path = "./crates/cfxcore/parity-trace-types" }
 
 serde = { version = "1.0", features = ["derive", "alloc"] }
 serde_json = "1.0"
@@ -155,6 +158,11 @@ chrono = "=0.4.38"
 error-chain = { version = "0.12" }
 jsonrpc-core = { version = "15.1.0" }
 log = "0.4"
+strum = "0.20"
+strum_macros = "0.20"
+lazy_static = "1.4"
+parking_lot = "0.11"
+rayon = "1.10"
 
 keccak-hash = "0.5"
 rlp = "0.4.0"

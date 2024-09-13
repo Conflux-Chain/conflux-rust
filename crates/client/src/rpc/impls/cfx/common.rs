@@ -11,7 +11,7 @@ use std::{
 
 use crate::rpc::{
     errors::invalid_params_check,
-    impls::pos::hash_value_to_h256,
+    impls::{pos::hash_value_to_h256, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT},
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
@@ -531,10 +531,9 @@ impl RpcImpl {
         )
     }
 
-    // TODO: cache the history to improve performance
     pub fn fee_history(
-        &self, block_count: HexU64, newest_block: EpochNumber,
-        reward_percentiles: Vec<f64>,
+        &self, mut block_count: HexU64, newest_block: EpochNumber,
+        reward_percentiles: Option<Vec<f64>>,
     ) -> CoreResult<CfxFeeHistory> {
         if newest_block == EpochNumber::LatestMined {
             return Err(RpcError::invalid_params(
@@ -549,7 +548,11 @@ impl RpcImpl {
         );
 
         if block_count.as_u64() == 0 {
-            return Ok(FeeHistory::new().to_cfx_fee_history());
+            return Ok(FeeHistory::new().into());
+        }
+
+        if block_count.as_u64() > MAX_FEE_HISTORY_CACHE_BLOCK_COUNT {
+            block_count = HexU64::from(MAX_FEE_HISTORY_CACHE_BLOCK_COUNT);
         }
         // keep read lock to ensure consistent view
         let inner = self.consensus_graph().inner.read();
@@ -578,6 +581,7 @@ impl RpcImpl {
             .get_height_from_epoch_number(newest_block.into())
             .map_err(RpcError::invalid_params)?;
 
+        let reward_percentiles = reward_percentiles.unwrap_or_default();
         let mut current_height = start_height;
 
         let mut fee_history = FeeHistory::new();
@@ -623,7 +627,7 @@ impl RpcImpl {
             Space::Native,
         );
 
-        Ok(fee_history.to_cfx_fee_history())
+        Ok(fee_history.into())
     }
 
     pub fn max_priority_fee_per_gas(&self) -> CoreResult<U256> {
@@ -632,7 +636,7 @@ impl RpcImpl {
         let fee_history = self.fee_history(
             HexU64::from(300),
             EpochNumber::LatestState,
-            vec![50f64],
+            Some(vec![50f64]),
         )?;
 
         let total_reward: U256 = fee_history

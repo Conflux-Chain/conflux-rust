@@ -1,4 +1,4 @@
-use cfx_execute_helper::exec_tracer::Outcome;
+use cfx_parity_trace_types::Outcome;
 use cfx_rpc_cfx_types::trace::{
     Action as RpcCfxAction, LocalizedTrace as RpcCfxLocalizedTrace,
 };

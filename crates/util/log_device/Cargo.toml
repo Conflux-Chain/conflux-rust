@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 byteorder = "1.2.7"
 db = { workspace = true }
 rlp = { workspace = true }

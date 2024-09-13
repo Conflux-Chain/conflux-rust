@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod action_params;
+mod address_pocket;
 mod call_create_type;
 mod context;
 mod env;
@@ -17,6 +18,7 @@ pub mod tests;
 
 pub use self::{
     action_params::{ActionParams, ActionValue, ParamsType},
+    address_pocket::AddressPocket,
     call_create_type::{CallType, CreateType},
     context::{
         contract_address, BlockHashSource, Context, ContractCreateResult,
