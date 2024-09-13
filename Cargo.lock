@@ -7180,6 +7180,7 @@ dependencies = [
 name = "rpc-eth-api"
 version = "2.4.0"
 dependencies = [
+ "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
  "cfx-types",
