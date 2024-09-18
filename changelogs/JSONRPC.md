@@ -5,6 +5,12 @@
 1. eSpace add new RPC method `eth_getBlockReceipts`
 2. RPC method `eth_call`, `eth_estimateGas`'s Transaction object add a new field `input` to keep compatibility with Ethereum.
 3. eSpace `block` and `transaction` object field value changed: `block.transactionsRoot(when tx is empty)`, `block.receiptsRoot(when tx is empty)`, `post-155 tx.v`, `phantom tx.r, tx.s`.
+4. Core Space local RPC method `cfx_sendTransaction` and `cfx_signTransaction` support `2930&1559` type transactions.
+5. Optimize method name of test and debug namespace, add `test` and `debug` prefix, change name from underscore style to camel style eg `current_sync_phase` -> `debug_currentSyncPhase`.
+6. eth_call, eth_estimateGas improve compatible with solidity custom revert error.
+7. Update both core and eSpace block gas limit to return real available gas limit. The core space block size is 9/10 of the consensus block, and the eSpace block size is 5/10 of the total gas limit for all eSpace transaction blocks that can be packaged in the corresponding epoch.
+
+Note: The `third` and `seventh` points above will cause changes in the data returned by the RPC, so please take note.
 
 ## v2.4.0
 
