@@ -8,7 +8,7 @@ authors = ["Conflux Foundation"]
 cfx-types = { workspace = true }
 edit-distance = "2.0"
 parity-crypto = "0.9.0"
-parity-secp256k1 = "0.7.0"
+parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
 lazy_static = "1.4"
 log = "0.4"
 parity-wordlist = "1.3"
