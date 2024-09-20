@@ -15,7 +15,7 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
 };
-use cfx_rpc_cfx_types::{traits::Provider, PhantomBlock};
+use cfx_rpc_cfx_types::{traits::BlockProvider, PhantomBlock};
 use cfx_types::{Space, H256};
 use cfxcore::{
     channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
@@ -530,7 +530,7 @@ impl ChainNotificationHandler {
     }
 }
 
-impl Provider for &PubSubClient {
+impl BlockProvider for &PubSubClient {
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
         self.consensus.get_block_epoch_number(hash)
     }
@@ -542,7 +542,7 @@ impl Provider for &PubSubClient {
     }
 }
 
-impl Provider for &ChainNotificationHandler {
+impl BlockProvider for &ChainNotificationHandler {
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
         self.consensus.get_block_epoch_number(hash)
     }

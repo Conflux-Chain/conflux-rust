@@ -1,6 +1,6 @@
+use cfx_rpc_primitives::Bytes;
 use cfx_types::H256;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use cfx_rpc_primitives::Bytes;
 
 /// Web3 rpc interface.
 #[cfg_attr(not(feature = "client"), rpc(server, namespace = "web3"))]

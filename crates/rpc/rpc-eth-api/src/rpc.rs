@@ -1,5 +1,5 @@
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use cfx_rpc_primitives::RpcModules;
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 /// RPC namespace, used to find the versions of all rpc modules
 #[rpc(server, namespace = "rpc")]

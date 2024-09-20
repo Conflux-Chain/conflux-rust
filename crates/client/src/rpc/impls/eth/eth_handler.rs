@@ -28,7 +28,7 @@ use cfx_executor::executive::{
     TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
-use cfx_rpc_cfx_types::{traits::Provider, PhantomBlock};
+use cfx_rpc_cfx_types::{traits::BlockProvider, PhantomBlock};
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
@@ -470,7 +470,7 @@ impl EthHandler {
     }
 }
 
-impl Provider for &EthHandler {
+impl BlockProvider for &EthHandler {
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
         self.consensus_graph().get_block_epoch_number(hash)
     }

@@ -16,10 +16,9 @@ impl RpcModules {
         Self { module_map }
     }
 
-    /// Consumes self and returns the inner hashmap mapping module names to their versions
-    pub fn into_modules(self) -> HashMap<String, String> {
-        self.module_map
-    }
+    /// Consumes self and returns the inner hashmap mapping module names to
+    /// their versions
+    pub fn into_modules(self) -> HashMap<String, String> { self.module_map }
 }
 
 #[cfg(test)]

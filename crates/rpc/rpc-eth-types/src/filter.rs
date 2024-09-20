@@ -19,7 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{BlockNumber, Error as SelfError, Log};
-use cfx_rpc_cfx_types::traits::Provider;
+use cfx_rpc_cfx_types::traits::BlockProvider;
 use cfx_rpc_primitives::VariadicValue;
 use cfx_types::{Space, H160, H256};
 use primitives::{
@@ -54,7 +54,7 @@ pub struct EthRpcLogFilter {
 
 impl EthRpcLogFilter {
     pub fn into_primitive(
-        self, consensus: impl Provider,
+        self, consensus: impl BlockProvider,
     ) -> Result<PrimitiveFilter, SelfError> {
         let params = LogFilterParams {
             address: self.address.map(|v| v.to_vec()),

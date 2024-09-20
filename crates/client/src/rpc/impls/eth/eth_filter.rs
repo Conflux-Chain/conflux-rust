@@ -29,7 +29,7 @@ use crate::rpc::{
     traits::eth_space::eth_filter::EthFilter,
     types::eth::{BlockNumber, EthRpcLogFilter, FilterChanges, Log},
 };
-use cfx_rpc_cfx_types::traits::Provider;
+use cfx_rpc_cfx_types::traits::BlockProvider;
 use cfx_rpc_eth_types::Error as EthRpcError;
 use cfxcore::errors::Error as CfxRpcError;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as RpcResult};
@@ -381,7 +381,7 @@ impl Filterable for EthFilterClient {
     }
 }
 
-impl Provider for &EthFilterClient {
+impl BlockProvider for &EthFilterClient {
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
         self.consensus.get_block_epoch_number(hash)
     }
