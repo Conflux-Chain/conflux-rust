@@ -162,7 +162,7 @@ impl FeeHistoryCacheInner {
     // if the cached history is outdated, clear the cache
     fn check_and_clear_cache(&mut self, latest_block: u64) {
         if !self.is_empty()
-            && self.upper_bound() <= latest_block - self.max_blocks
+            && self.upper_bound() + self.max_blocks <= latest_block
         {
             self.clear_cache();
         }
