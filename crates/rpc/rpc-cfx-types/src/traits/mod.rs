@@ -1,3 +1,3 @@
 mod provider;
 
-pub use provider::Provider;
+pub use provider::BlockProvider;

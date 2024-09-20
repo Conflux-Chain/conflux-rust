@@ -4,8 +4,9 @@
 
 use cfx_bytes::Bytes;
 
+use crate::AddressPocket;
 use cfx_types::{Address, Bloom, BloomInput, Space, U256};
-use cfx_vm_types::{ActionParams, AddressPocket, CallType, CreateType};
+use cfx_vm_types::{ActionParams, CallType, CreateType};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{ser::SerializeStruct, Serialize, Serializer};

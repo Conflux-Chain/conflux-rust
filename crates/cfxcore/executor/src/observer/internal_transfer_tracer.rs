@@ -1,5 +1,5 @@
+use cfx_parity_trace_types::AddressPocket;
 use cfx_types::{address_util::AddressUtil, Address, AddressSpaceUtil, U256};
-use cfx_vm_types::AddressPocket;
 
 use self::AddressPocket::*;
 
