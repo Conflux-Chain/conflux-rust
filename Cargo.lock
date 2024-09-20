@@ -1315,6 +1315,7 @@ dependencies = [
 name = "cfx-rpc"
 version = "2.4.0"
 dependencies = [
+ "alloy-rpc-types",
  "async-trait",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-types",
