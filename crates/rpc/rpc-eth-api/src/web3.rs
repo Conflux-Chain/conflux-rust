@@ -3,8 +3,7 @@ use cfx_types::H256;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 /// Web3 rpc interface.
-#[cfg_attr(not(feature = "client"), rpc(server, namespace = "web3"))]
-#[cfg_attr(feature = "client", rpc(server, client, namespace = "web3"))]
+#[rpc(server, namespace = "web3")]
 pub trait Web3Api {
     /// Returns current client version.
     #[method(name = "clientVersion")]

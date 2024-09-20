@@ -55,10 +55,11 @@ members = [
     "crates/serde_utils",
     "crates/cfxcore/geth-tracer",
     "crates/rpc/rpc-eth-types", 
-    "crates/rpc/rpc-primitives", 
+    "crates/rpc/rpc-primitives",
     "crates/rpc/rpc-cfx-types", 
     "crates/rpc/rpc-eth-api",
     "crates/cfxcore/parity-trace-types",
+    "crates/rpc/rpc",
 ]
 
 resolver = "2"
@@ -148,6 +149,7 @@ cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
 cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
 cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
 cfx-parity-trace-types = { path = "./crates/cfxcore/parity-trace-types" }
+cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth-api" }
 
 serde = { version = "1.0", features = ["derive", "alloc"] }
 serde_json = "1.0"
@@ -170,8 +172,6 @@ rand = "0.7"
 itertools = "0.10.0"
 
 byteorder = "1.2.7"
-fixed-hash = "0.5"
-keccak-hash = "0.5"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 hex = "0.4.3"
@@ -184,3 +184,14 @@ alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22
 revm = "8.0"
 
 bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore", "blst"] }
+
+# async
+async-trait = "0.1"
+
+# crypto
+fixed-hash = "0.5"
+keccak-hash = "0.5"
+tiny-keccak = "2.0.2"
+
+# misc
+clap = "2"

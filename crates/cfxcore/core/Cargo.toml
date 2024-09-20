@@ -26,7 +26,7 @@ cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 channel = { path = "src/pos/common/channel" }
-clap = "2"
+clap = { workspace = true }
 dag = { workspace = true }
 derivative = "2.0.2"
 db = { workspace = true }
@@ -97,7 +97,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 smart-default = "0.6.0"
 bls-signatures = { workspace = true }
-tiny-keccak = {version = "2.0",  features = ["keccak"]}
+tiny-keccak = { workspace = true,  features = ["keccak"]}
 bcs = "0.1.2"
 async-trait = "0.1"
 num-derive = { version = "0.3.3", default-features = false }

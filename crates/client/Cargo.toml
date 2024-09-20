@@ -7,7 +7,7 @@ edition = "2021"
 bigdecimal = "0.1.0"
 num-bigint = "0.2.6"
 mio = "0.6.8"
-clap = "2"
+clap = { workspace = true }
 textwrap = "0.9"
 toml = "0.5.8"
 serde = { workspace = true, features = ["derive"] }

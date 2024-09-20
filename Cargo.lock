@@ -1312,6 +1312,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-rpc"
+version = "2.4.0"
+dependencies = [
+ "async-trait",
+ "cfx-rpc-eth-api",
+ "cfx-rpc-eth-types",
+ "cfx-rpc-primitives",
+ "cfx-types",
+ "clap",
+ "jsonrpsee",
+ "keccak-hash",
+ "parity-version",
+]
+
+[[package]]
 name = "cfx-rpc-cfx-types"
 version = "2.4.0"
 dependencies = [
@@ -1328,6 +1343,17 @@ dependencies = [
  "serde",
  "serde_json",
  "strum_macros 0.20.1",
+]
+
+[[package]]
+name = "cfx-rpc-eth-api"
+version = "2.4.0"
+dependencies = [
+ "alloy-rpc-types-trace",
+ "cfx-rpc-eth-types",
+ "cfx-rpc-primitives",
+ "cfx-types",
+ "jsonrpsee",
 ]
 
 [[package]]
@@ -7165,17 +7191,6 @@ checksum = "ffc936cf8a7ea60c58f030fd36a612a48f440610214dc54bc36431f9ea0c3efb"
 dependencies = [
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "rpc-eth-api"
-version = "2.4.0"
-dependencies = [
- "alloy-rpc-types-trace",
- "cfx-rpc-eth-types",
- "cfx-rpc-primitives",
- "cfx-types",
- "jsonrpsee",
 ]
 
 [[package]]
