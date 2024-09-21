@@ -112,6 +112,7 @@ revm = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
+cfx-util-macros = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"

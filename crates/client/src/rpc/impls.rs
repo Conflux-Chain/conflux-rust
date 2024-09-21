@@ -26,7 +26,6 @@ pub mod cfx;
 pub mod eth;
 mod fee_history_cache;
 pub mod pos;
-pub mod trace;
 
 pub use cfx::{cfx_filter, common, light, pool, pubsub};
 pub use cfx_rpc_cfx_types::FeeHistoryCacheEntry;
