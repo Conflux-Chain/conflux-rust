@@ -11,7 +11,8 @@ use std::{
 
 use crate::rpc::{
     errors::invalid_params_check,
-    impls::{pos::hash_value_to_h256, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT},
+    helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+    impls::pos::hash_value_to_h256,
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,

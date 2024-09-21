@@ -24,13 +24,9 @@ pub struct RpcImplConfiguration {
 
 pub mod cfx;
 pub mod eth;
-mod fee_history_cache;
 pub mod pos;
 
 pub use cfx::{cfx_filter, common, light, pool, pubsub};
 pub use cfx_rpc_cfx_types::FeeHistoryCacheEntry;
 use cfx_types::U256;
 pub use eth::{debug, eth_filter, eth_handler::EthHandler, eth_pubsub};
-pub use fee_history_cache::{
-    FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
-};

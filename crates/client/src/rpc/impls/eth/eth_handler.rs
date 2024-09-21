@@ -8,10 +8,8 @@ use crate::rpc::{
         invalid_params, request_rejected_in_catch_up_mode, unknown_block,
         EthApiError, RpcInvalidTransactionError, RpcPoolError,
     },
-    impls::{
-        FeeHistoryCache, RpcImplConfiguration,
-        MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
-    },
+    helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT},
+    impls::RpcImplConfiguration,
     traits::eth_space::eth::Eth,
     types::{
         eth::{

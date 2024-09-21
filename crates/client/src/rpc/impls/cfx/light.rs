@@ -35,10 +35,8 @@ use crate::{
     common::delegate_convert,
     rpc::{
         errors::{self, invalid_params_check},
-        impls::{
-            common::{self, RpcImpl as CommonImpl},
-            MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
-        },
+        helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+        impls::common::{self, RpcImpl as CommonImpl},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
             cfx::check_rpc_address_network,
