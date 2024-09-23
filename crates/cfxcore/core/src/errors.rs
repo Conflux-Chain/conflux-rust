@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 use crate::light_protocol::Error as LightProtocolError;
 use cfx_rpc_eth_types::Error as EthRpcError;
+pub use cfx_rpc_utils::error::error_codes::EXCEPTION_ERROR;
 use cfx_statedb::Error as StateDbError;
 use cfx_storage::Error as StorageError;
 use jsonrpc_core::{futures::future, Error as JsonRpcError, ErrorCode};
@@ -12,7 +13,6 @@ use rlp::DecoderError;
 use serde_json::Value;
 use std::fmt::{Debug, Display};
 use thiserror::Error;
-pub use cfx_rpc_utils::error::error_codes::EXCEPTION_ERROR;
 
 #[derive(Debug, Error)]
 pub enum Error {
