@@ -23,6 +23,8 @@ pub use filter::*;
 pub use log::Log;
 pub use receipt::Receipt;
 pub use sync::{SyncInfo, SyncStatus};
+pub use trace::*;
+pub use trace_filter::TraceFilter;
 pub use transaction::Transaction;
 pub use transaction_request::{
     TransactionRequest, DEFAULT_ETH_GAS_CALL_REQUEST,

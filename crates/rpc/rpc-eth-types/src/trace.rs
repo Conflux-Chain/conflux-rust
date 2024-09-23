@@ -14,7 +14,7 @@ use std::{
 };
 
 /// Create response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     /// Sender
@@ -30,7 +30,7 @@ pub struct Create {
 }
 
 /// The type of the create-like instruction.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum CreateType {
     /// Not a create
@@ -52,7 +52,7 @@ impl From<CfxCreateType> for CreateType {
 }
 
 /// Call type.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum CallType {
     /// None
@@ -80,7 +80,7 @@ impl From<CfxCallType> for CallType {
 }
 
 /// Call response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
     /// Sender
@@ -98,7 +98,7 @@ pub struct Call {
 }
 
 /// Action
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Action {
     /// Call
     Call(Call),
@@ -136,7 +136,7 @@ impl TryFrom<RpcCfxAction> for Action {
 }
 
 /// Call Result
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CallResult {
     /// Gas used
@@ -146,7 +146,7 @@ pub struct CallResult {
 }
 
 /// Craete Result
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateResult {
     /// Gas used
@@ -158,7 +158,7 @@ pub struct CreateResult {
 }
 
 /// Response
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Res {
     /// Call
     Call(CallResult),
@@ -173,7 +173,7 @@ pub enum Res {
 }
 
 /// Trace
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LocalizedTrace {
     /// Action
     pub action: Action,
@@ -378,7 +378,7 @@ impl Serialize for Trace {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TraceError {
     /// Execution has been reverted with REVERT instruction.
     Reverted,

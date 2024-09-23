@@ -20,73 +20,15 @@
 
 use crate::{BlockNumber, Error as SelfError, Log};
 use cfx_rpc_cfx_types::traits::BlockProvider;
+use cfx_rpc_primitives::VariadicValue;
 use cfx_types::{Space, H160, H256};
 use primitives::{
     filter::{LogFilter as PrimitiveFilter, LogFilterParams},
     EpochNumber,
 };
-use serde::{
-    de::{DeserializeOwned, Error},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
-use serde_json::{from_value, Value};
+use serde::{Deserialize, Serialize, Serializer};
+use serde_json::Value;
 use std::convert::TryInto;
-
-/// Variadic value
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub enum VariadicValue<T>
-where T: DeserializeOwned
-{
-    /// Single
-    Single(T),
-    /// List
-    Multiple(Vec<T>),
-    /// None
-    Null,
-}
-
-impl<'a, T> Deserialize<'a> for VariadicValue<T>
-where T: DeserializeOwned
-{
-    fn deserialize<D>(deserializer: D) -> Result<VariadicValue<T>, D::Error>
-    where D: Deserializer<'a> {
-        let v: Value = Deserialize::deserialize(deserializer)?;
-
-        if v.is_null() {
-            return Ok(VariadicValue::Null);
-        }
-
-        from_value(v.clone())
-            .map(VariadicValue::Single)
-            .or_else(|_| from_value(v).map(VariadicValue::Multiple))
-            .map_err(|err| {
-                D::Error::custom(format!(
-                    "Invalid variadic value type: {}",
-                    err
-                ))
-            })
-    }
-}
-
-impl<T> VariadicValue<T>
-where T: DeserializeOwned
-{
-    pub fn to_vec(self) -> Vec<T> {
-        match self {
-            VariadicValue::Null => vec![],
-            VariadicValue::Single(x) => vec![x],
-            VariadicValue::Multiple(xs) => xs,
-        }
-    }
-
-    pub fn to_opt(self) -> Option<Vec<T>> {
-        match self {
-            VariadicValue::Null => None,
-            VariadicValue::Single(x) => Some(vec![x]),
-            VariadicValue::Multiple(xs) => Some(xs),
-        }
-    }
-}
 
 /// Filter Address
 pub type FilterAddress = VariadicValue<H160>;
@@ -198,7 +140,7 @@ impl EthRpcLogFilter {
 }
 
 /// Results of the filter_changes RPC.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum FilterChanges {
     /// New logs.
     Logs(Vec<Log>),

@@ -9,7 +9,7 @@ use cfx_rpc_cfx_types::{CfxFeeHistory, FeeHistoryCacheEntry};
 use cfx_types::{Space, SpaceMap, U256};
 use primitives::{transaction::SignedTransaction, BlockHeader};
 
-#[derive(Serialize, Debug, Default)]
+#[derive(Serialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct FeeHistory {
     /// Oldest Block

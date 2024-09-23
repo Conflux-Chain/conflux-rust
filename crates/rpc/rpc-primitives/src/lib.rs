@@ -1,10 +1,12 @@
 mod bytes;
 mod index;
+mod rpc_module;
 mod variadic_u64;
 mod variadic_value;
 
 pub use bytes::Bytes;
 pub use index::Index;
+pub use rpc_module::RpcModules;
 pub use variadic_u64::U64;
 pub use variadic_value::VariadicValue;
 
