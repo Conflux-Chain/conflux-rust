@@ -6,6 +6,7 @@ use cfx_rpc_eth_types::Error as EthRpcError;
 use cfx_statedb::Error as StateDbError;
 use cfx_storage::Error as StorageError;
 use jsonrpc_core::{futures::future, Error as JsonRpcError, ErrorCode};
+use jsonrpsee::types::error::ErrorObjectOwned;
 use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
 use serde_json::Value;
@@ -69,6 +70,13 @@ impl From<Error> for JsonRpcError {
                 data: None,
             },
         }
+    }
+}
+
+impl From<Error> for ErrorObjectOwned {
+    fn from(e: Error) -> ErrorObjectOwned {
+        let err: JsonRpcError = e.into();
+        ErrorObjectOwned::owned(err.code.code() as i32, err.message, err.data)
     }
 }
 

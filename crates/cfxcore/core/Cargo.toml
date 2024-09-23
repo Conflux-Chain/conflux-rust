@@ -141,6 +141,7 @@ alloy-rpc-types-trace = { workspace = true }
 geth-tracer = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
+jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 
 
 [dev-dependencies]

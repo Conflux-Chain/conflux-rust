@@ -1316,15 +1316,20 @@ name = "cfx-rpc"
 version = "2.4.0"
 dependencies = [
  "alloy-rpc-types",
+ "alloy-rpc-types-trace",
  "async-trait",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
+ "cfx-rpc-utils",
  "cfx-types",
+ "cfxcore",
  "clap",
+ "geth-tracer",
  "jsonrpsee",
  "keccak-hash",
  "parity-version",
+ "primitives",
 ]
 
 [[package]]
@@ -1390,6 +1395,14 @@ dependencies = [
  "serde",
  "serde-utils",
  "serde_json",
+]
+
+[[package]]
+name = "cfx-rpc-utils"
+version = "2.4.0"
+dependencies = [
+ "jsonrpc-core",
+ "jsonrpsee",
 ]
 
 [[package]]
@@ -1602,6 +1615,7 @@ dependencies = [
  "io",
  "itertools 0.10.5",
  "jsonrpc-core",
+ "jsonrpsee",
  "keccak-hash",
  "kvdb",
  "kvdb-rocksdb",
@@ -1857,6 +1871,7 @@ dependencies = [
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
+ "cfx-rpc",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
