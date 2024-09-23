@@ -18,11 +18,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::errors::invalid_params;
+use crate::Error;
 use cfx_types::H256;
 use primitives::EpochNumber;
 use serde::{
-    de::{Error, MapAccess, Visitor},
+    de::{Error as SerdeError, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{convert::TryFrom, fmt};
@@ -124,7 +124,7 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
                         if value.starts_with("0x") {
                             let number = u64::from_str_radix(&value[2..], 16)
                                 .map_err(|e| {
-                                Error::custom(format!(
+                                SerdeError::custom(format!(
                                     "Invalid block number: {}",
                                     e
                                 ))
@@ -133,7 +133,7 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
                             block_number = Some(number);
                             break;
                         } else {
-                            return Err(Error::custom(
+                            return Err(SerdeError::custom(
                                 "Invalid block number: missing 0x prefix"
                                     .to_string(),
                             ));
@@ -146,7 +146,7 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
                         require_canonical = visitor.next_value()?;
                     }
                     key => {
-                        return Err(Error::custom(format!(
+                        return Err(SerdeError::custom(format!(
                             "Unknown key: {}",
                             key
                         )))
@@ -167,11 +167,11 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
             });
         }
 
-        return Err(Error::custom("Invalid input"));
+        return Err(SerdeError::custom("Invalid input"));
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: Error {
+    where E: SerdeError {
         match value {
             "latest" => Ok(BlockNumber::Latest),
             "earliest" => Ok(BlockNumber::Earliest),
@@ -182,25 +182,28 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
                 u64::from_str_radix(&value[2..], 16)
                     .map(BlockNumber::Num)
                     .map_err(|e| {
-                        Error::custom(format!("Invalid block number: {}", e))
+                        SerdeError::custom(format!(
+                            "Invalid block number: {}",
+                            e
+                        ))
                     })
             }
-            _ => Err(Error::custom(
+            _ => Err(SerdeError::custom(
                 "Invalid block number: missing 0x prefix".to_string(),
             )),
         }
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where E: Error {
+    where E: SerdeError {
         self.visit_str(value.as_ref())
     }
 }
 
 impl TryFrom<BlockNumber> for EpochNumber {
-    type Error = jsonrpc_core::Error;
+    type Error = Error;
 
-    fn try_from(x: BlockNumber) -> jsonrpc_core::Result<EpochNumber> {
+    fn try_from(x: BlockNumber) -> Result<EpochNumber, Error> {
         match x {
             BlockNumber::Num(num) => Ok(EpochNumber::Number(num)),
             BlockNumber::Latest => Ok(EpochNumber::LatestState),
@@ -208,9 +211,9 @@ impl TryFrom<BlockNumber> for EpochNumber {
             BlockNumber::Pending => Ok(EpochNumber::LatestState),
             BlockNumber::Safe => Ok(EpochNumber::LatestConfirmed),
             BlockNumber::Finalized => Ok(EpochNumber::LatestFinalized),
-            BlockNumber::Hash { .. } => Err(invalid_params(
-                "block_num",
-                "Expected block number, found block hash",
+            BlockNumber::Hash { .. } => Err(Error::InvalidParams(
+                "block_num".into(),
+                "Expected block number, found block hash".into(),
             )),
         }
     }

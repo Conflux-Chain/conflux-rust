@@ -3,6 +3,7 @@ use super::{
     trace_types::{ExecTrace, TransactionExecTraces},
 };
 use cfx_types::{Address, Space, H256};
+use error_chain::bail;
 use primitives::EpochNumber;
 
 /// Log event Filter.

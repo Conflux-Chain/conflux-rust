@@ -17,19 +17,19 @@ cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
-log = "0.4"
+log = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 primitives = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
-serde = { version = "1.0", features = ["rc"] }
-serde_derive = "1.0"
+serde = { workspace = true, features = ["rc"] }
+serde_derive = { workspace = true}
 serde_json = { version = "1.0", default-features = false, features = [
     "alloc",
 ]}
 solidity-abi = { workspace = true }
-strum_macros = "0.20"
+strum_macros = { workspace = true }
 pow-types = { path = "../core/src/pos/types/pow-types" }
 typemap = { package = "typemap-ors", version = "1.0"}
 
@@ -38,3 +38,4 @@ alloy-sol-types = "0.7.1"
 revm = { version = "8.0", default-features = false, features = ["std"] }
 alloy-rpc-types-trace = { workspace = true }
 geth-tracer = { workspace = true }
+cfx-parity-trace-types = { workspace = true }

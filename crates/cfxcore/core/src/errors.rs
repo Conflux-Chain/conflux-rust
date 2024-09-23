@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 use crate::light_protocol::Error as LightProtocolError;
+use cfx_rpc_eth_types::Error as EthRpcError;
 use cfx_statedb::Error as StateDbError;
 use cfx_storage::Error as StorageError;
 use jsonrpc_core::{futures::future, Error as JsonRpcError, ErrorCode};
@@ -77,6 +78,13 @@ impl From<&str> for Error {
 
 impl From<String> for Error {
     fn from(s: String) -> Error { Error::Msg(s) }
+}
+
+impl From<EthRpcError> for Error {
+    fn from(e: EthRpcError) -> Error {
+        let e: JsonRpcError = e.into();
+        e.into()
+    }
 }
 
 pub(crate) fn invalid_params<T: Debug>(param: &str, details: T) -> Error {

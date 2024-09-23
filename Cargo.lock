@@ -1138,6 +1138,7 @@ dependencies = [
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-statedb",
  "cfx-types",
  "cfx-vm-interpreter",
@@ -1172,6 +1173,7 @@ dependencies = [
  "cfx-internal-common",
  "cfx-math",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
@@ -1277,6 +1279,78 @@ dependencies = [
  "hex-literal",
  "lazy_static",
  "rustc-hex",
+]
+
+[[package]]
+name = "cfx-parity-trace-types"
+version = "2.4.0"
+dependencies = [
+ "cfx-bytes",
+ "cfx-internal-common",
+ "cfx-types",
+ "cfx-vm-types",
+ "error-chain",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "primitives",
+ "rlp 0.4.6",
+ "rlp_derive",
+ "serde",
+ "strum_macros 0.20.1",
+]
+
+[[package]]
+name = "cfx-rpc-cfx-types"
+version = "2.4.0"
+dependencies = [
+ "cfx-addr",
+ "cfx-parameters",
+ "cfx-parity-trace-types",
+ "cfx-rpc-primitives",
+ "cfx-types",
+ "cfx-vm-types",
+ "error-chain",
+ "jsonrpc-core",
+ "log",
+ "primitives",
+ "serde",
+ "serde_json",
+ "strum_macros 0.20.1",
+]
+
+[[package]]
+name = "cfx-rpc-eth-types"
+version = "2.4.0"
+dependencies = [
+ "alloy-rpc-types",
+ "cfx-parameters",
+ "cfx-parity-trace-types",
+ "cfx-rpc-cfx-types",
+ "cfx-rpc-primitives",
+ "cfx-types",
+ "cfx-vm-types",
+ "error-chain",
+ "jsonrpc-core",
+ "primitives",
+ "rlp 0.4.6",
+ "rustc-hex",
+ "serde",
+ "serde-utils",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "cfx-rpc-primitives"
+version = "2.4.0"
+dependencies = [
+ "cfx-addr",
+ "cfx-types",
+ "primitives",
+ "rustc-hex",
+ "serde",
+ "serde-utils",
+ "serde_json",
 ]
 
 [[package]]
@@ -1441,6 +1515,8 @@ dependencies = [
  "cfx-math",
  "cfx-packing-pool",
  "cfx-parameters",
+ "cfx-rpc-cfx-types",
+ "cfx-rpc-eth-types",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
@@ -1738,6 +1814,9 @@ dependencies = [
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
+ "cfx-rpc-cfx-types",
+ "cfx-rpc-eth-types",
+ "cfx-rpc-primitives",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",

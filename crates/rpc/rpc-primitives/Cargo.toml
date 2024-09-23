@@ -1,0 +1,22 @@
+[package]
+name = "cfx-rpc-primitives"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rustc-hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde-utils = { workspace = true }
+cfx-addr = { workspace = true }
+cfx-types = { workspace = true }
+primitives = { workspace = true }

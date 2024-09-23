@@ -14,6 +14,7 @@ use cfx_parameters::{
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 
+pub use cfx_rpc_cfx_types::{PendingReason, TransactionStatus};
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
     address_util::AddressUtil, AddressWithSpace, Space, SpaceMap, H256, U128,
@@ -30,7 +31,6 @@ use primitives::{
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use rlp::*;
-use serde::Serialize;
 use std::{
     collections::{BTreeSet, HashMap},
     sync::Arc,
@@ -488,27 +488,6 @@ impl DeferredPool {
         self.ready_transactions_by_space(Space::Native)
             .chain(self.ready_transactions_by_space(Space::Ethereum))
     }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TransactionStatus {
-    Packed,
-    Ready,
-    Pending(PendingReason),
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PendingReason {
-    FutureNonce,
-    NotEnoughCash,
-    OldEpochHeight,
-    // The tx status in the pool is inaccurate due to chain switch or sponsor
-    // balance change. This tx will not be packed even if it should have
-    // been ready, and the user needs to send a new transaction to trigger
-    // the status change.
-    OutdatedStatus,
 }
 
 #[derive(Default, DeriveMallocSizeOf)]

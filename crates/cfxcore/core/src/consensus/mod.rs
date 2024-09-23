@@ -39,7 +39,7 @@ use cfx_execute_helper::{
     estimation::{EstimateExt, EstimateRequest},
     exec_tracer::{
         recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
-        TraceFilter, TransactionExecTraces,
+        TraceFilter,
     },
     phantom_tx::build_bloom_and_recover_phantom,
 };
@@ -58,6 +58,7 @@ use cfx_parameters::{
         GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
     },
 };
+use cfx_rpc_cfx_types::PhantomBlock;
 use cfx_statedb::StateDb;
 use cfx_storage::{
     state::StateTrait, state_manager::StateManagerTrait, StorageState,
@@ -78,8 +79,8 @@ use primitives::{
     log_entry::LocalizedLogEntry,
     pos::PosBlockId,
     receipt::Receipt,
-    Block, BlockHeader, EpochId, EpochNumber, SignedTransaction,
-    TransactionIndex, TransactionStatus,
+    Block, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
+    TransactionStatus,
 };
 use rayon::prelude::*;
 use std::{
@@ -111,16 +112,6 @@ pub struct MaybeExecutedTxExtraInfo {
 pub struct TransactionInfo {
     pub tx_index: TransactionIndex,
     pub maybe_executed_extra_info: Option<MaybeExecutedTxExtraInfo>,
-}
-
-pub struct PhantomBlock {
-    pub pivot_header: BlockHeader,
-    pub transactions: Vec<Arc<SignedTransaction>>,
-    pub receipts: Vec<Receipt>,
-    pub errors: Vec<String>,
-    pub bloom: Bloom,
-    pub traces: Vec<TransactionExecTraces>,
-    pub total_gas_limit: U256, // real gas limit of the block
 }
 
 #[derive(Clone)]
@@ -2262,15 +2253,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
             })
     }
 
-    fn get_block_hashes_by_epoch(
-        &self, epoch_number: EpochNumber,
-    ) -> Result<Vec<H256>, String> {
-        self.get_height_from_epoch_number(epoch_number)
-            .and_then(|height| {
-                self.inner.read_recursive().block_hashes_by_epoch(height)
-            })
-    }
-
     fn get_skipped_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
@@ -2307,18 +2289,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
         } else {
             None
         }
-    }
-
-    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
-        // try to get from memory
-        if let Some(e) =
-            self.inner.read_recursive().get_block_epoch_number(hash)
-        {
-            return Some(e);
-        }
-
-        // try to get from db
-        self.data_man.block_epoch_number(hash)
     }
 
     fn get_block_number(
@@ -2529,6 +2499,27 @@ impl ConsensusGraphTrait for ConsensusGraph {
         debug!("Build new consensus graph for sync-recovery with identified genesis {} stable block {}", cur_era_genesis_hash, cur_era_stable_hash);
 
         self.confirmation_meter.clear();
+    }
+
+    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        // try to get from memory
+        if let Some(e) =
+            self.inner.read_recursive().get_block_epoch_number(hash)
+        {
+            return Some(e);
+        }
+
+        // try to get from db
+        self.data_man.block_epoch_number(hash)
+    }
+
+    fn get_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.get_height_from_epoch_number(epoch_number)
+            .and_then(|height| {
+                self.inner.read_recursive().block_hashes_by_epoch(height)
+            })
     }
 
     fn to_arc_consensus(self: Arc<Self>) -> Arc<ConsensusGraph> { self }

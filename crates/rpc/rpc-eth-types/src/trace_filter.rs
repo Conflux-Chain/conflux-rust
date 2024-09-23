@@ -16,11 +16,12 @@
 
 //! Trace filter deserialization.
 
-use crate::rpc::types::eth::BlockNumber;
-use cfx_execute_helper::exec_tracer::TraceFilter as PrimitiveTraceFilter;
+use crate::BlockNumber;
+use cfx_parity_trace_types::TraceFilter as PrimitiveTraceFilter;
 use cfx_types::{Space, H160};
 use jsonrpc_core::Error as RpcError;
 use primitives::EpochNumber;
+use serde::Deserialize;
 use std::convert::TryInto;
 
 /// Trace filter

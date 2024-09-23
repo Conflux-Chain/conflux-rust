@@ -1,4 +1,5 @@
 use cfx_types::U256;
+use serde::Serialize;
 use std::collections::VecDeque;
 
 #[derive(Serialize, Debug, Default)]
