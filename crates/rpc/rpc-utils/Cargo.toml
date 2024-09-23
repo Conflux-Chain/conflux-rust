@@ -15,3 +15,10 @@ license-file.workspace = true
 [dependencies]
 jsonrpsee = { workspace = true }
 jsonrpc-core = { workspace = true}
+cfx-types = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-rpc-types = { workspace = true }
+serde_json = { workspace = true }
+alloy-sol-types = { workspace = true }
+revm = { workspace = true }
+thiserror = { workspace = true }

@@ -1,4 +1,4 @@
-use super::codes;
+use crate::error::error_codes as codes;
 use alloy_primitives::hex;
 use alloy_rpc_types::error::EthRpcErrorCode;
 use cfx_types::H256;

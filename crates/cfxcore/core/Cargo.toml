@@ -142,6 +142,7 @@ geth-tracer = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
+cfx-rpc-utils = { workspace = true }
 
 
 [dev-dependencies]

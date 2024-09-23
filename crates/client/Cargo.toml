@@ -114,6 +114,7 @@ cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfx-rpc = { workspace = true }
+cfx-rpc-utils = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"

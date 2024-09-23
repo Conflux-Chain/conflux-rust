@@ -1401,8 +1401,15 @@ dependencies = [
 name = "cfx-rpc-utils"
 version = "2.4.0"
 dependencies = [
+ "alloy-primitives",
+ "alloy-rpc-types",
+ "alloy-sol-types",
+ "cfx-types",
  "jsonrpc-core",
  "jsonrpsee",
+ "revm",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -1573,6 +1580,7 @@ dependencies = [
  "cfx-parameters",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
+ "cfx-rpc-utils",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
@@ -1875,6 +1883,7 @@ dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
+ "cfx-rpc-utils",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",

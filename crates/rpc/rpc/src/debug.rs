@@ -7,7 +7,7 @@ use alloy_rpc_types_trace::geth::{
 use async_trait::async_trait;
 use cfx_rpc_eth_api::DebugApiServer;
 use cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
-use cfx_rpc_utils::error::invalid_params_msg;
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 use cfx_types::{Space, H256, U256};
 use cfxcore::{ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph};
 use geth_tracer::to_alloy_h256;

@@ -12,8 +12,7 @@ use rlp::DecoderError;
 use serde_json::Value;
 use std::fmt::{Debug, Display};
 use thiserror::Error;
-
-pub const EXCEPTION_ERROR: i64 = -32016;
+pub use cfx_rpc_utils::error::error_codes::EXCEPTION_ERROR;
 
 #[derive(Debug, Error)]
 pub enum Error {
