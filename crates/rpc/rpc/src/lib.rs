@@ -1,5 +1,6 @@
 mod debug;
 mod eth;
+pub mod helpers;
 mod net;
 mod rpc;
 mod web3;

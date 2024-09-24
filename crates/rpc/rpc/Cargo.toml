@@ -28,3 +28,5 @@ cfxcore = { workspace = true }
 primitives = { workspace = true }
 geth-tracer = { workspace = true }
 cfx-rpc-utils = { workspace = true }
+parking_lot = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }

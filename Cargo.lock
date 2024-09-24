@@ -1318,6 +1318,7 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
  "async-trait",
+ "cfx-rpc-cfx-types",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
@@ -1329,6 +1330,7 @@ dependencies = [
  "jsonrpsee",
  "keccak-hash",
  "parity-version",
+ "parking_lot 0.11.2",
  "primitives",
 ]
 
