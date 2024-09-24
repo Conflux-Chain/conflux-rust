@@ -58,4 +58,4 @@ diem-proptest-helpers = { path = "../../../common/proptest-helpers" }
 storage-interface = { path = "../../storage-interface" }
 
 [features]
-fuzzing = ["diemdb/fuzzing"]
+fuzzing = ["pos-ledger-db/fuzzing"]
