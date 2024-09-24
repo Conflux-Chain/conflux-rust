@@ -33,7 +33,7 @@ use cfx_types::{
 };
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
-    errors::{Error as CfxRpcError, Result as CfxRpcResult},
+    errors::{Error as CoreError, Result as CoreResult},
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
@@ -107,7 +107,7 @@ impl EthHandler {
     fn exec_transaction(
         &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
-    ) -> CfxRpcResult<(Executed, U256)> {
+    ) -> CoreResult<(Executed, U256)> {
         let consensus_graph = self.consensus_graph();
 
         if request.gas_price.is_some()
@@ -234,7 +234,7 @@ impl EthHandler {
 
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
-    ) -> CfxRpcResult<H256> {
+    ) -> CoreResult<H256> {
         if self.sync.catch_up_mode() {
             warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
             bail!(request_rejected_in_catch_up_mode(None));
@@ -612,7 +612,7 @@ impl Eth for EthHandler {
             .get_eth_state_db_by_epoch_number(epoch_num, "num")?;
         let acc = state_db
             .get_account(&address.with_evm_space())
-            .map_err(|err| CfxRpcError::from(err))?;
+            .map_err(|err| CoreError::from(err))?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.balance).into())
     }
@@ -638,7 +638,7 @@ impl Eth for EthHandler {
         Ok(
             match state_db
                 .get::<StorageValue>(key)
-                .map_err(|err| CfxRpcError::from(err))?
+                .map_err(|err| CoreError::from(err))?
             {
                 Some(entry) => H256::from_uint(&entry.value).into(),
                 None => H256::zero(),
@@ -829,11 +829,11 @@ impl Eth for EthHandler {
 
         let code = match state_db
             .get_account(&address)
-            .map_err(|err| CfxRpcError::from(err))?
+            .map_err(|err| CoreError::from(err))?
         {
             Some(acc) => match state_db
                 .get_code(&address, &acc.code_hash)
-                .map_err(|err| CfxRpcError::from(err))?
+                .map_err(|err| CoreError::from(err))?
             {
                 Some(code) => (*code.code).clone(),
                 _ => vec![],
@@ -1195,7 +1195,7 @@ impl Eth for EthHandler {
         let logs = self
             .consensus_graph()
             .logs(filter)
-            .map_err(|err| CfxRpcError::from(err))?;
+            .map_err(|err| CoreError::from(err))?;
 
         // If the results does not fit into `max_limit`, report an error
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
