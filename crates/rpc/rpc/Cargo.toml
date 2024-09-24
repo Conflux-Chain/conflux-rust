@@ -30,3 +30,11 @@ geth-tracer = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 parking_lot = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
+jsonrpc-core = { workspace = true }
+cfx-vm-types = { workspace = true }
+cfx-statedb = { workspace = true }
+cfx-executor = { workspace = true }
+cfx-execute-helper = { workspace = true }
+error-chain = { workspace = true }
+cfx-parameters = { workspace = true }
+rustc-hex = { workspace = true }
