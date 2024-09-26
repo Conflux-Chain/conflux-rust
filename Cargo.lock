@@ -290,7 +290,7 @@ checksum = "1c7a679ac01774ab7e00a567a918d4231ae692c5c8cedaf4e16956c3116d7896"
 dependencies = [
  "alloy-sol-macro-input",
  "const-hex",
- "heck 0.5.0",
+ "heck",
  "indexmap 2.2.5",
  "proc-macro-error",
  "proc-macro2 1.0.85",
@@ -308,7 +308,7 @@ checksum = "356da0c2228aa6675a5faaa08a3e4061b967f924753983d72b9a18d9a3fad44e"
 dependencies = [
  "const-hex",
  "dunce",
- "heck 0.5.0",
+ "heck",
  "proc-macro2 1.0.85",
  "quote 1.0.36",
  "syn 2.0.66",
@@ -1170,7 +1170,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solidity-abi",
- "strum_macros 0.20.1",
+ "strum_macros",
  "typemap-ors",
 ]
 
@@ -1221,8 +1221,8 @@ dependencies = [
  "sha3-macro",
  "solidity-abi",
  "solidity-abi-derive",
- "strum 0.20.0",
- "strum_macros 0.20.1",
+ "strum",
+ "strum_macros",
  "substrate-bn 0.6.0 (git+https://github.com/paritytech/bn?rev=63f8c587356a67b33c7396af98e065b66fca5dda)",
  "tiny-keccak 2.0.2",
  "typemap-ors",
@@ -1308,7 +1308,7 @@ dependencies = [
  "rlp 0.4.6",
  "rlp_derive",
  "serde",
- "strum_macros 0.20.1",
+ "strum_macros",
 ]
 
 [[package]]
@@ -1343,6 +1343,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-rpc-builder"
+version = "2.4.0"
+
+[[package]]
 name = "cfx-rpc-cfx-types"
 version = "2.4.0"
 dependencies = [
@@ -1358,7 +1362,7 @@ dependencies = [
  "primitives",
  "serde",
  "serde_json",
- "strum_macros 0.20.1",
+ "strum_macros",
 ]
 
 [[package]]
@@ -1692,8 +1696,8 @@ dependencies = [
  "static_assertions",
  "storage-interface",
  "strfmt",
- "strum 0.20.0",
- "strum_macros 0.20.1",
+ "strum",
+ "strum_macros",
  "subscription-service",
  "substrate-bn 0.6.0 (git+https://github.com/paritytech/bn?rev=63f8c587356a67b33c7396af98e065b66fca5dda)",
  "tempdir",
@@ -1972,8 +1976,8 @@ dependencies = [
  "solidity-abi",
  "static_assertions",
  "storage-interface",
- "strum 0.20.0",
- "strum_macros 0.20.1",
+ "strum",
+ "strum_macros",
  "tempdir",
  "textwrap 0.9.0",
  "thiserror",
@@ -3954,15 +3958,6 @@ dependencies = [
 
 [[package]]
 name = "heck"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
-name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
@@ -4800,7 +4795,7 @@ version = "0.24.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0d4c6bec4909c966f59f52db3655c0e9d4685faae8b49185973d9d7389bb884"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro-crate 3.2.0",
  "proc-macro2 1.0.85",
  "quote 1.0.36",
@@ -5461,7 +5456,7 @@ name = "network"
 version = "0.1.0"
 dependencies = [
  "byte-unit",
- "bytes 0.4.12",
+ "bytes 1.7.1",
  "cfx-addr",
  "cfx-bytes",
  "cfx-types",
@@ -5492,8 +5487,8 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "slab",
- "strum 0.11.0",
- "strum_macros 0.11.0",
+ "strum",
+ "strum_macros",
  "throttling",
 ]
 
@@ -8078,38 +8073,21 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "strum"
-version = "0.11.0"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6c3a2071519ab6a48f465808c4c1ffdd00dfc8e93111d02b4fc5abab177676e"
-
-[[package]]
-name = "strum"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7318c509b5ba57f18533982607f24070a55d353e90d4cae30c467cdb2ad5ac5c"
+checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
 
 [[package]]
 name = "strum_macros"
-version = "0.11.0"
+version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8baacebd7b7c9b864d83a6ba7a246232983e277b86fa5cdec77f565715a4b136"
+checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
 dependencies = [
- "heck 0.3.3",
- "proc-macro2 0.4.30",
- "quote 0.6.13",
- "syn 0.15.44",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee8bc6b87a5112aeeab1f4a9f7ab634fe6cbefc4850006df31267f4cfb9e3149"
-dependencies = [
- "heck 0.3.3",
+ "heck",
  "proc-macro2 1.0.85",
  "quote 1.0.36",
- "syn 1.0.109",
+ "rustversion",
+ "syn 2.0.66",
 ]
 
 [[package]]
@@ -9004,12 +8982,6 @@ checksum = "5c5713f0fc4b5db668a2ac63cdb7bb4469d8c9fed047b1d0292cc7b0ce2ba921"
 dependencies = [
  "tinyvec",
 ]
-
-[[package]]
-name = "unicode-segmentation"
-version = "1.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dd624098567895118886609431a7c3b8f516e41d30e0643f03d94592a147e36"
 
 [[package]]
 name = "unicode-width"

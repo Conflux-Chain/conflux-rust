@@ -61,7 +61,7 @@ members = [
     "crates/cfxcore/parity-trace-types",
     "crates/rpc/rpc",
     "crates/util/util-macros",
-    "crates/rpc/rpc-utils",
+    "crates/rpc/rpc-utils", "crates/rpc/rpc-builder",
 ]
 
 resolver = "2"
@@ -168,8 +168,6 @@ fail = "0.4.0"
 thiserror = "1.0.63"
 anyhow = "1.0"
 error-chain = { version = "0.12" }
-strum = "0.20"
-strum_macros = "0.20"
 
 # parallelism
 parking_lot = "0.11"
@@ -212,3 +210,6 @@ itertools = "0.10.0"
 once_cell = "1.17.1"
 chrono = "=0.4.38"
 byteorder = "1.2.7"
+strum = "0.26"
+strum_macros = "0.26"
+bytes = "1.0.1"
