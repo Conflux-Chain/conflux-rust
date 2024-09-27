@@ -13,3 +13,22 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+serde = { workspace = true, features = ["derive"]  }
+strum = { workspace = true, features = ["derive"]  }
+alloy-primitives = { workspace = true}
+thiserror = { workspace = true }
+
+jsonrpsee-core = { workspace = true }
+jsonrpsee-types = { workspace = true }
+jsonrpsee = { workspace = true, features = ["server"] }
+# tower-http = { workspace = true, features = ["full"] }
+tower = { workspace = true, features = ["full"] }
+http.workspace = true
+pin-project = { workspace = true }
+rand = { workspace = true }
+cfx-rpc = { workspace = true }
+cfx-rpc-eth-api = { workspace = true }
+cfxcore = { workspace = true }
+cfx-types = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }

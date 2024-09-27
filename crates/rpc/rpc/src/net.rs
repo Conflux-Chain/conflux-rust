@@ -6,6 +6,10 @@ pub struct NetApi {
     chain_id: u64,
 }
 
+impl NetApi {
+    pub fn new(chain_id: u64) -> Self { Self { chain_id } }
+}
+
 impl NetApiServer for NetApi {
     fn version(&self) -> RpcResult<String> {
         // todo read chain_id from config, not in this struct

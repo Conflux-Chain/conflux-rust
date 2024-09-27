@@ -191,9 +191,16 @@ jsonrpc-ws-server = "15.1.0"
 
 # jsonrpc framework(new)
 jsonrpsee = "0.24.4"
+jsonrpsee-core = "0.24"
+jsonrpsee-types = "0.24"
+
+http = "1.0"
 
 # async
 async-trait = "0.1"
+tower = "0.4"
+tower-http = "0.5"
+pin-project = "1.0.12"
 
 # crypto
 fixed-hash = "0.5"
