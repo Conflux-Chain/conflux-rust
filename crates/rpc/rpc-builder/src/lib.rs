@@ -1,3 +1,4 @@
+mod constants;
 mod error;
 mod id_provider;
 mod module;
@@ -9,7 +10,7 @@ pub use module::{EthRpcModule, RpcModuleSelection};
 pub use result::*;
 use serde::{Deserialize, Serialize};
 
-use cfx_rpc::*;
+use cfx_rpc::{helpers::ChainInfo, *};
 use cfx_rpc_cfx_types::RpcImplConfiguration;
 use cfx_rpc_eth_api::*;
 use cfx_types::U256;
@@ -48,10 +49,7 @@ pub struct RpcModuleBuilder {
     max_estimation_gas_limit: Option<U256>,
 }
 
-// === impl RpcBuilder ===
-
 impl RpcModuleBuilder {
-    /// Create a new instance of the builder
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
@@ -149,7 +147,7 @@ impl RpcRegistryInner {
 }
 
 impl RpcRegistryInner {
-    pub fn web3_api(&self) -> Web3Api { Web3Api::new() }
+    pub fn web3_api(&self) -> Web3Api<()> { Web3Api::new(()) }
 
     pub fn register_web3(&mut self) -> &mut Self {
         let web3api = self.web3_api();
@@ -164,7 +162,9 @@ impl RpcRegistryInner {
         DebugApi::new(self.consensus.clone(), self.max_estimation_gas_limit)
     }
 
-    pub fn net_api(&self) -> NetApi { NetApi::new(1000) }
+    pub fn net_api(&self) -> NetApi<ChainInfo> {
+        NetApi::new(ChainInfo::new(self.consensus.clone()))
+    }
 
     /// Helper function to create a [`RpcModule`] if it's not `None`
     fn maybe_module(
@@ -209,11 +209,17 @@ impl RpcRegistryInner {
                         )
                         .into_rpc()
                         .into(),
-                        EthRpcModule::Net => NetApi::new(100).into_rpc().into(),
+                        EthRpcModule::Net => {
+                            NetApi::new(ChainInfo::new(self.consensus.clone()))
+                                .into_rpc()
+                                .into()
+                        }
                         EthRpcModule::Trace => {
                             TraceApi::new().into_rpc().into()
                         }
-                        EthRpcModule::Web3 => Web3Api::new().into_rpc().into(),
+                        EthRpcModule::Web3 => {
+                            Web3Api::new(()).into_rpc().into()
+                        }
                         EthRpcModule::Rpc => RPCApi::new(
                             namespaces
                                 .iter()
@@ -407,12 +413,14 @@ impl<RpcMiddleware> RpcServerConfig<RpcMiddleware> {
         let mut http_handle = None;
         let mut ws_handle = None;
 
-        let http_socket_addr = self.http_addr.unwrap_or(SocketAddr::V4(
-            SocketAddrV4::new(Ipv4Addr::LOCALHOST, 9545),
-        ));
+        let http_socket_addr =
+            self.http_addr.unwrap_or(SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::LOCALHOST,
+                constants::DEFAULT_HTTP_PORT,
+            )));
 
         let ws_socket_addr = self.ws_addr.unwrap_or(SocketAddr::V4(
-            SocketAddrV4::new(Ipv4Addr::LOCALHOST, 9546),
+            SocketAddrV4::new(Ipv4Addr::LOCALHOST, constants::DEFAULT_WS_PORT),
         ));
 
         // If both are configured on the same port, we combine them into one

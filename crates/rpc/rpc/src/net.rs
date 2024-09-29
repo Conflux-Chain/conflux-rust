@@ -1,25 +1,24 @@
+use cfx_rpc_cfx_types::traits::ChainMetaProvider;
 use cfx_rpc_eth_api::NetApiServer;
 use cfx_types::U64;
 use jsonrpsee::core::RpcResult;
 
-pub struct NetApi {
-    chain_id: u64,
+pub struct NetApi<ChainMeta> {
+    chain_meta: ChainMeta,
 }
 
-impl NetApi {
-    pub fn new(chain_id: u64) -> Self { Self { chain_id } }
+impl<ChainMeta> NetApi<ChainMeta> {
+    pub fn new(chain_meta: ChainMeta) -> Self { Self { chain_meta } }
 }
 
-impl NetApiServer for NetApi {
+impl<ChainMeta> NetApiServer for NetApi<ChainMeta>
+where ChainMeta: ChainMetaProvider + Send + Sync + 'static
+{
     fn version(&self) -> RpcResult<String> {
-        // todo read chain_id from config, not in this struct
-        Ok(self.chain_id.to_string())
+        Ok(self.chain_meta.chain_id().to_string())
     }
 
-    fn peer_count(&self) -> RpcResult<U64> {
-        // todo implement peer count
-        Ok(U64::from(0))
-    }
+    fn peer_count(&self) -> RpcResult<U64> { Ok(U64::from(0)) }
 
     fn is_listening(&self) -> RpcResult<bool> { Ok(true) }
 }
