@@ -34,7 +34,7 @@ either = "1.5.3"
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
-futures = {version="0.3.3", features = ["compat"]}
+futures = { workspace = true, features = ["compat"]}
 hashbrown = "0.7.1"
 hibitset = { workspace = true }
 itertools = { workspace = true }
@@ -88,10 +88,10 @@ tempdir = "0.3"
 threadpool = "1.0"
 throttling = { workspace = true }
 toml = "0.5.8"
-tokio02 = { version = "0.2", package="tokio", features = ["full"] }
-tokio = { version = "1.6", features = ["full"] }
-tokio-timer = "0.2.13"
-tokio-stream = "0.1.4"
+tokio02 = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full"] }
+tokio-timer = { workspace = true }
+tokio-stream = { workspace = true }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 strum = { workspace = true }
 strum_macros = { workspace = true }
@@ -99,7 +99,7 @@ smart-default = "0.6.0"
 bls-signatures = { workspace = true }
 tiny-keccak = { workspace = true,  features = ["keccak"]}
 bcs = "0.1.2"
-async-trait = "0.1"
+async-trait = { workspace = true }
 num-derive = { version = "0.3.3", default-features = false }
 thiserror = { workspace = true }
 fallible = { path = "src/pos/common/fallible" }
@@ -127,7 +127,7 @@ anyhow = { workspace = true }
 once_cell = { workspace = true }
 move-core-types = { path = "src/pos/types/move-core-types" }
 pow-types = {path = "src/pos/types/pow-types" }
-async-oneshot = "0.5.0"
+async-oneshot = { workspace = true }
 proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 diem-temppath = { path = "src/pos/common/temppath" }
@@ -152,7 +152,6 @@ cfx-vm-types = { workspace = true, features = ["testonly_code"] }
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 consensus-types = { path = "src/pos/consensus/consensus-types", features = ["fuzzing"] }
-#tokio = { version = "0.2.11", features = ["time"] }
 
 [dependencies.parity-util-mem]
 version = "0.5"

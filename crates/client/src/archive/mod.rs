@@ -11,6 +11,7 @@ use crate::{
     configuration::Configuration,
 };
 use blockgen::BlockGenerator;
+use cfx_rpc_builder::RpcServerHandle;
 use cfxcore::{
     pow::PowComputer, ConsensusGraph, NodeType, SynchronizationService,
     TransactionPool,
@@ -19,7 +20,6 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use std::sync::Arc;
-use cfx_rpc_builder::RpcServerHandle;
 
 pub struct ArchiveClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
