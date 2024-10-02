@@ -20,6 +20,7 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use std::sync::Arc;
+use tokio::runtime::Runtime as TokioRuntime;
 
 pub struct ArchiveClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
@@ -38,6 +39,7 @@ pub struct ArchiveClientExtraComponents {
     /// Handle to the started ETH RPC server. This is version 2 of the ETH RPC.
     /// Which use Rust async I/O
     pub eth_rpc_server_handle: Option<RpcServerHandle>,
+    pub tokio_runtime: TokioRuntime,
 }
 
 impl MallocSizeOf for ArchiveClientExtraComponents {
@@ -78,6 +80,7 @@ impl ArchiveClient {
             runtime,
             eth_rpc_http_server,
             eth_rpc_ws_server,
+            tokio_runtime,
         ) = initialize_not_light_node_modules(
             &mut conf,
             exit,
@@ -102,6 +105,7 @@ impl ArchiveClient {
                 eth_rpc_http_server,
                 eth_rpc_ws_server,
                 eth_rpc_server_handle: None,
+                tokio_runtime,
             },
         }))
     }

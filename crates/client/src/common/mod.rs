@@ -51,6 +51,7 @@ use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::NetworkService;
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
+use tokio::runtime::Runtime as TokioRuntime;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
 pub use crate::configuration::Configuration;
@@ -473,6 +474,7 @@ pub fn initialize_not_light_node_modules(
         Runtime,
         Option<HttpServer>,
         Option<WSServer>,
+        TokioRuntime,
     ),
     String,
 > {
@@ -719,6 +721,9 @@ pub fn initialize_not_light_node_modules(
 
     network.start();
 
+    let tokio_runtime =
+        tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+
     Ok((
         data_man,
         pow,
@@ -736,6 +741,7 @@ pub fn initialize_not_light_node_modules(
         runtime,
         eth_rpc_http_server,
         eth_rpc_ws_server,
+        tokio_runtime,
     ))
 }
 
