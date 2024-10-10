@@ -8,12 +8,10 @@ pub use error::*;
 pub use id_provider::EthSubscriptionIdProvider;
 pub use module::{EthRpcModule, RpcModuleSelection};
 pub use result::*;
-use serde::{Deserialize, Serialize};
 
 use cfx_rpc::{helpers::ChainInfo, *};
 use cfx_rpc_cfx_types::RpcImplConfiguration;
 use cfx_rpc_eth_api::*;
-use cfx_types::U256;
 use cfxcore::{
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
@@ -46,21 +44,18 @@ pub struct RpcModuleBuilder {
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
-    max_estimation_gas_limit: Option<U256>,
 }
 
 impl RpcModuleBuilder {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        max_estimation_gas_limit: Option<U256>,
     ) -> Self {
         Self {
             config,
             consensus,
             sync,
             tx_pool,
-            max_estimation_gas_limit,
         }
     }
 
@@ -73,27 +68,17 @@ impl RpcModuleBuilder {
         let mut modules = TransportRpcModules::default();
 
         if !module_config.is_empty() {
-            let TransportRpcModuleConfig {
-                http,
-                ws,
-                config: _,
-            } = module_config.clone();
+            let TransportRpcModuleConfig { http, ws } = module_config.clone();
 
             let Self {
-                config: rpc_config,
+                config,
                 consensus,
                 sync,
                 tx_pool,
-                max_estimation_gas_limit,
             } = self;
 
-            let mut registry = RpcRegistryInner::new(
-                rpc_config,
-                consensus,
-                sync,
-                tx_pool,
-                max_estimation_gas_limit,
-            );
+            let mut registry =
+                RpcRegistryInner::new(config, consensus, sync, tx_pool);
 
             modules.config = module_config;
             modules.http = registry.maybe_module(http.as_ref());
@@ -108,22 +93,19 @@ impl RpcModuleBuilder {
 #[derive(Clone)]
 pub struct RpcRegistryInner {
     consensus: SharedConsensusGraph,
-    max_estimation_gas_limit: Option<U256>,
-    modules: HashMap<EthRpcModule, Methods>,
     config: RpcImplConfiguration,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
+    modules: HashMap<EthRpcModule, Methods>,
 }
 
 impl RpcRegistryInner {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        max_estimation_gas_limit: Option<U256>,
     ) -> Self {
         Self {
             consensus,
-            max_estimation_gas_limit,
             config,
             sync,
             tx_pool,
@@ -159,7 +141,10 @@ impl RpcRegistryInner {
     pub fn trace_api(&self) -> TraceApi { TraceApi::new() }
 
     pub fn debug_api(&self) -> DebugApi {
-        DebugApi::new(self.consensus.clone(), self.max_estimation_gas_limit)
+        DebugApi::new(
+            self.consensus.clone(),
+            self.config.max_estimation_gas_limit,
+        )
     }
 
     pub fn net_api(&self) -> NetApi<ChainInfo> {
@@ -197,7 +182,7 @@ impl RpcRegistryInner {
                     .or_insert_with(|| match namespace {
                         EthRpcModule::Debug => DebugApi::new(
                             self.consensus.clone(),
-                            self.max_estimation_gas_limit,
+                            self.config.max_estimation_gas_limit,
                         )
                         .into_rpc()
                         .into(),
@@ -574,69 +559,6 @@ impl<RpcMiddleware> RpcServerConfig<RpcMiddleware> {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EthConfig {}
-
-/// Bundles settings for modules
-#[derive(Debug, Default, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct RpcModuleConfig {
-    /// `eth` namespace settings
-    eth: EthConfig,
-}
-
-// === impl RpcModuleConfig ===
-
-impl RpcModuleConfig {
-    /// Convenience method to create a new [`RpcModuleConfigBuilder`]
-    pub fn builder() -> RpcModuleConfigBuilder {
-        RpcModuleConfigBuilder::default()
-    }
-
-    /// Returns a new RPC module config given the eth namespace config
-    pub const fn new(eth: EthConfig) -> Self { Self { eth } }
-
-    /// Get a reference to the eth namespace config
-    pub const fn eth(&self) -> &EthConfig { &self.eth }
-
-    /// Get a mutable reference to the eth namespace config
-    pub fn eth_mut(&mut self) -> &mut EthConfig { &mut self.eth }
-}
-
-/// Configures [`RpcModuleConfig`]
-#[derive(Clone, Debug, Default)]
-pub struct RpcModuleConfigBuilder {
-    eth: Option<EthConfig>,
-}
-
-// === impl RpcModuleConfigBuilder ===
-
-impl RpcModuleConfigBuilder {
-    /// Configures a custom eth namespace config
-    pub const fn eth(mut self, eth: EthConfig) -> Self {
-        self.eth = Some(eth);
-        self
-    }
-
-    /// Consumes the type and creates the [`RpcModuleConfig`]
-    pub fn build(self) -> RpcModuleConfig {
-        let Self { eth } = self;
-        RpcModuleConfig {
-            eth: eth.unwrap_or_default(),
-        }
-    }
-
-    /// Get a reference to the eth namespace config, if any
-    pub const fn get_eth(&self) -> &Option<EthConfig> { &self.eth }
-
-    /// Get a mutable reference to the eth namespace config, if any
-    pub fn eth_mut(&mut self) -> &mut Option<EthConfig> { &mut self.eth }
-
-    /// Get the eth namespace config, creating a default if none is set
-    pub fn eth_mut_or_default(&mut self) -> &mut EthConfig {
-        self.eth.get_or_insert_with(EthConfig::default)
-    }
-}
-
 /// Holds modules to be installed per transport type
 #[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct TransportRpcModuleConfig {
@@ -644,8 +566,6 @@ pub struct TransportRpcModuleConfig {
     http: Option<RpcModuleSelection>,
     /// ws module configuration
     ws: Option<RpcModuleSelection>,
-    /// Config for the modules
-    config: Option<RpcModuleConfig>,
 }
 
 impl TransportRpcModuleConfig {
@@ -671,12 +591,6 @@ impl TransportRpcModuleConfig {
         self
     }
 
-    /// Sets a custom [`RpcModuleConfig`] for the configured modules.
-    pub const fn with_config(mut self, config: RpcModuleConfig) -> Self {
-        self.config = Some(config);
-        self
-    }
-
     /// Get a mutable reference to the
     pub fn http_mut(&mut self) -> &mut Option<RpcModuleSelection> {
         &mut self.http
@@ -684,11 +598,6 @@ impl TransportRpcModuleConfig {
 
     /// Get a mutable reference to the
     pub fn ws_mut(&mut self) -> &mut Option<RpcModuleSelection> { &mut self.ws }
-
-    /// Get a mutable reference to the
-    pub fn config_mut(&mut self) -> &mut Option<RpcModuleConfig> {
-        &mut self.config
-    }
 
     /// Returns true if no transports are configured
     pub const fn is_empty(&self) -> bool {
@@ -702,11 +611,6 @@ impl TransportRpcModuleConfig {
 
     /// Returns the [`RpcModuleSelection`] for the ws transport
     pub const fn ws(&self) -> Option<&RpcModuleSelection> { self.ws.as_ref() }
-
-    /// Returns the [`RpcModuleConfig`] for the configured modules
-    pub const fn config(&self) -> Option<&RpcModuleConfig> {
-        self.config.as_ref()
-    }
 
     /// Ensures that both http and ws are configured and that they are
     /// configured to use the same port.

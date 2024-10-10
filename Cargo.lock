@@ -1962,6 +1962,7 @@ dependencies = [
  "jsonrpc-pubsub",
  "jsonrpc-tcp-server",
  "jsonrpc-ws-server",
+ "jsonrpsee",
  "keccak-hash",
  "kvdb-rocksdb",
  "lazy_static",

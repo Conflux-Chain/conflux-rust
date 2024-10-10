@@ -8,7 +8,7 @@ cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
 cfxkey = { workspace = true }
-mio = "0.6.8"
+mio = { workspace = true }
 parking_lot = { workspace = true }
 log = { workspace = true }
 slab = "0.4"

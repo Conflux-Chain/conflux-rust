@@ -81,6 +81,7 @@ impl ArchiveClient {
             eth_rpc_http_server,
             eth_rpc_ws_server,
             tokio_runtime,
+            eth_rpc_server_handle,
         ) = initialize_not_light_node_modules(
             &mut conf,
             exit,
@@ -104,7 +105,7 @@ impl ArchiveClient {
                 pow,
                 eth_rpc_http_server,
                 eth_rpc_ws_server,
-                eth_rpc_server_handle: None,
+                eth_rpc_server_handle,
                 tokio_runtime,
             },
         }))

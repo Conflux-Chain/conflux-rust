@@ -3,8 +3,6 @@
 use std::fmt;
 
 use jsonrpsee_core::RpcResult;
-// use alloy_rpc_types_engine::PayloadError;
-// use reth_primitives::BlockId;
 
 /// Helper trait to easily convert various `Result` types into [`RpcResult`]
 pub trait ToRpcResult<Ok, Err>: Sized {
@@ -109,11 +107,6 @@ macro_rules! impl_to_rpc_result {
     };
 }
 
-// impl_to_rpc_result!(PayloadError);
-// impl_to_rpc_result!(reth_errors::RethError);
-// impl_to_rpc_result!(reth_errors::ProviderError);
-// impl_to_rpc_result!(reth_network_api::NetworkError);
-
 /// Constructs an invalid params JSON-RPC error.
 pub fn invalid_params_rpc_err(
     msg: impl Into<String>,
@@ -160,6 +153,7 @@ pub fn rpc_err(
 }
 
 // Formats a [`BlockId`] into an error message.
+// use reth_primitives::BlockId;
 // pub fn block_id_to_str(id: BlockId) -> String {
 //     match id {
 //         BlockId::Hash(h) => {

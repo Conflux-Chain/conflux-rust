@@ -1,5 +1,4 @@
 use crate::EthRpcModule;
-// use reth_ipc::server::IpcServerStartError;
 use std::{
     collections::HashSet,
     io::{self, ErrorKind},

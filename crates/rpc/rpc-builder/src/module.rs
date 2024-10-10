@@ -17,8 +17,6 @@ pub enum RpcModuleSelection {
     Selection(HashSet<EthRpcModule>),
 }
 
-// === impl RpcModuleSelection ===
-
 impl RpcModuleSelection {
     /// The standard modules to instantiate by default `eth`, `net`, `web3`
     pub const STANDARD_MODULES: [EthRpcModule; 3] =
