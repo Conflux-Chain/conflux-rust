@@ -1,5 +1,5 @@
+mod block_provider;
 mod chain_meta;
-mod provider;
 
+pub use block_provider::BlockProvider;
 pub use chain_meta::{ChainMetaProvider, ChainStaticMetaProvider};
-pub use provider::BlockProvider;

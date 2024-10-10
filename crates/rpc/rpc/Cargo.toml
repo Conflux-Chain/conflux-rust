@@ -38,3 +38,8 @@ cfx-execute-helper = { workspace = true }
 error-chain = { workspace = true }
 cfx-parameters = { workspace = true }
 rustc-hex = { workspace = true }
+transient-hashmap = { workspace = true }
+tokio = { workspace = true }
+log = { workspace = true }
+runtime = { workspace = true }
+futures = { workspace = true }

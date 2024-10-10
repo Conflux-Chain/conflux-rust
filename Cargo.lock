@@ -1332,14 +1332,19 @@ dependencies = [
  "cfxcore",
  "clap",
  "error-chain",
+ "futures 0.3.30",
  "geth-tracer",
  "jsonrpc-core",
  "jsonrpsee",
  "keccak-hash",
+ "log",
  "parity-version",
  "parking_lot 0.11.2",
  "primitives",
+ "runtime",
  "rustc-hex",
+ "tokio 1.40.0",
+ "transient-hashmap",
 ]
 
 [[package]]
