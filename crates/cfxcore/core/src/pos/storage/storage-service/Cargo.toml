@@ -36,4 +36,4 @@ storage-client = { path = "../storage-client" }
 
 [features]
 default = []
-fuzzing = ["proptest", "diemdb/fuzzing", "rand"]
+fuzzing = ["proptest", "pos-ledger-db/fuzzing", "rand"]

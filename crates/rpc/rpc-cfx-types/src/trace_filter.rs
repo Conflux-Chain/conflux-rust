@@ -2,9 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{trace::ActionType, EpochNumber};
-use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
-use cfx_execute_helper::exec_tracer::TraceFilter as PrimitiveTraceFilter;
+use super::trace::ActionType;
+use crate::EpochNumber;
+use cfx_parity_trace_types::TraceFilter as PrimitiveTraceFilter;
+use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
 use cfx_types::{Address, Space, H256, U64};
 use jsonrpc_core::Error as RpcError;
 use serde::{Deserialize, Serialize};
@@ -98,7 +99,7 @@ mod tests {
     use super::{
         super::trace::ActionType, EpochNumber, TraceFilter, VariadicValue,
     };
-    use cfx_execute_helper::exec_tracer::{
+    use cfx_parity_trace_types::{
         ActionType as PrimitiveActionType, TraceFilter as PrimitiveTraceFilter,
     };
     use cfx_types::{Address, Space, H256, U64};

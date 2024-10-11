@@ -12,12 +12,12 @@ cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 keccak-hash = { workspace = true }
-lazy_static = "1.4"
-log = "0.4"
+lazy_static = { workspace = true }
+log = { workspace = true }
 malloc_size_of = { workspace = true }
 memory-cache = { workspace = true }
-parking_lot = "0.11"
-rustc-hex = "2.1"
+parking_lot = { workspace = true }
+rustc-hex = { workspace = true }
 
 [dev-dependencies]
 cfx-vm-types = { workspace = true, features = ["testonly_code"] }

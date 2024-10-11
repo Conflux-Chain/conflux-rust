@@ -1,7 +1,6 @@
-use cfx_types::{Space, H256, U256};
-use cfxcore::consensus::PhantomBlock;
+use cfx_rpc_cfx_types::{FeeHistoryCacheEntry, PhantomBlock};
+use cfx_types::{Space, H256};
 use parking_lot::RwLock;
-use primitives::{transaction::SignedTransaction, BlockHeader};
 use std::{collections::VecDeque, sync::Arc};
 
 pub const MAX_FEE_HISTORY_CACHE_BLOCK_COUNT: u64 = 1024;
@@ -55,7 +54,7 @@ impl FeeHistoryCache {
             let block = fetch_block_by_hash(curr_hash)?;
             container.push_front((
                 i,
-                FeeHistoryEntry::from_block(
+                FeeHistoryCacheEntry::from_block(
                     Space::Ethereum,
                     &block.pivot_header,
                     block.transactions.iter().map(|x| &**x),
@@ -77,7 +76,7 @@ impl FeeHistoryCache {
                     break;
                 }
                 let block = fetch_block_by_hash(curr_hash)?;
-                *item = FeeHistoryEntry::from_block(
+                *item = FeeHistoryCacheEntry::from_block(
                     Space::Ethereum,
                     &block.pivot_header,
                     block.transactions.iter().map(|x| &**x),
@@ -97,7 +96,7 @@ impl FeeHistoryCache {
 
     pub fn get_history(
         &self, start_block: u64, end_block: u64,
-    ) -> Option<Vec<FeeHistoryEntry>> {
+    ) -> Option<Vec<FeeHistoryCacheEntry>> {
         let inner = self.inner.read();
         let lower_bound = inner.lower_bound;
         let upper_bound = inner.upper_bound();
@@ -122,16 +121,10 @@ impl FeeHistoryCache {
 
     pub fn get_history_with_missing_info(
         &self, start_block: u64, end_block: u64,
-    ) -> Vec<Option<FeeHistoryEntry>> {
+    ) -> Vec<Option<FeeHistoryCacheEntry>> {
         let inner = self.inner.read();
-        let lower_bound = inner.lower_bound;
         (start_block..=end_block)
-            .map(|block_number| {
-                inner
-                    .entries
-                    .get((block_number - lower_bound) as usize)
-                    .cloned()
-            })
+            .map(|block_number| inner.get(block_number))
             .collect()
     }
 }
@@ -143,7 +136,7 @@ struct FeeHistoryCacheInner {
     /// maximum number of blocks to store in the cache
     max_blocks: u64,
     /// Stores the entries of the cache
-    entries: VecDeque<FeeHistoryEntry>,
+    entries: VecDeque<FeeHistoryCacheEntry>,
 }
 
 impl FeeHistoryCacheInner {
@@ -162,7 +155,7 @@ impl FeeHistoryCacheInner {
     // if the cached history is outdated, clear the cache
     fn check_and_clear_cache(&mut self, latest_block: u64) {
         if !self.is_empty()
-            && self.upper_bound() <= latest_block - self.max_blocks
+            && self.upper_bound() + self.max_blocks <= latest_block
         {
             self.clear_cache();
         }
@@ -174,7 +167,7 @@ impl FeeHistoryCacheInner {
     }
 
     fn push_back(
-        &mut self, block_number: u64, entry: FeeHistoryEntry,
+        &mut self, block_number: u64, entry: FeeHistoryCacheEntry,
     ) -> Result<(), String> {
         if !self.is_empty() && block_number - self.upper_bound() != 1 {
             return Err("block number is not consecutive".to_string());
@@ -197,8 +190,7 @@ impl FeeHistoryCacheInner {
 
     pub fn is_empty(&self) -> bool { self.entries.is_empty() }
 
-    #[allow(dead_code)]
-    pub fn get(&self, height: u64) -> Option<FeeHistoryEntry> {
+    pub fn get(&self, height: u64) -> Option<FeeHistoryCacheEntry> {
         if height < self.lower_bound || height > self.upper_bound() {
             return None;
         }
@@ -207,82 +199,13 @@ impl FeeHistoryCacheInner {
     }
 
     #[allow(dead_code)]
-    pub fn update(&mut self, height: u64, entry: FeeHistoryEntry) {
+    pub fn update(&mut self, height: u64, entry: FeeHistoryCacheEntry) {
         if height < self.lower_bound || height > self.upper_bound() {
             return;
         }
         let key = height - self.lower_bound;
         if let Some(item) = self.entries.get_mut(key as usize) {
             *item = entry;
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct FeeHistoryEntry {
-    /// The base fee per gas for this block.
-    pub base_fee_per_gas: u64,
-    /// Gas used ratio this block.
-    pub gas_used_ratio: f64,
-    /// Gas used by this block.
-    pub gas_used: u64,
-    /// Gas limit by this block.
-    pub gas_limit: u64,
-    /// Hash of the block.
-    pub header_hash: H256,
-    ///
-    pub parent_hash: H256,
-    /// Approximated rewards for the configured percentiles.
-    pub rewards: Vec<u128>,
-    /// The timestamp of the block.
-    pub timestamp: u64,
-}
-
-impl FeeHistoryEntry {
-    pub fn from_block<'a, I>(
-        space: Space, pivot_header: &BlockHeader, transactions: I,
-    ) -> Self
-    where I: Clone + Iterator<Item = &'a SignedTransaction> {
-        let gas_limit: u64 = if space == Space::Native {
-            pivot_header.core_space_gas_limit().as_u64()
-        } else {
-            pivot_header.espace_gas_limit(true).as_u64()
-        };
-
-        let gas_used = transactions
-            .clone()
-            .map(|x| *x.gas_limit())
-            .reduce(|x, y| x + y)
-            .unwrap_or_default()
-            .as_u64();
-
-        let gas_used_ratio = gas_used as f64 / gas_limit as f64;
-
-        let base_fee_per_gas =
-            pivot_header.space_base_price(space).unwrap_or_default();
-
-        let mut rewards: Vec<_> = transactions
-            .map(|tx| {
-                if *tx.gas_price() < base_fee_per_gas {
-                    U256::zero()
-                } else {
-                    tx.effective_gas_price(&base_fee_per_gas)
-                }
-            })
-            .map(|x| x.as_u128())
-            .collect();
-
-        rewards.sort_unstable();
-
-        Self {
-            base_fee_per_gas: base_fee_per_gas.as_u64(),
-            gas_used_ratio,
-            gas_used,
-            gas_limit,
-            header_hash: pivot_header.hash(),
-            parent_hash: *pivot_header.parent_hash(),
-            rewards,
-            timestamp: pivot_header.timestamp(),
         }
     }
 }

@@ -12,11 +12,11 @@ cfx-types = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-vm-types = { workspace = true }
 derivative = "2.0.2"
-lazy_static = "1.4"
-log = "0.4"
+lazy_static = { workspace = true }
+log = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 primitives = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }

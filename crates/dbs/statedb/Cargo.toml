@@ -15,7 +15,7 @@ cfx-types = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
 hashbrown = "0.7.1"
 log = "0.4"
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 primitives = { workspace = true, optional = true }
 rlp = { workspace = true }
 tiny-keccak = "2.0.2"

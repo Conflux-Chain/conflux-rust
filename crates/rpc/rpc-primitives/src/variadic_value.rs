@@ -70,12 +70,6 @@ where T: DeserializeOwned
     }
 }
 
-// helper implementing automatic Option<Vec<A>> -> Option<Vec<B>> conversion
-pub fn maybe_vec_into<A, B>(src: &Option<Vec<A>>) -> Option<Vec<B>>
-where A: Clone + Into<B> {
-    src.clone().map(|x| x.into_iter().map(Into::into).collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::VariadicValue;

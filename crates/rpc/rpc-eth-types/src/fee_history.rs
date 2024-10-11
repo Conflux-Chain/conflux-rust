@@ -1,14 +1,13 @@
+use serde::Serialize;
 use std::collections::VecDeque;
 
-use crate::rpc::impls::FeeHistoryEntry;
 use cfx_parameters::block::{
     cspace_block_gas_limit_after_cip1559,
     espace_block_gas_limit_of_enabled_block,
 };
+use cfx_rpc_cfx_types::{CfxFeeHistory, FeeHistoryCacheEntry};
 use cfx_types::{Space, SpaceMap, U256};
 use primitives::{transaction::SignedTransaction, BlockHeader};
-
-use super::CfxFeeHistory;
 
 #[derive(Serialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -91,7 +90,7 @@ impl FeeHistory {
     }
 
     pub fn push_front_entry(
-        &mut self, entry: &FeeHistoryEntry, percentiles: &Vec<f64>,
+        &mut self, entry: &FeeHistoryCacheEntry, percentiles: &Vec<f64>,
     ) -> Result<(), String> {
         self.base_fee_per_gas
             .push_front(U256::from(entry.base_fee_per_gas));
