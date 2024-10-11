@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "2.4.0"
+version = "2.4.0-net8888"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1301,7 +1301,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "2.4.0"
+version = "2.4.0-net8888"
 dependencies = [
  "cfx-addr",
  "cfx-parameters",
@@ -1320,7 +1320,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "2.4.0"
+version = "2.4.0-net8888"
 dependencies = [
  "alloy-rpc-types",
  "cfx-parameters",
@@ -1342,7 +1342,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "2.4.0"
+version = "2.4.0-net8888"
 dependencies = [
  "cfx-addr",
  "cfx-types",
