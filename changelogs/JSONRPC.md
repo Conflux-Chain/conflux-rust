@@ -1,6 +1,6 @@
 # JSON-RPC CHANGELOG
 
-## vNext
+## v2.4.1
 
 1. eSpace add new RPC method `eth_getBlockReceipts`
 2. RPC method `eth_call`, `eth_estimateGas`'s Transaction object add a new field `input` to keep compatibility with Ethereum.
@@ -36,6 +36,8 @@ Receipt adds fields：
 - `type`: 0/1/2
 - `burntGasFee`
 - `effectiveGasPrice`
+
+The gasUsed field of transaction receipt previously represented gasCharged. Now, it reflects the actual gasUsed. If you previously calculated the transaction gas fee using `gasUsed * gasPrice`, you need to adjust it to `max(gasUsed, 3/4 * gasLimit) * gasPrice`.
 
 Block adds fields：
 
