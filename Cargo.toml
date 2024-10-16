@@ -32,9 +32,9 @@ members = [
     "crates/dbs/storage",
     "crates/execution/vm-interpreter",
     "crates/execution/vm-types",
-    "crates/util/cfx_math",
     "crates/execution/cfx-vm-tracer-derive",
-    "crates/util/dag",
+    "crates/util/cfx_math",
+    "crates/util/alloy-type-conversions",
     "crates/util/delegate",
     "crates/util/heap-map",
     "crates/util/hibitset",
@@ -245,6 +245,7 @@ diem-network-address-encryption = { path = "./crates/pos/config/management/netwo
 cfx-tasks = { path = "./crates/tasks" }
 eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }
+alloy-type-conversions = { path = "./crates/util/alloy-type-conversions" }
 
 # basics
 bytes = "1.9"
@@ -287,7 +288,12 @@ alloy-sol-types = "0.7.2"
 alloy-primitives = "0.7.2"
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
+
 revm = { version = "8.0", default-features = false }
+# revm-interpreter = "6.0"
+# revm-primitives = "5.0"
+revm-interpreter = { git = "https://github.com/Conflux-Chain/revm.git", branch = "dev"}
+revm-primitives = { git = "https://github.com/Conflux-Chain/revm.git", branch = "dev"}
 
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"

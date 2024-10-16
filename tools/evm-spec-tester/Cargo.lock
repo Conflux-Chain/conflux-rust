@@ -326,6 +326,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-type-conversions"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "revm-primitives 5.0.0",
+]
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1080,6 +1088,7 @@ dependencies = [
 name = "cfx-executor"
 version = "2.0.2"
 dependencies = [
+ "alloy-type-conversions",
  "bls-signatures",
  "blst",
  "byteorder",
@@ -1111,6 +1120,7 @@ dependencies = [
  "pow-types",
  "primitives",
  "rayon",
+ "revm-interpreter 6.0.0",
  "rlp 0.4.6",
  "rustc-hex",
  "sha3-macro",
@@ -1617,7 +1627,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "short-hex-str",
- "siphasher",
+ "siphasher 0.3.10",
  "slab",
  "smart-default",
  "solidity-abi",
@@ -2509,6 +2519,16 @@ name = "dyn-clone"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
+
+[[package]]
+name = "dynamic_host_macro"
+version = "0.1.0"
+source = "git+https://github.com/Conflux-Chain/revm.git?branch=dev#25e76c3cdb66ba39b15af0dfaaa50eb73bfd9174"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "ecdsa"
@@ -5331,6 +5351,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "phf"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd6780a80ae0c52cc120a26a1a42c1ae51b247a253e4e06113d23d2c2edd078"
+dependencies = [
+ "phf_macros",
+ "phf_shared",
+]
+
+[[package]]
+name = "phf_generator"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c80231409c20246a13fddb31776fb942c38553c51e871f8cbd687a4cfb5843d"
+dependencies = [
+ "phf_shared",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "phf_macros"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f84ac04429c13a7ff43785d75ad27569f2951ce0ffd30a3321230db2fc727216"
+dependencies = [
+ "phf_generator",
+ "phf_shared",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
+dependencies = [
+ "siphasher 1.0.1",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5568,7 +5630,7 @@ dependencies = [
  "rlp-derive",
  "serde",
  "serde_derive",
- "siphasher",
+ "siphasher 0.3.10",
  "unexpected",
 ]
 
@@ -5984,7 +6046,7 @@ dependencies = [
  "auto_impl",
  "cfg-if 1.0.0",
  "dyn-clone",
- "revm-interpreter",
+ "revm-interpreter 4.0.0",
  "revm-precompile",
  "serde",
  "serde_json",
@@ -5996,7 +6058,19 @@ version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d322f2730cd300e99d271a1704a2dfb8973d832428f5aa282aaa40e2473b5eec"
 dependencies = [
- "revm-primitives",
+ "revm-primitives 3.1.1",
+ "serde",
+]
+
+[[package]]
+name = "revm-interpreter"
+version = "6.0.0"
+source = "git+https://github.com/Conflux-Chain/revm.git?branch=dev#25e76c3cdb66ba39b15af0dfaaa50eb73bfd9174"
+dependencies = [
+ "dynamic_host_macro",
+ "paste",
+ "phf",
+ "revm-primitives 5.0.0",
  "serde",
 ]
 
@@ -6010,7 +6084,7 @@ dependencies = [
  "c-kzg",
  "k256",
  "once_cell",
- "revm-primitives",
+ "revm-primitives 3.1.1",
  "ripemd",
  "secp256k1",
  "sha2 0.10.6",
@@ -6032,6 +6106,26 @@ dependencies = [
  "enumn",
  "hashbrown 0.14.3",
  "hex",
+ "serde",
+]
+
+[[package]]
+name = "revm-primitives"
+version = "5.0.0"
+source = "git+https://github.com/Conflux-Chain/revm.git?branch=dev#25e76c3cdb66ba39b15af0dfaaa50eb73bfd9174"
+dependencies = [
+ "alloy-primitives",
+ "auto_impl",
+ "bitflags 2.5.0",
+ "bitvec 1.0.1",
+ "c-kzg",
+ "cfg-if 1.0.0",
+ "derive_more",
+ "dyn-clone",
+ "enumn",
+ "hashbrown 0.14.3",
+ "hex",
+ "once_cell",
  "serde",
 ]
 
@@ -6784,6 +6878,12 @@ name = "siphasher"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bd3e3206899af3f8b12af284fafc038cc1dc2b41d1b89dd17297221c5d225de"
+
+[[package]]
+name = "siphasher"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 
 [[package]]
 name = "slab"
