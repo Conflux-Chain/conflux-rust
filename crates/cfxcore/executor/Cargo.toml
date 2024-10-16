@@ -41,7 +41,7 @@ sha3-macro = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
-tiny-keccak = {version = "2.0",  features = ["keccak"]}
+tiny-keccak = { workspace = true,  features = ["keccak"]}
 diem-crypto = { path = "../core/src/pos/crypto/crypto" }
 diem-types = { path = "../core/src/pos/types" }
 pow-types = {path = "../core/src/pos/types/pow-types" }

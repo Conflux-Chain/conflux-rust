@@ -15,7 +15,7 @@ cfx-internal-common = { workspace = true }
 primitives = { workspace = true }
 db = { workspace = true }
 
-clap = "2.32"
+clap = { workspace = true }
 env_logger = "0.7"
 error-chain = "0.12"
 ethcore = { package = "ethcore", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }

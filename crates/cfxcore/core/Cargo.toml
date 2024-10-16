@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 bit-set = "0.4"
 substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
-byteorder = "1.0"
+byteorder = { workspace = true }
 cfxkey = { workspace = true }
 cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
@@ -26,7 +26,7 @@ cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 channel = { path = "src/pos/common/channel" }
-clap = "2"
+clap = { workspace = true }
 dag = { workspace = true }
 derivative = "2.0.2"
 db = { workspace = true }
@@ -37,15 +37,15 @@ fs_extra = "1.1.0"
 futures = {version="0.3.3", features = ["compat"]}
 hashbrown = "0.7.1"
 hibitset = { workspace = true }
-itertools = "0.9"
+itertools = { workspace = true }
 io = { workspace = true }
-jsonrpc-core = "15.1.0"
+jsonrpc-core = { workspace = true }
 keccak-hash = { workspace = true }
 kvdb = "0.4"
 kvdb-rocksdb = { workspace = true }
-lazy_static = "1.4"
+lazy_static = { workspace = true }
 link-cut-tree = { workspace = true }
-log = "0.4"
+log = { workspace = true }
 log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
 lru_time_cache = "0.9.0"
 malloc_size_of = { workspace = true }
@@ -63,18 +63,18 @@ primal = "0.2.3"
 primitives = { workspace = true }
 priority-send-queue = { workspace = true }
 prometheus = { version = "0.7.0", default-features = false }
-rand = "0.7"
+rand = { workspace = true }
 rand_08 = {package = "rand", version = "0.8"}
 rand_xorshift="0.2"
 random-crash = { workspace = true }
-rayon = "1.0"
+rayon = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
-rustc-hex = "2.1"
+rustc-hex = { workspace = true }
 secret-store = { workspace = true }
 serde = { version = "1.0", features = ["rc"] }
-serde_derive = "1.0"
-serde_json = "1.0"
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
 siphasher = "0.3"
 slab = "0.4"
 solidity-abi = { workspace = true }
@@ -93,11 +93,11 @@ tokio = { version = "1.6", features = ["full"] }
 tokio-timer = "0.2.13"
 tokio-stream = "0.1.4"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-strum = "0.20"
-strum_macros = "0.20"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 smart-default = "0.6.0"
 bls-signatures = { workspace = true }
-tiny-keccak = {version = "2.0",  features = ["keccak"]}
+tiny-keccak = { workspace = true,  features = ["keccak"]}
 bcs = "0.1.2"
 async-trait = "0.1"
 num-derive = { version = "0.3.3", default-features = false }
@@ -122,9 +122,9 @@ schemadb = { path = "src/pos/storage/schemadb" }
 storage-interface = { path = "src/pos/storage/storage-interface" }
 short-hex-str = { path = "src/pos/common/short-hex-str" }
 subscription-service = { path = "src/pos/common/subscription-service" }
-fail = "0.4.0"
-anyhow = "1.0.38"
-once_cell = "1.7.2"
+fail = { workspace = true }
+anyhow = { workspace = true }
+once_cell = { workspace = true }
 move-core-types = { path = "src/pos/types/move-core-types" }
 pow-types = {path = "src/pos/types/pow-types" }
 async-oneshot = "0.5.0"

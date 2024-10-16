@@ -22,7 +22,7 @@ use cfx_types::U256;
 use serde::{Serialize, Serializer};
 
 /// Sync info
-#[derive(Default, Debug, Serialize, PartialEq)]
+#[derive(Default, Debug, Serialize, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncInfo {
     /// Starting block
@@ -38,7 +38,7 @@ pub struct SyncInfo {
 }
 
 /// Sync status
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum SyncStatus {
     /// Info when syncing
     Info(SyncInfo),

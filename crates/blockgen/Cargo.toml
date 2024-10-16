@@ -7,15 +7,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = "2"
+clap = { workspace = true }
 cfxcore = { workspace = true }
 cfxkey = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-stratum = { workspace = true }
 cfx-types = { workspace = true }
 db = { workspace = true }
-lazy_static = "1.4"
-log = "0.4"
+lazy_static = { workspace = true }
+log = { workspace = true }
 metrics = { workspace = true }
 network = { workspace = true }
 primitives = { workspace = true }

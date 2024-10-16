@@ -24,6 +24,26 @@ impl<T> Into<Option<Vec<T>>> for VariadicValue<T> {
     }
 }
 
+impl<T> VariadicValue<T>
+where T: DeserializeOwned
+{
+    pub fn to_vec(self) -> Vec<T> {
+        match self {
+            VariadicValue::Null => vec![],
+            VariadicValue::Single(x) => vec![x],
+            VariadicValue::Multiple(xs) => xs,
+        }
+    }
+
+    pub fn to_opt(self) -> Option<Vec<T>> {
+        match self {
+            VariadicValue::Null => None,
+            VariadicValue::Single(x) => Some(vec![x]),
+            VariadicValue::Multiple(xs) => Some(xs),
+        }
+    }
+}
+
 impl<T> VariadicValue<T> {
     pub fn iter<'a>(&'a self) -> Box<dyn std::iter::Iterator<Item = &T> + 'a> {
         match self {
