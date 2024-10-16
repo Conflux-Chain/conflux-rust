@@ -22,7 +22,7 @@ use cfx_vm_types::{
 /// 2. After the completion of a frame's execution, an `Executable` may
 /// be created by the its caller frame's `Resumer` (implementing the `Resumable`
 /// trait) based on the execution results.
-pub trait Executable: Send {
+pub trait Executable {
     fn execute(
         self: Box<Self>, context: Context,
     ) -> DbResult<ExecutableOutcome>;
