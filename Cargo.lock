@@ -328,6 +328,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-type-conversions"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "rand 0.8.5",
+ "revm-primitives 5.0.0",
+]
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1178,6 +1187,7 @@ dependencies = [
 name = "cfx-executor"
 version = "2.0.2"
 dependencies = [
+ "alloy-type-conversions",
  "bls-signatures",
  "byteorder",
  "c-kzg",
@@ -1212,6 +1222,7 @@ dependencies = [
  "pow-types",
  "primitives",
  "rayon",
+ "revm-interpreter 6.0.0",
  "rlp 0.4.6",
  "rlp_derive",
  "rustc-hex",
@@ -2962,6 +2973,16 @@ name = "dyn-clone"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
+
+[[package]]
+name = "dynamic_host_macro"
+version = "0.1.0"
+source = "git+https://github.com/Conflux-Chain/revm.git?branch=dev#25e76c3cdb66ba39b15af0dfaaa50eb73bfd9174"
+dependencies = [
+ "proc-macro2 1.0.85",
+ "quote 1.0.36",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "ecdsa"
@@ -6145,6 +6166,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "phf"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ade2d8b8f33c7333b51bcf0428d37e217e9f32192ae4772156f65063b8ce03dc"
+dependencies = [
+ "phf_macros",
+ "phf_shared",
+]
+
+[[package]]
+name = "phf_generator"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48e4cc64c2ad9ebe670cb8fd69dd50ae301650392e81c05f9bfcb2d5bdbc24b0"
+dependencies = [
+ "phf_shared",
+ "rand 0.8.5",
+]
+
+[[package]]
+name = "phf_macros"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3444646e286606587e49f3bcf1679b8cef1dc2c5ecc29ddacaffc305180d464b"
+dependencies = [
+ "phf_generator",
+ "phf_shared",
+ "proc-macro2 1.0.85",
+ "quote 1.0.36",
+ "syn 2.0.66",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90fcb95eef784c2ac79119d1dd819e162b5da872ce6f3c3abe1e8ca1c082f72b"
+dependencies = [
+ "siphasher",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7028,7 +7091,7 @@ dependencies = [
  "auto_impl",
  "cfg-if 1.0.0",
  "dyn-clone",
- "revm-interpreter",
+ "revm-interpreter 4.0.0",
  "revm-precompile",
  "serde",
  "serde_json",
@@ -7040,7 +7103,19 @@ version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d322f2730cd300e99d271a1704a2dfb8973d832428f5aa282aaa40e2473b5eec"
 dependencies = [
- "revm-primitives",
+ "revm-primitives 3.1.1",
+ "serde",
+]
+
+[[package]]
+name = "revm-interpreter"
+version = "6.0.0"
+source = "git+https://github.com/Conflux-Chain/revm.git?branch=dev#25e76c3cdb66ba39b15af0dfaaa50eb73bfd9174"
+dependencies = [
+ "dynamic_host_macro",
+ "paste",
+ "phf",
+ "revm-primitives 5.0.0",
  "serde",
 ]
 
@@ -7054,7 +7129,7 @@ dependencies = [
  "c-kzg",
  "k256",
  "once_cell",
- "revm-primitives",
+ "revm-primitives 3.1.1",
  "ripemd",
  "secp256k1 0.28.2",
  "sha2 0.10.6",
@@ -7066,6 +7141,26 @@ name = "revm-primitives"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbbc9640790cebcb731289afb7a7d96d16ad94afeb64b5d0b66443bd151e79d6"
+dependencies = [
+ "alloy-primitives",
+ "auto_impl",
+ "bitflags 2.5.0",
+ "bitvec 1.0.1",
+ "c-kzg",
+ "cfg-if 1.0.0",
+ "derive_more",
+ "dyn-clone",
+ "enumn",
+ "hashbrown 0.14.3",
+ "hex 0.4.3",
+ "once_cell",
+ "serde",
+]
+
+[[package]]
+name = "revm-primitives"
+version = "5.0.0"
+source = "git+https://github.com/Conflux-Chain/revm.git?branch=dev#25e76c3cdb66ba39b15af0dfaaa50eb73bfd9174"
 dependencies = [
  "alloy-primitives",
  "auto_impl",

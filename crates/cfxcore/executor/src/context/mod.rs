@@ -2,6 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod revm;
+
+pub(crate) use revm::EvmHost;
+
 // Transaction execution environment.
 use crate::{
     executive::contract_address,

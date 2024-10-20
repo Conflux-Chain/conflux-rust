@@ -54,6 +54,8 @@ c-kzg = { version = "1.0.2", default-features = false}
 once_cell = "1.19"
 rayon = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
+revm-interpreter = { workspace = true }
+alloy-type-conversions = { workspace = true }
 
 [dev-dependencies]
 cfx-statedb = { workspace = true, features = ["testonly_code"]}
