@@ -37,7 +37,7 @@ pub use errors::{error_codes, invalid_params};
 
 use self::{
     impls::{
-        cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl},
+        cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl, TraceHandler},
         cfx_filter::CfxFilterClient,
         common::RpcImpl as CommonImpl,
         eth_pubsub::PubSubClient as EthPubSubClient,
@@ -48,7 +48,6 @@ use self::{
         pool::TransactionPoolHandler,
         pos::{PoSInterceptor, PosHandler},
         pubsub::PubSubClient,
-        trace::TraceHandler,
     },
     traits::{
         cfx::Cfx,
@@ -71,9 +70,8 @@ use crate::{
     configuration::Configuration,
     rpc::{
         impls::{
-            eth::{EthHandler, GethDebugHandler},
+            eth::{EthHandler, EthTraceHandler, GethDebugHandler},
             eth_filter::EthFilterClient,
-            trace::EthTraceHandler,
             RpcImplConfiguration,
         },
         interceptor::{RpcInterceptor, RpcProxy},

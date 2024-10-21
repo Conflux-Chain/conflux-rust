@@ -1483,6 +1483,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-util-macros"
+version = "2.4.0"
+
+[[package]]
 name = "cfx-utils"
 version = "0.6.0"
 dependencies = [
@@ -1859,6 +1863,7 @@ dependencies = [
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
  "cfxcore",
  "cfxcore-accounts",
