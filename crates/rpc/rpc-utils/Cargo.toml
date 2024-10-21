@@ -13,7 +13,7 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jsonrpsee = { workspace = true }
+jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 jsonrpc-core = { workspace = true}
 cfx-types = { workspace = true }
 alloy-primitives = { workspace = true }
