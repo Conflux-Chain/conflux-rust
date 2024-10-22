@@ -2963,6 +2963,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56ce8c6da7551ec6c462cbaf3bfbc75131ebbfa1c944aeaa9dab51ca1c5f0c3b"
 
 [[package]]
+name = "duration-str"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9f037c488d179e21c87ef5fa9c331e8e62f5dddfa84618b41bb197da03edff1"
+dependencies = [
+ "chrono",
+ "nom",
+ "rust_decimal",
+ "serde",
+ "thiserror",
+ "time 0.3.20",
+]
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5237,6 +5251,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "criterion",
+ "duration-str",
  "futures 0.3.27",
  "influx_db_client",
  "lazy_static",
@@ -7223,6 +7238,16 @@ version = "0.1.0"
 dependencies = [
  "futures 0.1.31",
  "tokio 0.1.22",
+]
+
+[[package]]
+name = "rust_decimal"
+version = "1.36.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b082d80e3e3cc52b2ed634388d436fe1f4de6af5786cc2de9ba9737527bdf555"
+dependencies = [
+ "arrayvec 0.7.4",
+ "num-traits",
 ]
 
 [[package]]
