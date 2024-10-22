@@ -10,16 +10,18 @@ use std::{
 };
 
 use crate::rpc::{
+    errors::invalid_params_check,
+    helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
     impls::pos::hash_value_to_h256,
     types::{
-        errors::check_rpc_address_network, pos::PoSEpochReward,
+        cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CfxFeeHistory,
         CheckBalanceAgainstTransactionResponse, EpochNumber, FeeHistory,
         RpcAddress, Status as RpcStatus, Transaction as RpcTransaction,
         TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo, U64 as HexU64,
     },
-    RpcErrorKind, RpcResult,
+    CoreResult,
 };
 
 use bigdecimal::BigDecimal;
@@ -40,8 +42,8 @@ use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, genesis_block::register_transaction,
-    rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
+    consensus::pos_handler::PosVerifier, errors::Error as CoreError,
+    genesis_block::register_transaction, BlockDataManager, ConsensusGraph,
     ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
@@ -186,7 +188,7 @@ impl RpcImpl {
             .expect("downcast should succeed")
     }
 
-    fn check_address_network(&self, network: Network) -> RpcResult<()> {
+    fn check_address_network(&self, network: Network) -> CoreResult<()> {
         invalid_params_check(
             "address",
             check_rpc_address_network(
@@ -194,6 +196,7 @@ impl RpcImpl {
                 self.network.get_network_type(),
             ),
         )
+        .map_err(|e| e.into())
     }
 }
 
@@ -204,7 +207,7 @@ impl RpcImpl {
         Ok(self.consensus.best_block_hash().into())
     }
 
-    pub fn gas_price(&self) -> RpcResult<U256> {
+    pub fn gas_price(&self) -> CoreResult<U256> {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
         let consensus_gas_price = consensus_graph
@@ -231,7 +234,7 @@ impl RpcImpl {
 
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
-    ) -> RpcResult<Option<RpcBlock>> {
+    ) -> CoreResult<Option<RpcBlock>> {
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
@@ -361,7 +364,7 @@ impl RpcImpl {
 
     pub fn block_by_hash(
         &self, hash: H256, include_txs: bool,
-    ) -> RpcResult<Option<RpcBlock>> {
+    ) -> CoreResult<Option<RpcBlock>> {
         let consensus_graph = self.consensus_graph();
         let hash: H256 = hash.into();
         info!(
@@ -390,7 +393,7 @@ impl RpcImpl {
 
     pub fn block_by_hash_with_pivot_assumption(
         &self, block_hash: H256, pivot_hash: H256, epoch_number: U64,
-    ) -> RpcResult<RpcBlock> {
+    ) -> CoreResult<RpcBlock> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         let block_hash: H256 = block_hash.into();
@@ -442,7 +445,7 @@ impl RpcImpl {
 
     pub fn block_by_block_number(
         &self, block_number: U64, include_txs: bool,
-    ) -> RpcResult<Option<RpcBlock>> {
+    ) -> CoreResult<Option<RpcBlock>> {
         let block_number = block_number.as_u64();
         let consensus_graph = self.consensus_graph();
 
@@ -506,7 +509,7 @@ impl RpcImpl {
 
     pub fn next_nonce(
         &self, address: RpcAddress, num: Option<BlockHashOrEpochNumber>,
-    ) -> RpcResult<U256> {
+    ) -> CoreResult<U256> {
         self.check_address_network(address.network)?;
         let consensus_graph = self.consensus_graph();
 
@@ -529,11 +532,10 @@ impl RpcImpl {
         )
     }
 
-    // TODO: cache the history to improve performance
     pub fn fee_history(
-        &self, block_count: HexU64, newest_block: EpochNumber,
-        reward_percentiles: Vec<f64>,
-    ) -> RpcResult<CfxFeeHistory> {
+        &self, mut block_count: HexU64, newest_block: EpochNumber,
+        reward_percentiles: Option<Vec<f64>>,
+    ) -> CoreResult<CfxFeeHistory> {
         if newest_block == EpochNumber::LatestMined {
             return Err(RpcError::invalid_params(
                 "newestBlock cannot be 'LatestMined'",
@@ -547,7 +549,11 @@ impl RpcImpl {
         );
 
         if block_count.as_u64() == 0 {
-            return Ok(FeeHistory::new().to_cfx_fee_history());
+            return Ok(FeeHistory::new().into());
+        }
+
+        if block_count.as_u64() > MAX_FEE_HISTORY_CACHE_BLOCK_COUNT {
+            block_count = HexU64::from(MAX_FEE_HISTORY_CACHE_BLOCK_COUNT);
         }
         // keep read lock to ensure consistent view
         let inner = self.consensus_graph().inner.read();
@@ -576,6 +582,7 @@ impl RpcImpl {
             .get_height_from_epoch_number(newest_block.into())
             .map_err(RpcError::invalid_params)?;
 
+        let reward_percentiles = reward_percentiles.unwrap_or_default();
         let mut current_height = start_height;
 
         let mut fee_history = FeeHistory::new();
@@ -621,16 +628,16 @@ impl RpcImpl {
             Space::Native,
         );
 
-        Ok(fee_history.to_cfx_fee_history())
+        Ok(fee_history.into())
     }
 
-    pub fn max_priority_fee_per_gas(&self) -> RpcResult<U256> {
+    pub fn max_priority_fee_per_gas(&self) -> CoreResult<U256> {
         info!("RPC Request: max_priority_fee_per_gas",);
 
         let fee_history = self.fee_history(
             HexU64::from(300),
             EpochNumber::LatestState,
-            vec![50f64],
+            Some(vec![50f64]),
         )?;
 
         let total_reward: U256 = fee_history
@@ -671,8 +678,8 @@ impl RpcImpl {
         }
     }
 
-    pub fn chain(&self) -> RpcResult<Vec<RpcBlock>> {
-        info!("RPC Request: cfx_getChain");
+    pub fn chain(&self) -> CoreResult<Vec<RpcBlock>> {
+        info!("RPC Request: test_getChain");
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
 
@@ -806,7 +813,7 @@ impl RpcImpl {
         }
     }
 
-    pub fn get_status(&self) -> RpcResult<RpcStatus> {
+    pub fn get_status(&self) -> CoreResult<RpcStatus> {
         let consensus_graph = self.consensus_graph();
 
         let (best_info, block_number) = {
@@ -903,36 +910,36 @@ impl RpcImpl {
         })
     }
 
-    pub fn pos_start_voting(&self, initialize: bool) -> RpcResult<()> {
+    pub fn pos_start_voting(&self, initialize: bool) -> CoreResult<()> {
         info!("RPC Request: pos_start_voting, initialize={}", initialize);
         self.pos_handler.start_voting(initialize).map_err(|e| {
             warn!("start_voting: err={:?}", e);
-            RpcErrorKind::Custom(e.to_string()).into()
+            CoreError::Custom(e.to_string())
         })
     }
 
-    pub fn pos_stop_voting(&self) -> RpcResult<()> {
+    pub fn pos_stop_voting(&self) -> CoreResult<()> {
         info!("RPC Request: pos_stop_voting");
         self.pos_handler.stop_voting().map_err(|e| {
             warn!("stop_voting: err={:?}", e);
-            RpcErrorKind::Custom(e.to_string()).into()
+            CoreError::Custom(e.to_string())
         })
     }
 
-    pub fn pos_voting_status(&self) -> RpcResult<bool> {
+    pub fn pos_voting_status(&self) -> CoreResult<bool> {
         self.pos_handler.voting_status().map_err(|e| {
             warn!("voting_status: err={:?}", e);
-            RpcErrorKind::Custom(e.to_string()).into()
+            CoreError::Custom(e.to_string())
         })
     }
 
-    pub fn pos_start(&self) -> RpcResult<()> {
+    pub fn pos_start(&self) -> CoreResult<()> {
         self.pos_handler
             .initialize(self.consensus.clone().to_arc_consensus())?;
         Ok(())
     }
 
-    pub fn pos_force_vote_proposal(&self, block_id: H256) -> RpcResult<()> {
+    pub fn pos_force_vote_proposal(&self, block_id: H256) -> CoreResult<()> {
         if !self.network.is_test_mode() {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
@@ -948,7 +955,7 @@ impl RpcImpl {
     pub fn pos_force_propose(
         &self, round: U64, parent_block_id: H256,
         payload: Vec<TransactionPayload>,
-    ) -> RpcResult<()> {
+    ) -> CoreResult<()> {
         if !self.network.is_test_mode() {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
@@ -963,7 +970,7 @@ impl RpcImpl {
             })
     }
 
-    pub fn pos_trigger_timeout(&self, timeout_type: String) -> RpcResult<()> {
+    pub fn pos_trigger_timeout(&self, timeout_type: String) -> CoreResult<()> {
         if !self.network.is_test_mode() {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
@@ -979,7 +986,7 @@ impl RpcImpl {
 
     pub fn pos_force_sign_pivot_decision(
         &self, block_hash: H256, height: U64,
-    ) -> RpcResult<()> {
+    ) -> CoreResult<()> {
         if !self.network.is_test_mode() {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
@@ -997,7 +1004,7 @@ impl RpcImpl {
             })
     }
 
-    pub fn pos_get_chosen_proposal(&self) -> RpcResult<Option<RpcPosBlock>> {
+    pub fn pos_get_chosen_proposal(&self) -> CoreResult<Option<RpcPosBlock>> {
         let maybe_block = self
             .pos_handler
             .get_chosen_proposal()
@@ -1128,7 +1135,7 @@ impl RpcImpl {
 
     pub fn txpool_get_account_transactions(
         &self, address: RpcAddress,
-    ) -> RpcResult<Vec<RpcTransaction>> {
+    ) -> CoreResult<Vec<RpcTransaction>> {
         self.check_address_network(address.network)?;
         let (ready_txs, deferred_txs) = self
             .tx_pool
@@ -1151,7 +1158,7 @@ impl RpcImpl {
 
     pub fn txpool_transaction_by_address_and_nonce(
         &self, address: RpcAddress, nonce: U256,
-    ) -> RpcResult<Option<RpcTransaction>> {
+    ) -> CoreResult<Option<RpcTransaction>> {
         let tx = self
             .tx_pool
             .get_transaction_by_address2nonce(
@@ -1171,7 +1178,7 @@ impl RpcImpl {
 
     pub fn txpool_content(
         &self, address: Option<RpcAddress>,
-    ) -> RpcResult<
+    ) -> CoreResult<
         BTreeMap<
             String,
             BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
@@ -1205,7 +1212,7 @@ impl RpcImpl {
 
     pub fn txpool_inspect(
         &self, address: Option<RpcAddress>,
-    ) -> RpcResult<
+    ) -> CoreResult<
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     > {
         let address: Option<H160> = match address {
@@ -1256,7 +1263,7 @@ impl RpcImpl {
         })
     }
 
-    pub fn accounts(&self) -> RpcResult<Vec<RpcAddress>> {
+    pub fn accounts(&self) -> CoreResult<Vec<RpcAddress>> {
         let accounts: Vec<Address> = self.accounts.accounts().map_err(|e| {
             format!("Could not fetch accounts. With error {:?}", e)
         })?;
@@ -1272,7 +1279,7 @@ impl RpcImpl {
             .collect::<Result<_, _>>()?)
     }
 
-    pub fn new_account(&self, password: String) -> RpcResult<RpcAddress> {
+    pub fn new_account(&self, password: String) -> CoreResult<RpcAddress> {
         let address =
             self.accounts.new_account(&password.into()).map_err(|e| {
                 format!("Could not create account. With error {:?}", e)
@@ -1286,7 +1293,7 @@ impl RpcImpl {
 
     pub fn unlock_account(
         &self, address: RpcAddress, password: String, duration: Option<U128>,
-    ) -> RpcResult<bool> {
+    ) -> CoreResult<bool> {
         self.check_address_network(address.network)?;
         let account: H160 = address.into();
         let store = self.accounts.clone();
@@ -1328,7 +1335,7 @@ impl RpcImpl {
         }
     }
 
-    pub fn lock_account(&self, address: RpcAddress) -> RpcResult<bool> {
+    pub fn lock_account(&self, address: RpcAddress) -> CoreResult<bool> {
         self.check_address_network(address.network)?;
         match self.accounts.lock_account(address.into()) {
             Ok(_) => Ok(true),
@@ -1341,7 +1348,7 @@ impl RpcImpl {
 
     pub fn sign(
         &self, data: Bytes, address: RpcAddress, password: Option<String>,
-    ) -> RpcResult<H520> {
+    ) -> CoreResult<H520> {
         self.check_address_network(address.network)?;
 
         let message = eth_data_hash(data.0);
@@ -1368,7 +1375,7 @@ impl RpcImpl {
 
     pub fn txpool_pending_nonce_range(
         &self, address: RpcAddress,
-    ) -> RpcResult<TxPoolPendingNonceRange> {
+    ) -> CoreResult<TxPoolPendingNonceRange> {
         self.check_address_network(address.network)?;
 
         let mut ret = TxPoolPendingNonceRange::default();
@@ -1378,7 +1385,7 @@ impl RpcImpl {
                 None,
                 None,
                 self.consensus.best_epoch_number(),
-            );
+            )?;
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
         for tx in pending_txs.iter() {
@@ -1394,7 +1401,7 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn txpool_next_nonce(&self, address: RpcAddress) -> RpcResult<U256> {
+    pub fn txpool_next_nonce(&self, address: RpcAddress) -> CoreResult<U256> {
         Ok(self
             .tx_pool
             .get_next_nonce(&address.hex_address.with_native_space()))
@@ -1402,7 +1409,7 @@ impl RpcImpl {
 
     pub fn account_pending_info(
         &self, address: RpcAddress,
-    ) -> RpcResult<Option<AccountPendingInfo>> {
+    ) -> CoreResult<Option<AccountPendingInfo>> {
         info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
         self.check_address_network(address.network)?;
 
@@ -1427,7 +1434,7 @@ impl RpcImpl {
     pub fn account_pending_transactions(
         &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
-    ) -> RpcResult<AccountPendingTransactions> {
+    ) -> CoreResult<AccountPendingTransactions> {
         info!("RPC Request: cfx_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
               address, maybe_start_nonce, maybe_limit);
         self.check_address_network(address.network)?;
@@ -1438,7 +1445,7 @@ impl RpcImpl {
                 maybe_start_nonce,
                 maybe_limit.map(|limit| limit.as_usize()),
                 self.consensus.best_epoch_number(),
-            );
+            )?;
         Ok(AccountPendingTransactions {
             pending_transactions: pending_txs
                 .into_iter()

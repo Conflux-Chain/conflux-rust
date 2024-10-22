@@ -154,13 +154,10 @@ impl<'a> StorageKeyWithSpace<'a> {
 
                     return x;
                 } else {
-                    unsafe { unreachable_unchecked() }
-                    /*
                     unreachable!(
                         "Invalid account key. Unrecognized: {:?}",
                         address_bytes
                     );
-                    */
                 }
             }
             StorageKey::StorageRootKey(address_bytes) => {
@@ -368,14 +365,10 @@ impl<'a> StorageKeyWithSpace<'a> {
                     Err(format!("Unable to parse storage key: {:?} - {:?}", address_bytes, bytes))
                 );
             } else {
-                if cfg!(debug_assertions) {
-                    unreachable!(
-                        "Invalid key format. Unrecognized: {:?}, account: {:?}",
-                        bytes, address_bytes
-                    );
-                } else {
-                    unsafe { unreachable_unchecked() }
-                }
+                unreachable!(
+                    "Invalid key format. Unrecognized: {:?}, account: {:?}",
+                    bytes, address_bytes
+                );
             };
 
             let space = if extension_bit {
@@ -436,7 +429,6 @@ impl Decodable for DeltaMptKeyPadding {
 
 mod delta_mpt_storage_key {
     use super::*;
-    use std::hint::unreachable_unchecked;
 
     pub const ACCOUNT_KEYPART_BYTES: usize = 32;
     const ACCOUNT_PADDING_BYTES: usize = 12;
@@ -642,14 +634,10 @@ mod delta_mpt_storage_key {
                     return StorageKey::AccountKey(remaining_bytes)
                         .with_native_space();
                 } else {
-                    if cfg!(debug_assertions) {
-                        unreachable!(
-                            "Invalid delta mpt key format. Unrecognized: {:?}",
-                            remaining_bytes
-                        );
-                    } else {
-                        unsafe { unreachable_unchecked() }
-                    }
+                    unreachable!(
+                        "Invalid delta mpt key format. Unrecognized: {:?}",
+                        remaining_bytes
+                    );
                 }
             } else {
                 let address_bytes = &remaining_bytes
@@ -710,14 +698,10 @@ mod delta_mpt_storage_key {
                 {
                     StorageKey::VoteListKey(address_bytes)
                 } else {
-                    if cfg!(debug_assertions) {
-                        unreachable!(
+                    unreachable!(
                             "Invalid delta mpt key format. Address {:?}, Unrecognized: {:?}",
                             address_bytes, remaining_bytes
                         );
-                    } else {
-                        unsafe { unreachable_unchecked() }
-                    }
                 };
 
                 let space = if extension_bit {
@@ -739,7 +723,6 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::AsRef,
-    hint::unreachable_unchecked,
     ops::{Deref, DerefMut},
     vec::Vec,
 };

@@ -351,7 +351,7 @@ fn handle_message<T: Decodable + Handleable + Message>(
     if let Err(e) = msg.handle(ctx) {
         debug!(
             "failed to handle sync protocol message, peer = {}, id = {}, name = {}, request_id = {:?}, error_kind = {:?}",
-            ctx.node_id, msg_id, msg_name, req_id, e.0,
+            ctx.node_id, msg_id, msg_name, req_id, e,
         );
 
         return Err(e);

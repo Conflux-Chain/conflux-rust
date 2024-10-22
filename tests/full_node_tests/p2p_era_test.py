@@ -83,10 +83,10 @@ class P2PTest(ConfluxTestFramework):
         self.log.info("sync blocks")
 
         for i in self.full_nodes:
-            self.nodes[i].expireblockgc(1000000)
+            self.nodes[i].test_expireBlockGc(1000000)
 
         sync_blocks(self.nodes, timeout=120, sync_count=False)
-        self.log.info("block count:%d", self.nodes[0].getblockcount())
+        self.log.info("block count:%d", self.nodes[0].test_getBlockCount())
 
         hasha = self.nodes[0].best_block_hash()
         block_a = client.block_by_hash(hasha)

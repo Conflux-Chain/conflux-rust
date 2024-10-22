@@ -7,21 +7,21 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = "2"
-cfxcore = { path = "../cfxcore/core" }
-cfxkey = { path = "../cfx_key" }
-cfx-parameters = { path = "../cfxcore/parameters" }
-cfx-stratum = { path = "../stratum" }
-cfx-types = { path = "../cfx_types" }
-db = { path = "../dbs/db" }
-lazy_static = "1.4"
-log = "0.4"
-metrics = { path = "../util/metrics" }
-network = { path = "../network" }
-primitives = { path = "../primitives" }
-parking_lot = "0.11"
-rlp = "0.4.0"
+clap = { workspace = true }
+cfxcore = { workspace = true }
+cfxkey = { workspace = true }
+cfx-parameters = { workspace = true }
+cfx-stratum = { workspace = true }
+cfx-types = { workspace = true }
+db = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+metrics = { workspace = true }
+network = { workspace = true }
+primitives = { workspace = true }
+parking_lot = { workspace = true }
+rlp = { workspace = true }
 rand = "0.7"
-secret-store = { path = "../secret_store" }
+secret-store = { workspace = true }
 toml = "0.5.8"
-txgen = { path = "../transactiongen" }
+txgen = { workspace = true }

@@ -4,8 +4,8 @@
 
 use crate::rpc::types::{
     BlockHashOrEpochNumber, Bytes as RpcBytes, ConsensusGraphStates,
-    EpochNumber, Receipt as RpcReceipt, RpcAddress, SendTxRequest,
-    StatOnGasLoad, SyncGraphStates, Transaction as RpcTransaction,
+    EpochNumber, Receipt as RpcReceipt, RpcAddress, StatOnGasLoad,
+    SyncGraphStates, Transaction as RpcTransaction, TransactionRequest,
     WrapTransaction,
 };
 use cfx_types::{H256, H520, U128, U64};
@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 #[rpc(server)]
 pub trait LocalRpc {
-    #[rpc(name = "txpool_inspect")]
+    #[rpc(name = "debug_inspectTxPool")]
     fn txpool_inspect(
         &self, address: Option<RpcAddress>,
     ) -> JsonRpcResult<
@@ -28,7 +28,7 @@ pub trait LocalRpc {
     >;
 
     // return all txpool transactions grouped by hex address
-    #[rpc(name = "txpool_content")]
+    #[rpc(name = "debug_txPoolContent")]
     fn txpool_content(
         &self, address: Option<RpcAddress>,
     ) -> JsonRpcResult<
@@ -39,72 +39,72 @@ pub trait LocalRpc {
     >;
 
     // return account ready + deferred transactions
-    #[rpc(name = "txpool_accountTransactions")]
+    #[rpc(name = "debug_txToolAccountTransactions")]
     fn txpool_get_account_transactions(
         &self, address: RpcAddress,
     ) -> JsonRpcResult<Vec<RpcTransaction>>;
 
-    #[rpc(name = "txpool_clear")]
+    #[rpc(name = "debug_clearTxPool")]
     fn txpool_clear(&self) -> JsonRpcResult<()>;
 
-    #[rpc(name = "net_throttling")]
+    #[rpc(name = "debug_getNetThrottling")]
     fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
 
-    #[rpc(name = "net_node")]
+    #[rpc(name = "debug_getNetNode")]
     fn net_node(
         &self, node_id: NodeId,
     ) -> JsonRpcResult<Option<(String, Node)>>;
 
-    #[rpc(name = "net_disconnect_node")]
+    #[rpc(name = "debug_disconnectNetNode")]
     fn net_disconnect_node(
         &self, id: NodeId, op: Option<UpdateNodeOperation>,
     ) -> JsonRpcResult<bool>;
 
-    #[rpc(name = "net_sessions")]
+    #[rpc(name = "debug_getNetSessions")]
     fn net_sessions(
         &self, node_id: Option<NodeId>,
     ) -> JsonRpcResult<Vec<SessionDetails>>;
 
-    #[rpc(name = "current_sync_phase")]
+    #[rpc(name = "debug_currentSyncPhase")]
     fn current_sync_phase(&self) -> JsonRpcResult<String>;
 
-    #[rpc(name = "consensus_graph_state")]
+    #[rpc(name = "debug_consensusGraphState")]
     fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
 
-    #[rpc(name = "sync_graph_state")]
+    #[rpc(name = "debug_syncGraphState")]
     fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
 
     #[rpc(name = "cfx_sendTransaction")]
     fn send_transaction(
-        &self, tx: SendTxRequest, password: Option<String>,
+        &self, tx: TransactionRequest, password: Option<String>,
     ) -> BoxFuture<H256>;
 
     /// Returns accounts list.
-    #[rpc(name = "accounts")]
+    #[rpc(name = "cfx_accounts")]
     fn accounts(&self) -> JsonRpcResult<Vec<RpcAddress>>;
 
     /// Create a new account
-    #[rpc(name = "new_account")]
+    #[rpc(name = "cfx_newAccount")]
     fn new_account(&self, password: String) -> JsonRpcResult<RpcAddress>;
 
     /// Unlock an account
-    #[rpc(name = "unlock_account")]
+    #[rpc(name = "cfx_unlockAccount")]
     fn unlock_account(
         &self, address: RpcAddress, password: String, duration: Option<U128>,
     ) -> JsonRpcResult<bool>;
 
     /// Lock an account
-    #[rpc(name = "lock_account")]
+    #[rpc(name = "cfx_lockAccount")]
     fn lock_account(&self, address: RpcAddress) -> JsonRpcResult<bool>;
 
-    #[rpc(name = "sign")]
+    #[rpc(name = "cfx_sign")]
     fn sign(
         &self, data: RpcBytes, address: RpcAddress, password: Option<String>,
     ) -> JsonRpcResult<H520>;
 
     #[rpc(name = "cfx_signTransaction")]
     fn sign_transaction(
-        &self, tx: SendTxRequest, password: Option<String>,
+        &self, tx: TransactionRequest, password: Option<String>,
     ) -> JsonRpcResult<String>;
 
     #[rpc(name = "cfx_getEpochReceipts")]

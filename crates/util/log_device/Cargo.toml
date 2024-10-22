@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 byteorder = "1.2.7"
-db = { path = "../../dbs/db" }
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+db = { workspace = true }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
 kvdb = "0.4"
 rand = "0.7"

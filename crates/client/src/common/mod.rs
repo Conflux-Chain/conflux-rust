@@ -20,7 +20,7 @@ use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
 
 use blockgen::BlockGenerator;
-use cfx_executor::machine::{new_machine_with_builtin, Machine, VmFactory};
+use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
@@ -68,6 +68,9 @@ use crate::{
     GENESIS_VERSION,
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
+
+pub mod delegate_convert;
+pub mod shutdown_handler;
 
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
@@ -124,92 +127,6 @@ pub trait ClientTrait {
     );
 }
 
-pub mod client_methods {
-    use std::{
-        sync::{Arc, Weak},
-        thread,
-        time::{Duration, Instant},
-    };
-
-    use ctrlc::CtrlC;
-    use parking_lot::{Condvar, Mutex};
-
-    use super::ClientTrait;
-
-    pub fn run(
-        this: Box<dyn ClientTrait>, exit_cond_var: Arc<(Mutex<bool>, Condvar)>,
-    ) -> bool {
-        CtrlC::set_handler({
-            let e = exit_cond_var.clone();
-            move || {
-                *e.0.lock() = true;
-                e.1.notify_all();
-            }
-        });
-
-        let mut lock = exit_cond_var.0.lock();
-        if !*lock {
-            exit_cond_var.1.wait(&mut lock);
-        }
-
-        shutdown(this)
-    }
-
-    /// Returns whether the shutdown is considered clean.
-    pub fn shutdown(this: Box<dyn ClientTrait>) -> bool {
-        let (ledger_db, maybe_pos_handler, maybe_blockgen) =
-            this.take_out_components_for_shutdown();
-        drop(this);
-        if let Some(blockgen) = maybe_blockgen {
-            blockgen.stop();
-            drop(blockgen);
-        }
-        let maybe_pos_db = if let Some(pos_handler) = maybe_pos_handler {
-            let maybe_pos_db = pos_handler.stop();
-            drop(pos_handler);
-            maybe_pos_db
-        } else {
-            None
-        };
-
-        // Make sure ledger_db is properly dropped, so rocksdb can be closed
-        // cleanly
-        let mut graceful = true;
-        graceful &= check_graceful_shutdown(ledger_db);
-        debug!("ledger_db drop: graceful = {}", graceful);
-        if let Some((pos_ledger_db, consensus_db)) = maybe_pos_db {
-            graceful &= check_graceful_shutdown(pos_ledger_db);
-            debug!("pos_ledger_db drop: graceful = {}", graceful);
-            graceful &= check_graceful_shutdown(consensus_db);
-            debug!("consensus_db drop: graceful = {}", graceful);
-        }
-        graceful
-    }
-
-    /// Most Conflux components references block data manager.
-    /// When block data manager is freed, all background threads must have
-    /// already stopped.
-    fn check_graceful_shutdown<T>(blockdata_manager_weak_ptr: Weak<T>) -> bool {
-        let sleep_duration = Duration::from_secs(1);
-        let warn_timeout = Duration::from_secs(5);
-        let max_timeout = Duration::from_secs(1200);
-        let instant = Instant::now();
-        let mut warned = false;
-        while instant.elapsed() < max_timeout {
-            if blockdata_manager_weak_ptr.upgrade().is_none() {
-                return true;
-            }
-            if !warned && instant.elapsed() > warn_timeout {
-                warned = true;
-                warn!("Shutdown is taking longer than expected.");
-            }
-            thread::sleep(sleep_duration);
-        }
-        eprintln!("Shutdown timeout reached, exiting uncleanly.");
-        false
-    }
-}
-
 pub fn initialize_common_modules(
     conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
@@ -255,9 +172,14 @@ pub fn initialize_common_modules(
                 Some(p) => p,
                 None => rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
             };
-            let (sk, vrf_sk): (ConsensusPrivateKey, ConsensusVRFPrivateKey) =
-                load_pri_key(key_path, &passwd).unwrap();
-            (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
+            match load_pri_key(key_path, &passwd) {
+                Ok((sk, vrf_sk)) => {
+                    (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
+                }
+                Err(e) => {
+                    bail!("Load pos_key failed: {}", e);
+                }
+            }
         } else {
             create_dir_all(key_path.parent().unwrap()).unwrap();
             let passwd = match default_passwd {
@@ -357,7 +279,7 @@ pub fn initialize_common_modules(
 
     let consensus_conf = conf.consensus_config();
     let vm = VmFactory::new(1024 * 32);
-    let machine = Arc::new(new_machine_with_builtin(conf.common_params(), vm));
+    let machine = Arc::new(Machine::new_with_builtin(conf.common_params(), vm));
 
     let genesis_block = genesis_block(
         &storage_manager,
@@ -448,6 +370,7 @@ pub fn initialize_common_modules(
         verification_config.clone(),
         node_type,
         pos_verifier.clone(),
+        conf.common_params(),
     ));
 
     for terminal in data_man
@@ -870,86 +793,4 @@ pub fn initialize_txgens(
     };
 
     (maybe_multi_genesis_txgen, maybe_direct_txgen_with_contract)
-}
-
-pub mod delegate_convert {
-    use std::convert::Into as StdInto;
-
-    use jsonrpc_core::{
-        futures::{future::IntoFuture, Future},
-        BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
-    };
-
-    use crate::rpc::{RpcBoxFuture, RpcError, RpcResult};
-
-    pub trait Into<T> {
-        fn into(x: Self) -> T;
-    }
-
-    impl<T> Into<JsonRpcResult<T>> for JsonRpcResult<T> {
-        fn into(x: Self) -> JsonRpcResult<T> { x }
-    }
-
-    impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for BoxFuture<T> {
-        fn into(x: Self) -> BoxFuture<T> { x }
-    }
-
-    impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcBoxFuture<T> {
-        fn into(x: Self) -> BoxFuture<T> {
-            Box::new(x.map_err(|rpc_error| Into::into(rpc_error)))
-        }
-    }
-
-    impl Into<JsonRpcError> for RpcError {
-        fn into(e: Self) -> JsonRpcError { e.into() }
-    }
-
-    pub fn into_jsonrpc_result<T>(r: RpcResult<T>) -> JsonRpcResult<T> {
-        match r {
-            Ok(t) => Ok(t),
-            Err(e) => Err(Into::into(e)),
-        }
-    }
-
-    impl<T> Into<JsonRpcResult<T>> for RpcResult<T> {
-        fn into(x: Self) -> JsonRpcResult<T> { into_jsonrpc_result(x) }
-    }
-
-    /// Sometimes an rpc method is implemented asynchronously, then the rpc
-    /// trait definition must use BoxFuture for the return type.
-    ///
-    /// This into conversion allow non-async rpc implementation method to
-    /// return RpcResult straight-forward. The delegate! macro with  #\[into\]
-    /// attribute will automatically call this method to do the return type
-    /// conversion.
-    impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcResult<T> {
-        fn into(x: Self) -> BoxFuture<T> {
-            into_jsonrpc_result(x).into_future().boxed()
-        }
-    }
-
-    /*
-    /// It's a bad idea to convert a BoxFuture return type to a JsonRpcResult
-    /// return type for rpc call. Simply imagine how the code below runs.
-    impl<T: Send + Sync + 'static> Into<JsonRpcResult<T>> for BoxFuture<T> {
-        fn into(x: Self) -> JsonRpcResult<T> {
-            thread::Builder::new()
-                .name("rpc async waiter".into())
-                .spawn(move || x.wait())
-                .map_err(|e| {
-                    let mut rpc_err = JsonRpcError::internal_error();
-                    rpc_err.message = format!("thread creation error: {}", e);
-
-                    rpc_err
-                })?
-                .join()
-                .map_err(|_| {
-                    let mut rpc_err = JsonRpcError::internal_error();
-                    rpc_err.message = format!("thread join error.");
-
-                    rpc_err
-                })?
-        }
-    }
-    */
 }

@@ -158,11 +158,20 @@ jsonrpc_local_http_port=12539
 
 # Possible Core space names are: all, safe, cfx, pos, debug, pubsub, test, trace, txpool.
 # `safe` only includes `cfx` and `pubsub`, `txpool`.
+#
 # public_rpc_apis = "safe"
 
 # Possible eSpace names are: eth, ethpubsub, ethdebug.
 # `evm` only includes `eth` and `ethpubsub`
+#
 # public_evm_rpc_apis = "evm"
+
+# By default, the maximum gas limit supported by gas estimation is 27 million for 
+# core space and 15 million for espace. These limits are also supported by the majority 
+# of transaction pools. You can override this parameter, but be aware that the estimated 
+# gas may be rejected by transaction pools, including the transaction pool on yourself,
+#
+# max_estimation_gas_limit = 30_000_000
 
 # --------------- Performance-related Network Parameters ----------------------
 
@@ -373,7 +382,7 @@ jsonrpc_local_http_port=12539
 #
 # persist_block_number_index = true
 
-# ---------------- Transaction Cache Parameters -----------------
+# ---------------- Transaction Cache & Transaction Pool Parameters -----------------
 
 # Whether to persist transaction indices.
 # This only needs to be enabled if you want to reliably answer transaction-related RPCs.
@@ -392,6 +401,10 @@ jsonrpc_local_http_port=12539
 #
 # tx_pool_min_native_tx_gas_price = 1_000_000_000
 # tx_pool_min_eth_tx_gas_price = 20_000_000_000
+
+# Controls whether transactions exceeding half of the gas limit are allowed to be packed.
+# 
+# tx_pool_allow_gas_over_half_block = false
 
 # ------------------ Storage Parameters ----------------------
 

@@ -7,31 +7,27 @@ use parking_lot::Mutex;
 mod lct;
 
 use lct::{
-    CaterpillarLinkCutTreeTrait, CaterpillarMinLinkCutTreeInner,
-    DefaultLinkCutTreeTrait, MinLinkCutTreeInner, SizeLinkCutTreeTrait,
-    SizeMinLinkCutTreeInner,
+    Caterpillar, DeltaAndPreferredChild, Link, LinkCutTree, PathLength, Unit,
+    Update,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 
-pub struct MinLinkCutTree<T> {
-    inner: Mutex<T>,
+pub struct MutexLinkCutTree<Ext> {
+    inner: Mutex<LinkCutTree<Ext>>,
 }
 
-impl<T: MallocSizeOf> MallocSizeOf for MinLinkCutTree<T> {
+impl<Ext> MallocSizeOf for MutexLinkCutTree<Ext> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.inner.lock().size_of(ops)
     }
 }
 
-impl<
-        T: DefaultLinkCutTreeTrait
-            + SizeLinkCutTreeTrait
-            + CaterpillarLinkCutTreeTrait,
-    > MinLinkCutTree<T>
+impl<Ext: Update + DeltaAndPreferredChild + Link + Clone + Default>
+    MutexLinkCutTree<Ext>
 {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(T::new()),
+            inner: Mutex::new(LinkCutTree::<Ext>::new()),
         }
     }
 
@@ -45,20 +41,12 @@ impl<
         self.inner.lock().lca(v, w)
     }
 
-    pub fn ancestor_at(&self, v: usize, at: usize) -> usize {
-        self.inner.lock().ancestor_at(v, at)
-    }
-
     pub fn set(&mut self, v: usize, value: i128) {
         self.inner.lock().set(v, value);
     }
 
     pub fn path_apply(&mut self, v: usize, delta: i128) {
         self.inner.lock().path_apply(v, delta);
-    }
-
-    pub fn caterpillar_apply(&mut self, v: usize, caterpillar_delta: i128) {
-        self.inner.lock().caterpillar_apply(v, caterpillar_delta);
     }
 
     pub fn path_aggregate(&self, v: usize) -> i128 {
@@ -76,142 +64,161 @@ impl<
     pub fn get(&self, v: usize) -> i128 { self.inner.lock().get(v) }
 }
 
+impl MutexLinkCutTree<Caterpillar> {
+    pub fn caterpillar_apply(&mut self, v: usize, caterpillar_delta: i128) {
+        self.inner.lock().caterpillar_apply(v, caterpillar_delta);
+    }
+}
+
+impl MutexLinkCutTree<PathLength> {
+    pub fn ancestor_at(&self, v: usize, at: usize) -> usize {
+        self.inner.lock().ancestor_at(v, at)
+    }
+}
+
 /// default implementation of link cut tree, ancestor_at and caterpillar_apply
 /// not supported
-pub type DefaultMinLinkCutTree = MinLinkCutTree<MinLinkCutTreeInner>;
+pub type DefaultMinLinkCutTree = MutexLinkCutTree<Unit>;
 /// link cut tree with support for ancestor_at
-pub type SizeMinLinkCutTree = MinLinkCutTree<SizeMinLinkCutTreeInner>;
+pub type SizeMinLinkCutTree = MutexLinkCutTree<PathLength>;
 /// link cut tree with support for caterpillar_apply
-pub type CaterpillarMinLinkCutTree =
-    MinLinkCutTree<CaterpillarMinLinkCutTreeInner>;
+pub type CaterpillarMinLinkCutTree = MutexLinkCutTree<Caterpillar>;
 
 #[cfg(test)]
 mod tests {
     extern crate rand;
     use super::{
-        CaterpillarMinLinkCutTree, DefaultMinLinkCutTree, SizeMinLinkCutTree,
+        CaterpillarMinLinkCutTree, DefaultMinLinkCutTree,
+        DeltaAndPreferredChild, Link, MutexLinkCutTree, SizeMinLinkCutTree,
+        Update,
     };
     use crate::lct::NULL;
     use rand::Rng;
 
-    macro_rules! test_min_func {
-        ($class_name:ident, $func_name:ident) => {
-            #[test]
-            fn $func_name() {
-                let mut tree: $class_name = $class_name::new();
-
-                // 0
-                // |\
-                // 1 4
-                // |\
-                // 2 3
-                tree.make_tree(0);
-                tree.make_tree(1);
-                tree.make_tree(2);
-                tree.make_tree(3);
-                tree.make_tree(4);
-                tree.link(0, 1);
-                tree.link(1, 2);
-                tree.link(1, 3);
-                tree.link(0, 4);
-
-                tree.set(0, 10);
-                tree.set(1, 9);
-                tree.set(2, 8);
-                tree.set(3, 7);
-                tree.set(4, 6);
-
-                assert_eq!(tree.path_aggregate(0), 10);
-                assert_eq!(tree.path_aggregate(1), 9);
-                assert_eq!(tree.path_aggregate(2), 8);
-                assert_eq!(tree.path_aggregate(3), 7);
-                assert_eq!(tree.path_aggregate(4), 6);
-
-                tree.path_apply(1, -5);
-
-                assert_eq!(tree.path_aggregate(0), 5);
-                assert_eq!(tree.path_aggregate(1), 4);
-                assert_eq!(tree.path_aggregate(2), 4);
-                assert_eq!(tree.path_aggregate(3), 4);
-                assert_eq!(tree.path_aggregate(4), 5);
-            }
-        };
+    trait TestExt:
+        Update + DeltaAndPreferredChild + Link + Clone + Default
+    {
+    }
+    impl<Ext: Update + DeltaAndPreferredChild + Link + Clone + Default> TestExt
+        for Ext
+    {
     }
 
-    macro_rules! test_lca_func {
-        ($class_name:ident, $func_name:ident) => {
-            #[test]
-            fn $func_name() {
-                let mut tree: $class_name = $class_name::new();
+    fn test_min<Ext: TestExt>(mut tree: MutexLinkCutTree<Ext>) {
+        // 0
+        // |\
+        // 1 4
+        // |\
+        // 2 3
+        tree.make_tree(0);
+        tree.make_tree(1);
+        tree.make_tree(2);
+        tree.make_tree(3);
+        tree.make_tree(4);
+        tree.link(0, 1);
+        tree.link(1, 2);
+        tree.link(1, 3);
+        tree.link(0, 4);
 
-                // 0
-                // |\
-                // 1 4
-                // |\
-                // 2 3
-                tree.make_tree(0);
-                tree.make_tree(1);
-                tree.make_tree(2);
-                tree.make_tree(3);
-                tree.make_tree(4);
-                tree.link(0, 1);
-                tree.link(1, 2);
-                tree.link(1, 3);
-                tree.link(0, 4);
+        tree.set(0, 10);
+        tree.set(1, 9);
+        tree.set(2, 8);
+        tree.set(3, 7);
+        tree.set(4, 6);
 
-                assert_eq!(tree.lca(0, 1), 0);
-                assert_eq!(tree.lca(2, 3), 1);
-                assert_eq!(tree.lca(1, 4), 0);
-                assert_eq!(tree.lca(1, 4), 0);
-            }
-        };
+        assert_eq!(tree.path_aggregate(0), 10);
+        assert_eq!(tree.path_aggregate(1), 9);
+        assert_eq!(tree.path_aggregate(2), 8);
+        assert_eq!(tree.path_aggregate(3), 7);
+        assert_eq!(tree.path_aggregate(4), 6);
+
+        tree.path_apply(1, -5);
+
+        assert_eq!(tree.path_aggregate(0), 5);
+        assert_eq!(tree.path_aggregate(1), 4);
+        assert_eq!(tree.path_aggregate(2), 4);
+        assert_eq!(tree.path_aggregate(3), 4);
+        assert_eq!(tree.path_aggregate(4), 5);
     }
 
-    macro_rules! test_get_func {
-        ($class_name:ident, $func_name:ident) => {
-            #[test]
-            fn $func_name() {
-                let mut tree: $class_name = $class_name::new();
-                tree.make_tree(0);
-                tree.make_tree(1);
-                tree.make_tree(2);
-                tree.make_tree(3);
-                tree.make_tree(4);
-                tree.link(0, 1);
-                tree.link(1, 2);
-                tree.link(1, 3);
-                tree.link(0, 4);
-                tree.path_apply(0, 1);
-                tree.path_apply(1, 2);
-                tree.path_apply(2, 3);
-                tree.path_apply(3, 4);
-                tree.path_apply(4, 5);
+    fn test_lca<Ext: TestExt>(mut tree: MutexLinkCutTree<Ext>) {
+        // 0
+        // |\
+        // 1 4
+        // |\
+        // 2 3
+        tree.make_tree(0);
+        tree.make_tree(1);
+        tree.make_tree(2);
+        tree.make_tree(3);
+        tree.make_tree(4);
+        tree.link(0, 1);
+        tree.link(1, 2);
+        tree.link(1, 3);
+        tree.link(0, 4);
 
-                assert_eq!(tree.get(0), 15);
-                assert_eq!(tree.get(1), 9);
-                assert_eq!(tree.get(2), 3);
-                assert_eq!(tree.get(3), 4);
-                assert_eq!(tree.get(4), 5);
-
-                tree.path_apply(4, -5);
-                assert_eq!(tree.get(0), 10);
-                assert_eq!(tree.get(1), 9);
-                assert_eq!(tree.get(2), 3);
-                assert_eq!(tree.get(3), 4);
-                assert_eq!(tree.get(4), 0);
-            }
-        };
+        assert_eq!(tree.lca(0, 1), 0);
+        assert_eq!(tree.lca(2, 3), 1);
+        assert_eq!(tree.lca(1, 4), 0);
+        assert_eq!(tree.lca(1, 4), 0);
     }
 
-    test_min_func!(DefaultMinLinkCutTree, test_min_default);
-    test_min_func!(SizeMinLinkCutTree, test_min_size);
-    test_min_func!(CaterpillarMinLinkCutTree, test_min_caterpillar);
-    test_lca_func!(DefaultMinLinkCutTree, test_lca_default);
-    test_lca_func!(SizeMinLinkCutTree, test_lca_size);
-    test_lca_func!(CaterpillarMinLinkCutTree, test_lca_caterpillar);
-    test_get_func!(DefaultMinLinkCutTree, test_get_default);
-    test_get_func!(SizeMinLinkCutTree, test_get_size);
-    test_get_func!(CaterpillarMinLinkCutTree, test_get_caterpillar);
+    fn test_get<Ext: TestExt>(mut tree: MutexLinkCutTree<Ext>) {
+        tree.make_tree(0);
+        tree.make_tree(1);
+        tree.make_tree(2);
+        tree.make_tree(3);
+        tree.make_tree(4);
+        tree.link(0, 1);
+        tree.link(1, 2);
+        tree.link(1, 3);
+        tree.link(0, 4);
+        tree.path_apply(0, 1);
+        tree.path_apply(1, 2);
+        tree.path_apply(2, 3);
+        tree.path_apply(3, 4);
+        tree.path_apply(4, 5);
+
+        assert_eq!(tree.get(0), 15);
+        assert_eq!(tree.get(1), 9);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 4);
+        assert_eq!(tree.get(4), 5);
+
+        tree.path_apply(4, -5);
+        assert_eq!(tree.get(0), 10);
+        assert_eq!(tree.get(1), 9);
+        assert_eq!(tree.get(2), 3);
+        assert_eq!(tree.get(3), 4);
+        assert_eq!(tree.get(4), 0);
+    }
+
+    #[test]
+    fn test_min_default() { test_min(DefaultMinLinkCutTree::new()) }
+
+    #[test]
+    fn test_min_size() { test_min(SizeMinLinkCutTree::new()) }
+
+    #[test]
+    fn test_min_caterpillar() { test_min(CaterpillarMinLinkCutTree::new()) }
+
+    #[test]
+    fn test_lca_default() { test_lca(DefaultMinLinkCutTree::new()) }
+
+    #[test]
+    fn test_lca_size() { test_lca(SizeMinLinkCutTree::new()) }
+
+    #[test]
+    fn test_lca_caterpillar() { test_lca(CaterpillarMinLinkCutTree::new()) }
+
+    #[test]
+    fn test_get_default() { test_get(DefaultMinLinkCutTree::new()) }
+
+    #[test]
+    fn test_get_size() { test_get(SizeMinLinkCutTree::new()) }
+
+    #[test]
+    fn test_get_caterpillar() { test_get(CaterpillarMinLinkCutTree::new()) }
 
     #[test]
     fn test_ancestor_at() {

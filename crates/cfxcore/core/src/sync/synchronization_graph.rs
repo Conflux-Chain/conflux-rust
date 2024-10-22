@@ -38,7 +38,7 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
     channel::Channel,
     consensus::{pos_handler::PosVerifier, SharedConsensusGraph},
-    error::{BlockError, Error, ErrorKind},
+    core_error::{BlockError, CoreError as Error},
     pow::{PowComputer, ProofOfWorkConfig},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
@@ -1800,10 +1800,7 @@ impl SynchronizationGraph {
                 self.consensus.best_chain_id(),
             );
             match r {
-                Err(Error(
-                    ErrorKind::Block(BlockError::InvalidTransactionsRoot(e)),
-                    _,
-                )) => {
+                Err(Error::Block(BlockError::InvalidTransactionsRoot(e))) => {
                     warn!("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
                     // If the transaction root does not match, it might be
                     // caused by receiving wrong

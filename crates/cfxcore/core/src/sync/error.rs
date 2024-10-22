@@ -7,126 +7,71 @@ use futures::channel::oneshot;
 use network;
 use rlp::DecoderError;
 use std::io;
+use thiserror::Error;
 
-error_chain! {
-    links {
-        Network(network::Error, network::ErrorKind);
-        Storage(cfx_storage::Error, cfx_storage::ErrorKind);
-    }
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Network(#[from] network::Error),
+    #[error(transparent)]
+    Storage(#[from] cfx_storage::Error),
+    #[error(transparent)]
+    Decoder(#[from] DecoderError),
+    #[error(transparent)]
+    Io(#[from] io::Error),
 
-    foreign_links {
-        Decoder(DecoderError);
-        Io(io::Error);
-    }
-
-    errors {
-        InvalidBlock {
-            description("Invalid block"),
-            display("Invalid block"),
-        }
-
-        InvalidGetBlockTxn(reason: String) {
-            description("Invalid GetBlockTxn"),
-            display("Invalid GetBlockTxn: {}", reason),
-        }
-
-        InvalidMessageFormat {
-            description("Invalid message format"),
-            display("Invalid message format"),
-        }
-
-        InvalidStatus(reason: String) {
-            description("Invalid Status"),
-            display("Invalid Status: {}", reason),
-        }
-
-        UnknownPeer {
-            description("Unknown peer"),
-            display("Unknown peer"),
-        }
-
-        UnexpectedResponse {
-            description("Unexpected response"),
-            display("Unexpected response"),
-        }
-
-        RequestNotFound {
-            description("The response is received after the request timeout or \
-            there is no request matching the response"),
-            display("No matching request found for response"),
-        }
-
-        TooManyTrans {
-            description("Send too many transactions to node in catch-up mode"),
-            display("Sent too many transactions"),
-        }
-
-        RpcTimeout {
-            description("Rpc gets timeout"),
-            display("Rpc gets timeout"),
-        }
-
-        RpcCancelledByDisconnection {
-            description("Rpc gets cancelled by disconnection"),
-            display("Rpc gets cancelled by disconnection"),
-        }
-
-        InvalidTimestamp {
-            description("Peer timestamp drifts too much"),
-            display("Drift too much"),
-        }
-
-        InvalidSnapshotManifest(reason: String) {
-            description("invalid snapshot manifest"),
-            display("invalid snapshot manifest: {}", reason),
-        }
-
-        InvalidSnapshotChunk(reason: String) {
-            description("invalid snapshot chunk"),
-            display("invalid snapshot chunk: {}", reason),
-        }
-
-        // FIXME: This works as a compatible fix when the snapshot provider cannot serve the chunk.
-        // We should add another reply like `UnsupportedSnapshot` and remove this.
-        EmptySnapshotChunk {
-            description("empty snapshot chunk")
-            display("Receive an empty snapshot chunk response, retry later")
-        }
-
-        AlreadyThrottled(msg_name: &'static str) {
-            description("packet already throttled"),
-            display("packet already throttled: {:?}", msg_name),
-        }
-
-        Throttled(msg_name: &'static str, response: Throttled) {
-            description("packet throttled"),
-            display("packet {:?} throttled: {:?}", msg_name, response),
-        }
-
-        InCatchUpMode(reason: String) {
-            description("Cannot process the message due to the catch up mode."),
-            display("Cannot process the message due to the catch up mode: {:?}", reason),
-        }
-
-        InternalError(reason: String) {
-            description("Internal error"),
-            display("Internal error: {:?}", reason),
-        }
-
-        UnexpectedMessage(reason: String) {
-            description("Message received in unexpected"),
-            display("UnexpectedMessage: {:?}", reason),
-        }
-
-        NotSupported(reason: String) {
-            description("Unable to process the message due to protocol version mismatch"),
-            display("Unable to process the message due to protocol version mismatch: {}", reason),
-        }
-    }
+    #[error("Invalid block")]
+    InvalidBlock,
+    #[error("Invalid GetBlockTxn: {0}")]
+    InvalidGetBlockTxn(String),
+    #[error("Invalid message format")]
+    InvalidMessageFormat,
+    #[error("Invalid Status: {0}")]
+    InvalidStatus(String),
+    #[error("Unknown peer")]
+    UnknownPeer,
+    #[error("Unexpected response")]
+    UnexpectedResponse,
+    #[error("No matching request found for response")]
+    RequestNotFound,
+    #[error("Sent too many transactions")]
+    TooManyTrans,
+    #[error("Rpc gets timeout")]
+    RpcTimeout,
+    #[error("Rpc gets cancelled by disconnection")]
+    RpcCancelledByDisconnection,
+    #[error("Drift too much")]
+    InvalidTimestamp,
+    #[error("invalid snapshot manifest: {0}")]
+    InvalidSnapshotManifest(String),
+    #[error("invalid snapshot chunk: {0}")]
+    InvalidSnapshotChunk(String),
+    #[error("Receive an empty snapshot chunk response, retry later")]
+    EmptySnapshotChunk,
+    #[error("packet already throttled: {0:?}")]
+    AlreadyThrottled(&'static str),
+    #[error("packet {0:?} throttled: {1:?}")]
+    Throttled(&'static str, Throttled),
+    #[error("Cannot process the message due to the catch up mode: {0:?}")]
+    InCatchUpMode(String),
+    #[error("Internal error: {0:?}")]
+    InternalError(String),
+    #[error("UnexpectedMessage: {0:?}")]
+    UnexpectedMessage(String),
+    #[error(
+        "Unable to process the message due to protocol version mismatch: {0}"
+    )]
+    NotSupported(String),
+    #[error("error msg: {0}")]
+    Msg(String),
 }
 
 impl From<oneshot::Canceled> for Error {
     fn from(error: oneshot::Canceled) -> Self {
-        ErrorKind::InternalError(format!("{}", error)).into()
+        Error::InternalError(format!("{}", error)).into()
     }
+}
+
+impl From<String> for Error {
+    fn from(s: String) -> Error { Error::Msg(s) }
 }

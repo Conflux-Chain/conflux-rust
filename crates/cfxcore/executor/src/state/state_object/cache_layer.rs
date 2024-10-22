@@ -159,7 +159,7 @@ impl State {
             Self::fetch_account_mut(&mut cache, &self.db, address, require)?;
 
         // Save the value before modification into the checkpoint.
-        self.notify_checkpoint(*address, account_entry);
+        self.copy_cache_entry_to_checkpoint(*address, account_entry);
 
         // Set the dirty flag in cache.
         if let AccountEntry::Cached(_, dirty_bit) = account_entry {
@@ -171,7 +171,7 @@ impl State {
         Ok(RwLockWriteGuard::map(cache, |c| {
             c.get_mut(address)
                 .expect("Entry known to exist in the cache.")
-                .account_mut()
+                .dirty_account_mut()
                 .expect("Required account must exist.")
         }))
     }

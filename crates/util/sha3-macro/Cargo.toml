@@ -9,7 +9,7 @@ edition = "2018"
 syn = {version = "1", features=["parsing"]}
 quote = "1"
 proc-macro2 = "1"
-keccak-hash = "0.5"
+keccak-hash = { workspace = true }
 
 [lib]
 name = "sha3_macro"

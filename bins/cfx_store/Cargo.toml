@@ -11,8 +11,8 @@ num_cpus = "1.6"
 rustc-hex = "2.1"
 serde = "1.0"
 serde_derive = "1.0"
-parking_lot = "0.11"
-cfxstore = { path = "../../crates/cfx_store" }
+parking_lot = { workspace = true }
+cfxstore = { workspace = true }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes,
+    errors,
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::eth_space::eth_pubsub::EthPubSub as PubSub,
@@ -15,10 +15,11 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
 };
+use cfx_rpc_cfx_types::{traits::BlockProvider, PhantomBlock};
 use cfx_types::{Space, H256};
 use cfxcore::{
-    channel::Channel, consensus::PhantomBlock, BlockDataManager,
-    ConsensusGraph, Notifications, SharedConsensusGraph,
+    channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
+    SharedConsensusGraph,
 };
 use futures::{
     compat::Future01CompatExt,
@@ -343,9 +344,7 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| {
-                RpcLog::try_from_localized(l, self.consensus.clone(), removed)
-            });
+            .map(|l| RpcLog::try_from_localized(l, self, removed));
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.
@@ -531,6 +530,30 @@ impl ChainNotificationHandler {
     }
 }
 
+impl BlockProvider for &PubSubClient {
+    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        self.consensus.get_block_epoch_number(hash)
+    }
+
+    fn get_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.consensus.get_block_hashes_by_epoch(epoch_number)
+    }
+}
+
+impl BlockProvider for &ChainNotificationHandler {
+    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        self.consensus.get_block_epoch_number(hash)
+    }
+
+    fn get_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.consensus.get_block_hashes_by_epoch(epoch_number)
+    }
+}
+
 impl PubSub for PubSubClient {
     type Metadata = Metadata;
 
@@ -546,10 +569,9 @@ impl PubSub for PubSubClient {
                 self.start_heads_loop();
                 return;
             }
-            (pubsub::Kind::NewHeads, _) => error_codes::invalid_params(
-                "newHeads",
-                "Expected no parameters.",
-            ),
+            (pubsub::Kind::NewHeads, _) => {
+                errors::invalid_params("newHeads", "Expected no parameters.")
+            }
             // --------- logs ---------
             (pubsub::Kind::Logs, None) => {
                 info!("eth pubsub logs");
@@ -564,8 +586,8 @@ impl PubSub for PubSubClient {
             }
             (pubsub::Kind::Logs, Some(pubsub::Params::Logs(filter))) => {
                 info!("eth pubsub logs with filter");
-                match filter.into_primitive(self.consensus.clone()) {
-                    Err(e) => e,
+                match filter.into_primitive(self) {
+                    Err(e) => e.into(),
                     Ok(filter) => {
                         let id = self
                             .logs_subscribers
@@ -577,11 +599,10 @@ impl PubSub for PubSubClient {
                     }
                 }
             }
-            (pubsub::Kind::Logs, _) => error_codes::invalid_params(
-                "logs",
-                "Expected filter parameter.",
-            ),
-            _ => error_codes::unimplemented(None),
+            (pubsub::Kind::Logs, _) => {
+                errors::invalid_params("logs", "Expected filter parameter.")
+            }
+            _ => errors::unimplemented(None),
         };
 
         let _ = subscriber.reject(error);

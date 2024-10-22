@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use pkcs8::{
     AlgorithmIdentifier, EncryptedPrivateKeyDocument, ObjectIdentifier,
     PrivateKeyInfo,
@@ -35,8 +35,11 @@ pub fn save_pri_key<P: AsRef<Path>, K: Serialize>(
 pub fn load_pri_key<'de, P: AsRef<Path>, K: DeserializeOwned>(
     path: P, passwd: impl AsRef<[u8]>,
 ) -> Result<K> {
-    let encrypted = EncryptedPrivateKeyDocument::read_der_file(path)?;
-    let encoded_keys = encrypted.decrypt(passwd)?;
+    let encrypted = EncryptedPrivateKeyDocument::read_der_file(path)
+        .map_err(|e| anyhow!("read file with error {}", e))?;
+    let encoded_keys = encrypted
+        .decrypt(passwd)
+        .map_err(|e| anyhow!("decrypt with error {}", e))?;
     Ok(bcs::from_bytes(
         encoded_keys.private_key_info().private_key,
     )?)

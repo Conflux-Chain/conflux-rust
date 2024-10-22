@@ -13,9 +13,10 @@ mod tracer_trait;
 
 pub use as_tracer::AsTracer;
 pub use call_tracer::CallTracer;
+pub use cfx_parity_trace_types::AddressPocket;
 pub use checkpoint_tracer::CheckpointTracer;
 pub use drain_trace::DrainTrace;
-pub use internal_transfer_tracer::{AddressPocket, InternalTransferTracer};
+pub use internal_transfer_tracer::InternalTransferTracer;
 pub use opcode_tracer::OpcodeTracer;
 pub use storage_tracer::StorageTracer;
 pub use tracer_trait::TracerTrait;

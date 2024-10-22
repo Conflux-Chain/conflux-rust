@@ -1,81 +1,81 @@
 [package]
 name = "client"
-version = "2.4.0-testnet-fix3"
+version = {workspace = true}
 edition = "2021"
 
 [dependencies]
 bigdecimal = "0.1.0"
 num-bigint = "0.2.6"
 mio = "0.6.8"
-clap = "2"
+clap = { workspace = true }
 textwrap = "0.9"
 toml = "0.5.8"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_derive = "1.0"
-parking_lot = "0.11"
-io = { path = "../util/io" }
-cfxkey = { path = "../cfx_key" }
-cfxcore-accounts = { path = "../accounts" }
-cfxstore = { path = "../cfx_store" }
-cfx-internal-common = { path = "../cfxcore/internal_common" }
-cfx-executor = { path = "../cfxcore/executor" }
-cfx-execute-helper = { path = "../cfxcore/execute-helper" }
-cfx-statedb = { path = "../dbs/statedb" }
-cfx-storage = { path = "../dbs/storage" }
-cfx-vm-types = { path = "../cfxcore/vm-types" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_derive = { workspace = true }
+parking_lot = { workspace = true }
+io = { workspace = true }
+cfxkey = { workspace = true }
+cfxcore-accounts = { workspace = true }
+cfxstore = { workspace = true }
+cfx-internal-common = { workspace = true }
+cfx-executor = { workspace = true }
+cfx-execute-helper = { workspace = true }
+cfx-statedb = { workspace = true }
+cfx-storage = { workspace = true }
+cfx-vm-types = { workspace = true }
 app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
-jsonrpc-core = "15.1.0"
+jsonrpc-core = { workspace = true }
 jsonrpc-tcp-server = "15.1.0"
 jsonrpc-http-server = "15.1.0"
 jsonrpc-derive = "15.1.0"
 jsonrpc-core-client = "15.1.0"
 jsonrpc-pubsub = "15.1.0"
 jsonrpc-ws-server = "15.1.0"
-error-chain = { version = "0.12" }
-lazy_static = "1.4"
-log = "0.4"
-cfx-types = { path = "../cfx_types" }
-cfx-addr = { path = "../cfx_addr" }
-cfx-bytes = { path = "../cfx_bytes" }
-runtime = { path = "../util/runtime" }
+error-chain = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+cfx-types = { workspace = true }
+cfx-addr = { workspace = true }
+cfx-bytes = { workspace = true }
+runtime = { workspace = true }
 slab = "0.4"
-cfxcore = { path = "../cfxcore/core" }
-network = { path = "../network" }
-db = { path = "../dbs/db" }
-blockgen = { path = "../blockgen" }
-txgen = { path = "../transactiongen" }
-secret-store = { path = "../secret_store" }
-primitives = { path = "../primitives" }
+cfxcore = { workspace = true }
+network = { workspace = true }
+db = { workspace = true }
+blockgen = { workspace = true }
+txgen = { workspace = true }
+secret-store = { workspace = true }
+primitives = { workspace = true }
 log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
-rlp = "0.4.0"
-keccak-hash = "0.5"
-rand = "0.7.2"
+rlp = { workspace = true }
+keccak-hash = { workspace = true }
+rand = { workspace = true }
 rand_08 = {package = "rand", version = "0.8.0"}
-kvdb-rocksdb = {path= "../dbs/kvdb-rocksdb" }
+kvdb-rocksdb = { workspace = true }
 tempdir = "0.3"
-rustc-hex = "2.1"
+rustc-hex = { workspace = true }
 threadpool = "1.0"
-metrics = { path = "../util/metrics" }
-delegate = { path = "../util/delegate" }
+metrics = { workspace = true }
+delegate = { workspace = true }
 transient-hashmap = "0.4"
 rand_xorshift = "0.2"
-itertools = "0.9"
+itertools = { workspace = true }
 order-stat = "0.1"
 futures01 = "0.1"
 futures = { version = "0.3.3", features = ["compat"] }
-rayon = "1.2.0"
-throttling = { path = "../util/throttling" }
+rayon = { workspace = true }
+throttling = { workspace = true }
 tokio = { version = "1.6", features = ["full"] }
 tokio-stream = "0.1.4"
 tokio-timer = "0.2.13"
-malloc_size_of = {path = "../util/malloc_size_of" }
-random-crash = { path = "../util/random_crash" }
-cfx-parameters = { path = "../cfxcore/parameters" }
-strum = "0.20"
-strum_macros = "0.20"
+malloc_size_of = { workspace = true }
+random-crash = { workspace = true }
+cfx-parameters = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
 crash-handler = { path = "../cfxcore/core/src/pos/common/crash-handler" }
 cached-pos-ledger-db = { path = "../cfxcore/core/src/pos/storage/cached-pos-ledger-db" }
 pos-ledger-db = { path = "../cfxcore/core/src/pos/storage/pos-ledger-db" }
@@ -91,23 +91,33 @@ diem-types = { path = "../cfxcore/core/src/pos/types" }
 pow-types = {path = "../cfxcore/core/src/pos/types/pow-types" }
 executor-types = { path = "../cfxcore/core/src/pos/types/executor-types" }
 executor = { path = "../cfxcore/core/src/pos/consensus/executor" }
-fail = "0.4.0"
+fail = { workspace = true }
 storage-interface = { path = "../cfxcore/core/src/pos/storage/storage-interface" }
 consensus-types = {path = "../cfxcore/core/src/pos/consensus/consensus-types" }
-anyhow = "1.0.38"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
-parity-version = {path = "../util/version" }
-solidity-abi = {path= "../util/solidity-abi" }
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
+parity-version = { workspace = true }
+solidity-abi = { workspace = true }
+bls-signatures = { workspace = true }
+geth-tracer = { workspace = true }
+serde-utils = { workspace = true }
+
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-sol-types = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
-geth-tracer = { path = "../cfxcore/geth-tracer" }
-serde-utils = { path = "../serde_utils" }
+alloy-rpc-types = { workspace = true }
+revm = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }
+cfx-rpc-primitives = { workspace = true }
+cfx-util-macros = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"
-cfx-parameters = { path = "../cfxcore/parameters" }
-cfx-executor = { path = "../cfxcore/executor", features = ["testonly_code"] }
+cfx-parameters = { workspace = true }
+cfx-executor = { workspace = true, features = ["testonly_code"] }
 serial_test = "0.5.1"
 
 [features]

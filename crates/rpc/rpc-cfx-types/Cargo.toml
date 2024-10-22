@@ -1,0 +1,28 @@
+[package]
+name = "cfx-rpc-cfx-types"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfx-rpc-primitives = { workspace = true }
+cfx-addr = { workspace = true }
+cfx-parameters = { workspace = true }
+cfx-types = { workspace = true }
+cfx-vm-types = { workspace = true }
+primitives = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum_macros = { workspace = true }
+jsonrpc-core = { workspace = true }
+error-chain = { workspace = true }
+log = { workspace = true }
+cfx-parity-trace-types = { workspace = true }

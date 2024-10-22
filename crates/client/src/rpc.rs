@@ -2,12 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use jsonrpc_core::{
-    BoxFuture, MetaIoHandler, RemoteProcedure, Result as JsonRpcResult, Value,
-};
+use jsonrpc_core::{MetaIoHandler, RemoteProcedure, Value};
 use jsonrpc_http_server::{
-    AccessControlAllowOrigin, DomainsValidation, Server as HttpServer,
-    ServerBuilder as HttpServerBuilder,
+    Server as HttpServer, ServerBuilder as HttpServerBuilder,
 };
 use jsonrpc_tcp_server::{
     MetaExtractor as TpcMetaExtractor, Server as TcpServer,
@@ -17,13 +14,10 @@ use jsonrpc_ws_server::{
     MetaExtractor as WsMetaExtractor, Server as WsServer,
     ServerBuilder as WsServerBuilder,
 };
-use std::{
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 mod authcodes;
-pub mod error_codes;
+pub mod errors;
 pub mod extractor;
 mod helpers;
 mod http_common;
@@ -32,18 +26,18 @@ pub mod informant;
 mod interceptor;
 pub mod metadata;
 pub mod rpc_apis;
+pub mod server_configuration;
 mod traits;
 pub mod types;
 
-pub use cfxcore::rpc_errors::{
-    invalid_params, invalid_params_check, BoxFuture as RpcBoxFuture,
-    Error as RpcError, ErrorKind as RpcErrorKind,
-    ErrorKind::JsonRpcError as JsonRpcErrorKind, Result as RpcResult,
+pub use cfxcore::errors::{
+    BoxFuture as CoreBoxFuture, Error as CoreError, Result as CoreResult,
 };
+pub use errors::{error_codes, invalid_params};
 
 use self::{
     impls::{
-        cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl},
+        cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl, TraceHandler},
         cfx_filter::CfxFilterClient,
         common::RpcImpl as CommonImpl,
         eth_pubsub::PubSubClient as EthPubSubClient,
@@ -54,14 +48,13 @@ use self::{
         pool::TransactionPoolHandler,
         pos::{PoSInterceptor, PosHandler},
         pubsub::PubSubClient,
-        trace::TraceHandler,
     },
     traits::{
-        cfx::{Cfx, CfxFilter},
+        cfx::Cfx,
+        cfx_filter::CfxFilter,
         debug::LocalRpc,
         eth_space::{
-            eth::{Eth, EthFilter},
-            eth_pubsub::EthPubSub,
+            eth::Eth, eth_filter::EthFilter, eth_pubsub::EthPubSub,
             trace::Trace as EthTrace,
         },
         pool::TransactionPool,
@@ -76,11 +69,9 @@ pub use self::types::{Block as RpcBlock, Origin};
 use crate::{
     configuration::Configuration,
     rpc::{
-        error_codes::request_rejected_too_many_request_error,
         impls::{
-            eth::{EthHandler, GethDebugHandler},
+            eth::{EthHandler, EthTraceHandler, GethDebugHandler},
             eth_filter::EthFilterClient,
-            trace::EthTraceHandler,
             RpcImplConfiguration,
         },
         interceptor::{RpcInterceptor, RpcProxy},
@@ -88,103 +79,12 @@ use crate::{
         traits::eth_space::debug::Debug,
     },
 };
-use futures01::lazy;
-use jsonrpc_core::futures::Future;
-use lazy_static::lazy_static;
+use interceptor::{MetricsInterceptor, ThrottleInterceptor};
 pub use metadata::Metadata;
-use metrics::{register_timer_with_group, ScopeTimer, Timer};
-use parking_lot::Mutex;
-use std::collections::{HashMap, HashSet};
-use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
-
-lazy_static! {
-    static ref METRICS_INTERCEPTOR_TIMERS: Mutex<HashMap<String, Arc<dyn Timer>>> =
-        Default::default();
-}
-
-#[derive(Debug, PartialEq)]
-pub struct TcpConfiguration {
-    pub enabled: bool,
-    pub address: SocketAddr,
-}
-
-impl TcpConfiguration {
-    pub fn new(ip: Option<(u8, u8, u8, u8)>, port: Option<u16>) -> Self {
-        let ipv4 = match ip {
-            Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
-            None => Ipv4Addr::new(0, 0, 0, 0),
-        };
-        TcpConfiguration {
-            enabled: port.is_some(),
-            address: SocketAddr::V4(SocketAddrV4::new(ipv4, port.unwrap_or(0))),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct HttpConfiguration {
-    pub enabled: bool,
-    pub address: SocketAddr,
-    pub cors_domains: DomainsValidation<AccessControlAllowOrigin>,
-    pub keep_alive: bool,
-    // If it's Some, we will manually set the number of threads of HTTP RPC
-    // server
-    pub threads: Option<usize>,
-}
-
-impl HttpConfiguration {
-    pub fn new(
-        ip: Option<(u8, u8, u8, u8)>, port: Option<u16>, cors: Option<String>,
-        keep_alive: bool, threads: Option<usize>,
-    ) -> Self {
-        let ipv4 = match ip {
-            Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
-            None => Ipv4Addr::new(0, 0, 0, 0),
-        };
-        HttpConfiguration {
-            enabled: port.is_some(),
-            address: SocketAddr::V4(SocketAddrV4::new(ipv4, port.unwrap_or(0))),
-            cors_domains: match cors {
-                None => DomainsValidation::Disabled,
-                Some(cors_list) => match cors_list.as_str() {
-                    "none" => DomainsValidation::Disabled,
-                    "all" => DomainsValidation::AllowOnly(vec![
-                        AccessControlAllowOrigin::Any,
-                    ]),
-                    _ => DomainsValidation::AllowOnly(
-                        cors_list.split(',').map(Into::into).collect(),
-                    ),
-                },
-            },
-            keep_alive,
-            threads,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct WsConfiguration {
-    pub enabled: bool,
-    pub address: SocketAddr,
-    pub max_payload_bytes: usize,
-}
-
-impl WsConfiguration {
-    pub fn new(
-        ip: Option<(u8, u8, u8, u8)>, port: Option<u16>,
-        max_payload_bytes: usize,
-    ) -> Self {
-        let ipv4 = match ip {
-            Some(ip) => Ipv4Addr::new(ip.0, ip.1, ip.2, ip.3),
-            None => Ipv4Addr::new(0, 0, 0, 0),
-        };
-        WsConfiguration {
-            enabled: port.is_some(),
-            address: SocketAddr::V4(SocketAddrV4::new(ipv4, port.unwrap_or(0))),
-            max_payload_bytes,
-        }
-    }
-}
+pub use server_configuration::{
+    HttpConfiguration, TcpConfiguration, WsConfiguration,
+};
+use std::collections::HashSet;
 
 pub fn setup_public_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
@@ -350,7 +250,10 @@ fn setup_rpc_apis(
             }
             Api::EthDebug => {
                 info!("Add geth debug method");
-                let geth_debug = GethDebugHandler::new(rpc.consensus.clone());
+                let geth_debug = GethDebugHandler::new(
+                    rpc.consensus.clone(),
+                    rpc.config.max_estimation_gas_limit,
+                );
                 handler.extend_with(geth_debug.to_delegate());
             }
             Api::Test => {
@@ -599,96 +502,5 @@ where
         Err(io_error) => {
             Err(format!("WS error: {} (addr = {})", io_error, conf.address))
         }
-    }
-}
-
-struct ThrottleInterceptor {
-    manager: TokenBucketManager,
-}
-
-impl ThrottleInterceptor {
-    fn new(file: &Option<String>, section: &str) -> Self {
-        let manager = match file {
-            Some(file) => TokenBucketManager::load(file, Some(section))
-                .expect("invalid throttling configuration file"),
-            None => TokenBucketManager::default(),
-        };
-
-        ThrottleInterceptor { manager }
-    }
-}
-
-impl RpcInterceptor for ThrottleInterceptor {
-    fn before(&self, name: &String) -> JsonRpcResult<()> {
-        let bucket = match self.manager.get(name) {
-            Some(bucket) => bucket,
-            None => return Ok(()),
-        };
-
-        let result = bucket.lock().throttle_default();
-
-        match result {
-            ThrottleResult::Success => Ok(()),
-            ThrottleResult::Throttled(wait_time) => {
-                debug!("RPC {} throttled in {:?}", name, wait_time);
-                bail!(request_rejected_too_many_request_error(Some(format!(
-                    "throttled in {:?}",
-                    wait_time
-                ))))
-            }
-            ThrottleResult::AlreadyThrottled => {
-                debug!("RPC {} already throttled", name);
-                bail!(request_rejected_too_many_request_error(Some(
-                    "already throttled, please try again later".into()
-                )))
-            }
-        }
-    }
-}
-
-struct MetricsInterceptor {
-    // TODO: Chain interceptors instead of wrapping up.
-    throttle_interceptor: ThrottleInterceptor,
-}
-
-impl MetricsInterceptor {
-    pub fn new(throttle_interceptor: ThrottleInterceptor) -> Self {
-        Self {
-            throttle_interceptor,
-        }
-    }
-}
-
-impl RpcInterceptor for MetricsInterceptor {
-    fn before(&self, name: &String) -> JsonRpcResult<()> {
-        self.throttle_interceptor.before(name)?;
-        // Use a global variable here because `http` and `web3` setup different
-        // interceptors for the same RPC API.
-        let mut timers = METRICS_INTERCEPTOR_TIMERS.lock();
-        if !timers.contains_key(name) {
-            let timer = register_timer_with_group("rpc", name.as_str());
-            timers.insert(name.clone(), timer);
-        }
-        Ok(())
-    }
-
-    fn around(
-        &self, name: &String, method_call: BoxFuture<Value>,
-    ) -> BoxFuture<Value> {
-        let maybe_timer = METRICS_INTERCEPTOR_TIMERS
-            .lock()
-            .get(name)
-            .map(|timer| timer.clone());
-        let setup = lazy(move || {
-            Ok(maybe_timer
-                .as_ref()
-                .map(|timer| ScopeTimer::time_scope(timer.clone())))
-        });
-        Box::new(setup.then(|timer: Result<_, ()>| {
-            method_call.then(|r| {
-                drop(timer);
-                r
-            })
-        }))
     }
 }

@@ -324,90 +324,84 @@ pub fn select_public_address(port: u16) -> SocketAddr {
 }
 
 fn search_upnp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
-    if let SocketAddr::V4(ref local_addr) = local.address {
-        let local_ip = *local_addr.ip();
-        let local_port = local_addr.port();
-        let local_udp_port = local.udp_port;
+    let local_addr = match local.address {
+        SocketAddr::V4(ref local_addr) => local_addr,
+        _ => return None,
+    };
+    let local_ip = *local_addr.ip();
+    let local_port = local_addr.port();
+    let local_udp_port = local.udp_port;
 
-        let search_options = SearchOptions {
-            timeout: Some(Duration::new(5, 0)),
-            // igd 0.7 used port 0 by default.
-            // Let's not change this behaviour
-            bind_addr: SocketAddr::V4(SocketAddrV4::new(local_ip, 0)),
-            ..Default::default()
-        };
-        let search_gateway_child = ::std::thread::spawn(move || {
-            match search_gateway(search_options) {
-                Err(ref err) => debug!("Gateway search error: {}", err),
-                Ok(gateway) => match gateway.get_external_ip() {
-                    Err(ref err) => {
-                        debug!("IP request error: {}", err);
-                    }
-                    Ok(external_addr) => {
-                        debug!("UPnP gets external ip: {}", external_addr);
-                        let client_ip = {
-                            // Connect to the gateway to find our LAN local
-                            // address from the socket, like `miniupnpc`.
-                            // Note that using local_ip (0.0.0.0) will cause
-                            // NOT_AUTHORIZED error.
-                            let client_sock =
-                                TcpStream::connect(&gateway.addr).ok()?;
-                            match client_sock.local_addr() {
-                                Ok(SocketAddr::V4(v4_addr)) => {
-                                    v4_addr.ip().clone()
-                                }
-                                _ => return None,
-                            }
-                        };
-                        match gateway.add_any_port(
-                            PortMappingProtocol::TCP,
-                            SocketAddrV4::new(client_ip, local_port),
-                            0,
-                            "Conflux Node/TCP",
-                        ) {
-                            Err(ref err) => {
-                                debug!("Port mapping error: {}", err);
-                            }
-                            Ok(tcp_port) => {
-                                debug!("UPnP gets tcp port: {}", tcp_port);
-                                match gateway.add_any_port(
-                                    PortMappingProtocol::UDP,
-                                    SocketAddrV4::new(
-                                        client_ip,
-                                        local_udp_port,
-                                    ),
-                                    0,
-                                    "Conflux Node/UDP",
-                                ) {
-                                    Err(ref err) => {
-                                        debug!("Port mapping error: {}", err);
-                                    }
-                                    Ok(udp_port) => {
-                                        debug!(
-                                            "UPnP gets udp port: {}",
-                                            udp_port
-                                        );
-                                        return Some(NodeEndpoint {
-                                            address: SocketAddr::V4(
-                                                SocketAddrV4::new(
-                                                    external_addr,
-                                                    tcp_port,
-                                                ),
-                                            ),
-                                            udp_port,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
+    let search_options = SearchOptions {
+        timeout: Some(Duration::new(5, 0)),
+        // igd 0.7 used port 0 by default.
+        // Let's not change this behaviour
+        bind_addr: SocketAddr::V4(SocketAddrV4::new(local_ip, 0)),
+        ..Default::default()
+    };
+
+    ::std::thread::scope(|_| {
+        let gateway = match search_gateway(search_options) {
+            Err(ref err) => {
+                debug!("Gateway search error: {}", err);
+                return None;
             }
-            None
-        });
-        return search_gateway_child.join().ok()?;
-    }
-    None
+            Ok(gateway) => gateway,
+        };
+
+        let external_addr = match gateway.get_external_ip() {
+            Err(ref err) => {
+                debug!("IP request error: {}", err);
+                return None;
+            }
+            Ok(external_addr) => external_addr,
+        };
+
+        debug!("UPnP gets external ip: {}", external_addr);
+        let client_ip = {
+            // Connect to the gateway to find our LAN local
+            // address from the socket, like `miniupnpc`.
+            // Note that using local_ip (0.0.0.0) will cause
+            // NOT_AUTHORIZED error.
+            let client_sock = TcpStream::connect(&gateway.addr).ok()?;
+            match client_sock.local_addr() {
+                Ok(SocketAddr::V4(v4_addr)) => v4_addr.ip().clone(),
+                _ => return None,
+            }
+        };
+
+        let tcp_port = match gateway.add_any_port(
+            PortMappingProtocol::TCP,
+            SocketAddrV4::new(client_ip, local_port),
+            0,
+            "Conflux Node/TCP",
+        ) {
+            Err(ref err) => {
+                debug!("Port mapping error: {}", err);
+                return None;
+            }
+            Ok(tcp_port) => tcp_port,
+        };
+        debug!("UPnP gets tcp port: {}", tcp_port);
+
+        let udp_port = match gateway.add_any_port(
+            PortMappingProtocol::UDP,
+            SocketAddrV4::new(client_ip, local_udp_port),
+            0,
+            "Conflux Node/UDP",
+        ) {
+            Err(ref err) => {
+                debug!("Port mapping error: {}", err);
+                return None;
+            }
+            Ok(udp_port) => udp_port,
+        };
+        debug!("UPnP gets udp port: {}", udp_port);
+
+        let address =
+            SocketAddr::V4(SocketAddrV4::new(external_addr, tcp_port));
+        Some(NodeEndpoint { address, udp_port })
+    })
 }
 
 fn search_natpmp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
