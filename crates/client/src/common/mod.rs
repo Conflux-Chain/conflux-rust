@@ -50,7 +50,6 @@ use diem_types::validator_config::{
 use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::NetworkService;
-use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use tokio::runtime::Runtime as TokioRuntime;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
@@ -150,7 +149,7 @@ pub fn initialize_common_modules(
         Arc<AccountProvider>,
         Arc<Notifications>,
         PubSubClient,
-        Runtime,
+        Arc<TokioRuntime>,
         EthPubSubClient,
     ),
     String,
@@ -422,16 +421,18 @@ pub fn initialize_common_modules(
         pos_verifier.clone(),
     ));
 
-    let runtime = Runtime::with_default_thread_count();
+    let tokio_runtime =
+        Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
+    // let runtime = Runtime::with_default_thread_count();
     let pubsub = PubSubClient::new(
-        runtime.executor(),
+        tokio_runtime.clone(),
         consensus.clone(),
         notifications.clone(),
         *network.get_network_type(),
     );
 
     let eth_pubsub = EthPubSubClient::new(
-        runtime.executor(),
+        tokio_runtime.clone(),
         consensus.clone(),
         notifications.clone(),
     );
@@ -451,7 +452,7 @@ pub fn initialize_common_modules(
         accounts,
         notifications,
         pubsub,
-        runtime,
+        tokio_runtime,
         eth_pubsub,
     ))
 }
@@ -474,10 +475,9 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Option<WSServer>,
         Arc<PosVerifier>,
-        Runtime,
+        Arc<TokioRuntime>,
         Option<HttpServer>,
         Option<WSServer>,
-        TokioRuntime,
         Option<RpcServerHandle>,
     ),
     String,
@@ -497,7 +497,7 @@ pub fn initialize_not_light_node_modules(
         accounts,
         _notifications,
         pubsub,
-        runtime,
+        tokio_runtime,
         eth_pubsub,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
@@ -725,8 +725,8 @@ pub fn initialize_not_light_node_modules(
 
     network.start();
 
-    let tokio_runtime =
-        tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+    // let tokio_runtime =
+    //     tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
 
     let eth_rpc_http_server_addr =
         conf.raw_conf.jsonrpc_http_eth_port_v2.map(|port| {
@@ -757,10 +757,9 @@ pub fn initialize_not_light_node_modules(
         debug_rpc_ws_server,
         rpc_ws_server,
         pos_verifier,
-        runtime,
+        tokio_runtime,
         eth_rpc_http_server,
         eth_rpc_ws_server,
-        tokio_runtime,
         async_eth_rpc_http_server,
     ))
 }

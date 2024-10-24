@@ -23,14 +23,13 @@ use cfxcore::{
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedTransactionPool,
 };
-use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as JsonRpcResult};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,
 };
-use runtime::Executor;
+use tokio::runtime::Runtime as TokioRuntime;
 
 /// Something which provides data that can be filtered over.
 pub trait Filterable {
@@ -99,9 +98,9 @@ impl CfxFilterClient {
     /// Creates new Cfx filter client.
     pub fn new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Executor,
-        poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
-        network: Network,
+        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
+        executor: Arc<TokioRuntime>, poll_lifetime: u32,
+        logs_filter_max_limit: Option<usize>, network: Network,
     ) -> Self {
         let filter_client = CfxFilterClient {
             consensus,
@@ -119,7 +118,7 @@ impl CfxFilterClient {
 
     fn start_epochs_loop(
         &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
-        executor: Executor,
+        executor: Arc<TokioRuntime>,
     ) {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
@@ -163,7 +162,6 @@ impl CfxFilterClient {
             }
         };
 
-        let fut = fut.unit_error().boxed().compat();
         executor.spawn(fut);
     }
 }

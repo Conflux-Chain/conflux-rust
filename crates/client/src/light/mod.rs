@@ -25,7 +25,7 @@ use cfxcore::{
     TransactionPool,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use runtime::Runtime;
+use tokio::runtime::Runtime as TokioRuntime;
 
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
@@ -36,7 +36,7 @@ pub struct LightClientExtraComponents {
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub rpc_ws_server: Option<WsServer>,
-    pub runtime: Runtime,
+    pub runtime: Arc<TokioRuntime>,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,

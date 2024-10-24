@@ -45,7 +45,6 @@ members = [
     "crates/util/metrics",
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
-    "crates/util/runtime",
     "crates/util/sha3-macro",
     "crates/util/solidity-abi",
     "crates/util/solidity-abi-derive",
@@ -106,7 +105,6 @@ priority-send-queue = { path = "./crates/util/priority-send-queue" }
 heap-map = { path = "./crates/util/heap-map" }
 treap-map = { path = "./crates/util/treap-map" }
 hibitset = { path = "./crates/util/hibitset" }
-runtime = { path = "./crates/util/runtime" }
 malloc_size_of = { path = "./crates/util/malloc_size_of" }
 delegate = { path = "./crates/util/delegate" }
 throttling = { path = "./crates/util/throttling" }

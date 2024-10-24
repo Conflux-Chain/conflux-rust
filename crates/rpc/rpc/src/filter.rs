@@ -19,8 +19,8 @@ use cfxcore::{channel::Channel, SharedConsensusGraph, SharedTransactionPool};
 use error_chain::bail;
 use jsonrpsee::core::RpcResult;
 use primitives::filter::LogFilter;
-use runtime::Executor;
 use std::{collections::VecDeque, sync::Arc};
+use tokio::runtime::Runtime as TokioRuntime;
 
 type PendingTransactionFilterKind = ();
 
@@ -31,8 +31,9 @@ pub struct EthFilterApi {
 impl EthFilterApi {
     pub fn new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Executor,
-        poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
+        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
+        executor: Arc<TokioRuntime>, poll_lifetime: u32,
+        logs_filter_max_limit: Option<usize>,
     ) -> EthFilterApi {
         let eth_filter = EthFilterHelper::new(
             consensus,

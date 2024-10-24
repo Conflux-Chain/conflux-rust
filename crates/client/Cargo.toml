@@ -39,7 +39,6 @@ log = { workspace = true }
 cfx-types = { workspace = true }
 cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
-runtime = { workspace = true }
 slab = { workspace = true }
 cfxcore = { workspace = true }
 network = { workspace = true }

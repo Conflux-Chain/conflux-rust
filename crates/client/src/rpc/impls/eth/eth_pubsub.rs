@@ -21,10 +21,7 @@ use cfxcore::{
     channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
     SharedConsensusGraph,
 };
-use futures::{
-    compat::Future01CompatExt,
-    future::{FutureExt, TryFutureExt},
-};
+use futures::compat::Future01CompatExt;
 use itertools::zip;
 use jsonrpc_core::{futures::Future, Result as RpcResult};
 use jsonrpc_pubsub::{
@@ -35,12 +32,12 @@ use parking_lot::RwLock;
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,
 };
-use runtime::Executor;
 use std::{
     collections::VecDeque,
     sync::{Arc, Weak},
     time::Duration,
 };
+use tokio::runtime::Runtime as TokioRuntime;
 use tokio_timer::sleep;
 
 type Client = Sink<pubsub::Result>;
@@ -59,7 +56,7 @@ pub struct PubSubClient {
 impl PubSubClient {
     /// Creates new `PubSubClient`.
     pub fn new(
-        executor: Executor, consensus: SharedConsensusGraph,
+        executor: Arc<TokioRuntime>, consensus: SharedConsensusGraph,
         notifications: Arc<Notifications>,
     ) -> Self {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
@@ -130,8 +127,6 @@ impl PubSubClient {
             }
         };
 
-        // run futures@0.3 future on tokio@0.1 executor
-        let fut = fut.unit_error().boxed().compat();
         self.handler.executor.spawn(fut);
     }
 
@@ -220,15 +215,13 @@ impl PubSubClient {
             }
         };
 
-        // run futures@0.3 future on tokio@0.1 executor
-        let fut = fut.unit_error().boxed().compat();
         self.handler.executor.spawn(fut);
     }
 }
 
 /// PubSub notification handler.
 pub struct ChainNotificationHandler {
-    pub executor: Executor,
+    pub executor: Arc<TokioRuntime>,
     consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
@@ -236,12 +229,14 @@ pub struct ChainNotificationHandler {
 
 impl ChainNotificationHandler {
     // notify `subscriber` about `result` in a separate task
-    fn notify(exec: &Executor, subscriber: &Client, result: pubsub::Result) {
+    fn notify(
+        exec: &TokioRuntime, subscriber: &Client, result: pubsub::Result,
+    ) {
         let fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
             |e| warn!(target: "rpc", "Unable to send notification: {}", e),
         );
 
-        exec.spawn(fut)
+        exec.spawn(fut.compat());
     }
 
     // notify `subscriber` about `result` asynchronously
@@ -250,7 +245,6 @@ impl ChainNotificationHandler {
             |e| warn!(target: "rpc", "Unable to send notification: {}", e),
         );
 
-        // convert futures01::Future into std::Future so that we can await
         let _ = fut.compat().await;
     }
 

@@ -1341,7 +1341,6 @@ dependencies = [
  "parity-version",
  "parking_lot 0.11.2",
  "primitives",
- "runtime",
  "rustc-hex",
  "tokio 1.40.0",
  "transient-hashmap",
@@ -1991,7 +1990,6 @@ dependencies = [
  "revm",
  "rlp 0.4.6",
  "rpassword 5.0.1",
- "runtime",
  "rustc-hex",
  "secret-store",
  "serde",
@@ -7281,14 +7279,6 @@ name = "ruint-macro"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
-
-[[package]]
-name = "runtime"
-version = "0.1.0"
-dependencies = [
- "futures 0.1.31",
- "tokio 0.1.22",
-]
 
 [[package]]
 name = "rustc-demangle"
