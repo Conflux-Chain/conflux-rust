@@ -1375,6 +1375,7 @@ dependencies = [
  "cfx-vm-types",
  "error-chain",
  "jsonrpc-core",
+ "jsonrpsee",
  "primitives",
  "rlp 0.4.6",
  "rustc-hex",
