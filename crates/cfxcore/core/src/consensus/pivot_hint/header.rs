@@ -87,23 +87,38 @@ impl PivotHintHeader {
     pub fn compute_check_height(
         &self, fork_at: u64, me_height: u64,
     ) -> Option<u64> {
-        let major_ticks = ((fork_at - 1) / self.minor_interval + 1)
-            ..=(me_height / self.minor_interval);
-        let availd_major_tick = 0..(self.range_max / self.minor_interval);
-        let check_major_tick = major_ticks
-            .intersection(availd_major_tick)
+        let major_ticks = ((fork_at - 1) / self.major_interval + 1)
+            ..=(me_height / self.major_interval);
+        let availd_major_ticks = 0..(self.range_max / self.major_interval);
+        let last_valid_major_tick = major_ticks
+            .intersection(availd_major_ticks)
             .into_iter()
             .next_back();
-        let major_height = check_major_tick.map(|x| x * self.minor_interval);
+        let major_height =
+            last_valid_major_tick.map(|x| x * self.major_interval);
+
+        if cfg!(test) {
+            assert!(major_height.map_or(true, |h| h >= fork_at
+                && h <= me_height
+                && h % self.major_interval == 0
+                && h < self.range_max));
+        }
 
         let minor_ticks = ((fork_at - 1) / self.minor_interval + 1)
             ..=(me_height / self.minor_interval);
-        let availd_minor_tick = 0..(self.range_max / self.minor_interval);
-        let check_minor_tick = minor_ticks
-            .intersection(availd_minor_tick)
+        let availd_minor_ticks = 0..(self.range_max / self.minor_interval);
+        let last_valid_minor_tick = minor_ticks
+            .intersection(availd_minor_ticks)
             .into_iter()
             .next_back();
-        let minor_height = check_minor_tick.map(|x| x * self.minor_interval);
+        let minor_height =
+            last_valid_minor_tick.map(|x| x * self.minor_interval);
+        if cfg!(test) {
+            assert!(minor_height.map_or(true, |h| h >= fork_at
+                && h <= me_height
+                && h % self.minor_interval == 0
+                && h < self.range_max));
+        }
 
         major_height.or(minor_height)
     }
