@@ -7,7 +7,10 @@ pub mod consensus_inner;
 pub mod consensus_trait;
 pub mod debug_recompute;
 mod pastset_cache;
+pub mod pivot_hint;
 pub mod pos_handler;
+
+use self::pivot_hint::{PivotHint, PivotHintConfig};
 
 use super::consensus::consensus_inner::{
     confirmation_meter::ConfirmationMeter,
@@ -152,6 +155,9 @@ pub struct ConsensusConfig {
     /// The number of extra epochs that we want to keep
     /// states/receipts/transactions.
     pub sync_state_epoch_gap: Option<u64>,
+
+    /// The file path and checksum for `PivotHint`
+    pub pivot_hint_conf: Option<PivotHintConfig>,
 }
 
 #[derive(Debug)]
@@ -250,7 +256,8 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
-        pos_verifier: Arc<PosVerifier>, params: CommonParams,
+        pos_verifier: Arc<PosVerifier>, pivot_hint: Option<Arc<PivotHint>>,
+        params: CommonParams,
     ) -> Self {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
@@ -288,6 +295,7 @@ impl ConsensusGraph {
                 notifications,
                 node_type,
                 pos_verifier,
+                pivot_hint,
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
@@ -315,7 +323,8 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
-        pos_verifier: Arc<PosVerifier>, params: CommonParams,
+        pos_verifier: Arc<PosVerifier>, pivot_hint: Option<Arc<PivotHint>>,
+        params: CommonParams,
     ) -> Self {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let stable_hash = data_man.get_cur_consensus_era_stable_hash();
@@ -333,6 +342,7 @@ impl ConsensusGraph {
             verification_conf,
             node_type,
             pos_verifier,
+            pivot_hint,
             params,
         )
     }

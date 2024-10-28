@@ -66,6 +66,7 @@ prometheus = { version = "0.7.0", default-features = false }
 rand = { workspace = true }
 rand_08 = {package = "rand", version = "0.8"}
 rand_xorshift="0.2"
+rangetools = "0.1.4"
 random-crash = { workspace = true }
 rayon = { workspace = true }
 rlp = { workspace = true }

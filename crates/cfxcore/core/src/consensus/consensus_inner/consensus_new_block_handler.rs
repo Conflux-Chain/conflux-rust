@@ -12,6 +12,7 @@ use crate::{
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
             ConsensusGraphInner, NULL,
         },
+        pivot_hint::PivotHint,
         pos_handler::PosVerifier,
         ConsensusConfig,
     },
@@ -49,6 +50,8 @@ pub struct ConsensusNewBlockHandler {
 
     /// The type of this node: Archive, Full, or Light.
     node_type: NodeType,
+
+    pivot_hint: Option<Arc<PivotHint>>,
 }
 
 /// ConsensusNewBlockHandler contains all sub-routines for handling new arriving
@@ -60,6 +63,7 @@ impl ConsensusNewBlockHandler {
         data_man: Arc<BlockDataManager>, executor: Arc<ConsensusExecutor>,
         statistics: SharedStatistics, notifications: Arc<Notifications>,
         node_type: NodeType, pos_verifier: Arc<PosVerifier>,
+        pivot_hint: Option<Arc<PivotHint>>,
     ) -> Self {
         let epochs_sender = notifications.epochs_ordered.clone();
         let blame_verifier =
@@ -75,6 +79,7 @@ impl ConsensusNewBlockHandler {
             epochs_sender,
             blame_verifier,
             node_type,
+            pivot_hint,
         }
     }
 
@@ -1242,6 +1247,10 @@ impl ConsensusNewBlockHandler {
                 new = inner.ancestor_at(me, fork_at);
                 let new_weight = inner.weight_tree.get(new);
 
+                let me_height = inner.arena[me].height;
+                let me_ancestor_hash_at =
+                    |height| inner.arena[inner.ancestor_at(me, height)].hash;
+
                 // Note that for properly set consensus parameters, fork_at will
                 // always after the force_height (i.e., the
                 // force confirmation is always stable).
@@ -1253,6 +1262,13 @@ impl ConsensusNewBlockHandler {
                         (new_weight, &inner.arena[new].hash),
                         (prev_weight, &inner.arena[prev].hash),
                     )
+                    && self.pivot_hint.as_ref().map_or(true, |hint| {
+                        hint.allow_switch(
+                            fork_at,
+                            me_height,
+                            me_ancestor_hash_at,
+                        )
+                    })
                 {
                     pivot_changed = true;
                 } else {
