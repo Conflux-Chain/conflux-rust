@@ -1126,8 +1126,8 @@ impl ConsensusNewBlockHandler {
             return;
         } else {
             debug!(
-                "Start activating block in ConsensusGraph: index = {:?} hash={:?}",
-                me, inner.arena[me].hash,
+                "Start activating block in ConsensusGraph: index = {:?} hash={:?} height={:?}",
+                me, inner.arena[me].hash, inner.arena[me].height,
             );
         }
 
@@ -1220,15 +1220,26 @@ impl ConsensusNewBlockHandler {
         let force_lca = inner.lca(force_confirm, last);
 
         if force_lca == force_confirm && inner.arena[me].parent == last {
-            inner.pivot_chain.push(me);
-            inner.set_epoch_number_in_epoch(
-                me,
-                inner.pivot_index_to_height(inner.pivot_chain.len()) - 1,
-            );
-            inner.pivot_chain_metadata.push(Default::default());
-            extend_pivot = true;
-            pivot_changed = true;
-            fork_at = inner.pivot_index_to_height(old_pivot_chain_len)
+            let me_height = inner.arena[me].height;
+            let me_hash = inner.arena[me].hash;
+            let allow_extend = self
+                .pivot_hint
+                .as_ref()
+                .map_or(true, |hint| hint.allow_extend(me_height, me_hash));
+            if allow_extend {
+                inner.pivot_chain.push(me);
+                inner.set_epoch_number_in_epoch(
+                    me,
+                    inner.pivot_index_to_height(inner.pivot_chain.len()) - 1,
+                );
+                inner.pivot_chain_metadata.push(Default::default());
+                extend_pivot = true;
+                pivot_changed = true;
+                fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
+            } else {
+                debug!("Chain extend rejected by pivot hint: height={me_height}, hash={me_hash:?}");
+                fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
+            }
         } else {
             let lca = inner.lca(last, me);
             let new;

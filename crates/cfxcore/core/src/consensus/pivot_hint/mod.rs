@@ -174,15 +174,44 @@ impl PivotHint {
         };
 
         let actual_hash = ancestor_hash_at(check_height);
-        let page_number = check_height / self.header.page_interval;
-        let page_offset = check_height % self.header.page_interval;
+        let result = self.check_hash(check_height, actual_hash);
+        debug!("Pivot hint check switch result {result}. fork_at: {fork_at}, me_height: {me_height}, check_height: {check_height}, fetch_hash: {actual_hash:?}");
+        result
+    }
 
-        self.check_with_page(page_number, |page| {
-            page.check_hash_at_height(page_offset, actual_hash)
-        })
+    pub fn allow_extend(&self, height: u64, hash: H256) -> bool {
+        if !self.active.load(Ordering::Acquire) {
+            return true;
+        }
+
+        if height >= self.header.range_max {
+            return true;
+        }
+
+        if height % self.header.minor_interval != 0 {
+            return true;
+        }
+
+        let page_number = height / self.header.page_interval;
+        let page_offset = height % self.header.page_interval;
+
+        let result = self.check_with_page(page_number, |page| {
+            page.check_hash_at_height(page_offset, hash)
+        });
+        debug!("Pivot hint check extend result {result}. me_height: {height}, fetch_hash: {hash:?}");
+        result
     }
 
     pub fn is_active(&self) -> bool { self.active.load(Ordering::Acquire) }
+
+    fn check_hash(&self, height: u64, hash: H256) -> bool {
+        let page_number = height / self.header.page_interval;
+        let page_offset = height % self.header.page_interval;
+
+        self.check_with_page(page_number, |page| {
+            page.check_hash_at_height(page_offset, hash)
+        })
+    }
 
     fn check_with_page(
         &self, page_number: u64, check: impl Fn(&PivotHintPage) -> bool,
