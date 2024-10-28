@@ -1243,7 +1243,16 @@ impl ConsensusNewBlockHandler {
         } else {
             let lca = inner.lca(last, me);
             let new;
-            if force_confirm != force_lca {
+            if self.pivot_hint.is_some() && lca == last {
+                // If pivot hint is enabled, `me` could be an extend of the
+                // pivot chain, but its parent block is not on the pivot chain.
+                // This special case can only happen
+                debug!("Chain extend rejected by pivot hint because parent is rejected.");
+                fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
+                // In this case, `pivot_changed` is false. So `new` can be
+                // aribitrary value.
+                new = 0;
+            } else if force_confirm != force_lca {
                 debug!(
                     "pivot chain switch to force_confirm={} force_height={}",
                     force_confirm, force_height
