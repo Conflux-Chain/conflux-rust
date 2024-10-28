@@ -27,7 +27,10 @@ use cfx_types::{address_util::AddressUtil, Address, Space, U256};
 pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    consensus::pos_handler::{PosConfiguration, PosVerifier},
+    consensus::{
+        pivot_hint::PivotHint,
+        pos_handler::{PosConfiguration, PosVerifier},
+    },
     genesis_block::{self as genesis, genesis_block},
     pow::PowComputer,
     statistics::Statistics,
@@ -357,6 +360,11 @@ pub fn initialize_common_modules(
 
     let statistics = Arc::new(Statistics::new());
     let notifications = Notifications::init();
+    let pivot_hint = if let Some(conf) = &consensus_conf.pivot_hint_conf {
+        Some(Arc::new(PivotHint::new(conf)?))
+    } else {
+        None
+    };
 
     let consensus = Arc::new(ConsensusGraph::new(
         consensus_conf,
@@ -370,6 +378,7 @@ pub fn initialize_common_modules(
         verification_config.clone(),
         node_type,
         pos_verifier.clone(),
+        pivot_hint,
         conf.common_params(),
     ));
 
