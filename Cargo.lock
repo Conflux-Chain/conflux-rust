@@ -1333,7 +1333,7 @@ dependencies = [
  "clap",
  "error-chain",
  "geth-tracer",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpsee",
  "keccak-hash",
  "parity-version",

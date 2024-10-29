@@ -15,7 +15,10 @@ use cfx_rpc_eth_types::{
     Receipt, SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
-use cfx_rpc_utils::error::{errors::*, jsonrpc_error_helpers::*};
+use cfx_rpc_utils::error::{
+    errors::*, jsonrpc_error_helpers::*,
+    jsonrpsee_error_helpers::internal_error as jsonrpsee_internal_error,
+};
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, H64, U256, U64,
@@ -76,29 +79,21 @@ impl EthApi {
     pub fn fetch_block_by_height(
         &self, height: u64,
     ) -> Result<PhantomBlock, String> {
-        let maybe_block = self.consensus_graph().get_phantom_block_by_number(
-            EpochNumber::Number(height),
-            None,
-            false,
-        )?;
-        if let Some(block) = maybe_block {
-            Ok(block)
-        } else {
-            Err("Specified block header does not exist".into())
-        }
+        self.consensus_graph()
+            .get_phantom_block_by_number(
+                EpochNumber::Number(height),
+                None,
+                false,
+            )?
+            .ok_or("Specified block header does not exist".to_string())
     }
 
     pub fn fetch_block_by_hash(
         &self, hash: &H256,
     ) -> Result<PhantomBlock, String> {
-        let maybe_block = self
-            .consensus_graph()
-            .get_phantom_block_by_hash(hash, false)?;
-        if let Some(block) = maybe_block {
-            Ok(block)
-        } else {
-            Err("Specified block header does not exist".into())
-        }
+        self.consensus_graph()
+            .get_phantom_block_by_hash(hash, false)?
+            .ok_or("Specified block header does not exist".into())
     }
 
     pub fn exec_transaction(
@@ -1115,7 +1110,7 @@ impl EthApiServer for EthApi {
         &self, hash: H256,
     ) -> RpcResult<Option<Bytes>> {
         let _ = hash;
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 
     /// Returns the information about a transaction requested by transaction
@@ -1132,7 +1127,7 @@ impl EthApiServer for EthApi {
         &self, hash: H256, index: Index,
     ) -> RpcResult<Option<Bytes>> {
         let _ = (hash, index);
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 
     /// Returns information about a transaction by block hash and transaction
@@ -1151,7 +1146,7 @@ impl EthApiServer for EthApi {
         &self, number: BlockNumberOrTag, index: Index,
     ) -> RpcResult<Option<Bytes>> {
         let _ = (number, index);
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 
     /// Returns information about a transaction by block number and transaction
@@ -1169,7 +1164,7 @@ impl EthApiServer for EthApi {
         &self, address: Address, nonce: U64,
     ) -> RpcResult<Option<Transaction>> {
         let _ = (address, nonce);
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 
     /// Returns the receipt of a transaction by transaction hash.
@@ -1218,13 +1213,13 @@ impl EthApiServer for EthApi {
         &self, hash: BlockNumberOrTag,
     ) -> RpcResult<Option<Header>> {
         let _ = hash;
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 
     /// Returns the block's header at given hash.
     async fn header_by_hash(&self, hash: H256) -> RpcResult<Option<Header>> {
         let _ = hash;
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 
     /// `eth_simulateV1` executes an arbitrary number of transactions on top of
@@ -1374,7 +1369,7 @@ impl EthApiServer for EthApi {
         &self, request: TransactionRequest,
     ) -> RpcResult<H256> {
         let _ = request;
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 
     /// Sends signed transaction, returning its hash.
@@ -1406,7 +1401,7 @@ impl EthApiServer for EthApi {
     /// + len(message) + message))).
     async fn sign(&self, address: Address, message: Bytes) -> RpcResult<Bytes> {
         let _ = (address, message);
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 
     /// Signs a transaction that can be submitted to the network at a later time
@@ -1415,6 +1410,6 @@ impl EthApiServer for EthApi {
         &self, transaction: TransactionRequest,
     ) -> RpcResult<Bytes> {
         let _ = transaction;
-        todo!()
+        Err(jsonrpsee_internal_error("Not implemented"))
     }
 }
