@@ -8,11 +8,16 @@ use async_trait::async_trait;
 use cfx_rpc_eth_api::DebugApiServer;
 use cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
-use cfx_types::{Space, H256, U256};
-use cfxcore::{ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph};
+use cfx_types::{AddressSpaceUtil, Space, H256, U256};
+use cfxcore::{
+    errors::Error as CoreError, ConsensusGraph, ConsensusGraphTrait,
+    SharedConsensusGraph,
+};
 use geth_tracer::to_alloy_h256;
 use jsonrpsee::core::RpcResult;
-use primitives::{Block, BlockHeaderBuilder, EpochNumber};
+use primitives::{
+    Block, BlockHashOrEpochNumber, BlockHeaderBuilder, EpochNumber,
+};
 use std::sync::Arc;
 
 pub struct DebugApi {
@@ -65,30 +70,56 @@ impl DebugApi {
     }
 
     pub fn trace_call(
-        &self, request: TransactionRequest, block_number: Option<BlockNumber>,
+        &self, mut request: TransactionRequest,
+        block_number: Option<BlockNumber>,
         opts: Option<GethDebugTracingCallOptions>,
-    ) -> Result<GethTrace, String> {
+    ) -> Result<GethTrace, CoreError> {
+        if request.from.is_none() {
+            return Err(CoreError::InvalidParam(
+                "from is required".to_string(),
+                Default::default(),
+            ));
+        }
+
         let opts = opts.unwrap_or_default();
         let block_num = block_number.unwrap_or_default();
 
-        let epoch_num = self.get_block_epoch_num(block_num)?;
+        let epoch_num = self
+            .get_block_epoch_num(block_num)
+            .map_err(|err| CoreError::Msg(err))?;
 
         // validate epoch state
         self.consensus_graph()
-            .validate_stated_epoch(&EpochNumber::Number(epoch_num))?;
+            .validate_stated_epoch(&EpochNumber::Number(epoch_num))
+            .map_err(|err| CoreError::Msg(err))?;
 
         let epoch_block_hashes = self
             .consensus_graph()
-            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))?;
-        let epoch_id =
-            epoch_block_hashes.last().expect("should have block hash");
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
+            .map_err(|err| CoreError::Msg(err))?;
+        let epoch_id = epoch_block_hashes
+            .last()
+            .ok_or(CoreError::Msg("should have block hash".to_string()))?;
+
+        // nonce auto fill
+        if request.nonce.is_none() {
+            let nonce = self.consensus_graph().next_nonce(
+                request.from.unwrap().with_evm_space(),
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(
+                    epoch_num,
+                )),
+                "num",
+            )?;
+            request.nonce = Some(nonce);
+        }
 
         // construct blocks from call_request
         let chain_id = self.consensus.best_chain_id();
         // debug trace call has a fixed large gas limit.
-        let signed_tx = request
-            .sign_call(chain_id.in_evm_space(), self.max_estimation_gas_limit)
-            .map_err(|err| err.to_string())?;
+        let signed_tx = request.sign_call(
+            chain_id.in_evm_space(),
+            self.max_estimation_gas_limit,
+        )?;
         let epoch_blocks = self
             .consensus_graph()
             .data_man
@@ -96,8 +127,11 @@ impl DebugApi {
                 &epoch_block_hashes,
                 true, /* update_cache */
             )
-            .expect("blocks exist");
-        let pivot_block = epoch_blocks.last().expect("should have block");
+            .ok_or(CoreError::Msg("blocks should exist".to_string()))?;
+        let pivot_block = epoch_blocks
+            .last()
+            .ok_or(CoreError::Msg("should have block".to_string()))?;
+
         let header = BlockHeaderBuilder::new()
             .with_base_price(pivot_block.block_header.base_price())
             .with_parent_hash(pivot_block.block_header.hash())
@@ -108,30 +142,28 @@ impl DebugApi {
         let block = Block::new(header, vec![Arc::new(signed_tx)]);
         let blocks: Vec<Arc<Block>> = vec![Arc::new(block)];
 
-        let traces = self
-            .consensus_graph()
-            .collect_blocks_geth_trace(
-                *epoch_id,
-                epoch_num,
-                &blocks,
-                opts.tracing_options,
-                None,
-            )
-            .map_err(|err| err.to_string())?;
+        let traces = self.consensus_graph().collect_blocks_geth_trace(
+            *epoch_id,
+            epoch_num,
+            &blocks,
+            opts.tracing_options,
+            None,
+        )?;
 
-        let res = traces.first().expect("should have trace");
+        let res = traces
+            .first()
+            .ok_or(CoreError::Msg("trace generation failed".to_string()))?;
 
         Ok(res.trace.clone())
     }
 
     pub fn trace_block_by_num(
         &self, block_num: u64, opts: Option<GethDebugTracingOptions>,
-    ) -> Result<Vec<TraceResult>, String> {
+    ) -> Result<Vec<TraceResult>, CoreError> {
         let opts = opts.unwrap_or_default();
         let epoch_traces = self
             .consensus_graph()
-            .collect_epoch_geth_trace(block_num, None, opts)
-            .map_err(|e| format!("invalid tx hash: {e}"))?;
+            .collect_epoch_geth_trace(block_num, None, opts)?;
 
         let result = epoch_traces
             .into_iter()
@@ -146,7 +178,7 @@ impl DebugApi {
 
     pub fn trace_transaction(
         &self, hash: H256, opts: Option<GethDebugTracingOptions>,
-    ) -> Result<GethTrace, String> {
+    ) -> Result<GethTrace, CoreError> {
         let opts = opts.unwrap_or_default();
 
         // early return if tracer is not supported or NoopTracer is requested
@@ -160,7 +192,9 @@ impl DebugApi {
                             .tracer_config
                             .clone()
                             .into_call_config()
-                            .map_err(|err| err.to_string())?;
+                            .map_err(|err| {
+                            CoreError::Msg(err.to_string())
+                        })?;
                         ()
                     }
                     GethDebugBuiltInTracerType::PreStateTracer => {
@@ -169,17 +203,19 @@ impl DebugApi {
                             .tracer_config
                             .clone()
                             .into_pre_state_config()
-                            .map_err(|err| err.to_string())?;
+                            .map_err(|err| CoreError::Msg(err.to_string()))?;
                         ()
                     }
                     GethDebugBuiltInTracerType::NoopTracer => {
                         return Ok(GethTrace::NoopTracer(NoopFrame::default()))
                     }
                     GethDebugBuiltInTracerType::MuxTracer => {
-                        return Err("not supported".into())
+                        return Err(CoreError::Msg("not supported".to_string()))
                     }
                 },
-                JsTracer(_) => return Err("not supported".into()),
+                JsTracer(_) => {
+                    return Err(CoreError::Msg("not supported".to_string()))
+                }
             }
         }
 
@@ -187,26 +223,27 @@ impl DebugApi {
             .consensus
             .get_data_manager()
             .transaction_index_by_hash(&hash, false /* update_cache */)
-            .ok_or("invalid tx hash")?;
+            .ok_or(CoreError::Msg("invalid tx hash".to_string()))?;
 
         let epoch_num = self
             .consensus
             .get_block_epoch_number(&tx_index.block_hash)
-            .ok_or("invalid tx hash")?;
+            .ok_or(CoreError::Msg("invalid tx hash".to_string()))?;
 
-        let epoch_traces = self
-            .consensus_graph()
-            .collect_epoch_geth_trace(epoch_num, Some(hash), opts)
-            .map_err(|e| format!("invalid tx hash: {e}"))?;
+        let epoch_traces = self.consensus_graph().collect_epoch_geth_trace(
+            epoch_num,
+            Some(hash),
+            opts,
+        )?;
 
         // filter by tx hash
         let trace = epoch_traces
             .into_iter()
             .find(|val| val.tx_hash == hash)
             .map(|val| val.trace)
-            .ok_or("trace generation failed".to_string());
+            .ok_or(CoreError::Msg("trace generation failed".to_string()))?;
 
-        trace
+        Ok(trace)
     }
 }
 
@@ -219,8 +256,7 @@ impl DebugApiServer for DebugApi {
     async fn debug_trace_transaction(
         &self, tx_hash: H256, opts: Option<GethDebugTracingOptions>,
     ) -> RpcResult<GethTrace> {
-        self.trace_transaction(tx_hash, opts)
-            .map_err(|e| invalid_params_msg(&e))
+        self.trace_transaction(tx_hash, opts).map_err(|e| e.into())
     }
 
     async fn debug_trace_block_by_hash(
@@ -231,7 +267,7 @@ impl DebugApiServer for DebugApi {
             .get_block_epoch_number_with_pivot_check(&block_hash, false)?;
 
         self.trace_block_by_num(epoch_num, opts)
-            .map_err(|err| invalid_params_msg(&err))
+            .map_err(|e| e.into())
     }
 
     async fn debug_trace_block_by_number(
@@ -241,8 +277,7 @@ impl DebugApiServer for DebugApi {
             .get_block_epoch_num(block)
             .map_err(|e| invalid_params_msg(&e))?;
 
-        self.trace_block_by_num(num, opts)
-            .map_err(|err| invalid_params_msg(&err))
+        self.trace_block_by_num(num, opts).map_err(|e| e.into())
     }
 
     async fn debug_trace_call(
@@ -250,6 +285,6 @@ impl DebugApiServer for DebugApi {
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<GethTrace> {
         self.trace_call(request, block_number, opts)
-            .map_err(|err| invalid_params_msg(&err))
+            .map_err(|e| e.into())
     }
 }

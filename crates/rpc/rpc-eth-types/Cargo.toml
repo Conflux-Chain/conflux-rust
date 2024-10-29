@@ -29,3 +29,4 @@ cfx-vm-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 error-chain = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
+jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }

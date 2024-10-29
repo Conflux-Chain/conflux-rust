@@ -40,7 +40,7 @@ impl Debug for GethDebugHandler {
     ) -> JsonRpcResult<GethTrace> {
         self.inner
             .trace_transaction(hash, opts)
-            .map_err(|err| invalid_params_msg(&err))
+            .map_err(|err| err.into())
     }
 
     fn debug_trace_block_by_hash(
@@ -52,7 +52,7 @@ impl Debug for GethDebugHandler {
 
         self.inner
             .trace_block_by_num(epoch_num, opts)
-            .map_err(|err| invalid_params_msg(&err))
+            .map_err(|err| err.into())
     }
 
     fn debug_trace_block_by_number(
@@ -65,7 +65,7 @@ impl Debug for GethDebugHandler {
 
         self.inner
             .trace_block_by_num(num, opts)
-            .map_err(|err| invalid_params_msg(&err))
+            .map_err(|err| err.into())
     }
 
     // TODO: implement state and block override
@@ -75,6 +75,6 @@ impl Debug for GethDebugHandler {
     ) -> JsonRpcResult<GethTrace> {
         self.inner
             .trace_call(request, block_number, opts)
-            .map_err(|err| invalid_params_msg(&err))
+            .map_err(|err| err.into())
     }
 }

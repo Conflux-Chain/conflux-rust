@@ -3,6 +3,7 @@ use alloy_primitives::hex;
 use alloy_rpc_types::error::EthRpcErrorCode;
 use cfx_types::H256;
 use jsonrpc_core::{Error, ErrorCode, Value};
+use jsonrpsee::types::ErrorObjectOwned;
 use std::fmt;
 
 /// Constructs a JSON-RPC error, consisting of `code`, `message` and optional
@@ -152,5 +153,13 @@ pub fn pivot_assumption_failed(expected: H256, got: H256) -> Error {
             "pivot assumption: {:?}, actual pivot hash: {:?}",
             expected, got
         ))),
+    }
+}
+
+pub fn error_object_owned_to_jsonrpc_error(e: ErrorObjectOwned) -> Error {
+    Error {
+        code: ErrorCode::from(e.code() as i64),
+        message: e.message().into(),
+        data: e.data().map(|v| Value::String(v.to_string())),
     }
 }
