@@ -1,4 +1,5 @@
 use jsonrpc_core::{Error as JsonRpcError, ErrorCode, Value};
+use jsonrpsee::types::ErrorObjectOwned;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -23,5 +24,12 @@ impl From<Error> for JsonRpcError {
                 data: None,
             },
         }
+    }
+}
+
+impl From<Error> for ErrorObjectOwned {
+    fn from(e: Error) -> ErrorObjectOwned {
+        let err: JsonRpcError = e.into();
+        ErrorObjectOwned::owned(err.code.code() as i32, err.message, err.data)
     }
 }

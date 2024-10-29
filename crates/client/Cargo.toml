@@ -28,12 +28,12 @@ app_dirs = "1.2.1"
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 jsonrpc-core = { workspace = true }
-jsonrpc-tcp-server = "15.1.0"
-jsonrpc-http-server = "15.1.0"
-jsonrpc-derive = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-pubsub = "15.1.0"
-jsonrpc-ws-server = "15.1.0"
+jsonrpc-tcp-server = { workspace = true }
+jsonrpc-http-server = { workspace = true }
+jsonrpc-derive = { workspace = true }
+jsonrpc-core-client = { workspace = true }
+jsonrpc-pubsub = { workspace = true }
+jsonrpc-ws-server = { workspace = true }
 error-chain = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
@@ -113,6 +113,8 @@ cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-util-macros = { workspace = true }
+cfx-rpc = { workspace = true }
+cfx-rpc-utils = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"

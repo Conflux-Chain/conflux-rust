@@ -2,13 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::error_helpers::*;
+use crate::error::jsonrpc_error_helpers::*;
 use alloy_primitives::{hex, Address, Bytes};
 use alloy_rpc_types::error::EthRpcErrorCode;
 use alloy_sol_types::decode_revert_reason;
-use cfxcore::transaction_pool::TransactionPoolError;
 use jsonrpc_core::{Error as JsonRpcError, ErrorCode};
-use primitives::transaction::TransactionError;
 use revm::primitives::{HaltReason, OutOfGasError};
 use std::time::Duration;
 
@@ -168,43 +166,6 @@ impl From<EthApiError> for JsonRpcError {
             err @ EthApiError::TransactionInputError(_) => invalid_params_rpc_err(err.to_string()),
             EthApiError::Other(err) => internal_rpc_err(err),
             // EthApiError::MuxTracerError(msg) => internal_rpc_err(msg.to_string()),
-        }
-    }
-}
-
-impl From<TransactionPoolError> for EthApiError {
-    fn from(err: TransactionPoolError) -> Self {
-        match err {
-            TransactionPoolError::TransactionError(tx_err) => match tx_err {
-                TransactionError::AlreadyImported => Self::PoolError(RpcPoolError::ReplaceUnderpriced),
-                TransactionError::ChainIdMismatch { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::InvalidChainId),
-                TransactionError::EpochHeightOutOfBound { .. } => Self::InvalidBlockRange,
-                TransactionError::NotEnoughBaseGas { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::GasTooLow),
-                TransactionError::Stale => Self::InvalidTransaction(RpcInvalidTransactionError::NonceTooLow),
-                TransactionError::TooCheapToReplace => Self::PoolError(RpcPoolError::ReplaceUnderpriced),
-                TransactionError::LimitReached => Self::PoolError(RpcPoolError::TxPoolOverflow),
-                TransactionError::InsufficientGasPrice { .. } => Self::PoolError(RpcPoolError::Underpriced),
-                TransactionError::InsufficientGas { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::GasTooLow),
-                TransactionError::InsufficientBalance { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::InsufficientFundsForTransfer),
-                TransactionError::GasLimitExceeded { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::GasTooHigh),
-                TransactionError::InvalidGasLimit(_) => Self::InvalidTransaction(RpcInvalidTransactionError::GasUintOverflow),
-                TransactionError::InvalidSignature(_) => Self::InvalidTransactionSignature,
-                TransactionError::TooBig => Self::InvalidTransaction(RpcInvalidTransactionError::MaxInitCodeSizeExceeded),
-                TransactionError::InvalidRlp(_) => Self::FailedToDecodeSignedTransaction,
-                TransactionError::ZeroGasPrice => Self::PoolError(RpcPoolError::Underpriced),
-                TransactionError::FutureTransactionType => Self::InvalidTransaction(RpcInvalidTransactionError::TxTypeNotSupported),
-                TransactionError::InvalidReceiver => Self::Other("Invalid receiver".to_string()),
-                TransactionError::TooLargeNonce => Self::InvalidTransaction(RpcInvalidTransactionError::NonceMaxValue),
-            },
-            TransactionPoolError::GasLimitExceeded { .. } => Self::PoolError(RpcPoolError::ExceedsGasLimit),
-            TransactionPoolError::GasPriceLessThanMinimum { .. } => Self::PoolError(RpcPoolError::Underpriced),
-            TransactionPoolError::RlpDecodeError(_) => Self::FailedToDecodeSignedTransaction,
-            TransactionPoolError::NonceTooDistant { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::NonceTooHigh),
-            TransactionPoolError::NonceTooStale { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::NonceTooLow),
-            TransactionPoolError::OutOfBalance { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::InsufficientFundsForTransfer),
-            TransactionPoolError::TxPoolFull => Self::PoolError(RpcPoolError::TxPoolOverflow),
-            TransactionPoolError::HigherGasPriceNeeded {..} => Self::PoolError(RpcPoolError::ReplaceUnderpriced),
-            TransactionPoolError::StateDbError(_) => Self::InternalEthError,
         }
     }
 }

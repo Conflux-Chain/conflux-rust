@@ -23,3 +23,8 @@ keccak-hash = { workspace = true}
 parity-version = { workspace = true }
 clap = { workspace = true }
 alloy-rpc-types = { workspace = true }
+alloy-rpc-types-trace = { workspace = true }
+cfxcore = { workspace = true }
+primitives = { workspace = true }
+geth-tracer = { workspace = true }
+cfx-rpc-utils = { workspace = true }
