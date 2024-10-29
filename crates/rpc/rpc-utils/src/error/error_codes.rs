@@ -96,9 +96,6 @@ pub const REQUEST_REJECTED_IN_CATCH_UP: i64 = -32077;
 /// return another error code such as invalid params, or for example
 /// CALL_EXECUTION_ERROR.
 pub const EXCEPTION_ERROR: i64 = -32016;
-static_assertions::const_assert!(
-    EXCEPTION_ERROR == cfxcore::errors::EXCEPTION_ERROR
-);
 /// The error can be given to a request about a previous related request
 /// which we can not associate with.
 ///

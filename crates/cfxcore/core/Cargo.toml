@@ -88,7 +88,6 @@ tempdir = "0.3"
 threadpool = "1.0"
 throttling = { workspace = true }
 toml = "0.5.8"
-tokio02 = { version = "0.2", package="tokio", features = ["full"] }
 tokio = { version = "1.6", features = ["full"] }
 tokio-timer = "0.2.13"
 tokio-stream = "0.1.4"
@@ -141,6 +140,8 @@ alloy-rpc-types-trace = { workspace = true }
 geth-tracer = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
+jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
+cfx-rpc-utils = { workspace = true }
 
 
 [dev-dependencies]

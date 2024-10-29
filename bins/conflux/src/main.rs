@@ -209,7 +209,9 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
     }
 
     if let Some(cmd) = RpcCommand::parse(subcmd_matches)? {
-        return Ok(Some(cmd.execute()?));
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(cmd.execute())?;
+        return Ok(Some(result));
     }
 
     Ok(None)
