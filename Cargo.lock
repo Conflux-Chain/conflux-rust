@@ -2014,6 +2014,7 @@ dependencies = [
  "base64ct",
  "bcs",
  "blockgen",
+ "bls-signatures",
  "cfx-types",
  "cfxcore",
  "cfxcore-accounts",

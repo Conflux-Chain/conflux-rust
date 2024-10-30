@@ -63,6 +63,7 @@ hex = "0.3.0"
 base64ct = "=1.1.1"
 parity-version = { workspace = true }
 tokio = { version = "1", features = ["rt"] }
+bls-signatures = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
 version = "0.3.2"
@@ -85,3 +86,7 @@ default = ["jemalloc-global"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
 u64-mpt-db-key = ["client/u64_mpt_db_key"]
+# According to Rust's feature unification, when a feature is enabled for a dependency in the root package,
+# it will be enabled across all paths depending on that package. 
+# (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification)
+blst-portable = ["bls-signatures/blst-portable"]
