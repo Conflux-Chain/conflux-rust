@@ -1661,6 +1661,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_xorshift 0.2.0",
  "random-crash",
+ "rangetools",
  "rayon",
  "rlp 0.4.6",
  "rlp_derive",
@@ -2013,6 +2014,7 @@ dependencies = [
  "base64ct",
  "bcs",
  "blockgen",
+ "bls-signatures",
  "cfx-types",
  "cfxcore",
  "cfxcore-accounts",
@@ -7013,6 +7015,12 @@ dependencies = [
  "parking_lot 0.11.2",
  "rand 0.7.3",
 ]
+
+[[package]]
+name = "rangetools"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6e97ca3dbabd81e6033cfe09f0cef37c89f34f2a9223cab7cf99305d46a9633"
 
 [[package]]
 name = "rayon"

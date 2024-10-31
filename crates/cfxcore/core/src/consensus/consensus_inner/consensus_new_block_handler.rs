@@ -12,6 +12,7 @@ use crate::{
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
             ConsensusGraphInner, NULL,
         },
+        pivot_hint::PivotHint,
         pos_handler::PosVerifier,
         ConsensusConfig,
     },
@@ -49,6 +50,8 @@ pub struct ConsensusNewBlockHandler {
 
     /// The type of this node: Archive, Full, or Light.
     node_type: NodeType,
+
+    pivot_hint: Option<Arc<PivotHint>>,
 }
 
 /// ConsensusNewBlockHandler contains all sub-routines for handling new arriving
@@ -60,6 +63,7 @@ impl ConsensusNewBlockHandler {
         data_man: Arc<BlockDataManager>, executor: Arc<ConsensusExecutor>,
         statistics: SharedStatistics, notifications: Arc<Notifications>,
         node_type: NodeType, pos_verifier: Arc<PosVerifier>,
+        pivot_hint: Option<Arc<PivotHint>>,
     ) -> Self {
         let epochs_sender = notifications.epochs_ordered.clone();
         let blame_verifier =
@@ -75,6 +79,7 @@ impl ConsensusNewBlockHandler {
             epochs_sender,
             blame_verifier,
             node_type,
+            pivot_hint,
         }
     }
 
@@ -1127,8 +1132,8 @@ impl ConsensusNewBlockHandler {
             return;
         } else {
             debug!(
-                "Start activating block in ConsensusGraph: index = {:?} hash={:?}",
-                me, inner.arena[me].hash,
+                "Start activating block in ConsensusGraph: index = {:?} hash={:?} height={:?}",
+                me, inner.arena[me].hash, inner.arena[me].height,
             );
         }
 
@@ -1221,19 +1226,39 @@ impl ConsensusNewBlockHandler {
         let force_lca = inner.lca(force_confirm, last);
 
         if force_lca == force_confirm && inner.arena[me].parent == last {
-            inner.pivot_chain.push(me);
-            inner.set_epoch_number_in_epoch(
-                me,
-                inner.pivot_index_to_height(inner.pivot_chain.len()) - 1,
-            );
-            inner.pivot_chain_metadata.push(Default::default());
-            extend_pivot = true;
-            pivot_changed = true;
-            fork_at = inner.pivot_index_to_height(old_pivot_chain_len)
+            let me_height = inner.arena[me].height;
+            let me_hash = inner.arena[me].hash;
+            let allow_extend = self
+                .pivot_hint
+                .as_ref()
+                .map_or(true, |hint| hint.allow_extend(me_height, me_hash));
+            if allow_extend {
+                inner.pivot_chain.push(me);
+                inner.set_epoch_number_in_epoch(
+                    me,
+                    inner.pivot_index_to_height(inner.pivot_chain.len()) - 1,
+                );
+                inner.pivot_chain_metadata.push(Default::default());
+                extend_pivot = true;
+                pivot_changed = true;
+                fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
+            } else {
+                debug!("Chain extend rejected by pivot hint: height={me_height}, hash={me_hash:?}");
+                fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
+            }
         } else {
             let lca = inner.lca(last, me);
             let new;
-            if force_confirm != force_lca {
+            if self.pivot_hint.is_some() && lca == last {
+                // If pivot hint is enabled, `me` could be an extend of the
+                // pivot chain, but its parent block is not on the pivot chain.
+                // This special case can only happen
+                debug!("Chain extend rejected by pivot hint because parent is rejected.");
+                fork_at = inner.pivot_index_to_height(old_pivot_chain_len);
+                // In this case, `pivot_changed` is false. So `new` can be
+                // aribitrary value.
+                new = 0;
+            } else if force_confirm != force_lca {
                 debug!(
                     "pivot chain switch to force_confirm={} force_height={}",
                     force_confirm, force_height
@@ -1248,6 +1273,10 @@ impl ConsensusNewBlockHandler {
                 new = inner.ancestor_at(me, fork_at);
                 let new_weight = inner.weight_tree.get(new);
 
+                let me_height = inner.arena[me].height;
+                let me_ancestor_hash_at =
+                    |height| inner.arena[inner.ancestor_at(me, height)].hash;
+
                 // Note that for properly set consensus parameters, fork_at will
                 // always after the force_height (i.e., the
                 // force confirmation is always stable).
@@ -1259,6 +1288,13 @@ impl ConsensusNewBlockHandler {
                         (new_weight, &inner.arena[new].hash),
                         (prev_weight, &inner.arena[prev].hash),
                     )
+                    && self.pivot_hint.as_ref().map_or(true, |hint| {
+                        hint.allow_switch(
+                            fork_at,
+                            me_height,
+                            me_ancestor_hash_at,
+                        )
+                    })
                 {
                     pivot_changed = true;
                 } else {
