@@ -16,6 +16,7 @@ use primitives::{account::AccountError, filter::FilterError, StateRoot};
 use rlp::DecoderError;
 use std::sync::Arc;
 
+use thiserror::Error;
 error_chain! {
     links {
         Network(network::Error, network::ErrorKind);
@@ -167,6 +168,159 @@ error_chain! {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum Errors {
+    #[error(transparent)]
+    Network(#[from] network::Error),
+
+    #[error(transparent)]
+    StateDb(#[from] cfx_statedb::Error),
+
+    #[error(transparent)]
+    Storage(#[from] cfx_storage::Error),
+
+    #[error(transparent)]
+    Decoder(#[from] DecoderError),
+
+    #[error(transparent)]
+    Filter(#[from] FilterError),
+
+    #[error(transparent)]
+    AccountError(#[from] AccountError),
+
+    #[error("packet already throttled {0:?}")]
+    AlreadyThrottled(&'static str),
+
+    #[error("ChainId mismatch, ours={ours:?}, theirs={theirs:?}.")]
+    ChainIdMismatch {
+        ours: ChainIdParamsOneChainInner,
+        theirs: ChainIdParamsOneChainInner,
+    },
+
+    #[error("{:?}", .0.display_error())]
+    ClonableErrorWrapper(ClonableError),
+
+    #[error("Genesis mismatch, ours={ours:?}, theirs={theirs:?}.")]
+    GenesisMismatch { ours: H256, theirs: H256 },
+
+    #[error("Internal error: {0:?}")]
+    InternalError(String),
+
+    #[error("Logs bloom hash validation for epoch {epoch} failed, expected={expected:?}, received={received:?}")]
+    InvalidBloom {
+        epoch: u64,
+        expected: H256,
+        received: H256,
+    },
+
+    #[error("Header verification failed")]
+    InvalidHeader,
+
+    #[error("Invalid ledger proof size for header {hash:?}: expected={expected}, received={received}")]
+    InvalidLedgerProofSize {
+        hash: H256,
+        expected: u64,
+        received: u64,
+    },
+    #[error("Invalid message format")]
+    InvalidMessageFormat,
+
+    #[error("Invalid previous state root for epoch {current_epoch} with snapshot epoch count {snapshot_epoch_count}: {root:?}",)]
+    InvalidPreviousStateRoot {
+        current_epoch: u64,
+        snapshot_epoch_count: u64,
+        root: Option<StateRoot>,
+    },
+
+    #[error("Receipts root validation for epoch {epoch} failed, expected={expected:?}, received={received:?}")]
+    InvalidReceipts {
+        epoch: u64,
+        expected: H256,
+        received: H256,
+    },
+
+    #[error(
+        "Invalid state proof for key {value:?} and value {key:?} in epoch {epoch}: {reason:?}"
+    )]
+    InvalidStateProof {
+        epoch: u64,
+        key: Vec<u8>,
+        value: Option<Vec<u8>>,
+        reason: &'static str,
+    },
+
+    #[error("State root validation for epoch {epoch} failed, expected={expected:?}, received={received:?}")]
+    InvalidStateRoot {
+        epoch: u64,
+        expected: H256,
+        received: H256,
+    },
+
+    #[error("Invalid storage root proof for address {address:?} in epoch {epoch}: {reason}")]
+    InvalidStorageRootProof {
+        epoch: u64,
+        address: H160,
+        reason: &'static str,
+    },
+
+    #[error("Invalid tx info: {reason:?}")]
+    InvalidTxInfo { reason: String },
+
+    #[error("Transaction root validation for block {hash:?} failed, expected={expected:?}, received={received:?}")]
+    InvalidTxRoot {
+        hash: H256,
+        expected: H256,
+        received: H256,
+    },
+
+    #[error("Invalid signature for transaction {hash:?}")]
+    InvalidTxSignature { hash: H256 },
+
+    #[error("Witness root validation for header {hash:?} failed, expected={expected:?}, received={received:?}")]
+    InvalidWitnessRoot {
+        hash: H256,
+        expected: H256,
+        received: H256,
+    },
+
+    #[error("Failed to send status to peer {peer:?}")]
+    SendStatusFailed { peer: NodeId },
+
+    #[error("Operation timeout: {0:?}")]
+    Timeout(String),
+
+    #[error("packet {msg_name:?} throttled: {response:?}")]
+    Throttled {
+        msg_name: &'static str,
+        response: Throttled,
+    },
+
+    #[error("Unable to produce tx info: {reason:?}")]
+    UnableToProduceTxInfo { reason: String },
+
+    #[error(
+        "Unexpected message id={received:?}, expected one of {expected:?}"
+    )]
+    UnexpectedMessage {
+        expected: Vec<MsgId>,
+        received: MsgId,
+    },
+
+    #[error("Unexpected peer type: {node_type:?}")]
+    UnexpectedPeerType { node_type: NodeType },
+
+    #[error("Unexpected response id; expected = {expected:?}, received = {received:?}")]
+    UnexpectedResponse {
+        expected: Option<RequestId>,
+        received: RequestId,
+    },
+    #[error("Unknown message: {id:?}")]
+    UnknownMessage { id: MsgId },
+
+    #[error("Witness for epoch {epoch} is not available")]
+    WitnessUnavailable { epoch: u64 },
+}
+
 pub fn handle(
     io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: &Error,
 ) {
@@ -308,8 +462,16 @@ pub fn handle(
 #[derive(Clone, Debug)]
 pub struct ClonableError(Arc<Mutex<Error>>);
 
+impl ClonableError {
+    fn display_error(&self) -> String {
+        self.0.lock().to_string()
+    }
+}
+
 impl Into<Error> for ClonableError {
-    fn into(self) -> Error { ErrorKind::ClonableErrorWrapper(self).into() }
+    fn into(self) -> Error {
+        ErrorKind::ClonableErrorWrapper(self).into()
+    }
 }
 
 impl From<Error> for ClonableError {
