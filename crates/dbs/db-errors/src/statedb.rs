@@ -6,6 +6,7 @@ use super::storage::Error as StorageError;
 use cfx_types::Address;
 use primitives::account::AccountError;
 use rlp::DecoderError;
+use thiserror::Error;
 
 error_chain! {
     links {
@@ -28,4 +29,20 @@ error_chain! {
             display("PoS database error, err={:?}", err)
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum Errors {
+    #[error(transparent)]
+    Account(#[from] AccountError),
+
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+
+    #[error(transparent)]
+    Decoder(#[from] DecoderError),
+    #[error("incomplete database: address={address:?}")]
+    IncompleteDatabase { address: Address },
+    #[error("PoS database error, err={0:?}")]
+    PosDatabaseError(String),
 }

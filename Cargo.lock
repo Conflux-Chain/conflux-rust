@@ -1137,6 +1137,7 @@ dependencies = [
  "rlp 0.4.6",
  "sqlite",
  "strfmt",
+ "thiserror",
 ]
 
 [[package]]

@@ -13,3 +13,4 @@ rlp = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
 sqlite = "0.25"
 strfmt = "0.1"
+thiserror = { workspace = true }
