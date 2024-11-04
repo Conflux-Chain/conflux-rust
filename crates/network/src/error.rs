@@ -5,6 +5,7 @@
 use crate::{io::IoError, service::ProtocolVersion, ProtocolId};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{fmt, io, net};
+use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DisconnectReason {
@@ -206,6 +207,55 @@ error_chain! {
             display("throttling failure: {}", reason),
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum Errors {
+    #[error(transparent)]
+    SocketIo(#[from] IoError),
+    ///Error concerning the network address parsing subsystem.
+    #[error("Failed to parse network address")]
+    AddressParse,
+    ///Error concerning the network address resolution subsystem.
+    #[error("Failed to resolve network address {}", .error.as_ref().map_or("".to_string(), |e| e.to_string()))]
+    AddressResolve { error: Option<io::Error> },
+    /// Authentication failure
+    #[error("Authentication failure")]
+    Auth,
+    #[error("Bad protocol")]
+    BadProtocol,
+    #[error("Bad socket address")]
+    BadAddr,
+    #[error("Decoder error: reason={0}")]
+    Decoder(String),
+    #[error("Expired message")]
+    Expired,
+    #[error("Peer disconnected: {0}")]
+    Disconnect(String),
+    ///Invalid node id
+    #[error("Invalid node id")]
+    InvalidNodeId,
+    #[error("Packet is too large")]
+    OversizedPacket,
+    #[error("Unexpected IO error: {0}")]
+    Io(io::Error),
+    #[error("Received message is deprecated. Protocol {protocol:?}, message id {msg_id}, \
+                min_supported_version {min_supported_version}")]
+    MessageDeprecated {
+        protocol: ProtocolId,
+        msg_id: u16,
+        min_supported_version: ProtocolVersion,
+    },
+    #[error("We are trying to send unsupported message to peer. Protocol {protocol:?},\
+                message id {msg_id}, peer_protocol_version {peer_protocol_version:?}, min_supported_version {min_supported_version:?}")]
+    SendUnsupportedMessage {
+        protocol: ProtocolId,
+        msg_id: u16,
+        peer_protocol_version: Option<ProtocolVersion>,
+        min_supported_version: Option<ProtocolVersion>,
+    },
+    #[error("throttling failure: {0}")]
+    Throttling(ThrottlingReason),
 }
 
 impl From<io::Error> for Error {

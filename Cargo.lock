@@ -5603,6 +5603,7 @@ dependencies = [
  "slab",
  "strum 0.11.0",
  "strum_macros 0.11.0",
+ "thiserror",
  "throttling",
 ]
 
