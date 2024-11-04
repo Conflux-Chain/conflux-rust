@@ -114,7 +114,7 @@ class Web3Test(ConfluxTestFramework):
         client.send_tx(tx, True)
         self.wait_for_tx([tx], True)
 
-        eip1820 = Web3.toChecksumAddress("1820a4b7618bde71dce8cdc73aab6c95905fad24")
+        eip1820 = Web3.to_checksum_address("1820a4b7618bde71dce8cdc73aab6c95905fad24")
         receipt = client.get_transaction_receipt(tx.hash.hex())
         assert_greater_than(int(receipt['gasUsed'],16), 1_500_000 + 21_000)
         assert_equal(len(self.w3.eth.getCode(eip1820)), 2501)
@@ -126,7 +126,7 @@ class Web3Test(ConfluxTestFramework):
         port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
 
-        assert_equal(self.w3.isConnected(), True)
+        assert_equal(self.w3.is_connected(), True)
         account = self.w3.eth.account.privateKeyToAccount(
             '0x348ce564d427a3311b6536bbcff9390d69395b06ed6c486954e971d960fe8709')
 
@@ -138,7 +138,7 @@ class Web3Test(ConfluxTestFramework):
         self.test_deploy_1820()
 
         # Send eip-155 transaction
-        receiver = Web3.toChecksumAddress("10000000000000000000000000000000000000aa")
+        receiver = Web3.to_checksum_address("10000000000000000000000000000000000000aa")
         signed = account.signTransaction(
             {"to": receiver, "value": 1 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 0, "chainId": 10})
         tx_hash = signed["hash"]
@@ -168,7 +168,7 @@ class Web3Test(ConfluxTestFramework):
 
         # Send to transaction
         mapped_sender = keccak_256(self.genesis_addr).digest()[-20:]
-        receiver = Web3.toChecksumAddress(mapped_sender.hex())
+        receiver = Web3.to_checksum_address(mapped_sender.hex())
         signed = account.signTransaction(
             {"to": receiver, "value": 2 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 2})
         self.w3.eth.sendRawTransaction(signed["rawTransaction"])

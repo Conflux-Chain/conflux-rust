@@ -61,9 +61,9 @@ class LightRPCTest(ConfluxTestFramework):
         file_path = os.path.join(file_dir, "../..", "internal_contract", "metadata", "Staking.json")
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
         staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
-        contract_addr = Web3.toChecksumAddress("0888000000000000000000000000000000000002")
+        contract_addr = Web3.to_checksum_address("0888000000000000000000000000000000000002")
         tx_conf = {
-            "from": Web3.toChecksumAddress(addr),
+            "from": Web3.to_checksum_address(addr),
             "to": contract_addr,
             "nonce": 0,
             "gas": 3_000_000,
@@ -87,18 +87,18 @@ class LightRPCTest(ConfluxTestFramework):
         whitelist_control_addr = "0x0888000000000000000000000000000000000001"
 
         tx_conf = {
-            "from": Web3.toChecksumAddress(self.rpc[FULLNODE0].GENESIS_ADDR),
+            "from": Web3.to_checksum_address(self.rpc[FULLNODE0].GENESIS_ADDR),
             "gas": 3_000_000,
             "gasPrice": 1,
             "chainId": 0,
         }
 
         # setSponsorForGas
-        data = whitelist_control.functions.setSponsorForGas(Web3.toChecksumAddress(contractAddr), 2000000).buildTransaction({"to":Web3.toChecksumAddress(whitelist_control_addr), **tx_conf})["data"]
+        data = whitelist_control.functions.setSponsorForGas(Web3.to_checksum_address(contractAddr), 2000000).buildTransaction({"to":Web3.to_checksum_address(whitelist_control_addr), **tx_conf})["data"]
         self.call_contract(contract=whitelist_control_addr, data_hex=data, value=20000000000000000000)
 
         # setSponsorForCollateral
-        data = whitelist_control.functions.setSponsorForCollateral(Web3.toChecksumAddress(contractAddr)).buildTransaction({"to":Web3.toChecksumAddress(whitelist_control_addr), **tx_conf})["data"]
+        data = whitelist_control.functions.setSponsorForCollateral(Web3.to_checksum_address(contractAddr)).buildTransaction({"to":Web3.to_checksum_address(whitelist_control_addr), **tx_conf})["data"]
         self.call_contract(contract=whitelist_control_addr, data_hex=data, value=20000000000000000000)
 
         # add to whitelist

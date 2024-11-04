@@ -95,7 +95,7 @@ class DebugTraceTxTest(Web3Base):
         erc20 = self.w3.eth.contract(address=erc20_address, abi=abi)
 
         # balance = erc20.functions.balanceOf(self.evmAccount.address).call()
-        target_addr = Web3.toChecksumAddress("0x8b14d287b4150ff22ac73df8be720e933f659abc")
+        target_addr = Web3.to_checksum_address("0x8b14d287b4150ff22ac73df8be720e933f659abc")
 
         data = erc20.encodeABI(fn_name="transfer", args=[target_addr, 100])
 

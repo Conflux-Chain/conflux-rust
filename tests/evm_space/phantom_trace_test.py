@@ -453,7 +453,7 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(receipt["outcomeStatus"], "0x1") # failure
 
         # transfer funds to mapped account
-        receiver = Web3.toChecksumAddress(mapped_address(self.confluxContractAddr))
+        receiver = Web3.to_checksum_address(mapped_address(self.confluxContractAddr))
         nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
 
         signed = self.evmAccount.signTransaction({

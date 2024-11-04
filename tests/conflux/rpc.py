@@ -87,7 +87,7 @@ class RpcClient:
     def rand_account(self) -> (str, bytes):
         priv_key = eth_utils.encode_hex(os.urandom(32))
         addr = eth_utils.encode_hex(priv_to_addr(priv_key))
-        return (Web3.toChecksumAddress(addr), priv_key)
+        return (Web3.to_checksum_address(addr), priv_key)
 
     def rand_hash(self, seed: bytes = None) -> str:
         if seed is None:

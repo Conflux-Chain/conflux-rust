@@ -46,7 +46,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
-        assert_equal(self.w3.isConnected(), True)
+        assert_equal(self.w3.is_connected(), True)
 
     def run_test(self):
         # initialize Conflux account

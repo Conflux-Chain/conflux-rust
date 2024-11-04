@@ -29,7 +29,7 @@ class Web3Base(ConfluxTestFramework):
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
-        assert_equal(self.w3.isConnected(), True)
+        assert_equal(self.w3.is_connected(), True)
 
     def cross_space_transfer(self, to, value):
         to = to.replace('0x', '')

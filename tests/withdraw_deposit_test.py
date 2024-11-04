@@ -49,7 +49,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         gas = CONTRACT_DEFAULT_GAS
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
-        self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
+        self.tx_conf = {"from":Web3.to_checksum_address(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
 
         total_num_blocks = 2 * 60 * 60 * 24 * 365
         accumulate_interest_rate = [2 ** 80 * total_num_blocks]
@@ -68,7 +68,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         assert_equal(client.get_balance(addr), 5 * 10 ** 18)
         assert_equal(client.get_staking_balance(addr), 0)
 
-        self.tx_conf["to"] = Web3.toChecksumAddress("0888000000000000000000000000000000000002")
+        self.tx_conf["to"] = Web3.to_checksum_address("0888000000000000000000000000000000000002")
         # deposit 10**18
         tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).buildTransaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)

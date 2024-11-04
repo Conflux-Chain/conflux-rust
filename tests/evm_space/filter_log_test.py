@@ -75,7 +75,7 @@ class FilterLogTest(Web3Base):
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f"http://{ip}:{port}/"))
-        assert_equal(self.w3.isConnected(), True)
+        assert_equal(self.w3.is_connected(), True)
 
         # initialize EVM account
         self.evmAccount = self.w3.eth.account.privateKeyToAccount(

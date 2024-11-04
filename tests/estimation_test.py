@@ -14,7 +14,7 @@ CFX = 10 ** 18
 BYTE_COLLATERAL = int(CFX / 1024)
 ENTRY_COLLATERAL = BYTE_COLLATERAL * 64
 SPONSOR_INTERNAL_CONTRACT = "0888000000000000000000000000000000000001"
-ZERO_ADDR = Web3.toChecksumAddress("0" * 40)
+ZERO_ADDR = Web3.to_checksum_address("0" * 40)
 
 
 class EstimationTest(ConfluxTestFramework):
@@ -60,7 +60,7 @@ class EstimationTest(ConfluxTestFramework):
         tx = client.new_contract_tx(None, bytecode, gas=500000, storage_limit=1024)
         send_tx(tx)
         receipt = client.get_transaction_receipt(tx.hash_hex())
-        contract = w3.eth.contract(abi=abi, address=Web3.toChecksumAddress(receipt["contractCreated"]))
+        contract = w3.eth.contract(abi=abi, address=Web3.to_checksum_address(receipt["contractCreated"]))
         contract_address = contract.address
         contract_base32_address = hex_to_b32_address(contract.address)
 

@@ -37,7 +37,7 @@ class TestTokenSupplyInfo(RpcClient):
         }
         tx_conf = REQUEST_BASE
         tx_conf["nonce"] = 0
-        tx_conf["to"] = Web3.toChecksumAddress("0888000000000000000000000000000000000002")
+        tx_conf["to"] = Web3.to_checksum_address("0888000000000000000000000000000000000002")
         file_path = os.path.join(file_dir, "..", "..", "internal_contract", "metadata", "Staking.json")
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
         staking_contract = get_contract_instance(contract_dict=staking_contract_dict)

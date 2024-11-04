@@ -62,7 +62,7 @@ def cfx_internal_contract(name: InternalContractName, framework: ConfluxTestFram
 def _add_address(self: Contract, address: str) -> Contract:
     w3 = Web3()
     new_contract = w3.eth.contract(
-        abi=self.abi, bytecode=self.bytecode, address=Web3.toChecksumAddress(address))
+        abi=self.abi, bytecode=self.bytecode, address=Web3.to_checksum_address(address))
 
     new_contract.framework = self.framework
     _enact_contract(new_contract)
@@ -232,9 +232,9 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         self.deploy_create2()
 
         self.genesis_key = default_config["GENESIS_PRI_KEY"]
-        self.genesis_addr = Web3.toChecksumAddress(encode_hex_0x(priv_to_addr(self.genesis_key)))
+        self.genesis_addr = Web3.to_checksum_address(encode_hex_0x(priv_to_addr(self.genesis_key)))
         self.genesis_key2 = default_config["GENESIS_PRI_KEY_2"]
-        self.genesis_addr2 = Web3.toChecksumAddress(encode_hex_0x(priv_to_addr(self.genesis_key2)))
+        self.genesis_addr2 = Web3.to_checksum_address(encode_hex_0x(priv_to_addr(self.genesis_key2)))
 
     def cfx_contract(self, name):
         return cfx_contract(name, self)

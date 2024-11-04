@@ -35,7 +35,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert(os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read().strip()
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, bytecode, storage_limit=1024)
-        contractAddr = Web3.toChecksumAddress(contractAddr)
+        contractAddr = Web3.to_checksum_address(contractAddr)
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 1)
 
@@ -100,7 +100,7 @@ class ContractBenchTest(SmartContractBenchBase):
         # deploy contract
         data = contract.constructor(10).buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(1024 + 64 * 3))
-        contractAddr = Web3.toChecksumAddress(contractAddr)
+        contractAddr = Web3.to_checksum_address(contractAddr)
         self.tx_conf["to"] = contractAddr
 
         # interact with vote()
@@ -131,7 +131,7 @@ class ContractBenchTest(SmartContractBenchBase):
         data = contract.constructor().buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=2560)
         tx_hash = receipt['transactionHash']
-        contractAddr = Web3.toChecksumAddress(contractAddr)
+        contractAddr = Web3.to_checksum_address(contractAddr)
         self.tx_conf["to"] = contractAddr
         logs = self.rpc.get_logs(self.filter)
         assert_equal(len(logs), l + 1)
@@ -213,7 +213,7 @@ class ContractBenchTest(SmartContractBenchBase):
         # deploy contract
         data = contract.constructor().buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=512)
-        contractAddr = Web3.toChecksumAddress(contractAddr)
+        contractAddr = Web3.to_checksum_address(contractAddr)
         self.tx_conf["to"] = contractAddr
         logs = self.rpc.get_logs(self.filter)
         l = len(logs)
@@ -251,12 +251,12 @@ class ContractBenchTest(SmartContractBenchBase):
         data = contract.constructor(1).buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(1536 + 64))
         tx_hash = receipt['transactionHash']
-        contractAddr = Web3.toChecksumAddress(contractAddr)
+        contractAddr = Web3.to_checksum_address(contractAddr)
         self.tx_conf["to"] = contractAddr
 
         c = "0x81f3521d71990945b99e1c592750d7157f2b545f"
         def check_wards(x, y, z):
-          data = contract.functions.wards(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+          data = contract.functions.wards(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
           result = self.rpc.call(contractAddr, data)
           A = int(result, 0)
           assert(A == x)
@@ -264,23 +264,23 @@ class ContractBenchTest(SmartContractBenchBase):
           result = self.rpc.call(contractAddr, data)
           B = int(result, 0)
           assert(B == y)
-          data = contract.functions.wards(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
+          data = contract.functions.wards(Web3.to_checksum_address(c)).buildTransaction(self.tx_conf)["data"]
           result = self.rpc.call(contractAddr, data)
           C = int(result, 0)
           assert(C == z)
 
         # deny pub[0]
         check_wards(0, 2, 0)
-        data = contract.functions.set1(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.set1(Web3.to_checksum_address(c)).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, storage_limit=64)
         check_wards(0, 2, 1)
-        data = contract.functions.set2(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.set2(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, storage_limit=64)
         check_wards(2, 2, 1)
-        data = contract.functions.set0(Web3.toChecksumAddress(c)).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.set0(Web3.to_checksum_address(c)).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, storage_limit=64)
         check_wards(2, 2, 0)
-        data = contract.functions.set0(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.set0(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, storage_limit=64)
         check_wards(0, 2, 0)
 
@@ -301,35 +301,35 @@ class ContractBenchTest(SmartContractBenchBase):
         data = contract.constructor(1).buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(4096 + 64 * 2))
         tx_hash = receipt['transactionHash']
-        contractAddr = Web3.toChecksumAddress(contractAddr)
+        contractAddr = Web3.to_checksum_address(contractAddr)
         self.tx_conf["to"] = contractAddr
 
         # rely [0,5)
         for i in range(5):
-          data = contract.functions.rely(Web3.toChecksumAddress(self.pub[i])).buildTransaction(self.tx_conf)["data"]
+          data = contract.functions.rely(Web3.to_checksum_address(self.pub[i])).buildTransaction(self.tx_conf)["data"]
           result = self.call_contract(self.sender, self.priv_key, contractAddr, data, 0, storage_limit=64)
           assert_equal(result["outcomeStatus"], "0x0")
 
         # deny 1, 3
         for i in range(5):
           if (i % 2 == 1):
-            data = contract.functions.deny(Web3.toChecksumAddress(self.pub[i])).buildTransaction(self.tx_conf)["data"]
+            data = contract.functions.deny(Web3.to_checksum_address(self.pub[i])).buildTransaction(self.tx_conf)["data"]
             result = self.call_contract(self.pub[i - 1], self.pri[i - 1], contractAddr, data, 0)
             assert_equal(result["outcomeStatus"], "0x0")
 
         # check wards
         for i in range(5):
-          data = contract.functions.wards(Web3.toChecksumAddress(self.pub[i])).buildTransaction(self.tx_conf)["data"]
+          data = contract.functions.wards(Web3.to_checksum_address(self.pub[i])).buildTransaction(self.tx_conf)["data"]
           result = self.rpc.call(contractAddr, data)
           assert_equal(int(result, 0), int(i % 2 == 0))
 
         # mint tokens
-        data = contract.functions.mint(Web3.toChecksumAddress(self.pub[0]), 100000).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.mint(Web3.to_checksum_address(self.pub[0]), 100000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, 0, storage_limit=128)
         logs = self.rpc.get_logs(self.filter)
 
         # check balance
-        data = contract.functions.balanceOf(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.balanceOf(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) == 100000)
 
@@ -339,7 +339,7 @@ class ContractBenchTest(SmartContractBenchBase):
         logs = self.rpc.get_logs(self.filter)
 
         # check allowance
-        data = contract.functions.allowance(Web3.toChecksumAddress(self.pub[0]), self.sender_checksum).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.allowance(Web3.to_checksum_address(self.pub[0]), self.sender_checksum).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) == 50000)
 
@@ -349,18 +349,18 @@ class ContractBenchTest(SmartContractBenchBase):
         assert(result["outcomeStatus"] != "0x0")
 
         # insuffcient allowance 
-        data = contract.functions.transferFrom(Web3.toChecksumAddress(self.pub[0]), self.sender_checksum, 10000).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.transferFrom(Web3.to_checksum_address(self.pub[0]), self.sender_checksum, 10000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[1], self.pri[1], contractAddr, data, storage_limit=128)
         assert(result["outcomeStatus"] != "0x0")
 
         # transfer 50000 use allowance
-        data = contract.functions.transferFrom(Web3.toChecksumAddress(self.pub[0]), Web3.toChecksumAddress(self.pub[1]), 50000).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.transferFrom(Web3.to_checksum_address(self.pub[0]), Web3.to_checksum_address(self.pub[1]), 50000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, contractAddr, data, storage_limit=64)
         assert(result["outcomeStatus"] == "0x0")
 
         # get digest and sign it
         ts = int(time.time()) + 7200
-        data = contract.functions.getHash(Web3.toChecksumAddress(self.pub[0]), Web3.toChecksumAddress(self.pub[1]), 0, ts, True).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.getHash(Web3.to_checksum_address(self.pub[0]), Web3.to_checksum_address(self.pub[1]), 0, ts, True).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         v, r, s = ecsign(bytes.fromhex(result[2:]), self.pri[0])
         v -= 27
@@ -370,28 +370,28 @@ class ContractBenchTest(SmartContractBenchBase):
         assert(len(s) == 66)
 
         # premit
-        data = contract.functions.permit(Web3.toChecksumAddress(self.pub[0]), Web3.toChecksumAddress(self.pub[1]), 0, ts, True, v, r, s).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.permit(Web3.to_checksum_address(self.pub[0]), Web3.to_checksum_address(self.pub[1]), 0, ts, True, v, r, s).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[5], self.pri[5], contractAddr, data, storage_limit=128)
         assert(result["outcomeStatus"] == "0x0")
 
         # check allowance
-        data = contract.functions.allowance(Web3.toChecksumAddress(self.pub[0]), self.sender_checksum).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.allowance(Web3.to_checksum_address(self.pub[0]), self.sender_checksum).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) == 0)
-        data = contract.functions.allowance(Web3.toChecksumAddress(self.pub[0]), Web3.toChecksumAddress(self.pub[1])).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.allowance(Web3.to_checksum_address(self.pub[0]), Web3.to_checksum_address(self.pub[1])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(result == '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
 
         # burn pub[0]
-        data = contract.functions.burn(Web3.toChecksumAddress(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.burn(Web3.to_checksum_address(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[1], self.pri[1], contractAddr, data, storage_limit=64)
         assert(result["outcomeStatus"] == "0x0")
 
         # check balance
-        data = contract.functions.balanceOf(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.balanceOf(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) == 0)
-        data = contract.functions.balanceOf(Web3.toChecksumAddress(self.pub[1])).buildTransaction(self.tx_conf)["data"]
+        data = contract.functions.balanceOf(Web3.to_checksum_address(self.pub[1])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(contractAddr, data)
         assert(int(result, 0) == 50000)
         data = contract.functions.totalSupply().buildTransaction(self.tx_conf)["data"]
@@ -407,7 +407,7 @@ class ContractBenchTest(SmartContractBenchBase):
         )
         data = dai.constructor(1).buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(4096 + 64 * 2))
-        dai_addr = Web3.toChecksumAddress(contractAddr)
+        dai_addr = Web3.to_checksum_address(contractAddr)
 
         CONTRACT_PATH = "contracts/Vat_bytecode.dat"
         file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -417,7 +417,7 @@ class ContractBenchTest(SmartContractBenchBase):
         )
         data = vat.constructor().buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(5632 + 64 * 2))
-        vat_addr = Web3.toChecksumAddress(contractAddr)
+        vat_addr = Web3.to_checksum_address(contractAddr)
 
         CONTRACT_PATH = "contracts/DaiJoin_bytecode.dat"
         file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -427,17 +427,17 @@ class ContractBenchTest(SmartContractBenchBase):
         )
         data = dai_join.constructor(vat_addr, dai_addr).buildTransaction(self.tx_conf)["data"]
         receipt, contractAddr = self.deploy_contract(self.sender, self.priv_key, data, storage_limit=(1024 + 64 * 2))
-        dai_join_addr = Web3.toChecksumAddress(contractAddr)
+        dai_join_addr = Web3.to_checksum_address(contractAddr)
 
         # mint dai tokens & give approval
         self.tx_conf["to"] = dai_addr
-        data = dai.functions.mint(Web3.toChecksumAddress(self.pub[0]), 100000).buildTransaction(self.tx_conf)["data"]
+        data = dai.functions.mint(Web3.to_checksum_address(self.pub[0]), 100000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.sender, self.priv_key, dai_addr, data, 0, storage_limit=128)
         assert(result["outcomeStatus"] == "0x0")
         data = dai.functions.approve(dai_join_addr, 100000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[0], self.pri[0], dai_addr, data, 0, storage_limit=64)
         assert(result["outcomeStatus"] == "0x0")
-        data = dai.functions.allowance(Web3.toChecksumAddress(self.pub[0]), dai_join_addr).buildTransaction(self.tx_conf)["data"]
+        data = dai.functions.allowance(Web3.to_checksum_address(self.pub[0]), dai_join_addr).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(dai_addr, data)
         assert_equal(int(result, 0), 100000)
         data = dai.functions.rely(dai_join_addr).buildTransaction(self.tx_conf)["data"]
@@ -459,43 +459,43 @@ class ContractBenchTest(SmartContractBenchBase):
 
         # join
         self.tx_conf["to"] = dai_join_addr
-        data = dai_join.functions.join(Web3.toChecksumAddress(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
+        data = dai_join.functions.join(Web3.to_checksum_address(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[0], self.pri[0], dai_join_addr, data, 0, storage_limit=320)
         assert(result["outcomeStatus"] == "0x0")
 
         # check
         self.tx_conf["to"] = dai_addr
-        data = dai.functions.balanceOf(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = dai.functions.balanceOf(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(dai_addr, data)
         assert_equal(int(result, 0), 50000)
 
         self.tx_conf["to"] = vat_addr
-        data = vat.functions.can(dai_join_addr, Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = vat.functions.can(dai_join_addr, Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(vat_addr, data)
         assert_equal(int(result, 0), 1)
 
-        data = vat.functions.dai(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = vat.functions.dai(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(vat_addr, data)
         assert_equal(int(result, 0), 50000000000000000000000000000000)
 
         # exit
         self.tx_conf["to"] = dai_join_addr
-        data = dai_join.functions.exit(Web3.toChecksumAddress(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
+        data = dai_join.functions.exit(Web3.to_checksum_address(self.pub[0]), 50000).buildTransaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[0], self.pri[0], dai_join_addr, data, 0, storage_limit=128)
         assert(result["outcomeStatus"] == "0x0")
 
         # check
         self.tx_conf["to"] = dai_addr
-        data = dai.functions.balanceOf(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = dai.functions.balanceOf(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(dai_addr, data)
         assert_equal(int(result, 0), 100000)
 
         self.tx_conf["to"] = vat_addr
-        data = vat.functions.can(dai_join_addr, Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = vat.functions.can(dai_join_addr, Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(vat_addr, data)
         assert_equal(int(result, 0), 0)
 
-        data = vat.functions.dai(Web3.toChecksumAddress(self.pub[0])).buildTransaction(self.tx_conf)["data"]
+        data = vat.functions.dai(Web3.to_checksum_address(self.pub[0])).buildTransaction(self.tx_conf)["data"]
         result = self.rpc.call(vat_addr, data)
         assert_equal(int(result, 0), 0)
 
@@ -541,13 +541,13 @@ class ContractBenchTest(SmartContractBenchBase):
         file_path = os.path.join(file_dir, "..", "internal_contract", "metadata", "Staking.json")
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
         staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
-        staking_contract_addr = Web3.toChecksumAddress("0888000000000000000000000000000000000002")
+        staking_contract_addr = Web3.to_checksum_address("0888000000000000000000000000000000000002")
 
         self.problem = "0x2bc79b7514884ab00da924607d71542cc4fed3beb8518e747726ae30ab6c7944"
         self.solution = "0xc4d2751c52311d0d7efe44e5c4195e058ad5ef4bb89b3e1761b24dc277b132c2"
         self.priv_key = default_config["GENESIS_PRI_KEY"]
         self.sender = encode_hex_0x(priv_to_addr(self.priv_key))
-        self.sender_checksum = Web3.toChecksumAddress(self.sender)
+        self.sender_checksum = Web3.to_checksum_address(self.sender)
         self.pub = []
         self.pri = []
         self.rpc = RpcClient(self.nodes[0])
