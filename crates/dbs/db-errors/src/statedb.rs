@@ -8,31 +8,8 @@ use primitives::account::AccountError;
 use rlp::DecoderError;
 use thiserror::Error;
 
-error_chain! {
-    links {
-    }
-
-    foreign_links {
-        Account(AccountError);
-        Storage(StorageError);
-        Decoder(DecoderError);
-    }
-
-    errors {
-        IncompleteDatabase(address: Address) {
-            description("incomplete database")
-            display("incomplete database: address={:?}", address)
-        }
-
-        PosDatabaseError(err: String) {
-            description("PoS database error")
-            display("PoS database error, err={:?}", err)
-        }
-    }
-}
-
 #[derive(Debug, Error)]
-pub enum Errors {
+pub enum Error {
     #[error(transparent)]
     Account(#[from] AccountError),
 
@@ -41,8 +18,19 @@ pub enum Errors {
 
     #[error(transparent)]
     Decoder(#[from] DecoderError),
-    #[error("incomplete database: address={address:?}")]
-    IncompleteDatabase { address: Address },
+    #[error("incomplete database: address={0:?}")]
+    IncompleteDatabase(Address),
     #[error("PoS database error, err={0:?}")]
     PosDatabaseError(String),
+
+    #[error("{0}")]
+    Msg(String),
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<String> for Error {
+    fn from(err: String) -> Self {
+        Error::Msg(err)
+    }
 }

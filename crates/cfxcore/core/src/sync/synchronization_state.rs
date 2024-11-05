@@ -15,7 +15,7 @@ use crate::{
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
     node_table::NodeId, service::ProtocolVersion, Error as NetworkError,
-    ErrorKind as NetworkErrorKind,
+    Error as NetworkErrorKind,
 };
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
@@ -160,7 +160,7 @@ impl SynchronizationState {
         &self, peer: &NodeId,
     ) -> Result<ProtocolVersion, NetworkError> {
         match self.get_peer_info(peer) {
-            Err(_) => bail!(NetworkErrorKind::InvalidNodeId),
+            Err(_) => Err(NetworkErrorKind::InvalidNodeId),
             Ok(info) => Ok(info.read().protocol_version),
         }
     }

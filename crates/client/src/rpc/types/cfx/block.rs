@@ -346,7 +346,7 @@ impl Block {
     pub fn into_primitive(self) -> Result<PrimitiveBlock, RpcError> {
         let miner: H160 = match self.miner.try_into() {
             Ok(m) => m,
-            Err(_) => bail!(RpcError::invalid_params(
+            Err(_) => return Err(RpcError::invalid_params(
                 "Invalid params: expected a valid base32-encoded Conflux address",
             )),
         };

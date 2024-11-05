@@ -852,7 +852,7 @@ impl SynchronizationGraphInner {
                 .pos_verifier
                 .verify_against_predecessors(pos_reference, &pred_pos_ref_list)
             {
-                bail!(BlockError::InvalidPosReference);
+                return Err(Error::from(BlockError::InvalidPosReference));
             }
         }
 

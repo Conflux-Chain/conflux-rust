@@ -4,7 +4,7 @@
 
 use crate::{
     consensus::SharedConsensusGraph,
-    light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
+    light_protocol::{message::WitnessInfoWithHeight, Error},
 };
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
@@ -42,7 +42,7 @@ impl LedgerInfo {
             .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
             .ok_or_else(|| {
-                ErrorKind::InternalError(format!("Block {:?} not found", hash))
+                Error::InternalError(format!("Block {:?} not found", hash))
                     .into()
             })
     }
@@ -55,7 +55,7 @@ impl LedgerInfo {
             .block_header_by_hash(&hash)
             .map(|h| (*h).clone())
             .ok_or_else(|| {
-                ErrorKind::InternalError(format!("Header {:?} not found", hash))
+                Error::InternalError(format!("Header {:?} not found", hash))
                     .into()
             })
     }
@@ -64,7 +64,7 @@ impl LedgerInfo {
     #[inline]
     fn pivot_hash_of(&self, height: u64) -> Result<H256, Error> {
         let epoch = EpochNumber::Number(height);
-        Ok(self.consensus.get_hash_from_epoch_number(epoch)?)
+        Ok(self.consensus.get_hash_from_epoch_number(epoch).map_err(|e| Error::Msg(e))?)
     }
 
     /// Get header at `height` on the pivot chain, if it exists.
@@ -79,7 +79,7 @@ impl LedgerInfo {
     #[inline]
     pub fn block_hashes_in(&self, height: u64) -> Result<Vec<H256>, Error> {
         let epoch = EpochNumber::Number(height);
-        Ok(self.consensus.get_block_hashes_by_epoch(epoch)?)
+        Ok(self.consensus.get_block_hashes_by_epoch(epoch).map_err(|e| Error::Msg(e))?)
     }
 
     /// Get the correct deferred state root of the block at `height` on the
@@ -96,7 +96,7 @@ impl LedgerInfo {
             .get_data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
-                Error::from(ErrorKind::InternalError(format!(
+                Error::from(Error::InternalError(format!(
                     "Execution commitments for {:?} not found",
                     pivot
                 )))
@@ -122,7 +122,7 @@ impl LedgerInfo {
             .get_data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
-                Error::from(ErrorKind::InternalError(format!(
+                Error::from(Error::InternalError(format!(
                     "Execution commitments for {:?} not found",
                     pivot
                 )))
@@ -145,7 +145,7 @@ impl LedgerInfo {
             .get_data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
-                Error::from(ErrorKind::InternalError(format!(
+                Error::from(Error::InternalError(format!(
                     "Execution commitments for {:?} not found",
                     pivot
                 )))
@@ -183,7 +183,7 @@ impl LedgerInfo {
         match state {
             Some(Ok(Some(state))) => Ok(state),
             _ => {
-                bail!(ErrorKind::InternalError(format!(
+                return Err(Error::InternalError(format!(
                     "State of epoch {} not found",
                     epoch
                 )));
@@ -199,7 +199,7 @@ impl LedgerInfo {
         match self.state_of(epoch)?.get_state_root() {
             Ok(root) => Ok(root),
             Err(e) => {
-                bail!(ErrorKind::InternalError(format!(
+                return Err(Error::InternalError(format!(
                     "State root of epoch {} not found: {:?}",
                     epoch, e
                 )));
@@ -214,7 +214,7 @@ impl LedgerInfo {
     ) -> Result<(Option<Vec<u8>>, StateProof), Error> {
         let state = self.state_of(epoch)?;
 
-        let key = StorageKeyWithSpace::from_key_bytes::<CheckInput>(&key)?;
+        let key = StorageKeyWithSpace::from_key_bytes::<CheckInput>(&key).map_err(|e| Error::Msg(e))?;
 
         let (value, proof) = state.get_original_raw_with_proof(key)?;
 
@@ -255,7 +255,7 @@ impl LedgerInfo {
                     )
                     .map(|res| (*res.block_receipts).clone())
                     .ok_or_else(|| {
-                        ErrorKind::InternalError(format!(
+                        Error::InternalError(format!(
                             "Receipts of epoch {} not found",
                             epoch
                         ))
@@ -286,7 +286,7 @@ impl LedgerInfo {
                     )
                     .map(|res| res.bloom)
                     .ok_or_else(|| {
-                        ErrorKind::InternalError(format!(
+                        Error::InternalError(format!(
                             "Logs bloom of epoch {} not found",
                             epoch
                         ))

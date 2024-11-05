@@ -91,7 +91,7 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
                     .unwrap()
                     .open_snapshot_mpt_as_owned()
             } else {
-                bail!("mpt_snapshot is none");
+                return Err(Error::Msg("mpt_snapshot is none".to_string()));
             }
         }
     }
@@ -122,7 +122,7 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
                     .unwrap()
                     .open_snapshot_mpt_shared()
             } else {
-                bail!("mpt_snapshot is none");
+                return Err(Error::Msg("mpt_snapshot is none".to_string()));
             }
         }
     }

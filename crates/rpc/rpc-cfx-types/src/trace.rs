@@ -344,7 +344,7 @@ impl LocalizedBlockTrace {
     ) -> Result<Self, String> {
         let traces: Vec<TransactionExecTraces> = traces.into();
         if traces.len() != transactions.len() {
-            error_chain::bail!("trace and tx hash list length unmatch!");
+            return Err("trace and tx hash list length unmatch!".to_string());
         }
         let transaction_traces = traces
             .into_iter()

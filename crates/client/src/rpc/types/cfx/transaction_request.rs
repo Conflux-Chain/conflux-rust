@@ -227,10 +227,10 @@ impl TransactionRequest {
         let max_gas = max_gas.unwrap_or(DEFAULT_CFX_GAS_CALL_REQUEST.into());
         let gas = self.gas.unwrap_or(max_gas);
         if gas > max_gas {
-            bail!(invalid_params(
+            return Err(invalid_params(
                 "gas",
                 format!("specified gas is larger than max gas {:?}", max_gas)
-            ))
+            ).into())
         }
         let transaction_type = self.transaction_type();
         let nonce = self.nonce.unwrap_or_default();

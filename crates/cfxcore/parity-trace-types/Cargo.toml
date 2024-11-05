@@ -24,4 +24,3 @@ cfx-internal-common = { workspace = true }
 cfx-vm-types = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 strum_macros = "0.20"
-error-chain = { workspace = true }

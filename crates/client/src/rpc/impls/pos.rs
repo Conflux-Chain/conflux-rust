@@ -58,10 +58,12 @@ impl RpcInterceptor for PoSInterceptor {
     fn before(&self, _name: &String) -> JsonRpcResult<()> {
         match self.pos_handler.pos_option() {
             Some(_) => Ok(()),
-            None => bail!(build_rpc_server_error(
-                POS_NOT_ENABLED,
-                "PoS chain is not enabled".into()
-            )),
+            None => {
+                return Err(build_rpc_server_error(
+                    POS_NOT_ENABLED,
+                    "PoS chain is not enabled".into(),
+                ))
+            }
         }
     }
 }
@@ -202,7 +204,7 @@ impl PosHandler {
                 let latest_view = latest_state.current_view();
                 let v = v.as_u64();
                 if v > latest_view {
-                    bail!("Specified block {} is not executed, the latest block number is {}", v, latest_view)
+                    return Err(format!("Specified block {} is not executed, the latest block number is {}", v, latest_view));
                 }
 
                 let state = self
@@ -606,7 +608,9 @@ pub fn hash_value_to_h256(h: HashValue) -> H256 {
 }
 
 impl Pos for PosHandler {
-    fn pos_status(&self) -> JsonRpcResult<Status> { Ok(self.status_impl()) }
+    fn pos_status(&self) -> JsonRpcResult<Status> {
+        Ok(self.status_impl())
+    }
 
     fn pos_account(
         &self, address: H256, view: Option<U64>,

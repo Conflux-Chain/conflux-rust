@@ -81,10 +81,13 @@ impl TraceHandler {
                     self.network,
                 ) {
                     Ok(t) => Ok(Some(t)),
-                    Err(e) => bail!(format!(
-                        "Traces not found for block {:?}: {:?}",
-                        block_hash, e
-                    )),
+                    Err(e) => {
+                        return Err(format!(
+                            "Traces not found for block {:?}: {:?}",
+                            block_hash, e
+                        )
+                        .into())
+                    }
                 }
             }
         }
@@ -250,7 +253,7 @@ impl TraceHandler {
 
         if !stack_index.is_empty() {
             error!("eth::filter_traces: actions left unmatched");
-            bail!(JsonRpcError::internal_error());
+            return Err(JsonRpcError::internal_error());
         }
 
         Ok(eth_traces)

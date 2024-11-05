@@ -286,7 +286,7 @@ impl SnapshotMptDbSqlite {
         match create_result {
             Err(e) => {
                 fs::remove_dir_all(&snapshot_path)?;
-                bail!(e);
+                return Err(e);
             }
             Ok(connections) => Ok(SnapshotMptDbSqlite {
                 maybe_db_connections: Some(connections),

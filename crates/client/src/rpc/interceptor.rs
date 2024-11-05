@@ -162,16 +162,17 @@ impl RpcInterceptor for ThrottleInterceptor {
             ThrottleResult::Success => Ok(()),
             ThrottleResult::Throttled(wait_time) => {
                 debug!("RPC {} throttled in {:?}", name, wait_time);
-                bail!(request_rejected_too_many_request_error(Some(format!(
-                    "throttled in {:?}",
-                    wait_time
-                ))))
+                return Err(request_rejected_too_many_request_error(Some(
+                    format!("throttled in {:?}", wait_time),
+                ))
+                .into());
             }
             ThrottleResult::AlreadyThrottled => {
                 debug!("RPC {} already throttled", name);
-                bail!(request_rejected_too_many_request_error(Some(
-                    "already throttled, please try again later".into()
-                )))
+                return Err(request_rejected_too_many_request_error(Some(
+                    "already throttled, please try again later".into(),
+                ))
+                .into());
             }
         }
     }
@@ -243,7 +244,9 @@ mod tests {
     struct FooImpl;
 
     impl Foo for FooImpl {
-        fn balance(&self, id: usize) -> RpcResult<usize> { Ok(id) }
+        fn balance(&self, id: usize) -> RpcResult<usize> {
+            Ok(id)
+        }
     }
 
     #[derive(Default)]

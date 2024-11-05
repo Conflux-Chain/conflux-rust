@@ -10,7 +10,7 @@ use cfxcore::{
     consensus::ConsensusConfig,
     errors::account_result_to_rpc_result,
     light_protocol::{
-        self, query_service::TxInfo, Error as LightError, ErrorKind,
+        self, query_service::TxInfo, Error as LightError,
     },
     verification::EpochReceiptProof,
     ConsensusGraph, ConsensusGraphTrait, LightQueryService, PeerInfo,
@@ -516,7 +516,7 @@ impl RpcImpl {
 
         match /* success = */ light.send_raw_tx(raw) {
             true => Ok(tx.hash().into()),
-            false => bail!(LightProtocol(light_protocol::ErrorKind::InternalError("Unable to relay tx".into()).into())),
+            false => return Err(LightProtocol(light_protocol::Error::InternalError("Unable to relay tx".into()).into())),
         }
     }
 
@@ -688,9 +688,9 @@ impl RpcImpl {
             // return `null` on timeout
             let tx_info = match light.get_tx_info(hash).await {
                 Ok(t) => t,
-                Err(LightError(ErrorKind::Timeout(_), _)) => return Ok(None),
-                Err(LightError(e, _)) => {
-                    bail!(RpcError::invalid_params(e.to_string()))
+                Err(LightError::Timeout(_)) => return Ok(None),
+                Err(e) => {
+                    return Err(RpcError::invalid_params(e.to_string()).into())
                 }
             };
 
@@ -726,8 +726,8 @@ impl RpcImpl {
                 *light.get_network_type(),
                 false,
                 false,
-            )?;
-
+            ).map_err(|e| cfxcore::errors::Error::from(e))?;
+            
             Ok(Some(receipt))
         };
 
@@ -1067,7 +1067,7 @@ impl RpcImpl {
             let contract_addr: H160 = contract_addr.into();
 
             if storage_limit > U256::from(std::u64::MAX) {
-                bail!(RpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
+                return Err(RpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)).into());
             }
 
             // retrieve accounts and sponsor info in parallel

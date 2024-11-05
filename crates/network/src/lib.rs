@@ -9,8 +9,6 @@ extern crate log;
 extern crate mio;
 extern crate parking_lot;
 extern crate slab;
-#[macro_use]
-extern crate error_chain;
 extern crate bytes;
 extern crate ipnetwork;
 extern crate rlp;
@@ -51,7 +49,7 @@ mod session_manager;
 pub mod throttling;
 
 pub use crate::{
-    error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
+    error::{DisconnectReason, Error, ThrottlingReason},
     ip::SessionIpLimitConfig,
     node_table::Node,
     service::NetworkService,

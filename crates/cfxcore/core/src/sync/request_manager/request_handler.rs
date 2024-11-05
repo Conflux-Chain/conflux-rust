@@ -16,7 +16,7 @@ use cfx_parameters::sync::FAILED_REQUEST_RESEND_WAIT;
 use malloc_size_of::MallocSizeOf;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
-    node_table::NodeId, ErrorKind as NetworkErrorKind, NetworkContext,
+    node_table::NodeId, Error as NetworkErrorKind, NetworkContext,
     UpdateNodeOperation,
 };
 use parking_lot::Mutex;
@@ -79,7 +79,7 @@ impl RequestHandler {
         if let Some(peer) = peers.get_mut(peer_id) {
             peer.match_request(request_id)
         } else {
-            bail!(Error::UnknownPeer);
+            return Err(Error::UnknownPeer);
         }
     }
 
@@ -316,7 +316,7 @@ impl RequestContainer {
         request_message.request.set_request_id(request_id);
         let res = request_message.request.send(io, &self.peer_id);
         let is_send_error = if let Err(e) = res {
-            match e.kind() {
+            match e {
                 NetworkErrorKind::OversizedPacket => {
                     panic!("Request packet should not be oversized!")
                 }
@@ -383,7 +383,7 @@ impl RequestContainer {
                 .store(true, AtomicOrdering::Relaxed);
             Ok(removed_req.message)
         } else {
-            bail!(Error::RequestNotFound)
+            return Err(Error::RequestNotFound)
         }
     }
 

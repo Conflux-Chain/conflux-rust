@@ -13,7 +13,6 @@ parking_lot = { workspace = true }
 log = "0.4"
 slab = "0.4"
 io = { workspace = true }
-error-chain = { version = "0.12", default-features = false }
 bytes = "0.4"
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
@@ -40,3 +39,4 @@ malloc_size_of = { workspace = true }
 diem-crypto = { path = "../cfxcore/core/src/pos/crypto/crypto" }
 diem-types = { path = "../cfxcore/core/src/pos/types" }
 thiserror = { workspace = true }
+anyhow = {workspace = true}

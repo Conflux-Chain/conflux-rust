@@ -27,10 +27,10 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
         epoch_height: u64,
     ) -> Result<Self> {
         if number_chunks != chunk_boundaries.len() + 1 {
-            bail!(ErrorKind::InvalidSnapshotSyncProof)
+            return Err(Error::InvalidSnapshotSyncProof)
         }
         if number_chunks != chunk_boundary_proofs.len() + 1 {
-            bail!(ErrorKind::InvalidSnapshotSyncProof)
+            return Err(Error::InvalidSnapshotSyncProof)
         }
         let mut chunk_index_by_upper_key = HashMap::new();
         for (chunk_index, (chunk_boundary, proof)) in chunk_boundaries
@@ -39,16 +39,16 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             .enumerate()
         {
             if merkle_root.ne(proof.get_merkle_root()) {
-                bail!(ErrorKind::InvalidSnapshotSyncProof)
+                return Err(Error::InvalidSnapshotSyncProof)
             }
             // We don't want the proof to carry extra nodes.
             if proof.number_leaf_nodes() != 1 {
-                bail!(ErrorKind::InvalidSnapshotSyncProof)
+                return Err(Error::InvalidSnapshotSyncProof)
             }
             if proof.if_proves_key(&*chunk_boundary)
                 != (true, proof.get_proof_nodes().last())
             {
-                bail!(ErrorKind::InvalidSnapshotSyncProof)
+                return Err(Error::InvalidSnapshotSyncProof)
             }
             chunk_index_by_upper_key
                 .insert(chunk_boundary.clone(), chunk_index);

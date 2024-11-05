@@ -464,7 +464,7 @@ where ValueType::Type: SqlBindableValue
         &self, immediate_write: bool,
     ) -> Result<KvdbSqliteTransaction<ValueType>> {
         if self.connection.is_none() {
-            bail!(ErrorKind::DbNotExist);
+            return Err(Error::DbNotExist);
         }
 
         KvdbSqliteTransaction::new(self.try_clone()?, immediate_write)
@@ -773,7 +773,7 @@ where ValueType::Type: SqlBindableValue
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, statements) = self.destructure_mut();
         match connection {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(conn) => {
                 conn.execute(
                     &statements.stmts_bytes_key_table.delete,
@@ -790,7 +790,7 @@ where ValueType::Type: SqlBindableValue
     ) -> Result<Option<Option<<Self as KeyValueDbTypes>::ValueType>>> {
         let (connection, statements) = self.destructure_mut();
         match connection {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(conn) => {
                 conn.execute(
                     &statements.stmts_main_table.delete,
@@ -808,7 +808,7 @@ where ValueType::Type: SqlBindableValue
         random_crash_if_enabled("sqlite put");
         let (connection, statements) = self.destructure_mut();
         match connection {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(conn) => {
                 let mut bind_list = Vec::<SqlBindableBox>::new();
                 bind_list.push(Box::new(&key));
@@ -831,7 +831,7 @@ where ValueType::Type: SqlBindableValue
         random_crash_if_enabled("sqlite put_with_number_key");
         let (connection, statements) = self.destructure_mut();
         match connection {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(conn) => {
                 let mut bind_list = Vec::<SqlBindableBox>::new();
                 bind_list.push(Box::new(key));
@@ -861,7 +861,7 @@ where ValueType::Type: SqlBindableValue
         random_crash_if_enabled("sqlite delete");
         let (connection, statements) = self.destructure();
         match connection {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(conn) => {
                 let mut db = conn.lock_db();
                 let mut statement_cache = conn.lock_statement_cache();
@@ -887,7 +887,7 @@ where ValueType::Type: SqlBindableValue
         random_crash_if_enabled("sqlite delete_with_number_key");
         let (connection, statements) = self.destructure();
         match connection {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(conn) => {
                 let mut db = conn.lock_db();
                 let mut statement_cache = conn.lock_statement_cache();
@@ -912,7 +912,7 @@ where ValueType::Type: SqlBindableValue
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, statements) = self.destructure();
         match connection {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(conn) => {
                 let mut bind_list = Vec::<SqlBindableBox>::new();
                 bind_list.push(Box::new(&key));
@@ -941,7 +941,7 @@ where ValueType::Type: SqlBindableValue
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (connection, statements) = self.destructure();
         match connection {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(conn) => {
                 let mut bind_list = Vec::<SqlBindableBox>::new();
                 bind_list.push(Box::new(key));

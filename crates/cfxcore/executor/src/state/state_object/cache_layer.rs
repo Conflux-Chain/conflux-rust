@@ -5,7 +5,7 @@
 use super::{AccountEntry, OverlayAccount, RequireFields, State};
 use crate::unwrap_or_return;
 use cfx_statedb::{
-    ErrorKind as DbErrorKind, Result as DbResult, StateDb, StateDbExt,
+    Error as DbErrorKind, Result as DbResult, StateDb, StateDbExt,
 };
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
 use parking_lot::{
@@ -116,7 +116,7 @@ impl State {
         fn no_account_is_an_error(
             address: &AddressWithSpace,
         ) -> DbResult<OverlayAccount> {
-            bail!(DbErrorKind::IncompleteDatabase(address.address));
+            return Err(DbErrorKind::IncompleteDatabase(address.address));
         }
         self.write_account_inner(address, require, no_account_is_an_error)
     }

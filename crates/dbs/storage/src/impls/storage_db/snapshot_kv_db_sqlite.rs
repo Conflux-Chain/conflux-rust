@@ -323,7 +323,7 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         match create_result {
             Err(e) => {
                 fs::remove_dir_all(&snapshot_path)?;
-                bail!(e);
+                return Err(e);
             }
             Ok(connections) => Ok(SnapshotKvDbSqlite {
                 maybe_db_connections: Some(connections),
@@ -662,7 +662,7 @@ impl SnapshotKvDbSqlite {
                 SNAPSHOT_MPT_DB_STATEMENTS.mpt_statements.clone(),
             )))
         } else {
-            bail!("mpt_snapshot is not in current db");
+            return Err(Error::Msg("mpt_snapshot is not in current db".to_string()));
         }
     }
 }

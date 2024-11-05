@@ -111,114 +111,17 @@ impl fmt::Display for ThrottlingReason {
     }
 }
 
-error_chain! {
-    foreign_links {
-        SocketIo(IoError);
-    }
-
-    errors {
-        #[doc = "Error concerning the network address parsing subsystem."]
-        AddressParse {
-            description("Failed to parse network address"),
-            display("Failed to parse network address"),
-        }
-
-        #[doc = "Error concerning the network address resolution subsystem."]
-        AddressResolve(err: Option<io::Error>) {
-            description("Failed to resolve network address"),
-            display("Failed to resolve network address {}", err.as_ref().map_or("".to_string(), |e| e.to_string())),
-        }
-
-        #[doc = "Authentication failure"]
-        Auth {
-            description("Authentication failure"),
-            display("Authentication failure"),
-        }
-
-        BadProtocol {
-            description("Bad protocol"),
-            display("Bad protocol"),
-        }
-
-        BadAddr {
-            description("Bad socket address"),
-            display("Bad socket address"),
-        }
-
-        Decoder(reason: String) {
-            description("Decoder error"),
-            display("Decoder error: reason={}", reason),
-        }
-
-        Expired {
-            description("Expired message"),
-            display("Expired message"),
-        }
-
-        Disconnect(reason: DisconnectReason) {
-            description("Peer disconnected"),
-            display("Peer disconnected: {}", reason),
-        }
-
-        #[doc = "Invalid node id"]
-        InvalidNodeId {
-            description("Invalid node id"),
-            display("Invalid node id"),
-        }
-
-        OversizedPacket {
-            description("Packet is too large"),
-            display("Packet is too large"),
-        }
-
-        Io(err: io::Error) {
-            description("IO Error"),
-            display("Unexpected IO error: {}", err),
-        }
-
-        MessageDeprecated{
-            protocol: ProtocolId,
-            msg_id: u16,
-            min_supported_version: ProtocolVersion
-        } {
-            description("Received message is deprecated"),
-            display(
-                "Received message is deprecated. Protocol {:?}, message id {}, \
-                min_supported_version {}", protocol, msg_id, min_supported_version
-            ),
-        }
-
-        SendUnsupportedMessage{
-            protocol: ProtocolId,
-            msg_id: u16,
-            peer_protocol_version: Option<ProtocolVersion>,
-            min_supported_version: Option<ProtocolVersion>
-        } {
-            description("We are trying to send unsupported message to peer"),
-            display(
-                "We are trying to send unsupported message to peer. Protocol {:?},\
-                message id {}, peer_protocol_version {:?}, min_supported_version {:?}",
-                protocol, msg_id, peer_protocol_version, min_supported_version
-            ),
-        }
-
-        Throttling(reason: ThrottlingReason) {
-            description("throttling failure"),
-            display("throttling failure: {}", reason),
-        }
-    }
-}
 
 #[derive(Debug, Error)]
-pub enum Errors {
+pub enum Error {
     #[error(transparent)]
     SocketIo(#[from] IoError),
     ///Error concerning the network address parsing subsystem.
     #[error("Failed to parse network address")]
     AddressParse,
     ///Error concerning the network address resolution subsystem.
-    #[error("Failed to resolve network address {}", .error.as_ref().map_or("".to_string(), |e| e.to_string()))]
-    AddressResolve { error: Option<io::Error> },
+    #[error("Failed to resolve network address {}", .0.as_ref().map_or("".to_string(), |e| e.to_string()))]
+    AddressResolve(Option<io::Error>),
     /// Authentication failure
     #[error("Authentication failure")]
     Auth,
@@ -256,29 +159,36 @@ pub enum Errors {
     },
     #[error("throttling failure: {0}")]
     Throttling(ThrottlingReason),
+
+    #[error("{0}")]
+    Msg(String),
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self { Error::from_kind(ErrorKind::Io(err)) }
+    fn from(err: io::Error) -> Self { Error::from(Error::Io(err)) }
 }
 
 impl From<rlp::DecoderError> for Error {
     fn from(err: rlp::DecoderError) -> Self {
-        ErrorKind::Decoder(format!("{}", err)).into()
+        Error::Decoder(format!("{}", err)).into()
     }
 }
 
 impl From<keylib::Error> for Error {
-    fn from(_err: keylib::Error) -> Self { ErrorKind::Auth.into() }
+    fn from(_err: keylib::Error) -> Self { Error::Auth.into() }
 }
 
 impl From<keylib::crypto::Error> for Error {
-    fn from(_err: keylib::crypto::Error) -> Self { ErrorKind::Auth.into() }
+    fn from(_err: keylib::crypto::Error) -> Self { Error::Auth.into() }
 }
 
 impl From<net::AddrParseError> for Error {
-    fn from(_err: net::AddrParseError) -> Self { ErrorKind::BadAddr.into() }
+    fn from(_err: net::AddrParseError) -> Self { Error::BadAddr.into() }
 }
+impl From<&str> for Error {
+    fn from(s: &str) -> Error { Error::Msg(s.into()) }
+}
+
 
 #[cfg(test)]
 mod tests {

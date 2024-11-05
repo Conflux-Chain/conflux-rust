@@ -180,7 +180,7 @@ pub fn initialize_common_modules(
                     (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
                 }
                 Err(e) => {
-                    bail!("Load pos_key failed: {}", e);
+                    return Err(format!("Load pos_key failed: {}", e));
                 }
             }
         } else {
@@ -195,7 +195,7 @@ pub fn initialize_common_modules(
                     .map_err(|e| format!("{:?}", e))?
                     .into_bytes();
                     if p != p2 {
-                        bail!("Passwords do not match!");
+                        return Err("Passwords do not match!".into());
                     }
                     p
                 }

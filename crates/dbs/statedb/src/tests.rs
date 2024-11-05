@@ -5,7 +5,7 @@
 use super::StateDbGeneric;
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_storage::{
-    utils::access_mode, ErrorKind, MptKeyValue, Result, StorageStateTrait,
+    utils::access_mode, Error, MptKeyValue, Result, StorageStateTrait,
 };
 use parking_lot::Mutex;
 use primitives::{EpochId, StorageKey, StorageKeyWithSpace, MERKLE_NULL_NODE};
@@ -103,7 +103,7 @@ impl StorageStateTrait for MockStorage {
     }
 
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo> {
-        Err(ErrorKind::Msg("No state root".to_owned()).into())
+        Err(Error::Msg("No state root".to_owned()).into())
     }
 
     fn set(

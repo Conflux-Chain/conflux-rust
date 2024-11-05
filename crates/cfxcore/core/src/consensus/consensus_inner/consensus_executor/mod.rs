@@ -26,7 +26,7 @@ use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
 use cfx_parameters::consensus::*;
-use cfx_statedb::{Result as DbResult, StateDb};
+use cfx_statedb::{Result as DbResult, StateDb, Error as DbError};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
     StorageManagerTrait,
@@ -51,7 +51,7 @@ use crate::{
         pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
-    errors::{invalid_params_check, Result as CoreResult},
+    errors::{self, invalid_params_check, Result as CoreResult},
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
@@ -1582,7 +1582,7 @@ impl ConsensusExecutionHandler {
     ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
-            bail!("invalid epoch id");
+            return Err(errors::Error::from("invalid epoch id"));
         }
         let best_block_header = best_block_header.unwrap();
         let block_height = best_block_header.height() + 1;
@@ -1597,7 +1597,7 @@ impl ConsensusExecutionHandler {
 
         let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
             Some(v) => v.start_block_number + epoch_size as u64,
-            None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
+            None => return Err(errors::Error::from("cannot obtain the execution context. Database is potentially corrupted!")),
         };
         let spec = self.machine.spec(start_block_number, block_height);
         let transitions = &self.machine.params().transition_heights;
@@ -1716,7 +1716,7 @@ impl ConsensusExecutionHandler {
             epoch_id,
             state_space,
         ) {
-            bail!("state is not ready");
+            return Err(DbError::from("state is not ready".to_string()))
         }
 
         let state_index = self
@@ -1732,7 +1732,7 @@ impl ConsensusExecutionHandler {
                     /* try_open = */ true,
                     state_space,
                 )?
-                .ok_or("state deleted")?,
+                .ok_or(DbError::from("state deleted".to_string()))?,
         );
         let state = State::new(state_db)?;
 

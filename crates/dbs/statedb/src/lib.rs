@@ -3,8 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 #[macro_use]
-extern crate error_chain;
-#[macro_use]
 extern crate log;
 
 pub mod global_params;
@@ -18,7 +16,7 @@ use cfx_db_errors::statedb as error;
 mod tests;
 
 pub use self::{
-    error::{Error, ErrorKind, Result},
+    error::{Error, Result},
     impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
     statedb_ext::StateDbExt,
 };
@@ -330,7 +328,7 @@ mod impls {
                                 // This is defensive checking, against certain
                                 // cases when we are not deleting the account
                                 // for sure.
-                                bail!(ErrorKind::IncompleteDatabase(
+                                return Err(Error::IncompleteDatabase(
                                     Address::from_slice(address)
                                 ));
                             }
@@ -342,7 +340,7 @@ mod impls {
                     None => match storage.get(storage_layout_key)? {
                         // A new account must set StorageLayout before accessing
                         // the storage.
-                        None => bail!(ErrorKind::IncompleteDatabase(
+                        None => return Err(Error::IncompleteDatabase(
                             Address::from_slice(address)
                         )),
                         Some(raw) => StorageLayout::from_bytes(raw.as_ref())?,

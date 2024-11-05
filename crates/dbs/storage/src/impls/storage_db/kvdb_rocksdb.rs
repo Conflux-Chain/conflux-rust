@@ -88,7 +88,7 @@ impl KeyValueDbTransactionTrait for KvdbRocksDbTransaction {
                         self.pending.ops.clear();
                         Ok(())
                     }
-                    Err(e) => bail!(e),
+                    Err(e) => return Err(Error::from(e)),
                 }
             }
             None => {

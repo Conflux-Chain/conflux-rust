@@ -9,7 +9,7 @@ use crate::{
         common::{FullPeerFilter, LedgerInfo},
         handler::sync::TxInfoValidated,
         message::msgid,
-        Error as LightError, ErrorKind, Handler as LightHandler,
+        Error as LightError, Handler as LightHandler,
         LightNodeConfiguration, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     sync::SynchronizationGraph,
@@ -77,7 +77,7 @@ async fn with_timeout<T>(
     // set error message
     with_timeout
         .await
-        .map_err(|_| LightError::from(ErrorKind::Timeout(msg)))?
+        .map_err(|_| LightError::from(LightError::Timeout(msg)))?
 }
 
 pub struct QueryService {
@@ -162,7 +162,7 @@ impl QueryService {
             None => Ok(None),
             Some(raw) => {
                 let decoded = rlp::decode::<T>(raw.as_ref())
-                    .map_err(|e| format!("{}", e))?;
+                    .map_err(|e| LightError::Msg(format!("{}", e)))?;
                 Ok(Some(decoded))
             }
         }
@@ -298,7 +298,7 @@ impl QueryService {
                 break;
             }
 
-            let mut epoch_hashes = inner.read().block_hashes_by_epoch(epoch)?;
+            let mut epoch_hashes = inner.read().block_hashes_by_epoch(epoch).map_err(|e| LightError::Msg(e))?;
             epoch_hashes.reverse();
 
             let missing = GAS_PRICE_BLOCK_SAMPLE_SIZE - hashes.len();
@@ -324,7 +324,7 @@ impl QueryService {
                     // `retrieve_block` will only return None if we do not have
                     // the corresponding header, which should not happen in this
                     // case.
-                    bail!(ErrorKind::InternalError(format!(
+                    return Err(LightError::InternalError(format!(
                         "Block {:?} not found during gas price sampling",
                         hash
                     )));
@@ -448,7 +448,7 @@ impl QueryService {
         let key = Self::account_key(&address);
 
         let code_hash = match self.retrieve_state_entry_raw(epoch, key).await {
-            Err(e) => bail!(e),
+            Err(e) => return Err(Error::from(e)),
             Ok(None) => return Ok(None),
             Ok(Some(rlp)) => {
                 account_result_to_rpc_result(
@@ -625,7 +625,7 @@ impl QueryService {
         let block_hash = tx_index.block_hash;
         let maybe_epoch = self.consensus.get_block_epoch_number(&block_hash);
         let maybe_block_number =
-            self.consensus.get_block_number(&block_hash)?;
+            self.consensus.get_block_number(&block_hash).map_err(|e| LightError::Msg(e))?;
         let maybe_state_root = maybe_epoch
             .and_then(|e| self.handler.witnesses.root_hashes_of(e).ok())
             .map(|roots| roots.state_root_hash);
@@ -905,7 +905,7 @@ impl QueryService {
 
                 Ok((epochs, block_filter))
             }
-            _ => bail!(FilterError::Custom(
+            _ => return Err(FilterError::Custom(
                 "Light nodes do not support log filtering using block numbers"
                     .into(),
             )),
@@ -920,7 +920,7 @@ impl QueryService {
         // find epochs and blocks to match against
         let (epochs, block_filter) = self
             .get_filter_epochs(&filter)
-            .map_err(|e| format!("{}", e))?;
+            .map_err(|e| LightError::Msg(format!("{}", e)))?;
 
         debug!("Executing filter on epochs {:?}", epochs);
 
@@ -987,7 +987,7 @@ impl QueryService {
                     debug!("Filtering epoch {:?} receipts = {:?}", epoch, receipts);
 
                     let logs = self
-                        .filter_epoch_receipts(epoch, receipts, filter.clone())?
+                        .filter_epoch_receipts(epoch, receipts, filter.clone()).map_err(|e| LightError::Msg(e))?
                         .map(|log| Ok(log));
 
                     Ok(stream::iter(logs))

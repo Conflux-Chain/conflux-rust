@@ -8,7 +8,7 @@ use crate::{
     node_table::{NodeEndpoint, NodeEntry, NodeId},
     parse_msg_id_leb128_2_bytes_at_most,
     service::{NetworkServiceInner, ProtocolVersion},
-    DisconnectReason, Error, ErrorKind, ProtocolId, ProtocolInfo,
+    DisconnectReason, Error, ProtocolId, ProtocolInfo,
     SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::Bytes;
@@ -289,7 +289,7 @@ impl Session {
             && packet.id != PACKET_DISCONNECT
             && self.had_hello.is_none()
         {
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         match packet.id {
@@ -322,7 +322,7 @@ impl Session {
                     "read packet DISCONNECT, reason = {}, session = {:?}",
                     reason, self
                 );
-                Err(ErrorKind::Disconnect(reason).into())
+                Err(Error::Disconnect(reason.to_string()).into())
             }
             PACKET_USER => Ok(SessionDataWithDisconnectInfo {
                 session_data: SessionData::Message {
@@ -338,7 +338,7 @@ impl Session {
                     "read packet UNKNOWN, packet_id = {:?}, session = {:?}",
                     packet.id, self
                 );
-                Err(ErrorKind::BadProtocol.into())
+                Err(Error::BadProtocol.into())
             }
         }
     }
@@ -398,7 +398,7 @@ impl Session {
                          remote = {}",
                         peer_caps[i].protocol, remote_network_id
                     );
-                    bail!(self.send_disconnect(DisconnectReason::Custom(
+                    return Err(self.send_disconnect(DisconnectReason::Custom(
                         "Invalid protocol list: duplication.".into()
                     )))
                 }
@@ -463,28 +463,28 @@ impl Session {
                 let pos_public_key_bytes: Vec<u8> = rlp.val_at(3)?;
                 trace!("pos_public_key_bytes: {:?}", pos_public_key_bytes);
                 if pos_public_key_bytes.len() < BLS_PUBLIC_KEY_LENGTH {
-                    bail!("pos public key bytes is too short!");
+                    return Err(Error::from("pos public key bytes is too short!"));
                 }
                 let bls_pub_key = ConsensusPublicKey::try_from(
                     &pos_public_key_bytes[..BLS_PUBLIC_KEY_LENGTH],
                 )
                 .map_err(|e| {
-                    Error::from_kind(
-                        ErrorKind::Decoder(format!("{:?}", e)).into(),
+                    Error::from(
+                        Error::Decoder(format!("{:?}", e)),
                     )
                 })?;
                 let vrf_pub_key = ConsensusVRFPublicKey::try_from(
                     &pos_public_key_bytes[BLS_PUBLIC_KEY_LENGTH..],
                 )
                 .map_err(|e| {
-                    Error::from_kind(
-                        ErrorKind::Decoder(format!("{:?}", e)).into(),
+                    Error::from(
+                        Error::Decoder(format!("{:?}", e)),
                     )
                 })?;
 
                 Ok(Some((bls_pub_key, vrf_pub_key)))
             }
-            length => Err(ErrorKind::Decoder(format!(
+            length => Err(Error::Decoder(format!(
                 "Hello has incorrect rlp length: {:?}",
                 length
             ))
@@ -507,11 +507,11 @@ impl Session {
                     .map(|p| str::from_utf8(&p[..]).unwrap_or("???")),
                 packet_id
             );
-            bail!(ErrorKind::Expired);
+            return Err(Error::Expired);
         }
 
         if self.expired() {
-            return Err(ErrorKind::Expired.into());
+            return Err(Error::Expired.into());
         }
 
         Ok(SessionPacket::assemble(
@@ -535,7 +535,7 @@ impl Session {
                     if min_protocol_version <= peer_protocol.version {
                         break;
                     } else {
-                        bail!(ErrorKind::SendUnsupportedMessage {
+                        return Err(Error::SendUnsupportedMessage {
                             protocol,
                             msg_id: parse_msg_id_leb128_2_bytes_at_most(
                                 &mut msg
@@ -589,7 +589,7 @@ impl Session {
             PACKET_DISCONNECT,
             packet,
         );
-        ErrorKind::Disconnect(reason).into()
+        Error::Disconnect(reason.to_string()).into()
     }
 
     /// Send Hello packet to remote peer.
@@ -778,7 +778,7 @@ impl SessionPacket {
         // packet id
         if data.is_empty() {
             debug!("failed to parse session packet, packet id missed");
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         let packet_id = data.split_off(data.len() - 1)[0];
@@ -786,7 +786,7 @@ impl SessionPacket {
         // protocol flag
         if data.is_empty() {
             debug!("failed to parse session packet, protocol flag missed");
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         let header_byte = data.split_off(data.len() - 1)[0];
@@ -794,7 +794,7 @@ impl SessionPacket {
         let header_version = (header_byte & 0x0f) >> 1;
         if header_version > HEADER_VERSION_WITH_EXTENSION {
             debug!("unsupported header_version {}", header_version);
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
         let has_extension = (header_byte & 0x10) >> 4;
 
@@ -802,7 +802,7 @@ impl SessionPacket {
         if protocol_flag == 0 {
             if packet_id == PACKET_USER {
                 debug!("failed to parse session packet, no protocol for user packet");
-                return Err(ErrorKind::BadProtocol.into());
+                return Err(Error::BadProtocol.into());
             }
 
             let (data, extensions) =
@@ -819,13 +819,13 @@ impl SessionPacket {
 
         if packet_id != PACKET_USER {
             debug!("failed to parse session packet, invalid packet id");
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         // protocol
         if data.len() < PROTOCOL_ID_SIZE {
             debug!("failed to parse session packet, protocol missed");
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         let protocol_bytes = data.split_off(data.len() - PROTOCOL_ID_SIZE);
@@ -855,7 +855,7 @@ impl SessionPacket {
             has_extension = (extension_byte & 1) != 0;
             if data.len() < extension_len {
                 debug!("failed to parse session packet, not enough bytes for extension.");
-                bail!(ErrorKind::BadProtocol);
+                return Err(Error::BadProtocol);
             }
             extensions
                 .push(data.split_off(data.len() - extension_len).to_vec());

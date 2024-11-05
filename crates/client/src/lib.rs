@@ -2,11 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-#![recursion_limit = "512"]
 #![allow(deprecated)]
 
-#[macro_use]
-extern crate error_chain;
 #[macro_use]
 extern crate log;
 #[macro_use]

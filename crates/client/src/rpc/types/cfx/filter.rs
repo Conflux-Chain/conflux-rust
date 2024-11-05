@@ -167,7 +167,7 @@ impl CfxRpcLogFilter {
 
             // any other case is considered an error
             _ => {
-                bail!(RpcError::invalid_params(
+                return Err(RpcError::invalid_params(
                     format!("Filter must provide one of the following: (1) an epoch range through `fromEpoch` and `toEpoch`, (2) a block number range through `fromBlock` and `toBlock`, (3) a set of block hashes through `blockHashes`")
                 ));
             }

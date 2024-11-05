@@ -68,10 +68,10 @@ impl SqliteConnection {
     pub fn close(&mut self) -> Result<()> {
         match unsafe { sqlite_ffi::sqlite3_close(self.get_db_mut().as_raw()) } {
             sqlite_ffi::SQLITE_OK => Ok(()),
-            code => bail!(sqlite::Error {
+            code => return Err(Error::SqliteError(sqlite::Error {
                 code: Some(code as isize),
                 message: None
-            }),
+            })),
         }
     }
 
@@ -80,10 +80,10 @@ impl SqliteConnection {
             sqlite_ffi::sqlite3_close_v2(self.get_db_mut().as_raw())
         } {
             sqlite_ffi::SQLITE_OK => Ok(()),
-            code => bail!(sqlite::Error {
+            code => return Err(Error::SqliteError(sqlite::Error {
                 code: Some(code as isize),
                 message: None
-            }),
+            })),
         }
     }
 
@@ -377,7 +377,7 @@ impl<'db, Item, F: FnMut(&Statement<'db>) -> Item> MappedRows<'db, F> {
             if MaybeRows::next(&mut self.maybe_rows)?.is_none() {
                 Ok(Some(row_mapped))
             } else {
-                bail!(ErrorKind::DbValueError)
+                return Err(Error::DbValueError)
             }
         }
     }
@@ -467,7 +467,7 @@ impl ScopedStatement {
             Ok(State::Done) => Ok(None),
             Ok(State::Row) => Ok(Some(self.as_mut())),
             Err(e) => {
-                bail!(e);
+                return Err(Error::SqliteError(e));
             }
         }
     }
@@ -581,7 +581,7 @@ impl<
         ValueType::iterate(&mut loader);
 
         match loader.error {
-            Some(e) => bail!(e),
+            Some(e) => return Err(e),
             None => result,
         }
     }

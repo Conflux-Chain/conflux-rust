@@ -179,9 +179,13 @@ impl ValueSizeFieldConverter {
 }
 
 impl SizeFieldConverterTrait<u32> for ValueSizeFieldConverter {
-    fn max_size() -> usize { Self::MAX_VALUE_SIZE }
+    fn max_size() -> usize {
+        Self::MAX_VALUE_SIZE
+    }
 
-    fn is_size_over_limit(size: usize) -> bool { size > Self::MAX_VALUE_SIZE }
+    fn is_size_over_limit(size: usize) -> bool {
+        size > Self::MAX_VALUE_SIZE
+    }
 
     fn get(size_field: &u32) -> usize {
         if *size_field == Self::VALUE_TOMBSTONE {
@@ -191,11 +195,15 @@ impl SizeFieldConverterTrait<u32> for ValueSizeFieldConverter {
         }
     }
 
-    fn set(size_field: &mut u32, size: usize) { *size_field = size as u32; }
+    fn set(size_field: &mut u32, size: usize) {
+        *size_field = size as u32;
+    }
 }
 
 impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
-    pub fn get_compressed_path_size(&self) -> u16 { self.path_size }
+    pub fn get_compressed_path_size(&self) -> u16 {
+        self.path_size
+    }
 
     pub fn copy_compressed_path<CompressedPath: CompressedPathTrait>(
         &mut self, new_path: CompressedPath,
@@ -245,10 +253,10 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn check_value_size(value: &[u8]) -> Result<()> {
         let value_size = value.len();
         if ValueSizeFieldConverter::is_size_over_limit(value_size) {
-            return Err(Error::from_kind(ErrorKind::MPTInvalidValueLength(
-                value_size,
-                ValueSizeFieldConverter::max_size(),
-            )));
+            return Err(Error::MPTInvalidValueLength {
+                length: value_size,
+                length_limit: ValueSizeFieldConverter::max_size(),
+            });
         }
         // We may use empty value to represent special state, such as tombstone.
         // Therefore We don't check for emptiness.
@@ -259,16 +267,16 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn check_key_size(access_key: &[u8]) -> Result<()> {
         let key_size = access_key.len();
         if TrivialSizeFieldConverterU16::is_size_over_limit(key_size) {
-            return Err(Error::from_kind(ErrorKind::MPTInvalidKeyLength(
-                key_size,
-                TrivialSizeFieldConverterU16::max_size(),
-            )));
+            return Err(Error::MPTInvalidKeyLength {
+                length: key_size,
+                length_limit: TrivialSizeFieldConverterU16::max_size(),
+            });
         }
         if key_size == 0 {
-            return Err(Error::from_kind(ErrorKind::MPTInvalidKeyLength(
-                key_size,
-                TrivialSizeFieldConverterU16::max_size(),
-            )));
+            return Err(Error::MPTInvalidKeyLength {
+                length: key_size,
+                length_limit: TrivialSizeFieldConverterU16::max_size(),
+            });
         }
 
         Ok(())
@@ -289,7 +297,9 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
         )
     }
 
-    fn has_value(&self) -> bool { self.value_size > 0 }
+    fn has_value(&self) -> bool {
+        self.value_size > 0
+    }
 
     fn get_children_count(&self) -> u8 {
         self.children_table.get_children_count()
@@ -314,8 +324,10 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     }
 
     unsafe fn add_new_child_unchecked<T>(&mut self, child_index: u8, child: T)
-    where ChildrenTableItem<NodeRefDeltaMptCompact>:
-            WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
+    where
+        ChildrenTableItem<NodeRefDeltaMptCompact>:
+            WrappedCreateFrom<T, NodeRefDeltaMptCompact>,
+    {
         self.children_table = CompactedChildrenTable::insert_child_unchecked(
             self.children_table.to_ref(),
             child_index,
@@ -330,8 +342,10 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     }
 
     unsafe fn replace_child_unchecked<T>(&mut self, child_index: u8, child: T)
-    where ChildrenTableItem<NodeRefDeltaMptCompact>:
-            WrappedCreateFrom<T, NodeRefDeltaMptCompact> {
+    where
+        ChildrenTableItem<NodeRefDeltaMptCompact>:
+            WrappedCreateFrom<T, NodeRefDeltaMptCompact>,
+    {
         self.children_table.set_child_unchecked(
             child_index,
             ChildrenTableItem::<NodeRefDeltaMptCompact>::take(child),
@@ -461,7 +475,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
                 _ => TrieNodeAction::Modify,
             })
         } else {
-            Err(ErrorKind::MPTKeyNotFound.into())
+            Err(Error::MPTKeyNotFound.into())
         }
     }
 
@@ -514,7 +528,9 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
         return TrieNodeAction::Modify;
     }
 
-    pub fn get_merkle(&self) -> &MerkleHash { &self.merkle_hash }
+    pub fn get_merkle(&self) -> &MerkleHash {
+        &self.merkle_hash
+    }
 
     pub fn set_merkle(&mut self, merkle: &MerkleHash) {
         self.merkle_hash = merkle.clone();
@@ -526,7 +542,9 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
 {
     type EntryType = MemOptimizedTrieNode<CacheAlgoDataT>;
 
-    fn from_value(value: Self) -> Self { value }
+    fn from_value(value: Self) -> Self {
+        value
+    }
 
     fn from_vacant_index(next: usize) -> Self {
         Self {
@@ -560,7 +578,9 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
         self.slab_next_vacant_index as usize
     }
 
-    fn get_occupied_ref(&self) -> &MemOptimizedTrieNode<CacheAlgoDataT> { self }
+    fn get_occupied_ref(&self) -> &MemOptimizedTrieNode<CacheAlgoDataT> {
+        self
+    }
 
     fn get_occupied_mut(
         &mut self,

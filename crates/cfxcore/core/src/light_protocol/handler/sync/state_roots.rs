@@ -158,7 +158,7 @@ impl StateRoots {
                 .or_insert(PendingItem::pending())
                 .set_error(e.clone());
 
-            bail!(e);
+            return Err(Error::ClonableErrorWrapper(e));
         }
 
         // store state root by epoch
@@ -229,7 +229,7 @@ impl StateRoots {
 
         // check
         if received != expected {
-            bail!(ErrorKind::InvalidStateRoot {
+            return Err(Error::InvalidStateRoot {
                 epoch,
                 expected,
                 received,
@@ -252,7 +252,7 @@ impl StateRoots {
                 if current_epoch <= snapshot_epoch_count {
                     // previous root should not have been provided
                     // for the first snapshot period
-                    bail!(ErrorKind::InvalidPreviousStateRoot {
+                    return Err(Error::InvalidPreviousStateRoot {
                         current_epoch,
                         snapshot_epoch_count,
                         root: maybe_prev_snapshot_state_root.clone()
@@ -269,7 +269,7 @@ impl StateRoots {
                 if current_epoch > snapshot_epoch_count {
                     // previous root should have been provided
                     // for subsequent snapshot periods
-                    bail!(ErrorKind::InvalidPreviousStateRoot {
+                    return Err(Error::InvalidPreviousStateRoot {
                         current_epoch,
                         snapshot_epoch_count,
                         root: maybe_prev_snapshot_state_root.clone()

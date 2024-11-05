@@ -23,7 +23,7 @@ pub const LIGHT_PROTO_V2: ProtocolVersion = ProtocolVersion(2);
 use error::handle as handle_error;
 
 pub use config::Configuration as LightNodeConfiguration;
-pub use error::{Error, ErrorKind};
+pub use error::Error;
 pub use handler::Handler;
 pub use provider::Provider;
 pub use query_service::QueryService;

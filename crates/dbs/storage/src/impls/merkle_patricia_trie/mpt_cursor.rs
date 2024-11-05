@@ -554,7 +554,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
             ) {
                 Err(e) => {
                     subtree_root.has_io_error.set_has_io_error();
-                    bail!(e);
+                    return Err(e);
                 }
                 Ok(iter) => iter,
             };
@@ -562,7 +562,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
             if let Some((path, snapshot_mpt_node)) = match iter.next() {
                 Err(e) => {
                     subtree_root.has_io_error.set_has_io_error();
-                    bail!(e);
+                    return Err(e);
                 }
                 Ok(item) => item,
             } {
@@ -591,7 +591,7 @@ impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt> for BasicPathNode<Mpt> {
     ) -> Result<SnapshotMptNode> {
         mpt.get_read_mpt()
             .load_node(path)?
-            .ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+            .ok_or(Error::from(Error::SnapshotMPTTrieNodeNotFound))
     }
 }
 
@@ -603,7 +603,7 @@ impl<Mpt: GetReadMpt, PathNode> CursorLoadNodeWrapper<Mpt>
     ) -> Result<SnapshotMptNode> {
         mpt.get_read_mpt()
             .load_node(path)?
-            .ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+            .ok_or(Error::from(Error::SnapshotMPTTrieNodeNotFound))
     }
 }
 
@@ -624,7 +624,7 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
             Ok(None) => {
                 self.set_has_io_error();
 
-                Err(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+                Err(Error::from(Error::SnapshotMPTTrieNodeNotFound))
             }
         }
     }
@@ -819,8 +819,8 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 
                 node
             }
-            Err(e) => match e.kind() {
-                ErrorKind::SnapshotMPTTrieNodeNotFound => {
+            Err(e) => match e {
+                Error::SnapshotMPTTrieNodeNotFound => {
                     mpt_is_empty = true;
 
                     SnapshotMptNode(VanillaTrieNode::new(
@@ -831,7 +831,7 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
                     ))
                 }
                 _ => {
-                    bail!(e);
+                    return Err(e);
                 }
             },
         };
@@ -1229,7 +1229,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                     .delete_node(&self.basic_node.path_db_key);
                 if result.is_err() {
                     self.set_has_io_error();
-                    bail!(result.unwrap_err());
+                    return Err(result.unwrap_err());
                 }
             }
         } else {
@@ -1244,7 +1244,7 @@ impl<Mpt: GetRwMpt> ReadWritePathNode<Mpt> {
                 );
             if result.is_err() {
                 self.set_has_io_error();
-                bail!(result.unwrap_err());
+                return Err(result.unwrap_err());
             }
         }
 

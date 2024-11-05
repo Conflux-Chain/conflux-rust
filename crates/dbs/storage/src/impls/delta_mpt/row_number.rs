@@ -32,7 +32,7 @@ impl RowNumber {
                 value: self.value + 1,
             })
         } else {
-            Err(ErrorKind::MPTTooManyNodes.into())
+            Err(Error::MPTTooManyNodes.into())
         }
     }
 }

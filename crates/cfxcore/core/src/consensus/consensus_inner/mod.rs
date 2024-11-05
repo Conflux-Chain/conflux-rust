@@ -3796,11 +3796,10 @@ impl ConsensusGraphInner {
         let max_height = self.arena[*self.pivot_chain.last().unwrap()].height;
         let (start, end) = height_range.unwrap_or((min_height, max_height));
         if start < min_height || end > max_height {
-            bail!(
-                "height_range out of bound: requested={:?} min={} max={}",
+            return  Err(format!("height_range out of bound: requested={:?} min={} max={}",
                 height_range,
                 min_height,
-                max_height
+                max_height)
             );
         }
 

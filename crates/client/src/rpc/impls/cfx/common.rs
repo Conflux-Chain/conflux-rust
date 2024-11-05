@@ -410,7 +410,7 @@ impl RpcImpl {
         // for genesis, check criteria directly
         if block_hash == genesis && (pivot_hash != genesis || epoch_number != 0)
         {
-            bail!(RpcError::invalid_params("pivot chain assumption failed"));
+            return Err(RpcError::invalid_params("pivot chain assumption failed").into());
         }
 
         // `block_hash` must match `epoch_number`
@@ -418,7 +418,7 @@ impl RpcImpl {
             && (consensus_graph.get_block_epoch_number(&block_hash)
                 != epoch_number.into())
         {
-            bail!(RpcError::invalid_params("pivot chain assumption failed"));
+            return Err(RpcError::invalid_params("pivot chain assumption failed").into());
         }
 
         // `pivot_hash` must match `epoch_number`
@@ -944,7 +944,7 @@ impl RpcImpl {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
             // permanently.
-            bail!(RpcError::internal_error())
+            return Err(RpcError::internal_error().into())
         }
         self.pos_handler.force_vote_proposal(block_id).map_err(|e| {
             warn!("force_vote_proposal: err={:?}", e);
@@ -960,7 +960,7 @@ impl RpcImpl {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
             // permanently.
-            bail!(RpcError::internal_error())
+            return Err(RpcError::internal_error().into())
         }
         self.pos_handler
             .force_propose(round, parent_block_id, payload)
@@ -975,7 +975,7 @@ impl RpcImpl {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
             // permanently.
-            bail!(RpcError::internal_error())
+            return Err(RpcError::internal_error().into())
         }
         debug!("pos_trigger_timeout: type={}", timeout_type);
         self.pos_handler.trigger_timeout(timeout_type).map_err(|e| {
@@ -991,7 +991,7 @@ impl RpcImpl {
             // Reject force vote if test RPCs are enabled in a mainnet node,
             // because this may cause staked CFXs locked
             // permanently.
-            bail!(RpcError::internal_error())
+            return Err(RpcError::internal_error().into())
         }
         self.pos_handler
             .force_sign_pivot_decision(PivotBlockDecision {
@@ -1304,7 +1304,7 @@ impl RpcImpl {
                 let duration: U128 = duration.into();
                 let v = duration.low_u64() as u32;
                 if duration != v.into() {
-                    bail!(RpcError::invalid_params("invalid duration number",));
+                    return Err(CoreError::JsonRpcError(RpcError::invalid_params("invalid duration number",)));
                 } else {
                     Some(v)
                 }
@@ -1330,7 +1330,7 @@ impl RpcImpl {
             Ok(_) => Ok(true),
             Err(err) => {
                 warn!("Unable to unlock the account. With error {:?}", err);
-                bail!(RpcError::internal_error())
+                return Err(RpcError::internal_error().into())
             }
         }
     }
@@ -1341,7 +1341,7 @@ impl RpcImpl {
             Ok(_) => Ok(true),
             Err(err) => {
                 warn!("Unable to lock the account. With error {:?}", err);
-                bail!(RpcError::internal_error())
+                return Err(RpcError::internal_error().into())
             }
         }
     }
@@ -1358,7 +1358,7 @@ impl RpcImpl {
                 Ok(signature) => signature,
                 Err(err) => {
                     warn!("Unable to sign the message. With error {:?}", err);
-                    bail!(RpcError::internal_error());
+                    return Err(CoreError::JsonRpcError(RpcError::internal_error()));
                 }
             };
         Ok(H520(signature.into()))

@@ -5,7 +5,6 @@ use cfx_rpc_cfx_types::trace::{
 use cfx_rpc_primitives::Bytes;
 use cfx_types::{H160, H256, U256};
 use cfx_vm_types::{CallType as CfxCallType, CreateType as CfxCreateType};
-use error_chain::bail;
 use jsonrpc_core::Error as JsonRpcError;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::{
@@ -129,7 +128,7 @@ impl TryFrom<RpcCfxAction> for Action {
                 create_type: create.create_type.into(),
             })),
             action => {
-                bail!("unsupported action in eth space: {:?}", action);
+                return Err(format!("unsupported action in eth space: {:?}", action));
             }
         }
     }
@@ -272,12 +271,12 @@ impl LocalizedTrace {
     ) -> Result<(), JsonRpcError> {
         if !matches!(self.result, Res::None) {
             // One action matches exactly one result.
-            bail!(JsonRpcError::internal_error());
+            return Err(JsonRpcError::internal_error());
         }
         match result {
             RpcCfxAction::CallResult(call_result) => {
                 if !matches!(self.action, Action::Call(_)) {
-                    bail!(JsonRpcError::internal_error());
+                    return Err(JsonRpcError::internal_error());
                 }
                 match call_result.outcome {
                     Outcome::Success => {
@@ -299,7 +298,7 @@ impl LocalizedTrace {
             }
             RpcCfxAction::CreateResult(create_result) => {
                 if !matches!(self.action, Action::Create(_)) {
-                    bail!(JsonRpcError::internal_error());
+                    return Err(JsonRpcError::internal_error());
                 }
                 match create_result.outcome {
                     Outcome::Success => {
@@ -321,7 +320,7 @@ impl LocalizedTrace {
                     }
                 }
             }
-            _ => bail!(JsonRpcError::internal_error()),
+            _ => return Err(JsonRpcError::internal_error()),
         }
         Ok(())
     }

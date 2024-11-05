@@ -317,38 +317,38 @@ impl HotStuffSynchronizationProtocol {
             }
             Error::Decoder(_) => op = Some(UpdateNodeOperation::Remove),
             Error::Io(_) => disconnect = false,
-            Error::Network(kind) => match kind.0 {
-                network::ErrorKind::AddressParse => disconnect = false,
-                network::ErrorKind::AddressResolve(_) => disconnect = false,
-                network::ErrorKind::Auth => disconnect = false,
-                network::ErrorKind::BadProtocol => {
+            Error::Network(kind) => match kind {
+                network::Error::AddressParse => disconnect = false,
+                network::Error::AddressResolve(_) => disconnect = false,
+                network::Error::Auth => disconnect = false,
+                network::Error::BadProtocol => {
                     op = Some(UpdateNodeOperation::Remove)
                 }
-                network::ErrorKind::BadAddr => disconnect = false,
-                network::ErrorKind::Decoder(_) => {
+                network::Error::BadAddr => disconnect = false,
+                network::Error::Decoder(_) => {
                     op = Some(UpdateNodeOperation::Remove)
                 }
-                network::ErrorKind::Expired => disconnect = false,
-                network::ErrorKind::Disconnect(_) => disconnect = false,
-                network::ErrorKind::InvalidNodeId => disconnect = false,
-                network::ErrorKind::OversizedPacket => disconnect = false,
-                network::ErrorKind::Io(_) => disconnect = false,
-                network::ErrorKind::Throttling(_) => disconnect = false,
-                network::ErrorKind::SocketIo(_) => {
+                network::Error::Expired => disconnect = false,
+                network::Error::Disconnect(_) => disconnect = false,
+                network::Error::InvalidNodeId => disconnect = false,
+                network::Error::OversizedPacket => disconnect = false,
+                network::Error::Io(_) => disconnect = false,
+                network::Error::Throttling(_) => disconnect = false,
+                network::Error::SocketIo(_) => {
                     op = Some(UpdateNodeOperation::Failure)
                 }
-                network::ErrorKind::Msg(_) => {
+                network::Error::Msg(_) => {
                     op = Some(UpdateNodeOperation::Failure)
                 }
-                network::ErrorKind::__Nonexhaustive {} => {
+                network::Error::MessageDeprecated { .. } => {
                     op = Some(UpdateNodeOperation::Failure)
                 }
-                network::ErrorKind::MessageDeprecated { .. } => {
+                network::Error::SendUnsupportedMessage { .. } => {
                     op = Some(UpdateNodeOperation::Failure)
                 }
-                network::ErrorKind::SendUnsupportedMessage { .. } => {
-                    op = Some(UpdateNodeOperation::Failure)
-                }
+                // _ => {
+                //     op = Some(UpdateNodeOperation::Failure)
+                // }
             },
             Error::Storage(_) => {}
             Error::Msg(_) => op = Some(UpdateNodeOperation::Failure),

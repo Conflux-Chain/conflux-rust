@@ -45,7 +45,7 @@ use crate::{
     parse_msg_id_leb128_2_bytes_at_most,
     session::{self, Session, SessionData, SessionDetails},
     session_manager::SessionManager,
-    Error, ErrorKind, HandlerWorkType, IpFilter, NatType, NetworkConfiguration,
+    Error, HandlerWorkType, IpFilter, NatType, NetworkConfiguration,
     NetworkContext as NetworkContextTrait, NetworkIoMessage,
     NetworkProtocolHandler, PeerInfo, ProtocolId, ProtocolInfo,
     UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
@@ -488,7 +488,7 @@ impl DelayedQueue {
         );
         match r {
             Ok(_) => {}
-            Err(Error(ErrorKind::Expired, _)) => {
+            Err(Error::Expired) => {
                 // If a connection is set expired, it should have been killed
                 // before, and the stored `context.peer` may have been reused by
                 // another connection, so we cannot kill it again
@@ -1970,7 +1970,7 @@ impl<'a> NetworkContextTrait for NetworkContext<'a> {
         version_valid_till: ProtocolVersion, priority: SendQueuePriority,
     ) -> Result<(), Error> {
         if version_valid_till < self.min_supported_version {
-            bail!(ErrorKind::SendUnsupportedMessage {
+            return Err(Error::SendUnsupportedMessage {
                 protocol: self.protocol,
                 msg_id: parse_msg_id_leb128_2_bytes_at_most(&mut &*msg),
                 peer_protocol_version: None,

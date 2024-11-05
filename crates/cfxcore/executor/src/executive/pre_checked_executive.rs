@@ -585,7 +585,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         let tx_substate = self.substate;
 
         let outcome = match result {
-            Err(vm::Error::StateDbError(e)) => bail!(e.0),
+            Err(vm::Error::StateDbError(e)) => return Err(e.0),
             Err(exception) => ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(exception),
                 Executed::execution_error_fully_charged(

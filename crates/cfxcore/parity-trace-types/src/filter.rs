@@ -3,7 +3,6 @@ use super::{
     trace_types::{ExecTrace, TransactionExecTraces},
 };
 use cfx_types::{Address, Space, H256};
-use error_chain::bail;
 use primitives::EpochNumber;
 
 /// Log event Filter.
@@ -133,7 +132,7 @@ impl TraceFilter {
             }
         }
         if !stack_index.is_empty() {
-            bail!("actions left unmatched!".to_string());
+            return Err("actions left unmatched!".to_string());
         }
         Ok(trace_pairs
             .into_iter()
@@ -195,7 +194,7 @@ impl TraceFilter {
             }
         }
         if !stack.is_empty() {
-            bail!("actions left unmatched!".to_string());
+            return Err("actions left unmatched!".to_string());
         }
         Ok(traces)
     }

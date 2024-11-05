@@ -483,10 +483,10 @@ impl RpcImpl {
         )?;
 
         if tx.recover_public().is_err() {
-            bail!(invalid_params_detail(
+            return Err(invalid_params_detail(
                 "tx",
                 "Can not recover pubkey for Ethereum like tx"
-            ));
+            ).into());
         }
 
         let r = self.send_transaction_with_signature(tx);
@@ -552,7 +552,7 @@ impl RpcImpl {
     ) -> CoreResult<H256> {
         if self.sync.catch_up_mode() {
             warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
-            bail!(request_rejected_in_catch_up_mode(None));
+            return Err(request_rejected_in_catch_up_mode(None).into());
         }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
@@ -560,14 +560,14 @@ impl RpcImpl {
         match (signed_trans.len(), failed_trans.len()) {
             (0, 0) => {
                 debug!("insert_new_transactions ignores inserted transactions");
-                bail!(invalid_params_detail("tx", "tx already exist"))
+                return Err(invalid_params_detail("tx", "tx already exist").into())
             }
             (0, 1) => {
                 let tx_err = failed_trans.values().next().unwrap();
                 if let TransactionPoolError::StateDbError(err) = tx_err {
-                    bail!(internal_error(err))
+                    return Err(internal_error(err).into())
                 } else {
-                    bail!(invalid_params_detail("tx", tx_err.to_string()))
+                    return Err(invalid_params_detail("tx", tx_err.to_string()).into())
                 }
             }
             (1, 0) => {
@@ -578,10 +578,10 @@ impl RpcImpl {
             _ => {
                 // This should never happen
                 error!("insert_new_transactions failed, invalid length of returned result vector {}", signed_trans.len() + failed_trans.len());
-                bail!(internal_error(format!(
+                return Err(internal_error(format!(
                     "unexpected insert result, {} returned items",
                     signed_trans.len() + failed_trans.len()
-                )))
+                )).into())
             }
         }
     }
@@ -694,7 +694,7 @@ impl RpcImpl {
                 // FIXME: method_not_found
                 let mut rpc_error = JsonRpcError::method_not_found();
                 rpc_error.message = "send_usable_genesis_accounts only allowed in test or dev mode with txgen set.".into();
-                bail!(rpc_error)
+                return Err(rpc_error.into())
             }
             Some(txgen) => {
                 txgen.set_genesis_accounts_start_index(account_start_index);
@@ -821,7 +821,7 @@ impl RpcImpl {
             .ok_or("Inconsistent state")?;
 
         if block_receipts.receipts.len() != block.transactions.len() {
-            bail!("Inconsistent state");
+            return Err("Inconsistent state".into());
         }
 
         let pivot_header = if let Some(x) = self
@@ -854,7 +854,7 @@ impl RpcImpl {
             || id >= exec_info.block_receipts.receipts.len()
             || id >= exec_info.block_receipts.tx_execution_error_messages.len()
         {
-            bail!("Inconsistent state");
+            return Err("Inconsistent state".into());
         }
 
         let tx = &exec_info.block.transactions[id];
@@ -946,10 +946,10 @@ impl RpcImpl {
 
         // pivot chain reorg
         if pivot_assumption != exec_info.pivot_header.hash() {
-            bail!(pivot_assumption_failed(
+            return Err(pivot_assumption_failed(
                 pivot_assumption,
                 exec_info.pivot_header.hash()
-            ));
+            ).into());
         }
 
         let mut rpc_receipts = vec![];
@@ -1055,7 +1055,7 @@ impl RpcImpl {
                 // FIXME: create helper function.
                 let mut rpc_error = JsonRpcError::method_not_found();
                 rpc_error.message = "generate_one_block_with_direct_txgen only allowed in test or dev mode.".into();
-                bail!(rpc_error)
+                return Err(rpc_error.into())
             }
             Some(direct_txgen) => {
                 let generated_transactions =
@@ -1121,10 +1121,10 @@ impl RpcImpl {
             let public = match tx.recover_public() {
                 Ok(public) => public,
                 Err(e) => {
-                    bail!(invalid_params(
+                    return Err(invalid_params(
                         &format!("raw_txs, tx {:?}", tx),
                         format!("Recover public error: {:?}", e),
-                    ));
+                    ).into());
                 }
             };
 
@@ -1228,7 +1228,7 @@ impl RpcImpl {
         // If the results does not fit into `max_limit`, report an error
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if logs.len() > max_limit {
-                bail!(invalid_params("filter", format!("This query results in too many logs, max limitation is {}, please filter results by a smaller epoch/block range", max_limit)));
+                return Err(invalid_params("filter", format!("This query results in too many logs, max limitation is {}, please filter results by a smaller epoch/block range", max_limit)).into());
             }
         }
 
@@ -1249,7 +1249,7 @@ impl RpcImpl {
         let (epoch_later_number, overflow) =
             epoch_height.overflowing_add(REWARD_EPOCH_COUNT.into());
         if overflow {
-            bail!(invalid_params("epoch", "Epoch number overflows!"));
+            return Err(invalid_params("epoch", "Epoch number overflows!").into());
         }
         let epoch_later = match self.consensus.get_hash_from_epoch_number(
             EpochNumber::Num(epoch_later_number).into_primitive(),
@@ -1257,7 +1257,7 @@ impl RpcImpl {
             Ok(hash) => hash,
             Err(e) => {
                 debug!("get_block_reward_info: get_hash_from_epoch_number returns error: {}", e);
-                bail!(invalid_params("epoch", "Reward not calculated yet!"))
+                return Err(invalid_params("epoch", "Reward not calculated yet!").into())
             }
         };
 
@@ -1303,40 +1303,40 @@ impl RpcImpl {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
-            )) => bail!(call_execution_error(
+            )) => return Err(call_execution_error(
                 "Transaction can not be executed".into(),
                 format! {"nonce is too old expected {:?} got {:?}", expected, got}
-            )),
+            ).into()),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(call_execution_error(
+            ) => return Err(call_execution_error(
                 "Transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
-            )),
+            ).into()),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(call_execution_error(
+            ) => return Err(call_execution_error(
                 "Transaction can not be executed".into(),
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
-            )),
+            ).into()),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(call_execution_error(
+                return Err(call_execution_error(
                     "Transaction can not be executed".into(),
                     format! {"{:?}", e}
-                ))
+                ).into())
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(VmError::Reverted),
                 executed,
-            ) => bail!(call_execution_error(
+            ) => return Err(call_execution_error(
                 "Transaction reverted".into(),
                 format!("0x{}", executed.output.to_hex::<String>())
-            )),
+            ).into()),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
-                bail!(call_execution_error(
+                return Err(call_execution_error(
                     "Transaction execution failed".into(),
                     format! {"{:?}", e}
-                ))
+                ).into())
             }
             ExecutionOutcome::Finished(executed) => Ok(executed.output.into()),
         }
@@ -1354,28 +1354,28 @@ impl RpcImpl {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
-            )) => bail!(call_execution_error(
+            )) => return Err(call_execution_error(
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"nonce is too old expected {:?} got {:?}", expected, got}
-            )),
+            ).into()),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(call_execution_error(
+            ) => return Err(call_execution_error(
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
-            )),
+            ).into()),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(call_execution_error(
+                return Err(call_execution_error(
                     "Can not estimate: transaction can not be executed".into(),
                     format! {"{:?}", e}
-                ))
+                ).into())
             }
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(call_execution_error(
+            ) => return Err(call_execution_error(
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
-            )),
+            ).into()),
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(VmError::Reverted),
                 executed,
@@ -1388,19 +1388,19 @@ impl RpcImpl {
                             .base32_address
                     });
 
-                bail!(call_execution_error(
+                return Err(call_execution_error(
                     format!("Estimation isn't accurate: transaction is reverted{}{}",
                         revert_error, innermost_error),
                     errors.join("\n"),
-                ))
+                ).into())
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
-                bail!(call_execution_error(
+                return Err(call_execution_error(
                     format! {"Can not estimate: transaction execution failed, \
                     all gas will be charged (execution error: {:?})", e}
                     .into(),
                     format! {"{:?}", e}
-                ))
+                ).into())
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
@@ -1438,7 +1438,7 @@ impl RpcImpl {
         let contract_addr = contract_addr.hex_address.with_native_space();
 
         if storage_limit > U256::from(std::u64::MAX) {
-            bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
+            return Err(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)).into());
         }
 
         let state_db = self
@@ -1691,13 +1691,13 @@ impl RpcImpl {
 
         if payload_size > max_size {
             // TODO(thegaram): should we define a new error type?
-            bail!(invalid_params(
+            return Err(invalid_params(
                 "epoch",
                 format!(
                     "Oversized payload: size = {}, max = {}",
                     payload_size, max_size
                 )
-            ));
+            ).into());
         }
 
         Ok(())
@@ -1732,7 +1732,7 @@ impl RpcImpl {
                     .block_header_by_hash(&h)
                     .is_none()
                 {
-                    bail!(invalid_params("block_hash", "block not found"));
+                    return Err(invalid_params("block_hash", "block not found").into());
                 }
 
                 let e = match self.get_block_epoch_number(&h) {
@@ -1750,7 +1750,7 @@ impl RpcImpl {
                 let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
 
                 if require_pivot.unwrap_or(true) && (h != pivot_hash) {
-                    bail!(pivot_assumption_failed(h, pivot_hash));
+                    return Err(pivot_assumption_failed(h, pivot_hash).into());
                 }
 
                 hashes
@@ -1786,7 +1786,7 @@ impl RpcImpl {
         let (block_hash, tx_index_in_block) =
             match self.consensus.get_transaction_info_by_hash(&tx_hash) {
                 None => {
-                    bail!(invalid_params(
+                    return Err(invalid_params(
                         "transactions hash",
                         format!(
                             "Unable to get transaction info for hash {:?}",
@@ -1802,7 +1802,7 @@ impl RpcImpl {
         let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
             Some(epoch) => epoch,
             None => {
-                bail!(invalid_params(
+                return Err(invalid_params(
                     "block hash",
                     format!(
                         "Unable to get epoch number for block {:?}",
@@ -1819,7 +1819,7 @@ impl RpcImpl {
         {
             Ok(hs) => hs,
             Err(e) => {
-                bail!(invalid_params(
+                return Err(invalid_params(
                     "block hash",
                     format!("Unable to find epoch hashes for {}: {}", epoch, e)
                 ));
@@ -1830,7 +1830,7 @@ impl RpcImpl {
             match epoch_hashes.iter().position(|h| *h == block_hash) {
                 Some(id) => id,
                 None => {
-                    bail!(invalid_params(
+                    return Err(invalid_params(
                         "block hash",
                         format!(
                             "Unable to find block {:?} in epoch {}",
@@ -1890,14 +1890,14 @@ impl RpcImpl {
 
         let mut epoch_number = match last_epoch {
             EpochNumber::Earliest => {
-                bail!(invalid_params_msg("Cannot stat genesis"))
+                return Err(invalid_params_msg("Cannot stat genesis").into())
             }
             EpochNumber::Num(num) if num.is_zero() => {
-                bail!(invalid_params_msg("Cannot stat genesis"))
+                return Err(invalid_params_msg("Cannot stat genesis").into())
             }
-            EpochNumber::LatestMined => bail!(invalid_params_msg(
+            EpochNumber::LatestMined => return Err(invalid_params_msg(
                 "Epoch number is earilier than 'latest_state'"
-            )),
+            ).into()),
             EpochNumber::Num(num) => {
                 let pivot_hash = consensus.get_hash_from_epoch_number(
                     primitives::EpochNumber::LatestState,
@@ -1906,9 +1906,9 @@ impl RpcImpl {
                     .get_block_epoch_number(&pivot_hash)
                     .ok_or_else(block_not_found_error)?;
                 if epoch_number < num.as_u64() {
-                    bail!(invalid_params_msg(
+                    return Err(invalid_params_msg(
                         "Epoch number is earilier than 'latest_state'"
-                    ))
+                    ).into())
                 }
                 num.as_u64()
             }
@@ -1969,9 +1969,9 @@ impl RpcImpl {
                 // Fetch execution info or return not found.
                 let exec_info =
                     match consensus.get_block_execution_info(&b.hash()) {
-                        None => bail!(internal_error_msg(
+                        None => return Err(internal_error_msg(
                         "Cannot fetch block receipt with checked input params"
-                    )),
+                    ).into()),
                         Some((res, _)) => res.1,
                     };
 
@@ -2117,7 +2117,7 @@ impl RpcImpl {
                 Ok(mut txs) => {
                     transactions.append(&mut txs);
                 }
-                Err(e) => bail!(internal_error(e)),
+                Err(e) => return Err(internal_error(e)),
             };
         }
 

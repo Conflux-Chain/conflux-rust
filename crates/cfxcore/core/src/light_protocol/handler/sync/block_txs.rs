@@ -147,7 +147,7 @@ impl BlockTxs {
                 .or_insert(PendingItem::pending())
                 .set_error(e.clone());
 
-            bail!(e);
+            return Err(Error::ClonableErrorWrapper(e));
         }
 
         // store block bodies by block hash
@@ -220,7 +220,7 @@ impl BlockTxs {
         let received = compute_transaction_root(&txs);
 
         if received != expected {
-            bail!(ErrorKind::InvalidTxRoot {
+            return Err(Error::InvalidTxRoot {
                 hash,
                 expected,
                 received,

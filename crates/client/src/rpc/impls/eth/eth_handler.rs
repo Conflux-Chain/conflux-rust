@@ -143,12 +143,12 @@ impl EthHandler {
                             .cloned();
 
                         if Some(hash) != pivot {
-                            bail!("Block {:?} not found", hash);
+                            return Err(CfxRpcError::from(format!("Block {:?} not found", hash)));
                         }
 
                         EpochNumber::Number(e)
                     }
-                    None => bail!("Block {:?} not found", hash),
+                    None => return Err(CfxRpcError::from(format!("Block {:?} not found", hash))),
                 }
             }
             epoch => epoch.try_into()?,
@@ -181,51 +181,51 @@ impl EthHandler {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
                 got,
-            )) => bail!(invalid_input_rpc_err(
+            )) => return Err(invalid_input_rpc_err(
                 format! {"nonce is too old expected {:?} got {:?}", expected, got}
-            )),
+            ).into()),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::InvalidRecipientAddress(recipient),
-            ) => bail!(invalid_input_rpc_err(
+            ) => return Err(invalid_input_rpc_err(
                 format! {"invalid recipient address {:?}", recipient}
-            )),
+            ).into()),
             ExecutionOutcome::NotExecutedDrop(
                 TxDropError::NotEnoughGasLimit { expected, got },
-            ) => bail!(invalid_input_rpc_err(
+            ) => return Err(invalid_input_rpc_err(
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
-            )),
+            ).into()),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
+                return Err(invalid_input_rpc_err(format! {"err: {:?}", e}).into())
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 e @ ExecutionError::NotEnoughCash { .. },
                 _executed,
             ) => {
-                bail!(geth_call_execution_error(
+                return Err(geth_call_execution_error(
                     format!(
                         "insufficient funds for gas * price + value: {:?})",
                         e
                     ),
                     "".into()
-                ))
+                ).into())
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(VmError::Reverted),
                 executed,
-            ) => bail!(geth_call_execution_error(
+            ) => return Err(geth_call_execution_error(
                 format!(
                     "execution reverted: revert: {}",
                     string_revert_reason_decode(&executed.output)
                 ),
                 format!("0x{}", executed.output.to_hex::<String>())
-            )),
+            ).into()),
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(e),
                 _executed,
-            ) => bail!(geth_call_execution_error(
+            ) => return Err(geth_call_execution_error(
                 format!("execution reverted: {}", e),
                 "".into()
-            )),
+            ).into()),
             ExecutionOutcome::Finished(executed) => executed,
         };
 
@@ -237,7 +237,7 @@ impl EthHandler {
     ) -> CfxRpcResult<H256> {
         if self.sync.catch_up_mode() {
             warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
-            bail!(request_rejected_in_catch_up_mode(None));
+            return Err(request_rejected_in_catch_up_mode(None).into());
         }
         let (signed_trans, failed_trans) =
             self.tx_pool.insert_new_transactions(vec![tx]);
@@ -248,12 +248,12 @@ impl EthHandler {
         } else if signed_trans.len() + failed_trans.len() == 0 {
             // For tx in transactions_pubkey_cache, we simply ignore them
             debug!("insert_new_transactions ignores inserted transactions");
-            bail!(RpcError::from(EthApiError::PoolError(
+            return Err(RpcError::from(EthApiError::PoolError(
                 RpcPoolError::ReplaceUnderpriced
-            )));
+            )).into());
         } else if signed_trans.is_empty() {
             let tx_err = failed_trans.into_iter().next().expect("Not empty").1;
-            bail!(RpcError::from(EthApiError::from(tx_err)))
+            return Err(CfxRpcError::JsonRpcError(RpcError::from(EthApiError::from(tx_err))))
         } else {
             let tx_hash = signed_trans[0].hash();
             self.sync.append_received_transactions(signed_trans);
@@ -851,17 +851,17 @@ impl Eth for EthHandler {
         {
             tx
         } else {
-            bail!(EthApiError::FailedToDecodeSignedTransaction)
+            return Err(EthApiError::FailedToDecodeSignedTransaction.into())
         };
 
         if tx.space() != Space::Ethereum {
-            bail!(EthApiError::Other(
+            return Err(EthApiError::Other(
                 "Incorrect transaction space".to_string()
-            ));
+            ).into());
         }
 
         if tx.recover_public().is_err() {
-            bail!(EthApiError::InvalidTransactionSignature);
+            return Err(EthApiError::InvalidTransactionSignature.into());
         }
 
         let r = self.send_transaction_with_signature(tx)?;
@@ -1200,7 +1200,7 @@ impl Eth for EthHandler {
         // If the results does not fit into `max_limit`, report an error
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if logs.len() > max_limit {
-                bail!(invalid_params("filter", format!("This query results in too many logs, max limitation is {}, please use a smaller block range", max_limit)));
+                return Err(invalid_params("filter", format!("This query results in too many logs, max limitation is {}, please use a smaller block range", max_limit)));
             }
         }
 

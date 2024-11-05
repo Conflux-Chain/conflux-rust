@@ -214,7 +214,7 @@ impl Filterable for EthFilterClient {
         let mut result = vec![];
         let logs = match retrieve_epoch_logs(epoch, self.consensus_graph()) {
             Some(logs) => logs,
-            None => bail!(RpcError {
+            None => return Err(RpcError {
                 code: ErrorCode::ServerError(codes::UNSUPPORTED),
                 message: "Unable to retrieve logs for epoch".into(),
                 data: None,
@@ -259,7 +259,7 @@ impl Filterable for EthFilterClient {
             recent_reported_epochs.front().cloned()
         {
             if last_epoch_number != num {
-                bail!(RpcError {
+                return Err(RpcError {
                     code: ErrorCode::ServerError(codes::UNSUPPORTED),
                     message: "Last block number does not match".into(),
                     data: None,
@@ -401,7 +401,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
         let epoch_number = self.best_executed_epoch_number();
 
         if filter.to_block == Some(BlockNumber::Pending) {
-            bail!(RpcError {
+            return Err(RpcError {
                 code: ErrorCode::InvalidRequest,
                 message: "Filter logs from pending blocks is not supported"
                     .into(),
@@ -459,7 +459,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
         info!("filter_changes id: {}", index);
         let filter = match self.polls().lock().poll_mut(&index) {
             Some(filter) => filter.clone(),
-            None => bail!(RpcError {
+            None => return Err(RpcError {
                 code: ErrorCode::InvalidRequest,
                 message: "Filter not found".into(),
                 data: None,
@@ -594,7 +594,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 })
             }) {
                 Some((filter, include_pending)) => (filter, include_pending),
-                None => bail!(RpcError {
+                None => return Err(RpcError {
                     code: ErrorCode::InvalidRequest,
                     message: "Filter not found".into(),
                     data: None,

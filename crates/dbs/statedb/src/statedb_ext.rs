@@ -63,7 +63,7 @@ impl StateDbExt for StateDbGeneric {
         match self.get_raw(key) {
             Ok(None) => Ok(None),
             Ok(Some(raw)) => Ok(Some(::rlp::decode::<T>(raw.as_ref())?)),
-            Err(e) => bail!(e),
+            Err(e) => return Err(e),
         }
     }
 
@@ -97,7 +97,7 @@ impl StateDbExt for StateDbGeneric {
                 address.address,
                 &Rlp::new(&raw),
             )?)),
-            Err(e) => bail!(e),
+            Err(e) => return Err(e),
         }
     }
 

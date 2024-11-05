@@ -8,12 +8,14 @@ mod peers;
 pub use ledger_info::LedgerInfo;
 pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
 
-use super::{Error, ErrorKind};
+use super::Error;
 use cfx_internal_common::ChainIdParamsOneChainInner;
 use std::{cmp, fmt::Debug};
 
 pub fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
-where I: Iterator<Item = T> {
+where
+    I: Iterator<Item = T>,
+{
     collection.fold(None, |max_so_far, x| match max_so_far {
         None => Some(x),
         Some(max_so_far) => Some(cmp::max(max_so_far, x)),
@@ -26,12 +28,12 @@ pub fn validate_chain_id(
     peer_height: u64,
 ) -> Result<(), Error> {
     if !ours.matches(&theirs, peer_height) {
-        let error_kind = ErrorKind::ChainIdMismatch {
+        let error_kind = Error::ChainIdMismatch {
             ours: ours.clone(),
             theirs,
         };
         debug!("{:?}", error_kind);
-        bail!(error_kind);
+        return Err(Error::from(error_kind));
     } else {
         Ok(())
     }

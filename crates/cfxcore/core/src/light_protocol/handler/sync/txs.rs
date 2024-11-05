@@ -134,7 +134,7 @@ impl Txs {
                 .or_insert(PendingItem::pending())
                 .set_error(e.clone());
 
-            bail!(e);
+            return Err(Error::ClonableErrorWrapper(e));
         }
 
         self.verified
@@ -197,7 +197,7 @@ impl Txs {
             Ok(true) => {}
             _ => {
                 warn!("Tx signature verification failed for {:?}", tx);
-                bail!(ErrorKind::InvalidTxSignature { hash: tx.hash() });
+                return Err(Error::InvalidTxSignature { hash: tx.hash() });
             }
         }
 

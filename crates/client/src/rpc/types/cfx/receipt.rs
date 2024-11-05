@@ -157,7 +157,7 @@ impl Receipt {
                         (None, unsigned.action().clone(), Space::Ethereum)
                     }
                 } else {
-                    bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
+                    return Err(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
                 }
             }
         };
