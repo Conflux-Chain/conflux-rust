@@ -55,7 +55,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
         print(f'Using Conflux account {self.cfxAccount}')
 
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        self.evmAccount = self.w3.eth.account.from_key("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
@@ -82,7 +82,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
         cfx_next_nonce = self.rpc.get_nonce(self.cfxAccount)
         cfx_tx_hashes = []
 
-        evm_next_nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        evm_next_nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
         evm_tx_hashes = []
 
         def emitConflux(n):
@@ -155,7 +155,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(receipt["outcomeStatus"], "0x0")
 
         for h in evm_tx_hashes:
-            receipt = self.w3.eth.waitForTransactionReceipt(h)
+            receipt = self.w3.eth.wait_for_transaction_receipt(h)
             assert_equal(receipt["status"], 1)
 
         # TODO: add failing tx
@@ -402,7 +402,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
         # make sure pending transactions can be retrieved even before execution
         evm_next_nonce += 1
 
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": evmContractAddr,
             "value": 0,
             "gasPrice": 1,
@@ -412,7 +412,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             "data": "0x",
         })
 
-        tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         tx = self.nodes[0].eth_getTransactionByHash(tx_hash.hex())
         assert_ne(tx, None)
 
@@ -448,9 +448,9 @@ class PhantomTransactionTest(ConfluxTestFramework):
         assert(os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read()
 
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
 
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": None,
             "value": 0,
             "gasPrice": 1,
@@ -461,18 +461,18 @@ class PhantomTransactionTest(ConfluxTestFramework):
         })
 
         tx_hash = signed["hash"]
-        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         assert_equal(tx_hash, return_tx_hash)
 
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
-        receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         assert_equal(receipt["status"], 1)
         addr = receipt["contractAddress"]
         return addr
 
     def construct_evm_tx(self, receiver, data_hex, nonce):
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": receiver,
             "value": 0,
             "gasPrice": 1,

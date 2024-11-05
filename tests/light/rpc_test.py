@@ -71,11 +71,11 @@ class LightRPCTest(ConfluxTestFramework):
             "chainId": 0
         }
 
-        tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).buildTransaction(tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).build_transaction(tx_conf)["data"])
         tx = self.rpc[FULLNODE0].new_tx(value=0, sender=addr, receiver=contract_addr, gas=3_000_000, data=tx_data, priv_key=priv)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
 
-        tx_data = decode_hex(staking_contract.functions.voteLock(4 * 10 ** 17, 100000).buildTransaction(tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.voteLock(4 * 10 ** 17, 100000).build_transaction(tx_conf)["data"])
         tx = self.rpc[FULLNODE0].new_tx(value=0, sender=addr, receiver=contract_addr, gas=3_000_000, data=tx_data, priv_key=priv)
         assert_equal(self.rpc[FULLNODE0].send_tx(tx, True), tx.hash_hex())
 
@@ -94,11 +94,11 @@ class LightRPCTest(ConfluxTestFramework):
         }
 
         # setSponsorForGas
-        data = whitelist_control.functions.setSponsorForGas(Web3.to_checksum_address(contractAddr), 2000000).buildTransaction({"to":Web3.to_checksum_address(whitelist_control_addr), **tx_conf})["data"]
+        data = whitelist_control.functions.setSponsorForGas(Web3.to_checksum_address(contractAddr), 2000000).build_transaction({"to":Web3.to_checksum_address(whitelist_control_addr), **tx_conf})["data"]
         self.call_contract(contract=whitelist_control_addr, data_hex=data, value=20000000000000000000)
 
         # setSponsorForCollateral
-        data = whitelist_control.functions.setSponsorForCollateral(Web3.to_checksum_address(contractAddr)).buildTransaction({"to":Web3.to_checksum_address(whitelist_control_addr), **tx_conf})["data"]
+        data = whitelist_control.functions.setSponsorForCollateral(Web3.to_checksum_address(contractAddr)).build_transaction({"to":Web3.to_checksum_address(whitelist_control_addr), **tx_conf})["data"]
         self.call_contract(contract=whitelist_control_addr, data_hex=data, value=20000000000000000000)
 
         # add to whitelist

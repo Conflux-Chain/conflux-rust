@@ -70,7 +70,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
         self.tx_conf["to"] = Web3.to_checksum_address("0888000000000000000000000000000000000002")
         # deposit 10**18
-        tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18).build_transaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
@@ -81,7 +81,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         # withdraw 5 * 10**17
         balance = client.get_balance(addr)
         capital = 5 * 10 ** 17
-        tx_data = decode_hex(staking_contract.functions.withdraw(capital).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.withdraw(capital).build_transaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
@@ -93,7 +93,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
         # lock 4 * 10 ** 17 until block number 100000
         balance = client.get_balance(addr)
-        tx_data = decode_hex(staking_contract.functions.voteLock(4 * 10 ** 17, 100000).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.voteLock(4 * 10 ** 17, 100000).build_transaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
@@ -103,7 +103,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         # withdraw 5 * 10**17 and it should fail
         balance = client.get_balance(addr)
         capital = 5 * 10 ** 17
-        tx_data = decode_hex(staking_contract.functions.withdraw(capital).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.withdraw(capital).build_transaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
@@ -112,7 +112,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
         # withdraw 10**17 + 1 and it should fail
         balance = client.get_balance(addr)
-        tx_data = decode_hex(staking_contract.functions.withdraw(10 ** 17 + 1).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.withdraw(10 ** 17 + 1).build_transaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])
@@ -122,7 +122,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
         # withdraw 10**17 and it should succeed
         balance = client.get_balance(addr)
         capital = 10 ** 17
-        tx_data = decode_hex(staking_contract.functions.withdraw(capital).buildTransaction(self.tx_conf)["data"])
+        tx_data = decode_hex(staking_contract.functions.withdraw(capital).build_transaction(self.tx_conf)["data"])
         tx = client.new_tx(value=0, sender=addr, receiver=self.tx_conf["to"], gas=gas, data=tx_data, priv_key=priv_key)
         client.send_tx(tx)
         self.wait_for_tx([tx])

@@ -45,7 +45,7 @@ class Web3Base(ConfluxTestFramework):
         self.rpc.send_tx(tx, True)
 
     def construct_evm_tx(self, receiver, data_hex, nonce):
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": receiver,
             "value": 0,
             "gasPrice": 1,
@@ -71,9 +71,9 @@ class Web3Base(ConfluxTestFramework):
         return addr
     
     def deploy_evm_space_by_code(self, bytecode):
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
 
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": None,
             "value": 0,
             "gasPrice": 1,
@@ -84,12 +84,12 @@ class Web3Base(ConfluxTestFramework):
         })
 
         tx_hash = signed["hash"]
-        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         assert_equal(tx_hash, return_tx_hash)
 
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
-        receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         assert_equal(receipt["status"], 1)
         addr = receipt["contractAddress"]
         return addr
@@ -130,7 +130,7 @@ class Web3Base(ConfluxTestFramework):
         self.cfxAccount = self.rpc.GENESIS_ADDR
         print(f'Using Conflux account {self.cfxAccount}')
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))

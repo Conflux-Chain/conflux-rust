@@ -42,7 +42,7 @@ class TestTokenSupplyInfo(RpcClient):
         staking_contract_dict = json.loads(open(os.path.join(file_path), "r").read())
         staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
         tx_data = decode_hex(staking_contract.functions.deposit(10 ** 18)
-                             .buildTransaction(tx_conf)["data"])
+                             .build_transaction(tx_conf)["data"])
         tx = self.new_tx(data=tx_data, gas=tx_conf["gas"], receiver=tx_conf["to"], value=0)
         self.send_tx(tx, True)
         # Stake 10**18 drip, and generating 5 blocks does not affect rewards
@@ -59,7 +59,7 @@ class TestTokenSupplyInfo(RpcClient):
             bytecode_file=os.path.join(file_dir, "../contracts/pay_bytecode.dat"),
         )
         # deploy pay contract
-        tx_data = decode_hex(pay_contract.constructor().buildTransaction(tx_conf)["data"])
+        tx_data = decode_hex(pay_contract.constructor().build_transaction(tx_conf)["data"])
         tx = self.new_tx(data=tx_data, gas=tx_conf["gas"], receiver='', storage_limit=512, value=0)
         self.send_tx(tx, True)
         # Collateral for pay_contract
