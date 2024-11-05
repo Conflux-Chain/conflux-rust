@@ -2,26 +2,8 @@
 
 set -e
 
-function install() {
-	if [ "`pip3 show ${1%%=*}`" =  "" ]; then
-		pip3 install $1
-	fi
-}
+pip3 install cfx-account eth-utils coincurve==19.0.1 pysha3 web3==7.4.0 py-solc-x jsonrpcclient==3.3.6 asyncio websockets pyyaml numpy
 
-install cfx-account
-install eth-utils
-# install rlp==1.2.0
-# install py-ecc==5.2.0
-install coincurve==19.0.1
-install pysha3
-# install trie==1.4.0
-install web3==7.4.0
-install py-solc-x
-install jsonrpcclient==3.3.6
-install asyncio
-install websockets
-install pyyaml
-install numpy
 
 # python3 -m solcx.install v0.5.17
 
