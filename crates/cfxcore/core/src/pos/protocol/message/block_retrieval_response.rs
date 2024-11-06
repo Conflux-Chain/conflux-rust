@@ -42,7 +42,7 @@ impl Handleable for BlockRetrievalRpcResponse {
                 let res_tx = req.response_tx.take();
                 if let Some(tx) = res_tx {
                     if let Err(e) = tx.send(Ok(Box::new(self))) {
-                        bail!(Error::UnexpectedMessage(
+                        return Err(Error::UnexpectedMessage(
                             format!("{:?}", e).into()
                         ))
                     }

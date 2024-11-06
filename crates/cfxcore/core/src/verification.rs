@@ -360,21 +360,21 @@ impl VerificationConfig {
 
         if self.pos_verifier.is_enabled_at_height(header.height()) {
             if header.pos_reference().is_none() {
-                bail!(BlockError::MissingPosReference);
+                return Err(BlockError::MissingPosReference.into());
             }
         } else {
             if header.pos_reference().is_some() {
-                bail!(BlockError::UnexpectedPosReference);
+                return Err(BlockError::UnexpectedPosReference.into());
             }
         }
 
         if header.height() >= self.machine.params().transition_heights.cip1559 {
             if header.base_price().is_none() {
-                bail!(BlockError::MissingBaseFee);
+                return Err(BlockError::MissingBaseFee.into());
             }
         } else {
             if header.base_price().is_some() {
-                bail!(BlockError::UnexpectedBaseFee);
+                return Err(BlockError::UnexpectedBaseFee.into());
             }
         }
 
@@ -445,10 +445,10 @@ impl VerificationConfig {
         let expected_root = compute_transaction_root(&block.transactions);
         if &expected_root != block.block_header.transactions_root() {
             warn!("Invalid transaction root");
-            bail!(BlockError::InvalidTransactionsRoot(Mismatch {
+            return Err(BlockError::InvalidTransactionsRoot(Mismatch {
                 expected: expected_root,
                 found: *block.block_header.transactions_root(),
-            }));
+            }).into());
         }
         Ok(())
     }
@@ -648,7 +648,7 @@ impl VerificationConfig {
         if result == 0 || (result > 0 && allow_larger_epoch) {
             Ok(())
         } else {
-            bail!(TransactionError::EpochHeightOutOfBound {
+            return Err(TransactionError::EpochHeightOutOfBound {
                 set: *tx.epoch_height(),
                 block_height,
                 transaction_epoch_bound,
@@ -711,14 +711,14 @@ impl VerificationConfig {
 
         // Disallow unsigned transactions
         if tx.is_unsigned() {
-            bail!(TransactionError::InvalidSignature(
+            return Err(TransactionError::InvalidSignature(
                 "Transaction is unsigned".into()
             ));
         }
 
         if let Some(tx_chain_id) = tx.chain_id() {
             if tx_chain_id != chain_id.in_space(tx.space()) {
-                bail!(TransactionError::ChainIdMismatch {
+                return Err(TransactionError::ChainIdMismatch {
                     expected: chain_id.in_space(tx.space()),
                     got: tx_chain_id,
                     space: tx.space(),
@@ -728,7 +728,7 @@ impl VerificationConfig {
 
         // Forbid zero-gas-price tx
         if tx.gas_price().is_zero() {
-            bail!(TransactionError::ZeroGasPrice);
+            return Err(TransactionError::ZeroGasPrice);
         }
 
         if matches!(mode, VerifyTxMode::Local(..))
@@ -736,7 +736,7 @@ impl VerificationConfig {
         {
             if let Action::Call(ref address) = tx.transaction.action() {
                 if !address.is_genesis_valid_address() {
-                    bail!(TransactionError::InvalidReceiver)
+                    return Err(TransactionError::InvalidReceiver)
                 }
             }
         }
@@ -745,7 +745,7 @@ impl VerificationConfig {
             (mode, self.max_nonce)
         {
             if tx.nonce() > &max_nonce {
-                bail!(TransactionError::TooLargeNonce)
+                return Err(TransactionError::TooLargeNonce)
             }
         }
 
@@ -768,11 +768,11 @@ impl VerificationConfig {
         }
 
         if !Self::check_eip155_transaction(tx, cip90a, &mode) {
-            bail!(TransactionError::FutureTransactionType);
+            return Err(TransactionError::FutureTransactionType);
         }
 
         if !Self::check_eip1559_transaction(tx, cip1559, &mode) {
-            bail!(TransactionError::FutureTransactionType)
+            return Err(TransactionError::FutureTransactionType)
         }
 
         Self::check_gas_limit(tx, cip76, &mode)?;
@@ -834,7 +834,7 @@ impl VerificationConfig {
                 &spec,
             );
             if *tx.gas() < (tx_intrinsic_gas as usize).into() {
-                bail!(TransactionError::NotEnoughBaseGas {
+                return Err(TransactionError::NotEnoughBaseGas {
                     required: tx_intrinsic_gas.into(),
                     got: *tx.gas()
                 });
@@ -853,7 +853,7 @@ impl VerificationConfig {
         let data_length = tx.data().len();
         let min_gas_limit = data_length.saturating_mul(100);
         if tx.gas() < &U256::from(min_gas_limit) {
-            bail!(TransactionError::NotEnoughBaseGas {
+            return Err(TransactionError::NotEnoughBaseGas {
                 required: min_gas_limit.into(),
                 got: *tx.gas()
             });
@@ -865,7 +865,7 @@ impl VerificationConfig {
         &self, tx: &TransactionWithSignature,
     ) -> Result<(), TransactionError> {
         if tx.rlp_size() > self.max_block_size_in_bytes {
-            bail!(TransactionError::TooBig)
+            return Err(TransactionError::TooBig)
         } else {
             Ok(())
         }

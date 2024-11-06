@@ -140,7 +140,7 @@ impl Blooms {
                 .or_insert(PendingItem::pending())
                 .set_error(e.clone());
 
-            bail!(e);
+            return Err(e.into());
         }
 
         // store bloom by epoch
@@ -208,7 +208,7 @@ impl Blooms {
 
         // check
         if received != expected {
-            bail!(ErrorKind::InvalidBloom {
+            return Err(Error::InvalidBloom {
                 epoch,
                 expected,
                 received,

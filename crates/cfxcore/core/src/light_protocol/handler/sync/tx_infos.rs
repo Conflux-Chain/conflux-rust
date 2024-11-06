@@ -165,7 +165,7 @@ impl TxInfos {
                 .or_insert(PendingItem::pending())
                 .set_error(e.clone());
 
-            bail!(e);
+            return Err(e.into());
         }
 
         Ok(())
@@ -196,7 +196,7 @@ impl TxInfos {
 
         // quick check for well-formedness
         if block_index_in_epoch >= num_blocks_in_epoch {
-            bail!(ErrorKind::InvalidTxInfo {
+            return Err(Error::InvalidTxInfo {
                 reason: format!(
                     "Inconsisent block index: {} >= {}",
                     block_index_in_epoch, num_blocks_in_epoch
@@ -205,7 +205,7 @@ impl TxInfos {
         }
 
         if tx_index_in_block >= num_txs_in_block {
-            bail!(ErrorKind::InvalidTxInfo {
+            return Err(Error::InvalidTxInfo {
                 reason: format!(
                     "Inconsisent tx index: {} >= {}",
                     tx_index_in_block, num_txs_in_block
@@ -218,7 +218,7 @@ impl TxInfos {
         if receipt.outcome_status != TransactionStatus::Success
             && receipt.outcome_status != TransactionStatus::Failure
         {
-            bail!(ErrorKind::InvalidTxInfo {
+            return Err(Error::InvalidTxInfo {
                 reason: format!(
                     "Unexpected outcome status in tx info: {:?}",
                     receipt.outcome_status
@@ -228,7 +228,7 @@ impl TxInfos {
 
         let block_hash = match self.ledger.block_hashes_in(epoch)? {
             hs if hs.len() != num_blocks_in_epoch => {
-                bail!(ErrorKind::InvalidTxInfo {
+                return Err(Error::InvalidTxInfo {
                     reason: format!(
                         "Number of blocks in epoch mismatch: local = {}, received = {}",
                         hs.len(), num_blocks_in_epoch),
@@ -263,7 +263,7 @@ impl TxInfos {
             tx_hash,
             &tx_proof,
         ) {
-            bail!(ErrorKind::InvalidTxInfo {
+            return Err(Error::InvalidTxInfo {
                 reason: "Transaction proof verification failed".to_owned()
             });
         }
@@ -302,7 +302,7 @@ impl TxInfos {
             &receipt,
             &receipt_proof,
         ) {
-            bail!(ErrorKind::InvalidTxInfo {
+            return Err(Error::InvalidTxInfo {
                 reason: "Receipt proof verification failed".to_owned()
             });
         }
@@ -330,7 +330,7 @@ impl TxInfos {
                     &prev_receipt,
                     &prev_receipt_proof,
                 ) {
-                    bail!(ErrorKind::InvalidTxInfo {
+                    return Err(Error::InvalidTxInfo {
                         reason: "Previous receipt proof verification failed"
                             .to_owned()
                     });
@@ -341,7 +341,7 @@ impl TxInfos {
 
             // not the first receipt but no previous receipt was provided
             (_, maybe_prev_receipt, maybe_prev_receipt_proof) => {
-                bail!(ErrorKind::InvalidTxInfo {
+                return Err(Error::InvalidTxInfo {
                     reason: format!(
                         "Expected two receipts; received one.
                         tx_index_in_block = {:?},

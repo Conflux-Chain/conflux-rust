@@ -122,7 +122,7 @@ impl SnapshotManifestManager {
         // validate blame state if requested
         if request.is_initial_request() {
             if !self.chunk_boundaries.is_empty() {
-                bail!(Error::InvalidSnapshotManifest(
+                return Err(Error::InvalidSnapshotManifest(
                     "Initial manifest is not expected".into(),
                 ));
             }
@@ -143,7 +143,7 @@ impl SnapshotManifestManager {
                 None => {
                     warn!("failed to validate the blame state, re-sync manifest from other peer");
                     self.resync_manifest(ctx);
-                    bail!(Error::InvalidSnapshotManifest(
+                    return Err(Error::InvalidSnapshotManifest(
                         "invalid blame state in manifest".into(),
                     ));
                 }
@@ -162,7 +162,7 @@ impl SnapshotManifestManager {
                     None => {
                         warn!("failed to validate the epoch receipts, re-sync manifest from other peer");
                         self.resync_manifest(ctx);
-                        bail!(Error::InvalidSnapshotManifest(
+                        return Err(Error::InvalidSnapshotManifest(
                             "invalid epoch receipts in manifest".into(),
                         ));
                     }
@@ -173,7 +173,7 @@ impl SnapshotManifestManager {
                 response.manifest.validate(&snapshot_info.merkle_root)
             {
                 warn!("failed to validate snapshot manifest, error = {:?}", e);
-                bail!(Error::InvalidSnapshotManifest(
+                return Err(Error::InvalidSnapshotManifest(
                     "invalid chunk proofs in manifest".into(),
                 ));
             }
@@ -188,7 +188,7 @@ impl SnapshotManifestManager {
             });
         } else {
             if self.chunk_boundaries.is_empty() {
-                bail!(Error::InvalidSnapshotManifest(
+                return Err(Error::InvalidSnapshotManifest(
                     "Non-initial manifest is not expected".into()
                 ));
             }
@@ -206,7 +206,7 @@ impl SnapshotManifestManager {
                         "failed to validate snapshot manifest, error = {:?}",
                         e
                     );
-                    bail!(Error::InvalidSnapshotManifest(
+                    return Err(Error::InvalidSnapshotManifest(
                         "invalid chunk proofs in manifest".into(),
                     ));
                 }

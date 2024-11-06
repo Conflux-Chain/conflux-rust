@@ -151,7 +151,7 @@ impl Receipts {
                 .or_insert(PendingItem::pending())
                 .set_error(e.clone());
 
-            bail!(e);
+            return Err(e.into());
         }
 
         // store receipts by epoch
@@ -230,7 +230,7 @@ impl Receipts {
 
         // check
         if received != expected {
-            bail!(ErrorKind::InvalidReceipts {
+            return Err(Error::InvalidReceipts {
                 epoch,
                 expected,
                 received,

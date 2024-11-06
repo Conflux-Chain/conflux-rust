@@ -154,7 +154,7 @@ impl StateEntries {
                 .or_insert(PendingItem::pending())
                 .set_error(e.clone());
 
-            bail!(e);
+            return Err(e.into());
         }
 
         // store state entry by state key
@@ -224,7 +224,7 @@ impl StateEntries {
 
         self.state_roots
             .validate_state_root(epoch, &state_root)
-            .chain_err(|| ErrorKind::InvalidStateProof {
+            .map_err(|_| Error::InvalidStateProof {
                 epoch,
                 key: key.clone(),
                 value: value.clone(),
@@ -236,7 +236,7 @@ impl StateEntries {
 
         self.state_roots
             .validate_prev_snapshot_state_root(epoch, &maybe_prev_root)
-            .chain_err(|| ErrorKind::InvalidStateProof {
+            .map_err(|_| Error::InvalidStateProof {
                 epoch,
                 key: key.clone(),
                 value: value.clone(),
@@ -258,7 +258,7 @@ impl StateEntries {
             state_root,
             maybe_intermediate_padding,
         ) {
-            bail!(ErrorKind::InvalidStateProof {
+            return Err(Error::InvalidStateProof {
                 epoch,
                 key: key.clone(),
                 value: value.clone(),

@@ -581,15 +581,25 @@ pub struct ConsensusGraphNode {
 }
 
 impl ConsensusGraphNode {
-    pub fn past_num_blocks(&self) -> u64 { self.past_num_blocks }
+    pub fn past_num_blocks(&self) -> u64 {
+        self.past_num_blocks
+    }
 
-    pub fn adaptive(&self) -> bool { self.adaptive }
+    pub fn adaptive(&self) -> bool {
+        self.adaptive
+    }
 
-    pub fn pending(&self) -> bool { self.data.pending }
+    pub fn pending(&self) -> bool {
+        self.data.pending
+    }
 
-    pub fn partial_invalid(&self) -> bool { self.data.partial_invalid }
+    pub fn partial_invalid(&self) -> bool {
+        self.data.partial_invalid
+    }
 
-    pub fn era_block(&self) -> usize { self.era_block }
+    pub fn era_block(&self) -> usize {
+        self.era_block
+    }
 }
 
 impl ConsensusGraphInner {
@@ -3458,7 +3468,9 @@ impl ConsensusGraphInner {
 
     /// FIXME Use snapshot-related information when we can sync snapshot states.
     /// Return the latest height that a snapshot should be available.
-    fn latest_snapshot_height(&self) -> u64 { self.cur_era_stable_height }
+    fn latest_snapshot_height(&self) -> u64 {
+        self.cur_era_stable_height
+    }
 
     fn collect_defer_blocks_missing_execution_commitments(
         &self, me: usize,
@@ -3787,7 +3799,9 @@ impl ConsensusGraphInner {
         bounded_hashes
     }
 
-    pub fn finish_block_recovery(&mut self) { self.header_only = false; }
+    pub fn finish_block_recovery(&mut self) {
+        self.header_only = false;
+    }
 
     pub fn get_pivot_chain_and_weight(
         &self, height_range: Option<(u64, u64)>,
@@ -3796,12 +3810,11 @@ impl ConsensusGraphInner {
         let max_height = self.arena[*self.pivot_chain.last().unwrap()].height;
         let (start, end) = height_range.unwrap_or((min_height, max_height));
         if start < min_height || end > max_height {
-            bail!(
+            return Err(format!(
                 "height_range out of bound: requested={:?} min={} max={}",
-                height_range,
-                min_height,
-                max_height
-            );
+                height_range, min_height, max_height
+            )
+            .into());
         }
 
         let mut chain = Vec::new();

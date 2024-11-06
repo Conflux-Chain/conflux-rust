@@ -148,7 +148,7 @@ impl StorageRoots {
                 .or_insert(PendingItem::pending())
                 .set_error(e.clone());
 
-            bail!(e);
+            return Err(e.into());
         }
 
         // store storage root by storage root key
@@ -219,7 +219,7 @@ impl StorageRoots {
 
         self.state_roots
             .validate_state_root(epoch, &state_root)
-            .chain_err(|| ErrorKind::InvalidStorageRootProof {
+            .map_err(|_| Error::InvalidStorageRootProof {
                 epoch,
                 address,
                 reason: "Validation of current state root failed",
@@ -230,7 +230,7 @@ impl StorageRoots {
 
         self.state_roots
             .validate_prev_snapshot_state_root(epoch, &maybe_prev_root)
-            .chain_err(|| ErrorKind::InvalidStorageRootProof {
+            .map_err(|_| Error::InvalidStorageRootProof {
                 epoch,
                 address,
                 reason: "Validation of previous state root failed",
@@ -253,7 +253,7 @@ impl StorageRoots {
             state_root,
             maybe_intermediate_padding,
         ) {
-            bail!(ErrorKind::InvalidStorageRootProof {
+            return Err(Error::InvalidStorageRootProof {
                 epoch,
                 address,
                 reason: "Validation of merkle proof failed",
