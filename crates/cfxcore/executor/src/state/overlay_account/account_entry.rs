@@ -7,6 +7,7 @@ use super::OverlayAccount;
 /// Entry object in cache and checkpoint layers, adding additional markers
 /// like dirty bits to the `OverlayAccount` structure.
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub enum AccountEntry {
     /// Represents an account that is confirmed to be absent from the database.
     DbAbsent,
@@ -54,9 +55,16 @@ impl AccountEntry {
         }
     }
 
-    pub fn try_into_dirty_account(self) -> Option<OverlayAccount> {
+    pub fn dirty_account_mut(&mut self) -> Option<&mut OverlayAccount> {
+        match self {
+            Cached(acc, true) => Some(acc),
+            _ => None,
+        }
+    }
+
+    pub fn into_to_commit_account(self) -> Option<OverlayAccount> {
         // Due to an existing bug, the genesis account is very special. It is
-        // always dirty.
+        // always considered to be committed even if it is not dirty.
         const SPECIAL_ADDRESS: AddressWithSpace = AddressWithSpace {
             address: GENESIS_ACCOUNT_ADDRESS,
             space: cfx_types::Space::Native,
@@ -69,7 +77,19 @@ impl AccountEntry {
         }
     }
 
-    pub fn clone_cache_entry(&self) -> AccountEntry {
+    pub fn clone_cache_entry_for_checkpoint(
+        &self, checkpoint_id: usize,
+    ) -> AccountEntry {
+        match self {
+            DbAbsent => DbAbsent,
+            Cached(acc, dirty_bit) => Cached(
+                acc.clone_account_for_checkpoint(checkpoint_id),
+                *dirty_bit,
+            ),
+        }
+    }
+
+    pub fn clone_account(&self) -> AccountEntry {
         match self {
             DbAbsent => DbAbsent,
             Cached(acc, dirty_bit) => Cached(acc.clone_account(), *dirty_bit),

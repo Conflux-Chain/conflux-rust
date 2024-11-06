@@ -18,7 +18,7 @@ use cfx_parameters::consensus_internal::ELASTICITY_MULTIPLIER;
 use futures::executor::block_on;
 use parking_lot::RwLock;
 use slab::Slab;
-use tokio02::sync::mpsc::error::TryRecvError;
+use tokio::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
 
 use cfx_executor::machine::Machine;
@@ -38,7 +38,7 @@ use crate::{
     block_data_manager::{BlockDataManager, BlockStatus},
     channel::Channel,
     consensus::{pos_handler::PosVerifier, SharedConsensusGraph},
-    error::{BlockError, Error, ErrorKind},
+    core_error::{BlockError, CoreError as Error},
     pow::{PowComputer, ProofOfWorkConfig},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
@@ -1150,7 +1150,7 @@ impl SynchronizationGraph {
                                 warn!("Duplicate block = {} sent to the consensus worker", hash);
                             },
                             Err(TryRecvError::Empty) => break 'inner,
-                            Err(TryRecvError::Closed) => break 'outer,
+                            Err(TryRecvError::Disconnected) => break 'outer,
                         }
                     }
                     if let Some((_, hash)) = priority_queue.pop() {
@@ -1800,10 +1800,7 @@ impl SynchronizationGraph {
                 self.consensus.best_chain_id(),
             );
             match r {
-                Err(Error(
-                    ErrorKind::Block(BlockError::InvalidTransactionsRoot(e)),
-                    _,
-                )) => {
+                Err(Error::Block(BlockError::InvalidTransactionsRoot(e))) => {
                     warn!("BlockTransactionRoot not match! inserted_block={:?} err={:?}", block, e);
                     // If the transaction root does not match, it might be
                     // caused by receiving wrong

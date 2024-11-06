@@ -26,7 +26,7 @@ use std::collections::BTreeMap;
 // consensus layer parameters and functions are also inappropriately placed
 // here.
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommonParams {
     /// Maximum size of extra data.
     pub maximum_extra_data_size: usize,

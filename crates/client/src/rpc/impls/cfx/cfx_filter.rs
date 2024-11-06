@@ -8,18 +8,18 @@ use std::{
 };
 
 use crate::rpc::{
-    error_codes::{codes, invalid_params},
+    errors::{codes, invalid_params},
     helpers::{
         limit_logs, PollFilter, PollManager, SyncPollFilter,
         MAX_BLOCK_HISTORY_SIZE,
     },
-    traits::cfx::CfxFilter,
+    traits::cfx_filter::CfxFilter,
     types::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, Log, RevertTo},
 };
 use cfx_addr::Network;
 use cfx_types::{Space, H128, H256};
 use cfxcore::{
-    channel::Channel, rpc_errors::Error as CfxRpcError, BlockDataManager,
+    channel::Channel, errors::Error as CfxRpcError, BlockDataManager,
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedTransactionPool,
 };

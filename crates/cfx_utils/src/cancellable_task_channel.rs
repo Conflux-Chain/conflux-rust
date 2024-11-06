@@ -217,7 +217,7 @@ impl<T: CancelByKey> CancelableTaskReceiver<T> {
             Err(StopOr::RecvError(TryRecvError::Disconnected)) => {
                 Err(StopOr::RecvError(RecvError))
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => unreachable!(),
         }
     }
 }

@@ -1,9 +1,8 @@
 use cfx_bytes::Bytes;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
-    H160, U256,
+    address_util::AddressUtil, cal_contract_address, Address, AddressSpaceUtil,
+    AddressWithSpace, CreateContractAddressType, H160, U256,
 };
-use cfx_vm_types::{contract_address, CreateContractAddress};
 use cfxkey::KeyPair;
 use hex_literal::hex;
 use rustc_hex::FromHex;
@@ -35,8 +34,8 @@ lazy_static! {
 
 fn genesis_contract_address_impl(idx: usize, code: &Bytes) -> AddressWithSpace {
     let genesis_account_address = GENESIS_ACCOUNT_ADDRESS;
-    let (mut address, _) = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let (mut address, _) = cal_contract_address(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         0,
         &genesis_account_address,
         &U256::from(idx),

@@ -4,7 +4,7 @@
 
 use crate::sync::{
     message::{Context, Handleable},
-    Error, ErrorKind,
+    Error,
 };
 use cfx_types::H256;
 use primitives::Block;
@@ -86,7 +86,7 @@ fn on_new_decoded_block(
             if insert_result.is_new_valid() {
                 need_to_relay.extend(to_relay);
             } else {
-                return Err(Error::from_kind(ErrorKind::InvalidBlock));
+                return Err(Error::InvalidBlock);
             }
         }
     }

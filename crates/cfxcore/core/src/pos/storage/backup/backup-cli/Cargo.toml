@@ -15,7 +15,7 @@ byteorder = "1.4.3"
 bytes = "1.0.1"
 futures = "0.3.12"
 hex = "0.4.3"
-itertools = "0.10.0"
+itertools = { workspace = true }
 num_cpus = "1.13.0"
 once_cell = "1.7.2"
 pin-project = "1.0.5"
@@ -58,4 +58,4 @@ diem-proptest-helpers = { path = "../../../common/proptest-helpers" }
 storage-interface = { path = "../../storage-interface" }
 
 [features]
-fuzzing = ["diemdb/fuzzing"]
+fuzzing = ["pos-ledger-db/fuzzing"]

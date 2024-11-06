@@ -17,22 +17,22 @@ class ExampleTest(ConfluxTestFramework):
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
-        self.nodes[0].generate_empty_blocks(1)
-        assert (self.nodes[0].getblockcount() == 2)
+        self.nodes[0].test_generateEmptyBlocks(1)
+        assert (self.nodes[0].test_getBlockCount() == 2)
         besthash = self.nodes[0].best_block_hash()
 
-        self.nodes[1].generate_empty_blocks(2)
-        assert (self.nodes[1].getblockcount() == 3)
+        self.nodes[1].test_generateEmptyBlocks(2)
+        assert (self.nodes[1].test_getBlockCount() == 3)
 
         connect_nodes(self.nodes, 0, 1)
         sync_blocks(self.nodes[0:2])
-        assert (self.nodes[0].getblockcount() == 4)
+        assert (self.nodes[0].test_getBlockCount() == 4)
 
-        self.nodes[0].generate_empty_blocks(1)
-        self.nodes[1].generate_empty_blocks(1)
+        self.nodes[0].test_generateEmptyBlocks(1)
+        self.nodes[1].test_generateEmptyBlocks(1)
         sync_blocks(self.nodes[0:2])
-        assert (self.nodes[0].getblockcount() == 6)
-        assert (self.nodes[1].getblockcount() == 6)
+        assert (self.nodes[0].test_getBlockCount() == 6)
+        assert (self.nodes[1].test_getBlockCount() == 6)
 
 
 if __name__ == '__main__':

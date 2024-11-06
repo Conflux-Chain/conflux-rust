@@ -12,6 +12,7 @@ use crate::{
     block::BlockHeight, bytes::Bytes, hash::keccak, pos::PosBlockId,
     receipt::BlockReceipts, MERKLE_NULL_NODE, NULL_EPOCH,
 };
+use cfx_parameters::block::{cspace_block_gas_limit, espace_block_gas_limit};
 use cfx_types::{
     Address, Bloom, Space, SpaceMap, H256, KECCAK_EMPTY_BLOOM, U256,
 };
@@ -30,7 +31,7 @@ const HEADER_LIST_MIN_LEN: usize = 13;
 /// field.
 pub static CIP112_TRANSITION_HEIGHT: OnceCell<u64> = OnceCell::new();
 
-const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
+pub const BASE_PRICE_CHANGE_DENOMINATOR: usize = 8;
 
 #[derive(Clone, Debug, Eq)]
 pub struct BlockHeaderRlpPart {
@@ -170,6 +171,17 @@ impl BlockHeader {
     /// Get the gas limit field of the header.
     pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
 
+    pub fn core_space_gas_limit(&self) -> U256 {
+        cspace_block_gas_limit(
+            self.base_price.is_some(),
+            self.gas_limit().to_owned(),
+        )
+    }
+
+    pub fn espace_gas_limit(&self, can_pack: bool) -> U256 {
+        espace_block_gas_limit(can_pack, self.gas_limit().to_owned())
+    }
+
     /// Get the referee hashes field of the header.
     pub fn referee_hashes(&self) -> &Vec<H256> { &self.referee_hashes }
 
@@ -189,6 +201,14 @@ impl BlockHeader {
                  espace_base_price,
              }| SpaceMap::new(core_base_price, espace_base_price),
         )
+    }
+
+    // Get the base price for the given space after 1559 hardfork.
+    pub fn space_base_price(&self, space: Space) -> Option<U256> {
+        self.base_price.map(|x| match space {
+            Space::Native => x.core_base_price,
+            Space::Ethereum => x.espace_base_price,
+        })
     }
 
     /// Set the nonce field of the header.

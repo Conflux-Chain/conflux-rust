@@ -14,7 +14,7 @@ use crate::{
         },
         request_manager::{AsAny, Request},
         state::storage::{Chunk, ChunkKey, SnapshotSyncCandidate},
-        Error, ErrorKind, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
+        Error, ProtocolConfiguration, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -55,7 +55,7 @@ impl Handleable for SnapshotChunkRequest {
             SnapshotSyncCandidate::FullSync {
                 snapshot_epoch_id, ..
             } => snapshot_epoch_id,
-            _ => bail!(ErrorKind::NotSupported(
+            _ => bail!(Error::NotSupported(
                 "OneStepSync/IncSync not yet implemented.".into()
             )),
         };

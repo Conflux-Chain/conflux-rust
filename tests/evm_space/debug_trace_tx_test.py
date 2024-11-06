@@ -197,12 +197,5 @@ class DebugTraceTxTest(Web3Base):
                 assert_equal("storage" in no_stack_storage_trace["structLogs"][i], False)
 
 
-
-    def load_abi_from_contracts_folder(self, name):
-        abi_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "contracts", name + "_abi.json")
-        with open(abi_file, 'r') as abi_file:
-            abi = json.loads(abi_file.read())
-            return abi
-
 if __name__ == "__main__":
     DebugTraceTxTest().main()

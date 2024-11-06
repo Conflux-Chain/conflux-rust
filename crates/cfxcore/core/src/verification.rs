@@ -4,9 +4,9 @@
 
 use crate::{
     consensus::pos_handler::PosVerifier,
-    error::{BlockError, Error},
+    core_error::{BlockError, CoreError as Error},
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
-    sync::{Error as SyncError, ErrorKind as SyncErrorKind},
+    sync::Error as SyncError,
 };
 use cfx_executor::{
     executive::gas_required_for, machine::Machine, spec::TransitionsEpochHeight,
@@ -335,7 +335,7 @@ impl VerificationConfig {
         let invalid_threshold = now + VALID_TIME_DRIFT;
         if header.timestamp() > invalid_threshold {
             warn!("block {} has incorrect timestamp", header.hash());
-            return Err(SyncErrorKind::InvalidTimestamp.into());
+            return Err(SyncError::InvalidTimestamp.into());
         }
         Ok(())
     }
@@ -564,13 +564,10 @@ impl VerificationConfig {
 
         assert!(block_height >= cip1559_init);
 
-        let core_gas_limit = block.block_header.gas_limit() * 9 / 10;
-        let espace_gas_limit =
-            if self.machine.params().can_pack_evm_transaction(block_height) {
-                block.block_header.gas_limit() * 5 / 10
-            } else {
-                U256::zero()
-            };
+        let core_gas_limit = block.block_header.core_space_gas_limit();
+        let espace_gas_limit = block
+            .block_header
+            .espace_gas_limit(params.can_pack_evm_transaction(block_height));
 
         if total_gas[Ethereum] > espace_gas_limit {
             return Err(From::from(BlockError::InvalidPackedGasLimit(
@@ -780,6 +777,7 @@ impl VerificationConfig {
 
         Self::check_gas_limit(tx, cip76, &mode)?;
         Self::check_gas_limit_with_calldata(tx, cip130)?;
+
         Ok(())
     }
 

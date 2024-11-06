@@ -55,7 +55,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         # contains transaction fee.
         self.rpc.generate_blocks(1)
         balance = self.rpc.get_balance(self.mining_author)
-        count = self.nodes[0].getblockcount()
+        count = self.nodes[0].test_getBlockCount()
         transaction_fee = parse_as_int(receipt['gasFee'])
         expected += block_reward + transaction_fee
         self.log.info("block count: %d, balance: %d, expected: %d, transaction_fee: %d", count, balance, expected,
@@ -68,7 +68,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         # should contains storage maintenance fee.
         self.rpc.generate_blocks(1)
         balance = self.rpc.get_balance(self.mining_author)
-        count = self.nodes[0].getblockcount()
+        count = self.nodes[0].test_getBlockCount()
         collateral_for_storage = self.rpc.get_collateral_for_storage(sender)
         storage_fee = collateral_for_storage * 4 // 100 // 63072000
         expected += block_reward + storage_fee
@@ -81,7 +81,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         # should contains storage maintenance fee.
         self.rpc.generate_blocks(1)
         balance = self.rpc.get_balance(self.mining_author)
-        count = self.nodes[0].getblockcount()
+        count = self.nodes[0].test_getBlockCount()
         collateral_for_storage = self.rpc.get_collateral_for_storage(sender)
         storage_fee = collateral_for_storage * 4 // 100 // 63072000
         expected += storage_fee + block_reward

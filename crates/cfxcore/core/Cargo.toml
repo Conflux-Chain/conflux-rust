@@ -3,105 +3,105 @@ description = "Conflux core library"
 homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = "2.4.0"
+version = { workspace = true}
 edition = "2021"
 
 [dependencies]
 bit-set = "0.4"
 substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
-byteorder = "1.0"
-cfxkey = { path = "../../cfx_key" }
-cfx-addr = { path = "../../cfx_addr" }
-cfx-bytes = { path = "../../cfx_bytes" }
-cfx-math = { path = "../../cfx_math" }
-cfx-internal-common = { path = "../internal_common" }
-cfx-parameters = { path = "../parameters" }
-cfx-statedb = { path = "../../dbs/statedb" }
-cfx-storage = { path = "../../dbs/storage", optional = true }
-cfx-vm-tracer-derive = {path= "../../util/cfx-vm-tracer-derive" }
-cfx-types = { path = "../../cfx_types" }
-cfx-utils = { path = "../../cfx_utils" }
-cfx-vm-types = { path = "../vm-types" }
-cfx-vm-interpreter = { path = "../vm-interpreter" }
-cfx-executor = { path = "../executor" }
-cfx-execute-helper = { path = "../execute-helper" }
+byteorder = { workspace = true }
+cfxkey = { workspace = true }
+cfx-addr = { workspace = true }
+cfx-bytes = { workspace = true }
+cfx-math = { workspace = true }
+cfx-internal-common = { workspace = true }
+cfx-parameters = { workspace = true }
+cfx-statedb = { workspace = true }
+cfx-storage = { workspace = true }
+cfx-vm-tracer-derive = { workspace = true }
+cfx-types = { workspace = true }
+cfx-utils = { workspace = true }
+cfx-vm-types = { workspace = true }
+cfx-vm-interpreter = { workspace = true }
+cfx-executor = { workspace = true }
+cfx-execute-helper = { workspace = true }
 channel = { path = "src/pos/common/channel" }
-clap = "2"
-dag = {path = "../../util/dag" }
+clap = { workspace = true }
+dag = { workspace = true }
 derivative = "2.0.2"
-db = { path = "../../dbs/db" }
+db = { workspace = true }
 either = "1.5.3"
 error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
 futures = {version="0.3.3", features = ["compat"]}
 hashbrown = "0.7.1"
-hibitset = { path = "../../util/hibitset" }
-itertools = "0.9"
-io = { path = "../../util/io" }
-jsonrpc-core = "15.1.0"
-keccak-hash = "0.5"
+hibitset = { workspace = true }
+itertools = { workspace = true }
+io = { workspace = true }
+jsonrpc-core = { workspace = true }
+keccak-hash = { workspace = true }
 kvdb = "0.4"
-kvdb-rocksdb = {path= "../../dbs/kvdb-rocksdb" }
-lazy_static = "1.4"
-link-cut-tree = { path = "../../util/link-cut-tree" }
-log = "0.4"
+kvdb-rocksdb = { workspace = true }
+lazy_static = { workspace = true }
+link-cut-tree = { workspace = true }
+log = { workspace = true }
 log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
 lru_time_cache = "0.9.0"
-malloc_size_of = {path = "../../util/malloc_size_of" }
-malloc_size_of_derive = {path = "../../util/malloc_size_of_derive" }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
 memmap = "0.6"
 memoffset = "0.5.1"
-memory-cache = { path = "../../util/memory-cache" }
-metrics = { path = "../../util/metrics" }
-network = { path = "../../network" }
+memory-cache = { workspace = true }
+metrics = { workspace = true }
+network = { workspace = true }
 num = "0.2"
 num-traits = { version = "0.2.8", default-features = false }
 parity-crypto = "0.9.0"
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 primal = "0.2.3"
-primitives = { path = "../../primitives" }
-priority-send-queue = { path = "../../util/priority-send-queue" }
+primitives = { workspace = true }
+priority-send-queue = { workspace = true }
 prometheus = { version = "0.7.0", default-features = false }
-rand = "0.7"
+rand = { workspace = true }
 rand_08 = {package = "rand", version = "0.8"}
 rand_xorshift="0.2"
-random-crash = { path = "../../util/random_crash" }
-rayon = "1.0"
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-rustc-hex = "2.1"
-secret-store = { path = "../../secret_store" }
+rangetools = "0.1.4"
+random-crash = { workspace = true }
+rayon = { workspace = true }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
+rustc-hex = { workspace = true }
+secret-store = { workspace = true }
 serde = { version = "1.0", features = ["rc"] }
-serde_derive = "1.0"
-serde_json = "1.0"
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
 siphasher = "0.3"
 slab = "0.4"
-solidity-abi = {path= "../../util/solidity-abi" }
-solidity-abi-derive = {path= "../../util/solidity-abi-derive" }
-sha3-macro = {path= "../../util/sha3-macro" }
+solidity-abi = { workspace = true }
+solidity-abi-derive = { workspace = true }
+sha3-macro = { workspace = true }
 sqlite = "0.25"
 sqlite3-sys = "0.12"
 static_assertions = "1.1.0"
 strfmt = "0.1"
 tempdir = "0.3"
 threadpool = "1.0"
-throttling = { path = "../../util/throttling" }
+throttling = { workspace = true }
 toml = "0.5.8"
-tokio02 = { version = "0.2", package="tokio", features = ["full"] }
 tokio = { version = "1.6", features = ["full"] }
 tokio-timer = "0.2.13"
 tokio-stream = "0.1.4"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-strum = "0.20"
-strum_macros = "0.20"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 smart-default = "0.6.0"
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
-tiny-keccak = {version = "2.0",  features = ["keccak"]}
+bls-signatures = { workspace = true }
+tiny-keccak = { workspace = true,  features = ["keccak"]}
 bcs = "0.1.2"
 async-trait = "0.1"
 num-derive = { version = "0.3.3", default-features = false }
-thiserror = "1.0.24"
+thiserror = { workspace = true }
 fallible = { path = "src/pos/common/fallible" }
 mirai-annotations = { version = "1.10.1", default-features = false }
 bounded-executor = { path = "src/pos/common/bounded-executor" }
@@ -122,9 +122,9 @@ schemadb = { path = "src/pos/storage/schemadb" }
 storage-interface = { path = "src/pos/storage/storage-interface" }
 short-hex-str = { path = "src/pos/common/short-hex-str" }
 subscription-service = { path = "src/pos/common/subscription-service" }
-fail = "0.4.0"
-anyhow = "1.0.38"
-once_cell = "1.7.2"
+fail = { workspace = true }
+anyhow = { workspace = true }
+once_cell = { workspace = true }
 move-core-types = { path = "src/pos/types/move-core-types" }
 pow-types = {path = "src/pos/types/pow-types" }
 async-oneshot = "0.5.0"
@@ -132,19 +132,23 @@ proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 diem-temppath = { path = "src/pos/common/temppath" }
 crash-handler = { path = "src/pos/common/crash-handler" }
-heap-map = {path = "../../util/heap-map" }
+heap-map = { workspace = true }
 impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
-treap-map = {path = "../../util/treap-map" }
-cfx-packing-pool = { path = "../packing-pool" }
+treap-map = { workspace = true }
+cfx-packing-pool = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
-geth-tracer = { path = "../geth-tracer" }
+geth-tracer = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
+jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
+cfx-rpc-utils = { workspace = true }
 
 
 [dev-dependencies]
 criterion = "0.3"
-cfx-storage = { path = "../../dbs/storage", features = ["testonly_code"] }
-cfx-vm-types = { path = "../vm-types", features = ["testonly_code"] }
+cfx-storage = { workspace = true, features = ["testonly_code"] }
+cfx-vm-types = { workspace = true, features = ["testonly_code"] }
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 consensus-types = { path = "src/pos/consensus/consensus-types", features = ["fuzzing"] }
@@ -155,12 +159,9 @@ version = "0.5"
 default-features = false
 
 [features]
-default = ["cfx-storage"]
+default = []
 # Unfortunately cfg test attributes doesn't work across crates,
 # we have to define a feature for test code.
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
 fuzzing = ["proptest", "proptest-derive"]
-bls-blst = ["bls-signatures/blst", "diem-crypto/bls-blst"]
-bls-pairing = ["bls-signatures/pairing", "diem-crypto/bls-pairing"]
-blst-portable = ["bls-signatures/blst-portable", "diem-crypto/blst-portable"]

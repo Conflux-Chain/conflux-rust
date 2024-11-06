@@ -51,17 +51,17 @@ impl State {
     fn commit_dirty_accounts(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<Vec<Account>> {
-        assert!(self.checkpoints.get_mut().is_empty());
+        assert!(self.no_checkpoint());
 
         let cache_items = self.cache.get_mut().drain();
-        let mut sorted_dirty_accounts = cache_items
-            .filter_map(|(_, acc)| acc.try_into_dirty_account())
+        let mut to_commit_accounts = cache_items
+            .filter_map(|(_, acc)| acc.into_to_commit_account())
             .collect::<Vec<_>>();
-        sorted_dirty_accounts.sort_by(|a, b| a.address().cmp(b.address()));
+        to_commit_accounts.sort_by(|a, b| a.address().cmp(b.address()));
 
         let mut accounts_to_notify = vec![];
 
-        for account in sorted_dirty_accounts.into_iter() {
+        for account in to_commit_accounts.into_iter() {
             let address = *account.address();
 
             if account.pending_db_clear() {

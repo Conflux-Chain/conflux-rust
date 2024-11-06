@@ -19,6 +19,7 @@ class Eip1559Test(Web3Base):
         self.conf_parameters["executive_trace"] = "true"
         self.conf_parameters["cip1559_transition_height"] = str(1)
         self.conf_parameters["min_eth_base_price"] = 20 * (10**9)
+        self.conf_parameters["tx_pool_allow_gas_over_half_block"] = "true"
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -86,6 +87,8 @@ class Eip1559Test(Web3Base):
         assert_equal(receipt["txExecErrorMsg"], None)
 
         tx = self.w3.eth.get_transaction(return_tx_hash)
+
+        assert_equal(Web3.toHex(tx["v"]), tx["yParity"])
 
         return tx, receipt
     

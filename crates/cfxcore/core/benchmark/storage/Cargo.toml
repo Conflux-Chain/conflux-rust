@@ -7,13 +7,15 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-cfxcore = { path = "../..", features = ["bls-blst"] }
-cfx-types = { path = "../../../../cfx_types", features=["storage_benchmark_no_account_space_check"] }
-cfx-statedb = { path = "../../../../dbs/statedb" }
-cfx-storage = { path = "../../../../dbs/storage" }
-cfx-internal-common = { path = "../../../internal_common" }
-clap = "2.32"
-db = { path = "../../../../dbs/db" }
+cfxcore = { workspace = true }
+cfx-types = { workspace = true, features=["storage_benchmark_no_account_space_check"] }
+cfx-statedb = { workspace = true }
+cfx-storage = { workspace = true }
+cfx-internal-common = { workspace = true }
+primitives = { workspace = true }
+db = { workspace = true }
+
+clap = { workspace = true }
 env_logger = "0.7"
 error-chain = "0.12"
 ethcore = { package = "ethcore", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
@@ -25,8 +27,7 @@ heapsize = "0.4"
 kvdb = "0.4"
 lazy_static = "1.4"
 log = "0.4"
-parking_lot = "0.11"
-primitives = { path = "../../../../primitives" }
+parking_lot = { workspace = true }
 rlp = { version = "0.3.0", feature = ["ethereum"] }
 serde_json = "1.0"
 base64ct = "=1.1.1"
@@ -61,10 +62,6 @@ sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = 
 # The line below register an independent "eth-secp256k1" which directs to crates-io.
 eth-secp256k1 = "0.5.7"
 
-#[dev-dependencies]
-
-[workspace]
-# Note: try to list it in the top level workspace and to exclude it from cfxcore.
 
 [profile.release]
 debug = true

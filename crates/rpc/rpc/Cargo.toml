@@ -1,0 +1,30 @@
+[package]
+name = "cfx-rpc"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfx-rpc-eth-api = { workspace = true }
+jsonrpsee = { workspace = true, features = ["server", "macros"] }
+cfx-types = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
+cfx-rpc-primitives = { workspace = true }
+async-trait = { workspace = true }
+keccak-hash = { workspace = true}
+parity-version = { workspace = true }
+clap = { workspace = true }
+alloy-rpc-types = { workspace = true }
+alloy-rpc-types-trace = { workspace = true }
+cfxcore = { workspace = true }
+primitives = { workspace = true }
+geth-tracer = { workspace = true }
+cfx-rpc-utils = { workspace = true }

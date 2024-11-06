@@ -9,39 +9,39 @@ edition = "2021"
 [dependencies]
 substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
 byteorder = "1.0"
-cfxkey = { path = "../../cfx_key" }
-cfx-bytes = { path = "../../cfx_bytes" }
-cfx-math = { path = "../../cfx_math" }
-cfx-internal-common = { path = "../internal_common" }
-cfx-parameters = { path = "../parameters" }
-cfx-statedb = { path = "../../dbs/statedb" }
-cfx-vm-tracer-derive = { path= "../../util/cfx-vm-tracer-derive" }
-cfx-types = { path = "../../cfx_types" }
-cfx-vm-types = { path = "../vm-types" }
-cfx-vm-interpreter = { path = "../vm-interpreter" }
+cfxkey = { workspace = true }
+cfx-bytes = { workspace = true }
+cfx-math = { workspace = true }
+cfx-internal-common = { workspace = true }
+cfx-parameters = { workspace = true }
+cfx-statedb = { workspace = true }
+cfx-vm-tracer-derive = { workspace = true }
+cfx-types = { workspace = true }
+cfx-vm-types = { workspace = true }
+cfx-vm-interpreter = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
-keccak-hash = "0.5"
-lazy_static = "1.4"
-log = "0.4"
-malloc_size_of = {path = "../../util/malloc_size_of" }
-malloc_size_of_derive = {path = "../../util/malloc_size_of_derive" }
+keccak-hash = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
 num = "0.2"
 parity-crypto = "0.9.0"
-parking_lot = "0.11"
-primitives = { path = "../../primitives" }
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-rustc-hex = "2.1"
-serde = { version = "1.0", features = ["rc"] }
-serde_derive = "1.0"
-serde_json = "1.0"
-solidity-abi = { path= "../../util/solidity-abi" }
-solidity-abi-derive = { path= "../../util/solidity-abi-derive" }
-sha3-macro = {path= "../../util/sha3-macro" }
-strum = "0.20"
-strum_macros = "0.20"
+parking_lot = { workspace = true }
+primitives = { workspace = true }
+rlp ={ workspace = true }
+rlp_derive = { workspace = true }
+rustc-hex = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
+solidity-abi = { workspace = true }
+solidity-abi-derive = { workspace = true }
+sha3-macro = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
 bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
-tiny-keccak = {version = "2.0",  features = ["keccak"]}
+tiny-keccak = { workspace = true,  features = ["keccak"]}
 diem-crypto = { path = "../core/src/pos/crypto/crypto" }
 diem-types = { path = "../core/src/pos/types" }
 pow-types = {path = "../core/src/pos/types/pow-types" }
@@ -52,11 +52,13 @@ hex-literal = "0.4.1"
 derive_more = "0.99"
 c-kzg = { version = "1.0.2", default-features = false}
 once_cell = "1.19"
+rayon = { workspace = true }
+cfx-parity-trace-types = { workspace = true }
 
 [dev-dependencies]
-cfx-statedb = { path = "../../dbs/statedb", features = ["testonly_code"]}
-cfx-storage = { path = "../../dbs/storage", features = ["testonly_code"]}
-cfx-vm-types = { path = "../vm-types", features = ["testonly_code"]}
+cfx-statedb = { workspace = true, features = ["testonly_code"]}
+cfx-storage = { workspace = true, features = ["testonly_code"]}
+cfx-vm-types = { workspace = true, features = ["testonly_code"]}
 
 [features]
 testonly_code = []

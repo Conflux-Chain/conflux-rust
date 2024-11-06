@@ -4,25 +4,24 @@ use cfx_types::AddressWithSpace;
 use primitives::{
     Account, CodeInfo, DepositList, StorageKey, StorageValue, VoteStakeList,
 };
-use std::sync::Arc;
 
 use super::OverlayAccount;
 
 impl OverlayAccount {
     pub fn commit(
-        mut self, db: &mut StateDb, address: &AddressWithSpace,
+        self, db: &mut StateDb, address: &AddressWithSpace,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()> {
         // When committing an overlay account, the execution of an epoch has
         // finished. In this case, all the checkpoints except the bottom one
         // must be removed. (Each checkpoint is a mapping from addresses to
         // overlay accounts.)
-        assert_eq!(Arc::strong_count(&self.storage_write_cache), 1);
 
         // Commit storage entries
 
-        let value_cache = Arc::get_mut(&mut self.storage_write_cache).unwrap();
-        for (k, mut v) in value_cache.drain() {
+        assert!(self.storage_write_checkpoint.is_none());
+        let write_cache = &mut self.storage_write_cache.write();
+        for (k, mut v) in write_cache.drain() {
             let address_key =
                 StorageKey::new_storage_key(&self.address.address, k.as_ref())
                     .with_space(self.address.space);

@@ -51,7 +51,7 @@ class PoWGenerateThread(threading.Thread):
         self.fixed_period = fixed_period
 
     def generate_block(self):
-        self.node.generate_empty_blocks(1)
+        self.node.test_generateEmptyBlocks(1)
 
     def run(self):
         # generate blocks

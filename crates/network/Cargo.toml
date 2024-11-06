@@ -4,19 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cfx-addr = { path = "../cfx_addr" }
-cfx-bytes = { path = "../cfx_bytes" }
-cfx-types = { path = "../cfx_types" }
-cfxkey = { path = "../cfx_key" }
+cfx-addr = { workspace = true }
+cfx-bytes = { workspace = true }
+cfx-types = { workspace = true }
+cfxkey = { workspace = true }
 mio = "0.6.8"
-parking_lot = "0.11"
+parking_lot = { workspace = true }
 log = "0.4"
 slab = "0.4"
-io = { path = "../util/io" }
+io = { workspace = true }
 error-chain = { version = "0.12", default-features = false }
 bytes = "0.4"
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
 ipnetwork = "0.12.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -25,17 +25,17 @@ igd = "0.10"
 libc = "0.2.66"
 rand = "0.7"
 parity-path = "0.1"
-keccak-hash = "0.5"
+keccak-hash = { workspace = true }
 enum-map = "0.4.0"
 enum-map-derive = "0.4.0"
 strum = "0.11.0"
 strum_macros = "0.11.0"
 lazy_static = "1.4"
 byte-unit = "1.1.0"
-priority-send-queue = { path = "../util/priority-send-queue" }
-metrics = { path = "../util/metrics" }
-throttling = { path = "../util/throttling" }
+priority-send-queue = { workspace = true }
+metrics = { workspace = true }
+throttling = { workspace = true }
 natpmp = "0.2"
-malloc_size_of = { path = "../util/malloc_size_of" }
+malloc_size_of = { workspace = true }
 diem-crypto = { path= "../cfxcore/core/src/pos/crypto/crypto" }
 diem-types = { path= "../cfxcore/core/src/pos/types" }
