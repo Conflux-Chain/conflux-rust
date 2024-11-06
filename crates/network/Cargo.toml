@@ -24,7 +24,7 @@ serde_derive = { workspace = true }
 igd = "0.10"
 libc = "0.2.66"
 rand = { workspace = true }
-parity-path = "0.1"
+parity-path = { workspace = true }
 keccak-hash = { workspace = true }
 enum-map = "0.4.0"
 enum-map-derive = "0.4.0"

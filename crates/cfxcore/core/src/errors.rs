@@ -7,7 +7,7 @@ pub use cfx_rpc_utils::error::error_codes::EXCEPTION_ERROR;
 use cfx_statedb::Error as StateDbError;
 use cfx_storage::Error as StorageError;
 use jsonrpc_core::{futures::future, Error as JsonRpcError, ErrorCode};
-use jsonrpsee::types::error::ErrorObjectOwned;
+use jsonrpsee::types::ErrorObjectOwned;
 use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
 use serde_json::Value;

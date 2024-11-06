@@ -18,7 +18,7 @@ use cfx_parameters::consensus_internal::ELASTICITY_MULTIPLIER;
 use futures::executor::block_on;
 use parking_lot::RwLock;
 use slab::Slab;
-use tokio02::sync::mpsc::error::TryRecvError;
+use tokio::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
 
 use cfx_executor::machine::Machine;
@@ -1150,7 +1150,7 @@ impl SynchronizationGraph {
                                 warn!("Duplicate block = {} sent to the consensus worker", hash);
                             },
                             Err(TryRecvError::Empty) => break 'inner,
-                            Err(TryRecvError::Closed) => break 'outer,
+                            Err(TryRecvError::Disconnected) => break 'outer,
                         }
                     }
                     if let Some((_, hash)) = priority_queue.pop() {

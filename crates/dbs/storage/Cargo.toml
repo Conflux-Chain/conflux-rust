@@ -43,13 +43,10 @@ sqlite3-sys = "0.12"
 strfmt = "0.1"
 tokio = { version = "0.2", features = ["full"] }
 once_cell = "1.10.0"
+parity-util-mem = { workspace = true, default-features = false }
 
 [dev-dependencies]
 primitives = { workspace = true, features = ["test_no_account_length_check"] }
-
-[dependencies.parity-util-mem]
-version = "0.5"
-default-features = false
 
 [features]
 default = ["primitives"]
