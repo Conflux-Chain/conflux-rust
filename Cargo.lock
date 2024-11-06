@@ -1295,7 +1295,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1313,7 +1313,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
@@ -1334,7 +1334,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "cfx-addr",
  "cfx-parameters",
@@ -1353,7 +1353,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "alloy-rpc-types",
  "cfx-parameters",
@@ -1387,7 +1387,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "cfx-addr",
  "cfx-types",
@@ -1400,7 +1400,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1505,7 +1505,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "2.4.0"
+version = "2.4.1"
 
 [[package]]
 name = "cfx-utils"
@@ -1559,7 +1559,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -1862,7 +1862,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -2008,7 +2008,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "app_dirs",
  "base64ct",
@@ -3742,7 +3742,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -7759,7 +7759,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.4.0"
+version = "2.4.1"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
