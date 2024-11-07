@@ -79,7 +79,7 @@ impl RequestHandler {
         if let Some(peer) = peers.get_mut(peer_id) {
             peer.match_request(request_id)
         } else {
-            bail!(Error::UnknownPeer);
+            return Err(Error::UnknownPeer);
         }
     }
 
@@ -383,7 +383,7 @@ impl RequestContainer {
                 .store(true, AtomicOrdering::Relaxed);
             Ok(removed_req.message)
         } else {
-            bail!(Error::RequestNotFound)
+            return Err(Error::RequestNotFound);
         }
     }
 

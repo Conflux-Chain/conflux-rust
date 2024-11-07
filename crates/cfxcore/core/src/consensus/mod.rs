@@ -717,13 +717,13 @@ impl ConsensusGraph {
             if let Err(..) =
                 inner.check_block_pivot_assumption(&hash, epoch_number)
             {
-                bail!(invalid_params(
+                return Err(invalid_params(
                     "epoch parameter",
                     format!(
                         "should receive a pivot block hash, receives: {:?}",
                         hash
                     ),
-                ))
+                ));
             }
         }
         Ok(epoch_number)
@@ -1152,7 +1152,7 @@ impl ConsensusGraph {
 
         // check if block exists
         if self.data_man.block_header_by_hash(&block_hash).is_none() {
-            bail!(FilterError::UnknownBlock { hash: block_hash });
+            return Err(FilterError::UnknownBlock { hash: block_hash });
         };
 
         // find pivot block
@@ -1167,7 +1167,9 @@ impl ConsensusGraph {
                     // if local block info is not available, that means this
                     // block has never entered the consensus graph.
                     None => {
-                        bail!(FilterError::BlockNotExecutedYet { block_hash })
+                        return Err(FilterError::BlockNotExecutedYet {
+                            block_hash,
+                        })
                     }
                     // if the local block info is available, then it is very
                     // likely that we have already executed this block and the
@@ -1178,7 +1180,9 @@ impl ConsensusGraph {
                     // rare enough to not require special handling here; we can
                     // add more fine-grained errors in the future if necessary.
                     Some(_) => {
-                        bail!(FilterError::BlockAlreadyPruned { block_hash })
+                        return Err(FilterError::BlockAlreadyPruned {
+                            block_hash,
+                        })
                     }
                 }
             }
@@ -1190,7 +1194,7 @@ impl ConsensusGraph {
             None => {
                 // internal error
                 error!("Header of pivot block {:?} not found", pivot_hash);
-                bail!(FilterError::UnknownBlock { hash: pivot_hash });
+                return Err(FilterError::UnknownBlock { hash: pivot_hash });
             }
         };
 
@@ -1286,10 +1290,12 @@ impl ConsensusGraph {
             .hash_by_block_number(from_block, true /* update_cache */)
         {
             Some(h) => h,
-            None => bail!(FilterError::Custom(format!(
-                "Unable to find block hash for from_block {:?}",
-                from_block
-            ))),
+            None => {
+                return Err(FilterError::Custom(format!(
+                    "Unable to find block hash for from_block {:?}",
+                    from_block
+                )))
+            }
         };
 
         let to_hash = match self
@@ -1297,26 +1303,32 @@ impl ConsensusGraph {
             .hash_by_block_number(to_block, true /* update_cache */)
         {
             Some(h) => h,
-            None => bail!(FilterError::Custom(format!(
-                "Unable to find block hash for to_block {:?}",
-                to_block
-            ))),
+            None => {
+                return Err(FilterError::Custom(format!(
+                    "Unable to find block hash for to_block {:?}",
+                    to_block
+                )))
+            }
         };
 
         let from_epoch = match self.get_block_epoch_number(&from_hash) {
             Some(e) => e,
-            None => bail!(FilterError::Custom(format!(
-                "Unable to find epoch number for block {:?}",
-                from_hash
-            ))),
+            None => {
+                return Err(FilterError::Custom(format!(
+                    "Unable to find epoch number for block {:?}",
+                    from_hash
+                )))
+            }
         };
 
         let to_epoch = match self.get_block_epoch_number(&to_hash) {
             Some(e) => e,
-            None => bail!(FilterError::Custom(format!(
-                "Unable to find epoch number for block {:?}",
-                to_hash
-            ))),
+            None => {
+                return Err(FilterError::Custom(format!(
+                    "Unable to find epoch number for block {:?}",
+                    to_hash
+                )))
+            }
         };
 
         let (from_epoch_hashes, to_epoch_hashes) = {
@@ -1438,7 +1450,7 @@ impl ConsensusGraph {
         {
             (v.last().expect("pivot block always exist").clone(), v.len())
         } else {
-            bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
+            return Err("cannot get block hashes in the specified epoch, maybe it does not exist?".into());
         };
         self.executor
             .call_virtual(tx, &epoch_id, epoch_size, request)
@@ -1456,7 +1468,7 @@ impl ConsensusGraph {
         {
             v
         } else {
-            bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
+            return Err("cannot get block hashes in the specified epoch, maybe it does not exist?".into());
         };
 
         let blocks = self
@@ -1507,10 +1519,10 @@ impl ConsensusGraph {
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
                 height, hash, state_availability_boundary
             );
-            bail!(format!(
+            return Err(format!(
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
                 height, hash, state_availability_boundary
-            ));
+            ).into());
         }
         let maybe_state_readonly_index =
             self.data_man.get_state_readonly_index(&hash).into();
@@ -1530,10 +1542,11 @@ impl ConsensusGraph {
         let state = match maybe_state {
             Some(state) => state,
             None => {
-                bail!(format!(
+                return Err(format!(
                     "State for epoch (number={:?} hash={:?}) does not exist",
                     height, hash
-                ));
+                )
+                .into());
             }
         };
 
@@ -1554,10 +1567,10 @@ impl ConsensusGraph {
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
                 height, hash, state_availability_boundary
             );
-            bail!(format!(
+            return Err(format!(
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
                 height, hash, state_availability_boundary
-            ));
+            ).into());
         }
         let maybe_state_readonly_index =
             self.data_man.get_state_readonly_index(&hash).into();
@@ -1577,10 +1590,11 @@ impl ConsensusGraph {
         let state = match maybe_state {
             Some(state) => state,
             None => {
-                bail!(format!(
+                return Err(format!(
                     "State for epoch (number={:?} hash={:?}) does not exist",
                     height, hash
-                ));
+                )
+                .into());
             }
         };
 
@@ -1687,11 +1701,11 @@ impl ConsensusGraph {
             .read_recursive()
             .block_hashes_by_epoch(epoch_number)?;
         if block_hashes.last().expect("epoch set not empty") != &assumed_pivot {
-            bail!(FilterError::PivotChainReorg {
+            return Err(FilterError::PivotChainReorg {
                 epoch: epoch_number,
                 from: assumed_pivot,
-                to: *block_hashes.last().unwrap()
-            })
+                to: *block_hashes.last().unwrap(),
+            });
         }
         let mut traces = Vec::new();
         for block_hash in block_hashes {
@@ -1761,10 +1775,11 @@ impl ConsensusGraph {
         let mut traces = Vec::new();
         for (pivot_hash, block_hash, block_trace, block_txs) in block_traces {
             if block_txs.len() != block_trace.0.len() {
-                bail!(format!(
+                return Err(format!(
                     "tx list and trace length unmatch: block_hash={:?}",
                     block_hash
-                ));
+                )
+                .into());
             }
             let epoch_number = self
                 .data_man

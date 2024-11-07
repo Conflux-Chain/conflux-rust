@@ -55,9 +55,11 @@ impl Handleable for SnapshotChunkRequest {
             SnapshotSyncCandidate::FullSync {
                 snapshot_epoch_id, ..
             } => snapshot_epoch_id,
-            _ => bail!(Error::NotSupported(
-                "OneStepSync/IncSync not yet implemented.".into()
-            )),
+            _ => {
+                return Err(Error::NotSupported(
+                    "OneStepSync/IncSync not yet implemented.".into(),
+                ))
+            }
         };
         let chunk = match Chunk::load(
             snapshot_epoch_id,

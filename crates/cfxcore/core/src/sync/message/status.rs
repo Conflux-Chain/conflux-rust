@@ -42,7 +42,7 @@ impl Handleable for StatusV2 {
                 "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, chain_id, self.chain_id,
             );
-            bail!(Error::InvalidStatus("chain_id mismatches".into()));
+            return Err(Error::InvalidStatus("chain_id mismatches".into()));
         }
         let genesis_hash = ctx.manager.graph.data_man.true_genesis.hash();
         if ctx.manager.protocol_config.check_status_genesis {
@@ -51,7 +51,9 @@ impl Handleable for StatusV2 {
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, genesis_hash, self.genesis_hash
             );
-                bail!(Error::InvalidStatus("genesis hash mismatches".into()));
+                return Err(Error::InvalidStatus(
+                    "genesis hash mismatches".into(),
+                ));
             }
         }
 
@@ -157,7 +159,7 @@ impl Handleable for StatusV3 {
                 "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, chain_id, self.chain_id,
             );
-            bail!(Error::InvalidStatus("chain_id mismatches".into()));
+            return Err(Error::InvalidStatus("chain_id mismatches".into()));
         }
         drop(chain_id);
 
@@ -168,7 +170,9 @@ impl Handleable for StatusV3 {
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, genesis_hash, self.genesis_hash
             );
-                bail!(Error::InvalidStatus("genesis hash mismatches".into()));
+                return Err(Error::InvalidStatus(
+                    "genesis hash mismatches".into(),
+                ));
             }
         }
 

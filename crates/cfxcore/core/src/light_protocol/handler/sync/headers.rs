@@ -7,7 +7,7 @@ use crate::{
     light_protocol::{
         common::{FullPeerState, Peers},
         message::{msgid, GetBlockHeaders},
-        Error, ErrorKind, LightNodeConfiguration,
+        Error, LightNodeConfiguration,
     },
     message::{Message, RequestId},
     sync::SynchronizationGraph,
@@ -257,7 +257,7 @@ impl Headers {
 
         // disconnect peers who send invalid headers
         if has_invalid_header {
-            bail!(ErrorKind::InvalidHeader);
+            return Err(Error::InvalidHeader);
         }
 
         Ok(())

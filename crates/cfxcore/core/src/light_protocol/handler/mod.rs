@@ -316,7 +316,7 @@ impl Handler {
             None => {
                 // NOTE: this should not happen as we register
                 // all peers in `on_peer_connected`
-                bail!(ErrorKind::InternalError(format!(
+                return Err(Error::InternalError(format!(
                     "Received message from unknown peer={:?}",
                     peer
                 )));
@@ -339,10 +339,10 @@ impl Handler {
             && !state.read().handshake_completed
         {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
-            bail!(ErrorKind::UnexpectedMessage {
+            return Err(Error::UnexpectedMessage {
                 expected: vec![
                     msgid::STATUS_PONG_DEPRECATED,
-                    msgid::STATUS_PONG_V2
+                    msgid::STATUS_PONG_V2,
                 ],
                 received: msg_id,
             });
@@ -356,7 +356,7 @@ impl Handler {
         match node_type {
             NodeType::Archive => Ok(()),
             NodeType::Full => Ok(()),
-            _ => bail!(ErrorKind::UnexpectedPeerType { node_type }),
+            _ => return Err(Error::UnexpectedPeerType { node_type }),
         }
     }
 
@@ -366,7 +366,7 @@ impl Handler {
         let theirs = genesis;
 
         if ours != theirs {
-            bail!(ErrorKind::GenesisMismatch { ours, theirs });
+            return Err(Error::GenesisMismatch { ours, theirs });
         }
 
         Ok(())
@@ -403,7 +403,7 @@ impl Handler {
             // request was throttled by service provider
             msgid::THROTTLED => self.on_throttled(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
 
-            _ => bail!(ErrorKind::UnknownMessage{id: msg_id}),
+            _ => return Err(Error::UnknownMessage{id: msg_id}),
         }
     }
 
@@ -971,7 +971,7 @@ impl NetworkProtocolHandler for Handler {
                     io,
                     peer,
                     msgid::INVALID,
-                    &ErrorKind::InvalidMessageFormat.into(),
+                    &Error::InvalidMessageFormat.into(),
                 )
             }
         };
@@ -1012,7 +1012,11 @@ impl NetworkProtocolHandler for Handler {
                     io,
                     node_id,
                     msgid::INVALID,
-                    &ErrorKind::SendStatusFailed { peer: *node_id }.into(),
+                    &Error::SendStatusFailed {
+                        peer: *node_id,
+                        source: None,
+                    }
+                    .into(),
                 );
             }
         }

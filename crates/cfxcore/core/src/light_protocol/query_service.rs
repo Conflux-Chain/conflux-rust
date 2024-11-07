@@ -9,8 +9,8 @@ use crate::{
         common::{FullPeerFilter, LedgerInfo},
         handler::sync::TxInfoValidated,
         message::msgid,
-        Error as LightError, ErrorKind, Handler as LightHandler,
-        LightNodeConfiguration, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
+        Error as LightError, Handler as LightHandler, LightNodeConfiguration,
+        LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     sync::SynchronizationGraph,
     ConsensusGraph, Notifications,
@@ -77,7 +77,7 @@ async fn with_timeout<T>(
     // set error message
     with_timeout
         .await
-        .map_err(|_| LightError::from(ErrorKind::Timeout(msg)))?
+        .map_err(|_| LightError::from(LightError::Timeout(msg)))?
 }
 
 pub struct QueryService {
@@ -324,7 +324,7 @@ impl QueryService {
                     // `retrieve_block` will only return None if we do not have
                     // the corresponding header, which should not happen in this
                     // case.
-                    bail!(ErrorKind::InternalError(format!(
+                    return Err(LightError::InternalError(format!(
                         "Block {:?} not found during gas price sampling",
                         hash
                     )));
@@ -448,7 +448,7 @@ impl QueryService {
         let key = Self::account_key(&address);
 
         let code_hash = match self.retrieve_state_entry_raw(epoch, key).await {
-            Err(e) => bail!(e),
+            Err(e) => return Err(e.into()),
             Ok(None) => return Ok(None),
             Ok(Some(rlp)) => {
                 account_result_to_rpc_result(
@@ -905,7 +905,7 @@ impl QueryService {
 
                 Ok((epochs, block_filter))
             }
-            _ => bail!(FilterError::Custom(
+            _ => return Err(FilterError::Custom(
                 "Light nodes do not support log filtering using block numbers"
                     .into(),
             )),

@@ -6,7 +6,7 @@ use cfx_types::H256;
 use primitives::{BlockHeader, BlockHeaderBuilder};
 use std::ops::Index;
 
-use crate::light_protocol::{Error, ErrorKind};
+use crate::light_protocol::Error;
 
 pub enum LedgerProof {
     StateRoot(Vec<H256>),
@@ -48,10 +48,10 @@ impl LedgerProof {
         let blame = witness.blame() as u64;
 
         if hashes.len() as u64 != blame + 1 {
-            bail!(ErrorKind::InvalidLedgerProofSize {
+            return Err(Error::InvalidLedgerProofSize {
                 hash,
                 expected: blame + 1,
-                received: hashes.len() as u64
+                received: hashes.len() as u64,
             });
         }
 
@@ -66,7 +66,7 @@ impl LedgerProof {
 
         // validate against local witness deferred state root hash
         if received != expected {
-            bail!(ErrorKind::InvalidWitnessRoot {
+            return Err(Error::InvalidWitnessRoot {
                 hash,
                 expected,
                 received,

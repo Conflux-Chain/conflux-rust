@@ -78,8 +78,8 @@ impl SnapshotManifestResponse {
     ) -> Result<(), Error> {
         if request.is_initial_request() && self.state_root_vec.is_empty() {
             debug!("Responded snapshot manifest has empty blame states");
-            bail!(Error::InvalidSnapshotManifest(
-                "state blame vector not found".into()
+            return Err(Error::InvalidSnapshotManifest(
+                "state blame vector not found".into(),
             ));
         }
 
@@ -87,8 +87,8 @@ impl SnapshotManifestResponse {
             || self.state_root_vec.len() != self.bloom_blame_vec.len()
         {
             debug!("Responded snapshot manifest has mismatch blame states/receipts/blooms");
-            bail!(Error::InvalidSnapshotManifest(
-                "blame vector length mismatch".into()
+            return Err(Error::InvalidSnapshotManifest(
+                "blame vector length mismatch".into(),
             ));
         }
 

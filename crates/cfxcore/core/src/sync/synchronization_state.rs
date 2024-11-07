@@ -160,7 +160,7 @@ impl SynchronizationState {
         &self, peer: &NodeId,
     ) -> Result<ProtocolVersion, NetworkError> {
         match self.get_peer_info(peer) {
-            Err(_) => bail!(NetworkErrorKind::InvalidNodeId),
+            Err(_) => return Err(NetworkErrorKind::InvalidNodeId.into()),
             Ok(info) => Ok(info.read().protocol_version),
         }
     }

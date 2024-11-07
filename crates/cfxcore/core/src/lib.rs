@@ -2,9 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// Recursion limit raised for error_chain
-#![recursion_limit = "256"]
-
 extern crate cfx_bytes as bytes;
 #[macro_use]
 extern crate cfx_internal_common;
@@ -12,8 +9,6 @@ extern crate cfxkey as keylib;
 extern crate keccak_hash as hash;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate error_chain;
 extern crate db as ext_db;
 #[macro_use]
 extern crate lazy_static;

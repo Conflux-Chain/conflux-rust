@@ -76,7 +76,7 @@ impl RequestHandler {
                 &self.protocol_config,
             )
         } else {
-            bail!(Error::UnknownPeer);
+            return Err(Error::UnknownPeer);
         }
     }
 
@@ -358,7 +358,7 @@ impl RequestContainer {
             }
             Ok(removed_req.message)
         } else {
-            bail!(Error::RequestNotFound)
+            return Err(Error::RequestNotFound);
         }
     }
 

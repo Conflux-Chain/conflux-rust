@@ -171,7 +171,7 @@ impl PosHandler {
         }
         let pos_config_path = match self.conf.diem_conf_path.as_ref() {
             Some(path) => PathBuf::from(path),
-            None => bail!("No pos config!"),
+            None => return Err("No pos config!".into()),
         };
 
         POS_STATE_CONFIG
@@ -239,7 +239,7 @@ impl PosHandler {
         );
         pos_drop_handle.pow_handler.initialize(consensus);
         if self.pos.set(Box::new(pos_connection)).is_err() {
-            bail!("PoS initialized twice!");
+            return Err("PoS initialized twice!".into());
         }
         *self.test_command_sender.lock() = Some(test_command_sender);
         *self.drop_handle.lock() = Some(pos_drop_handle);

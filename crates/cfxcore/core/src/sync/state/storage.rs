@@ -175,13 +175,13 @@ impl RangedManifest {
     /// not be empty, and the proofs of all chunk keys are valid.
     pub fn validate(&self, snapshot_root: &MerkleHash) -> Result<(), Error> {
         if self.chunk_boundaries.len() != self.chunk_boundary_proofs.len() {
-            bail!(Error::InvalidSnapshotManifest(
+            return Err(Error::InvalidSnapshotManifest(
                 "chunk and proof number do not match".into(),
             ));
         }
         if let Some(next) = &self.next {
             if next != self.chunk_boundaries.last().unwrap() {
-                bail!(Error::InvalidSnapshotManifest(
+                return Err(Error::InvalidSnapshotManifest(
                     "next does not match last boundary".into(),
                 ));
             }
@@ -197,12 +197,14 @@ impl RangedManifest {
                     snapshot_root,
                     proof.get_merkle_root()
                 );
-                bail!(Error::InvalidSnapshotManifest(
+                return Err(Error::InvalidSnapshotManifest(
                     "invalid proof merkle root".into(),
                 ));
             }
             if !proof.if_proves_key(&self.chunk_boundaries[chunk_index]).0 {
-                bail!(Error::InvalidSnapshotManifest("invalid proof".into(),));
+                return Err(Error::InvalidSnapshotManifest(
+                    "invalid proof".into(),
+                ));
             }
         }
         Ok(())

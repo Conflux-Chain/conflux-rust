@@ -74,7 +74,7 @@ impl Handleable for Transactions {
         };
 
         if should_disconnect {
-            bail!(Error::TooManyTrans);
+            return Err(Error::TooManyTrans);
         }
 
         // The transaction pool will rely on the execution state information to
@@ -144,7 +144,7 @@ impl Handleable for TransactionDigests {
                         .max_trans_count_received_in_catch_up
                         as usize
                 {
-                    bail!(Error::TooManyTrans);
+                    return Err(Error::TooManyTrans);
                 }
             }
         }
