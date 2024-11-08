@@ -123,7 +123,7 @@ impl Witnesses {
         let height = epoch + DEFERRED_STATE_EPOCH_COUNT;
 
         if height > *self.height_of_latest_verified_header.read() {
-            bail!(ErrorKind::WitnessUnavailable { epoch });
+            bail!(Error::WitnessUnavailable { epoch });
         }
 
         match self.data_man.verified_blamed_roots_by_height(height) {
@@ -133,7 +133,7 @@ impl Witnesses {
                 // the response for blamed headers. thus, in some cases, `None`
                 // might mean *haven't received yet* instead of *not blamed*.
                 if self.in_flight.read().contains(&height) {
-                    bail!(ErrorKind::WitnessUnavailable { epoch });
+                    bail!(Error::WitnessUnavailable { epoch });
                 }
 
                 let header = self
