@@ -25,8 +25,8 @@ cfx-statedb = { workspace = true }
 cfx-storage = { workspace = true }
 cfx-vm-types = { workspace = true }
 app_dirs = "1.2.1"
-dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
+dir = { workspace = true }
+ctrlc = { workspace = true }
 jsonrpc-core = { workspace = true }
 jsonrpc-tcp-server = { workspace = true }
 jsonrpc-http-server = { workspace = true }
