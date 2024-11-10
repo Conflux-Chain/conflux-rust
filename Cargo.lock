@@ -1521,7 +1521,7 @@ dependencies = [
  "keccak-hash",
  "log",
  "parking_lot 0.11.2",
- "tokio 0.2.25",
+ "tokio 0.1.22",
  "tokio-io",
 ]
 
@@ -5608,7 +5608,7 @@ name = "network"
 version = "0.1.0"
 dependencies = [
  "byte-unit",
- "bytes 1.7.1",
+ "bytes 0.4.12",
  "cfx-addr",
  "cfx-bytes",
  "cfx-types",
