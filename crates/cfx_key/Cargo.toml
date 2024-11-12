@@ -7,23 +7,21 @@ edition = "2021"
 
 [dependencies]
 cfx-types = { workspace = true }
-edit-distance = "2.0"
+edit-distance = { workspace = true }
 parity-crypto = { workspace = true }
 parity-secp256k1 = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 parity-wordlist = { workspace = true }
-quick-error = "1.2.2"
 rand = { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
 tiny-keccak = { workspace = true }
-zeroize = "1.0.0"
+zeroize = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 malloc_size_of = { workspace = true }
-docopt = "1.0"
-env_logger = "0.5"
 panic_hook = { workspace = true }
 threadpool = { workspace = true }
+thiserror = { workspace = true }
 

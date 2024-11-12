@@ -15,31 +15,19 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use parity_crypto::error::SymmError;
-use quick_error::quick_error;
 use secp256k1;
 use std::io;
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum Error {
-        Secp(e: secp256k1::Error) {
-            display("secp256k1 error: {}", e)
-            cause(e)
-            from()
-        }
-        Io(e: io::Error) {
-            display("i/o error: {}", e)
-            cause(e)
-            from()
-        }
-        InvalidMessage {
-            display("invalid message")
-        }
-        Symm(e: SymmError) {
-            cause(e)
-            from()
-        }
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("secp256k1 error: {0}")]
+    Secp(#[from] secp256k1::Error),
+    #[error("i/o error: {0}")]
+    Io(#[from] io::Error),
+    #[error("invalid message")]
+    InvalidMessage,
+    #[error(transparent)]
+    Symm(#[from] SymmError),
 }
 
 /// ECDH functions
