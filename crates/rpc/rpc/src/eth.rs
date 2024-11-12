@@ -146,8 +146,8 @@ impl EthApi {
             epoch => epoch.try_into()?,
         };
 
-        // if gas_price is zero, it is considered as not set
-        request.unset_zero_gas_price();
+        // if gas_price and gas is zero, it is considered as not set
+        request.unset_zero_gas_and_price();
 
         let estimate_request = EstimateRequest {
             has_sender: request.from.is_some(),
