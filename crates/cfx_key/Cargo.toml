@@ -3,26 +3,27 @@ description = "Conflux Keys Generator"
 name = "cfxkey"
 version = "0.3.0"
 authors = ["Conflux Foundation"]
+edition = "2021"
 
 [dependencies]
 cfx-types = { workspace = true }
 edit-distance = "2.0"
 parity-crypto = { workspace = true }
 parity-secp256k1 = { workspace = true }
-lazy_static = "1.4"
-log = "0.4"
+lazy_static = { workspace = true }
+log = { workspace = true }
 parity-wordlist = { workspace = true }
 quick-error = "1.2.2"
-rand = "0.7"
-rustc-hex = "2.1"
-serde = "1.0"
-serde_derive = "1.0"
-tiny-keccak = "1.4"
+rand = { workspace = true }
+rustc-hex = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+tiny-keccak = { workspace = true }
 zeroize = "1.0.0"
 malloc_size_of_derive = { workspace = true }
 malloc_size_of = { workspace = true }
 docopt = "1.0"
 env_logger = "0.5"
 panic_hook = { workspace = true }
-threadpool = "1.7"
+threadpool = { workspace = true }
 

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use log::{info, trace};
 use std::collections::HashSet;
 
 use edit_distance::edit_distance;

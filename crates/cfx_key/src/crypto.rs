@@ -15,6 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use parity_crypto::error::SymmError;
+use quick_error::quick_error;
 use secp256k1;
 use std::io;
 
@@ -44,10 +45,8 @@ quick_error! {
 /// ECDH functions
 pub mod ecdh {
     use super::Error;
+    use crate::{Public, Secret, SECP256K1};
     use secp256k1::{self, ecdh, key};
-    use Public;
-    use Secret;
-    use SECP256K1;
 
     /// Agree on a shared secret
     pub fn agree(secret: &Secret, public: &Public) -> Result<Secret, Error> {
@@ -70,12 +69,9 @@ pub mod ecdh {
 /// ECIES function
 pub mod ecies {
     use super::{ecdh, Error};
+    use crate::{Generator, Public, Random, Secret};
     use cfx_types::H128;
     use parity_crypto::{aes, digest, hmac, is_equal};
-    use Generator;
-    use Public;
-    use Random;
-    use Secret;
 
     /// Encrypt a message with a public key, writing an HMAC covering both
     /// the plaintext and authenticated data.
@@ -183,8 +179,7 @@ pub mod ecies {
 #[cfg(test)]
 mod tests {
     use super::ecies;
-    use Generator;
-    use Random;
+    use crate::{Generator, Random};
 
     #[test]
     fn ecies_shared() {

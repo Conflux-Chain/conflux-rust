@@ -32,7 +32,7 @@ impl Generator for Random {
 }
 
 impl Generator for OsRng {
-    type Error = ::Void;
+    type Error = crate::Void;
 
     fn generate(&mut self) -> Result<KeyPair, Self::Error> {
         let (sec, publ) = SECP256K1

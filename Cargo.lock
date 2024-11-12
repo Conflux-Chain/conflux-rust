@@ -1748,7 +1748,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "threadpool",
- "tiny-keccak 1.5.0",
+ "tiny-keccak 2.0.2",
  "zeroize",
 ]
 

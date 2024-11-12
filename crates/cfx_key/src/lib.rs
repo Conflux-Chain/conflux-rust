@@ -16,28 +16,6 @@
 
 // #![warn(missing_docs)]
 
-extern crate cfx_types;
-extern crate edit_distance;
-extern crate parity_crypto;
-extern crate parity_wordlist;
-#[macro_use]
-extern crate quick_error;
-extern crate malloc_size_of;
-extern crate malloc_size_of_derive;
-extern crate rand;
-extern crate rustc_hex;
-extern crate secp256k1;
-extern crate serde;
-extern crate tiny_keccak;
-extern crate zeroize;
-
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde_derive;
-
 mod brain;
 mod brain_prefix;
 mod error;
@@ -54,6 +32,9 @@ pub mod brain_recover;
 pub mod crypto;
 pub mod math;
 
+use lazy_static::lazy_static;
+pub use parity_wordlist::Error as WordlistError;
+
 pub use self::{
     brain::Brain,
     brain_prefix::BrainPrefix,
@@ -64,7 +45,6 @@ pub use self::{
     },
     keypair::{is_compatible_public, public_to_address, KeyPair},
     math::public_is_valid,
-    parity_wordlist::Error as WordlistError,
     password::Password,
     prefix::Prefix,
     random::Random,
