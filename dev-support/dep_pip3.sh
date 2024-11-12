@@ -2,26 +2,13 @@
 
 set -e
 
-function install() {
-	if [ "`pip3 show ${1%%=*}`" =  "" ]; then
-		pip3 install $1
-	fi
-}
+# function install() {
+# 	if [ "`pip3 show ${1%%=*}`" =  "" ]; then
+# 		pip3 install $1
+# 	fi
+# }
 
-install git+https://github.com/conflux-fans/cfx-account.git@v1.1.0-beta.2 # install cfx-account lib and prepare for CIP-1559 tests
-install eth-utils
-install rlp==1.2.0
-install py-ecc==5.2.0
-install coincurve==19.0.1
-install pysha3
-install trie==1.4.0
-install web3==5.31.1
-install py-solc-x
-install jsonrpcclient==3.3.6
-install asyncio
-install websockets
-install pyyaml
-install numpy
+pip3 install git+https://github.com/conflux-fans/cfx-account.git@v1.1.0-beta.2 eth-utils rlp==1.2.0 py-ecc==5.2.0 coincurve==19.0.1 pysha3 trie==1.4.0 web3==5.31.1 py-solc-x jsonrpcclient==3.3.6 asyncio websockets pyyaml numpy
 
 python3 -m solcx.install v0.5.17
 
