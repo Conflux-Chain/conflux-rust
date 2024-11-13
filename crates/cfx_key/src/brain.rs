@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Generator, KeyPair, Secret};
+use super::{KeyPair, KeyPairGenerator, Secret};
 use crate::keccak::Keccak256;
 use log::trace;
 use parity_wordlist;
@@ -32,7 +32,7 @@ impl Brain {
     }
 }
 
-impl Generator for Brain {
+impl KeyPairGenerator for Brain {
     type Error = crate::Void;
 
     fn generate(&mut self) -> Result<KeyPair, Self::Error> {
@@ -66,7 +66,7 @@ impl Generator for Brain {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Brain, Generator};
+    use crate::{Brain, KeyPairGenerator};
 
     #[test]
     fn test_brain() {

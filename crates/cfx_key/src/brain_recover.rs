@@ -20,7 +20,7 @@ use std::collections::HashSet;
 use edit_distance::edit_distance;
 use parity_wordlist;
 
-use super::{Address, Brain, Generator};
+use super::{Address, Brain, KeyPairGenerator};
 
 /// Tries to find a phrase for address, given the number
 /// of expected words and a partial phrase.

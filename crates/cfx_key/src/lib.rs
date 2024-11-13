@@ -50,6 +50,7 @@ pub use self::{
     random::Random,
     secret::Secret,
     signature::{recover, sign, verify_address, verify_public, Signature},
+    KeyPairGenerator as Generator,
 };
 
 use cfx_types::H256;
@@ -67,7 +68,7 @@ lazy_static! {
 pub enum Void {}
 
 /// Generates new keypair.
-pub trait Generator {
+pub trait KeyPairGenerator {
     type Error;
 
     /// Should be called to generate new keypair.

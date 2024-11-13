@@ -254,7 +254,7 @@ pub fn recover(
 #[cfg(test)]
 mod tests {
     use super::{recover, sign, verify_address, verify_public, Signature};
-    use crate::{Generator, Message, Random};
+    use crate::{KeyPairGenerator, Message, Random};
     use std::str::FromStr;
 
     #[test]
