@@ -18,18 +18,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate cfxkey;
-extern crate docopt;
-extern crate env_logger;
-extern crate panic_hook;
-extern crate parity_wordlist;
-extern crate rustc_hex;
-extern crate serde;
-extern crate threadpool;
-
-#[macro_use]
-extern crate serde_derive;
-
 use std::{env, fmt, io, num::ParseIntError, process, sync};
 
 use cfxkey::{
@@ -38,6 +26,7 @@ use cfxkey::{
 };
 use docopt::Docopt;
 use rustc_hex::{FromHex, FromHexError};
+use serde::Deserialize;
 
 const USAGE: &str = r#"
 Conflux keys generator.
