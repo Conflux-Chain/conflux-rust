@@ -15,39 +15,25 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use parity_crypto::error::SymmError;
-use secp256k1;
 use std::io;
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum Error {
-        Secp(e: secp256k1::Error) {
-            display("secp256k1 error: {}", e)
-            cause(e)
-            from()
-        }
-        Io(e: io::Error) {
-            display("i/o error: {}", e)
-            cause(e)
-            from()
-        }
-        InvalidMessage {
-            display("invalid message")
-        }
-        Symm(e: SymmError) {
-            cause(e)
-            from()
-        }
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("secp256k1 error: {0}")]
+    Secp(#[from] secp256k1::Error),
+    #[error("i/o error: {0}")]
+    Io(#[from] io::Error),
+    #[error("invalid message")]
+    InvalidMessage,
+    #[error(transparent)]
+    Symm(#[from] SymmError),
 }
 
 /// ECDH functions
 pub mod ecdh {
     use super::Error;
+    use crate::{Public, Secret, SECP256K1};
     use secp256k1::{self, ecdh, key};
-    use Public;
-    use Secret;
-    use SECP256K1;
 
     /// Agree on a shared secret
     pub fn agree(secret: &Secret, public: &Public) -> Result<Secret, Error> {
@@ -70,12 +56,9 @@ pub mod ecdh {
 /// ECIES function
 pub mod ecies {
     use super::{ecdh, Error};
+    use crate::{KeyPairGenerator, Public, Random, Secret};
     use cfx_types::H128;
     use parity_crypto::{aes, digest, hmac, is_equal};
-    use Generator;
-    use Public;
-    use Random;
-    use Secret;
 
     /// Encrypt a message with a public key, writing an HMAC covering both
     /// the plaintext and authenticated data.
@@ -182,9 +165,9 @@ pub mod ecies {
 
 #[cfg(test)]
 mod tests {
-    use super::ecies;
-    use Generator;
-    use Random;
+    use super::{ecdh, ecies};
+    use crate::{KeyPairGenerator, Public, Random, Secret};
+    use std::str::FromStr;
 
     #[test]
     fn ecies_shared() {
@@ -201,5 +184,26 @@ mod tests {
         let decrypted =
             ecies::decrypt(kp.secret(), shared, &encrypted).unwrap();
         assert_eq!(decrypted[..message.len()], message[..]);
+    }
+
+    #[test]
+    fn ecdh_agree() {
+        /*
+        kp1: KeyPair { secret: 0x3d6c3a910832105febef6f8111b51b11e6cb190fb45b5fc70ee6290c411e9a09, public: 0x057c7d5b963cb4605c3e0c4d5cbefd2a31fb3877e481172d6225a77e0a5964a0112f123aaee2d42f6bec55b396564ffcbd188c799f905253c9394642447063b0 }
+        kp2: KeyPair { secret: 0x6da0008f5531966a9637266fd180ca66e2643920a2d60d4c34350e25f0ccda98, public: 0x4cf74522f3c86d88cd2ba56b378d3fccd4ba3fe93fe4e11ebecc24b06085fc37ee63073aa998693cf2573dc9a437ac0a94d9093054419d23390bad2329ee5eee }
+         */
+        let secret = Secret::from_str(
+            "3d6c3a910832105febef6f8111b51b11e6cb190fb45b5fc70ee6290c411e9a09",
+        )
+        .unwrap();
+        let publ = Public::from_str("4cf74522f3c86d88cd2ba56b378d3fccd4ba3fe93fe4e11ebecc24b06085fc37ee63073aa998693cf2573dc9a437ac0a94d9093054419d23390bad2329ee5eee").unwrap();
+
+        let agree_secret = ecdh::agree(&secret, &publ).unwrap();
+
+        let expected = Secret::from_str(
+            "c6440592fa14256dbbc39639b77524e51bac84b64fa1b1726130a49263f1fb6f",
+        )
+        .unwrap();
+        assert_eq!(agree_secret, expected);
     }
 }

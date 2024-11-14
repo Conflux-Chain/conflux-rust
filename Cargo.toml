@@ -176,6 +176,7 @@ error-chain = { version = "0.12" }
 # parallelism
 parking_lot = "0.11"
 rayon = "1.10"
+threadpool = "1.7"
 
 # alloy & revm
 alloy-sol-types = "0.7.2"
@@ -222,11 +223,12 @@ mio = "0.6.8"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package="tokio", features = ["full"] }
 
-# crypto
+# crypto & hash
 fixed-hash = "0.5"
 keccak-hash = "0.5"
 tiny-keccak = "2.0.2"
 bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore", "blst"] }
+secp256k1 = "0.30.0"
 
 # misc
 clap = "2"
@@ -246,11 +248,14 @@ textwrap = "0.9"
 app_dirs = "1.2.1"
 slab = "0.4"
 tempdir = "0.3"
-threadpool = "1.0"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
 bigdecimal = "0.1.0"
 num-bigint = "0.2.6"
+edit-distance = "2"
+zeroize = "1"
+docopt = "1.0"
+env_logger = "0.5"
 
 # conflux forked crates
 rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "3773afe5b953997188f37c39308105b5deb0faac" }

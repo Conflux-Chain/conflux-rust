@@ -5,74 +5,28 @@
 // Modification based on https://github.com/hlb8122/rust-bitcoincash-addr in MIT License.
 // A copy of the original license is included in LICENSE.rust-bitcoincash-addr.
 
-extern crate cfx_types;
-#[macro_use]
-extern crate lazy_static;
-extern crate rustc_hex;
+#![cfg_attr(not(feature = "std"), no_std)]
 
-#[allow(dead_code)]
-pub mod checksum;
-pub mod consts;
-pub mod errors;
-#[cfg(test)]
-mod tests;
+mod consts;
+mod types;
+mod utils;
+
+pub use consts::*;
+pub use types::*;
+pub use utils::*;
+
+extern crate cfx_types;
+extern crate core;
+extern crate lazy_static;
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+
+#[cfg(not(feature = "std"))]
+use alloc::{string::String, vec::Vec};
 
 use cfx_types::Address;
-use checksum::polymod;
-pub use consts::{AddressType, Network};
-pub use errors::DecodingError;
-use errors::*;
 
-const BASE32_CHARS: &str = "abcdefghijklmnopqrstuvwxyz0123456789";
-const EXCLUDE_CHARS: [char; 4] = ['o', 'i', 'l', 'q'];
-lazy_static! {
-    // Regular expression for application to match string. This regex isn't strict,
-    // because our SDK will.
-    // "(?i)[:=_-0123456789abcdefghijklmnopqrstuvwxyz]*"
-    static ref REGEXP: String = format!{"(?i)[:=_-{}]*", BASE32_CHARS};
-
-    // For encoding.
-    static ref CHARSET: Vec<u8> =
-        // Remove EXCLUDE_CHARS from charset.
-        BASE32_CHARS.replace(&EXCLUDE_CHARS[..], "").into_bytes();
-
-    // For decoding.
-    static ref CHAR_INDEX: [Option<u8>; 128] = (|| {
-        let mut index = [None; 128];
-        assert_eq!(CHARSET.len(), consts::CHARSET_SIZE);
-        for i in 0..consts::CHARSET_SIZE {
-            let c = CHARSET[i] as usize;
-            index[c] = Some(i as u8);
-            // Support uppercase as well.
-            let u = (c as u8 as char).to_ascii_uppercase() as u8 as usize;
-            if u != c {
-                index[u] = Some(i as u8);
-            }
-        }
-        return index;
-    }) ();
-}
-
-/// Struct containing the raw bytes and metadata of a Conflux address.
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct DecodedRawAddress {
-    /// Base32 address. This is included for debugging purposes.
-    pub input_base32_address: String,
-    /// Address bytes
-    pub parsed_address_bytes: Vec<u8>,
-    /// The parsed address in H160 format.
-    pub hex_address: Option<Address>,
-    /// Network
-    pub network: Network,
-}
-
-#[derive(Copy, Clone)]
-pub enum EncodingOptions {
-    Simple,
-    QrCode,
-}
-
-// TODO: verbose level and address type.
 pub fn cfx_addr_encode(
     raw: &[u8], network: Network, encoding_options: EncodingOptions,
 ) -> Result<String, EncodingError> {
@@ -145,7 +99,6 @@ pub fn cfx_addr_encode(
 pub fn cfx_addr_decode(
     addr_str: &str,
 ) -> Result<DecodedRawAddress, DecodingError> {
-    // FIXME: add a unit test for addr_str in capital letters.
     let has_lowercase = addr_str.chars().any(|c| c.is_lowercase());
     let has_uppercase = addr_str.chars().any(|c| c.is_uppercase());
     if has_lowercase && has_uppercase {
@@ -269,138 +222,4 @@ pub fn cfx_addr_decode(
         hex_address,
         network,
     })
-}
-
-/// The checksum calculation includes the lower 5 bits of each character of the
-/// prefix.
-/// - e.g. "bit..." becomes 2,9,20,...
-// Expand the address prefix for the checksum operation.
-fn expand_prefix(prefix: &str) -> Vec<u8> {
-    let mut ret: Vec<u8> = prefix.chars().map(|c| (c as u8) & 0x1f).collect();
-    ret.push(0);
-    ret
-}
-
-// This method assume that data is valid string of inbits.
-// When pad is true, any remaining bits are padded and encoded into a new byte;
-// when pad is false, any remaining bits are checked to be zero and discarded.
-fn convert_bits(
-    data: &[u8], inbits: u8, outbits: u8, pad: bool,
-) -> Result<Vec<u8>, DecodingError> {
-    assert!(inbits <= 8 && outbits <= 8);
-    let num_bytes = (data.len() * inbits as usize + outbits as usize - 1)
-        / outbits as usize;
-    let mut ret = Vec::with_capacity(num_bytes);
-    let mut acc: u16 = 0; // accumulator of bits
-    let mut num: u8 = 0; // num bits in acc
-    let groupmask = (1 << outbits) - 1;
-    for d in data.iter() {
-        // We push each input chunk into a 16-bit accumulator
-        acc = (acc << inbits) | u16::from(*d);
-        num += inbits;
-        // Then we extract all the output groups we can
-        while num >= outbits {
-            // Store only the highest outbits.
-            ret.push((acc >> (num - outbits)) as u8);
-            // Clear the highest outbits.
-            acc &= !(groupmask << (num - outbits));
-            num -= outbits;
-        }
-    }
-    if pad {
-        // If there's some bits left, pad and add it
-        if num > 0 {
-            ret.push((acc << (outbits - num)) as u8);
-        }
-    } else {
-        // FIXME: add unit tests for it.
-        // If there's some bits left, figure out if we need to remove padding
-        // and add it
-        let padding = ((data.len() * inbits as usize) % outbits as usize) as u8;
-        if num >= inbits || acc != 0 {
-            return Err(DecodingError::InvalidPadding {
-                from_bits: inbits,
-                padding_bits: padding,
-                padding: acc,
-            });
-        }
-    }
-    Ok(ret)
-}
-
-#[test]
-fn test_expand_prefix() {
-    assert_eq!(expand_prefix("cfx"), vec![0x03, 0x06, 0x18, 0x00]);
-
-    assert_eq!(
-        expand_prefix("cfxtest"),
-        vec![0x03, 0x06, 0x18, 0x14, 0x05, 0x13, 0x14, 0x00]
-    );
-
-    assert_eq!(
-        expand_prefix("net17"),
-        vec![0x0e, 0x05, 0x14, 0x11, 0x17, 0x00]
-    );
-}
-
-#[test]
-fn test_convert_bits() {
-    // 00000000 --> 0, 0, 0, 0, 0, 0, 0, 0
-    assert_eq!(convert_bits(&[0], 8, 1, false), Ok(vec![0; 8]));
-
-    // 00000000 --> 000, 000, 00_
-    assert_eq!(convert_bits(&[0], 8, 3, false), Ok(vec![0, 0])); // 00_ is dropped
-    assert_eq!(convert_bits(&[0], 8, 3, true), Ok(vec![0, 0, 0])); // 00_ becomes 000
-
-    // 00000001 --> 000, 000, 01_
-    assert!(convert_bits(&[1], 8, 3, false).is_err()); // 01_ != 0 (ignored incomplete chunk must be 0)
-    assert_eq!(convert_bits(&[1], 8, 3, true), Ok(vec![0, 0, 2])); // 01_ becomes 010
-
-    // 00000001 --> 0000000, 1______
-    assert_eq!(convert_bits(&[1], 8, 7, true), Ok(vec![0, 64])); // 1______ becomes 1000000
-
-    // 0, 0, 0, 0, 0, 0, 0, 0 --> 00000000
-    assert_eq!(convert_bits(&[0; 8], 1, 8, false), Ok(vec![0]));
-
-    // 000, 000, 010 -> 00000001, 0_______
-    assert_eq!(convert_bits(&[0, 0, 2], 3, 8, false), Ok(vec![1])); // 0_______ is dropped
-    assert_eq!(convert_bits(&[0, 0, 2], 3, 8, true), Ok(vec![1, 0])); // 0_______ becomes 00000000
-
-    // 000, 000, 011 -> 00000001, 1_______
-    assert!(convert_bits(&[0, 0, 3], 3, 8, false).is_err()); // 1_______ != 0 (ignored incomplete chunk must be 0)
-
-    // 00000000, 00000001, 00000010, 00000011, 00000100 -->
-    // 00000, 00000, 00000, 10000, 00100, 00000, 11000, 00100
-    assert_eq!(
-        convert_bits(&[0, 1, 2, 3, 4], 8, 5, false),
-        Ok(vec![0, 0, 0, 16, 4, 0, 24, 4])
-    );
-
-    // 00000000, 00000001, 00000010 -->
-    // 00000, 00000, 00000, 10000, 0010_
-    assert!(convert_bits(&[0, 1, 2], 8, 5, false).is_err()); // 0010_ != 0 (ignored incomplete chunk must be 0)
-
-    assert_eq!(
-        convert_bits(&[0, 1, 2], 8, 5, true),
-        Ok(vec![0, 0, 0, 16, 4])
-    ); // 0010_ becomes 00100
-
-    // 00000, 00000, 00000, 10000, 00100, 00000, 11000, 00100 -->
-    // 00000000, 00000001, 00000010, 00000011, 00000100
-    assert_eq!(
-        convert_bits(&[0, 0, 0, 16, 4, 0, 24, 4], 5, 8, false),
-        Ok(vec![0, 1, 2, 3, 4])
-    );
-
-    // 00000, 00000, 00000, 10000, 00100 -->
-    // 00000000, 00000001, 00000010, 0_______
-    assert_eq!(
-        convert_bits(&[0, 0, 0, 16, 4], 5, 8, false),
-        Ok(vec![0, 1, 2])
-    ); // 0_______ is dropped
-
-    assert_eq!(
-        convert_bits(&[0, 0, 0, 16, 4], 5, 8, true),
-        Ok(vec![0, 1, 2, 0])
-    ); // 0_______ becomes 00000000
 }

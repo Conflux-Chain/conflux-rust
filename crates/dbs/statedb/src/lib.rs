@@ -19,7 +19,7 @@ mod tests;
 
 pub use self::{
     error::{Error, ErrorKind, Result},
-    impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
+    impls::StateDb as StateDbGeneric,
     statedb_ext::StateDbExt,
 };
 pub use cfx_storage::utils::access_mode;
@@ -35,10 +35,6 @@ mod impls {
     // see `delete_all`
     type AccessedEntries = BTreeMap<Key, EntryValue>;
 
-    // A checkpoint contains the previous values for all keys
-    // modified or deleted since the last checkpoint.
-    type Checkpoint = BTreeMap<Key, Option<Value>>;
-
     // Use generic type for better test-ability.
     pub struct StateDb {
         /// Contains the original storage key values for all loaded and
@@ -48,25 +44,6 @@ mod impls {
         /// The underlying storage, The storage is updated only upon fn
         /// commit().
         storage: Box<dyn StorageStateTrait>,
-
-        /// Checkpoints allow callers to revert un-committed changes.
-        checkpoints: Vec<Checkpoint>,
-    }
-
-    // Note: Not used currently.
-    pub trait StateDbCheckpointMethods {
-        /// Create a new checkpoint. Returns the index of the checkpoint.
-        fn checkpoint(&mut self) -> usize;
-
-        /// Discard checkpoint.
-        /// This means giving up the ability to revert to the latest checkpoint.
-        /// Older checkpoints remain valid.
-        fn discard_checkpoint(&mut self);
-
-        /// Revert to checkpoint.
-        /// Revert all values in `accessed_entries` to their value before
-        /// creating the latest checkpoint.
-        fn revert_to_checkpoint(&mut self);
     }
 
     impl StateDb {
@@ -74,7 +51,6 @@ mod impls {
             StateDb {
                 accessed_entries: Default::default(),
                 storage,
-                checkpoints: Default::default(),
             }
         }
 
@@ -92,14 +68,6 @@ mod impls {
             Self::new(Box::new(
                 InmemoryStorage::from_epoch_id(epoch_id).unwrap(),
             ))
-        }
-
-        /// Set `key` to `value` in latest checkpoint if not set previously.
-        fn update_checkpoint(&mut self, key: &Key, value: Option<Value>) {
-            if let Some(checkpoint) = self.checkpoints.last_mut() {
-                // only insert if key not in checkpoint already
-                checkpoint.entry(key.clone()).or_insert(value);
-            }
         }
 
         #[cfg(test)]
@@ -156,7 +124,7 @@ mod impls {
                 self.accessed_entries.get_mut().entry(key_bytes.clone());
             let value = value.map(Into::into);
 
-            let old_value = match &mut entry {
+            match &mut entry {
                 Occupied(o) => {
                     // set `current_value` to `value` and keep the old value
                     Some(std::mem::replace(
@@ -166,7 +134,7 @@ mod impls {
                 }
 
                 // Vacant
-                _ => {
+                &mut Vacant(_) => {
                     let original_value = self.storage.get(key)?.map(Into::into);
 
                     entry.or_insert(EntryValue::new_modified(
@@ -177,9 +145,6 @@ mod impls {
                     None
                 }
             };
-
-            // store old value in latest checkpoint if not stored yet
-            self.update_checkpoint(&key_bytes, old_value);
 
             Ok(())
         }
@@ -285,14 +250,6 @@ mod impls {
                 }
             }
 
-            // update latest checkpoint if necessary
-            if !AM::READ_ONLY {
-                for (k, v) in &deleted_kvs {
-                    let v: Value = Some(v.clone().into());
-                    self.update_checkpoint(k, Some(v));
-                }
-            }
-
             Ok(deleted_kvs)
         }
 
@@ -312,45 +269,46 @@ mod impls {
             storage: &dyn StorageStateTrait,
             accessed_entries: &AccessedEntries,
         ) -> Result<()> {
-            if !storage_layouts_to_rewrite
+            if storage_layouts_to_rewrite
                 .contains_key(&(address.to_vec(), space))
             {
-                let storage_layout_key =
-                    StorageKey::StorageRootKey(address).with_space(space);
-                let current_storage_layout = match accessed_entries
-                    .get(&storage_layout_key.to_key_bytes())
-                {
-                    Some(entry) => match &entry.current_value {
-                        // We don't rewrite storage layout for account to
-                        // delete.
-                        None => {
-                            if accept_account_deletion {
-                                return Ok(());
-                            } else {
-                                // This is defensive checking, against certain
-                                // cases when we are not deleting the account
-                                // for sure.
-                                bail!(ErrorKind::IncompleteDatabase(
-                                    Address::from_slice(address)
-                                ));
-                            }
-                        }
-                        Some(value_ref) => {
-                            StorageLayout::from_bytes(&*value_ref)?
-                        }
-                    },
-                    None => match storage.get(storage_layout_key)? {
-                        // A new account must set StorageLayout before accessing
-                        // the storage.
-                        None => bail!(ErrorKind::IncompleteDatabase(
-                            Address::from_slice(address)
-                        )),
-                        Some(raw) => StorageLayout::from_bytes(raw.as_ref())?,
-                    },
-                };
-                storage_layouts_to_rewrite
-                    .insert((address.into(), space), current_storage_layout);
+                return Ok(());
             }
+            let storage_layout_key =
+                StorageKey::StorageRootKey(address).with_space(space);
+            let current_storage_layout = match accessed_entries
+                .get(&storage_layout_key.to_key_bytes())
+            {
+                Some(entry) => match &entry.current_value {
+                    // We don't rewrite storage layout for account to
+                    // delete.
+                    None => {
+                        if accept_account_deletion {
+                            return Ok(());
+                        } else {
+                            // This is defensive checking, against certain
+                            // cases when we are not deleting the account
+                            // for sure.
+                            bail!(ErrorKind::IncompleteDatabase(
+                                Address::from_slice(address)
+                            ));
+                        }
+                    }
+
+                    Some(value_ref) => StorageLayout::from_bytes(&*value_ref)?,
+                },
+                None => match storage.get(storage_layout_key)? {
+                    // A new account must set StorageLayout before accessing
+                    // the storage.
+                    None => bail!(ErrorKind::IncompleteDatabase(
+                        Address::from_slice(address)
+                    )),
+                    Some(raw) => StorageLayout::from_bytes(raw.as_ref())?,
+                },
+            };
+            storage_layouts_to_rewrite
+                .insert((address.into(), space), current_storage_layout);
+
             Ok(())
         }
 
@@ -458,7 +416,7 @@ mod impls {
             }
             // Set storage layout for contracts with storage modification or
             // contracts with storage_layout initialization or modification.
-            for ((k, space), v) in &mut storage_layouts_to_rewrite {
+            for ((k, space), v) in &storage_layouts_to_rewrite {
                 self.commit_storage_layout(
                     k,
                     *space,
@@ -487,9 +445,6 @@ mod impls {
             mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<StateRootWithAuxInfo> {
             self.apply_changes_to_storage(debug_record.as_deref_mut())?;
-            if !self.checkpoints.is_empty() {
-                panic!("Active checkpoints during state-db commit");
-            }
 
             let result = match self.storage.get_state_root() {
                 Ok(r) => r,
@@ -499,78 +454,6 @@ mod impls {
             self.storage.commit(epoch_id)?;
 
             Ok(result)
-        }
-    }
-
-    impl StateDbCheckpointMethods for StateDb {
-        fn checkpoint(&mut self) -> usize {
-            trace!("Creating checkpoint #{}", self.checkpoints.len());
-            self.checkpoints.push(BTreeMap::new()); // no values are modified yet
-            self.checkpoints.len() - 1
-        }
-
-        fn discard_checkpoint(&mut self) {
-            // checkpoint `n` (to be discarded)
-            let latest = match self.checkpoints.pop() {
-                Some(checkpoint) => checkpoint,
-                None => {
-                    // TODO: panic?
-                    warn!("Attempt to discard non-existent checkpoint");
-                    return;
-                }
-            };
-
-            trace!("Discarding checkpoint #{}", self.checkpoints.len());
-
-            // checkpoint `n - 1`
-            let previous = match self.checkpoints.last_mut() {
-                Some(checkpoint) => checkpoint,
-                None => return,
-            };
-
-            // insert all keys that have been updated in `n` but not in `n - 1`
-            if previous.is_empty() {
-                *previous = latest;
-            } else {
-                for (k, v) in latest {
-                    previous.entry(k).or_insert(v);
-                }
-            }
-        }
-
-        fn revert_to_checkpoint(&mut self) {
-            let checkpoint = match self.checkpoints.pop() {
-                Some(checkpoint) => checkpoint,
-                None => {
-                    // TODO: panic?
-                    warn!("Attempt to revert to non-existent checkpoint");
-                    return;
-                }
-            };
-
-            trace!("Reverting to checkpoint #{}", self.checkpoints.len());
-
-            // revert all modified keys to their old version
-            for (k, v) in checkpoint {
-                let entry = self.accessed_entries.get_mut().entry(k);
-
-                match (entry, v) {
-                    // prior to the checkpoint `k` was not present
-                    (Occupied(o), None) => {
-                        o.remove();
-                    }
-                    // the value under `k` has been modified after checkpoint
-                    (Occupied(mut o), Some(original_value)) => {
-                        o.get_mut().current_value = original_value;
-                    }
-                    (_, _) => {
-                        // keys are not removed from `accessed_entries` other
-                        // than during revert and commit, so this should not
-                        // happen
-                        panic!("Enountered non-existent key while reverting to checkpoint");
-                    }
-                }
-            }
         }
     }
 
@@ -618,7 +501,10 @@ mod impls {
         EpochId, SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageLayout,
     };
     use std::{
-        collections::{btree_map::Entry::Occupied, BTreeMap},
+        collections::{
+            btree_map::Entry::{Occupied, Vacant},
+            BTreeMap,
+        },
         ops::Bound::{Excluded, Included, Unbounded},
         sync::Arc,
     };

@@ -1113,7 +1113,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cfx-addr"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cfx-types",
  "lazy_static",
@@ -1756,9 +1756,7 @@ name = "cfxkey"
 version = "0.3.0"
 dependencies = [
  "cfx-types",
- "docopt",
  "edit-distance",
- "env_logger",
  "lazy_static",
  "log",
  "malloc_size_of",
@@ -1767,13 +1765,13 @@ dependencies = [
  "parity-crypto",
  "parity-secp256k1",
  "parity-wordlist",
- "quick-error",
  "rand 0.7.3",
  "rustc-hex",
  "serde",
  "serde_derive",
+ "thiserror",
  "threadpool",
- "tiny-keccak 1.5.0",
+ "tiny-keccak 2.0.2",
  "zeroize",
 ]
 
