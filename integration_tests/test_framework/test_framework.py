@@ -3,6 +3,7 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Base class for RPC testing."""
+import pytest
 from integration_tests.conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from integration_tests.conflux.messages import Transactions
 from integration_tests.conflux.rpc import RpcClient
@@ -69,34 +70,11 @@ class ConfluxTestFramework:
     The __init__() and main() methods should not be overridden.
 
     This class also contains various public and private helper methods."""
-
-    def __init__(self):
-        """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
-        self.setup_clean_chain = True
-        self.nodes: list[TestNode] = []
-        self.network_thread = None
-        self.mocktime = 0
-        self.rpc_timewait = CONFLUX_RPC_WAIT_TIMEOUT
-        self.supports_cli = False
-        self.bind_to_localhost_only = True
-        self.conf_parameters = {}
-        self.pos_parameters = {"round_time_ms": 1000}
-        # The key is file name, and the value is a string as file content.
-        self.extra_conf_files = {}
-        self.set_test_params()
-        self.predicates = {}
-        self.snapshot = {}
-
-        assert hasattr(
-            self,
-            "num_nodes"), "Test must set self.num_nodes in set_test_params()"
-
-    def run_test(self):
-        raise NotImplementedError
-
-    def main(self):
-        """Main function. This should not be overridden by the subclass test scripts."""
-
+    
+    num_nodes: int
+    rpc: RpcClient
+    
+    def _get_parser(self) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
         parser.add_argument(
             "--nocleanup",
@@ -181,9 +159,33 @@ class ConfluxTestFramework:
             dest="port_min",
             default=11000,
             type=int)
-        self.add_options(parser)
-        self.options, _ = parser.parse_known_args()
+        return parser
 
+    def __init__(self):
+        """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
+        arg_parser = self._get_parser()
+        self.setup_clean_chain = True
+        self.nodes: list[TestNode] = []
+        self.network_thread = None
+        self.mocktime = 0
+        self.rpc_timewait = CONFLUX_RPC_WAIT_TIMEOUT
+        self.supports_cli = False
+        self.bind_to_localhost_only = True
+        self.conf_parameters = {}
+        self.pos_parameters = {"round_time_ms": 1000}
+        # The key is file name, and the value is a string as file content.
+        self.extra_conf_files = {}
+        self.set_test_params()
+        self.predicates = {}
+        self.snapshot = {}
+
+        assert hasattr(
+            self,
+            "num_nodes"), "Test must set self.num_nodes in set_test_params()"
+
+        self.add_options(arg_parser)
+        self.options, _ = arg_parser.parse_known_args()
+        
         PortMin.n = self.options.port_min
 
         check_json_precision()
@@ -201,40 +203,23 @@ class ConfluxTestFramework:
 
         self._start_logging()
 
-        success = TestStatus.FAILED
-
         if self.options.random_seed is not None:
             random.seed(self.options.random_seed)
 
         self.after_options_parsed()
 
-        try:
-            if self.options.usecli and not self.supports_cli:
-                raise SkipTest(
-                    "--usecli specified but test does not support using CLI")
-            self.setup_chain()
-            self.setup_network()
-            self.before_test()
-            self.run_test()
-            success = TestStatus.PASSED
-        except JSONRPCException as e:
-            self.log.exception("JSONRPC error")
-        except SkipTest as e:
-            self.log.warning("Test Skipped: %s" % e.message)
-            success = TestStatus.SKIPPED
-        except AssertionError as e:
-            self.log.exception("Assertion failed")
-        except KeyError as e:
-            self.log.exception("Key error")
-        except Exception as e:
-            self.log.exception("Unexpected exception caught during testing")
-        except KeyboardInterrupt as e:
-            self.log.warning("Exiting after keyboard interrupt")
+        if self.options.usecli and not self.supports_cli:
+            raise SkipTest(
+                "--usecli specified but test does not support using CLI")
+        self.setup_chain()
+        self.setup_network()
+        self.before_test()
 
-        if success == TestStatus.FAILED and self.options.pdbonfailure:
-            print(
-                "Testcase failed. Attaching python debugger. Enter ? for help")
-            pdb.set_trace()
+    def teardown(self, request: pytest.FixtureRequest):
+        success = TestStatus.PASSED
+        if request.session.testsfailed > 0:
+            success = TestStatus.FAILED
+            self.log.exception(f"{request.session.testsfailed} tests failed")
 
         self.log.debug('Closing down network thread')
         if not self.options.noshutdown:
@@ -257,9 +242,6 @@ class ConfluxTestFramework:
         if success == TestStatus.PASSED:
             self.log.info("Tests successful")
             exit_code = TEST_EXIT_PASSED
-        elif success == TestStatus.SKIPPED:
-            self.log.info("Test skipped")
-            exit_code = TEST_EXIT_SKIPPED
         else:
             self.log.error(
                 "Test failed. Test logging available at %s/test_framework.log",
@@ -268,7 +250,6 @@ class ConfluxTestFramework:
                 os.path.normpath(
                     os.path.dirname(os.path.realpath(__file__)) +
                     "/../combine_logs.py"), self.options.tmpdir))
-            exit_code = TEST_EXIT_FAILED
         handlers = self.log.handlers[:]
         for handler in handlers:
             self.log.removeHandler(handler)
@@ -276,7 +257,6 @@ class ConfluxTestFramework:
         logging.shutdown()
         if cleanup_tree_on_exit:
             shutil.rmtree(self.options.tmpdir)
-        assert success != TestStatus.FAILED, "Test failed"
 
     # Methods to override in subclass test scripts.
     def set_test_params(self):
