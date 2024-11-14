@@ -64,7 +64,6 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         self.log.info("Stopped all other nodes except node 0")
         genesis = self.nodes[0].cfx_getBlockByEpochNumber("0x0", False)["hash"]
         self.nodes[0].add_p2p_connection(P2PInterface(genesis))
-        network_thread_start()
         self.nodes[0].p2p.wait_for_status()
         self.log.info("p2p connection to node 0 connected")
         gas_price = 1
