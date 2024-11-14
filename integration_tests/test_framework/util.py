@@ -555,7 +555,7 @@ PORT_RANGE = 100
 
 class PortMin:
     # Must be initialized with a unique integer for each process
-    n = None
+    n: int = None
 
 
 def get_rpc_proxy(url, node_number, timeout=CONFLUX_RPC_WAIT_TIMEOUT, coveragedir=None):

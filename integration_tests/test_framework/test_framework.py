@@ -154,16 +154,12 @@ class ConfluxTestFramework:
                 os.path.dirname(os.path.realpath(__file__)),
                 "../../target/release/conflux"),
             type=str)
-        parser.add_argument(
-            "--port-min",
-            dest="port_min",
-            default=11000,
-            type=int)
         return parser
 
-    def __init__(self):
+    def __init__(self, port_min: int):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
         arg_parser = self._get_parser()
+        self.port_min = port_min
         self.setup_clean_chain = True
         self.nodes: list[TestNode] = []
         self.network_thread = None
@@ -186,7 +182,7 @@ class ConfluxTestFramework:
         self.add_options(arg_parser)
         self.options, _ = arg_parser.parse_known_args()
         
-        PortMin.n = self.options.port_min
+        PortMin.n = port_min # This line sets the port range for the test nodes
 
         check_json_precision()
 
@@ -438,7 +434,7 @@ class ConfluxTestFramework:
         Useful if a test case wants complete control over initialization."""
 
         for i in range(self.num_nodes):
-            initialize_datadir(self.options.tmpdir, i, self.options.port_min, self.conf_parameters,
+            initialize_datadir(self.options.tmpdir, i, self.port_min, self.conf_parameters,
                                self.extra_conf_files)
             
     def before_test(self):

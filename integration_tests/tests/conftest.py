@@ -4,9 +4,13 @@ import os
 from typing import Type
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
-
+from integration_tests.conflux.rpc import RpcClient
 
 TMP_DIR = None
+
+PORT_MIN = 11000
+PORT_MAX = 65535
+PORT_RANGE = 100
 
 @pytest.fixture(scope="session")
 def arg_parser():
@@ -100,7 +104,7 @@ def arg_parser():
 def framework_class() -> Type[ConfluxTestFramework]:
     class DefaultFramework(ConfluxTestFramework):
         def set_test_params(self):
-            self.num_nodes = 2
+            self.num_nodes = 1
             self.conf_parameters = {
                 "executive_trace": "true",
                 "public_rpc_apis": "\"cfx,debug,test,pubsub,trace\"",
@@ -109,13 +113,20 @@ def framework_class() -> Type[ConfluxTestFramework]:
             }
         def setup_network(self):
             self.setup_nodes()
+            self.rpc = RpcClient(self.nodes[0])
     return DefaultFramework
 
 @pytest.fixture(scope="module")
-def network(framework_class: Type[ConfluxTestFramework], request: pytest.FixtureRequest):
+def network(framework_class: Type[ConfluxTestFramework], port_min: int, request: pytest.FixtureRequest):
     try:
-        framework = framework_class()
+        framework = framework_class(port_min)
     except Exception as e:
         pytest.fail(f"Failed to setup framework: {e}")
     yield framework
     framework.teardown(request)
+    
+@pytest.fixture(scope="module")
+def port_min(worker_id: str) -> int:
+    # worker_id is "master" or "gw0", "gw1", etc.
+    index = int(worker_id.split("gw")[1]) if "gw" in worker_id else 0
+    return PORT_MIN + index * PORT_RANGE
