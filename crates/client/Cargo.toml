@@ -57,7 +57,7 @@ rand_08 = {package = "rand", version = "0.8.0"}
 kvdb-rocksdb = { workspace = true }
 tempdir = "0.3"
 rustc-hex = { workspace = true }
-threadpool = "1.0"
+threadpool = { workspace = true }
 metrics = { workspace = true }
 delegate = { workspace = true }
 transient-hashmap = "0.4"

@@ -160,9 +160,7 @@ impl Block {
         // get the block.gas_used
         let tx_len = b.transactions.len();
 
-        let (gas_used, transactions) = if tx_len == 0 {
-            (Some(U256::from(0)), BlockTransactions::Hashes(vec![]))
-        } else {
+        let (gas_used, transactions) = {
             let maybe_results = consensus_inner
                 .block_execution_results_by_hash(
                     &b.hash(),
