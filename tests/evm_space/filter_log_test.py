@@ -75,10 +75,10 @@ class FilterLogTest(Web3Base):
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f"http://{ip}:{port}/"))
-        assert_equal(self.w3.isConnected(), True)
+        assert_equal(self.w3.is_connected(), True)
 
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(
+        self.evmAccount = self.w3.eth.account.from_key(
             DEFAULT_TEST_ACCOUNT_KEY
         )
         print(f"Using EVM account {self.evmAccount.address}")
@@ -175,9 +175,9 @@ class FilterLogTest(Web3Base):
         asyncio.get_event_loop().run_until_complete(self.run_async())
 
     def deploy_evm_space(self, data_hex):
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
 
-        signed = self.evmAccount.signTransaction(
+        signed = self.evmAccount.sign_transaction(
             {
                 "to": None,
                 "value": 0,
@@ -190,19 +190,19 @@ class FilterLogTest(Web3Base):
         )
 
         tx_hash = signed["hash"]
-        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         assert_equal(tx_hash, return_tx_hash)
 
         self.rpc[FULLNODE0].generate_block(1)
         self.rpc[FULLNODE0].generate_blocks(20, 1)
-        receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         assert_equal(receipt["status"], 1)
         addr = receipt["contractAddress"]
         return receipt, addr
 
     def call_contract(self, contract, data_hex):
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
-        signed = self.evmAccount.signTransaction(
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
+        signed = self.evmAccount.sign_transaction(
             {
                 "to": contract,
                 "value": 0,
@@ -214,7 +214,7 @@ class FilterLogTest(Web3Base):
             }
         )
 
-        tx = self.w3.eth.sendRawTransaction(signed["rawTransaction"]).hex()
+        tx = self.w3.eth.send_raw_transaction(signed["raw_transaction"]).hex()
         time_end = time.time() + 10
         while time.time() < time_end:
             self.rpc[FULLNODE0].generate_block(1)

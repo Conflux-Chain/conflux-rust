@@ -47,7 +47,7 @@ class EvmFullHistoryStateTest(ConfluxTestFramework):
         self.nodes[0].eth_call({"to": "0x0000000000000000000000000000000000000000", "data": "0x00"}, "0x33")
         assert_raises_rpc_error(None, None, self.nodes[0].eth_call, {"to": "0x0000000000000000000000000000000000000000", "data": "0x00"}, "0x31")
 
-        evm_genesis_account = Web3().eth.account.privateKeyToAccount(default_config["GENESIS_PRI_KEY"]).address
+        evm_genesis_account = Web3().eth.account.from_key(default_config["GENESIS_PRI_KEY"]).address
         # value = default_config["TOTAL_COIN"]
         value = 10 ** 18
         self.cross_space_transfer(evm_genesis_account, value)

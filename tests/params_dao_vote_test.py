@@ -295,7 +295,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(2_000_000 * 10 ** 18, int(client.call("0x0888000000000000000000000000000000000007", eth_utils.encode_hex(data)), 0))
         data = get_contract_function_data(params_control_contract, "totalVotes", args=[round])
         total = client.call("0x0888000000000000000000000000000000000007", eth_utils.encode_hex(data))
-        data = get_contract_function_data(params_control_contract, "readVote", args=[Web3.toChecksumAddress(client.GENESIS_ADDR)])
+        data = get_contract_function_data(params_control_contract, "readVote", args=[Web3.to_checksum_address(client.GENESIS_ADDR)])
         vote = client.call("0x0888000000000000000000000000000000000007", eth_utils.encode_hex(data))
         assert_equal(total, vote)
 

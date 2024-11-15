@@ -6,15 +6,16 @@ from dataclasses import dataclass
 from typing import Literal, Dict
 import types
 
+from eth_utils.abi import get_abi_output_types
 from web3 import Web3
-from web3.contract import ContractFunction, Contract, ContractConstructor, get_abi_output_types
+from web3.contract.contract import ContractFunction, Contract, ContractConstructor
 from conflux.address import b32_address_to_hex
 from conflux.config import default_config
 from conflux.utils import priv_to_addr
 from test_framework.blocktools import encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework, RpcClient, start_p2p_connection
 from test_framework.util import *
-from eth_utils import decode_hex
+from eth_utils.hexadecimal import decode_hex
 
 
 BASE = int(1e18)
@@ -62,7 +63,7 @@ def cfx_internal_contract(name: InternalContractName, framework: ConfluxTestFram
 def _add_address(self: Contract, address: str) -> Contract:
     w3 = Web3()
     new_contract = w3.eth.contract(
-        abi=self.abi, bytecode=self.bytecode, address=Web3.toChecksumAddress(address))
+        abi=self.abi, bytecode=self.bytecode, address=Web3.to_checksum_address(address))
 
     new_contract.framework = self.framework
     _enact_contract(new_contract)
@@ -179,7 +180,7 @@ def _cfx_call(self: ContractFunction, framework=None, sender=None, raw_output=Fa
 
     if not raw_output:
         output_types = get_abi_output_types(self.abi)
-        ans = self.web3.codec.decode_abi(output_types, decode_hex(result))
+        ans = self.w3.codec.decode(output_types, decode_hex(result))
         if len(ans) == 0:
             return
         elif len(ans) == 1:
@@ -232,9 +233,9 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         self.deploy_create2()
 
         self.genesis_key = default_config["GENESIS_PRI_KEY"]
-        self.genesis_addr = Web3.toChecksumAddress(encode_hex_0x(priv_to_addr(self.genesis_key)))
+        self.genesis_addr = Web3.to_checksum_address(encode_hex_0x(priv_to_addr(self.genesis_key)))
         self.genesis_key2 = default_config["GENESIS_PRI_KEY_2"]
-        self.genesis_addr2 = Web3.toChecksumAddress(encode_hex_0x(priv_to_addr(self.genesis_key2)))
+        self.genesis_addr2 = Web3.to_checksum_address(encode_hex_0x(priv_to_addr(self.genesis_key2)))
 
     def cfx_contract(self, name):
         return cfx_contract(name, self)
