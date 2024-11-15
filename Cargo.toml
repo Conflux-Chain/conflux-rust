@@ -256,6 +256,8 @@ edit-distance = "2"
 zeroize = "1"
 docopt = "1.0"
 env_logger = "0.5"
+vergen = "7.0.0"
+target_info = "0.1"
 
 # conflux forked crates
 rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "3773afe5b953997188f37c39308105b5deb0faac" }

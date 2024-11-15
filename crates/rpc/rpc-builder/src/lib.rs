@@ -30,7 +30,7 @@ use jsonrpsee::{
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    // time::{Duration, SystemTime, UNIX_EPOCH},
+    /* time::{Duration, SystemTime, UNIX_EPOCH}, */
 };
 pub use tower::layer::util::{Identity, Stack};
 // use tower::Layer;
@@ -129,7 +129,7 @@ impl RpcRegistryInner {
 }
 
 impl RpcRegistryInner {
-    pub fn web3_api(&self) -> Web3Api<()> { Web3Api::new(()) }
+    pub fn web3_api(&self) -> Web3Api { Web3Api }
 
     pub fn register_web3(&mut self) -> &mut Self {
         let web3api = self.web3_api();
@@ -173,51 +173,47 @@ impl RpcRegistryInner {
         &mut self, namespaces: impl Iterator<Item = EthRpcModule>,
     ) -> Vec<Methods> {
         let namespaces: Vec<_> = namespaces.collect();
+        let module_version = namespaces
+            .iter()
+            .map(|module| (module.to_string(), "1.0".to_string()))
+            .collect::<HashMap<String, String>>();
+
+        let namespace_methods = |namespace| {
+            self.modules
+                .entry(namespace)
+                .or_insert_with(|| match namespace {
+                    EthRpcModule::Debug => DebugApi::new(
+                        self.consensus.clone(),
+                        self.config.max_estimation_gas_limit,
+                    )
+                    .into_rpc()
+                    .into(),
+                    EthRpcModule::Eth => EthApi::new(
+                        self.config.clone(),
+                        self.consensus.clone(),
+                        self.sync.clone(),
+                        self.tx_pool.clone(),
+                    )
+                    .into_rpc()
+                    .into(),
+                    EthRpcModule::Net => {
+                        NetApi::new(ChainInfo::new(self.consensus.clone()))
+                            .into_rpc()
+                            .into()
+                    }
+                    EthRpcModule::Trace => TraceApi::new().into_rpc().into(),
+                    EthRpcModule::Web3 => Web3Api.into_rpc().into(),
+                    EthRpcModule::Rpc => {
+                        RPCApi::new(module_version.clone()).into_rpc().into()
+                    }
+                })
+                .clone()
+        };
+
         namespaces
             .iter()
             .copied()
-            .map(|namespace| {
-                self.modules
-                    .entry(namespace)
-                    .or_insert_with(|| match namespace {
-                        EthRpcModule::Debug => DebugApi::new(
-                            self.consensus.clone(),
-                            self.config.max_estimation_gas_limit,
-                        )
-                        .into_rpc()
-                        .into(),
-                        EthRpcModule::Eth => EthApi::new(
-                            self.config.clone(),
-                            self.consensus.clone(),
-                            self.sync.clone(),
-                            self.tx_pool.clone(),
-                        )
-                        .into_rpc()
-                        .into(),
-                        EthRpcModule::Net => {
-                            NetApi::new(ChainInfo::new(self.consensus.clone()))
-                                .into_rpc()
-                                .into()
-                        }
-                        EthRpcModule::Trace => {
-                            TraceApi::new().into_rpc().into()
-                        }
-                        EthRpcModule::Web3 => {
-                            Web3Api::new(()).into_rpc().into()
-                        }
-                        EthRpcModule::Rpc => RPCApi::new(
-                            namespaces
-                                .iter()
-                                .map(|module| {
-                                    (module.to_string(), "1.0".to_string())
-                                })
-                                .collect(),
-                        )
-                        .into_rpc()
-                        .into(),
-                    })
-                    .clone()
-            })
+            .map(namespace_methods)
             .collect::<Vec<_>>()
     }
 }

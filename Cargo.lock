@@ -1375,7 +1375,6 @@ dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
  "cfx-vm-types",
- "clap",
  "error-chain",
  "jsonrpc-core 15.1.0",
  "log",

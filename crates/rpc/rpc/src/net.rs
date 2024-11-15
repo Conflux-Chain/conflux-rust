@@ -3,16 +3,16 @@ use cfx_rpc_eth_api::NetApiServer;
 use cfx_types::U64;
 use jsonrpsee::core::RpcResult;
 
-pub struct NetApi<ChainMeta> {
-    chain_meta: ChainMeta,
+pub struct NetApi<T> {
+    chain_meta: T,
 }
 
-impl<ChainMeta> NetApi<ChainMeta> {
-    pub fn new(chain_meta: ChainMeta) -> Self { Self { chain_meta } }
+impl<T> NetApi<T> {
+    pub fn new(chain_meta: T) -> Self { Self { chain_meta } }
 }
 
-impl<ChainMeta> NetApiServer for NetApi<ChainMeta>
-where ChainMeta: ChainMetaProvider + Send + Sync + 'static
+impl<T> NetApiServer for NetApi<T>
+where T: ChainMetaProvider + Send + Sync + 'static
 {
     fn version(&self) -> RpcResult<String> {
         Ok(self.chain_meta.chain_id().to_string())

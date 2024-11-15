@@ -189,7 +189,6 @@ impl fmt::Display for RpcModuleSelection {
     }
 }
 
-/// Represents RPC modules that are supported by reth
 #[derive(
     Debug,
     Clone,
@@ -224,8 +223,6 @@ pub enum EthRpcModule {
     /// `rpc_` module
     Rpc,
 }
-
-// === impl EthRpcModule ===
 
 impl EthRpcModule {
     /// Returns the number of variants in the enum

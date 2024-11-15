@@ -27,4 +27,3 @@ error-chain = { workspace = true }
 log = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 parity-version = { workspace = true }
-clap = { workspace = true }

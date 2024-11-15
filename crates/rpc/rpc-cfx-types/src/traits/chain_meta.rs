@@ -1,25 +1,13 @@
-use clap::crate_version;
+use crate::ChainStaticMeta;
 
-pub trait ChainStaticMetaProvider {
-    /// Returns the current chain name.
-    fn chain_name(&self) -> String { "ConfluxNetwork".to_string() }
-
-    /// Returns the current chain protocol version.
-    fn protocol_version(&self) -> u64 { 65 }
-
-    fn client_version(&self) -> String {
-        parity_version::version(crate_version!())
-    }
-}
-
-impl<T> ChainStaticMetaProvider for T {}
-
-pub trait ChainMetaProvider: ChainStaticMetaProvider {
+pub trait ChainMetaProvider {
     /// Returns the current chain id.
     fn chain_id(&self) -> u32;
 
     /// Returns the current chain network id.
     fn network_id(&self) -> u32 { self.chain_id() }
+
+    fn meta() -> ChainStaticMeta { ChainStaticMeta }
 
     // /// Returns the current chain genesis hash.
     // fn genesis_hash(&self) -> String;
