@@ -32,8 +32,14 @@ pub mod brain_recover;
 pub mod crypto;
 pub mod math;
 
+use cfx_types::H256;
 use lazy_static::lazy_static;
+use secp256k1::SecretKey;
+
+pub use cfx_types::{Address, Public};
 pub use parity_wordlist::Error as WordlistError;
+pub type Message = H256;
+pub use secp256k1::global::SECP256K1;
 
 pub use self::{
     brain::Brain,
@@ -53,14 +59,32 @@ pub use self::{
     KeyPairGenerator as Generator,
 };
 
-use cfx_types::H256;
-
-pub use cfx_types::{Address, Public};
-pub type Message = H256;
-
 lazy_static! {
-    pub static ref SECP256K1: secp256k1::Secp256k1 =
-        secp256k1::Secp256k1::new();
+
+    /// The number 0 encoded as a secret key
+    pub static ref ZERO_KEY: SecretKey = SecretKey::from_slice(&[
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0
+    ]).expect("should success");
+
+    /// The number 1 encoded as a secret key
+    pub static ref ONE_KEY: SecretKey = SecretKey::from_slice(&[
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 1
+    ]).expect("should success");
+
+    /// The number -1 encoded as a secret key
+    pub static ref MINUS_ONE_KEY: SecretKey = SecretKey::from_slice(&[
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
+        0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b,
+        0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x40
+    ]).expect("should success");
+
 }
 
 /// Uninstantiatable error type for infallible generators.

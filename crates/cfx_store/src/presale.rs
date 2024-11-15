@@ -20,7 +20,6 @@ use crypto::{
     publickey::{Address, KeyPair, Secret},
     Keccak256,
 };
-// use cfxkey::Secret;
 use json;
 use std::{fs, num::NonZeroU32, path::Path};
 use Error;

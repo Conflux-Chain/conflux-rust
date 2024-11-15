@@ -19,7 +19,7 @@ use std::{collections::HashSet, fs, path::Path};
 use accounts_dir::{
     DiskKeyFileManager, KeyDirectory, KeyFileManager, RootDiskDirectory,
 };
-use cfxkey::Address;
+use cfx_types::Address;
 use dir;
 use Error;
 
