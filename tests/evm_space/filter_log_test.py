@@ -172,7 +172,7 @@ class FilterLogTest(Web3Base):
         assert_equal(len(logs2), 2 * NUM_CALLS + 2)
 
     def run_test(self):
-        asyncio.get_event_loop().run_until_complete(self.run_async())
+        asyncio.run(self.run_async())
 
     def deploy_evm_space(self, data_hex):
         nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)

@@ -46,7 +46,7 @@ class EthWsTest(Web3Base):
         self.log.info("Pass")
 
     def run_test(self):
-        asyncio.get_event_loop().run_until_complete(self.test_ws())
+        asyncio.run(self.test_ws())
 
 if __name__ == "__main__":
     EthWsTest().main()
