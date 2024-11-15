@@ -142,7 +142,7 @@ impl Provider {
             None => {
                 // NOTE: this should not happen as we register
                 // all peers in `on_peer_connected`
-                bail!(ErrorKind::InternalError(format!(
+                bail!(Error::InternalError(format!(
                     "Received message from unknown peer={:?}",
                     peer
                 )))
@@ -164,7 +164,7 @@ impl Provider {
             && !state.read().handshake_completed
         {
             warn!("Received msg={:?} from handshaking peer={:?}", msg_id, peer);
-            bail!(ErrorKind::UnexpectedMessage {
+            bail!(Error::UnexpectedMessage {
                 expected: vec![
                     msgid::STATUS_PING_DEPRECATED,
                     msgid::STATUS_PING_V2
@@ -200,7 +200,7 @@ impl Provider {
             msgid::GET_BLOCK_TXS => self.on_get_block_txs(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_TX_INFOS => self.on_get_tx_infos(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
             msgid::GET_STORAGE_ROOTS => self.on_get_storage_roots(io, peer, decode_rlp_and_check_deprecation(&rlp, min_supported_ver, protocol)?),
-            _ => bail!(ErrorKind::UnknownMessage{id: msg_id}),
+            _ => bail!(Error::UnknownMessage{id: msg_id}),
         }
     }
 
@@ -228,7 +228,7 @@ impl Provider {
         let (tx, tx_index, receipt) =
             match self.consensus.get_transaction_info_by_hash(&hash) {
                 None => {
-                    bail!(ErrorKind::UnableToProduceTxInfo {
+                    bail!(Error::UnableToProduceTxInfo {
                         reason: format!("Unable to get tx info for {:?}", hash)
                     });
                 }
@@ -239,7 +239,7 @@ impl Provider {
                         ..
                     },
                 )) => {
-                    bail!(ErrorKind::UnableToProduceTxInfo {
+                    bail!(Error::UnableToProduceTxInfo {
                         reason: format!("Unable to get receipt for {:?}", hash)
                     });
                 }
@@ -253,7 +253,7 @@ impl Provider {
                         ..
                     },
                 )) => {
-                    bail!(ErrorKind::UnableToProduceTxInfo {
+                    bail!(Error::UnableToProduceTxInfo {
                         reason: format!(
                             "Phantom tx not supported (hash: {:?})",
                             hash
@@ -284,7 +284,7 @@ impl Provider {
         let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
             Some(epoch) => epoch,
             None => {
-                bail!(ErrorKind::UnableToProduceTxInfo {
+                bail!(Error::UnableToProduceTxInfo {
                     reason: format!(
                         "Unable to get epoch number for block {:?}",
                         block_hash
@@ -296,7 +296,7 @@ impl Provider {
         let epoch_hashes = match self.ledger.block_hashes_in(epoch) {
             Ok(hs) => hs,
             Err(e) => {
-                bail!(ErrorKind::UnableToProduceTxInfo {
+                bail!(Error::UnableToProduceTxInfo {
                     reason: format!(
                         "Unable to find epoch hashes for {}: {}",
                         epoch, e
@@ -311,7 +311,7 @@ impl Provider {
             match epoch_hashes.iter().position(|h| *h == block_hash) {
                 Some(id) => id,
                 None => {
-                    bail!(ErrorKind::UnableToProduceTxInfo {
+                    bail!(Error::UnableToProduceTxInfo {
                         reason: format!(
                             "Unable to find {:?} in epoch {}",
                             block_hash, epoch
@@ -411,7 +411,7 @@ impl Provider {
     fn validate_peer_type(&self, node_type: NodeType) -> Result<()> {
         match node_type {
             NodeType::Light => Ok(()),
-            _ => bail!(ErrorKind::UnexpectedPeerType { node_type }),
+            _ => bail!(Error::UnexpectedPeerType { node_type }),
         }
     }
 
@@ -421,7 +421,7 @@ impl Provider {
         let theirs = genesis;
 
         if ours != theirs {
-            bail!(ErrorKind::GenesisMismatch { ours, theirs });
+            bail!(Error::GenesisMismatch { ours, theirs });
         }
 
         Ok(())
@@ -447,7 +447,10 @@ impl Provider {
         )?;
 
         self.send_status(io, peer)
-            .chain_err(|| ErrorKind::SendStatusFailed { peer: *peer })?;
+            .map_err(|e| Error::SendStatusFailed {
+                peer: *peer,
+                source: Some(Box::new(e)),
+            })?;
 
         let state = self.get_existing_peer_state(peer)?;
         let mut state = state.write();
@@ -615,8 +618,7 @@ impl Provider {
                     .block_header_by_hash(&h)
                     .map(|header_arc| header_arc.as_ref().clone())
                     .ok_or_else(|| {
-                        ErrorKind::Msg(format!("Block {:?} not found", h))
-                            .into()
+                        Error::Msg(format!("Block {:?} not found", h)).into()
                     })
             });
 
@@ -664,7 +666,7 @@ impl Provider {
             }
             _ => {
                 // NOTE: this should not happen
-                bail!(ErrorKind::InternalError(format!(
+                bail!(Error::InternalError(format!(
                     "insert_new_transactions failed: {:?}, {:?}",
                     passed, failed
                 )))
@@ -716,7 +718,7 @@ impl Provider {
             .take(MAX_TXS_TO_SEND)
             .map::<Result<_>, _>(|h| {
                 self.tx_by_hash(h).ok_or_else(|| {
-                    ErrorKind::Msg(format!("Tx {:?} not found", h)).into()
+                    Error::Msg(format!("Tx {:?} not found", h)).into()
                 })
             });
 
@@ -948,7 +950,7 @@ impl Provider {
         let network = match self.network.upgrade() {
             Some(network) => network,
             None => {
-                bail!(ErrorKind::InternalError(
+                bail!(Error::InternalError(
                     "Network unavailable, not relaying hashes".to_owned()
                 ));
             }
@@ -987,10 +989,10 @@ impl Provider {
                     request_id: msg.get_request_id(),
                 };
 
-                bail!(ErrorKind::Throttled(msg.msg_name(), throttled))
+                bail!(Error::Throttled(msg.msg_name(), throttled))
             }
             ThrottleResult::AlreadyThrottled => {
-                bail!(ErrorKind::AlreadyThrottled(msg.msg_name()))
+                bail!(Error::AlreadyThrottled(msg.msg_name()))
             }
         }
     }
@@ -1033,7 +1035,7 @@ impl NetworkProtocolHandler for Provider {
                     io,
                     peer,
                     msgid::INVALID,
-                    &ErrorKind::InvalidMessageFormat.into(),
+                    &Error::InvalidMessageFormat.into(),
                 )
             }
         };

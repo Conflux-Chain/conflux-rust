@@ -9,8 +9,8 @@ use crate::{
         common::{FullPeerFilter, LedgerInfo},
         handler::sync::TxInfoValidated,
         message::msgid,
-        Error as LightError, ErrorKind, Handler as LightHandler,
-        LightNodeConfiguration, LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
+        Error as LightError, Handler as LightHandler, LightNodeConfiguration,
+        LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     sync::SynchronizationGraph,
     ConsensusGraph, Notifications,
@@ -77,7 +77,7 @@ async fn with_timeout<T>(
     // set error message
     with_timeout
         .await
-        .map_err(|_| LightError::from(ErrorKind::Timeout(msg)))?
+        .map_err(|_| LightError::from(LightError::Timeout(msg)))?
 }
 
 pub struct QueryService {
@@ -324,7 +324,7 @@ impl QueryService {
                     // `retrieve_block` will only return None if we do not have
                     // the corresponding header, which should not happen in this
                     // case.
-                    bail!(ErrorKind::InternalError(format!(
+                    bail!(LightError::InternalError(format!(
                         "Block {:?} not found during gas price sampling",
                         hash
                     )));
