@@ -18,6 +18,7 @@ use super::{Error, Public, Secret, SECP256K1};
 use cfx_types::{BigEndianHash as _, H256, U256};
 use secp256k1::{
     constants::{CURVE_ORDER, GENERATOR_X, GENERATOR_Y},
+    ffi::{CPtr, PublicKey as FfiPublicKey},
     PublicKey, Scalar,
 };
 
@@ -31,17 +32,14 @@ pub fn public_is_valid(public: &Public) -> bool {
 // The only invalid pubkey the API should be able to create is
 // the zero one.
 fn is_valid_pubkey(publ: &PublicKey) -> bool {
-    let zero = PublicKey::from_slice(&[0u8; 65]).unwrap(); // TODO: make sure zero is initialized correctly
-    publ != &zero
-
-    // let ptr: *const FfiPublicKey = publ.as_c_ptr();
-    // unsafe {
-    //     if let Some(val_back) = ptr.as_ref() {
-    //         val_back.underlying_bytes().iter().any(|&x| x != 0)
-    //     } else {
-    //         false
-    //     }
-    // }
+    let ptr: *const FfiPublicKey = publ.as_c_ptr();
+    unsafe {
+        if let Some(val_back) = ptr.as_ref() {
+            val_back.underlying_bytes().iter().any(|&x| x != 0)
+        } else {
+            false
+        }
+    }
 }
 
 /// Inplace multiply public key by secret key (EC point * scalar)
