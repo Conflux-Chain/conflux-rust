@@ -77,7 +77,7 @@ class SmartContractBenchBase(ConfluxTestFramework):
             attributes['to'] = contract_addr
         else:
             attributes['receiver'] = b''
-        tx_data = func(*args).buildTransaction(attributes)
+        tx_data = func(*args).build_transaction(attributes)
         tx_data['data'] = decode_hex(tx_data['data'])
         tx_data['pri_key'] = sender_key
         tx_data['gas_price'] = tx_data['gasPrice']

@@ -10,7 +10,7 @@ from test_framework.contracts import ConfluxTestFrameworkForContract, Account
 SNAPSHOT_EPOCH = 60
 
 def temp_address(number: int):
-    return Web3.toChecksumAddress("{:#042x}".format(number + 100))
+    return Web3.to_checksum_address("{:#042x}".format(number + 100))
 
 
 class ContractRemoveTest(ConfluxTestFrameworkForContract):

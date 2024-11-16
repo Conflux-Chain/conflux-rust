@@ -220,7 +220,7 @@ impl BlockTxs {
         let received = compute_transaction_root(&txs);
 
         if received != expected {
-            bail!(ErrorKind::InvalidTxRoot {
+            bail!(Error::InvalidTxRoot {
                 hash,
                 expected,
                 received,

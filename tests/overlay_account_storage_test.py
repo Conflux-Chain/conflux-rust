@@ -1,7 +1,4 @@
-from web3 import Web3
-from web3.contract import ContractFunction, Contract
-
-from conflux.rpc import RpcClient
+from web3.contract.contract import ContractFunction, Contract
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *

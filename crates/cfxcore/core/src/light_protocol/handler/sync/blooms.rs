@@ -208,7 +208,7 @@ impl Blooms {
 
         // check
         if received != expected {
-            bail!(ErrorKind::InvalidBloom {
+            bail!(Error::InvalidBloom {
                 epoch,
                 expected,
                 received,

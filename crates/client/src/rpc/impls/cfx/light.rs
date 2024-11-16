@@ -9,9 +9,7 @@ use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::ConsensusConfig,
     errors::account_result_to_rpc_result,
-    light_protocol::{
-        self, query_service::TxInfo, Error as LightError, ErrorKind,
-    },
+    light_protocol::{self, query_service::TxInfo, Error as LightError},
     verification::EpochReceiptProof,
     ConsensusGraph, ConsensusGraphTrait, LightQueryService, PeerInfo,
     SharedConsensusGraph,
@@ -516,7 +514,7 @@ impl RpcImpl {
 
         match /* success = */ light.send_raw_tx(raw) {
             true => Ok(tx.hash().into()),
-            false => bail!(LightProtocol(light_protocol::ErrorKind::InternalError("Unable to relay tx".into()).into())),
+            false => bail!(LightProtocol(light_protocol::Error::InternalError("Unable to relay tx".into()).into())),
         }
     }
 
@@ -688,8 +686,8 @@ impl RpcImpl {
             // return `null` on timeout
             let tx_info = match light.get_tx_info(hash).await {
                 Ok(t) => t,
-                Err(LightError(ErrorKind::Timeout(_), _)) => return Ok(None),
-                Err(LightError(e, _)) => {
+                Err(LightError::Timeout(_)) => return Ok(None),
+                Err(e) => {
                     bail!(RpcError::invalid_params(e.to_string()))
                 }
             };
