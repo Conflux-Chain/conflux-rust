@@ -405,7 +405,7 @@ where ValueType::Type: SqlBindableValue
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (maybe_connections, statements) = self.destructure_mut();
         match maybe_connections {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(connections) => KvdbSqliteBorrowMut::<ValueType>::new((
                 connections.get_mut(key_to_shard_id(key, connections.len())),
                 statements,
@@ -419,7 +419,7 @@ where ValueType::Type: SqlBindableValue
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (maybe_connections, statements) = self.destructure_mut();
         match maybe_connections {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(connections) => KvdbSqliteBorrowMut::new((
                 connections
                     .get_mut(number_key_to_shard_id(key, connections.len())),
@@ -434,7 +434,7 @@ where ValueType::Type: SqlBindableValue
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (maybe_connections, statements) = self.destructure_mut();
         match maybe_connections {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(connections) => KvdbSqliteBorrowMut::<ValueType>::new((
                 connections.get_mut(key_to_shard_id(key, connections.len())),
                 statements,
@@ -448,7 +448,7 @@ where ValueType::Type: SqlBindableValue
     ) -> Result<Option<Option<Self::ValueType>>> {
         let (maybe_connections, statements) = self.destructure_mut();
         match maybe_connections {
-            None => Err(Error::from(ErrorKind::DbNotExist)),
+            None => Err(Error::from(Error::DbNotExist)),
             Some(connections) => KvdbSqliteBorrowMut::new((
                 connections
                     .get_mut(number_key_to_shard_id(key, connections.len())),
@@ -902,7 +902,7 @@ where ValueType::Type: SqlBindableValue
         &self, immediate_write: bool,
     ) -> Result<KvdbSqliteShardedTransaction<ValueType>> {
         if self.shards_connections.is_none() {
-            bail!(ErrorKind::DbNotExist);
+            bail!(Error::DbNotExist);
         }
 
         KvdbSqliteShardedTransaction::new(self.try_clone()?, immediate_write)

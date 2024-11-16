@@ -245,10 +245,10 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn check_value_size(value: &[u8]) -> Result<()> {
         let value_size = value.len();
         if ValueSizeFieldConverter::is_size_over_limit(value_size) {
-            return Err(Error::from_kind(ErrorKind::MPTInvalidValueLength(
-                value_size,
-                ValueSizeFieldConverter::max_size(),
-            )));
+            return Err(Error::MPTInvalidValueLength {
+                length: value_size,
+                length_limit: ValueSizeFieldConverter::max_size(),
+            });
         }
         // We may use empty value to represent special state, such as tombstone.
         // Therefore We don't check for emptiness.
@@ -259,16 +259,16 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
     pub fn check_key_size(access_key: &[u8]) -> Result<()> {
         let key_size = access_key.len();
         if TrivialSizeFieldConverterU16::is_size_over_limit(key_size) {
-            return Err(Error::from_kind(ErrorKind::MPTInvalidKeyLength(
-                key_size,
-                TrivialSizeFieldConverterU16::max_size(),
-            )));
+            return Err(Error::MPTInvalidKeyLength {
+                length: key_size,
+                length_limit: TrivialSizeFieldConverterU16::max_size(),
+            });
         }
         if key_size == 0 {
-            return Err(Error::from_kind(ErrorKind::MPTInvalidKeyLength(
-                key_size,
-                TrivialSizeFieldConverterU16::max_size(),
-            )));
+            return Err(Error::MPTInvalidKeyLength {
+                length: key_size,
+                length_limit: TrivialSizeFieldConverterU16::max_size(),
+            });
         }
 
         Ok(())
@@ -461,7 +461,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
                 _ => TrieNodeAction::Modify,
             })
         } else {
-            Err(ErrorKind::MPTKeyNotFound.into())
+            Err(Error::MPTKeyNotFound.into())
         }
     }
 
