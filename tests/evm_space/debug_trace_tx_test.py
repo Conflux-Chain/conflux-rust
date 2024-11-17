@@ -7,7 +7,7 @@ from conflux.config import default_config
 from test_framework.util import *
 from web3 import Web3
 
-toHex = Web3.toHex
+toHex = Web3.to_hex
 
 class DebugTraceTxTest(Web3Base):
     def set_test_params(self):
@@ -19,7 +19,7 @@ class DebugTraceTxTest(Web3Base):
         self.cfxAccount = self.rpc.GENESIS_ADDR
         print(f'Using Conflux account {self.cfxAccount}')
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 100 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(100 * 10 ** 18))
@@ -37,18 +37,18 @@ class DebugTraceTxTest(Web3Base):
         return trace
 
     def common_cfx_transfer_tx_trace(self):
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
         
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": self.evmAccount.address,
             "value": 1,
             "gasPrice": 1,
             "gas": 210000,
             "nonce": nonce,
-            "chainId": self.w3.eth.chainId,
+            "chainId": self.w3.eth.chain_id,
         })
 
-        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         self.rpc.generate_blocks(20, 1)
         trace = self.nodes[0].ethrpc.debug_traceTransaction(toHex(return_tx_hash))
 
@@ -62,18 +62,18 @@ class DebugTraceTxTest(Web3Base):
         assert(os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read()
 
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
-        signed = self.evmAccount.signTransaction({
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
+        signed = self.evmAccount.sign_transaction({
             "to": None,
             "value": 0,
             "gasPrice": 1,
             "gas": 10000000,
             "nonce": nonce,
-            "chainId": self.w3.eth.chainId,
+            "chainId": self.w3.eth.chain_id,
             "data": bytecode,
         })
 
-        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
 
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
@@ -95,22 +95,22 @@ class DebugTraceTxTest(Web3Base):
         erc20 = self.w3.eth.contract(address=erc20_address, abi=abi)
 
         # balance = erc20.functions.balanceOf(self.evmAccount.address).call()
-        target_addr = Web3.toChecksumAddress("0x8b14d287b4150ff22ac73df8be720e933f659abc")
+        target_addr = Web3.to_checksum_address("0x8b14d287b4150ff22ac73df8be720e933f659abc")
 
-        data = erc20.encodeABI(fn_name="transfer", args=[target_addr, 100])
+        data = erc20.encode_abi(abi_element_identifier="transfer", args=[target_addr, 100])
 
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
-        signed = self.evmAccount.signTransaction({
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
+        signed = self.evmAccount.sign_transaction({
             "to": erc20_address,
             "value": 0,
             "gasPrice": 1,
             "gas": 1000000,
             "nonce": nonce,
-            "chainId": self.w3.eth.chainId,
+            "chainId": self.w3.eth.chain_id,
             "data": data,
         })
 
-        tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
 
         # why this method is not working?
         # tx_hash = erc20.functions.transfer(target_addr, 100).transact()

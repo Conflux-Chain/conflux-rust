@@ -197,7 +197,7 @@ impl Txs {
             Ok(true) => {}
             _ => {
                 warn!("Tx signature verification failed for {:?}", tx);
-                bail!(ErrorKind::InvalidTxSignature { hash: tx.hash() });
+                bail!(Error::InvalidTxSignature { hash: tx.hash() });
             }
         }
 

@@ -38,7 +38,7 @@ class FilterTransactionTest(Web3Base):
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f"http://{ip}:{port}/"))
-        assert_equal(self.w3.isConnected(), True)
+        assert_equal(self.w3.is_connected(), True)
 
     async def run_async(self):
         client = self.rpc
@@ -47,7 +47,7 @@ class FilterTransactionTest(Web3Base):
         self.cfxAccount = client.GENESIS_ADDR
 
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(
+        self.evmAccount = self.w3.eth.account.from_key(
             self.DEFAULT_TEST_ACCOUNT_KEY
         )
         self.cross_space_transfer(self.evmAccount.address, 1 * 10**18)
@@ -56,7 +56,7 @@ class FilterTransactionTest(Web3Base):
         )
 
         # new account
-        account2 = self.w3.eth.account.privateKeyToAccount(hex(random.getrandbits(256)))
+        account2 = self.w3.eth.account.from_key(hex(random.getrandbits(256)))
         self.cross_space_transfer(account2.address, 1 * 10**18)
         assert_equal(self.nodes[0].eth_getBalance(account2.address), hex(1 * 10**18))
 
@@ -66,16 +66,16 @@ class FilterTransactionTest(Web3Base):
         assert_equal(len(filter_txs), 0)
 
         # target address
-        to_address = self.w3.eth.account.privateKeyToAccount(
+        to_address = self.w3.eth.account.from_key(
             hex(random.getrandbits(256))
         )
 
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
         # create txs
         txs_size = 20
         txs = []
         for i in range(txs_size):
-            signed = self.evmAccount.signTransaction(
+            signed = self.evmAccount.sign_transaction(
                 {
                     "to": to_address.address,
                     "value": 1,
@@ -86,8 +86,8 @@ class FilterTransactionTest(Web3Base):
                 }
             )
 
-            return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
-            txs.append(return_tx_hash.hex())
+            return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
+            txs.append(return_tx_hash.to_0x_hex())
             nonce += 1
 
         def wait_to_pack_txs(size):
@@ -109,21 +109,21 @@ class FilterTransactionTest(Web3Base):
         assert_equal(filter_txs[0], txs[5])
 
         # tx for second account
-        signed = account2.signTransaction(
+        signed = account2.sign_transaction(
             {
                 "to": to_address.address,
                 "value": 1,
                 "gasPrice": 1,
                 "gas": 210000,
-                "nonce": self.w3.eth.getTransactionCount(account2.address),
+                "nonce": self.w3.eth.get_transaction_count(account2.address),
                 "chainId": 10,
             }
         )
 
-        tx_second_account = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        tx_second_account = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         filter_txs = self.nodes[0].eth_getFilterChanges(filter)
         assert_equal(len(filter_txs), 1)
-        assert_equal(filter_txs[0], tx_second_account.hex())
+        assert_equal(filter_txs[0], tx_second_account.to_0x_hex())
 
         # pack all transactons
         wait_until(lambda: wait_to_pack_txs(20))

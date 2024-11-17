@@ -39,7 +39,7 @@ class Issue2483(ConfluxTestFramework):
         contract_address = receipt["contractCreated"]
 
         contract = self.w3.eth.contract(abi=abi)
-        call_data = contract.encodeABI(fn_name="setFresh")
+        call_data = contract.encode_abi("setFresh")
 
         tx = self.rpc.new_contract_tx(receiver=contract_address, data_hex=call_data)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
