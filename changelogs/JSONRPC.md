@@ -1,5 +1,10 @@
 # JSON-RPC CHANGELOG
 
+## vNext
+
+1. The gasUsed field of Core Space block will return `null` if the block is not executed.
+2. Core Space pubsub block header notification add two new fields: `baseFeePerGas` and `custom`.
+
 ## v2.4.1
 
 1. eSpace add new RPC method `eth_getBlockReceipts`

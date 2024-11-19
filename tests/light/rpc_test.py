@@ -472,7 +472,7 @@ class LightRPCTest(ConfluxTestFramework):
 
         # full nodes will use '0x0' for empty blocks and None
         # for transactions not executed yet
-        block['gasUsed'] = '0x0' if block['gasUsed'] == '0x0' else None
+        block['gasUsed'] = None
 
         for tx in block['transactions']:
             if type(tx) is not dict: continue
