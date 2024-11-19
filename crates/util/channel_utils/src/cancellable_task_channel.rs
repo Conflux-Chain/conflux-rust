@@ -1,6 +1,16 @@
 // Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+use parking_lot::{
+    Condvar, MappedMutexGuard, Mutex, MutexGuard, RwLock, RwLockWriteGuard,
+};
+use std::{
+    collections::VecDeque,
+    sync::{
+        mpsc::{self, RecvError, SendError, TryRecvError},
+        Arc,
+    },
+};
 
 pub fn new_cancellable_task_channel<T: CancelByKey>(
 ) -> (CancelableTaskSender<T>, CancelableTaskReceiver<T>) {
@@ -347,15 +357,3 @@ impl<T: CancelByKey> TaskInfo<T> {
         None
     }
 }
-
-use parking_lot::{
-    Condvar, MappedMutexGuard, Mutex, MutexGuard, RwLock, RwLockWriteGuard,
-};
-use std::{
-    collections::VecDeque,
-    hint::unreachable_unchecked,
-    sync::{
-        mpsc::{self, RecvError, SendError, TryRecvError},
-        Arc,
-    },
-};

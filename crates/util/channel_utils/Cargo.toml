@@ -2,10 +2,10 @@
 description = "Conflux utilities library"
 homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
-name = "cfx-utils"
+name = "channel-utils"
 version = "0.6.0"
 edition = "2021"
 
 [dependencies]
-log = "0.4"
+log = { workspace = true }
 parking_lot = { workspace = true }
