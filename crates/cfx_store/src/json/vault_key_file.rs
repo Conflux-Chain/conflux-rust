@@ -16,6 +16,7 @@
 
 use super::{Crypto, Uuid, Version, H160};
 use serde::de::Error;
+use serde_derive::{Deserialize, Serialize};
 use serde_json::{self, error, value::Value};
 use std::io::{Read, Write};
 
@@ -114,7 +115,7 @@ impl VaultKeyMeta {
 
 #[cfg(test)]
 mod test {
-    use json::{
+    use crate::json::{
         insert_vault_name_to_json_meta, remove_vault_name_from_json_meta,
         Aes128Ctr, Cipher, Crypto, Kdf, Pbkdf2, Prf, VaultKeyFile, Version,
     };

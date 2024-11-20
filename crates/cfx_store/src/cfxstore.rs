@@ -21,23 +21,20 @@ use std::{
     time::{Duration, Instant},
 };
 
-use account::SafeAccount;
-use accounts_dir::{KeyDirectory, SetKeyError, VaultKey, VaultKeyDirectory};
+use crate::{
+    account::SafeAccount,
+    accounts_dir::{KeyDirectory, SetKeyError, VaultKey, VaultKeyDirectory},
+    crypto::KEY_ITERATIONS,
+    import,
+    json::{self, OpaqueKeyFile, Uuid},
+    random::Random,
+    Derivation, Error, OpaqueSecret, SecretStore, SecretVaultRef,
+    SimpleSecretStore, StoreAccountRef,
+};
 use cfxkey::{
     self, Address, ExtendedKeyPair, KeyPair, Message, Password, Public, Secret,
     Signature,
 };
-use crypto::KEY_ITERATIONS;
-use import;
-use json::{self, OpaqueKeyFile, Uuid};
-use random::Random;
-use Derivation;
-use Error;
-use OpaqueSecret;
-use SecretStore;
-use SecretVaultRef;
-use SimpleSecretStore;
-use StoreAccountRef;
 
 /// Accounts store.
 pub struct CfxStore {
@@ -894,17 +891,17 @@ impl SimpleSecretStore for CfxMultiStore {
 
 #[cfg(test)]
 mod tests {
-    extern crate tempdir;
-
-    use self::tempdir::TempDir;
     use super::{CfxMultiStore, CfxStore};
-    use accounts_dir::{KeyDirectory, MemoryDirectory, RootDiskDirectory};
+    use crate::{
+        accounts_dir::{KeyDirectory, MemoryDirectory, RootDiskDirectory},
+        secret_store::{
+            Derivation, SecretStore, SecretVaultRef, SimpleSecretStore,
+            StoreAccountRef,
+        },
+    };
     use cfx_types::H256;
     use cfxkey::{Generator, KeyPair, Random};
-    use secret_store::{
-        Derivation, SecretStore, SecretVaultRef, SimpleSecretStore,
-        StoreAccountRef,
-    };
+    use tempdir::TempDir;
 
     fn keypair() -> KeyPair { Random.generate().unwrap() }
 

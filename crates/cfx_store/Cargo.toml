@@ -3,6 +3,7 @@ description = "Parity Ethereum Key Management"
 name = "cfxstore"
 version = "0.2.1"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
 
 [dependencies]
 log = "0.4"
