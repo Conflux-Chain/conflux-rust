@@ -24,6 +24,7 @@ use cfx_parameters::{
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
+use error_chain::bail;
 use primitives::{
     transaction::{
         Action, Cip1559Transaction, Cip2930Transaction, NativeTransaction,
@@ -31,6 +32,7 @@ use primitives::{
     },
     SignedTransaction, Transaction, TransactionWithSignature,
 };
+use serde::{Deserialize, Serialize};
 use std::{convert::Into, sync::Arc};
 
 /// The maximum gas limit accepted by most tx pools.

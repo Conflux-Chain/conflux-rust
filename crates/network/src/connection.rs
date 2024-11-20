@@ -3,17 +3,19 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    io::{IoContext, StreamToken},
+    iolib::{IoContext, StreamToken},
     throttling::THROTTLING_SERVICE,
     Error, ErrorKind,
 };
 use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
+use log::{debug, trace};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Histogram, Meter, Sample,
 };
 use mio::{tcp::*, *};
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
+use serde::Deserialize;
 use serde_derive::Serialize;
 use std::{
     io::{self, Read, Write},
@@ -588,7 +590,7 @@ impl PacketAssembler for PacketWithLenAssembler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::*;
+    use crate::iolib::*;
     use mio::Ready;
     use std::{
         cmp,

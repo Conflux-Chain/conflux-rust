@@ -10,14 +10,15 @@ use cfxcore::{
     consensus::{ConsensusConfig, ConsensusGraphInner},
     pow, ConsensusGraphTrait, SharedConsensusGraph,
 };
+use error_chain::bail;
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
     BlockHeaderBuilder, TransactionIndex, TransactionStatus,
 };
 use serde::{
-    de::{Deserialize, Deserializer, Error, Unexpected},
-    Serialize, Serializer,
+    de::{Deserializer, Error, Unexpected},
+    Deserialize, Serialize, Serializer,
 };
 use serde_json::Value;
 use std::{convert::TryInto, sync::Arc};

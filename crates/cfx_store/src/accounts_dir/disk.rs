@@ -421,13 +421,11 @@ fn account_filename(account: &SafeAccount) -> String {
 
 #[cfg(test)]
 mod test {
-    extern crate tempdir;
-
-    use self::tempdir::TempDir;
     use super::{KeyDirectory, RootDiskDirectory, VaultKey};
     use crate::account::SafeAccount;
     use cfxkey::{Generator, Random};
     use std::{env, fs};
+    use tempdir::TempDir;
 
     #[test]
     fn should_create_new_account() {

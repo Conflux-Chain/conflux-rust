@@ -12,8 +12,10 @@ use cfxcore::{
     channel::Channel, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph, SharedTransactionPool,
 };
+use error_chain::bail;
 use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
+use log::{debug, error, info};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,

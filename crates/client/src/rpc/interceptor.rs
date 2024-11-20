@@ -3,12 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::errors::request_rejected_too_many_request_error;
+use error_chain::bail;
 use futures01::{lazy, Future};
 use jsonrpc_core::{
     BoxFuture, Metadata, Params, RemoteProcedure, Result as RpcResult,
     RpcMethod,
 };
 use lazy_static::lazy_static;
+use log::debug;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
 use parking_lot::Mutex;
 use serde_json::Value;

@@ -13,6 +13,8 @@ use crate::{
 use cfx_bytes::Bytes;
 use cfx_types::{H256, H520};
 use cfxkey::{recover, sign, KeyPair, Secret};
+use error_chain::bail;
+use log::{debug, trace, warn};
 use rlp::{Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{

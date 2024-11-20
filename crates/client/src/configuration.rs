@@ -5,6 +5,7 @@
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 
 use lazy_static::*;
+use log::{error, warn};
 use parking_lot::RwLock;
 use rand::Rng;
 

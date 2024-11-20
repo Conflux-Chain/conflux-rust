@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use log::{debug, error, info, warn};
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
@@ -23,6 +24,7 @@ use cfxcore::{
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedTransactionPool,
 };
+use error_chain::bail;
 use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as JsonRpcResult};

@@ -21,7 +21,9 @@ use cfxcore::{
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
 use clap::crate_version;
+use error_chain::bail;
 use jsonrpc_core::Result as RpcResult;
+use log::debug;
 use primitives::TransactionWithSignature;
 
 pub struct EthHandler {

@@ -26,6 +26,7 @@ use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     SubscriptionId,
 };
+use log::{debug, trace};
 use std::{collections::HashMap, ops, str};
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]

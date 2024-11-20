@@ -6,6 +6,7 @@ use crate::rpc::types::{Bytes, RpcAddress};
 use cfx_addr::Network;
 use cfx_types::{Space, H256, U256};
 use primitives::log_entry::{LocalizedLogEntry, LogEntry};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]

@@ -329,14 +329,12 @@ where P: AsRef<Path> {
 
 #[cfg(test)]
 mod test {
-    extern crate tempdir;
-
-    use self::tempdir::TempDir;
     use super::{
         check_vault_name, create_vault_file, make_vault_dir_path,
         read_vault_file, VaultDiskDirectory, VaultKey, VAULT_FILE_NAME,
     };
     use std::{fs, io::Write, path::PathBuf};
+    use tempdir::TempDir;
 
     #[test]
     fn check_vault_name_succeeds() {

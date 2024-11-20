@@ -18,6 +18,7 @@
 
 use jsonrpc_core as core;
 use jsonrpc_core::futures::future::Either;
+use log::debug;
 use order_stat;
 use parking_lot::RwLock;
 use runtime;

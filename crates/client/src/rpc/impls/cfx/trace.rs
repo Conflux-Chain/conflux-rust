@@ -22,7 +22,9 @@ use cfxcore::{
     block_data_manager::DataVersionTuple, BlockDataManager, ConsensusGraph,
     ConsensusGraphTrait, SharedConsensusGraph,
 };
+use error_chain::bail;
 use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
+use log::error;
 use primitives::EpochNumber;
 use std::{convert::TryInto, sync::Arc};
 

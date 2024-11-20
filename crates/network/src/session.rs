@@ -14,10 +14,13 @@ use crate::{
 use bytes::Bytes;
 use diem_crypto::{bls::BLS_PUBLIC_KEY_LENGTH, ValidCryptoMaterial};
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
+use error_chain::bail;
 use io::*;
+use log::{debug, trace};
 use mio::{tcp::*, *};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
+use serde::Deserialize;
 use serde_derive::Serialize;
 use std::{
     convert::TryFrom,

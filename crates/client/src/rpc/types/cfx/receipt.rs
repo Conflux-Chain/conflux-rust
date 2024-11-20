@@ -8,6 +8,7 @@ use cfx_types::{
     address_util::AddressUtil, Bloom, Space, SpaceMap, H256, U256, U64,
 };
 use cfx_vm_types::{contract_address, CreateContractAddress};
+use error_chain::bail;
 use primitives::{
     receipt::{
         Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
@@ -16,7 +17,7 @@ use primitives::{
     SignedTransaction as PrimitiveTransaction, Transaction, TransactionIndex,
     TransactionStatus,
 };
-use serde_derive::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageChange {
