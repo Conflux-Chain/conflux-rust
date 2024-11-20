@@ -39,7 +39,7 @@ class CrossSpaceLogFilteringTest(Web3Base):
         print(f'Using Conflux account {self.cfxAccount}')
 
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
@@ -66,7 +66,7 @@ class CrossSpaceLogFilteringTest(Web3Base):
         cfx_next_nonce = self.rpc.get_nonce(self.cfxAccount)
         cfx_tx_hashes = []
 
-        evm_next_nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        evm_next_nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
         evm_tx_hashes = []
 
         def emitConflux(n):
@@ -138,7 +138,7 @@ class CrossSpaceLogFilteringTest(Web3Base):
             assert_equal(receipt["outcomeStatus"], "0x0")
 
         for h in evm_tx_hashes:
-            receipt = self.w3.eth.waitForTransactionReceipt(h)
+            receipt = self.w3.eth.wait_for_transaction_receipt(h)
             assert_equal(receipt["status"], 1)
 
         # check Conflux events
@@ -392,9 +392,9 @@ class CrossSpaceLogFilteringTest(Web3Base):
         assert(os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read()
 
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
 
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": None,
             "value": 0,
             "gasPrice": 1,
@@ -405,12 +405,12 @@ class CrossSpaceLogFilteringTest(Web3Base):
         })
 
         tx_hash = signed["hash"]
-        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         assert_equal(tx_hash, return_tx_hash)
 
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
-        receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         assert_equal(receipt["status"], 1)
         addr = receipt["contractAddress"]
         return addr

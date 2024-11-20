@@ -16,6 +16,7 @@ futures = "0.3.26"
 tokio = "1.26.0"
 chrono = { workspace = true }
 serde = { workspace = true }
+duration-str = "0.5.1"
 
 [dev-dependencies]
 criterion = "0.3"

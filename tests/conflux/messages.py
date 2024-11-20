@@ -5,7 +5,6 @@
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
 
-import asyncore
 from collections import defaultdict
 from io import BytesIO
 

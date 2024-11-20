@@ -128,7 +128,7 @@ impl OpenableOnDemandOpenDeltaDbTrait for SingleMptDbManager {
             *maybe_mpt = Some(mpt.clone());
             Ok(mpt)
         } else {
-            Err(ErrorKind::DbNotExist.into())
+            Err(Error::DbNotExist.into())
         }
     }
 }

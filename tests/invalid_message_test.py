@@ -40,7 +40,6 @@ class InvalidMessageTest(ConfluxTestFramework):
         time.sleep(0.5)
         genesis = node.cfx_getBlockByEpochNumber("0x0", False)["hash"]
         node.add_p2p_connection(DefaultNode(genesis))
-        network_thread_start()
         node.p2p.wait_for_status()
 
     def _test_invalid_packet(self):

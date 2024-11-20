@@ -13,7 +13,7 @@ extern crate keccak_hash as hash;
 #[macro_use]
 extern crate log;
 #[macro_use]
-extern crate error_chain;
+extern crate cfx_util_macros;
 extern crate db as ext_db;
 #[macro_use]
 extern crate lazy_static;

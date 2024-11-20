@@ -18,7 +18,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 cfx-types = { workspace = true }
 thiserror = { workspace = true }
-jsonrpc-core = "15.1.0"
+jsonrpc-core = { workspace = true }
 primitives = { workspace = true }
 rlp = { workspace = true }
 cfx-parameters = { workspace = true }
@@ -29,4 +29,4 @@ cfx-vm-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 error-chain = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
-
+jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }

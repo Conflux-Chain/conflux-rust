@@ -268,6 +268,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
             get_logs_filter_max_limit: None,
             sync_state_starting_epoch: None,
             sync_state_epoch_gap: None,
+            pivot_hint_conf: None,
         },
         txpool.clone(),
         statistics.clone(),
@@ -281,6 +282,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         verification_config.clone(),
         NodeType::Archive,
         pos_verifier.clone(),
+        /* pivot_hint */ None,
         params,
     ));
 

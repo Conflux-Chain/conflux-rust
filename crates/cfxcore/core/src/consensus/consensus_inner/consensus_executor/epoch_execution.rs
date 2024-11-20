@@ -6,7 +6,7 @@ use cfx_parameters::genesis::GENESIS_ACCOUNT_ADDRESS;
 use geth_tracer::{GethTraceWithHash, GethTracer, TxExecContext};
 use pow_types::StakingEvent;
 
-use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult};
+use cfx_statedb::{Error as DbErrorKind, Result as DbResult};
 use cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 use primitives::{
     receipt::BlockReceipts, Action, Block, BlockNumber, Receipt,

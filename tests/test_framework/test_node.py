@@ -24,7 +24,6 @@ from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from .authproxy import JSONRPCException
 from .util import *
 
-
 class FailedToStartError(Exception):
     """Raised when a node fails to start correctly."""
 
@@ -389,7 +388,7 @@ class TestNode:
         # if self.ip is not None:
         #     kwargs['dstaddr'] = self.ip
         # print(args, kwargs)
-        p2p_conn.peer_connect(*args, **kwargs)
+        p2p_conn.peer_connect(*args, **kwargs)()
         self.p2ps.append(p2p_conn)
 
         return p2p_conn

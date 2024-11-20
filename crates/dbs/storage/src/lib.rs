@@ -4,13 +4,11 @@
 
 // TODO: check them again and reason about the safety of each usage.
 #![allow(clippy::mut_from_ref, clippy::cast_ref_to_mut, clippy::drop_ref)]
-// Recursion limit raised for error_chain
-#![recursion_limit = "512"]
 #![allow(deprecated)]
 
 //extern crate futures;
 #[macro_use]
-extern crate error_chain;
+extern crate cfx_util_macros;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
@@ -200,7 +198,7 @@ pub use self::{
     impls::{
         defaults,
         delta_mpt::*,
-        errors::{Error, ErrorKind, Result},
+        errors::{Error, Result},
         merkle_patricia_trie::{
             mpt_cursor::rlp_key_value_len, simple_mpt::*,
             trie_proof::TrieProofNode, CompressedPathRaw, KVInserter,

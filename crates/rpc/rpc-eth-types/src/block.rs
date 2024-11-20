@@ -32,7 +32,7 @@ const SHA3_HASH_OF_EMPTY: &str =
     "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
 
 /// Block Transactions
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BlockTransactions {
     /// Only hashes
     Hashes(Vec<H256>),
@@ -53,7 +53,7 @@ impl Serialize for BlockTransactions {
 }
 
 /// Block representation
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
     /// Hash of the block

@@ -81,7 +81,7 @@ class FilterLifetimeTest(Web3Base):
             raise AssertionError("Expected exception")
 
     def run_test(self):
-        asyncio.get_event_loop().run_until_complete(self.run_async())
+        asyncio.run(self.run_async())
 
 
 if __name__ == "__main__":

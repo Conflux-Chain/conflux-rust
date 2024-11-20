@@ -45,7 +45,7 @@ for i in range(start_block_number, end_block_number + 1, 1000):
     for log in logs:
         pos_identifier = log["topics"][1]
         if log["topics"][0] == REGISTER_TOPIC:
-            bls_pub_key, vrf_pub_key = eth_abi.decode_abi(["bytes", "bytes"], decode_hex(log["data"]))
+            bls_pub_key, vrf_pub_key = eth_abi.decode(["bytes", "bytes"], decode_hex(log["data"]))
             pub_keys_map[pos_identifier] = (encode_hex_0x(bls_pub_key), encode_hex_0x(vrf_pub_key))
             print(pub_keys_map[pos_identifier])
         elif log["topics"][0] == INCREASE_STAKE_TOPIC:

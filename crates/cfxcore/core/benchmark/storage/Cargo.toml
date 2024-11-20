@@ -15,20 +15,20 @@ cfx-internal-common = { workspace = true }
 primitives = { workspace = true }
 db = { workspace = true }
 
-clap = "2.32"
+clap = { workspace = true }
 env_logger = "0.7"
 error-chain = "0.12"
 ethcore = { package = "ethcore", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethkey = { package = "ethkey", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethcore_types = { package = "common-types", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethjson = { package = "ethjson", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
-ethereum-types = "0.4"
+ethereum-types = { workspace = true }
 heapsize = "0.4"
 kvdb = "0.4"
 lazy_static = "1.4"
 log = "0.4"
 parking_lot = { workspace = true }
-rlp = { version = "0.3.0", feature = ["ethereum"] }
+rlp = { workspace = true, feature = ["ethereum"] }
 serde_json = "1.0"
 base64ct = "=1.1.1"
 bevy = "0.11.3"

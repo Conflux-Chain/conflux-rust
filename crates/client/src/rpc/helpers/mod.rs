@@ -13,6 +13,7 @@ pub use self::{
     },
     poll_manager::PollManager,
 };
+pub use cfx_rpc::helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT;
 pub use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
 pub use epoch_queue::EpochQueue;
 pub use subscribers::{Id as SubscriberId, Subscribers};

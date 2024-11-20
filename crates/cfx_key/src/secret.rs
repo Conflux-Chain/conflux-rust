@@ -14,13 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::{Error, SECP256K1};
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use secp256k1::{constants::SECRET_KEY_SIZE as SECP256K1_SECRET_KEY_SIZE, key};
 use std::{fmt, ops::Deref, str::FromStr};
 use zeroize::Zeroize;
-use Error;
-use SECP256K1;
 
 #[derive(Clone, PartialEq, Eq, DeriveMallocSizeOf)]
 pub struct Secret {
@@ -254,7 +253,7 @@ impl Deref for Secret {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::{Generator, Random},
+        super::{KeyPairGenerator, Random},
         Secret,
     };
     use std::str::FromStr;
@@ -301,5 +300,39 @@ mod tests {
         pow3_expected.mul(&secret).unwrap();
         pow3_expected.mul(&secret).unwrap();
         assert_eq!(pow3, pow3_expected);
+    }
+
+    #[test]
+    fn secret_sub_and_add() {
+        let secret = Random.generate().unwrap().secret().clone();
+        let secret_one = Secret::from_str(
+            "0000000000000000000000000000000000000000000000000000000000000001",
+        )
+        .unwrap();
+
+        let mut sub1 = secret.clone();
+        sub1.sub(&secret_one).unwrap();
+
+        let mut dec1 = secret.clone();
+        dec1.dec().unwrap();
+
+        assert_eq!(sub1, dec1);
+
+        let mut add1 = sub1.clone();
+        add1.add(&secret_one).unwrap();
+        assert_eq!(add1, secret);
+    }
+
+    #[test]
+    fn secret_neg() {
+        let secret_one = Secret::from_str(
+            "0000000000000000000000000000000000000000000000000000000000000001",
+        )
+        .unwrap();
+        let minus_one = Secret::from(secp256k1::key::MINUS_ONE_KEY);
+
+        let mut inv1 = secret_one.clone();
+        inv1.neg().unwrap();
+        assert_eq!(inv1, minus_one);
     }
 }

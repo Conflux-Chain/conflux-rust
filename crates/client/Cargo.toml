@@ -7,12 +7,12 @@ edition = "2021"
 bigdecimal = "0.1.0"
 num-bigint = "0.2.6"
 mio = "0.6.8"
-clap = "2"
+clap = { workspace = true }
 textwrap = "0.9"
 toml = "0.5.8"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_derive = "1.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_derive = { workspace = true }
 parking_lot = { workspace = true }
 io = { workspace = true }
 cfxkey = { workspace = true }
@@ -25,17 +25,17 @@ cfx-statedb = { workspace = true }
 cfx-storage = { workspace = true }
 cfx-vm-types = { workspace = true }
 app_dirs = "1.2.1"
-dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
-jsonrpc-core = "15.1.0"
-jsonrpc-tcp-server = "15.1.0"
-jsonrpc-http-server = "15.1.0"
-jsonrpc-derive = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-pubsub = "15.1.0"
-jsonrpc-ws-server = "15.1.0"
-error-chain = { version = "0.12" }
-lazy_static = "1.4"
+dir = { workspace = true }
+ctrlc = { workspace = true }
+jsonrpc-core = { workspace = true }
+jsonrpc-tcp-server = { workspace = true }
+jsonrpc-http-server = { workspace = true }
+jsonrpc-derive = { workspace = true }
+jsonrpc-core-client = { workspace = true }
+jsonrpc-pubsub = { workspace = true }
+jsonrpc-ws-server = { workspace = true }
+error-chain = { workspace = true }
+lazy_static = { workspace = true }
 log = { workspace = true }
 cfx-types = { workspace = true }
 cfx-addr = { workspace = true }
@@ -52,21 +52,21 @@ primitives = { workspace = true }
 log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
 rlp = { workspace = true }
 keccak-hash = { workspace = true }
-rand = "0.7.2"
+rand = { workspace = true }
 rand_08 = {package = "rand", version = "0.8.0"}
 kvdb-rocksdb = { workspace = true }
 tempdir = "0.3"
 rustc-hex = { workspace = true }
-threadpool = "1.0"
+threadpool = { workspace = true }
 metrics = { workspace = true }
 delegate = { workspace = true }
 transient-hashmap = "0.4"
 rand_xorshift = "0.2"
-itertools = "0.9"
+itertools = { workspace = true }
 order-stat = "0.1"
 futures01 = "0.1"
 futures = { version = "0.3.3", features = ["compat"] }
-rayon = "1.2.0"
+rayon = { workspace = true }
 throttling = { workspace = true }
 tokio = { version = "1.6", features = ["full"] }
 tokio-stream = "0.1.4"
@@ -74,8 +74,8 @@ tokio-timer = "0.2.13"
 malloc_size_of = { workspace = true }
 random-crash = { workspace = true }
 cfx-parameters = { workspace = true }
-strum = "0.20"
-strum_macros = "0.20"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 crash-handler = { path = "../cfxcore/core/src/pos/common/crash-handler" }
 cached-pos-ledger-db = { path = "../cfxcore/core/src/pos/storage/cached-pos-ledger-db" }
 pos-ledger-db = { path = "../cfxcore/core/src/pos/storage/pos-ledger-db" }
@@ -91,7 +91,7 @@ diem-types = { path = "../cfxcore/core/src/pos/types" }
 pow-types = {path = "../cfxcore/core/src/pos/types/pow-types" }
 executor-types = { path = "../cfxcore/core/src/pos/types/executor-types" }
 executor = { path = "../cfxcore/core/src/pos/consensus/executor" }
-fail = "0.4.0"
+fail = { workspace = true }
 storage-interface = { path = "../cfxcore/core/src/pos/storage/storage-interface" }
 consensus-types = {path = "../cfxcore/core/src/pos/consensus/consensus-types" }
 rpassword = "5.0.1"
@@ -112,6 +112,9 @@ revm = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
+cfx-util-macros = { workspace = true }
+cfx-rpc = { workspace = true }
+cfx-rpc-utils = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"
