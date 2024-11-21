@@ -425,7 +425,7 @@ impl DeltaMptIdGen {
                     id = Ok(self.id_limit);
                     self.id_limit += 1;
                 } else {
-                    id = Err(ErrorKind::TooManyDeltaMPT.into())
+                    id = Err(Error::TooManyDeltaMPT.into())
                 }
             }
             Some(x) => id = Ok(x),

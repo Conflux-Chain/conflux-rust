@@ -1,7 +1,7 @@
 use super::OverlayAccount;
 use cfx_bytes::Bytes;
 use cfx_statedb::{
-    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt, StateDbGeneric,
+    Error as DbErrorKind, Result as DbResult, StateDbExt, StateDbGeneric,
 };
 use cfx_types::Address;
 use keccak_hash::KECCAK_EMPTY;

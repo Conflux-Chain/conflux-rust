@@ -3,26 +3,25 @@ description = "Conflux Keys Generator"
 name = "cfxkey"
 version = "0.3.0"
 authors = ["Conflux Foundation"]
+edition = "2021"
 
 [dependencies]
 cfx-types = { workspace = true }
-edit-distance = "2.0"
-parity-crypto = "0.9.0"
-parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
-lazy_static = "1.4"
-log = "0.4"
-parity-wordlist = "1.3"
-quick-error = "1.2.2"
-rand = "0.7"
-rustc-hex = "2.1"
-serde = "1.0"
-serde_derive = "1.0"
-tiny-keccak = "1.4"
-zeroize = "1.0.0"
+edit-distance = { workspace = true }
+parity-crypto = { workspace = true }
+parity-secp256k1 = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+parity-wordlist = { workspace = true }
+rand = { workspace = true }
+rustc-hex = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+tiny-keccak = { workspace = true }
+zeroize = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 malloc_size_of = { workspace = true }
-docopt = "1.0"
-env_logger = "0.5"
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-threadpool = "1.7"
+panic_hook = { workspace = true }
+threadpool = { workspace = true }
+thiserror = { workspace = true }
 

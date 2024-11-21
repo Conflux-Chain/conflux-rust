@@ -59,7 +59,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerSqlite {
 
         let path_str = self.get_delta_db_path(delta_db_name);
         if Path::new(&path_str).exists() {
-            Err(ErrorKind::DeltaMPTAlreadyExists.into())
+            Err(Error::DeltaMPTAlreadyExists.into())
         } else {
             fs::create_dir_all(&path_str).ok();
             KvdbSqliteSharded::create_and_open(

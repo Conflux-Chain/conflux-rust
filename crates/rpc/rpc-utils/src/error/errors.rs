@@ -7,6 +7,7 @@ use alloy_primitives::{hex, Address, Bytes};
 use alloy_rpc_types::error::EthRpcErrorCode;
 use alloy_sol_types::decode_revert_reason;
 use jsonrpc_core::{Error as JsonRpcError, ErrorCode};
+use jsonrpsee::types::ErrorObjectOwned;
 use revm::primitives::{HaltReason, OutOfGasError};
 use std::time::Duration;
 
@@ -167,6 +168,13 @@ impl From<EthApiError> for JsonRpcError {
             EthApiError::Other(err) => internal_rpc_err(err),
             // EthApiError::MuxTracerError(msg) => internal_rpc_err(msg.to_string()),
         }
+    }
+}
+
+impl From<EthApiError> for ErrorObjectOwned {
+    fn from(e: EthApiError) -> Self {
+        let err = JsonRpcError::from(e);
+        ErrorObjectOwned::owned(err.code.code() as i32, err.message, err.data)
     }
 }
 

@@ -522,7 +522,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
         &mut self, value: ValueType, value_util: &mut ValueUtilT,
     ) -> Result<PosT> {
         if self.array.capacity() == self.array.len() {
-            return Err(ErrorKind::OutOfCapacity.into());
+            return Err(Error::OutOfCapacity.into());
         }
 
         let mut hole: Hole<ValueType> = unsafe { mem::uninitialized() };

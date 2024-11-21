@@ -377,7 +377,7 @@ impl<'db, Item, F: FnMut(&Statement<'db>) -> Item> MappedRows<'db, F> {
             if MaybeRows::next(&mut self.maybe_rows)?.is_none() {
                 Ok(Some(row_mapped))
             } else {
-                bail!(ErrorKind::DbValueError)
+                bail!(Error::DbValueError)
             }
         }
     }

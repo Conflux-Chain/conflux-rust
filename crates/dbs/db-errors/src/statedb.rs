@@ -7,25 +7,35 @@ use cfx_types::Address;
 use primitives::account::AccountError;
 use rlp::DecoderError;
 
-error_chain! {
-    links {
-    }
+use thiserror::Error;
 
-    foreign_links {
-        Account(AccountError);
-        Storage(StorageError);
-        Decoder(DecoderError);
-    }
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error(transparent)]
+    Account(#[from] AccountError),
 
-    errors {
-        IncompleteDatabase(address: Address) {
-            description("incomplete database")
-            display("incomplete database: address={:?}", address)
-        }
+    #[error(transparent)]
+    Storage(#[from] StorageError),
 
-        PosDatabaseError(err: String) {
-            description("PoS database error")
-            display("PoS database error, err={:?}", err)
-        }
-    }
+    #[error(transparent)]
+    Decoder(#[from] DecoderError),
+
+    #[error("incomplete database: address={0:?}")]
+    IncompleteDatabase(Address),
+
+    #[error("PoS database error, err={0:?}")]
+    PosDatabaseError(String),
+
+    #[error("{0}")]
+    Msg(String),
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<String> for Error {
+    fn from(e: String) -> Self { Error::Msg(e) }
+}
+
+impl From<&str> for Error {
+    fn from(e: &str) -> Self { Error::Msg(e.into()) }
 }

@@ -152,7 +152,7 @@ class PubSubTest(ConfluxTestFramework):
         self.log.info(f"Pass -- test #1989 fix")
 
     def run_test(self):
-        asyncio.get_event_loop().run_until_complete(self.run_async())
+        asyncio.run(self.run_async())
 
     def deploy_contract(self, sender, priv_key, data_hex):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=20000)

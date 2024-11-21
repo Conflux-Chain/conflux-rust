@@ -1113,7 +1113,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cfx-addr"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cfx-types",
  "lazy_static",
@@ -1132,11 +1132,12 @@ name = "cfx-db-errors"
 version = "2.0.2"
 dependencies = [
  "cfx-types",
- "error-chain",
+ "cfx-util-macros",
  "primitives",
  "rlp 0.4.6",
  "sqlite",
  "strfmt",
+ "thiserror",
 ]
 
 [[package]]
@@ -1318,18 +1319,28 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
  "async-trait",
+ "cfx-execute-helper",
+ "cfx-executor",
+ "cfx-parameters",
+ "cfx-rpc-cfx-types",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
  "cfx-rpc-utils",
+ "cfx-statedb",
  "cfx-types",
+ "cfx-vm-types",
  "cfxcore",
  "clap",
+ "error-chain",
  "geth-tracer",
+ "jsonrpc-core 15.1.0",
  "jsonrpsee",
  "keccak-hash",
  "parity-version",
+ "parking_lot 0.11.2",
  "primitives",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -1422,7 +1433,7 @@ dependencies = [
  "cfx-parameters",
  "cfx-storage",
  "cfx-types",
- "error-chain",
+ "cfx-util-macros",
  "hashbrown 0.7.2",
  "lazy_static",
  "log",
@@ -1441,9 +1452,9 @@ dependencies = [
  "cfx-db-errors",
  "cfx-internal-common",
  "cfx-types",
+ "cfx-util-macros",
  "delegate 0.5.2",
  "derivative",
- "error-chain",
  "fallible-iterator",
  "fs_extra",
  "futures 0.3.27",
@@ -1585,6 +1596,7 @@ dependencies = [
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-utils",
  "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
@@ -1607,7 +1619,6 @@ dependencies = [
  "diem-temppath",
  "diem-types",
  "either",
- "error-chain",
  "executor",
  "executor-types",
  "fail",
@@ -1721,9 +1732,7 @@ name = "cfxkey"
 version = "0.3.0"
 dependencies = [
  "cfx-types",
- "docopt",
  "edit-distance",
- "env_logger",
  "lazy_static",
  "log",
  "malloc_size_of",
@@ -1732,13 +1741,13 @@ dependencies = [
  "parity-crypto",
  "parity-secp256k1",
  "parity-wordlist",
- "quick-error",
  "rand 0.7.3",
  "rustc-hex",
  "serde",
  "serde_derive",
+ "thiserror",
  "threadpool",
- "tiny-keccak 1.5.0",
+ "tiny-keccak 2.0.2",
  "zeroize",
 ]
 

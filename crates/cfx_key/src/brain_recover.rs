@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use log::{info, trace};
 use std::collections::HashSet;
 
 use edit_distance::edit_distance;
 use parity_wordlist;
 
-use super::{Address, Brain, Generator};
+use super::{Address, Brain, KeyPairGenerator};
 
 /// Tries to find a phrase for address, given the number
 /// of expected words and a partial phrase.
