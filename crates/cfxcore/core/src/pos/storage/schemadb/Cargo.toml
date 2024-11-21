@@ -15,10 +15,7 @@ once_cell = "1.7.2"
 diem-config = { path = "../../config" }
 diem-logger = { path = "../../common/logger" }
 diem-metrics = { path = "../../common/metrics" }
-
-[dependencies.rocksdb]
-git = "https://github.com/Conflux-Chain/rust-rocksdb.git"
-rev = "3773afe5b953997188f37c39308105b5deb0faac"
+rocksdb = { workspace = true }
 
 [dev-dependencies]
 byteorder = "1.4.3"

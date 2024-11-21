@@ -30,7 +30,7 @@ class Eip1559Test(Web3Base):
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
-        assert_equal(self.w3.isConnected(), True)
+        assert_equal(self.w3.is_connected(), True)
 
 
     def run_test(self):
@@ -39,7 +39,7 @@ class Eip1559Test(Web3Base):
         self.log.info(f'Using Conflux account {self.cfxAccount}')
 
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         self.log.info(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 100 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(100 * 10 ** 18))
@@ -49,7 +49,7 @@ class Eip1559Test(Web3Base):
         ret = self.nodes[0].debug_getTransactionsByEpoch("0x1")
         assert_equal(len(ret), 1)
 
-        self.nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        self.nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
         
         tx, receipt = self.send_large_transaction()
         self.check_node_sync(tx, receipt)
@@ -64,7 +64,7 @@ class Eip1559Test(Web3Base):
 
     
     def send_large_transaction(self):
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "type": "0x2",
             "to": self.evmAccount.address,
             "value": 1,
@@ -76,10 +76,10 @@ class Eip1559Test(Web3Base):
         })
         self.nonce += 1
 
-        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
-        receipt = self.w3.eth.waitForTransactionReceipt(return_tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(return_tx_hash)
 
         assert_equal(receipt["status"], 1)
         # TODO check EIP1559 gas usage
@@ -88,13 +88,13 @@ class Eip1559Test(Web3Base):
 
         tx = self.w3.eth.get_transaction(return_tx_hash)
 
-        assert_equal(Web3.toHex(tx["v"]), tx["yParity"])
+        assert_equal(tx["v"], tx["yParity"])
 
         return tx, receipt
     
     def send_large_cheap_transactions(self):
         for i in range(0, 5):
-            signed = self.evmAccount.signTransaction({
+            signed = self.evmAccount.sign_transaction({
                 "type": "0x2",
                 "to": self.evmAccount.address,
                 "value": 1,
@@ -104,12 +104,12 @@ class Eip1559Test(Web3Base):
                 "nonce": self.nonce + i,
                 "chainId": 10,
             })
-            return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+            return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         
         self.nonce += 5
 
         self.rpc.generate_blocks(20, 5)
-        receipt = self.w3.eth.waitForTransactionReceipt(return_tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(return_tx_hash)
 
         assert_equal(receipt["status"], 1)
         assert_equal(receipt["txExecErrorMsg"], None)
@@ -137,7 +137,7 @@ class Eip1559Test(Web3Base):
 
     def send_many_transactions_in_one_block(self):
         for i in range(0, 10):
-            signed = self.evmAccount.signTransaction({
+            signed = self.evmAccount.sign_transaction({
                 "type": "0x2",
                 "to": self.evmAccount.address,
                 "value": 1,
@@ -147,12 +147,12 @@ class Eip1559Test(Web3Base):
                 "nonce": self.nonce + i,
                 "chainId": 10,
             })
-            return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+            return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         self.nonce += 10
 
         self.rpc.generate_block(10)
         self.rpc.generate_blocks(20, 0)
-        receipt = self.w3.eth.waitForTransactionReceipt(return_tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(return_tx_hash)
         assert_equal(receipt["cumulativeGasUsed"], 21000 * 10)
         assert_equal(receipt["gasUsed"], 21000)
 

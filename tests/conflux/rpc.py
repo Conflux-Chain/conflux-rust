@@ -9,6 +9,7 @@ from eth_account.datastructures import SignedTransaction
 import rlp
 import json
 
+
 from .address import hex_to_b32_address, b32_address_to_hex, DEFAULT_PY_TEST_CHAIN_ID
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
@@ -87,7 +88,7 @@ class RpcClient:
     def rand_account(self) -> (str, bytes):
         priv_key = eth_utils.encode_hex(os.urandom(32))
         addr = eth_utils.encode_hex(priv_to_addr(priv_key))
-        return (Web3.toChecksumAddress(addr), priv_key)
+        return (Web3.to_checksum_address(addr), priv_key)
 
     def rand_hash(self, seed: bytes = None) -> str:
         if seed is None:
@@ -146,7 +147,7 @@ class RpcClient:
         raw_txs = []
         for tx in txs:
             if isinstance(tx, SignedTransaction):
-                raw_txs.append(tx.rawTransaction)
+                raw_txs.append(tx.raw_transaction)
             elif isinstance(tx, Transaction):
                 raw_txs.append(rlp.encode(tx))
             else:
@@ -159,7 +160,7 @@ class RpcClient:
         return block_hash
 
     def generate_block_with_fake_txs(self, txs: list, adaptive=False, tx_data_len: int = 0) -> str:
-        encoded_txs = eth_utils.encode_hex(rlp.encode(txs))
+        encoded_txs = eth_utils.hexadecimal.encode_hex(rlp.encode(txs))
         block_hash = self.node.test_generateBlockWithFakeTxs(encoded_txs, adaptive, tx_data_len)
         assert_is_hash_string(block_hash)
         return block_hash
@@ -319,7 +320,7 @@ class RpcClient:
     # a temporary patch for transaction compatibility
     def send_tx(self, tx: Union[Transaction, SignedTransaction], wait_for_receipt=False, wait_for_catchup=True) -> str:
         if isinstance(tx, SignedTransaction):
-            encoded = cast(str, tx.rawTransaction.hex())
+            encoded = cast(str, tx.raw_transaction.to_0x_hex())
         else:
             encoded = eth_utils.encode_hex(rlp.encode(tx))
         tx_hash = self.send_raw_tx(encoded, wait_for_catchup=wait_for_catchup)
@@ -403,7 +404,7 @@ class RpcClient:
         if epoch_height is None:
             epoch_height = self.epoch_number()
 
-        action = eth_utils.decode_hex(receiver)
+        action = eth_utils.hexadecimal.decode_hex(receiver)
         tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id)
 
         if sign:
@@ -472,12 +473,12 @@ class RpcClient:
             nonce = int(nonce, 0)
 
         if receiver is not None:
-            action = eth_utils.decode_hex(receiver)
+            action = eth_utils.hexadecimal.decode_hex(receiver)
         else:
             action = b''
         if data_hex is None:
             data_hex = "0x"
-        data = eth_utils.decode_hex(data_hex)
+        data = eth_utils.hexadecimal.decode_hex(data_hex)
 
         if type(gas) is str:
             gas = int(gas, 0)
@@ -671,7 +672,7 @@ class RpcClient:
                                receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(stake_tx, wait_for_receipt=True)
         data, pos_identifier = self.node.test_posRegister(int_to_hex(voting_power), 0 if legacy else 1)
-        register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0,
+        register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.hexadecimal.decode_hex(data), value=0,
                                   receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS,
                                   storage_limit=1024)
         register_tx_hash = self.send_tx(register_tx, wait_for_receipt=True)
@@ -769,5 +770,5 @@ def get_contract_function_data(contract, name, args):
     attrs = {
         **REQUEST_BASE,
     }
-    tx_data = func(*args).buildTransaction(attrs)
-    return eth_utils.decode_hex(tx_data['data'])
+    tx_data = func(*args).build_transaction(attrs)
+    return eth_utils.hexadecimal.decode_hex(tx_data['data'])

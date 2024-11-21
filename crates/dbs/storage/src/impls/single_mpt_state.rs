@@ -95,7 +95,7 @@ impl SingleMptState {
             Some(merkle_hash) => {
                 // Non-empty state
                 if merkle_hash.is_zero() {
-                    Err(ErrorKind::StateCommitWithoutMerkleHash.into())
+                    Err(Error::StateCommitWithoutMerkleHash.into())
                 } else {
                     Ok(merkle_hash)
                 }

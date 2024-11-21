@@ -151,7 +151,7 @@ class FilterLogTest(ConfluxTestFramework):
         assert_equal(len(logs2), 2 * NUM_CALLS + 2)
 
     def run_test(self):
-        asyncio.get_event_loop().run_until_complete(self.run_async())
+        asyncio.run(self.run_async())
 
     def deploy_contract(self, client, data_hex):
         tx = client.new_contract_tx("", data_hex, storage_limit=200000)

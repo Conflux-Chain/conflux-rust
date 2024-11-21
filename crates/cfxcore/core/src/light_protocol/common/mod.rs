@@ -8,7 +8,7 @@ mod peers;
 pub use ledger_info::LedgerInfo;
 pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
 
-use super::{Error, ErrorKind};
+use super::Error;
 use cfx_internal_common::ChainIdParamsOneChainInner;
 use std::{cmp, fmt::Debug};
 
@@ -26,7 +26,7 @@ pub fn validate_chain_id(
     peer_height: u64,
 ) -> Result<(), Error> {
     if !ours.matches(&theirs, peer_height) {
-        let error_kind = ErrorKind::ChainIdMismatch {
+        let error_kind = Error::ChainIdMismatch {
             ours: ours.clone(),
             theirs,
         };

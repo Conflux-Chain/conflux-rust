@@ -3,7 +3,7 @@ from conflux.config import default_config
 from test_framework.util import *
 from web3 import Web3
 
-toHex = Web3.toHex
+toHex = Web3.to_hex
 
 class EspaceRpcTest(Web3Base):
 
@@ -12,7 +12,7 @@ class EspaceRpcTest(Web3Base):
         self.cfxAccount = self.rpc.GENESIS_ADDR
         print(f'Using Conflux account {self.cfxAccount}')
 
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
 
         self.cross_space_transfer(self.evmAccount.address, 1000 * 10 ** 18)
@@ -27,7 +27,7 @@ class EspaceRpcTest(Web3Base):
 
         erc20 = self.load_contract(addr, "erc20")
         
-        data = erc20.encodeABI(fn_name="balanceOf", args=[self.evmAccount.address])
+        data = erc20.encode_abi(abi_element_identifier="balanceOf", args=[self.evmAccount.address])
 
         res1 = self.nodes[0].ethrpc.eth_call({
             "from": self.evmAccount.address,

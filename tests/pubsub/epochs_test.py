@@ -199,8 +199,8 @@ class PubSubTest(ConfluxTestFramework):
 
     def run_test(self):
         assert(SHORT_FORK_LEN < LONG_FORK_LEN)
-        asyncio.get_event_loop().run_until_complete(self.test_forks())
-        asyncio.get_event_loop().run_until_complete(self.test_latest_state())
+        asyncio.run(self.test_forks())
+        asyncio.run(self.test_latest_state())
 
     def generate_chain(self, parent, len):
         hashes = [parent]
