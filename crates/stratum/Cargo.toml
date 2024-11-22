@@ -9,12 +9,12 @@ edition = "2021"
 [dependencies]
 cfx-types = { workspace = true }
 keccak-hash = { workspace = true }
-jsonrpc-core = { workspace = true }
-jsonrpc-tcp-server = { workspace = true }
-log = "0.4"
+jsonrpc-core = "15.1.0"
+jsonrpc-tcp-server = "15.1.0"
+log = { workspace = true }
 parking_lot = { workspace = true }
 
 [dev-dependencies]
-env_logger = "0.5"
+env_logger = { workspace = true }
 tokio = "0.1"
 tokio-io = "0.1"

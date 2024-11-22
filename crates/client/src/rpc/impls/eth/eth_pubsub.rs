@@ -26,7 +26,7 @@ use futures::{
     future::{FutureExt, TryFutureExt},
 };
 use itertools::zip;
-use jsonrpc_core::{futures::Future, Result as RpcResult};
+use jsonrpc_core::Result as RpcResult;
 use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     SubscriptionId,
@@ -246,12 +246,12 @@ impl ChainNotificationHandler {
 
     // notify `subscriber` about `result` asynchronously
     async fn notify_async(subscriber: &Client, result: pubsub::Result) {
-        let fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
+        let _fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
             |e| warn!(target: "rpc", "Unable to send notification: {}", e),
         );
 
         // convert futures01::Future into std::Future so that we can await
-        let _ = fut.compat().await;
+        // let _ = fut.compat().await;
     }
 
     // notify each subscriber about header `hash` concurrently
