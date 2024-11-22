@@ -92,7 +92,13 @@ pub fn load_secrets_file(
     for line in buffered.lines() {
         let keypair =
             KeyPair::from_secret(line.unwrap().parse().unwrap()).unwrap();
+        
+        // Insert balance for native space
         accounts.insert(keypair.address().with_native_space(), balance.clone());
+        
+        // Insert balance for EVM space
+        accounts.insert(keypair.evm_address().with_evm_space(), balance.clone());
+        
         secret_store.insert(keypair);
     }
     Ok(accounts)
