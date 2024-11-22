@@ -19,6 +19,8 @@ import time
 from typing import Union
 import random
 
+from eth_account import Account
+
 from .authproxy import JSONRPCException
 from . import coverage
 from .mininode import start_p2p_connection
@@ -72,6 +74,7 @@ class ConfluxTestFramework:
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
+        self.secrets: list[str] = []
         self.setup_clean_chain = True
         self.nodes: list[TestNode] = []
         self.network_thread = None
@@ -91,6 +94,11 @@ class ConfluxTestFramework:
             self,
             "num_nodes"), "Test must set self.num_nodes in set_test_params()"
 
+    # should be called before setup_chain()
+    def _add_genesis_secrets(self, num_secrets: int):
+        for _ in range(num_secrets):
+            self.secrets.append(Account.create().key.hex())
+            
     def main(self):
         """Main function. This should not be overridden by the subclass test scripts."""
 
@@ -456,7 +464,7 @@ class ConfluxTestFramework:
 
         for i in range(self.num_nodes):
             initialize_datadir(self.options.tmpdir, i, self.options.port_min, self.conf_parameters,
-                               self.extra_conf_files)
+                               self.extra_conf_files, self.secrets)
             
     def before_test(self):
         pass
