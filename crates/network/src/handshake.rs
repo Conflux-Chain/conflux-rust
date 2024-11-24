@@ -20,7 +20,6 @@
 
 use crate::{
     connection::Connection, node_table::NodeId, service::HostMetadata, Error,
-    ErrorKind,
 };
 use cfx_types::{Public, H256};
 use io::{IoContext, StreamToken};
@@ -182,7 +181,7 @@ impl Handshake {
                 data.len(),
                 AUTH_PACKET_SIZE
             );
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         let auth = ecies::decrypt(secret, &[], data)?;
@@ -253,7 +252,7 @@ impl Handshake {
                 data.len(),
                 ACK_OF_AUTH_PACKET_SIZE
             );
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         let ack = ecies::decrypt(secret, &[], data)?;
@@ -262,7 +261,7 @@ impl Handshake {
 
         if self_nonce != &self.nonce[..] {
             debug!("failed to read ack of auth, nonce mismatch");
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         self.write_ack_of_ack(io, remote_nonce)
@@ -299,14 +298,14 @@ impl Handshake {
                 data.len(),
                 ACK_OF_ACK_PACKET_SIZE
             );
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         let nonce = ecies::decrypt(secret, &[], data)?;
 
         if &nonce[..] != &self.nonce[..] {
             debug!("failed to read ack of ack, nonce mismatch");
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         self.state = HandshakeState::StartSession;
