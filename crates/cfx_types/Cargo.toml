@@ -5,11 +5,13 @@ license = "GPL-3.0"
 description = "Conflux types"
 
 [dependencies]
-ethereum-types = "0.9"
-serde_derive = "1.0"
-serde = "1.0"
-rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+ethereum-types = { workspace = true }
+serde_derive = { workspace = true }
+serde = { workspace = true }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
+hex = { workspace = true }
+keccak-hash = { workspace = true }
 
 [features]
 storage_benchmark_no_account_space_check = []

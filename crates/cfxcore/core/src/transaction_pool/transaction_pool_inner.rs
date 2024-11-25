@@ -2,16 +2,19 @@ use super::{
     account_cache::AccountCache,
     garbage_collector::GarbageCollector,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
+    TransactionPoolError,
 };
 
 use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 use cfx_parameters::{
+    block::cspace_block_gas_limit_after_cip1559,
     consensus_internal::ELASTICITY_MULTIPLIER,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 
+pub use cfx_rpc_cfx_types::{PendingReason, TransactionStatus};
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
     address_util::AddressUtil, AddressWithSpace, Space, SpaceMap, H256, U128,
@@ -28,7 +31,6 @@ use primitives::{
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use rlp::*;
-use serde::Serialize;
 use std::{
     collections::{BTreeSet, HashMap},
     sync::Arc,
@@ -488,27 +490,6 @@ impl DeferredPool {
     }
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum TransactionStatus {
-    Packed,
-    Ready,
-    Pending(PendingReason),
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum PendingReason {
-    FutureNonce,
-    NotEnoughCash,
-    OldEpochHeight,
-    // The tx status in the pool is inaccurate due to chain switch or sponsor
-    // balance change. This tx will not be packed even if it should have
-    // been ready, and the user needs to send a new transaction to trigger
-    // the status change.
-    OutdatedStatus,
-}
-
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct TransactionSet {
     inner: HashMap<H256, Arc<SignedTransaction>>,
@@ -827,7 +808,7 @@ impl TransactionPoolInner {
         ) {
             self.collect_garbage(transaction.as_ref());
             if self.is_full(transaction.space()) {
-                return InsertResult::Failed("Transaction Pool is full".into());
+                return InsertResult::Failed(TransactionPoolError::TxPoolFull);
             }
         }
         let result = {
@@ -1225,7 +1206,9 @@ impl TransactionPoolInner {
         };
 
         {
-            let gas_target = block_gas_limit * 9 / 10 / ELASTICITY_MULTIPLIER;
+            let gas_target =
+                cspace_block_gas_limit_after_cip1559(block_gas_limit)
+                    / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Native];
             let min_base_price =
                 machine.params().min_base_price()[Space::Native];
@@ -1342,16 +1325,13 @@ impl TransactionPoolInner {
     pub fn insert_transaction_with_readiness_check(
         &mut self, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
-    ) -> Result<(), String> {
+    ) -> Result<(), TransactionPoolError> {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let (sponsored_gas, sponsored_storage) =
             self.get_sponsored_gas_and_storage(account_cache, &transaction)?;
 
-        let (state_nonce, state_balance) = account_cache
-            .get_nonce_and_balance(&transaction.sender())
-            .map_err(|e| {
-                format!("Failed to read account_cache from storage: {}", e)
-            })?;
+        let (state_nonce, state_balance) =
+            account_cache.get_nonce_and_balance(&transaction.sender())?;
 
         if transaction.hash[0] & 254 == 0 {
             trace!(
@@ -1367,10 +1347,10 @@ impl TransactionPoolInner {
                 "Transaction {:?} is discarded due to in too distant future",
                 transaction.hash()
             );
-            return Err(format!(
-                "Transaction {:?} is discarded due to in too distant future",
-                transaction.hash()
-            ));
+            return Err(TransactionPoolError::NonceTooDistant {
+                hash: transaction.hash(),
+                nonce: *transaction.nonce(),
+            });
         } else if !packed /* Because we may get slightly out-dated state for transaction pool, we should allow transaction pool to set already past-nonce transactions to packed. */
             && *transaction.nonce() < state_nonce
         {
@@ -1378,10 +1358,10 @@ impl TransactionPoolInner {
                 "Transaction {:?} is discarded due to a too stale nonce, self.nonce()={}, state_nonce={}",
                 transaction.hash(), transaction.nonce(), state_nonce,
             );
-            return Err(format!(
-                "Transaction {:?} is discarded due to a too stale nonce",
-                transaction.hash()
-            ));
+            return Err(TransactionPoolError::NonceTooStale {
+                hash: transaction.hash(),
+                nonce: *transaction.nonce(),
+            });
         }
 
         // check balance
@@ -1416,7 +1396,11 @@ impl TransactionPoolInner {
                     state_balance
                 );
                 trace!("{}", msg);
-                return Err(msg);
+                return Err(TransactionPoolError::OutOfBalance {
+                    need: need_balance,
+                    have: state_balance,
+                    hash: transaction.hash(),
+                });
             }
         }
 
@@ -1427,17 +1411,14 @@ impl TransactionPoolInner {
             (state_nonce, state_balance),
             (sponsored_gas, sponsored_storage),
         );
-        if let InsertResult::Failed(info) = result {
-            return Err(format!("Failed imported to deferred pool: {}", info));
+        if let InsertResult::Failed(err) = result {
+            return Err(err);
         }
 
         self.recalculate_readiness_with_state(
             &transaction.sender(),
             account_cache,
-        )
-        .map_err(|e| {
-            format!("Failed to read account_cache from storage: {}", e)
-        })?;
+        )?;
 
         Ok(())
     }
@@ -1456,70 +1437,84 @@ impl TransactionPoolInner {
 
     pub fn get_sponsored_gas_and_storage(
         &self, account_cache: &AccountCache, transaction: &SignedTransaction,
-    ) -> Result<(U256, u64), String> {
-        let mut sponsored_gas = U256::from(0);
-        let mut sponsored_storage = 0;
+    ) -> StateDbResult<(U256, u64)> {
         let sender = transaction.sender();
 
-        // Compute sponsored_gas for `transaction`
-        if let Transaction::Native(ref utx) = transaction.unsigned {
-            if let Action::Call(ref callee) = utx.action().clone() {
-                // FIXME: This is a quick fix for performance issue.
-                if callee.is_contract_address() {
-                    if let Some(sponsor_info) =
-                        account_cache.get_sponsor_info(callee).map_err(|e| {
-                            format!(
-                                "Failed to read account_cache from storage: {}",
-                                e
-                            )
-                        })?
-                    {
-                        if account_cache
-                            .check_commission_privilege(
-                                &callee,
-                                &sender.address,
-                            )
-                            .map_err(|e| {
-                                format!(
-                                    "Failed to read account_cache from storage: {}",
-                                    e
-                                )
-                            })?
-                        {
-                            let estimated_gas = Self::estimated_gas_fee(transaction.gas().clone(), transaction.gas_price().clone());
-                            if estimated_gas <= sponsor_info.sponsor_gas_bound
-                                && estimated_gas
-                                <= sponsor_info.sponsor_balance_for_gas
-                            {
-                                sponsored_gas = utx.gas().clone();
-                            }
-                            let estimated_collateral =
-                                U256::from(*utx.storage_limit())
-                                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                            if estimated_collateral
-                                <= sponsor_info.sponsor_balance_for_collateral + sponsor_info.unused_storage_points()
-                            {
-                                sponsored_storage = *utx.storage_limit();
-                            }
-                        }
-                    }
-                }
+        // Filter out espace transactions
+        let utx = if let Transaction::Native(ref utx) = transaction.unsigned {
+            utx
+        } else {
+            return Ok(Default::default());
+        };
+
+        // Keep contract call only
+        let contract_address = match utx.action() {
+            Action::Call(callee) if callee.is_contract_address() => *callee,
+            _ => {
+                return Ok(Default::default());
             }
+        };
+
+        // Get sponsor info
+        let sponsor_info = if let Some(sponsor_info) =
+            account_cache.get_sponsor_info(&contract_address)?
+        {
+            sponsor_info
+        } else {
+            return Ok(Default::default());
+        };
+
+        // Check if sender is eligible for sponsor
+        if !account_cache
+            .check_commission_privilege(&contract_address, &sender.address)?
+        {
+            return Ok(Default::default());
         }
-        Ok((sponsored_gas, sponsored_storage))
+
+        // Detailed logics
+        let estimated_gas = Self::estimated_gas_fee(
+            transaction.gas().clone(),
+            transaction.gas_price().clone(),
+        );
+        let sponsored_gas = if estimated_gas <= sponsor_info.sponsor_gas_bound
+            && estimated_gas <= sponsor_info.sponsor_balance_for_gas
+        {
+            utx.gas().clone()
+        } else {
+            0.into()
+        };
+
+        let estimated_collateral = U256::from(*utx.storage_limit())
+            * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        let sponsored_collateral = if estimated_collateral
+            <= sponsor_info.sponsor_balance_for_collateral
+                + sponsor_info.unused_storage_points()
+        {
+            *utx.storage_limit()
+        } else {
+            0
+        };
+
+        Ok((sponsored_gas, sponsored_collateral))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::verification::PackingCheckResult;
+    use crate::{
+        transaction_pool::TransactionPoolError,
+        verification::PackingCheckResult,
+    };
 
     use super::{
         DeferredPool, InsertResult, TransactionPoolInner, TxWithReadyInfo,
     };
     use cfx_executor::{
-        machine::{new_machine, Machine, VmFactory},
+        machine::{Machine, VmFactory},
         spec::CommonParams,
+    };
+    use cfx_parameters::block::{
+        cspace_block_gas_limit_after_cip1559, espace_block_gas_limit,
     };
     use cfx_types::{Address, AddressSpaceUtil, Space, SpaceMap, U256};
     use itertools::Itertools;
@@ -1641,7 +1636,9 @@ mod tests {
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
-            InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", bob_tx2_new.gas_price()))
+            InsertResult::Failed(TransactionPoolError::HigherGasPriceNeeded {
+                expected: *bob_tx2_new.gas_price() + U256::one()
+            })
         );
 
         assert_eq!(
@@ -1812,13 +1809,12 @@ mod tests {
 
         let params = machine.params();
 
-        let core_gas_limit = block_gas_limit * 9 / 10;
-        let eth_gas_limit =
-            if params.can_pack_evm_transaction(best_epoch_height) {
-                block_gas_limit * 5 / 10
-            } else {
-                U256::zero()
-            };
+        let core_gas_limit =
+            cspace_block_gas_limit_after_cip1559(block_gas_limit);
+        let eth_gas_limit = espace_block_gas_limit(
+            params.can_pack_evm_transaction(best_epoch_height),
+            block_gas_limit,
+        );
 
         let gas_target =
             SpaceMap::new(core_gas_limit, eth_gas_limit).map_all(|x| x / 2);
@@ -1859,7 +1855,7 @@ mod tests {
         let mut params = CommonParams::default();
         params.min_base_price = SpaceMap::new(100, 200).map_all(U256::from);
 
-        let machine = Arc::new(new_machine(params, VmFactory::default()));
+        let machine = Arc::new(Machine::new(params, VmFactory::default()));
 
         let test_block_limit = SpaceMap::new(5400, 3000);
 

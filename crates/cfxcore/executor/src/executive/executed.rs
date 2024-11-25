@@ -207,7 +207,8 @@ pub fn make_ext_result<O: ExecutiveObserver>(observer: O) -> ShareDebugMap {
     ext_result
 }
 
-pub fn revert_reason_decode(output: &Bytes) -> String {
+// abi decode string revert reason: Error(string)
+pub fn string_revert_reason_decode(output: &Bytes) -> String {
     const MAX_LENGTH: usize = 50;
     let decode_result = if output.len() < 4 {
         Err(ABIDecodeError("Uncompleted Signature"))
@@ -234,16 +235,19 @@ pub fn revert_reason_decode(output: &Bytes) -> String {
 use cfx_vm_types::Spec;
 
 #[cfg(test)]
-use rustc_hex::FromHex;
+mod test {
+    use super::string_revert_reason_decode;
+    use rustc_hex::FromHex;
 
-#[test]
-fn test_decode_result() {
-    let input_hex = "08c379a0\
-         0000000000000000000000000000000000000000000000000000000000000020\
-         0000000000000000000000000000000000000000000000000000000000000018\
-         e699bae59586e4b88de8b6b3efbc8ce8afb7e58585e580bc0000000000000000";
-    assert_eq!(
-        "智商不足，请充值".to_string(),
-        revert_reason_decode(&input_hex.from_hex().unwrap())
-    );
+    #[test]
+    fn test_decode_result() {
+        let input_hex = "08c379a0\
+            0000000000000000000000000000000000000000000000000000000000000020\
+            0000000000000000000000000000000000000000000000000000000000000018\
+            e699bae59586e4b88de8b6b3efbc8ce8afb7e58585e580bc0000000000000000";
+        assert_eq!(
+            "智商不足，请充值".to_string(),
+            string_revert_reason_decode(&input_hex.from_hex().unwrap())
+        );
+    }
 }

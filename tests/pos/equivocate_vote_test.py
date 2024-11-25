@@ -34,7 +34,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
                     latest_round_blocks.add(b["hash"])
         for b in latest_round_blocks:
             self.log.info("force_vote %s", b)
-            self.nodes[self.num_nodes - 1].pos_force_vote_proposal(b)
+            self.nodes[self.num_nodes - 1].test_posForceVoteProposal(b)
             # wait for the vote to be processed.
             time.sleep(0.2)
         client.generate_empty_blocks(300)
@@ -53,7 +53,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         self.log.info("balance before unstake %s", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
         client.wait_for_unstake()
         self.log.info("balance after unstake %s", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
-        # assert (self.nodes[0].getblockcount() == 6002)
+        # assert (self.nodes[0].test_getBlockCount() == 6002)
 
 if __name__ == '__main__':
     PosEquivocateVoteTest().main()

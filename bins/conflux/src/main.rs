@@ -12,7 +12,7 @@ use cfxcore::NodeType;
 use clap::{crate_version, load_yaml, App, ArgMatches};
 use client::{
     archive::ArchiveClient,
-    common::{client_methods, ClientTrait},
+    common::{shutdown_handler, ClientTrait},
     configuration::Configuration,
     full::FullClient,
     light::LightClient,
@@ -158,24 +158,23 @@ Current Version: {}
     client_handle = match conf.node_type() {
         NodeType::Archive => {
             info!("Starting archive client...");
-            ArchiveClient::start(conf, exit.clone()).map_err(|e| {
-                format!("failed to start archive client: {:?}", e)
-            })?
+            ArchiveClient::start(conf, exit.clone())
+                .map_err(|e| format!("failed to start archive client: {}", e))?
         }
         NodeType::Full => {
             info!("Starting full client...");
             FullClient::start(conf, exit.clone())
-                .map_err(|e| format!("failed to start full client: {:?}", e))?
+                .map_err(|e| format!("failed to start full client: {}", e))?
         }
         NodeType::Light => {
             info!("Starting light client...");
             LightClient::start(conf, exit.clone())
-                .map_err(|e| format!("failed to start light client: {:?}", e))?
+                .map_err(|e| format!("failed to start light client: {}", e))?
         }
         NodeType::Unknown => return Err("Unknown node type".into()),
     };
     info!("Conflux client started");
-    client_methods::run(client_handle, exit);
+    shutdown_handler::run(client_handle, exit);
 
     Ok(())
 }
@@ -210,7 +209,9 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
     }
 
     if let Some(cmd) = RpcCommand::parse(subcmd_matches)? {
-        return Ok(Some(cmd.execute()?));
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(cmd.execute())?;
+        return Ok(Some(result));
     }
 
     Ok(None)

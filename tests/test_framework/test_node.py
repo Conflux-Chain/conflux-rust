@@ -24,7 +24,6 @@ from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from .authproxy import JSONRPCException
 from .util import *
 
-
 class FailedToStartError(Exception):
     """Raised when a node fails to start correctly."""
 
@@ -236,12 +235,12 @@ class TestNode:
         retry = 0
         max_retry = wait_time / sleep_time
 
-        while self.current_sync_phase() not in phases and retry <= max_retry:
+        while self.debug_currentSyncPhase() not in phases and retry <= max_retry:
             time.sleep(0.1)
             retry += 1
 
         if retry > max_retry:
-            current_phase = self.current_sync_phase()
+            current_phase = self.debug_currentSyncPhase()
             raise AssertionError(f"Node did not reach any of {phases} after {wait_time} seconds, current phase is {current_phase}")
 
     def wait_for_nodeid(self):
@@ -389,7 +388,7 @@ class TestNode:
         # if self.ip is not None:
         #     kwargs['dstaddr'] = self.ip
         # print(args, kwargs)
-        p2p_conn.peer_connect(*args, **kwargs)
+        p2p_conn.peer_connect(*args, **kwargs)()
         self.p2ps.append(p2p_conn)
 
         return p2p_conn

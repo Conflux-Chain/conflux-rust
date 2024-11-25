@@ -69,7 +69,7 @@ class P2PThrottlingTest(ConfluxTestFramework):
         start = time.time()
         # Generate blocks with about twice the throttling rate.
         for _ in range(int(n_blocks/rate)):
-            self.nodes[0].generate_empty_blocks(rate)
+            self.nodes[0].test_generateEmptyBlocks(rate)
             time.sleep(0.5)
         self.log.info("Wait for blocks to be synced")
         sync_blocks(self.nodes, timeout=120)

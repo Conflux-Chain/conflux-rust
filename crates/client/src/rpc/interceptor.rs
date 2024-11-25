@@ -2,13 +2,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::rpc::errors::request_rejected_too_many_request_error;
 use futures01::{lazy, Future};
 use jsonrpc_core::{
     BoxFuture, Metadata, Params, RemoteProcedure, Result as RpcResult,
     RpcMethod,
 };
+use lazy_static::lazy_static;
+use metrics::{register_timer_with_group, ScopeTimer, Timer};
+use parking_lot::Mutex;
 use serde_json::Value;
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
+
+lazy_static! {
+    static ref METRICS_INTERCEPTOR_TIMERS: Mutex<HashMap<String, Arc<dyn Timer>>> =
+        Default::default();
+}
 
 pub trait RpcInterceptor: Send + Sync + 'static {
     fn before(&self, _name: &String) -> RpcResult<()>;
@@ -120,6 +130,97 @@ where
         let method_future = before_future.and_then(move |_| method_call);
 
         Box::new(method_future)
+    }
+}
+
+pub struct ThrottleInterceptor {
+    manager: TokenBucketManager,
+}
+
+impl ThrottleInterceptor {
+    pub fn new(file: &Option<String>, section: &str) -> Self {
+        let manager = match file {
+            Some(file) => TokenBucketManager::load(file, Some(section))
+                .expect("invalid throttling configuration file"),
+            None => TokenBucketManager::default(),
+        };
+
+        ThrottleInterceptor { manager }
+    }
+}
+
+impl RpcInterceptor for ThrottleInterceptor {
+    fn before(&self, name: &String) -> RpcResult<()> {
+        let bucket = match self.manager.get(name) {
+            Some(bucket) => bucket,
+            None => return Ok(()),
+        };
+
+        let result = bucket.lock().throttle_default();
+
+        match result {
+            ThrottleResult::Success => Ok(()),
+            ThrottleResult::Throttled(wait_time) => {
+                debug!("RPC {} throttled in {:?}", name, wait_time);
+                bail!(request_rejected_too_many_request_error(Some(format!(
+                    "throttled in {:?}",
+                    wait_time
+                ))))
+            }
+            ThrottleResult::AlreadyThrottled => {
+                debug!("RPC {} already throttled", name);
+                bail!(request_rejected_too_many_request_error(Some(
+                    "already throttled, please try again later".into()
+                )))
+            }
+        }
+    }
+}
+
+pub struct MetricsInterceptor {
+    // TODO: Chain interceptors instead of wrapping up.
+    throttle_interceptor: ThrottleInterceptor,
+}
+
+impl MetricsInterceptor {
+    pub fn new(throttle_interceptor: ThrottleInterceptor) -> Self {
+        Self {
+            throttle_interceptor,
+        }
+    }
+}
+
+impl RpcInterceptor for MetricsInterceptor {
+    fn before(&self, name: &String) -> RpcResult<()> {
+        self.throttle_interceptor.before(name)?;
+        // Use a global variable here because `http` and `web3` setup different
+        // interceptors for the same RPC API.
+        let mut timers = METRICS_INTERCEPTOR_TIMERS.lock();
+        if !timers.contains_key(name) {
+            let timer = register_timer_with_group("rpc", name.as_str());
+            timers.insert(name.clone(), timer);
+        }
+        Ok(())
+    }
+
+    fn around(
+        &self, name: &String, method_call: BoxFuture<Value>,
+    ) -> BoxFuture<Value> {
+        let maybe_timer = METRICS_INTERCEPTOR_TIMERS
+            .lock()
+            .get(name)
+            .map(|timer| timer.clone());
+        let setup = lazy(move || {
+            Ok(maybe_timer
+                .as_ref()
+                .map(|timer| ScopeTimer::time_scope(timer.clone())))
+        });
+        Box::new(setup.then(|timer: Result<_, ()>| {
+            method_call.then(|r| {
+                drop(timer);
+                r
+            })
+        }))
     }
 }
 

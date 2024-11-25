@@ -27,7 +27,7 @@ function check_build {
     local result
 
     result=$(
-        cargo build --release && cargo doc --document-private-items && cargo test --release --all --no-run && cargo bench --all --no-run | tee /dev/stderr
+        cargo build --release && cargo doc --document-private-items && cargo test --release --all --no-run && cargo bench --all --no-run && ./dev-support/check-crates.sh | tee /dev/stderr
     )
 
     local exit_code=$?
@@ -71,7 +71,7 @@ function check_unit_tests {
     pushd $ROOT_DIR > /dev/null
     local result
     result=$(
-       cargo test --release --all | tee /dev/stderr
+       cargo test --release --all && cargo test -p cfx-addr --no-default-features | tee /dev/stderr
     )
     local exit_code=$?
     popd > /dev/null

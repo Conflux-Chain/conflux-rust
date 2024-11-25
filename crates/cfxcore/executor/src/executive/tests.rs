@@ -5,18 +5,13 @@
 use super::*;
 use crate::{
     machine::{Machine, VmFactory},
-    state::{get_state_for_genesis_write, CleanupMode, State},
+    state::{get_state_by_epoch_id, get_state_for_genesis_write, CleanupMode},
     substate::Substate,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
     internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     staking::*,
-};
-use cfx_statedb::StateDb;
-use cfx_storage::{
-    state_manager::StateManagerTrait, tests::new_state_manager_for_unit_test,
-    StateIndex,
 };
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, U256,
@@ -42,7 +37,7 @@ use std::{
 
 #[cfg(test)]
 fn make_byzantium_machine(max_depth: usize) -> Machine {
-    let mut machine = crate::machine::new_machine_with_builtin(
+    let mut machine = crate::machine::Machine::new_with_builtin(
         Default::default(),
         VmFactory::new(1024 * 32),
     );
@@ -95,8 +90,7 @@ fn test_sender_balance() {
     params.value = ActionValue::Transfer(U256::from(0x7));
     params.create_type = CreateType::CREATE;
     let storage_limit_in_drip = U256::MAX;
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     state
         .add_balance(
             &sender_with_space,
@@ -215,8 +209,7 @@ fn test_create_contract_out_of_depth() {
     let machine = make_byzantium_machine(0);
     let spec = machine.spec_for_test(env.number);
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     state
         .add_balance(&sender_with_space, &U256::from(100), CleanupMode::NoEmpty)
         .unwrap();
@@ -270,8 +263,7 @@ fn test_suicide_when_creation() {
     let machine = make_byzantium_machine(0);
     let spec = machine.spec_for_test(env.number);
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     state
         .add_balance(
             &sender_with_space,
@@ -361,8 +353,7 @@ fn test_call_to_create() {
     let machine = make_byzantium_machine(5);
     let spec = machine.spec_for_test(env.number);
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     state
         .new_contract_with_code(&address, U256::zero())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
@@ -429,8 +420,7 @@ fn test_revert() {
     let spec = machine.spec_for_test(env.number);
     let mut substate = Substate::new();
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     state
         .add_balance(
             &sender_with_space,
@@ -509,8 +499,7 @@ fn test_keccak() {
     let machine = make_byzantium_machine(0);
     let spec = machine.spec_for_test(env.number);
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     state
         .add_balance(
             &sender_with_space,
@@ -555,8 +544,7 @@ fn test_not_enough_cash() {
     let machine = make_byzantium_machine(0);
     let spec = machine.spec_for_test(env.number);
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     state
         .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
         .unwrap();
@@ -593,8 +581,7 @@ fn test_deposit_withdraw_lock() {
     let mut sender = Address::zero();
     sender.set_user_account_type_bits();
     let sender_with_space = sender.with_native_space();
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let env = Env::default();
     let machine = make_byzantium_machine(0);
     let spec = machine.spec_for_test(env.number);
@@ -948,8 +935,7 @@ fn test_deposit_withdraw_lock() {
 fn test_commission_privilege_all_whitelisted_across_epochs() {
     let code: Vec<u8> = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let machine = make_byzantium_machine(0);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
@@ -1011,16 +997,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     state.commit(epoch_id, Some(&mut debug_record)).unwrap();
     debug!("{:?}", debug_record);
 
-    let mut state = State::new(StateDb::new(
-        storage_manager
-            .get_state_for_next_epoch(
-                StateIndex::new_for_test_only_delta_mpt(&epoch_id),
-                false,
-            )
-            .unwrap()
-            .unwrap(),
-    ))
-    .expect("Failed to initialize state");
+    let mut state = get_state_by_epoch_id(&epoch_id);
 
     state.checkpoint();
     let mut substate = Substate::new();
@@ -1107,19 +1084,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         .unwrap()
         .unwrap();
     state.discard_checkpoint();
-    state.commit(epoch_id, None).unwrap();
-
-    let state = State::new(StateDb::new(
-        storage_manager
-            .get_state_no_commit(
-                StateIndex::new_for_test_only_delta_mpt(&epoch_id),
-                /* try_open = */ false,
-                None,
-            )
-            .unwrap()
-            .unwrap(),
-    ))
-    .expect("Failed to initialize state");
+    state.commit_for_test(epoch_id).unwrap();
 
     assert_eq!(
         true,
@@ -1151,8 +1116,7 @@ fn test_commission_privilege() {
 
     let code = "7c601080600c6000396000f3006000355415600957005b60203560003555600052601d60036017f0600055".from_hex().unwrap();
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
@@ -1546,8 +1510,7 @@ fn test_storage_commission_privilege() {
     // &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
     let code = "7c601080600c6000396000f3006000355415600957005b6020356000355560005233600155".from_hex().unwrap();
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
@@ -2181,8 +2144,7 @@ fn test_push0() {
     let env = Env::default();
     let machine = make_byzantium_machine(0);
 
-    let storage_manager = new_state_manager_for_unit_test();
-    let mut state = get_state_for_genesis_write(&storage_manager);
+    let mut state = get_state_for_genesis_write();
 
     // Test case 1 in EIP-3855
     {

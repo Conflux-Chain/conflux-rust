@@ -1,21 +1,21 @@
 use super::ConsensusExecutionHandler;
-use std::{convert::From, sync::Arc};
+use std::{collections::BTreeSet, convert::From, sync::Arc};
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
+use cfx_parameters::genesis::GENESIS_ACCOUNT_ADDRESS;
 use geth_tracer::{GethTraceWithHash, GethTracer, TxExecContext};
 use pow_types::StakingEvent;
 
-use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult};
-use cfx_types::{Space, SpaceMap, H256, U256};
+use cfx_statedb::{Error as DbErrorKind, Result as DbResult};
+use cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 use primitives::{
-    receipt::BlockReceipts, Action, Block, BlockNumber, EpochId, Receipt,
+    receipt::BlockReceipts, Action, Block, BlockNumber, Receipt,
     SignedTransaction, TransactionIndex,
 };
 
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::consensus_inner::consensus_executor::GOOD_TPS_METER,
-    state_prefetcher::{prefetch_accounts, PrefetchTaskHandle},
 };
 use cfx_execute_helper::{
     exec_tracer::TransactionExecTraces,
@@ -46,11 +46,11 @@ pub struct GethTask<'a> {
 
 impl ConsensusExecutionHandler {
     pub(super) fn process_epoch_transactions<'a>(
-        &self, epoch_id: EpochId, state: &mut State,
-        epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
-        on_local_pivot: bool, virtual_call: Option<VirtualCall<'a>>,
+        &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
+        start_block_number: u64, on_local_pivot: bool,
+        virtual_call: Option<VirtualCall<'a>>,
     ) -> DbResult<Vec<Arc<BlockReceipts>>> {
-        self.prefetch_storage_for_execution(epoch_id, state, epoch_blocks);
+        self.prefetch_storage_for_execution(&*state, epoch_blocks);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
@@ -127,45 +127,36 @@ impl ConsensusExecutionHandler {
     }
 
     fn prefetch_storage_for_execution(
-        &self, epoch_id: EpochId, state: &mut State,
-        epoch_blocks: &Vec<Arc<Block>>,
+        &self, state: &State, epoch_blocks: &Vec<Arc<Block>>,
     ) {
         // Prefetch accounts for transactions.
         // The return value _prefetch_join_handles is used to join all threads
         // before the exit of this function.
-        let prefetch_join_handles = match self
-            .execution_state_prefetcher
-            .as_ref()
+        let pool = if let Some(prefetcher) =
+            self.execution_state_prefetcher.as_ref()
         {
-            Some(prefetcher) => {
-                let mut accounts = vec![];
-                for block in epoch_blocks.iter() {
-                    for transaction in block.transactions.iter() {
-                        accounts.push(&transaction.sender);
-                        match transaction.action() {
-                            Action::Call(ref address) => accounts.push(address),
-                            _ => {}
-                        }
-                    }
-                }
-
-                prefetch_accounts(prefetcher, epoch_id, state, accounts)
-            }
-            None => PrefetchTaskHandle {
-                task_epoch_id: epoch_id,
-                state,
-                prefetcher: None,
-                accounts: vec![],
-            },
+            prefetcher
+        } else {
+            return;
         };
 
-        // TODO:
-        //   Make the state shared ref for vm execution, then remove this drop.
-        //   When the state can be made shared, prefetch can happen at the same
-        //   time of the execution, the vm execution do not have to wait
-        //   for prefetching to finish.
-        prefetch_join_handles.wait_for_task();
-        drop(prefetch_join_handles);
+        let mut accounts = BTreeSet::new();
+        for block in epoch_blocks.iter() {
+            for transaction in block.transactions.iter() {
+                let space = transaction.space();
+                accounts.insert(transaction.sender.with_space(space));
+                if let Action::Call(ref address) = transaction.action() {
+                    accounts.insert(address.with_space(space));
+                }
+            }
+        }
+        // Due to an existing bug and special handling of the genesis account,
+        // it can not be prefetched.
+        accounts.remove(&GENESIS_ACCOUNT_ADDRESS.with_native_space());
+        let res = state.prefetch_accounts(accounts, pool);
+        if let Err(e) = res {
+            warn!("Fail to prefetch account {:?}", e);
+        }
     }
 
     fn make_block_env(&self, block_context: &BlockProcessContext) -> Env {

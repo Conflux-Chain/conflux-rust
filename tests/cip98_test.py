@@ -30,7 +30,7 @@ class CIP98Test(ConfluxTestFramework):
         w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
         start_p2p_connection(self.nodes)
         priv = default_config["GENESIS_PRI_KEY"]
-        account = w3.eth.account.privateKeyToAccount(priv)
+        account = w3.eth.account.from_key(priv)
 
         # Create forks to make block number != epoch number
         client.generate_block()
@@ -50,10 +50,10 @@ class CIP98Test(ConfluxTestFramework):
         hash_contract_abi_path = join(dirname(realpath(__file__)),
                                       *"contracts/cip98_test.json".split("/"))
         abi = json.loads(open(hash_contract_abi_path, "r").read())
-        signed = account.signTransaction(dict(data=bytecode, gas=200000, nonce=0, gasPrice=1, chainId=EVM_CHAIN_ID))
-        w3.eth.sendRawTransaction(signed["rawTransaction"])
+        signed = account.sign_transaction(dict(data=bytecode, gas=200000, nonce=0, gasPrice=1, chainId=EVM_CHAIN_ID))
+        w3.eth.send_raw_transaction(signed["raw_transaction"])
         client.generate_blocks(20, 1)
-        receipt = w3.eth.waitForTransactionReceipt(signed["hash"])
+        receipt = w3.eth.wait_for_transaction_receipt(signed["hash"])
         contract = w3.eth.contract(abi=abi, address=receipt["contractAddress"])
 
         assert_equal(encode_hex(contract.functions.query().call()), ZERO_HASH)

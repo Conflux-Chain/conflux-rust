@@ -7,9 +7,10 @@ version = "2.0.2"
 edition = "2021"
 
 [dependencies]
-primitives = { path = "../../primitives" }
-cfx-types = { path = "../../cfx_types" }
-rlp = "0.4.0"
-error-chain = { version = "0.12", default-features = false }
+primitives = { workspace = true }
+cfx-types = { workspace = true }
+rlp = { workspace = true }
 sqlite = "0.25"
 strfmt = "0.1"
+thiserror ={ workspace = true }
+cfx-util-macros ={ workspace = true}

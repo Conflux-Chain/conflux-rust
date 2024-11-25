@@ -1,4 +1,5 @@
 pub mod cfx;
+pub mod cfx_filter;
 pub mod debug;
 pub mod pool;
 pub mod pos;

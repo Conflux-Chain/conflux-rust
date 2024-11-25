@@ -94,7 +94,7 @@ impl State {
         {
             Ok(())
         } else {
-            Err(ErrorKind::UnsupportedByFreshlySyncedSnapshot(op).into())
+            Err(Error::UnsupportedByFreshlySyncedSnapshot(op).into())
         }
     }
 
@@ -775,7 +775,7 @@ impl State {
             Some(merkle_hash) => {
                 // Non-empty state
                 if merkle_hash.is_zero() {
-                    Err(ErrorKind::StateCommitWithoutMerkleHash.into())
+                    Err(Error::StateCommitWithoutMerkleHash.into())
                 } else {
                     Ok(merkle_hash)
                 }

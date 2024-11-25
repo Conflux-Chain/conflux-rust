@@ -95,7 +95,7 @@ class HardforkTest(ConfluxTestFramework):
         for log in logs:
             pos_identifier = log["topics"][1]
             if log["topics"][0] == REGISTER_TOPIC:
-                bls_pub_key, vrf_pub_key = eth_abi.decode_abi(["bytes", "bytes"], decode_hex(log["data"]))
+                bls_pub_key, vrf_pub_key = eth_abi.decode(["bytes", "bytes"], decode_hex(log["data"]))
                 pub_keys_map[pos_identifier] = (encode_hex_0x(bls_pub_key), encode_hex_0x(vrf_pub_key))
             elif log["topics"][0] == INCREASE_STAKE_TOPIC:
                 assert pos_identifier in pub_keys_map
@@ -108,7 +108,7 @@ class HardforkTest(ConfluxTestFramework):
                              pkfile="public_keys")
 
         # generate blocks until pos start
-        self.nodes[0].generate_empty_blocks(500)
+        self.nodes[0].test_generateEmptyBlocks(500)
         sync_blocks(self.nodes)
         pos_identifier, _ = client.wait_for_pos_register()
         client.generate_empty_blocks(400)
@@ -116,12 +116,12 @@ class HardforkTest(ConfluxTestFramework):
         time.sleep(2)
         parent_hash = client.best_block_hash()
         for _ in range(100):
-            parent_hash = client.node.test_generatecustomblock(parent_hash, [], eth_utils.encode_hex(rlp.encode([])), False, ["0x01", "0x8804"])
+            parent_hash = client.node.test_generateCustomBlock(parent_hash, [], eth_utils.encode_hex(rlp.encode([])), False, ["0x01", "0x8804"])
         sync_blocks(self.nodes)
 
         # Check if stopped node will be retired
         STOP_INDEX = 0
-        final_serving_round = self.nodes[0].pos_stop_election()
+        final_serving_round = self.nodes[0].test_posStopElection()
         stopped = False
         print("final_serving_round", final_serving_round)
 

@@ -59,9 +59,9 @@ impl PosStateConfig {
         cip99_out_queue_locked_views: u64, fix_cip99_transition_view: u64,
         fix_cip99_in_queue_locked_views: u64,
         fix_cip99_out_queue_locked_views: u64,
-        nonce_limit_transition_view: u64, max_nonce_per_account: u64, cip136_transition_view: u64,
-        cip136_in_queue_locked_views: u64, cip136_out_queue_locked_views: u64,
-        cip136_round_per_term: u64,
+        nonce_limit_transition_view: u64, max_nonce_per_account: u64,
+        cip136_transition_view: u64, cip136_in_queue_locked_views: u64,
+        cip136_out_queue_locked_views: u64, cip136_round_per_term: u64,
     ) -> Self {
         Self {
             round_per_term,
@@ -124,7 +124,9 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
 
     fn in_queue_locked_views(&self, view: u64) -> u64 {
         let conf = self.get().unwrap();
-        if view >= conf.fix_cip99_transition_view && view < conf.cip136_transition_view {
+        if view >= conf.fix_cip99_transition_view
+            && view < conf.cip136_transition_view
+        {
             conf.fix_cip99_in_queue_locked_views
         } else if view >= conf.cip99_transition_view
             && view < conf.fix_cip99_transition_view

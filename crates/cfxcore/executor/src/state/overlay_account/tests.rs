@@ -20,8 +20,7 @@ use primitives::is_default::IsDefault;
 use std::str::FromStr;
 
 fn test_account_is_default(account: &mut OverlayAccount) {
-    let storage_manager = new_state_manager_for_unit_test();
-    let state = get_state_for_genesis_write(&storage_manager);
+    let state = get_state_for_genesis_write();
 
     assert!(account.as_account().is_default());
 
@@ -754,15 +753,15 @@ fn test_clone_overwrite() {
 
     overlay_account1.set_storage_simple(vec![0; 32], U256::zero());
     assert_eq!(account1, overlay_account1.as_account());
-    assert_eq!(overlay_account1.storage_write_cache.len(), 1);
-    let overlay_account = overlay_account1.clone_account();
+    assert_eq!(overlay_account1.storage_write_cache.read().len(), 1);
+    let overlay_account = overlay_account1.clone_account_for_checkpoint(0);
     assert_eq!(account1, overlay_account.as_account());
-    assert_eq!(overlay_account.storage_write_cache.len(), 1);
+    assert_eq!(overlay_account.storage_write_cache.read().len(), 1);
 
     overlay_account2.set_storage_simple(vec![0; 32], U256::zero());
     overlay_account2.set_storage_simple(vec![1; 32], U256::zero());
     overlay_account1 = overlay_account2;
     assert_ne!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account1.as_account());
-    assert_eq!(overlay_account1.storage_write_cache.len(), 2);
+    assert_eq!(overlay_account1.storage_write_cache.read().len(), 2);
 }

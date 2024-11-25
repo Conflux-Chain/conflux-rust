@@ -21,7 +21,7 @@ import random
 
 from .authproxy import JSONRPCException
 from . import coverage
-from .mininode import start_p2p_connection
+from .mininode import start_p2p_connection, NetworkThread
 from .test_node import TestNode
 from .util import (
     CONFLUX_RPC_WAIT_TIMEOUT,
@@ -197,6 +197,10 @@ class ConfluxTestFramework:
                 default=tempfile.mkdtemp(prefix="conflux_test_"))
 
         self._start_logging()
+        
+        self.log.debug('Setting up network thread')
+        self.network_thread = NetworkThread()
+        self.network_thread.start()
 
         success = TestStatus.FAILED
 
@@ -232,6 +236,9 @@ class ConfluxTestFramework:
             print(
                 "Testcase failed. Attaching python debugger. Enter ? for help")
             pdb.set_trace()
+        
+        self.log.debug('Closing down network thread')
+        self.network_thread.close()
 
         self.log.debug('Closing down network thread')
         if not self.options.noshutdown:
@@ -362,7 +369,7 @@ class ConfluxTestFramework:
         node.wait_for_rpc_connection()
         node.wait_for_nodeid()
         # try:
-        #     node.pos_start()
+        #     node.test_posStart()
         # except Exception as e:
         #     print(e)
         if phase_to_wait is not None:
@@ -461,6 +468,7 @@ class ConfluxTestFramework:
     def before_test(self):
         pass
 
+    # wait for core space tx
     def wait_for_tx(self, all_txs, check_status=False):
         for tx in all_txs:
             self.log.debug("Wait for tx to confirm %s", tx.hash_hex())

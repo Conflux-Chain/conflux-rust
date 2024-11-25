@@ -1,10 +1,17 @@
 [package]
 name = "cfx-addr"
-version = "0.1.0"
+version = "0.2.0"
 license = "GPL-3.0"
-description = "Conflux Address Encoder/Decoder"
+description = "Conflux Base32 Address Encoder/Decoder"
+edition = "2021"
 
 [dependencies]
-cfx-types = { path = "../cfx_types" }
-lazy_static = "1.4"
-rustc-hex = "2.1"
+cfx-types = { workspace = true }
+lazy_static = { workspace = true }
+
+[dev-dependencies]
+rustc-hex = { workspace = true }
+
+[features]
+default = ["std"]
+std = []

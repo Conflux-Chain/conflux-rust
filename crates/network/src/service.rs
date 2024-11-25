@@ -1062,133 +1062,137 @@ impl NetworkServiceInner {
         let mut kill = false;
         let mut token_to_disconnect = None;
 
-        if let Some(session) = self.sessions.get(stream) {
-            // We check dropped_nodes first to make sure we stop processing
-            // communications from any dropped peers
-            let mut session_node_id = session.read().id().map(|id| *id);
-            let mut pos_public_key_opt = None;
-            if let Some(node_id) = session_node_id {
-                let to_drop = self.dropped_nodes.read().contains(&node_id);
-                self.drop_peers(io);
-                if to_drop {
-                    return;
-                }
-            }
+        let session = if let Some(session) = self.sessions.get(stream) {
+            session
+        } else {
+            return;
+        };
 
-            loop {
-                let mut sess = session.write();
-                let data = sess.readable(io, self);
-                match data {
-                    Ok(session_data) => {
-                        if session_data.token_to_disconnect.is_some() {
-                            debug!("session_readable: set token_to_disconnect to {:?}", session_data.token_to_disconnect);
-                            token_to_disconnect =
-                                session_data.token_to_disconnect;
-                        }
-                        match session_data.session_data {
-                            SessionData::Ready { pos_public_key } => {
-                                debug!(
-                                    "receive Ready with pos_public_key={:?} account={:?}",
-                                    pos_public_key,
-                                    pos_public_key.as_ref().map(|k| from_consensus_public_key(&k.0, &k.1)),
-                                );
-                                handshake_done = true;
-                                session_node_id = Some(*sess.id().unwrap());
-                                pos_public_key_opt = pos_public_key;
-                            }
-                            SessionData::Message { data, protocol } => {
-                                drop(sess);
-                                match self.handlers.read().get(&protocol) {
-                                    None => warn!(
-                                        "No handler found for protocol: {:?}",
-                                        protocol
-                                    ),
-                                    Some(_) => {
-                                        messages.push((protocol, data));
-                                    }
-                                }
-                            }
-                            SessionData::None => break,
-                            SessionData::Continue => {}
-                        }
-                    }
-                    Err(e) => {
-                        debug!("Failed to read session data, error = {:?}, session = {:?}", e, *sess);
-                        kill = true;
-                        break;
-                    }
-                }
-            }
-
-            if let Some(token_to_disconnect) = token_to_disconnect {
-                self.kill_connection_by_token(
-                    token_to_disconnect.0,
-                    io,
-                    true,
-                    Some(UpdateNodeOperation::Failure),
-                    token_to_disconnect.1.as_str(), // reason
-                );
-            }
-
-            if kill {
-                self.kill_connection_by_token(
-                    stream,
-                    io,
-                    true,
-                    Some(UpdateNodeOperation::Failure),
-                    "session readable error", // reason
-                );
+        // We check dropped_nodes first to make sure we stop processing
+        // communications from any dropped peers
+        let mut session_node_id = session.read().id().map(|id| *id);
+        let mut pos_public_key_opt = None;
+        if let Some(node_id) = session_node_id {
+            let to_drop = self.dropped_nodes.read().contains(&node_id);
+            self.drop_peers(io);
+            if to_drop {
                 return;
             }
+        }
 
-            // Handshake is just finished, first process the outcome from the
-            // handshake.
-            if handshake_done {
-                {
-                    let handlers = self.handlers.read();
-                    // Clone the data to prevent deadlock, because handler may
-                    // close the connection within the on_peer_connected
-                    // callback.
-                    let session_metadata = session.read().metadata.clone();
-                    for protocol in &session_metadata.peer_protocols {
-                        if let Some(handler) =
-                            handlers.get(&protocol.protocol).cloned()
-                        {
-                            debug!("session handshaked, token = {}", stream);
-                            let network_context = NetworkContext::new(
-                                io,
-                                handler,
-                                protocol.protocol,
-                                self,
-                            );
-                            network_context
-                                .protocol_handler()
-                                .on_peer_connected(
-                                    &network_context,
-                                    session_node_id.as_ref().unwrap(),
-                                    protocol.version,
-                                    pos_public_key_opt.clone(),
-                                );
+        loop {
+            let mut sess = session.write();
+            let data = sess.readable(io, self);
+            let session_data = match data {
+                Ok(session_data) => session_data,
+                Err(e) => {
+                    debug!("Failed to read session data, error = {:?}, session = {:?}", e, *sess);
+                    kill = true;
+                    break;
+                }
+            };
+
+            if session_data.token_to_disconnect.is_some() {
+                debug!(
+                    "session_readable: set token_to_disconnect to {:?}",
+                    session_data.token_to_disconnect
+                );
+                token_to_disconnect = session_data.token_to_disconnect;
+            }
+
+            match session_data.session_data {
+                SessionData::Ready { pos_public_key } => {
+                    debug!(
+                        "receive Ready with pos_public_key={:?} account={:?}",
+                        pos_public_key,
+                        pos_public_key
+                            .as_ref()
+                            .map(|k| from_consensus_public_key(&k.0, &k.1)),
+                    );
+                    handshake_done = true;
+                    session_node_id = Some(*sess.id().unwrap());
+                    pos_public_key_opt = pos_public_key;
+                }
+                SessionData::Message { data, protocol } => {
+                    drop(sess);
+                    match self.handlers.read().get(&protocol) {
+                        None => warn!(
+                            "No handler found for protocol: {:?}",
+                            protocol
+                        ),
+                        Some(_) => {
+                            messages.push((protocol, data));
                         }
                     }
                 }
+                SessionData::None => break,
+                SessionData::Continue => {}
             }
+        }
 
-            for (protocol, data) in messages {
-                if let Err(e) = io.handle(
-                    stream,
-                    0, /* We only have one handler for the execution
-                        * event_loop,
-                        * so the handler_id is always 0 */
-                    NetworkIoMessage::HandleProtocolMessage {
-                        protocol,
-                        peer: stream,
-                        node_id: session_node_id.as_ref().unwrap().clone(),
-                        data,
-                    },
-                ) {
-                    warn!("Error occurs, discard protocol message: err={}", e);
+        if let Some(token_to_disconnect) = token_to_disconnect {
+            self.kill_connection_by_token(
+                token_to_disconnect.0,
+                io,
+                true,
+                Some(UpdateNodeOperation::Failure),
+                token_to_disconnect.1.as_str(), // reason
+            );
+        }
+
+        if kill {
+            self.kill_connection_by_token(
+                stream,
+                io,
+                true,
+                Some(UpdateNodeOperation::Failure),
+                "session readable error", // reason
+            );
+            return;
+        }
+
+        // Handshake is just finished, first process the outcome from the
+        // handshake.
+        if handshake_done {
+            let handlers = self.handlers.read();
+            // Clone the data to prevent deadlock, because handler may
+            // close the connection within the on_peer_connected
+            // callback.
+            let session_metadata = session.read().metadata.clone();
+            for protocol in &session_metadata.peer_protocols {
+                if let Some(handler) = handlers.get(&protocol.protocol).cloned()
+                {
+                    debug!("session handshaked, token = {}", stream);
+                    let network_context = NetworkContext::new(
+                        io,
+                        handler,
+                        protocol.protocol,
+                        self,
+                    );
+                    network_context.protocol_handler().on_peer_connected(
+                        &network_context,
+                        session_node_id.as_ref().unwrap(),
+                        protocol.version,
+                        pos_public_key_opt.clone(),
+                    );
                 }
+            }
+        }
+
+        for (protocol, data) in messages {
+            if let Err(e) = io.handle(
+                stream,
+                0, /* We only have one handler for the execution
+                    * event_loop,
+                    * so the handler_id is always 0 */
+                NetworkIoMessage::HandleProtocolMessage {
+                    protocol,
+                    peer: stream,
+                    node_id: session_node_id.as_ref().unwrap().clone(),
+                    data,
+                },
+            ) {
+                warn!("Error occurs, discard protocol message: err={}", e);
             }
         }
     }

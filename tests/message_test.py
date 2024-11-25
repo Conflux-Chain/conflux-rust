@@ -25,9 +25,9 @@ class MessageTest(ConfluxTestFramework):
         default_node = start_p2p_connection([self.nodes[0]])[0]
 
         # Use the mininode and blocktools functionality to manually build a block
-        # Calling the generate_empty_blocks() rpc is easier, but this allows us to exactly
+        # Calling the test_generateEmptyBlocks() rpc is easier, but this allows us to exactly
         # control the blocks and transactions.
-        block_hash = self.nodes[0].generate_empty_blocks(1)[0]
+        block_hash = self.nodes[0].test_generateEmptyBlocks(1)[0]
         blocks = [decode_hex(block_hash)]
         new_block = create_block(blocks[0], 2)
 
@@ -82,18 +82,18 @@ class MessageTest(ConfluxTestFramework):
 
         # empty packet
         buf = struct.pack("<L", 0)[:3]
-        assert node.p2p.state == "connected"
-        node.p2p.send(buf)
+        assert node.p2p.is_connected
+        node.p2p.send_data(buf)
         # node should disconnect this p2p connection
-        wait_until(lambda: node.p2p.state != "connected", timeout=3)
+        wait_until(lambda: node.p2p.is_connected == False, timeout=3)
 
         p2p = start_p2p_connection([self.nodes[0]])[0]
         p2p.send_packet(PACKET_DISCONNECT, b'')
-        wait_until(lambda: p2p.state != "connected", timeout=3)
+        wait_until(lambda: p2p.is_connected == False, timeout=3)
 
         p2p = start_p2p_connection([self.nodes[0]])[0]
         p2p.send_packet(PACKET_PROTOCOL, b'')
-        wait_until(lambda: p2p.state != "connected", timeout=3)
+        wait_until(lambda: p2p.is_connected == False, timeout=3)
 
 if __name__ == "__main__":
     MessageTest().main()

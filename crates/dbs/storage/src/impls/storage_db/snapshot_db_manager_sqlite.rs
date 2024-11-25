@@ -289,7 +289,7 @@ impl SnapshotDbManagerSqlite {
                     .try_acquire()
                     // Unfortunately we have to use map_error because the
                     // TryAcquireError isn't public.
-                    .map_err(|_err| ErrorKind::SemaphoreTryAcquireError)?
+                    .map_err(|_err| Error::SemaphoreTryAcquireError)?
             } else {
                 executor::block_on(self.open_snapshot_semaphore.acquire())
             };
@@ -406,7 +406,7 @@ impl SnapshotDbManagerSqlite {
             .get(&snapshot_path)
             .is_some()
         {
-            bail!(ErrorKind::SnapshotAlreadyExists)
+            bail!(Error::SnapshotAlreadyExists)
         }
 
         let semaphore_permit =
@@ -421,7 +421,7 @@ impl SnapshotDbManagerSqlite {
             .get(&snapshot_path)
             .is_some()
         {
-            bail!(ErrorKind::SnapshotAlreadyExists)
+            bail!(Error::SnapshotAlreadyExists)
         }
 
         let mpt_table_in_current_db =
@@ -450,7 +450,7 @@ impl SnapshotDbManagerSqlite {
 
                 Ok(db)
             } else {
-                bail!(ErrorKind::SnapshotNotFound);
+                bail!(Error::SnapshotNotFound);
             }
         }?;
 
@@ -494,7 +494,7 @@ impl SnapshotDbManagerSqlite {
                     .try_acquire()
                     // Unfortunately we have to use map_error because the
                     // TryAcquireError isn't public.
-                    .map_err(|_err| ErrorKind::SemaphoreTryAcquireError)?
+                    .map_err(|_err| Error::SemaphoreTryAcquireError)?
             } else {
                 executor::block_on(self.mpt_open_snapshot_semaphore.acquire())
             };
@@ -580,7 +580,7 @@ impl SnapshotDbManagerSqlite {
             .get(&snapshot_path)
             .is_some()
         {
-            bail!(ErrorKind::SnapshotAlreadyExists)
+            bail!(Error::SnapshotAlreadyExists)
         }
 
         let semaphore_permit =
@@ -604,7 +604,7 @@ impl SnapshotDbManagerSqlite {
                     Some(self.latest_mpt_snapshot_semaphore.clone()),
                 )
             } else {
-                bail!(ErrorKind::SnapshotNotFound);
+                bail!(Error::SnapshotNotFound);
             }
         }?;
 
@@ -803,7 +803,7 @@ impl SnapshotDbManagerSqlite {
                     "COW copy failed, check file system support. Command {:?}",
                     command,
                 );
-                Err(ErrorKind::SnapshotCowCreation.into())
+                Err(Error::SnapshotCowCreation.into())
             } else {
                 info!(
                     "COW copy failed, check file system support. Command {:?}",
@@ -836,7 +836,7 @@ impl SnapshotDbManagerSqlite {
                         "Fail to copy snapshot {:?}, err={:?}",
                         old_snapshot_path, e,
                     );
-                    ErrorKind::SnapshotCopyFailure.into()
+                    Error::SnapshotCopyFailure.into()
                 })
         }
     }
@@ -862,7 +862,7 @@ impl SnapshotDbManagerSqlite {
                     "Failed to create a new snapshot by COW. \
                      Use XFS on linux or APFS on Mac"
                 );
-                Err(ErrorKind::SnapshotCowCreation.into())
+                Err(Error::SnapshotCowCreation.into())
             } else {
                 Ok(false)
             }
@@ -885,7 +885,7 @@ impl SnapshotDbManagerSqlite {
             false,
         )?;
         let old_snapshot_db = maybe_old_snapshot_db
-            .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
+            .ok_or(Error::from(Error::SnapshotNotFound))?;
         temp_snapshot_db.copy_and_merge(
             &old_snapshot_db.snapshot_db,
             mpt_snapshot_db,
@@ -1158,7 +1158,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         false,
                     )?;
                     old_snapshot = maybe_old_snapshot_db
-                        .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
+                        .ok_or(Error::from(Error::SnapshotNotFound))?;
                     if old_snapshot.is_mpt_table_in_current_db() {
                         Some(&old_snapshot.snapshot_db)
                     } else {

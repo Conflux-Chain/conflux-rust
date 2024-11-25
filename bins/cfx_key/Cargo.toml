@@ -1,19 +1,20 @@
 [package]
-description = "Parity Ethereum Keys Generator CLI"
+description = "Conflux Core Space Keys Generator CLI"
 name = "ctxkey-cli"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+edition = "2021"
 
 [dependencies]
-docopt = "1.0"
-env_logger = "0.5"
-cfxkey = { path = "../../crates/cfx_key" }
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-parity-wordlist="1.2"
-rustc-hex = "2.1"
-serde = "1.0"
-serde_derive = "1.0"
-threadpool = "1.7"
+docopt = { workspace = true }
+env_logger = { workspace = true }
+cfxkey = { workspace = true }
+panic_hook = { workspace = true }
+parity-wordlist= { workspace = true }
+rustc-hex = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+threadpool = { workspace = true }
 
 [[bin]]
 name = "cfxkey"

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
-    error_codes,
+    errors,
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::pubsub::PubSub,
@@ -495,10 +495,9 @@ impl PubSub for PubSubClient {
                 self.heads_subscribers.write().push(subscriber);
                 return;
             }
-            (pubsub::Kind::NewHeads, _) => error_codes::invalid_params(
-                "newHeads",
-                "Expected no parameters.",
-            ),
+            (pubsub::Kind::NewHeads, _) => {
+                errors::invalid_params("newHeads", "Expected no parameters.")
+            }
             // --------- epochs ---------
             (pubsub::Kind::Epochs, None) => {
                 let id = self.epochs_subscribers.write().push(subscriber);
@@ -510,10 +509,9 @@ impl PubSub for PubSubClient {
                 self.start_epoch_loop(id, epoch);
                 return;
             }
-            (pubsub::Kind::Epochs, _) => error_codes::invalid_params(
-                "epochs",
-                "Expected epoch parameter.",
-            ),
+            (pubsub::Kind::Epochs, _) => {
+                errors::invalid_params("epochs", "Expected epoch parameter.")
+            }
             // --------- logs ---------
             (pubsub::Kind::Logs, None) => {
                 let id = self
@@ -538,11 +536,10 @@ impl PubSub for PubSubClient {
                     }
                 }
             }
-            (pubsub::Kind::Logs, _) => error_codes::invalid_params(
-                "logs",
-                "Expected filter parameter.",
-            ),
-            _ => error_codes::unimplemented(None),
+            (pubsub::Kind::Logs, _) => {
+                errors::invalid_params("logs", "Expected filter parameter.")
+            }
+            _ => errors::unimplemented(None),
         };
 
         let _ = subscriber.reject(error);

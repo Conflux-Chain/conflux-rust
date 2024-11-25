@@ -3,7 +3,7 @@ use super::{
     trace_types::ExecTrace,
     ExecTraceKey,
 };
-use cfx_executor::executive::{revert_reason_decode, Executed};
+use cfx_executor::executive::{string_revert_reason_decode, Executed};
 use cfx_types::Address;
 
 /// An executive tracer only records errors during EVM unwind.
@@ -95,7 +95,7 @@ impl ErrorUnwind {
             Outcome::Success => None,
             Outcome::Reverted => Some(format!(
                 "Vm reverted. {}",
-                revert_reason_decode(return_data)
+                string_revert_reason_decode(return_data)
             )),
             Outcome::Fail => Some(
                 String::from_utf8(return_data.clone())

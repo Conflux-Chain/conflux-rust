@@ -37,8 +37,8 @@ class P2PTest(ConfluxTestFramework):
         nonce = 0
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
-        self.tx_conf = {"from":Web3.toChecksumAddress(genesis_addr), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
-        raw_create = erc20_contract.constructor().buildTransaction(self.tx_conf)
+        self.tx_conf = {"from":Web3.to_checksum_address(genesis_addr), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
+        raw_create = erc20_contract.constructor().build_transaction(self.tx_conf)
         tx_data = decode_hex(raw_create["data"])
         tx_create = create_transaction(pri_key=genesis_key, receiver=b'', nonce=nonce, gas_price=gas_price, data=tx_data, gas=gas, value=0, storage_limit=1920)
         self.client = RpcClient(self.nodes[0])
@@ -60,7 +60,7 @@ class P2PTest(ConfluxTestFramework):
             value = int((balance_map[sender_key] - ((tx_n - i) * 21000 * gas_price)) * random.random())
             receiver_sk, _ = ec_random_keys()
             balance_map[receiver_sk] = value
-            tx_data = decode_hex(erc20_contract.functions.transfer(Web3.toChecksumAddress(encode_hex(priv_to_addr(receiver_sk))), value).buildTransaction(self.tx_conf)["data"])
+            tx_data = decode_hex(erc20_contract.functions.transfer(Web3.to_checksum_address(encode_hex(priv_to_addr(receiver_sk))), value).build_transaction(self.tx_conf)["data"])
             tx = create_transaction(pri_key=sender_key, receiver=decode_hex(self.tx_conf["to"]), value=0, nonce=nonce, gas=gas,
                                     gas_price=gas_price, data=tx_data, storage_limit=64)
             r = random.randint(0, self.num_nodes - 1)
@@ -82,7 +82,7 @@ class P2PTest(ConfluxTestFramework):
         self.log.info("Pass")
 
     def get_balance(self, contract, token_address):
-        tx = contract.functions.balanceOf(Web3.toChecksumAddress(encode_hex(token_address))).buildTransaction(self.tx_conf)
+        tx = contract.functions.balanceOf(Web3.to_checksum_address(encode_hex(token_address))).build_transaction(self.tx_conf)
         result = self.client.call(tx["to"], tx["data"])
         balance = bytes_to_int(decode_hex(result))
         self.log.debug("address=%s, balance=%s", encode_hex(token_address), balance)

@@ -7,6 +7,7 @@ use crate::{
     metrics::{is_enabled, Metric, ORDER},
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
+use chrono::Duration;
 use lazy_static::lazy_static;
 use parking_lot::{Mutex, RwLock};
 use std::{
@@ -14,7 +15,6 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
     time::Instant,
 };
-use time::Duration;
 use timer::Timer;
 
 // Meters count events to produce exponentially-weighted moving average rates

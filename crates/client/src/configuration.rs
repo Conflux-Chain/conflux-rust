@@ -20,7 +20,9 @@ use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{Address, AllChainID, Space, SpaceMap, H256, U256};
+use cfx_types::{
+    parse_hex_string, Address, AllChainID, Space, SpaceMap, H256, U256,
+};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -31,7 +33,8 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-        pos_handler::PosVerifier, ConsensusConfig, ConsensusInnerConfig,
+        pivot_hint::PivotHintConfig, pos_handler::PosVerifier, ConsensusConfig,
+        ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
@@ -112,6 +115,7 @@ build_config! {
         // Controls block generation speed.
         // Only effective in `dev` mode
         (dev_block_interval_ms, (Option<u64>), None)
+        (dev_pack_tx_immediately, (Option<bool>), None)
         (enable_state_expose, (bool), false)
         (generate_tx, (bool), false)
         (generate_tx_period_us, (Option<u64>), Some(100_000))
@@ -145,6 +149,8 @@ build_config! {
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (genesis_accounts, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
+        (pivot_hint_path, (Option<String>), None)
+        (pivot_hint_checksum, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (hydra_transition_number, (Option<u64>), Some(92060600))
@@ -206,6 +212,7 @@ build_config! {
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
+        (max_estimation_gas_limit, (Option<u64>), None)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
@@ -274,9 +281,11 @@ build_config! {
         (tx_pool_min_native_tx_gas_price, (Option<u64>), None)
         (tx_pool_min_eth_tx_gas_price, (Option<u64>), None)
         (tx_pool_nonce_bits, (usize), TXPOOL_DEFAULT_NONCE_BITS)
+        (tx_pool_allow_gas_over_half_block, (bool), false)
         (max_packing_batch_gas_limit, (u64), 3_000_000)
         (max_packing_batch_size, (usize), 50)
         (packing_pool_degree, (u8), 4)
+
 
         // Storage Section.
         (additional_maintained_snapshot_count, (u32), 1)
@@ -613,6 +622,20 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
+        let pivot_hint_conf = match (
+            &self.raw_conf.pivot_hint_path,
+            &self.raw_conf.pivot_hint_checksum,
+        ) {
+            (Some(path), Some(checksum)) => {
+                let checksum = H256::from_str(checksum)
+                    .expect("Cannot parse `pivot_hint_checksum` as hex string");
+                Some(PivotHintConfig::new(path, checksum))
+            }
+            (None, None) => None,
+            _ => {
+                panic!("`pivot_hint_path` and `pivot_hint_checksum` must be both set or both unset");
+            }
+        };
         let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
@@ -663,6 +686,7 @@ impl Configuration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
             sync_state_starting_epoch: self.raw_conf.sync_state_starting_epoch,
             sync_state_epoch_gap: self.raw_conf.sync_state_epoch_gap,
+            pivot_hint_conf,
         };
         match self.raw_conf.node_type {
             Some(NodeType::Archive) => {
@@ -1046,16 +1070,16 @@ impl Configuration {
             };
         TxPoolConfig {
             capacity: self.raw_conf.tx_pool_size,
-            max_tx_gas: RwLock::new(U256::from(
+            half_block_gas_limit: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
             min_native_tx_price: self
                 .raw_conf
                 .tx_pool_min_native_tx_gas_price
                 .unwrap_or(min_native_tx_price_default),
-            packing_gas_limit_block_count: self
+            allow_gas_over_half_block: self
                 .raw_conf
-                .packing_gas_limit_block_count,
+                .tx_pool_allow_gas_over_half_block,
             target_block_gas_limit: self.raw_conf.target_block_gas_limit,
             min_eth_tx_price: self
                 .raw_conf
@@ -1072,11 +1096,20 @@ impl Configuration {
     pub fn rpc_impl_config(&self) -> RpcImplConfiguration {
         RpcImplConfiguration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
-            dev_pack_tx_immediately: self.is_dev_mode()
-                && self.raw_conf.dev_block_interval_ms.is_none(),
+            dev_pack_tx_immediately: self
+                .raw_conf
+                .dev_pack_tx_immediately
+                .unwrap_or_else(|| {
+                    self.is_dev_mode()
+                        && self.raw_conf.dev_block_interval_ms.is_none()
+                }),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
             enable_metrics: self.raw_conf.rpc_enable_metrics,
             poll_lifetime_in_seconds: self.raw_conf.poll_lifetime_in_seconds,
+            max_estimation_gas_limit: self
+                .raw_conf
+                .max_estimation_gas_limit
+                .map(U256::from),
         }
     }
 
@@ -1471,10 +1504,6 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
         Some(_) => Ok(vec![]),
         None => Ok(vec![]),
     }
-}
-
-pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
-    hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
 }
 
 pub fn parse_config_address_string(

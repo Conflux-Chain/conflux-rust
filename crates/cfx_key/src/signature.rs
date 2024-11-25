@@ -14,8 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::{
+    public_to_address, Address, Error, Message, Public, Secret, SECP256K1,
+};
 use cfx_types::{H256, H520};
-use public_to_address;
 use rustc_hex::{FromHex, ToHex};
 use secp256k1::{
     key::{PublicKey, SecretKey},
@@ -29,12 +31,6 @@ use std::{
     ops::{Deref, DerefMut},
     str::FromStr,
 };
-use Address;
-use Error;
-use Message;
-use Public;
-use Secret;
-use SECP256K1;
 
 /// Signature encoded as RSV components
 #[repr(C)]
@@ -258,10 +254,8 @@ pub fn recover(
 #[cfg(test)]
 mod tests {
     use super::{recover, sign, verify_address, verify_public, Signature};
+    use crate::{KeyPairGenerator, Message, Random};
     use std::str::FromStr;
-    use Generator;
-    use Message;
-    use Random;
 
     #[test]
     fn vrs_conversion() {

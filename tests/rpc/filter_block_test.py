@@ -52,14 +52,14 @@ class FilterBlockTest(ConfluxTestFramework):
         # create filter
         filter = self.nodes[0].cfx_newBlockFilter()
 
-        blocks = self.nodes[0].generate_empty_blocks(4)
+        blocks = self.nodes[0].test_generateEmptyBlocks(4)
 
         # query block
         filter_blocks = self.nodes[0].cfx_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 0)
 
         # generate common blocks
-        blocks.extend(self.nodes[0].generate_empty_blocks(20))
+        blocks.extend(self.nodes[0].test_generateEmptyBlocks(20))
         sync_blocks(self.nodes[0:2])
 
         e1 = client1.epoch_number()
@@ -78,7 +78,7 @@ class FilterBlockTest(ConfluxTestFramework):
         disconnect_nodes(self.nodes, 0, 1)
 
         # blocks in node1
-        blocks.extend(self.nodes[0].generate_empty_blocks(6))
+        blocks.extend(self.nodes[0].test_generateEmptyBlocks(6))
 
         filter_blocks = self.nodes[0].cfx_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 6)
@@ -88,7 +88,7 @@ class FilterBlockTest(ConfluxTestFramework):
             assert_equal(filter_blocks[i], blocks[idx])
             idx -= 1
 
-        blocks.extend(self.nodes[0].generate_empty_blocks(1))
+        blocks.extend(self.nodes[0].test_generateEmptyBlocks(1))
         filter_blocks = self.nodes[0].cfx_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 1)
         assert_equal(filter_blocks[0], blocks[len(blocks) - 5])
@@ -96,7 +96,7 @@ class FilterBlockTest(ConfluxTestFramework):
         parent_block = blocks[-1]
 
         # blocks in node2
-        b2 = self.nodes[1].generate_empty_blocks(12)
+        b2 = self.nodes[1].test_generateEmptyBlocks(12)
 
         # re-org
         connect_nodes(self.nodes, 0, 1)
@@ -123,7 +123,7 @@ class FilterBlockTest(ConfluxTestFramework):
             idx -= 1
 
     def run_test(self):
-        asyncio.get_event_loop().run_until_complete(self.run_async())
+        asyncio.run(self.run_async())
 
 
 if __name__ == "__main__":

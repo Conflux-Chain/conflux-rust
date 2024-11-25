@@ -10,7 +10,7 @@ use crate::{
             Handleable, Key, KeyContainer,
         },
         request_manager::{AsAny, Request},
-        Error, ErrorKind, ProtocolConfiguration,
+        Error, ProtocolConfiguration,
     },
     NodeType,
 };
@@ -135,8 +135,8 @@ impl GetBlocks {
     }
 
     fn is_oversize_packet_err(e: &Error) -> bool {
-        match e.kind() {
-            ErrorKind::Network(kind) => match kind {
+        match e {
+            Error::Network(kind) => match kind.0 {
                 network::ErrorKind::OversizedPacket => true,
                 _ => false,
             },

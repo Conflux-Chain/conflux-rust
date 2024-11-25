@@ -12,9 +12,12 @@ use cfx_types::{Address, Space, U256};
 use primitives::{
     SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
 };
-use std::{collections::hash_map::Entry::*, sync::Arc};
+use std::collections::hash_map::Entry::*;
 
 use super::OverlayAccount;
+
+#[cfg(test)]
+use super::super::checkpoints::CheckpointEntry;
 
 impl OverlayAccount {
     pub fn set_storage(
@@ -40,20 +43,22 @@ impl OverlayAccount {
             None
         };
 
-        // Insert in cache
-        let new_entry = StorageValue {
-            owner: new_owner,
-            value,
-        };
-        Arc::make_mut(&mut self.storage_write_cache)
-            .insert(key.clone(), new_entry);
+        self.insert_storage_write_cache(
+            key,
+            StorageValue {
+                owner: new_owner,
+                value,
+            },
+        );
         Ok(())
     }
 
     #[cfg(test)]
     pub fn set_storage_simple(&mut self, key: Vec<u8>, value: U256) {
-        Arc::make_mut(&mut self.storage_write_cache)
-            .insert(key.clone(), StorageValue { value, owner: None });
+        self.insert_storage_write_cache(
+            key,
+            StorageValue { owner: None, value },
+        );
     }
 
     pub fn delete_storage_range(
@@ -65,7 +70,9 @@ impl OverlayAccount {
 
         // Its strong count should be 1 and will not cause memory copy,
         // unless in test and gas estimation.
-        let write_cache = Arc::make_mut(&mut self.storage_write_cache);
+        assert!(self.storage_write_checkpoint.is_none());
+        let write_cache = &mut self.storage_write_cache.write();
+        // Must have no checkpoint in range deletion
         for (k, v) in write_cache.iter_mut() {
             if k.starts_with(key_prefix) && !v.value.is_zero() {
                 if let Some(old_owner) = v.owner {
@@ -117,7 +124,6 @@ impl OverlayAccount {
                 COLLATERAL_UNITS_PER_STORAGE_KEY,
             );
         }
-
         std::mem::drop(read_cache);
 
         if delete_all {
@@ -129,7 +135,7 @@ impl OverlayAccount {
     }
 
     fn cached_entry_at(&self, key: &[u8]) -> Option<StorageValue> {
-        if let Some(entry) = self.storage_write_cache.get(key) {
+        if let Some(entry) = self.storage_write_cache.read().get(key) {
             return Some(*entry);
         }
         if let Some(entry) = self.storage_read_cache.read().get(key) {
@@ -139,8 +145,40 @@ impl OverlayAccount {
     }
 
     #[cfg(test)]
-    pub fn cached_value_at(&self, key: &[u8]) -> Option<U256> {
+    pub fn cached_value_at_cache(&self, key: &[u8]) -> Option<U256> {
         self.cached_entry_at(key).map(|e| e.value)
+    }
+
+    #[cfg(test)]
+    fn cached_entry_at_checkpoint(
+        &self, key: &[u8], state_checkpoint_id: usize,
+    ) -> Option<CheckpointEntry<StorageValue>> {
+        if self.storage_write_checkpoint.is_none() {
+            return None;
+        }
+        if self
+            .storage_write_checkpoint
+            .as_ref()
+            .unwrap()
+            .get_state_cp_id()
+            < state_checkpoint_id
+        {
+            return None;
+        }
+        self.storage_write_checkpoint.as_ref().unwrap().get(key)
+    }
+
+    #[cfg(test)]
+    pub fn cached_value_at_checkpoint(
+        &self, key: &[u8], state_checkpoint_id: usize,
+    ) -> Option<CheckpointEntry<U256>> {
+        self.cached_entry_at_checkpoint(key, state_checkpoint_id)
+            .map(|e: CheckpointEntry<StorageValue>| match e {
+                CheckpointEntry::Unchanged => CheckpointEntry::Unchanged,
+                CheckpointEntry::Recorded(sv) => {
+                    CheckpointEntry::Recorded(sv.value)
+                }
+            })
     }
 
     // If a contract is removed, and then some one transfer balance to it,
@@ -168,7 +206,11 @@ impl OverlayAccount {
     }
 
     pub fn transient_storage_at(&self, key: &[u8]) -> U256 {
-        self.transient_storage.get(key).cloned().unwrap_or_default()
+        self.transient_storage_cache
+            .read()
+            .get(key)
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn get_and_cache_storage(
@@ -190,7 +232,7 @@ impl OverlayAccount {
     }
 
     pub fn transient_set_storage(&mut self, key: Vec<u8>, value: U256) {
-        Arc::make_mut(&mut self.transient_storage).insert(key, value);
+        self.insert_transient_write_cache(key, value);
     }
 
     pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {
@@ -204,8 +246,7 @@ impl OverlayAccount {
         let mut entry = self.storage_entry_at(db, key)?;
         if !entry.value.is_zero() {
             entry.value = value;
-            Arc::make_mut(&mut self.storage_write_cache)
-                .insert(key.to_vec(), entry);
+            self.insert_storage_write_cache(key.to_vec(), entry);
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }

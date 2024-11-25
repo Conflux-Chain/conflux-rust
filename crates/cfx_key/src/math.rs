@@ -104,7 +104,7 @@ fn set_public(public: &mut Public, key_public: &key::PublicKey) {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::{Generator, Random},
+        super::{KeyPairGenerator, Random},
         public_add, public_sub,
     };
 

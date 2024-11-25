@@ -6,7 +6,6 @@ import time
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.mininode import DefaultNode, network_thread_start
 from test_framework.util import connect_nodes, get_peer_addr, wait_until
 from conflux.rpc import RpcClient
 
@@ -113,13 +112,13 @@ class NodeReputationTests(ConfluxTestFramework):
 
         # On node 0: node 3 is blacklisted, and cannot immediately add it again
         assert client0.get_node(self.nodes[3].key) is None
-        self.nodes[0].addnode(self.nodes[3].key, get_peer_addr(self.nodes[3]))
+        self.nodes[0].test_addNode(self.nodes[3].key, get_peer_addr(self.nodes[3]))
         assert client0.get_node(self.nodes[3].key) is None
 
         # On node 3: add node 0 as trusted node, so that try to create
         # outgoing connection to node 0.
         client3 = RpcClient(self.nodes[3])
-        self.nodes[3].addnode(self.nodes[0].key, get_peer_addr(self.nodes[0]))
+        self.nodes[3].test_addNode(self.nodes[0].key, get_peer_addr(self.nodes[0]))
         node0 = client3.get_node(self.nodes[0].key)
         assert node0[0] == "trusted"
 

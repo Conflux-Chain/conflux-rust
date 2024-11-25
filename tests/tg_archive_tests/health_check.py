@@ -103,7 +103,7 @@ class NewBlockEvent(EventBase):
 
     def execute(self, node):
         assert self._txs is not None
-        block_hash = node.test_generate_block_with_nonce_and_timestamp(
+        block_hash = node.test_generateBlockWithNonceAndTimestamp(
             self._parent,
             self._referees,
             self._txs,
@@ -372,7 +372,7 @@ class TreeGraphTracing(ConfluxTestFramework):
         alive_peer_indices = {}
         for (i, node) in enumerate(self.nodes):
             if i not in self._stopped_peers:
-                sync_phase = node.current_sync_phase()
+                sync_phase = node.debug_currentSyncPhase()
                 if sync_phase in phase:
                     alive_peer_indices.setdefault(sync_phase, []).append(i)
         return alive_peer_indices
@@ -413,10 +413,10 @@ class TreeGraphTracing(ConfluxTestFramework):
                     return
                 self.log.info("stopping {}".format(chosen_peer))
                 # retrieve new ready blocks before stopping it
-                new_blocks = self.nodes[chosen_peer].sync_graph_state()
+                new_blocks = self.nodes[chosen_peer].debug_syncGraphState()
                 self._snapshots[chosen_peer].new_blocks(
                     new_blocks['readyBlockVec'])
-                self.nodes[chosen_peer].save_node_db()
+                self.nodes[chosen_peer].test_saveNodeDb()
                 self.stop_node(chosen_peer, kill=True)
                 self._stopped_peers.append(chosen_peer)
                 self._snapshots[chosen_peer].stop()
@@ -441,8 +441,8 @@ class TreeGraphTracing(ConfluxTestFramework):
                 chosen_peer = alive_peer_indices[random.randint(
                     1, len(alive_peer_indices) - 1)]
                 self.log.info("enable db crash {}".format(chosen_peer))
-                self.nodes[chosen_peer].save_node_db()
-                self.nodes[chosen_peer].set_db_crash(
+                self.nodes[chosen_peer].test_saveNodeDb()
+                self.nodes[chosen_peer].test_setDbCrash(
                     CRASH_EXIT_PROBABILITY, CRASH_EXIT_CODE)
         except Exception as e:
             self.log.info('got exception[{}] during db crash'.format(repr(e)))
@@ -492,8 +492,8 @@ class TreeGraphTracing(ConfluxTestFramework):
                     # skip stopped nodes
                     if i in self._stopped_peers:
                         continue
-                    delta = node.consensus_graph_state()
-                    new_blocks = node.sync_graph_state()
+                    delta = node.debug_consensusGraphState()
+                    new_blocks = node.debug_syncGraphState()
                     bft_commits = node.bft_state()
                     self.log.info("peer[{}] bftEvents=[{}]".format(
                         i,

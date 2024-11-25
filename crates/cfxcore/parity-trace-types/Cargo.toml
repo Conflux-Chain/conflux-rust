@@ -1,0 +1,27 @@
+[package]
+name = "cfx-parity-trace-types"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
+cfx-bytes = { workspace = true }
+cfx-types = { workspace = true }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
+primitives = { workspace = true }
+cfx-internal-common = { workspace = true }
+cfx-vm-types = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
+strum_macros = "0.20"
+error-chain = { workspace = true }

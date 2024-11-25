@@ -8,7 +8,7 @@ use crate::{
     sync::{
         message::{msgid, Context, Handleable, SnapshotManifestRequest},
         state::storage::RangedManifest,
-        Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V3,
+        Error, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
 use cfx_types::H256;
@@ -78,7 +78,7 @@ impl SnapshotManifestResponse {
     ) -> Result<(), Error> {
         if request.is_initial_request() && self.state_root_vec.is_empty() {
             debug!("Responded snapshot manifest has empty blame states");
-            bail!(ErrorKind::InvalidSnapshotManifest(
+            bail!(Error::InvalidSnapshotManifest(
                 "state blame vector not found".into()
             ));
         }
@@ -87,7 +87,7 @@ impl SnapshotManifestResponse {
             || self.state_root_vec.len() != self.bloom_blame_vec.len()
         {
             debug!("Responded snapshot manifest has mismatch blame states/receipts/blooms");
-            bail!(ErrorKind::InvalidSnapshotManifest(
+            bail!(Error::InvalidSnapshotManifest(
                 "blame vector length mismatch".into()
             ));
         }
