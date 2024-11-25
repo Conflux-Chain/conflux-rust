@@ -4,7 +4,7 @@
 
 use crate::rpc::errors::request_rejected_too_many_request_error;
 use jsonrpc_core::{
-    futures::future::{lazy, FutureExt},
+    futures::future::{lazy, FutureExt, TryFutureExt},
     BoxFuture, Metadata, Params, RemoteProcedure, Result as RpcResult,
     RpcMethod,
 };
@@ -127,7 +127,7 @@ where
             &self.name,
             lazy(move |_| method.call(params, meta)).flatten().boxed(),
         );
-        let method_future = before_future.then(move |_| method_call);
+        let method_future = before_future.and_then(move |_| method_call);
 
         method_future.boxed()
     }
