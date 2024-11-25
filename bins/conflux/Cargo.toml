@@ -29,7 +29,6 @@ jsonrpc-core = "18.0.0"
 jsonrpc-tcp-server = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["http"] }
-error-chain = { workspace = true }
 log = { workspace = true }
 slab = "0.4"
 cfxcore = { workspace = true }

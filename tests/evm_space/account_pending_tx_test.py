@@ -11,13 +11,13 @@ class EVMAccountPendingTxTest(Web3Base):
         self.cfxAccount = self.rpc.GENESIS_ADDR
         print(f'Using Conflux account {self.cfxAccount}')
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
 
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
 
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": self.evmAccount.address,
             "value": 100,
             "gasPrice": 1,
@@ -25,7 +25,7 @@ class EVMAccountPendingTxTest(Web3Base):
             "nonce": 2,
             "chainId": self.TEST_CHAIN_ID,
         })
-        self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        self.w3.eth.send_raw_transaction(signed["raw_transaction"])
 
         pendingTx = self.nodes[0].eth_getAccountPendingTransactions(self.evmAccount.address)
         assert_equal(pendingTx["pendingCount"], "0x1")

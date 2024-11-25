@@ -6,7 +6,7 @@
 #![allow(deprecated)]
 
 #[macro_use]
-extern crate error_chain;
+extern crate cfx_util_macros;
 #[macro_use]
 extern crate log;
 #[macro_use]

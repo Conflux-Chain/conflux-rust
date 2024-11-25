@@ -31,7 +31,6 @@ dag = { workspace = true }
 derivative = "2.0.2"
 db = { workspace = true }
 either = "1.5.3"
-error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
 futures = { workspace = true, features = ["compat"]}
@@ -143,8 +142,8 @@ cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 cfx-rpc-utils = { workspace = true }
+cfx-util-macros = { workspace = true }
 parity-util-mem = { workspace = true, default-features = false }
-
 
 [dev-dependencies]
 criterion = "0.3"

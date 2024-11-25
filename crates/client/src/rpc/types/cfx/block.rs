@@ -160,9 +160,7 @@ impl Block {
         // get the block.gas_used
         let tx_len = b.transactions.len();
 
-        let (gas_used, transactions) = if tx_len == 0 {
-            (Some(U256::from(0)), BlockTransactions::Hashes(vec![]))
-        } else {
+        let (gas_used, transactions) = {
             let maybe_results = consensus_inner
                 .block_execution_results_by_hash(
                     &b.hash(),
@@ -427,11 +425,13 @@ pub struct Header {
     pub block_number: Option<U256>,
     /// Gas Limit
     pub gas_limit: U256,
+    /// Base fee
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base_fee_per_gas: Option<U256>,
     /// Timestamp
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
-    // TODO: We should change python test script and remove this field
     /// PoW Quality
     pub pow_quality: Option<U256>,
     /// Referee hashes
@@ -440,6 +440,8 @@ pub struct Header {
     pub adaptive: bool,
     /// Nonce of the block
     pub nonce: U256,
+    /// Custom field
+    pub custom: Vec<Bytes>,
     /// PoS reference.
     pub pos_reference: Option<PosBlockId>,
 }
@@ -458,6 +460,9 @@ impl Header {
 
         let block_number = consensus.get_block_number(&hash)?.map(Into::into);
 
+        let base_fee_per_gas: Option<U256> =
+            h.base_price().map(|x| x[Space::Native]).into();
+
         let referee_hashes =
             h.referee_hashes().iter().map(|x| H256::from(*x)).collect();
 
@@ -474,6 +479,7 @@ impl Header {
             epoch_number,
             block_number,
             gas_limit: h.gas_limit().into(),
+            base_fee_per_gas,
             timestamp: h.timestamp().into(),
             difficulty: h.difficulty().into(),
             adaptive: h.adaptive(),
@@ -481,9 +487,9 @@ impl Header {
             nonce: h.nonce().into(),
             pow_quality: h.pow_hash.map(|pow_hash| {
                 pow::pow_hash_to_quality(&pow_hash, &h.nonce())
-            }), /* TODO(thegaram):
-                 * include custom */
+            }),
             pos_reference: *h.pos_reference(),
+            custom: h.custom().clone().into_iter().map(Into::into).collect(),
         })
     }
 }
@@ -619,6 +625,8 @@ mod tests {
             transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
             epoch_number: None,
             block_number: None,
+            base_fee_per_gas: None,
+            custom: vec![],
             gas_limit: U256::default(),
             timestamp: 0.into(),
             difficulty: U256::default(),
@@ -632,7 +640,7 @@ mod tests {
 
         assert_eq!(
             serialized_header,
-            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"blockNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","posReference":null}"#
+            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"blockNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","custom":[],"posReference":null}"#
         );
     }
 }

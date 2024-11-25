@@ -1,11 +1,14 @@
 import re
 
 import sha3 as _sha3
-from py_ecc.secp256k1 import privtopub, ecdsa_raw_sign, ecdsa_raw_recover
+from py_ecc.secp256k1.secp256k1 import privtopub, ecdsa_raw_sign, ecdsa_raw_recover
 import rlp
 from rlp.sedes import big_endian_int, BigEndianInt, Binary
-from eth_utils import encode_hex as encode_hex_0x
-from eth_utils import decode_hex, int_to_big_endian, big_endian_to_int
+from eth_utils.hexadecimal import (
+    encode_hex as encode_hex_0x,
+    decode_hex
+)
+from eth_utils.encoding import int_to_big_endian, big_endian_to_int
 from rlp.utils import ALL_BYTES
 import random
 import coincurve

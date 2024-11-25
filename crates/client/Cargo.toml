@@ -33,7 +33,6 @@ jsonrpc-derive = { workspace = true }
 jsonrpc-core-client = { workspace = true }
 jsonrpc-pubsub = { workspace = true }
 jsonrpc-ws-server = { workspace = true }
-error-chain = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 cfx-types = { workspace = true }
