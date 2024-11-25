@@ -236,17 +236,17 @@ pub struct ChainNotificationHandler {
 
 impl ChainNotificationHandler {
     // notify `subscriber` about `result` in a separate task
-    fn notify(exec: &Executor, subscriber: &Client, result: pubsub::Result) {
-        let fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
+    fn notify(_exec: &Executor, subscriber: &Client, result: pubsub::Result) {
+        let _fut = subscriber.notify(Ok(result)).map_err(
             |e| warn!(target: "rpc", "Unable to send notification: {}", e),
         );
 
-        exec.spawn(fut)
+        // exec.spawn(fut)
     }
 
     // notify `subscriber` about `result` asynchronously
     async fn notify_async(subscriber: &Client, result: pubsub::Result) {
-        let _fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
+        let _fut = subscriber.notify(Ok(result)).map_err(
             |e| warn!(target: "rpc", "Unable to send notification: {}", e),
         );
 
