@@ -16,7 +16,6 @@ cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
-error-chain = { version = "0.12", default-features = false }
 log = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }

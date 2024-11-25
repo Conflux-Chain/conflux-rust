@@ -7,7 +7,7 @@ use crate::{
     node_database::NodeDatabase,
     node_table::{NodeId, *},
     service::{UdpIoContext, MAX_DATAGRAM_SIZE, UDP_PROTOCOL_DISCOVERY},
-    DiscoveryConfiguration, Error, ErrorKind, IpFilter, ThrottlingReason,
+    DiscoveryConfiguration, Error, IpFilter, ThrottlingReason,
     NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
 use cfx_bytes::Bytes;
@@ -208,12 +208,12 @@ impl Discovery {
     ) -> Result<(), Error> {
         // validate packet
         if packet.len() < 32 + 65 + 4 + 1 {
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         let hash_signed = keccak(&packet[32..]);
         if hash_signed[..] != packet[0..32] {
-            return Err(ErrorKind::BadProtocol.into());
+            return Err(Error::BadProtocol.into());
         }
 
         let signed = &packet[(32 + 65)..];
@@ -245,7 +245,7 @@ impl Discovery {
             .as_secs();
         if self.check_timestamps && timestamp < secs_since_epoch {
             debug!("Expired packet");
-            return Err(ErrorKind::Expired.into());
+            return Err(Error::Expired.into());
         }
         Ok(())
     }
@@ -257,9 +257,9 @@ impl Discovery {
         trace!("Got Ping from {:?}", &from);
 
         if !self.ping_throttling.try_acquire(from.ip()) {
-            return Err(ErrorKind::Throttling(
-                ThrottlingReason::PacketThrottled("PING"),
-            )
+            return Err(Error::Throttling(ThrottlingReason::PacketThrottled(
+                "PING",
+            ))
             .into());
         }
 
@@ -349,9 +349,9 @@ impl Discovery {
         trace!("Got FindNode from {:?}", &from);
 
         if !self.find_nodes_throttling.try_acquire(from.ip()) {
-            return Err(ErrorKind::Throttling(
-                ThrottlingReason::PacketThrottled("FIND_NODES"),
-            )
+            return Err(Error::Throttling(ThrottlingReason::PacketThrottled(
+                "FIND_NODES",
+            ))
             .into());
         }
 
@@ -698,7 +698,7 @@ impl FindNodeMessage {
 
         let value = match self.tag_value {
             Some(ref value) => value,
-            None => return Err(ErrorKind::BadProtocol.into()),
+            None => return Err(Error::BadProtocol.into()),
         };
 
         let ids = node_db.sample_trusted_node_ids_with_tag(
@@ -737,12 +737,12 @@ impl NeighborsChunkMessage {
     fn validate(&self) -> Result<(), Error> {
         if self.neighbors.is_empty() {
             debug!("invalid NeighborsChunkMessage, neighbors is empty");
-            bail!(ErrorKind::BadProtocol);
+            bail!(Error::BadProtocol);
         }
 
         if self.num_chunks == 0 {
             debug!("invalid NeighborsChunkMessage, num_chunks is zero");
-            bail!(ErrorKind::BadProtocol);
+            bail!(Error::BadProtocol);
         }
 
         if self.chunk_index >= self.num_chunks {
@@ -750,7 +750,7 @@ impl NeighborsChunkMessage {
                 "invalid NeighborsChunkMessage, chunk index is invalid, len = {}, index = {}",
                 self.num_chunks, self.chunk_index
             );
-            bail!(ErrorKind::BadProtocol);
+            bail!(Error::BadProtocol);
         }
 
         Ok(())
@@ -767,7 +767,7 @@ impl NeighborsChunkMessage {
             request.num_chunks = self.num_chunks;
         } else if request.num_chunks != self.num_chunks {
             debug!("invalid NeighborsChunkMessage, chunk number mismatch, requested = {}, responded = {}", request.num_chunks, self.num_chunks);
-            bail!(ErrorKind::BadProtocol);
+            bail!(Error::BadProtocol);
         }
 
         if !request.received_chunks.insert(self.chunk_index) {
