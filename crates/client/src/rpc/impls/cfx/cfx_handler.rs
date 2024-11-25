@@ -35,6 +35,7 @@ use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
     U64,
 };
+use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     block_data_manager::BlockExecutionResult,
@@ -48,7 +49,6 @@ use cfxcore::{
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
 use diem_types::transaction::TransactionPayload;
-use error_chain::bail;
 use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
 use log::{debug, error, info, trace, warn};
 use network::{

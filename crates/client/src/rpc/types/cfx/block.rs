@@ -5,12 +5,12 @@
 use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{Space, H160, H256, U256, U64};
+use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
     consensus::{ConsensusConfig, ConsensusGraphInner},
     pow, ConsensusGraphTrait, SharedConsensusGraph,
 };
-use error_chain::bail;
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,

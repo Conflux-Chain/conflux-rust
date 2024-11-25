@@ -2,9 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{Error, ErrorKind, ThrottlingReason};
+use crate::{Error, ThrottlingReason};
 use byte_unit::n_mb_bytes;
-use error_chain::bail;
+use cfx_util_macros::bail;
 use lazy_static::lazy_static;
 use log::{debug, error, info, trace};
 use metrics::{Gauge, GaugeUsize};
@@ -117,12 +117,12 @@ impl Service {
     ) -> Result<usize, Error> {
         if data_size > self.queue_capacity {
             debug!("throttling.on_enqueue: enqueue too large data, data size = {}, queue capacity = {}", data_size, self.queue_capacity);
-            bail!(ErrorKind::Throttling(ThrottlingReason::QueueFull));
+            bail!(Error::Throttling(ThrottlingReason::QueueFull));
         }
 
         if self.cur_queue_size > self.queue_capacity - data_size {
             debug!("throttling.on_enqueue: queue size not enough, data size = {}, queue size = {}", data_size, self.cur_queue_size);
-            bail!(ErrorKind::Throttling(ThrottlingReason::QueueFull));
+            bail!(Error::Throttling(ThrottlingReason::QueueFull));
         }
 
         self.cur_queue_size += data_size;
@@ -180,7 +180,7 @@ impl Service {
     pub fn check_throttling(&self) -> Result<(), Error> {
         if self.cur_queue_size > self.max_throttle_queue_size {
             debug!("throttling.check_throttling: throttled, queue size = {}, max throttling size = {}", self.cur_queue_size, self.max_throttle_queue_size);
-            bail!(ErrorKind::Throttling(ThrottlingReason::Throttled));
+            bail!(Error::Throttling(ThrottlingReason::Throttled));
         }
 
         Ok(())

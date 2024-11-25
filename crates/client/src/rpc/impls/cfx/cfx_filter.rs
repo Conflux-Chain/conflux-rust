@@ -19,12 +19,12 @@ use crate::rpc::{
 };
 use cfx_addr::Network;
 use cfx_types::{Space, H128, H256};
+use cfx_util_macros::bail;
 use cfxcore::{
     channel::Channel, errors::Error as CfxRpcError, BlockDataManager,
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedTransactionPool,
 };
-use error_chain::bail;
 use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as JsonRpcResult};

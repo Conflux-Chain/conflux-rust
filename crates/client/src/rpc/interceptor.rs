@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::errors::request_rejected_too_many_request_error;
-use error_chain::bail;
+use cfx_util_macros::bail;
 use futures01::{lazy, Future};
 use jsonrpc_core::{
     BoxFuture, Metadata, Params, RemoteProcedure, Result as RpcResult,

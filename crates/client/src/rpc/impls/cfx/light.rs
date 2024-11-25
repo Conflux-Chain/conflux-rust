@@ -5,6 +5,7 @@
 use cfx_types::{
     AddressSpaceUtil, BigEndianHash, Space, H160, H256, H520, U128, U256, U64,
 };
+use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::ConsensusConfig,
@@ -17,7 +18,6 @@ use cfxcore::{
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
 use diem_types::transaction::TransactionPayload;
-use error_chain::bail;
 use futures::future::{self, FutureExt, TryFutureExt};
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as JsonRpcResult};
 use log::{debug, info};

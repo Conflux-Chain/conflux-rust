@@ -26,6 +26,7 @@ use cfx_executor::internal_contract;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_statedb::StateDbExt;
 use cfx_types::{hexstr_to_h256, BigEndianHash, H256, U64};
+use cfx_util_macros::bail;
 use cfxcore::{
     consensus::pos_handler::PosVerifier, BlockDataManager, SharedConsensusGraph,
 };
@@ -38,7 +39,6 @@ use diem_types::{
     term_state::{lock_status::StatusList, PosState, TERM_LIST_LEN},
     transaction::Transaction as CoreTransaction,
 };
-use error_chain::bail;
 use itertools::Itertools;
 use jsonrpc_core::Result as JsonRpcResult;
 use log::{debug, info};

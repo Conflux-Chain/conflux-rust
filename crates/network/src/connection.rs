@@ -5,7 +5,7 @@
 use crate::{
     iolib::{IoContext, StreamToken},
     throttling::THROTTLING_SERVICE,
-    Error, ErrorKind,
+    Error,
 };
 use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
@@ -339,7 +339,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         if !data.is_empty() {
             let size = data.len();
             if self.assembler.is_oversized(size) {
-                return Err(ErrorKind::OversizedPacket.into());
+                return Err(Error::OversizedPacket.into());
             }
 
             trace!("Sending packet, token = {}, size = {}", self.token, size);
@@ -532,7 +532,7 @@ impl PacketAssembler for PacketWithLenAssembler {
 
     fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error> {
         if self.is_oversized(data.len()) {
-            return Err(ErrorKind::OversizedPacket.into());
+            return Err(Error::OversizedPacket.into());
         }
 
         // first n-bytes swapped to the end

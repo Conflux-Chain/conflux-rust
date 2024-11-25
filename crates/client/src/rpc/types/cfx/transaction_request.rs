@@ -22,9 +22,9 @@ use cfx_parameters::{
     RATIO_BASE_TEN,
 };
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
+use cfx_util_macros::bail;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
-use error_chain::bail;
 use primitives::{
     transaction::{
         Action, Cip1559Transaction, Cip2930Transaction, NativeTransaction,

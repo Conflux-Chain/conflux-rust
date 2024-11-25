@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use error_chain::bail;
+use cfx_util_macros::bail;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;

@@ -26,7 +26,7 @@ mod session_manager;
 pub mod throttling;
 
 pub use crate::{
-    error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
+    error::{DisconnectReason, Error, ThrottlingReason},
     ip::SessionIpLimitConfig,
     node_table::Node,
     service::NetworkService,

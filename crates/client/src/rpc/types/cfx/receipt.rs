@@ -7,8 +7,8 @@ use cfx_addr::Network;
 use cfx_types::{
     address_util::AddressUtil, Bloom, Space, SpaceMap, H256, U256, U64,
 };
+use cfx_util_macros::bail;
 use cfx_vm_types::{contract_address, CreateContractAddress};
-use error_chain::bail;
 use primitives::{
     receipt::{
         Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,

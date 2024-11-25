@@ -7,7 +7,7 @@ use crate::rpc::{
     types::{EpochNumber, Log, RpcAddress},
 };
 use cfx_types::{Space, H256, U256, U64};
-use error_chain::bail;
+use cfx_util_macros::bail;
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
 use serde::{Deserialize, Serialize, Serializer};

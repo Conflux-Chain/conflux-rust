@@ -2,10 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{ip_utils::*, AllowIP, Error, ErrorKind, IpFilter};
+use crate::{ip_utils::*, AllowIP, Error, IpFilter};
 use cfx_types::H512;
+use cfx_util_macros::bail;
 use enum_map::{Enum, EnumMap};
-use error_chain::bail;
 use io::*;
 use log::{debug, warn};
 use rand::{self, prelude::SliceRandom, Rng};
@@ -155,8 +155,10 @@ impl FromStr for NodeEndpoint {
                 address: a,
                 udp_port: a.port(),
             }),
-            Ok(None) => bail!(ErrorKind::AddressResolve(None)),
-            Err(_) => Err(ErrorKind::AddressParse.into()), /* always an io::Error of InvalidInput kind */
+            Ok(None) => bail!(Error::AddressResolve(None)),
+            Err(_) => Err(Error::AddressParse.into()), /* always an io::Error
+                                                        * of InvalidInput
+                                                        * kind */
         }
     }
 }
@@ -312,13 +314,12 @@ impl FromStr for Node {
         let (id, endpoint) =
             if let Some(id_and_address_str) = s.strip_prefix("cfxnode://") {
                 // A node url with format "cfxnode://ID@IP:PORT"
-                let delimiter_index = id_and_address_str
-                    .find("@")
-                    .ok_or(ErrorKind::AddressParse)?;
+                let delimiter_index =
+                    id_and_address_str.find("@").ok_or(Error::AddressParse)?;
                 (
                     id_and_address_str[..delimiter_index]
                         .parse()
-                        .map_err(|_| ErrorKind::InvalidNodeId)?,
+                        .map_err(|_| Error::InvalidNodeId)?,
                     NodeEndpoint::from_str(
                         &id_and_address_str[delimiter_index + 1..],
                     )?,
