@@ -94,9 +94,12 @@ class ConfluxTestFramework:
             self,
             "num_nodes"), "Test must set self.num_nodes in set_test_params()"
 
-    # should be called before setup_chain()
-    def _add_genesis_secrets(self, num_secrets: int):
-        for _ in range(num_secrets):
+    # add random secrets to self.secrets
+    # when node starts, self.secrets will be used
+    # to generate genesis account for both EVM and Core
+    # each with 10000 CFX (10^21 drip)
+    def _add_genesis_secrets(self, additional_secrets: int):
+        for _ in range(additional_secrets):
             self.secrets.append(Account.create().key.hex())
             
     def main(self):
