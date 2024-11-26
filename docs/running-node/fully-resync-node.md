@@ -1,6 +1,6 @@
 # fully resync node
 
-When running a Conflux node, if you prefer not to use a data snapshot, you can choose to fully synchronize data from the network.
+When running a Conflux `Archive` node, if you prefer not to use a data snapshot, you can choose to fully synchronize data from the network.
 
 > Note: Syncing data from scratch can take a significant amount of time. As of November 26, 2024, syncing the Conflux mainnet data from scratch may take approximately 2 months.
 
