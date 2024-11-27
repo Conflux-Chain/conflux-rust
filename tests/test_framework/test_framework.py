@@ -3,7 +3,7 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Base class for RPC testing."""
-from typing import List, Literal
+from typing import List, Literal, Union
 from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.messages import Transactions
 from conflux.rpc import RpcClient, default_config
@@ -100,7 +100,11 @@ class ConfluxTestFramework:
     # when node starts, self.secrets will be used
     # to generate genesis account for both EVM and Core
     # each with 10000 CFX (10^21 drip)
-    def _add_genesis_secrets(self, additional_secrets: int, space: List[Literal["evm", "core"]] | Literal["evm", "core"]=["evm", "core"]):
+    def _add_genesis_secrets(
+        self,
+        additional_secrets: int,
+        space: Union[List[Literal["evm", "core"]], Literal["evm", "core"]]=["evm", "core"]
+    ):
         for _ in range(additional_secrets):
             if "evm" in space or "evm" == space:
                 self.evm_secrets.append(Account.create().key.hex())
