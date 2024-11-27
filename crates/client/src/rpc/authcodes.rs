@@ -19,6 +19,7 @@
 use cfx_types::H256;
 use itertools::Itertools;
 use keccak_hash::keccak;
+use log::{trace, warn};
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 use std::{
     fs,

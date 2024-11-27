@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use log::{debug, info};
 use std::{
     collections::HashMap,
     fs::create_dir_all,
@@ -12,6 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use cfx_util_macros::bail;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
@@ -19,6 +21,7 @@ use parking_lot::{Condvar, Mutex};
 use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
 
+use crate::keylib::KeyPair;
 use blockgen::BlockGenerator;
 use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
@@ -49,7 +52,6 @@ use diem_crypto::{
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusVRFPrivateKey,
 };
-use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::NetworkService;
 use runtime::Runtime;

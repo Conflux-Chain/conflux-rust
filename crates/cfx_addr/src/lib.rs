@@ -15,10 +15,6 @@ pub use consts::*;
 pub use types::*;
 pub use utils::*;
 
-extern crate cfx_types;
-extern crate core;
-extern crate lazy_static;
-
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 

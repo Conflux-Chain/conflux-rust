@@ -14,6 +14,7 @@ use jsonrpc_ws_server::{
     MetaExtractor as WsMetaExtractor, Server as WsServer,
     ServerBuilder as WsServerBuilder,
 };
+use log::{info, warn};
 use std::sync::Arc;
 
 mod authcodes;

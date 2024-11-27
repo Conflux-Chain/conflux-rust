@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use cfxkey::{self, DerivationError, Error as EthKeyError};
-use crypto::{
+use crate::crypto::{
     self, publickey::Error as CryptoPublicKeyError, Error as EthCryptoError,
 };
+use cfxkey::{self, DerivationError, Error as EthKeyError};
 use std::{fmt, io::Error as IoError};
 
 /// Account-related errors.

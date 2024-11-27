@@ -5,6 +5,7 @@ use std::{
 };
 
 use ctrlc::CtrlC;
+use log::{debug, warn};
 use parking_lot::{Condvar, Mutex};
 
 use super::ClientTrait;

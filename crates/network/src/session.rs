@@ -12,12 +12,15 @@ use crate::{
     UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::Bytes;
+use cfx_util_macros::bail;
 use diem_crypto::{bls::BLS_PUBLIC_KEY_LENGTH, ValidCryptoMaterial};
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::*;
+use log::{debug, trace};
 use mio::{tcp::*, *};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
+use serde::Deserialize;
 use serde_derive::Serialize;
 use std::{
     convert::TryFrom,
