@@ -11,7 +11,8 @@ from test_framework.util import *
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        self._add_genesis_secrets(2)
+        self._add_genesis_secrets(1, "core")
+        self._add_genesis_secrets(1, "evm")
 
     def setup_network(self):
         self.setup_nodes()
@@ -20,9 +21,11 @@ class ExampleTest(ConfluxTestFramework):
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
         
-        core_accounts = [CfxAccount.from_key(secret, 10) for secret in self.secrets]
-        evm_accounts = [EthAccount.from_key(secret) for secret in self.secrets]
-        
+        core_accounts = [CfxAccount.from_key(secret, 10) for secret in self.core_secrets]
+        assert len(core_accounts) == 2
+        evm_accounts = [EthAccount.from_key(secret) for secret in self.evm_secrets]
+        assert len(evm_accounts) == 2
+
         for acct in core_accounts:
             assert_equal(int(self.nodes[0].cfx_getBalance(acct.address), 16), 10000000000000000000000)
         for acct in evm_accounts:

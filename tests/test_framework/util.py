@@ -354,26 +354,29 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000, har
         shutil.copyfile(os.path.join(private_keys_dir, str(n)), os.path.join(net_config_dir, 'pos_key'))
         shutil.copyfile(os.path.join(private_keys_dir, "pow_sk"+str(n)), os.path.join(datadir, 'pow_sk'))
 
-def _will_create_genesis_secret_file(conf_parameters, secrets: list[str]):
+def _will_create_genesis_secret_file(conf_parameters, core_secrets: list[str], evm_secrets: list[str]):
     if conf_parameters.get("genesis_secrets") == None:
-        return len(secrets) > 0
-    if conf_parameters.get("genesis_secrets") and len(secrets) > 0:
+        return len(core_secrets) > 1 or len(evm_secrets) > 1  # initial genesis secrets are already set
+    if conf_parameters.get("genesis_secrets") and (len(core_secrets) > 0 or len(evm_secrets) > 0):
         warnings.warn("genesis_secrets is set and extra secrets are provided. extra secrets will be ignored.")
     return False
 
-def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}, secrets: list[str] = []):
+def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}, core_secrets: list[str] = [], evm_secrets: list[str] = []):
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
 
-    if _will_create_genesis_secret_file(conf_parameters, secrets):
+    if _will_create_genesis_secret_file(conf_parameters, core_secrets, evm_secrets):
         genesis_file_path = os.path.join(datadir, "genesis_secrets.txt")
         with open(genesis_file_path, 'w') as f:
-            f.write(default_config["GENESIS_PRI_KEY"].hex() + "\n")
-            f.write(default_config["GENESIS_PRI_KEY_2"].hex() + "\n")
-            for secret in secrets:
+            for secret in core_secrets:
                 f.write(secret + "\n")
             conf_parameters.update({"genesis_secrets": f"\"{genesis_file_path}\""})
+        genesis_evm_file_path = os.path.join(datadir, "genesis_evm_secrets.txt")
+        with open(genesis_evm_file_path, 'w') as f:
+            for secret in evm_secrets:
+                f.write(secret + "\n")
+            conf_parameters.update({"genesis_evm_secrets": f"\"{genesis_evm_file_path}\""})
 
     with open(
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:

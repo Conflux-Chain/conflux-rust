@@ -250,11 +250,38 @@ pub fn initialize_common_modules(
     }
 
     let genesis_accounts = if conf.is_test_or_dev_mode() {
-        match conf.raw_conf.genesis_secrets {
-            Some(ref file) => {
-                genesis::load_secrets_file(file, secret_store.as_ref())?
+        match (
+            &conf.raw_conf.genesis_secrets,
+            &conf.raw_conf.genesis_evm_secrets,
+        ) {
+            (Some(file), evm_file) => {
+                // Load core space accounts
+                let mut accounts = genesis::load_secrets_file(
+                    file,
+                    secret_store.as_ref(),
+                    Space::Native,
+                )?;
+
+                // Load EVM space accounts if specified
+                if let Some(evm_file) = evm_file {
+                    let evm_accounts = genesis::load_secrets_file(
+                        evm_file,
+                        secret_store.as_ref(),
+                        Space::Ethereum,
+                    )?;
+                    accounts.extend(evm_accounts);
+                }
+                accounts
             }
-            None => genesis::default(conf.is_test_or_dev_mode()),
+            (None, Some(evm_file)) => {
+                // Only load EVM space accounts
+                genesis::load_secrets_file(
+                    evm_file,
+                    secret_store.as_ref(),
+                    Space::Ethereum,
+                )?
+            }
+            (None, None) => genesis::default(conf.is_test_or_dev_mode()),
         }
     } else {
         match conf.raw_conf.genesis_accounts {

@@ -148,6 +148,7 @@ build_config! {
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (genesis_accounts, (Option<String>), None)
+        (genesis_evm_secrets, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
         (pivot_hint_path, (Option<String>), None)
         (pivot_hint_checksum, (Option<String>), None)

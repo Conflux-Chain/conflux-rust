@@ -75,7 +75,7 @@ pub fn default(dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
 }
 
 pub fn load_secrets_file(
-    path: &String, secret_store: &SecretStore,
+    path: &String, secret_store: &SecretStore, space: Space,
 ) -> Result<HashMap<AddressWithSpace, U256>, String> {
     let file = File::open(path)
         .map_err(|e| format!("failed to open file: {:?}", e))?;
@@ -93,12 +93,22 @@ pub fn load_secrets_file(
         let keypair =
             KeyPair::from_secret(line.unwrap().parse().unwrap()).unwrap();
 
-        // Insert balance for native space
-        accounts.insert(keypair.address().with_native_space(), balance.clone());
-
-        // Insert balance for EVM space
-        accounts
-            .insert(keypair.evm_address().with_evm_space(), balance.clone());
+        match space {
+            Space::Native => {
+                // Insert balance for native space only
+                accounts.insert(
+                    keypair.address().with_native_space(),
+                    balance.clone(),
+                );
+            }
+            Space::Ethereum => {
+                // Insert balance for EVM space only
+                accounts.insert(
+                    keypair.evm_address().with_evm_space(),
+                    balance.clone(),
+                );
+            }
+        }
 
         secret_store.insert(keypair);
     }
