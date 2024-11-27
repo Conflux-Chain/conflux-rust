@@ -1,6 +1,7 @@
 use crate::rpc::types::Transaction;
 use cfx_types::{H256, U256, U64};
 use cfxcore::transaction_pool::TransactionStatus;
+use serde::Serialize;
 
 #[derive(Default, Serialize)]
 pub struct TxWithPoolInfo {

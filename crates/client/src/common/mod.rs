@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use log::{debug, info};
 use std::{
     collections::HashMap,
     fs::create_dir_all,
@@ -13,6 +14,7 @@ use std::{
 };
 
 use cfx_rpc_builder::RpcServerHandle;
+use cfx_util_macros::bail;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
@@ -20,6 +22,7 @@ use parking_lot::{Condvar, Mutex};
 use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
 
+use crate::keylib::KeyPair;
 use blockgen::BlockGenerator;
 use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
@@ -28,7 +31,10 @@ use cfx_types::{address_util::AddressUtil, Address, Space, U256};
 pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    consensus::pos_handler::{PosConfiguration, PosVerifier},
+    consensus::{
+        pivot_hint::PivotHint,
+        pos_handler::{PosConfiguration, PosVerifier},
+    },
     genesis_block::{self as genesis, genesis_block},
     pow::PowComputer,
     statistics::Statistics,
@@ -47,7 +53,6 @@ use diem_crypto::{
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusVRFPrivateKey,
 };
-use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::NetworkService;
 use runtime::Runtime;
@@ -361,6 +366,11 @@ pub fn initialize_common_modules(
 
     let statistics = Arc::new(Statistics::new());
     let notifications = Notifications::init();
+    let pivot_hint = if let Some(conf) = &consensus_conf.pivot_hint_conf {
+        Some(Arc::new(PivotHint::new(conf)?))
+    } else {
+        None
+    };
 
     let consensus = Arc::new(ConsensusGraph::new(
         consensus_conf,
@@ -374,6 +384,7 @@ pub fn initialize_common_modules(
         verification_config.clone(),
         node_type,
         pos_verifier.clone(),
+        pivot_hint,
         conf.common_params(),
     ));
 

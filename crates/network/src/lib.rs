@@ -3,34 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 #![allow(deprecated)]
-extern crate io;
-#[macro_use]
-extern crate log;
-extern crate mio;
-extern crate parking_lot;
-extern crate slab;
-#[macro_use]
-extern crate error_chain;
-extern crate bytes;
-extern crate ipnetwork;
-extern crate rlp;
-extern crate serde;
-extern crate serde_json;
-#[macro_use]
-extern crate serde_derive;
-extern crate enum_map;
-extern crate igd;
-extern crate keccak_hash as hash;
-extern crate libc;
-extern crate parity_path;
-extern crate rand;
-#[macro_use]
-extern crate enum_map_derive;
-extern crate strum;
-#[macro_use]
-extern crate strum_macros;
-extern crate cfxkey as keylib;
-extern crate keccak_hash;
+use cfxkey as keylib;
+use io as iolib;
+use keccak_hash as hash;
 
 pub const PROTOCOL_ID_SIZE: usize = 3;
 pub type ProtocolId = [u8; PROTOCOL_ID_SIZE];
@@ -51,7 +26,7 @@ mod session_manager;
 pub mod throttling;
 
 pub use crate::{
-    error::{DisconnectReason, Error, ErrorKind, ThrottlingReason},
+    error::{DisconnectReason, Error, ThrottlingReason},
     ip::SessionIpLimitConfig,
     node_table::Node,
     service::NetworkService,

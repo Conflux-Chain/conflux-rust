@@ -12,11 +12,11 @@ use cfx_rpc_cfx_types::traits::BlockProvider;
 use cfx_rpc_eth_types::{EthRpcLogFilter, Log};
 use cfx_rpc_utils::error::error_codes as codes;
 use cfx_types::{Space, H256};
+use cfx_util_macros::bail;
 use cfxcore::{
     channel::Channel, errors::Error as CfxRpcError, ConsensusGraph,
     ConsensusGraphTrait, SharedConsensusGraph, SharedTransactionPool,
 };
-use error_chain::bail;
 use futures::{FutureExt, TryFutureExt};
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as RpcResult};
 use log::{debug, error, info};

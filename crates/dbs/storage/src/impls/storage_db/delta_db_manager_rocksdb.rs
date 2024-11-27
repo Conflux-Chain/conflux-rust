@@ -52,7 +52,7 @@ impl DeltaDbManagerTrait for DeltaDbManagerRocksdb {
 
         let path = self.get_delta_db_path(delta_db_name);
         if path.exists() {
-            Err(ErrorKind::DeltaMPTAlreadyExists.into())
+            Err(Error::DeltaMPTAlreadyExists.into())
         } else {
             Ok(KvdbRocksdb {
                 kvdb: Arc::new(Database::open(

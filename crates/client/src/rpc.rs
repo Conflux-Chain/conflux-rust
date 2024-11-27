@@ -22,6 +22,7 @@ use jsonrpc_ws_server::{
     ServerBuilder as WsServerBuilder,
 };
 pub use jsonrpsee::server::ServerBuilder;
+use log::{info, warn};
 use std::{net::SocketAddr, sync::Arc};
 
 mod authcodes;

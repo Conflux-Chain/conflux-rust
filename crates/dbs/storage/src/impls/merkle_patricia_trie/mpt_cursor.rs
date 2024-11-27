@@ -591,7 +591,7 @@ impl<Mpt: GetReadMpt> CursorLoadNodeWrapper<Mpt> for BasicPathNode<Mpt> {
     ) -> Result<SnapshotMptNode> {
         mpt.get_read_mpt()
             .load_node(path)?
-            .ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+            .ok_or(Error::from(Error::SnapshotMPTTrieNodeNotFound))
     }
 }
 
@@ -603,7 +603,7 @@ impl<Mpt: GetReadMpt, PathNode> CursorLoadNodeWrapper<Mpt>
     ) -> Result<SnapshotMptNode> {
         mpt.get_read_mpt()
             .load_node(path)?
-            .ok_or(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+            .ok_or(Error::from(Error::SnapshotMPTTrieNodeNotFound))
     }
 }
 
@@ -624,7 +624,7 @@ impl<Mpt: GetReadMpt, T: CursorSetIoError + TakeMpt<Mpt>>
             Ok(None) => {
                 self.set_has_io_error();
 
-                Err(Error::from(ErrorKind::SnapshotMPTTrieNodeNotFound))
+                Err(Error::from(Error::SnapshotMPTTrieNodeNotFound))
             }
         }
     }
@@ -819,8 +819,8 @@ pub trait PathNodeTrait<Mpt: GetReadMpt>:
 
                 node
             }
-            Err(e) => match e.kind() {
-                ErrorKind::SnapshotMPTTrieNodeNotFound => {
+            Err(e) => match e {
+                Error::SnapshotMPTTrieNodeNotFound => {
                     mpt_is_empty = true;
 
                     SnapshotMptNode(VanillaTrieNode::new(

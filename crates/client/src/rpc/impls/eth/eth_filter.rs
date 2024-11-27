@@ -5,6 +5,8 @@
 use std::collections::VecDeque;
 
 use cfx_types::H128;
+use cfx_util_macros::bail;
+use log::{debug, info};
 use primitives::filter::LogFilter;
 
 use crate::rpc::{

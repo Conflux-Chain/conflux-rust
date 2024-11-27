@@ -15,8 +15,8 @@ use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
     invalid_request_msg, jsonrpc_error_to_error_object_owned,
 };
 use cfx_types::{H128 as FilterId, H256};
+use cfx_util_macros::bail;
 use cfxcore::{channel::Channel, SharedConsensusGraph, SharedTransactionPool};
-use error_chain::bail;
 use jsonrpsee::core::RpcResult;
 use primitives::filter::LogFilter;
 use runtime::Executor;

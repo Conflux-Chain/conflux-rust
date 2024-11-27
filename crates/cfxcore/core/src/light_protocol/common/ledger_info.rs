@@ -4,7 +4,7 @@
 
 use crate::{
     consensus::SharedConsensusGraph,
-    light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
+    light_protocol::{message::WitnessInfoWithHeight, Error},
 };
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
@@ -42,7 +42,7 @@ impl LedgerInfo {
             .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
             .ok_or_else(|| {
-                ErrorKind::InternalError(format!("Block {:?} not found", hash))
+                Error::InternalError(format!("Block {:?} not found", hash))
                     .into()
             })
     }
@@ -55,7 +55,7 @@ impl LedgerInfo {
             .block_header_by_hash(&hash)
             .map(|h| (*h).clone())
             .ok_or_else(|| {
-                ErrorKind::InternalError(format!("Header {:?} not found", hash))
+                Error::InternalError(format!("Header {:?} not found", hash))
                     .into()
             })
     }
@@ -96,7 +96,7 @@ impl LedgerInfo {
             .get_data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
-                Error::from(ErrorKind::InternalError(format!(
+                Error::from(Error::InternalError(format!(
                     "Execution commitments for {:?} not found",
                     pivot
                 )))
@@ -122,7 +122,7 @@ impl LedgerInfo {
             .get_data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
-                Error::from(ErrorKind::InternalError(format!(
+                Error::from(Error::InternalError(format!(
                     "Execution commitments for {:?} not found",
                     pivot
                 )))
@@ -145,7 +145,7 @@ impl LedgerInfo {
             .get_data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
-                Error::from(ErrorKind::InternalError(format!(
+                Error::from(Error::InternalError(format!(
                     "Execution commitments for {:?} not found",
                     pivot
                 )))
@@ -183,7 +183,7 @@ impl LedgerInfo {
         match state {
             Some(Ok(Some(state))) => Ok(state),
             _ => {
-                bail!(ErrorKind::InternalError(format!(
+                bail!(Error::InternalError(format!(
                     "State of epoch {} not found",
                     epoch
                 )));
@@ -199,7 +199,7 @@ impl LedgerInfo {
         match self.state_of(epoch)?.get_state_root() {
             Ok(root) => Ok(root),
             Err(e) => {
-                bail!(ErrorKind::InternalError(format!(
+                bail!(Error::InternalError(format!(
                     "State root of epoch {} not found: {:?}",
                     epoch, e
                 )));
@@ -255,7 +255,7 @@ impl LedgerInfo {
                     )
                     .map(|res| (*res.block_receipts).clone())
                     .ok_or_else(|| {
-                        ErrorKind::InternalError(format!(
+                        Error::InternalError(format!(
                             "Receipts of epoch {} not found",
                             epoch
                         ))
@@ -286,7 +286,7 @@ impl LedgerInfo {
                     )
                     .map(|res| res.bloom)
                     .ok_or_else(|| {
-                        ErrorKind::InternalError(format!(
+                        Error::InternalError(format!(
                             "Logs bloom of epoch {} not found",
                             epoch
                         ))

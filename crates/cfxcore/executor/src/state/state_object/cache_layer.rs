@@ -5,7 +5,7 @@
 use super::{AccountEntry, OverlayAccount, RequireFields, State};
 use crate::unwrap_or_return;
 use cfx_statedb::{
-    ErrorKind as DbErrorKind, Result as DbResult, StateDb, StateDbExt,
+    Error as DbErrorKind, Result as DbResult, StateDb, StateDbExt,
 };
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
 use parking_lot::{

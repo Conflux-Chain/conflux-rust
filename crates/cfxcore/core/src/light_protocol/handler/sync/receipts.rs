@@ -230,7 +230,7 @@ impl Receipts {
 
         // check
         if received != expected {
-            bail!(ErrorKind::InvalidReceipts {
+            bail!(Error::InvalidReceipts {
                 epoch,
                 expected,
                 received,

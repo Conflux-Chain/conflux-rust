@@ -219,10 +219,11 @@ impl StorageRoots {
 
         self.state_roots
             .validate_state_root(epoch, &state_root)
-            .chain_err(|| ErrorKind::InvalidStorageRootProof {
+            .map_err(|e| Error::InvalidStorageRootProof {
                 epoch,
                 address,
                 reason: "Validation of current state root failed",
+                source: Some(Box::new(e)),
             })?;
 
         // validate previous state root
@@ -230,10 +231,11 @@ impl StorageRoots {
 
         self.state_roots
             .validate_prev_snapshot_state_root(epoch, &maybe_prev_root)
-            .chain_err(|| ErrorKind::InvalidStorageRootProof {
+            .map_err(|e| Error::InvalidStorageRootProof {
                 epoch,
                 address,
                 reason: "Validation of previous state root failed",
+                source: Some(Box::new(e)),
             })?;
 
         // construct padding
@@ -253,10 +255,11 @@ impl StorageRoots {
             state_root,
             maybe_intermediate_padding,
         ) {
-            bail!(ErrorKind::InvalidStorageRootProof {
+            bail!(Error::InvalidStorageRootProof {
                 epoch,
                 address,
                 reason: "Validation of merkle proof failed",
+                source: None
             });
         }
 

@@ -1113,7 +1113,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cfx-addr"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cfx-types",
  "lazy_static",
@@ -1132,11 +1132,12 @@ name = "cfx-db-errors"
 version = "2.0.2"
 dependencies = [
  "cfx-types",
- "error-chain",
+ "cfx-util-macros",
  "primitives",
  "rlp 0.4.6",
  "sqlite",
  "strfmt",
+ "thiserror",
 ]
 
 [[package]]
@@ -1156,7 +1157,6 @@ dependencies = [
  "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
- "error-chain",
  "geth-tracer",
  "log",
  "malloc_size_of",
@@ -1189,6 +1189,7 @@ dependencies = [
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
@@ -1196,7 +1197,6 @@ dependencies = [
  "derive_more",
  "diem-crypto",
  "diem-types",
- "error-chain",
  "hex-literal",
  "impl-tools",
  "impl-trait-for-tuples 0.2.2",
@@ -1300,8 +1300,8 @@ dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
- "error-chain",
  "malloc_size_of",
  "malloc_size_of_derive",
  "primitives",
@@ -1328,13 +1328,13 @@ dependencies = [
  "cfx-rpc-utils",
  "cfx-statedb",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
  "cfxcore",
  "clap",
- "error-chain",
  "futures 0.3.30",
  "geth-tracer",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpsee",
  "keccak-hash",
  "log",
@@ -1379,10 +1379,9 @@ dependencies = [
  "cfx-parity-trace-types",
  "cfx-rpc-primitives",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
- "clap",
- "error-chain",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "log",
  "parity-version",
  "primitives",
@@ -1412,9 +1411,10 @@ dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-primitives",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
- "error-chain",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
+ "jsonrpsee",
  "primitives",
  "rlp 0.4.6",
  "rustc-hex",
@@ -1445,7 +1445,7 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-sol-types",
  "cfx-types",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpsee",
  "revm",
  "serde_json",
@@ -1461,7 +1461,7 @@ dependencies = [
  "cfx-parameters",
  "cfx-storage",
  "cfx-types",
- "error-chain",
+ "cfx-util-macros",
  "hashbrown 0.7.2",
  "lazy_static",
  "log",
@@ -1480,9 +1480,9 @@ dependencies = [
  "cfx-db-errors",
  "cfx-internal-common",
  "cfx-types",
+ "cfx-util-macros",
  "delegate 0.5.2",
  "derivative",
- "error-chain",
  "fallible-iterator",
  "fs_extra",
  "futures 0.3.30",
@@ -1520,12 +1520,12 @@ version = "1.12.0"
 dependencies = [
  "cfx-types",
  "env_logger",
- "jsonrpc-core",
- "jsonrpc-tcp-server",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-tcp-server 15.1.0",
  "keccak-hash",
  "log",
  "parking_lot 0.11.2",
- "tokio 0.2.25",
+ "tokio 0.1.22",
  "tokio-io",
 ]
 
@@ -1624,6 +1624,7 @@ dependencies = [
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-utils",
  "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
@@ -1646,7 +1647,6 @@ dependencies = [
  "diem-temppath",
  "diem-types",
  "either",
- "error-chain",
  "executor",
  "executor-types",
  "fail",
@@ -1662,7 +1662,7 @@ dependencies = [
  "impl-trait-for-tuples 0.2.2",
  "io",
  "itertools 0.10.5",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "jsonrpsee",
  "keccak-hash",
  "kvdb",
@@ -1700,6 +1700,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_xorshift 0.2.0",
  "random-crash",
+ "rangetools",
  "rayon",
  "rlp 0.4.6",
  "rlp_derive",
@@ -1731,7 +1732,6 @@ dependencies = [
  "threadpool",
  "throttling",
  "tiny-keccak 2.0.2",
- "tokio 0.2.25",
  "tokio 1.40.0",
  "tokio-stream",
  "tokio-timer",
@@ -1760,9 +1760,7 @@ name = "cfxkey"
 version = "0.3.0"
 dependencies = [
  "cfx-types",
- "docopt",
  "edit-distance",
- "env_logger",
  "lazy_static",
  "log",
  "malloc_size_of",
@@ -1771,13 +1769,13 @@ dependencies = [
  "parity-crypto",
  "parity-secp256k1",
  "parity-wordlist",
- "quick-error",
  "rand 0.7.3",
  "rustc-hex",
  "serde",
  "serde_derive",
+ "thiserror",
  "threadpool",
- "tiny-keccak 1.5.0",
+ "tiny-keccak 2.0.2",
  "zeroize",
 ]
 
@@ -1951,7 +1949,6 @@ dependencies = [
  "diem-time-service",
  "diem-types",
  "dir",
- "error-chain",
  "executor",
  "executor-types",
  "fail",
@@ -1960,12 +1957,12 @@ dependencies = [
  "geth-tracer",
  "io",
  "itertools 0.10.5",
- "jsonrpc-core",
- "jsonrpc-core-client",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-core-client 15.1.0",
  "jsonrpc-derive",
- "jsonrpc-http-server",
- "jsonrpc-pubsub",
- "jsonrpc-tcp-server",
+ "jsonrpc-http-server 15.1.0",
+ "jsonrpc-pubsub 15.1.0",
+ "jsonrpc-tcp-server 15.1.0",
  "jsonrpc-ws-server",
  "jsonrpsee",
  "keccak-hash",
@@ -2054,6 +2051,7 @@ dependencies = [
  "base64ct",
  "bcs",
  "blockgen",
+ "bls-signatures",
  "cfx-types",
  "cfxcore",
  "cfxcore-accounts",
@@ -2068,24 +2066,21 @@ dependencies = [
  "dir",
  "docopt",
  "env_logger",
- "error-chain",
  "executor",
- "executor-types",
  "futures 0.1.31",
  "hex 0.3.2",
  "home 0.5.4",
  "io",
  "jemallocator",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-http-server",
- "jsonrpc-tcp-server",
+ "jsonrpc-core 18.0.0",
+ "jsonrpc-core-client 18.0.0",
+ "jsonrpc-http-server 18.0.0",
+ "jsonrpc-tcp-server 18.0.0",
  "keccak-hash",
  "kvdb-rocksdb",
  "log",
  "log4rs",
  "malloc_size_of",
- "mio 0.6.23",
  "move-core-types",
  "network",
  "panic_hook",
@@ -2107,6 +2102,7 @@ dependencies = [
  "tempdir",
  "textwrap 0.9.0",
  "threadpool",
+ "tokio 1.40.0",
  "toml",
  "txgen",
 ]
@@ -3027,6 +3023,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56ce8c6da7551ec6c462cbaf3bfbc75131ebbfa1c944aeaa9dab51ca1c5f0c3b"
 
 [[package]]
+name = "duration-str"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9f037c488d179e21c87ef5fa9c331e8e62f5dddfa84618b41bb197da03edff1"
+dependencies = [
+ "chrono",
+ "nom",
+ "rust_decimal",
+ "serde",
+ "thiserror",
+ "time 0.3.20",
+]
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3212,16 +3222,6 @@ checksum = "534c5cf6194dfab3db3242765c03bbe257cf92f22b38f6bc0c58d59108a820ba"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "error-chain"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
-dependencies = [
- "backtrace",
- "version_check",
 ]
 
 [[package]]
@@ -3651,6 +3651,7 @@ dependencies = [
  "futures-core",
  "futures-task",
  "futures-util",
+ "num_cpus",
 ]
 
 [[package]]
@@ -3911,7 +3912,7 @@ dependencies = [
  "indexmap 1.9.2",
  "slab",
  "tokio 1.40.0",
- "tokio-util",
+ "tokio-util 0.7.7",
  "tracing",
 ]
 
@@ -3930,7 +3931,7 @@ dependencies = [
  "indexmap 2.2.5",
  "slab",
  "tokio 1.40.0",
- "tokio-util",
+ "tokio-util 0.7.7",
  "tracing",
 ]
 
@@ -4674,12 +4675,29 @@ checksum = "489b9c612e60c766f751ab40fcb43cbb55a1e10bb44a9b4307ed510ca598cbd7"
 dependencies = [
  "failure",
  "futures 0.1.31",
- "hyper 0.12.36",
- "jsonrpc-core",
- "jsonrpc-pubsub",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-pubsub 15.1.0",
  "log",
  "serde",
  "serde_json",
+ "url 1.7.2",
+]
+
+[[package]]
+name = "jsonrpc-client-transports"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2b99d4207e2a04fb4581746903c2bb7eb376f88de9c699d0f3e10feeac0cd3a"
+dependencies = [
+ "derive_more",
+ "futures 0.3.30",
+ "hyper 0.14.25",
+ "jsonrpc-core 18.0.0",
+ "jsonrpc-pubsub 18.0.0",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio 1.40.0",
  "url 1.7.2",
 ]
 
@@ -4697,12 +4715,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpc-core"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14f7f76aef2d054868398427f6c54943cf3d1caa9a7ec7d0c38d69df97a965eb"
+dependencies = [
+ "futures 0.3.30",
+ "futures-executor",
+ "futures-util",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
 name = "jsonrpc-core-client"
 version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f764902d7b891344a0acb65625f32f6f7c6db006952143bd650209fbe7d94db"
 dependencies = [
- "jsonrpc-client-transports",
+ "jsonrpc-client-transports 15.1.0",
+]
+
+[[package]]
+name = "jsonrpc-core-client"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b51da17abecbdab3e3d4f26b01c5ec075e88d3abe3ab3b05dc9aa69392764ec0"
+dependencies = [
+ "futures 0.3.30",
+ "jsonrpc-client-transports 18.0.0",
 ]
 
 [[package]]
@@ -4724,11 +4767,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb5c4513b7b542f42da107942b7b759f27120b5cc894729f88254b28dff44b7"
 dependencies = [
  "hyper 0.12.36",
- "jsonrpc-core",
- "jsonrpc-server-utils",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-server-utils 15.1.0",
  "log",
  "net2",
  "parking_lot 0.10.2",
+ "unicase",
+]
+
+[[package]]
+name = "jsonrpc-http-server"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
+dependencies = [
+ "futures 0.3.30",
+ "hyper 0.14.25",
+ "jsonrpc-core 18.0.0",
+ "jsonrpc-server-utils 18.0.0",
+ "log",
+ "net2",
+ "parking_lot 0.11.2",
  "unicase",
 ]
 
@@ -4738,9 +4797,24 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "639558e0604013be9787ae52f798506ae42bf4220fe587bdc5625871cc8b9c77"
 dependencies = [
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "log",
  "parking_lot 0.10.2",
+ "rand 0.7.3",
+ "serde",
+]
+
+[[package]]
+name = "jsonrpc-pubsub"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "240f87695e6c6f62fb37f05c02c04953cf68d6408b8c1c89de85c7a0125b1011"
+dependencies = [
+ "futures 0.3.30",
+ "jsonrpc-core 18.0.0",
+ "lazy_static",
+ "log",
+ "parking_lot 0.11.2",
  "rand 0.7.3",
  "serde",
 ]
@@ -4753,11 +4827,29 @@ checksum = "72f1f3990650c033bd8f6bd46deac76d990f9bbfb5f8dc8c4767bf0a00392176"
 dependencies = [
  "bytes 0.4.12",
  "globset",
- "jsonrpc-core",
+ "jsonrpc-core 15.1.0",
  "lazy_static",
  "log",
  "tokio 0.1.22",
  "tokio-codec",
+ "unicase",
+]
+
+[[package]]
+name = "jsonrpc-server-utils"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa4fdea130485b572c39a460d50888beb00afb3e35de23ccd7fad8ff19f0e0d4"
+dependencies = [
+ "bytes 1.7.1",
+ "futures 0.3.30",
+ "globset",
+ "jsonrpc-core 18.0.0",
+ "lazy_static",
+ "log",
+ "tokio 1.40.0",
+ "tokio-stream",
+ "tokio-util 0.6.10",
  "unicase",
 ]
 
@@ -4767,11 +4859,24 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c2645fad19361780217525afe54984046bab2400346395244e6d74f33aa9a0a"
 dependencies = [
- "jsonrpc-core",
- "jsonrpc-server-utils",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-server-utils 15.1.0",
  "log",
  "parking_lot 0.10.2",
  "tokio-service",
+]
+
+[[package]]
+name = "jsonrpc-tcp-server"
+version = "18.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60a0a0d35558123e93743d467285196905da1368500378cb5352b71856377874"
+dependencies = [
+ "jsonrpc-core 18.0.0",
+ "jsonrpc-server-utils 18.0.0",
+ "log",
+ "parking_lot 0.11.2",
+ "tower-service",
 ]
 
 [[package]]
@@ -4780,8 +4885,8 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6596fe75209b73a2a75ebe1dce4e60e03b88a2b25e8807b667597f6315150d22"
 dependencies = [
- "jsonrpc-core",
- "jsonrpc-server-utils",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-server-utils 15.1.0",
  "log",
  "parity-ws",
  "parking_lot 0.10.2",
@@ -4860,7 +4965,7 @@ dependencies = [
  "thiserror",
  "tokio 1.40.0",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.7",
  "tower",
  "tracing",
 ]
@@ -5302,6 +5407,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "criterion",
+ "duration-str",
  "futures 0.3.30",
  "influx_db_client",
  "lazy_static",
@@ -5492,16 +5598,16 @@ name = "network"
 version = "0.1.0"
 dependencies = [
  "byte-unit",
- "bytes 1.7.1",
+ "bytes 0.4.12",
  "cfx-addr",
  "cfx-bytes",
  "cfx-types",
+ "cfx-util-macros",
  "cfxkey",
  "diem-crypto",
  "diem-types",
  "enum-map",
  "enum-map-derive",
- "error-chain",
  "igd",
  "io",
  "ipnetwork",
@@ -5525,6 +5631,7 @@ dependencies = [
  "slab",
  "strum",
  "strum_macros",
+ "thiserror",
  "throttling",
 ]
 
@@ -6940,6 +7047,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rangetools"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6e97ca3dbabd81e6033cfe09f0cef37c89f34f2a9223cab7cf99305d46a9633"
+
+[[package]]
 name = "rayon"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7288,6 +7401,16 @@ version = "0.1.0"
 dependencies = [
  "futures 0.1.31",
  "tokio 0.1.22",
+]
+
+[[package]]
+name = "rust_decimal"
+version = "1.36.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b082d80e3e3cc52b2ed634388d436fe1f4de6af5786cc2de9ba9737527bdf555"
+dependencies = [
+ "arrayvec 0.7.4",
+ "num-traits",
 ]
 
 [[package]]
@@ -8651,7 +8774,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite 0.2.14",
  "tokio 1.40.0",
- "tokio-util",
+ "tokio-util 0.7.7",
 ]
 
 [[package]]
@@ -8755,6 +8878,20 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
+version = "0.6.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36943ee01a6d67977dd3f84a5a1d2efeb4ada3a1ae771cadfaa535d9d9fc6507"
+dependencies = [
+ "bytes 1.7.1",
+ "futures-core",
+ "futures-sink",
+ "log",
+ "pin-project-lite 0.2.14",
+ "tokio 1.40.0",
+]
+
+[[package]]
+name = "tokio-util"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5427d89453009325de0d8f342c9490009f76e999cb7672d77e46267448f7e6b2"
@@ -8831,7 +8968,7 @@ dependencies = [
  "rand 0.8.5",
  "slab",
  "tokio 1.40.0",
- "tokio-util",
+ "tokio-util 0.7.7",
  "tower-layer",
  "tower-service",
  "tracing",

@@ -4,12 +4,10 @@
 
 use crate::command::helpers::{input_password, password_prompt};
 use clap::ArgMatches;
-use futures::future::Future;
 use jsonrpc_core::{Params, Value};
 use jsonrpc_core_client::{transports::http::connect, RawClient};
-use jsonrpc_http_server::hyper::rt;
 use serde_json::Map;
-use std::{str::FromStr, sync::mpsc::channel};
+use std::str::FromStr;
 
 pub struct RpcCommand {
     pub url: String,
@@ -54,29 +52,15 @@ impl RpcCommand {
         }))
     }
 
-    pub fn execute(self) -> Result<String, String> {
-        let (sender, receiver) = channel();
-
-        rt::run(
-            connect::<RawClient>(self.url.as_str())
-                .and_then(move |client| {
-                    client.call_method(self.method.as_str(), self.args).then(
-                        move |result| {
-                            sender
-                                .send(result)
-                                .expect("channel should work fine");
-                            Ok(())
-                        },
-                    )
-                })
-                .map_err(|e| eprintln!("future error: {:?}", e)),
-        );
-
-        receiver
-            .recv()
-            .expect("channel should work fine")
-            .map(|result| format!("{:#}", result))
-            .map_err(|e| format!("{:?}", e))
+    pub async fn execute(self) -> Result<String, String> {
+        let client = connect::<RawClient>(self.url.as_str())
+            .await
+            .map_err(|e| e.to_string())?;
+        let result = client
+            .call_method(self.method.as_str(), self.args)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(format!("{:#}", result))
     }
 }
 

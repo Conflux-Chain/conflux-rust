@@ -769,7 +769,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
         let mut alloc_fields = self.alloc_fields.lock();
         let key = alloc_fields.next;
         if key == self.entries.capacity() {
-            Err(Error::from_kind(ErrorKind::OutOfMem))
+            Err(Error::OutOfMem)
         } else {
             alloc_fields.used += 1;
             if key == alloc_fields.size_initialized {
@@ -848,14 +848,14 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     pub fn remove(&self, key: usize) -> Result<T> {
         if key > self.entries.len() {
             // Index out of range.
-            return Err(Error::from_kind(ErrorKind::SlabKeyError));
+            return Err(Error::SlabKeyError);
         }
         let mut alloc_fields = self.alloc_fields.lock();
         let next = alloc_fields.next;
         let entry = self.cast_entry_ref_mut(key);
         if entry.is_vacant() {
             // Trying to free unallocated space.
-            Err(Error::from_kind(ErrorKind::SlabKeyError))
+            Err(Error::SlabKeyError)
         } else {
             alloc_fields.used -= 1;
             alloc_fields.next = key;

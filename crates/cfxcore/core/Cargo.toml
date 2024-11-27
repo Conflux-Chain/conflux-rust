@@ -3,12 +3,12 @@ description = "Conflux core library"
 homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = { workspace = true}
+version = { workspace = true }
 edition = "2021"
 
 [dependencies]
 bit-set = "0.4"
-substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
+substrate-bn = { workspace = true, default-features = false }
 byteorder = { workspace = true }
 cfxkey = { workspace = true }
 cfx-addr = { workspace = true }
@@ -31,7 +31,6 @@ dag = { workspace = true }
 derivative = "2.0.2"
 db = { workspace = true }
 either = "1.5.3"
-error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
 futures = { workspace = true, features = ["compat"]}
@@ -57,7 +56,7 @@ metrics = { workspace = true }
 network = { workspace = true }
 num = "0.2"
 num-traits = { version = "0.2.8", default-features = false }
-parity-crypto = "0.9.0"
+parity-crypto = { workspace = true }
 parking_lot = { workspace = true }
 primal = "0.2.3"
 primitives = { workspace = true }
@@ -66,6 +65,7 @@ prometheus = { version = "0.7.0", default-features = false }
 rand = { workspace = true }
 rand_08 = {package = "rand", version = "0.8"}
 rand_xorshift="0.2"
+rangetools = "0.1.4"
 random-crash = { workspace = true }
 rayon = { workspace = true }
 rlp = { workspace = true }
@@ -88,11 +88,10 @@ tempdir = "0.3"
 threadpool = "1.0"
 throttling = { workspace = true }
 toml = "0.5.8"
-tokio02 = { workspace = true, features = ["full"] }
 tokio = { workspace = true, features = ["full"] }
 tokio-timer = { workspace = true }
 tokio-stream = { workspace = true }
-unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+unexpected = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 smart-default = "0.6.0"
@@ -143,7 +142,8 @@ cfx-rpc-cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 cfx-rpc-utils = { workspace = true }
-
+cfx-util-macros = { workspace = true }
+parity-util-mem = { workspace = true, default-features = false }
 
 [dev-dependencies]
 criterion = "0.3"
@@ -152,10 +152,6 @@ cfx-vm-types = { workspace = true, features = ["testonly_code"] }
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 consensus-types = { path = "src/pos/consensus/consensus-types", features = ["fuzzing"] }
-
-[dependencies.parity-util-mem]
-version = "0.5"
-default-features = false
 
 [features]
 default = []

@@ -67,9 +67,13 @@ pub struct TransactionRequest {
 }
 
 impl TransactionRequest {
-    pub fn unset_zero_gas_price(&mut self) {
+    pub fn unset_zero_gas_and_price(&mut self) {
         if self.gas_price == Some(U256::zero()) {
             self.gas_price = None;
+        }
+
+        if self.gas == Some(U256::zero()) {
+            self.gas = None;
         }
     }
 

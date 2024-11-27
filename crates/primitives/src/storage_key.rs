@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::static_bool::{self, StaticBool};
+use lazy_static::lazy_static;
 
 pub type CheckInput = static_bool::Yes;
 pub type SkipInputCheck = static_bool::No;
@@ -716,9 +717,10 @@ mod delta_mpt_storage_key {
 }
 
 use super::{MerkleHash, MERKLE_NULL_NODE};
-use crate::storage_key::delta_mpt_storage_key::ACCOUNT_KEYPART_BYTES;
+use crate::{
+    hash::keccak, storage_key::delta_mpt_storage_key::ACCOUNT_KEYPART_BYTES,
+};
 use cfx_types::{Address, Space, H256};
-use hash::keccak;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::{Deserialize, Serialize};
 use std::{

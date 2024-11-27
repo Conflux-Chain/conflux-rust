@@ -25,7 +25,6 @@ class ExpireBlockTest(ConfluxTestFramework):
         genesis = self.nodes[0].cfx_getBlockByEpochNumber("0x0", False)["hash"]
         self.nodes[0].add_p2p_connection(P2PInterface(genesis))
         self.nodes[1].add_p2p_connection(P2PInterface(genesis))
-        network_thread_start()
         self.nodes[0].p2p.wait_for_status()
         self.nodes[1].p2p.wait_for_status()
 

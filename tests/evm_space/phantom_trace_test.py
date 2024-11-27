@@ -39,7 +39,7 @@ class PhantomTransactionTest(Web3Base):
         print(f'Using Conflux account {self.cfxAccount}')
 
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
@@ -80,7 +80,7 @@ class PhantomTransactionTest(Web3Base):
         self.log.info("Pass")
 
     def test_callEVM(self):
-        data_hex = self.confluxContract.encodeABI(fn_name="callEVM", args=[self.evmContractAddr, 1])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="callEVM", args=[self.evmContractAddr, 1])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
@@ -135,7 +135,7 @@ class PhantomTransactionTest(Web3Base):
 
         assert_equal(phantom1["from"], mapped_address(self.confluxContractAddr))
         assert_equal(phantom1["to"], self.evmContractAddr.lower())
-        assert_equal(phantom1["input"], self.evmContract.encodeABI(fn_name="call", args=[1])),
+        assert_equal(phantom1["input"], self.evmContract.encode_abi(abi_element_identifier="call", args=[1])),
         assert_equal(phantom1["status"], "0x1")
         assert_equal(phantom1["blockHash"], block["hash"])
         assert_equal(phantom1["blockNumber"], block["number"])
@@ -170,7 +170,7 @@ class PhantomTransactionTest(Web3Base):
                 "callType": "call",
                 "from": self.evmContractAddr.lower(),
                 "to": self.evmContractAddr.lower(),
-                "input": self.evmContract.encodeABI(fn_name="call", args=[0]),
+                "input": self.evmContract.encode_abi(abi_element_identifier="call", args=[0]),
                 "gas": "0x0",
                 "value": "0x0",
             },
@@ -206,7 +206,7 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(filtered, block_traces)
 
     def test_staticCallEVM(self):
-        data_hex = self.confluxContract.encodeABI(fn_name="staticCallEVM", args=[self.evmContractAddr, 1])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="staticCallEVM", args=[self.evmContractAddr, 1])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
@@ -232,7 +232,7 @@ class PhantomTransactionTest(Web3Base):
         assert(os.path.isfile(bytecode_file))
         bytecode = open(bytecode_file).read()
 
-        data_hex = self.confluxContract.encodeABI(fn_name="createEVM", args=[bytecode])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="createEVM", args=[bytes.fromhex(bytecode)])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex, gas=3_700_000)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
@@ -334,7 +334,7 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(filtered, block_traces)
 
     def test_transferEVM(self):
-        data_hex = self.confluxContract.encodeABI(fn_name="transferEVM", args=[self.evmAccount.address])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="transferEVM", args=[self.evmAccount.address])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex, value=0x222)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
@@ -445,7 +445,7 @@ class PhantomTransactionTest(Web3Base):
 
     def test_withdrawFromMapped(self):
         # withdraw with insufficient funds should fail
-        data_hex = self.confluxContract.encodeABI(fn_name="withdrawFromMapped", args=[0x123])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="withdrawFromMapped", args=[0x123])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
@@ -453,10 +453,10 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(receipt["outcomeStatus"], "0x1") # failure
 
         # transfer funds to mapped account
-        receiver = Web3.toChecksumAddress(mapped_address(self.confluxContractAddr))
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+        receiver = Web3.to_checksum_address(mapped_address(self.confluxContractAddr))
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
 
-        signed = self.evmAccount.signTransaction({
+        signed = self.evmAccount.sign_transaction({
             "to": receiver,
             "value": 0x123,
             "gasPrice": 1,
@@ -466,12 +466,12 @@ class PhantomTransactionTest(Web3Base):
             "data": data_hex,
         })
 
-        self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         self.rpc.generate_blocks(20, 1)
-        receipt = self.w3.eth.waitForTransactionReceipt(signed["hash"])
+        receipt = self.w3.eth.wait_for_transaction_receipt(signed["hash"])
         assert_equal(receipt["status"], 1) # success
 
-        data_hex = self.confluxContract.encodeABI(fn_name="withdrawFromMapped", args=[0x123])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="withdrawFromMapped", args=[0x123])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
@@ -536,7 +536,7 @@ class PhantomTransactionTest(Web3Base):
 
     def test_fail(self):
         # test failing tx
-        data_hex = self.confluxContract.encodeABI(fn_name="fail", args=[self.evmContractAddr])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="fail", args=[self.evmContractAddr])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
@@ -555,7 +555,7 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(len(block_traces), 0)
 
         # test failing subcall
-        data_hex = self.confluxContract.encodeABI(fn_name="subcallFail", args=[self.evmContractAddr])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="subcallFail", args=[self.evmContractAddr])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
@@ -578,7 +578,7 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(filtered, None)
 
         # test insufficient storage (issue #2483)
-        data_hex = self.confluxContract.encodeABI(fn_name="callEVMAndSetStorage", args=[self.evmContractAddr, 1])
+        data_hex = self.confluxContract.encode_abi(abi_element_identifier="callEVMAndSetStorage", args=[self.evmContractAddr, 1])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
@@ -589,7 +589,7 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(len(block_traces), 0)
 
     def test_deployEip1820(self):
-        data_hex = self.crossSpaceContract.encodeABI(fn_name="deployEip1820", args=[])
+        data_hex = self.crossSpaceContract.encode_abi(abi_element_identifier="deployEip1820", args=[])
         tx = self.rpc.new_contract_tx(receiver=CROSS_SPACE_CALL_ADDRESS, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)

@@ -16,6 +16,7 @@ futures = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
+duration-str = "0.5.1"
 
 [dev-dependencies]
 criterion = "0.3"

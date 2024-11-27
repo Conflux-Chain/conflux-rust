@@ -11,7 +11,7 @@ use crate::{
 };
 use futures::channel::oneshot;
 use network::{
-    node_table::NodeId, ErrorKind as NetworkErrorKind, NetworkContext,
+    node_table::NodeId, Error as NetworkError, NetworkContext,
     UpdateNodeOperation,
 };
 use parking_lot::Mutex;
@@ -112,8 +112,8 @@ impl RequestHandler {
         request.set_request_id(request_id);
         let send_res = request.send(io, &peer);
         let is_send_error = if let Err(e) = send_res {
-            match e.kind() {
-                NetworkErrorKind::OversizedPacket => {
+            match e {
+                NetworkError::OversizedPacket => {
                     panic!("Request packet should not be oversized!")
                 }
                 _ => {}
@@ -328,8 +328,8 @@ impl RequestContainer {
                     pending_msg.set_request_id(new_request_id);
                     let send_res = pending_msg.request.send(io, &self.peer_id);
                     let is_send_error = if let Err(e) = send_res {
-                        match e.kind() {
-                            NetworkErrorKind::OversizedPacket => panic!(
+                        match e {
+                            NetworkError::OversizedPacket => panic!(
                                 "Request packet should not be oversized!"
                             ),
                             _ => {}

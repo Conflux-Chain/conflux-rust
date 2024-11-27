@@ -17,14 +17,8 @@ parking_lot = { workspace = true }
 regex = "1.3.1"
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
-
-[dependencies.parity-util-mem]
-version = "0.5"
-default-features = false
+parity-util-mem = { workspace = true, default-features = false }
+rocksdb = { workspace = true }
 
 [dev-dependencies]
 tempdir = "0.3.7"
-
-[dependencies.rocksdb]
-git = "https://github.com/Conflux-Chain/rust-rocksdb.git"
-rev = "3773afe5b953997188f37c39308105b5deb0faac"

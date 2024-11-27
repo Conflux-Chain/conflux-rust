@@ -57,7 +57,6 @@ class CrashFullNodeTest(ConfluxTestFramework):
             self.stop_node(i)
         genesis = self.nodes[0].cfx_getBlockByEpochNumber("0x0", False)["hash"]
         self.nodes[0].add_p2p_connection(P2PInterface(genesis))
-        network_thread_start()
         self.nodes[0].p2p.wait_for_status()
         client = RpcClient(self.nodes[0])
         gas_price = 1
