@@ -30,7 +30,6 @@ members = [
     "crates/cfxcore/vm-interpreter",
     "crates/cfxcore/vm-types",
     "crates/util/cfx_math",
-    "crates/util/channel_utils",
     "crates/util/cfx-vm-tracer-derive",
     "crates/util/dag",
     "crates/util/delegate",
@@ -137,7 +136,6 @@ cfxcore-accounts = { path = "./crates/accounts" }
 secret-store = { path = "./crates/secret_store" }
 cfxstore = { path = "./crates/cfx_store" }
 network = { path = "./crates/network" }
-channel-utils = { path = "crates/util/channel_utils" }
 cfxcore = { path = "./crates/cfxcore/core" }
 cfx-parameters = { path = "./crates/cfxcore/parameters" }
 cfx-execute-helper = { path = "./crates/cfxcore/execute-helper" }
