@@ -23,13 +23,13 @@ use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, H64, U256, U64,
 };
+use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     errors::{Error as CoreError, Result as CoreResult},
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
-use error_chain::bail;
 use jsonrpc_core::Error as RpcError;
 use jsonrpsee::core::RpcResult;
 use primitives::{

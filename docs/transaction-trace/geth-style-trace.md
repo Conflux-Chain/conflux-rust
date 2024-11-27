@@ -27,7 +27,7 @@ And serveral builtin JS tracers, include:
 
 Geth also support writing custom tracer in [Go and Js](https://geth.ethereum.org/docs/developers/evm-tracing/custom-tracer).
 
-debug_traceCall method suport [state override](https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers#state-overrides).
+`debug_traceCall` method suport [state override](https://geth.ethereum.org/docs/developers/evm-tracing/built-in-tracers#state-overrides).
 
 ## Conflux Implementation
 
@@ -54,6 +54,8 @@ To use eSpace trace RPC methods, you need to enable `ethdebug` API module in the
 public_evm_rpc_apis = "eth,ethdebug"
 ```
 
+To enable this feature, a `full state` node is required; otherwise, the `debug_traceTransaction` method can only be called for transactions within the most recent 100,000 blocks.
+
 ### Opcode Tracer
 
 Currently the opcode trace's structLogs `error` field is not implemented.
@@ -67,7 +69,7 @@ Currently we do not support state override in `debug_traceCall` method.
 ## FAQs
 
 1. Does trace RPC methods support eSpace PhantomTransaction traces?
-    
+
     Currently, no. We will support it in the future.
 
 ## Resources

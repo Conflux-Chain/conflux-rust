@@ -1,5 +1,5 @@
+use crate::space::Space;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use space::Space;
 
 #[derive(
     Default, Copy, Clone, Debug, Eq, PartialEq, RlpEncodable, RlpDecodable,

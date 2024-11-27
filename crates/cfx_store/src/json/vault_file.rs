@@ -15,6 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::Crypto;
+use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use std::io::{Read, Write};
 
@@ -41,7 +42,7 @@ impl VaultFile {
 
 #[cfg(test)]
 mod test {
-    use json::{Aes128Ctr, Cipher, Crypto, Kdf, Pbkdf2, Prf, VaultFile};
+    use crate::json::{Aes128Ctr, Cipher, Crypto, Kdf, Pbkdf2, Prf, VaultFile};
     use serde_json;
 
     #[test]

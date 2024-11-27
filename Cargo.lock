@@ -1148,11 +1148,12 @@ name = "cfx-db-errors"
 version = "2.0.2"
 dependencies = [
  "cfx-types",
- "error-chain",
+ "cfx-util-macros",
  "primitives",
  "rlp 0.4.6",
  "sqlite",
  "strfmt",
+ "thiserror",
 ]
 
 [[package]]
@@ -1172,7 +1173,6 @@ dependencies = [
  "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
- "error-chain",
  "geth-tracer",
  "log",
  "malloc_size_of",
@@ -1205,6 +1205,7 @@ dependencies = [
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
@@ -1212,7 +1213,6 @@ dependencies = [
  "derive_more",
  "diem-crypto",
  "diem-types",
- "error-chain",
  "hex-literal",
  "impl-tools",
  "impl-trait-for-tuples 0.2.2",
@@ -1316,8 +1316,8 @@ dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
- "error-chain",
  "malloc_size_of",
  "malloc_size_of_derive",
  "primitives",
@@ -1344,10 +1344,10 @@ dependencies = [
  "cfx-rpc-utils",
  "cfx-statedb",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
  "cfxcore",
  "clap",
- "error-chain",
  "geth-tracer",
  "jsonrpc-core 15.1.0",
  "jsonrpsee",
@@ -1367,8 +1367,8 @@ dependencies = [
  "cfx-parity-trace-types",
  "cfx-rpc-primitives",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
- "error-chain",
  "jsonrpc-core 15.1.0",
  "log",
  "primitives",
@@ -1398,8 +1398,8 @@ dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-primitives",
  "cfx-types",
+ "cfx-util-macros",
  "cfx-vm-types",
- "error-chain",
  "jsonrpc-core 15.1.0",
  "jsonrpsee",
  "primitives",
@@ -1448,7 +1448,7 @@ dependencies = [
  "cfx-parameters",
  "cfx-storage",
  "cfx-types",
- "error-chain",
+ "cfx-util-macros",
  "hashbrown 0.7.2",
  "lazy_static",
  "log",
@@ -1467,9 +1467,9 @@ dependencies = [
  "cfx-db-errors",
  "cfx-internal-common",
  "cfx-types",
+ "cfx-util-macros",
  "delegate 0.5.2",
  "derivative",
- "error-chain",
  "fallible-iterator",
  "fs_extra",
  "futures 0.3.27",
@@ -1935,7 +1935,6 @@ dependencies = [
  "diem-time-service",
  "diem-types",
  "dir",
- "error-chain",
  "executor",
  "executor-types",
  "fail",
@@ -2053,7 +2052,6 @@ dependencies = [
  "dir",
  "docopt",
  "env_logger",
- "error-chain",
  "executor",
  "hex 0.3.2",
  "home 0.5.4",
@@ -3208,16 +3206,6 @@ checksum = "534c5cf6194dfab3db3242765c03bbe257cf92f22b38f6bc0c58d59108a820ba"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "error-chain"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d2f06b9cac1506ece98fe3231e3cc9c4410ec3d5b1f24ae1c8946f0742cdefc"
-dependencies = [
- "backtrace",
- "version_check",
 ]
 
 [[package]]
@@ -5606,12 +5594,12 @@ dependencies = [
  "cfx-addr",
  "cfx-bytes",
  "cfx-types",
+ "cfx-util-macros",
  "cfxkey",
  "diem-crypto",
  "diem-types",
  "enum-map",
  "enum-map-derive",
- "error-chain",
  "igd",
  "io",
  "ipnetwork",
@@ -5635,6 +5623,7 @@ dependencies = [
  "slab",
  "strum 0.11.0",
  "strum_macros 0.11.0",
+ "thiserror",
  "throttling",
 ]
 

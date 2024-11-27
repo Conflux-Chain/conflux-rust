@@ -70,7 +70,7 @@ impl TrieProof {
         for (node_index, node) in nodes.iter().enumerate() {
             if !connected_child_parent_map.contains_key(node.get_merkle()) {
                 // Not connected.
-                bail!(ErrorKind::InvalidTrieProof);
+                bail!(Error::InvalidTrieProof);
             }
             for (child_index, child_merkle) in
                 node.get_children_table_ref().iter()

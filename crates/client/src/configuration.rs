@@ -5,6 +5,7 @@
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 
 use lazy_static::*;
+use log::{error, warn};
 use parking_lot::RwLock;
 use rand::Rng;
 
@@ -1485,7 +1486,7 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
             .filter(|s| !s.is_empty())
             .map(|s| match validate_node_url(s).map(Into::into) {
                 None => Ok(s.to_owned()),
-                Some(ErrorKind::AddressResolve(_)) => Err(format!(
+                Some(network::Error::AddressResolve(_)) => Err(format!(
                     "Failed to resolve hostname of a boot node: {}",
                     s
                 )),

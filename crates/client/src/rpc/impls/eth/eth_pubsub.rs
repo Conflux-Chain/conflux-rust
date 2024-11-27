@@ -31,6 +31,7 @@ use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     SubscriptionId,
 };
+use log::{debug, error, info, trace, warn};
 use parking_lot::RwLock;
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,

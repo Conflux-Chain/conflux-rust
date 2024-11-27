@@ -2,6 +2,7 @@ use crate::rpc::types::address::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::H256;
 use primitives::{AccessList, AccessListItem};
+use serde::{Deserialize, Serialize};
 use std::convert::Into;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

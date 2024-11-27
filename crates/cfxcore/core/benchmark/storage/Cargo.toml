@@ -17,7 +17,7 @@ db = { workspace = true }
 
 clap = { workspace = true }
 env_logger = "0.7"
-error-chain = "0.12"
+cfx-util-macros = { workspace = true }
 ethcore = { package = "ethcore", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethkey = { package = "ethkey", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }
 ethcore_types = { package = "common-types", git = "https://github.com/paritytech/parity-ethereum", tag = "v2.4.0" }

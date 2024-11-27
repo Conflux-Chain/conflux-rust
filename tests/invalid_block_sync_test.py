@@ -84,7 +84,6 @@ class InvalidBodySyncTest(ConfluxTestFramework):
         conn0 = InvalidBodyNode(genesis)
         conn1 = DefaultNode(genesis)
         self.nodes[1].add_p2p_connection(conn1)
-        network_thread_start()
         conn1.wait_for_status()
         for (h, b) in conn0.block_map.items():
             if h != conn0.invalid_block and h != decode_hex(genesis):

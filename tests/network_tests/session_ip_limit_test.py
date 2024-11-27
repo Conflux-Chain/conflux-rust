@@ -5,7 +5,7 @@ import sys
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.mininode import DefaultNode, network_thread_start
+from test_framework.mininode import DefaultNode
 from test_framework.util import wait_until
 from conflux.rpc import RpcClient
 
@@ -30,14 +30,13 @@ class SessionIpLimitTests(ConfluxTestFramework):
         peers = [DefaultNode(genesis) for _ in range(self.num_peers)]
         for p in peers:
             self.nodes[0].add_p2p_connection(p)
-        network_thread_start()
 
         # One peer will be refused due to IP limit
         wait_until(lambda: [p.had_status for p in peers].count(False) == 1, timeout=3)
         assert len(RpcClient(self.nodes[0]).get_peers()) == self.num_peers - 1
         for p in peers:
             if not p.had_status:
-                wait_until(lambda: p.state == "closed", timeout=3)
+                wait_until(lambda: p.is_connected == False, timeout=3)
 
 if __name__ == "__main__":
     # 1 node for a single IP address

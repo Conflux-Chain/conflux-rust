@@ -6,7 +6,6 @@ import time
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.mininode import DefaultNode, network_thread_start
 from test_framework.util import connect_nodes, get_peer_addr, wait_until
 from conflux.rpc import RpcClient
 

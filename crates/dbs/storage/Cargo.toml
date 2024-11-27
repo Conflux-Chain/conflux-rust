@@ -14,7 +14,6 @@ cfx-internal-common = { workspace = true }
 cfx-types = { workspace = true }
 delegate = "0.5.0"
 derivative = "2.0.2"
-error-chain = { version = "0.12", default-features = false }
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
 futures = { version = "0.3.3", features = ["compat"] }
@@ -31,7 +30,7 @@ memoffset = "0.5.1"
 parking_lot = { workspace = true }
 primitives = { workspace = true, optional = true }
 rand = "0.7"
-rand_chacha="0.2.1"
+rand_chacha = "0.2.1"
 random-crash = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
@@ -44,6 +43,7 @@ strfmt = "0.1"
 tokio = { version = "0.2", features = ["full"] }
 once_cell = "1.10.0"
 parity-util-mem = { workspace = true, default-features = false }
+cfx-util-macros = { workspace = true }
 
 [dev-dependencies]
 primitives = { workspace = true, features = ["test_no_account_length_check"] }

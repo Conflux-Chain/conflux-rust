@@ -1,5 +1,5 @@
+use crate::space::Space;
 use ethereum_types::Address;
-use space::Space;
 
 #[derive(Default, Eq, PartialEq, Hash, Copy, Clone, Debug, Ord, PartialOrd)]
 pub struct AddressWithSpace {
