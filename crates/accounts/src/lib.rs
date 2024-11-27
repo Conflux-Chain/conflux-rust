@@ -32,7 +32,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use cfxkey::{Address, Generator, Message, Password, Public, Random, Secret};
+use cfxkey::{
+    Address, Generator, Message, Password, Public, Random, Secret, Signature,
+};
 use cfxstore::{
     accounts_dir::MemoryDirectory, random_string, CfxMultiStore, CfxStore,
     OpaqueSecret, SecretStore, SecretVaultRef, SimpleSecretStore,
@@ -41,7 +43,6 @@ use cfxstore::{
 use log::warn;
 use parking_lot::RwLock;
 
-pub use cfxkey::Signature;
 pub use cfxstore::{Derivation, Error, IndexDerivation, KeyFile};
 
 pub use self::{account_data::AccountMeta, error::SignError};
