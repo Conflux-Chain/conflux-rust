@@ -18,29 +18,8 @@
 
 #![warn(missing_docs)]
 
-extern crate cfx_types;
-extern crate cfxkey as _cfxkey;
-extern crate dir;
-extern crate libc;
-extern crate parity_crypto as crypto;
-extern crate parity_wordlist;
-extern crate parking_lot;
-extern crate rand;
-extern crate rustc_hex;
-extern crate serde;
-extern crate serde_json;
-extern crate smallvec;
-extern crate tempdir;
-extern crate time;
-extern crate tiny_keccak;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
-#[macro_use]
-extern crate matches;
+pub use parity_crypto as crypto;
+pub use parity_wordlist::random_phrase;
 
 mod account;
 pub mod accounts_dir;
@@ -59,7 +38,6 @@ pub use self::{
     error::Error,
     import::{import_account, import_accounts, read_geth_accounts},
     json::OpaqueKeyFile as KeyFile,
-    parity_wordlist::random_phrase,
     presale::PresaleWallet,
     random::random_string,
     secret_store::{

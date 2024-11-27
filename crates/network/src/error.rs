@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{io::IoError, service::ProtocolVersion, ProtocolId};
+use crate::{iolib::IoError, service::ProtocolVersion, ProtocolId};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{fmt, io, net};
 use thiserror::Error;
@@ -183,12 +183,12 @@ impl From<rlp::DecoderError> for Error {
     }
 }
 
-impl From<keylib::Error> for Error {
-    fn from(_err: keylib::Error) -> Self { Error::Auth.into() }
+impl From<crate::keylib::Error> for Error {
+    fn from(_err: crate::keylib::Error) -> Self { Error::Auth.into() }
 }
 
-impl From<keylib::crypto::Error> for Error {
-    fn from(_err: keylib::crypto::Error) -> Self { Error::Auth.into() }
+impl From<crate::keylib::crypto::Error> for Error {
+    fn from(_err: crate::keylib::crypto::Error) -> Self { Error::Auth.into() }
 }
 
 impl From<net::AddrParseError> for Error {

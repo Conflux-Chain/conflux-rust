@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_util_macros::bail;
 use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
@@ -23,6 +24,7 @@ use crate::rpc::{
     },
     CoreResult,
 };
+use log::{debug, info, warn};
 
 use bigdecimal::BigDecimal;
 use jsonrpc_core::{

@@ -3,6 +3,7 @@ use diem_types::{
     epoch_state::EpochState,
     term_state::{NodeList, TermData},
 };
+use serde::Serialize;
 
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]

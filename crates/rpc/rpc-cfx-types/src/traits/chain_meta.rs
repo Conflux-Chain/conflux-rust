@@ -7,7 +7,7 @@ pub trait ChainMetaProvider {
     /// Returns the current chain network id.
     fn network_id(&self) -> u32 { self.chain_id() }
 
-    fn meta() -> ChainStaticMeta { ChainStaticMeta }
+    fn meta(&self) -> ChainStaticMeta { ChainStaticMeta }
 
     // /// Returns the current chain genesis hash.
     // fn genesis_hash(&self) -> String;

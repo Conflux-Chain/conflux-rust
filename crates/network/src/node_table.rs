@@ -4,10 +4,13 @@
 
 use crate::{ip_utils::*, AllowIP, Error, IpFilter};
 use cfx_types::H512;
-use enum_map::EnumMap;
+use cfx_util_macros::bail;
+use enum_map::{Enum, EnumMap};
 use io::*;
+use log::{debug, warn};
 use rand::{self, prelude::SliceRandom, Rng};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde::Deserialize;
 use serde_derive::Serialize;
 use serde_json;
 use std::{
@@ -25,6 +28,7 @@ use std::{
     time::{self, Duration, SystemTime},
 };
 use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 /// Node public key
 pub type NodeId = H512;

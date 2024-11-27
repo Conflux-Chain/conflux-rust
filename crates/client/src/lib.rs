@@ -5,14 +5,7 @@
 #![recursion_limit = "512"]
 #![allow(deprecated)]
 
-#[macro_use]
-extern crate cfx_util_macros;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde_derive;
-extern crate cfxkey as keylib;
-extern crate tempdir;
+use cfxkey as keylib;
 
 #[macro_use]
 mod config_macro;

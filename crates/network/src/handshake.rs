@@ -19,11 +19,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    connection::Connection, node_table::NodeId, service::HostMetadata, Error,
+    connection::Connection,
+    keylib::{crypto::ecies, Secret},
+    node_table::NodeId,
+    service::HostMetadata,
+    Error,
 };
 use cfx_types::{Public, H256};
 use io::{IoContext, StreamToken};
-use keylib::{crypto::ecies, Secret};
+use log::{debug, error, trace};
 use mio::tcp::TcpStream;
 use priority_send_queue::SendQueuePriority;
 use std::{

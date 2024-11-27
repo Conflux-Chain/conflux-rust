@@ -17,10 +17,12 @@ use crate::rpc::{
 };
 use cfx_rpc::EthApi;
 use cfx_types::{Address, AddressSpaceUtil, Space, H160, H256, U256, U64};
+use cfx_util_macros::bail;
 use cfxcore::{
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::Result as RpcResult;
+use log::debug;
 use primitives::TransactionWithSignature;
 
 pub struct EthHandler {

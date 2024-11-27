@@ -147,8 +147,8 @@ impl RpcRegistryInner {
         )
     }
 
-    pub fn net_api(&self) -> NetApi<ChainInfo> {
-        NetApi::new(ChainInfo::new(self.consensus.clone()))
+    pub fn net_api(&self) -> NetApi {
+        NetApi::new(Box::new(ChainInfo::new(self.consensus.clone())))
     }
 
     /// Helper function to create a [`RpcModule`] if it's not `None`
@@ -196,11 +196,11 @@ impl RpcRegistryInner {
                     )
                     .into_rpc()
                     .into(),
-                    EthRpcModule::Net => {
-                        NetApi::new(ChainInfo::new(self.consensus.clone()))
-                            .into_rpc()
-                            .into()
-                    }
+                    EthRpcModule::Net => NetApi::new(Box::new(ChainInfo::new(
+                        self.consensus.clone(),
+                    )))
+                    .into_rpc()
+                    .into(),
                     EthRpcModule::Trace => TraceApi::new().into_rpc().into(),
                     EthRpcModule::Web3 => Web3Api.into_rpc().into(),
                     EthRpcModule::Rpc => {

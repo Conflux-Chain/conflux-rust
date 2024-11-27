@@ -8,12 +8,14 @@ use std::{
 };
 
 use cfx_types::{Space, H128, H256};
+use cfx_util_macros::bail;
 use cfxcore::{
     channel::Channel, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph, SharedTransactionPool,
 };
 use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
+use log::{debug, error, info};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,
