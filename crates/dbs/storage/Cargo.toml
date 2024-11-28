@@ -22,8 +22,8 @@ keccak-hash = { workspace = true }
 kvdb = "0.4"
 kvdb-rocksdb = { workspace = true }
 lazy_static = "1.4"
-log = "0.4"
-log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
+log = { workspace = true }
+log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 memoffset = "0.5.1"

@@ -29,7 +29,7 @@ diem-types = { path = "../../types" }
 diem-vault-client = { path = "../../secure/storage/vault" }
 serde = { version = "1.0.124", default-features = false }
 thiserror = "1.0.24"
-log = "0.4.17"
+log = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3.4"
