@@ -21,7 +21,6 @@ use cfx_util_macros::bail;
 use cfxcore::{
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
-use clap::crate_version;
 use jsonrpc_core::Result as RpcResult;
 use log::debug;
 use primitives::TransactionWithSignature;
@@ -44,7 +43,7 @@ impl EthHandler {
 impl Eth for EthHandler {
     fn client_version(&self) -> RpcResult<String> {
         debug!("RPC Request: web3_clientVersion()");
-        Ok(parity_version::version(crate_version!()))
+        Ok(parity_version::conflux_client_version!())
     }
 
     fn net_version(&self) -> RpcResult<String> {

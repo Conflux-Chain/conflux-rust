@@ -8,12 +8,13 @@ description.workspace = true
 documentation.workspace = true
 
 [dependencies]
+# mio = { workspace = true }
 clap = { workspace = true, features = ["yaml"] }
 textwrap = "0.9"
-toml = "0.5.8"
-serde = "1.0"
-serde_json = "1.0"
-serde_derive = "1.0"
+toml = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_derive = { workspace = true }
 parking_lot = { workspace = true }
 panic_hook = { workspace = true }
 app_dirs = "1.2.1"
@@ -28,7 +29,7 @@ jsonrpc-core = "18.0.0"
 jsonrpc-tcp-server = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["http"] }
-log = "0.4"
+log = { workspace = true }
 slab = "0.4"
 cfxcore = { workspace = true }
 network = { workspace = true }
@@ -37,17 +38,19 @@ blockgen = { workspace = true }
 txgen = { workspace = true }
 secret-store = { workspace = true }
 primitives = { workspace = true }
-log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
+log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 rlp = { workspace = true }
 keccak-hash = { workspace = true }
 rand = "0.8.3"
 kvdb-rocksdb = { workspace = true }
 client = { workspace = true }
 cfx-types = { workspace = true }
+threadpool = "1.7"
+futures = "0.1"
 docopt = "1.0"
 cfxkey = { workspace = true }
 parity-wordlist = { workspace = true }
-rustc-hex = "2.1"
+rustc-hex = { workspace = true }
 env_logger = "0.5"
 malloc_size_of = { workspace = true }
 diem-crypto = { path= "../../crates/cfxcore/core/src/pos/crypto/crypto" }

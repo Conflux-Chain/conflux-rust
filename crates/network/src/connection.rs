@@ -580,7 +580,7 @@ impl PacketAssembler for PacketWithLenAssembler {
             packet[..self.data_len_bytes].copy_from_slice(&swapped);
         } else {
             // just ignore the first n-bytes of msg length
-            packet.split_to(self.data_len_bytes);
+            let _ = packet.split_to(self.data_len_bytes);
         };
 
         Some(packet)

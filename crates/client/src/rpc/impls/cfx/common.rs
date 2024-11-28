@@ -27,7 +27,6 @@ use crate::rpc::{
 use log::{debug, info, warn};
 
 use bigdecimal::BigDecimal;
-use clap::crate_version;
 use jsonrpc_core::{
     Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
 };
@@ -1372,7 +1371,7 @@ impl RpcImpl {
     }
 
     pub fn get_client_version(&self) -> JsonRpcResult<String> {
-        Ok(parity_version::version(crate_version!()))
+        Ok(parity_version::conflux_client_version!())
     }
 
     pub fn txpool_pending_nonce_range(

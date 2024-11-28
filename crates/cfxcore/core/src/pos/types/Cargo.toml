@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 aes-gcm = "0.8.0"
 anyhow = { workspace = true }
-bytes = "1.0.1"
+bytes = { workspace = true }
 chrono = { workspace = true, features = ["clock"] }
 hex = "0.4.3"
 itertools = { version = "0.10.0", default-features = false }

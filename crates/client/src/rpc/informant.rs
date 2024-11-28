@@ -21,7 +21,6 @@ use jsonrpc_core::futures::future::Either;
 use log::debug;
 use order_stat;
 use parking_lot::RwLock;
-use runtime;
 use std::{
     fmt,
     sync::{
@@ -30,8 +29,6 @@ use std::{
     },
     time,
 };
-
-pub use self::runtime::Executor;
 
 const RATE_SECONDS: usize = 10;
 const STATS_SAMPLES: usize = 60;
