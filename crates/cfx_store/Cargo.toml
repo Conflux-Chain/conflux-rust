@@ -22,7 +22,7 @@ parity-crypto = { workspace = true, features = ["publickey"] }
 dir = { workspace = true }
 smallvec = "1.4"
 parity-wordlist = { workspace = true }
-tempdir = "0.3"
+tempdir = { workspace = true }
 
 [dev-dependencies]
 matches = "0.1"

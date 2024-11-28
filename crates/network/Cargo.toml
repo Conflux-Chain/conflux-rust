@@ -11,9 +11,9 @@ cfxkey = { workspace = true }
 mio = { workspace = true }
 parking_lot = { workspace = true }
 log = { workspace = true }
-slab = "0.4"
+slab = { workspace = true }
 io = { workspace = true }
-bytes = "0.4"
+bytes = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
 ipnetwork = "0.12.6"
