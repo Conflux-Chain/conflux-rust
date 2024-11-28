@@ -6,9 +6,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 
 [dependencies]
-log = "0.4"
 libc = { workspace = true }
 rand = { workspace = true }
+log = { workspace = true }
 cfx-types = { workspace = true }
 cfxkey = { workspace = true }
 serde = { workspace = true }

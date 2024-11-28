@@ -11,7 +11,7 @@ edition = "2021"
 cfxkey = { workspace = true }
 cfxstore = { workspace = true }
 cfx-types = { workspace = true }
-log = "0.4"
+log = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }

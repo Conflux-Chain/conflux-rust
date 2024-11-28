@@ -10,8 +10,8 @@ timer = "0.2.0"
 time = "0.1"
 rand = { workspace = true }
 influx_db_client = "0.5.1"
-log = "0.4"
-log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
+log = { workspace = true }
+log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 futures = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
