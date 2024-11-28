@@ -20,7 +20,6 @@ cfx-statedb = { workspace = true }
 cfx-storage = { workspace = true }
 cfx-vm-tracer-derive = { workspace = true }
 cfx-types = { workspace = true }
-cfx-utils = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
