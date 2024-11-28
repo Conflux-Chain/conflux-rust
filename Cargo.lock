@@ -1558,14 +1558,6 @@ name = "cfx-util-macros"
 version = "2.4.0"
 
 [[package]]
-name = "cfx-utils"
-version = "0.6.0"
-dependencies = [
- "log",
- "parking_lot 0.11.2",
-]
-
-[[package]]
 name = "cfx-vm-interpreter"
 version = "2.0.2"
 dependencies = [
@@ -1636,7 +1628,6 @@ dependencies = [
  "cfx-storage",
  "cfx-types",
  "cfx-util-macros",
- "cfx-utils",
  "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
  "cfx-vm-types",

@@ -4,8 +4,6 @@ members = [
     "crates/cfx_bytes",
     "crates/cfx_types",
     "crates/cfx_addr",
-    "crates/cfx_math",
-    "crates/cfx_utils",
     "crates/stratum",
     "crates/accounts",
     "crates/blockgen",
@@ -31,6 +29,7 @@ members = [
     "crates/dbs/storage",
     "crates/cfxcore/vm-interpreter",
     "crates/cfxcore/vm-types",
+    "crates/util/cfx_math",
     "crates/util/cfx-vm-tracer-derive",
     "crates/util/dag",
     "crates/util/delegate",
@@ -52,7 +51,7 @@ members = [
     "crates/util/throttling",
     "crates/util/treap-map",
     "crates/util/version",
-    "crates/serde_utils",
+    "crates/util/serde_utils",
     "crates/cfxcore/geth-tracer",
     "crates/rpc/rpc-eth-types", 
     "crates/rpc/rpc-primitives",
@@ -95,7 +94,7 @@ debug-assertions = true
 
 [workspace.dependencies]
 cfxkey = { path = "./crates/cfx_key" }
-cfx-math = { path = "./crates/cfx_math" }
+cfx-math = { path = "./crates/util/cfx_math" }
 solidity-abi = { path = "./crates/util/solidity-abi" }
 random-crash = { path = "./crates/util/random_crash" }
 memory-cache = { path = "./crates/util/memory-cache" }
@@ -124,7 +123,7 @@ client = { path = "./crates/client" }
 cfx-stratum = { path = "./crates/stratum" }
 txgen = { path = "./crates/transactiongen" }
 blockgen = { path = "./crates/blockgen" }
-serde-utils = { path = "./crates/serde_utils" }
+serde-utils = { path = "./crates/util/serde_utils" }
 db = { path = "./crates/dbs/db" }
 cfx-db-errors = { path = "./crates/dbs/db-errors" }
 cfx-statedb = { path = "./crates/dbs/statedb" }
@@ -135,7 +134,6 @@ cfxcore-accounts = { path = "./crates/accounts" }
 secret-store = { path = "./crates/secret_store" }
 cfxstore = { path = "./crates/cfx_store" }
 network = { path = "./crates/network" }
-cfx-utils = { path = "./crates/cfx_utils" }
 cfxcore = { path = "./crates/cfxcore/core" }
 cfx-parameters = { path = "./crates/cfxcore/parameters" }
 cfx-execute-helper = { path = "./crates/cfxcore/execute-helper" }
