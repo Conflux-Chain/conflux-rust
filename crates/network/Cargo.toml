@@ -21,7 +21,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_derive = { workspace = true }
 igd = "0.10"
-libc = "0.2.66"
+libc = { workspace = true }
 rand = { workspace = true }
 parity-path = { workspace = true }
 keccak-hash = { workspace = true }

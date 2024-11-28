@@ -38,7 +38,7 @@ cfxkey = { workspace = true }
 cfx-types = { workspace = true }
 bls-signatures = { workspace = true }
 vrf = "0.2.2"
-lazy_static = "1.4"
+lazy_static = { workspace = true }
 parking_lot = { workspace = true }
 openssl = "0.10"
 diem-logger = {path = "../../common/logger" }

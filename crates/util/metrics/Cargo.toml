@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-lazy_static = "1.4"
+lazy_static = { workspace = true }
 parking_lot = { workspace = true }
 timer = "0.2.0"
 time = "0.1"

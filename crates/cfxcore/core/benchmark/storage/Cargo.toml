@@ -25,7 +25,7 @@ ethjson = { package = "ethjson", git = "https://github.com/paritytech/parity-eth
 ethereum-types = { workspace = true }
 heapsize = "0.4"
 kvdb = "0.4"
-lazy_static = "1.4"
+lazy_static = { workspace = true }
 log = "0.4"
 parking_lot = { workspace = true }
 rlp = { workspace = true, feature = ["ethereum"] }

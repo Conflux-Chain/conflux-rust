@@ -23,5 +23,5 @@ parking_lot = { workspace = true }
 rlp = { workspace = true }
 rand = { workspace = true }
 secret-store = { workspace = true }
-toml = "0.5.8"
+toml = { workspace = true }
 txgen = { workspace = true }

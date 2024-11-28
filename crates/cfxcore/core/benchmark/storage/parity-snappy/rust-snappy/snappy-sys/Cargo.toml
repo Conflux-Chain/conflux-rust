@@ -14,7 +14,7 @@ links = "snappy"
 default = []
 
 [dependencies]
-libc = "0.2"
+libc = { workspace = true }
 
 [build-dependencies]
 cmake = "0.1"

@@ -8,7 +8,7 @@ description = "Rust bindings for the snappy compression library"
 keywords = ["snappy"]
 
 [dependencies]
-libc = "0.2"
+libc = { workspace = true }
 parity-snappy-sys = { package = "snappy-sys", git = "https://github.com/busyjay/rust-snappy", branch = "static-link" }
 
 [dev-dependencies]

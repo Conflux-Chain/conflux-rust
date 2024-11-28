@@ -71,7 +71,7 @@ rlp = { workspace = true }
 rlp_derive = { workspace = true }
 rustc-hex = { workspace = true }
 secret-store = { workspace = true }
-serde = { version = "1.0", features = ["rc"] }
+serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 siphasher = "0.3"
@@ -86,7 +86,7 @@ strfmt = "0.1"
 tempdir = "0.3"
 threadpool = "1.0"
 throttling = { workspace = true }
-toml = "0.5.8"
+toml = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-timer = { workspace = true }
 tokio-stream = { workspace = true }
