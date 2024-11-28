@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 log = "0.4"
 libc = "0.2"
-rand = "0.7"
+rand = { workspace = true }
 cfx-types = { workspace = true }
 cfxkey = { workspace = true }
 serde = "1.0"

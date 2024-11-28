@@ -10,7 +10,7 @@ edition = "2021"
 cfx-types = { workspace = true }
 parking_lot = { workspace = true }
 rlp = { workspace = true }
-rand = "0.7"
+rand = { workspace = true }
 cfxkey = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 malloc_size_of= {path = "../util/malloc_size_of" }

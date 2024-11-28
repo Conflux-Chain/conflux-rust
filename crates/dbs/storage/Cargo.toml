@@ -29,7 +29,7 @@ malloc_size_of_derive = { workspace = true }
 memoffset = "0.5.1"
 parking_lot = { workspace = true }
 primitives = { workspace = true, optional = true }
-rand = "0.7"
+rand = { workspace = true }
 rand_chacha = "0.2.1"
 random-crash = { workspace = true }
 rlp = { workspace = true }

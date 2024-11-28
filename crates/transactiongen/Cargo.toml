@@ -15,7 +15,7 @@ cfx-bytes = { workspace = true }
 primitives = { workspace = true }
 parking_lot = { workspace = true }
 rlp = { workspace = true }
-rand = "0.7"
+rand = { workspace = true }
 rustc-hex = "2.1"
 secret-store = { workspace = true }
 network = { workspace = true }

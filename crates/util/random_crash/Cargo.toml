@@ -10,7 +10,7 @@ edition = "2018"
 lazy_static = { version = "1.4" }
 log = "0.4"
 parking_lot = { workspace = true }
-rand = "0.7"
+rand = { workspace = true }
 
 [features]
 random_crash = []
