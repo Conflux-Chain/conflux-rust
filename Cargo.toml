@@ -166,7 +166,6 @@ rustc-hex = "2.1"
 fail = "0.4.0"
 thiserror = "1.0.63"
 anyhow = "1.0"
-error-chain = { version = "0.12" }
 
 # parallelism
 parking_lot = "0.11"

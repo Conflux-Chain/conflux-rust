@@ -1953,7 +1953,6 @@ dependencies = [
  "dir",
  "executor",
  "executor-types",
- "fail",
  "futures 0.3.30",
  "futures01",
  "geth-tracer",

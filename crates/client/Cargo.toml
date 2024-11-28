@@ -89,7 +89,6 @@ diem-types = { path = "../cfxcore/core/src/pos/types" }
 pow-types = {path = "../cfxcore/core/src/pos/types/pow-types" }
 executor-types = { path = "../cfxcore/core/src/pos/types/executor-types" }
 executor = { path = "../cfxcore/core/src/pos/consensus/executor" }
-fail = { workspace = true }
 storage-interface = { path = "../cfxcore/core/src/pos/storage/storage-interface" }
 consensus-types = {path = "../cfxcore/core/src/pos/consensus/consensus-types" }
 rpassword = { workspace = true }
