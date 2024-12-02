@@ -461,7 +461,6 @@ pub fn initialize_common_modules(
 
     let tokio_runtime =
         Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
-    // let runtime = Runtime::with_default_thread_count();
     let pubsub = PubSubClient::new(
         tokio_runtime.clone(),
         consensus.clone(),
@@ -762,9 +761,6 @@ pub fn initialize_not_light_node_modules(
     )?;
 
     network.start();
-
-    // let tokio_runtime =
-    //     tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
 
     let eth_rpc_http_server_addr =
         conf.raw_conf.jsonrpc_http_eth_port_v2.map(|port| {
