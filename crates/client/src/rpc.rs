@@ -80,7 +80,7 @@ use crate::{
     rpc::{
         impls::{
             eth::{EthHandler, EthTraceHandler, GethDebugHandler},
-            eth_filter::EthFilterClient,
+            eth_filter::EthFilterHelper as EthFilterClient,
             RpcImplConfiguration,
         },
         interceptor::{RpcInterceptor, RpcProxy},

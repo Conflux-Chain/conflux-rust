@@ -58,7 +58,7 @@ rustc-hex = { workspace = true }
 threadpool = { workspace = true }
 metrics = { workspace = true }
 delegate = { workspace = true }
-transient-hashmap = "0.4"
+transient-hashmap = { workspace = true }
 rand_xorshift = "0.2"
 itertools = { workspace = true }
 order-stat = "0.1"

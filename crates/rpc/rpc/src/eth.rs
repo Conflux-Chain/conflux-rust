@@ -11,8 +11,9 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter, FeeHistory, Header, Log,
-    Receipt, SyncInfo, SyncStatus, Transaction, TransactionRequest,
+    Block, BlockNumber as BlockId, EthRpcLogFilter, EthRpcLogFilter as Filter,
+    FeeHistory, Header, Log, Receipt, SyncInfo, SyncStatus, Transaction,
+    TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::error::{
@@ -1411,5 +1412,9 @@ impl EthApiServer for EthApi {
     ) -> RpcResult<Bytes> {
         let _ = transaction;
         Err(jsonrpsee_internal_error("Not implemented"))
+    }
+
+    async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>> {
+        self.logs(filter).map_err(|err| err.into())
     }
 }

@@ -1,6 +1,7 @@
 use jsonrpc_core::Error as JsonRpcError;
 use jsonrpsee::types::error::{
     ErrorObjectOwned, INTERNAL_ERROR_CODE, INVALID_PARAMS_CODE,
+    INVALID_REQUEST_CODE,
 };
 
 pub fn jsonrpc_error_to_error_object_owned(
@@ -11,6 +12,11 @@ pub fn jsonrpc_error_to_error_object_owned(
 
 pub fn invalid_params_msg(param: &str) -> ErrorObjectOwned {
     invalid_params_rpc_err(format!("Invalid parameters: {}", param))
+}
+
+pub fn invalid_request_msg(param: &str) -> ErrorObjectOwned {
+    let data: Option<bool> = None;
+    ErrorObjectOwned::owned(INVALID_REQUEST_CODE, param, data)
 }
 
 pub fn invalid_params_rpc_err(msg: impl Into<String>) -> ErrorObjectOwned {

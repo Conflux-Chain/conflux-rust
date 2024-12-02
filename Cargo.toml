@@ -245,6 +245,8 @@ slab = "0.4"
 tempdir = "0.3"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
+transient-hashmap = "0.4"
+
 bigdecimal = "0.1.0"
 num-bigint = "0.2.6"
 edit-distance = "2"
