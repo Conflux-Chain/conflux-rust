@@ -19,7 +19,7 @@ diem-crypto-derive = { path = "../../crypto/crypto-derive" }
 diem-infallible = { path = "../../common/infallible" }
 diem-types = { path = "../../types" }
 short-hex-str = { path = "../../common/short-hex-str" }
-rustc-hex = "2.1"
+rustc-hex = { workspace = true }
 
 
 [dev-dependencies]

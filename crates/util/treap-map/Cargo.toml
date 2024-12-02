@@ -9,7 +9,7 @@ edition = "2018"
 # malloc_size_of_derive = {path = "../malloc_size_of_derive"}
 malloc_size_of = { workspace = true }
 primitives = { workspace = true }
-rand = "0.7"
+rand = { workspace = true }
 rand_xorshift = "0.2"
 
 [dev-dependencies]

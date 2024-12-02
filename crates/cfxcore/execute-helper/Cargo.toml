@@ -23,8 +23,8 @@ primitives = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
-serde_derive = { workspace = true}
-serde_json = { version = "1.0", default-features = false, features = [
+serde_derive = { workspace = true }
+serde_json = { workspace = true, default-features = false, features = [
     "alloc",
 ]}
 solidity-abi = { workspace = true }

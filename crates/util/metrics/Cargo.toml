@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-lazy_static = "1.4"
+lazy_static = { workspace = true }
 parking_lot = { workspace = true }
 timer = "0.2.0"
 time = "0.1"
-rand = "0.7"
+rand = { workspace = true }
 influx_db_client = "0.5.1"
 log = { workspace = true }
 log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
