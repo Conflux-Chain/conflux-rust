@@ -8,6 +8,7 @@ use diem_types::{
         ValidatorVerifier as PrimitiveValidatorVerifier,
     },
 };
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

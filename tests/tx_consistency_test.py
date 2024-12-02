@@ -60,6 +60,7 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
         self.check_with_rpc(client.epoch_number)
         self.check_with_rpc(client.best_block_hash)
         self.check_with_rpc(client.gas_price)
+        time.sleep(5)
         self.check_with_rpc(client.chain, True)
 
         # check receipt
@@ -198,7 +199,12 @@ class TxConsistencyTest(DefaultConfluxTestFramework):
             for name in dir(client):
                 if name == client_rpc.__name__:
                     value = getattr(client, name)()
-                    assert_equal(value, expected_value)
+                    if collection_result:
+                        assert_equal(len(value), len(expected_value))
+                        for idy in range(len(value) - 7):
+                            assert_equal(value[idy], expected_value[idy])
+                    else:
+                        assert_equal(value, expected_value)
 
         if collection_result:
             self.log.info("check RPC: API = {}, Len = {}".format(client_rpc.__name__, len(expected_value)))

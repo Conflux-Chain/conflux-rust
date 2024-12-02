@@ -16,7 +16,7 @@ class EvmTx2ReceiptTest(Web3Base):
         self.cfxAccount = self.rpc.GENESIS_ADDR
         print(f'Using Conflux account {self.cfxAccount}')
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
@@ -26,8 +26,8 @@ class EvmTx2ReceiptTest(Web3Base):
         ret = self.nodes[0].debug_getTransactionsByEpoch("0x1")
         assert_equal(len(ret), 1)
 
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
-        signed = self.evmAccount.signTransaction({
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
+        signed = self.evmAccount.sign_transaction({
             "to": self.evmAccount.address,
             "value": 1,
             "gasPrice": 1,
@@ -36,10 +36,10 @@ class EvmTx2ReceiptTest(Web3Base):
             "chainId": 10,
         })
 
-        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        return_tx_hash = self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
-        receipt = self.w3.eth.waitForTransactionReceipt(return_tx_hash)
+        receipt = self.w3.eth.wait_for_transaction_receipt(return_tx_hash)
         assert_equal(receipt["status"], 1)
         assert_equal(receipt["gasUsed"], 21000)
         assert_equal(receipt["txExecErrorMsg"], None)

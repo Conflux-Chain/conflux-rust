@@ -82,18 +82,18 @@ class MessageTest(ConfluxTestFramework):
 
         # empty packet
         buf = struct.pack("<L", 0)[:3]
-        assert node.p2p.state == "connected"
-        node.p2p.send(buf)
+        assert node.p2p.is_connected
+        node.p2p.send_data(buf)
         # node should disconnect this p2p connection
-        wait_until(lambda: node.p2p.state != "connected", timeout=3)
+        wait_until(lambda: node.p2p.is_connected == False, timeout=3)
 
         p2p = start_p2p_connection([self.nodes[0]])[0]
         p2p.send_packet(PACKET_DISCONNECT, b'')
-        wait_until(lambda: p2p.state != "connected", timeout=3)
+        wait_until(lambda: p2p.is_connected == False, timeout=3)
 
         p2p = start_p2p_connection([self.nodes[0]])[0]
         p2p.send_packet(PACKET_PROTOCOL, b'')
-        wait_until(lambda: p2p.state != "connected", timeout=3)
+        wait_until(lambda: p2p.is_connected == False, timeout=3)
 
 if __name__ == "__main__":
     MessageTest().main()

@@ -18,20 +18,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate cfxstore;
-extern crate dir;
-extern crate docopt;
-extern crate num_cpus;
-extern crate panic_hook;
-extern crate parking_lot;
-extern crate rustc_hex;
-extern crate serde;
-
-extern crate env_logger;
-
-#[macro_use]
-extern crate serde_derive;
-
 use std::{collections::VecDeque, env, fmt, fs, io::Read, process};
 
 use cfxstore::{
@@ -41,6 +27,7 @@ use cfxstore::{
     SimpleSecretStore, StoreAccountRef,
 };
 use docopt::Docopt;
+use serde::Deserialize;
 
 mod crack;
 

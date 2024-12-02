@@ -5,6 +5,7 @@
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 
 use lazy_static::*;
+use log::{error, warn};
 use parking_lot::RwLock;
 use rand::Rng;
 
@@ -33,7 +34,8 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-        pos_handler::PosVerifier, ConsensusConfig, ConsensusInnerConfig,
+        pivot_hint::PivotHintConfig, pos_handler::PosVerifier, ConsensusConfig,
+        ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
@@ -147,7 +149,10 @@ build_config! {
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (genesis_accounts, (Option<String>), None)
+        (genesis_evm_secrets, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
+        (pivot_hint_path, (Option<String>), None)
+        (pivot_hint_checksum, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (hydra_transition_number, (Option<u64>), None)
@@ -617,6 +622,20 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
+        let pivot_hint_conf = match (
+            &self.raw_conf.pivot_hint_path,
+            &self.raw_conf.pivot_hint_checksum,
+        ) {
+            (Some(path), Some(checksum)) => {
+                let checksum = H256::from_str(checksum)
+                    .expect("Cannot parse `pivot_hint_checksum` as hex string");
+                Some(PivotHintConfig::new(path, checksum))
+            }
+            (None, None) => None,
+            _ => {
+                panic!("`pivot_hint_path` and `pivot_hint_checksum` must be both set or both unset");
+            }
+        };
         let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
@@ -667,6 +686,7 @@ impl Configuration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
             sync_state_starting_epoch: self.raw_conf.sync_state_starting_epoch,
             sync_state_epoch_gap: self.raw_conf.sync_state_epoch_gap,
+            pivot_hint_conf,
         };
         match self.raw_conf.node_type {
             Some(NodeType::Archive) => {
@@ -1468,7 +1488,7 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
             .filter(|s| !s.is_empty())
             .map(|s| match validate_node_url(s).map(Into::into) {
                 None => Ok(s.to_owned()),
-                Some(ErrorKind::AddressResolve(_)) => Err(format!(
+                Some(network::Error::AddressResolve(_)) => Err(format!(
                     "Failed to resolve hostname of a boot node: {}",
                     s
                 )),

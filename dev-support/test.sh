@@ -71,7 +71,7 @@ function check_unit_tests {
     pushd $ROOT_DIR > /dev/null
     local result
     result=$(
-       cargo test --release --all | tee /dev/stderr
+       cargo test --release --all && cargo test -p cfx-addr --no-default-features | tee /dev/stderr
     )
     local exit_code=$?
     popd > /dev/null

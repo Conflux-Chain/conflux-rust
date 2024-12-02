@@ -6,7 +6,7 @@ use super::{HasKey, PriorityQueue};
 use crate::{
     light_protocol::{
         common::{FullPeerFilter, FullPeerState, Peers},
-        Error, ErrorKind,
+        Error,
     },
     message::{MsgId, RequestId},
 };
@@ -97,7 +97,7 @@ where
         match self.peers.get(peer) {
             Some(state) => Ok(state),
             None => {
-                bail!(ErrorKind::InternalError(format!(
+                bail!(Error::InternalError(format!(
                     "Received message from unknown peer={:?}",
                     peer
                 )));
@@ -129,7 +129,7 @@ where
             ThrottleResult::Success => Ok(id),
             ThrottleResult::Throttled(_) => Ok(id),
             ThrottleResult::AlreadyThrottled => {
-                bail!(ErrorKind::UnexpectedResponse {
+                bail!(Error::UnexpectedResponse {
                     expected: id,
                     received: request_id,
                 });

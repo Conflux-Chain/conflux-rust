@@ -3,9 +3,10 @@ name = "cfx-types"
 version = "0.2.0"
 license = "GPL-3.0"
 description = "Conflux types"
+edition = "2021"
 
 [dependencies]
-ethereum-types = "0.9"
+ethereum-types = { workspace = true }
 serde_derive = { workspace = true }
 serde = { workspace = true }
 rlp = { workspace = true }

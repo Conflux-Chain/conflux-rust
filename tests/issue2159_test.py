@@ -13,6 +13,8 @@ from test_framework.util import pubsub_url
 FULLNODE = 0
 
 def block_on(op):
+    # will raise DeprecationWarning in python higher version (e.g. 3.13)
+    # ignore it so far
     return asyncio.get_event_loop().run_until_complete(op)
 
 class Issue2159Test(ConfluxTestFramework):

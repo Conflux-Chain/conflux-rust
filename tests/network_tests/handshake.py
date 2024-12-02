@@ -5,7 +5,7 @@ import sys
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.mininode import DefaultNode, network_thread_start
+from test_framework.mininode import DefaultNode
 from test_framework.util import wait_until, connect_nodes
 
 class HandshakeTests(ConfluxTestFramework):
@@ -20,7 +20,6 @@ class HandshakeTests(ConfluxTestFramework):
         # mininode handshake
         peer = DefaultNode(genesis)
         self.nodes[0].add_p2p_connection(peer)
-        network_thread_start()
         wait_until(lambda: peer.had_status, timeout=3)
 
         # full node handshake

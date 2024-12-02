@@ -7,7 +7,7 @@ version = "2.0.2"
 edition = "2021"
 
 [dependencies]
-substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
+substrate-bn = { workspace = true, default-features = false }
 byteorder = "1.0"
 cfxkey = { workspace = true }
 cfx-bytes = { workspace = true }
@@ -19,14 +19,14 @@ cfx-vm-tracer-derive = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
-error-chain = { version = "0.12", default-features = false }
+cfx-util-macros = { workspace = true }
 keccak-hash = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 num = "0.2"
-parity-crypto = "0.9.0"
+parity-crypto = { workspace = true }
 parking_lot = { workspace = true }
 primitives = { workspace = true }
 rlp ={ workspace = true }
@@ -40,7 +40,7 @@ solidity-abi-derive = { workspace = true }
 sha3-macro = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore"]}
+bls-signatures = { workspace = true }
 tiny-keccak = { workspace = true,  features = ["keccak"]}
 diem-crypto = { path = "../core/src/pos/crypto/crypto" }
 diem-types = { path = "../core/src/pos/types" }

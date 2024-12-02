@@ -14,7 +14,7 @@ CFX = 10 ** 18
 BYTE_COLLATERAL = int(CFX / 1024)
 ENTRY_COLLATERAL = BYTE_COLLATERAL * 64
 SPONSOR_INTERNAL_CONTRACT = "0888000000000000000000000000000000000001"
-ZERO_ADDR = Web3.toChecksumAddress("0" * 40)
+ZERO_ADDR = Web3.to_checksum_address("0" * 40)
 
 
 class EstimationTest(ConfluxTestFramework):
@@ -60,7 +60,7 @@ class EstimationTest(ConfluxTestFramework):
         tx = client.new_contract_tx(None, bytecode, gas=500000, storage_limit=1024)
         send_tx(tx)
         receipt = client.get_transaction_receipt(tx.hash_hex())
-        contract = w3.eth.contract(abi=abi, address=Web3.toChecksumAddress(receipt["contractCreated"]))
+        contract = w3.eth.contract(abi=abi, address=Web3.to_checksum_address(receipt["contractCreated"]))
         contract_address = contract.address
         contract_base32_address = hex_to_b32_address(contract.address)
 
@@ -73,13 +73,13 @@ class EstimationTest(ConfluxTestFramework):
         estimate(to=hex_to_b32_address(user), value=hex(1_000_000_000 * CFX))
 
         # Deep Recursive and Set Entries
-        data = contract.encodeABI("recursive", [100])
+        data = contract.encode_abi("recursive", [100])
         res = estimate(to=contract_base32_address, data=data)
         send_tx(client.new_contract_tx(contract_address, gas=res["gasLimit"], data_hex=data,
                                        storage_limit=res["storageCollateralized"]))
 
         # Repeatedly Set the Same Entry
-        data = contract.encodeABI("recursive", [0])
+        data = contract.encode_abi("recursive", [0])
         # For a random sender, it needs to pay for the collateral for resetting entries.
         res = estimate(to=contract_base32_address, data=data)
         assert_equal(int(res["storageCollateralized"], 0), 128)
@@ -111,11 +111,11 @@ class EstimationTest(ConfluxTestFramework):
 
         # # Sponsor gas for this contract.
         send_tx(client.new_contract_tx(receiver=SPONSOR_INTERNAL_CONTRACT,
-                                       data_hex=sponsor_contract.encodeABI("setSponsorForGas",
+                                       data_hex=sponsor_contract.encode_abi("setSponsorForGas",
                                                                            [contract_address, 30_000_000]),
                                        value=30_000_000_000))
         send_tx(client.new_contract_tx(receiver=SPONSOR_INTERNAL_CONTRACT,
-                                       data_hex=sponsor_contract.encodeABI("addPrivilegeByAdmin",
+                                       data_hex=sponsor_contract.encode_abi("addPrivilegeByAdmin",
                                                                            [contract_address, [ZERO_ADDR]]),
                                        storage_limit=64))
 
@@ -147,40 +147,40 @@ class EstimationTest(ConfluxTestFramework):
 
         # Sponsor gas for this contract.
         send_tx(client.new_contract_tx(receiver=SPONSOR_INTERNAL_CONTRACT,
-                                       data_hex=sponsor_contract.encodeABI("setSponsorForCollateral",
+                                       data_hex=sponsor_contract.encode_abi("setSponsorForCollateral",
                                                                            [contract_address]),
                                        value=5 * ENTRY_COLLATERAL))
 
-        data = contract.encodeABI("inc_prefix", [4])
+        data = contract.encode_abi("inc_prefix", [4])
         res = estimate(to=contract_base32_address, data=data, **from_user)
         send_tx(client.new_contract_tx(contract_address, gas=res["gasLimit"], data_hex=data,
                                        storage_limit=res["storageCollateralized"], priv_key=user_pri))
 
         # The sponsor have enough balance for collateral, only pay for additional.
-        data = contract.encodeABI("inc_prefix", [5])
+        data = contract.encode_abi("inc_prefix", [5])
         res = estimate(to=contract_base32_address, data=data)
         assert_equal(int(res["storageCollateralized"], 0), 64)
 
         # The sponsor don't have enough balance for collateral
-        data = contract.encodeABI("inc_prefix", [6])
+        data = contract.encode_abi("inc_prefix", [6])
         res = estimate(to=contract_base32_address, data=data)
         assert_equal(int(res["storageCollateralized"], 0), 6 * 64)
 
         # The user overcome
         send_tx(client.new_contract_tx(user, value=20 * ENTRY_COLLATERAL + 1_000_000))
-        data = contract.encodeABI("inc_prefix", [7])
+        data = contract.encode_abi("inc_prefix", [7])
         res = estimate(to=contract_base32_address, data=data, **from_user)
         assert_equal(int(res["storageCollateralized"], 0), 7 * 64)
         send_tx(client.new_contract_tx(contract_address, gas=res["gasLimit"], data_hex=data,
                                        storage_limit=res["storageCollateralized"], priv_key=user_pri))
 
-        data = contract.encodeABI("inc_prefix", [8])
+        data = contract.encode_abi("inc_prefix", [8])
         res = estimate(to=contract_base32_address, data=data, **from_user)
         assert_equal(int(res["storageCollateralized"], 0), 6 * 64)
         send_tx(client.new_contract_tx(contract_address, gas=res["gasLimit"], data_hex=data,
                                        storage_limit=res["storageCollateralized"], priv_key=user_pri))
 
-        data = contract.encodeABI("inc_prefix", [3])
+        data = contract.encode_abi("inc_prefix", [3])
         res = estimate(to=contract_base32_address, data=data, **from_user)
         assert_equal(int(res["storageCollateralized"], 0), 3 * 64)
 

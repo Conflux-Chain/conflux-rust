@@ -33,7 +33,7 @@ class PhantomTransactionHashTest(Web3Base):
         print(f'Using Conflux account {self.cfxAccount}')
 
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
@@ -50,7 +50,7 @@ class PhantomTransactionHashTest(Web3Base):
 
         # create and charge accounts
         cfx_privkey_1 = "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde0"
-        cfx_address_1 = self.w3.eth.account.privateKeyToAccount(cfx_privkey_1).address
+        cfx_address_1 = self.w3.eth.account.from_key(cfx_privkey_1).address
         cfx_address_1 = cfx_address_1[:2] + '1' + cfx_address_1[3:]
         self.cross_space_transfer(mapped_address(cfx_address_1), 1 * 10 ** 18)
 
@@ -62,7 +62,7 @@ class PhantomTransactionHashTest(Web3Base):
         ), True)
 
         cfx_privkey_2 = "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde1"
-        cfx_address_2 = self.w3.eth.account.privateKeyToAccount(cfx_privkey_2).address
+        cfx_address_2 = self.w3.eth.account.from_key(cfx_privkey_2).address
         cfx_address_2 = cfx_address_2[:2] + '1' + cfx_address_2[3:]
         self.cross_space_transfer(mapped_address(cfx_address_2), 1 * 10 ** 18)
 
@@ -74,7 +74,7 @@ class PhantomTransactionHashTest(Web3Base):
         ), True)
 
         # withdraw
-        data_hex = self.crossSpaceContract.encodeABI(fn_name="withdrawFromMapped", args=[1])
+        data_hex = self.crossSpaceContract.encode_abi(abi_element_identifier="withdrawFromMapped", args=[1])
 
         tx = self.rpc.new_contract_tx(receiver=CROSS_SPACE_CALL_ADDRESS, data_hex=data_hex, sender=cfx_address_1, priv_key=cfx_privkey_1)
         cfx_tx_hash_1 = tx.hash_hex()
@@ -102,7 +102,7 @@ class PhantomTransactionHashTest(Web3Base):
 
         # call
         call_hex = encode_hex_0x(keccak(b"emitEVM(uint256)"))[:10] + encode_u256(0)
-        data_hex = self.crossSpaceContract.encodeABI(fn_name="callEVM", args=[self.evmContractAddr, call_hex])
+        data_hex = self.crossSpaceContract.encode_abi(abi_element_identifier="callEVM", args=[self.evmContractAddr, call_hex])
 
         tx = self.rpc.new_contract_tx(receiver=CROSS_SPACE_CALL_ADDRESS, data_hex=data_hex, sender=cfx_address_1, priv_key=cfx_privkey_1)
         cfx_tx_hash_1 = tx.hash_hex()

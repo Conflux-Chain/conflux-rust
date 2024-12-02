@@ -15,54 +15,39 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use parity_crypto::error::SymmError;
-use secp256k1;
 use std::io;
 
-quick_error! {
-    #[derive(Debug)]
-    pub enum Error {
-        Secp(e: secp256k1::Error) {
-            display("secp256k1 error: {}", e)
-            cause(e)
-            from()
-        }
-        Io(e: io::Error) {
-            display("i/o error: {}", e)
-            cause(e)
-            from()
-        }
-        InvalidMessage {
-            display("invalid message")
-        }
-        Symm(e: SymmError) {
-            cause(e)
-            from()
-        }
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("secp256k1 error: {0}")]
+    Secp(#[from] secp256k1::Error),
+    #[error("i/o error: {0}")]
+    Io(#[from] io::Error),
+    #[error("invalid message")]
+    InvalidMessage,
+    #[error(transparent)]
+    Symm(#[from] SymmError),
 }
 
 /// ECDH functions
 pub mod ecdh {
     use super::Error;
-    use secp256k1::{self, ecdh, key};
-    use Public;
-    use Secret;
-    use SECP256K1;
+    use crate::{Public, Secret};
+    use secp256k1::{self, ecdh::SharedSecret, PublicKey, SecretKey};
 
     /// Agree on a shared secret
     pub fn agree(secret: &Secret, public: &Public) -> Result<Secret, Error> {
-        let context = &SECP256K1;
         let pdata = {
             let mut temp = [4u8; 65];
             (&mut temp[1..65]).copy_from_slice(&public[0..64]);
             temp
         };
 
-        let publ = key::PublicKey::from_slice(context, &pdata)?;
-        let sec = key::SecretKey::from_slice(context, secret.as_bytes())?;
-        let shared = ecdh::SharedSecret::new_raw(context, &publ, &sec);
+        let publ = PublicKey::from_slice(&pdata)?;
+        let sec = SecretKey::from_slice(secret.as_bytes())?;
+        let shared = SharedSecret::new(&publ, &sec);
 
-        Secret::from_unsafe_slice(&shared[0..32])
+        Secret::from_unsafe_slice(&shared.secret_bytes()[0..32])
             .map_err(|_| Error::Secp(secp256k1::Error::InvalidSecretKey))
     }
 }
@@ -70,12 +55,9 @@ pub mod ecdh {
 /// ECIES function
 pub mod ecies {
     use super::{ecdh, Error};
+    use crate::{KeyPairGenerator, Public, Random, Secret};
     use cfx_types::H128;
     use parity_crypto::{aes, digest, hmac, is_equal};
-    use Generator;
-    use Public;
-    use Random;
-    use Secret;
 
     /// Encrypt a message with a public key, writing an HMAC covering both
     /// the plaintext and authenticated data.
@@ -183,8 +165,7 @@ pub mod ecies {
 #[cfg(test)]
 mod tests {
     use super::ecies;
-    use Generator;
-    use Random;
+    use crate::{KeyPairGenerator, Random};
 
     #[test]
     fn ecies_shared() {

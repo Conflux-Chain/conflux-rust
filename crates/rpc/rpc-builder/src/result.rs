@@ -1,111 +1,32 @@
+// Copyright 2023-2024 Paradigm.xyz
+// This file is part of reth.
+// Reth is a modular, contributor-friendly and blazing-fast implementation of
+// the Ethereum protocol
+
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
 //! Additional helpers for converting errors.
-
-use std::fmt;
-
-use jsonrpsee_core::RpcResult;
-
-/// Helper trait to easily convert various `Result` types into [`RpcResult`]
-pub trait ToRpcResult<Ok, Err>: Sized {
-    /// Converts result to [`RpcResult`] by converting error variant to
-    /// [`jsonrpsee_types::error::ErrorObject`]
-    fn to_rpc_result(self) -> RpcResult<Ok>
-    where Err: fmt::Display {
-        self.map_internal_err(|err| err.to_string())
-    }
-
-    /// Converts this type into an [`RpcResult`]
-    fn map_rpc_err<'a, F, M>(self, op: F) -> RpcResult<Ok>
-    where
-        F: FnOnce(Err) -> (i32, M, Option<&'a [u8]>),
-        M: Into<String>;
-
-    /// Converts this type into an [`RpcResult`] with the
-    /// [`jsonrpsee_types::error::INTERNAL_ERROR_CODE`] and the given message.
-    fn map_internal_err<F, M>(self, op: F) -> RpcResult<Ok>
-    where
-        F: FnOnce(Err) -> M,
-        M: Into<String>;
-
-    /// Converts this type into an [`RpcResult`] with the
-    /// [`jsonrpsee_types::error::INTERNAL_ERROR_CODE`] and given message and
-    /// data.
-    fn map_internal_err_with_data<'a, F, M>(self, op: F) -> RpcResult<Ok>
-    where
-        F: FnOnce(Err) -> (M, &'a [u8]),
-        M: Into<String>;
-
-    /// Adds a message to the error variant and returns an internal Error.
-    ///
-    /// This is shorthand for `Self::map_internal_err(|err| format!("{msg}:
-    /// {err}"))`.
-    fn with_message(self, msg: &str) -> RpcResult<Ok>;
-}
-
-/// A macro that implements the `ToRpcResult` for a specific error type
-#[macro_export]
-macro_rules! impl_to_rpc_result {
-    ($err:ty) => {
-        impl<Ok> ToRpcResult<Ok, $err> for Result<Ok, $err> {
-            #[inline]
-            fn map_rpc_err<'a, F, M>(
-                self, op: F,
-            ) -> jsonrpsee_core::RpcResult<Ok>
-            where
-                F: FnOnce($err) -> (i32, M, Option<&'a [u8]>),
-                M: Into<String>,
-            {
-                match self {
-                    Ok(t) => Ok(t),
-                    Err(err) => {
-                        let (code, msg, data) = op(err);
-                        Err($crate::result::rpc_err(code, msg, data))
-                    }
-                }
-            }
-
-            #[inline]
-            fn map_internal_err<'a, F, M>(
-                self, op: F,
-            ) -> jsonrpsee_core::RpcResult<Ok>
-            where
-                F: FnOnce($err) -> M,
-                M: Into<String>,
-            {
-                self.map_err(|err| $crate::result::internal_rpc_err(op(err)))
-            }
-
-            #[inline]
-            fn map_internal_err_with_data<'a, F, M>(
-                self, op: F,
-            ) -> jsonrpsee_core::RpcResult<Ok>
-            where
-                F: FnOnce($err) -> (M, &'a [u8]),
-                M: Into<String>,
-            {
-                match self {
-                    Ok(t) => Ok(t),
-                    Err(err) => {
-                        let (msg, data) = op(err);
-                        Err($crate::result::internal_rpc_err_with_data(
-                            msg, data,
-                        ))
-                    }
-                }
-            }
-
-            #[inline]
-            fn with_message(self, msg: &str) -> jsonrpsee_core::RpcResult<Ok> {
-                match self {
-                    Ok(t) => Ok(t),
-                    Err(err) => {
-                        let msg = format!("{msg}: {err}");
-                        Err($crate::result::internal_rpc_err(msg))
-                    }
-                }
-            }
-        }
-    };
-}
 
 /// Constructs an invalid params JSON-RPC error.
 pub fn invalid_params_rpc_err(

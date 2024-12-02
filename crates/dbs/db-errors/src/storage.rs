@@ -4,166 +4,132 @@
 
 use primitives::account::AccountError;
 use std::{io, num};
-
+use thiserror::Error;
 type DeltaMptId = u16;
 
-error_chain! {
-    links {
-    }
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Account(#[from] AccountError),
 
-    foreign_links {
-        Account(AccountError);
-        Io(io::Error);
-        IntegerConversionError(std::num::TryFromIntError);
-        ParseIntError(num::ParseIntError);
-        RlpDecodeError(rlp::DecoderError);
-        SqliteError(sqlite::Error);
-        StrfmtFmtError(strfmt::FmtError);
-    }
+    #[error(transparent)]
+    Io(#[from] io::Error),
 
-    errors {
-        OutOfCapacity {
-            description("Out of capacity"),
-            display("Out of capacity"),
-        }
+    #[error(transparent)]
+    IntegerConversionError(#[from] std::num::TryFromIntError),
 
-        OutOfMem {
-            description("Out of memory."),
-            display("Out of memory."),
-        }
+    #[error(transparent)]
+    ParseIntError(#[from] num::ParseIntError),
 
-        SlabKeyError {
-            description("Slab: invalid position accessed"),
-            display("Slab: invalid position accessed"),
-        }
+    #[error(transparent)]
+    RlpDecodeError(#[from] rlp::DecoderError),
 
-        MPTKeyNotFound {
-            description("Key not found."),
-            display("Key not found."),
-        }
+    #[error(transparent)]
+    SqliteError(#[from] sqlite::Error),
 
-        MPTInvalidKeyLength(length: usize, length_limit: usize){
-            description("Invalid key length."),
-            display(
-                "Invalid key length {}. length must be within [1, {}].",
-                length, length_limit),
-        }
+    #[error(transparent)]
+    StrfmtFmtError(#[from] strfmt::FmtError),
 
-        MPTInvalidValueLength(length: usize, length_limit: usize) {
-            description("Invalid value length."),
-            display(
-                "Invalid value length {}. Length must be less than {}",
-                length, length_limit),
-        }
+    #[error("Out of capacity")]
+    OutOfCapacity,
 
-        MPTTooManyNodes {
-            description("Too many nodes."),
-            display("Too many nodes."),
-        }
+    #[error("Out of memory.")]
+    OutOfMem,
 
-        StateCommitWithoutMerkleHash {
-            description("State commit called before computing Merkle hash."),
-            display("State commit called before computing Merkle hash."),
-        }
+    #[error("Slab: invalid position accessed")]
+    SlabKeyError,
 
-        DbNotExist {
-            description("Not allowed to operate on an readonly empty db."),
-            display("Not allowed to operate on an readonly empty db."),
-        }
+    #[error("Key not found.")]
+    MPTKeyNotFound,
 
-        // TODO(yz): add error details.
-        DbValueError {
-            description("Unexpected result from db query."),
-            display("Unexpected result from db query."),
-        }
+    #[error("Invalid key length {length}. length must be within [1, {length_limit}].")]
+    MPTInvalidKeyLength { length: usize, length_limit: usize },
 
-        DbIsUnclean {
-            description("Db is unclean."),
-            display("Db is unclean."),
-        }
+    #[error("Invalid value length {length}. Length must be less than {length_limit}")]
+    MPTInvalidValueLength { length: usize, length_limit: usize },
 
-        SnapshotCowCreation {
-            description("Failed to create new snapshot by COW."),
-            display("Failed to create new snapshot by COW. Use XFS on linux or APFS on Mac."),
-        }
+    #[error("Too many nodes.")]
+    MPTTooManyNodes,
 
-        SnapshotCopyFailure {
-            description("Failed to directly copy a snapshot."),
-            display("Failed to copy a snapshot."),
-        }
+    #[error("State commit called before computing Merkle hash.")]
+    StateCommitWithoutMerkleHash,
 
-        SnapshotNotFound {
-            description("Snapshot file not found."),
-            display("Snapshot file not found."),
-        }
+    #[error("Not allowed to operate on an readonly empty db.")]
+    DbNotExist,
 
-        SnapshotAlreadyExists {
-            description("Attempting to create or modify a Snapshot which already exists."),
-            display("Attempting to create or modify a Snapshot which already exists."),
-        }
+    // TODO(yz): add error details.
+    #[error("Unexpected result from db query.")]
+    DbValueError,
 
-        SnapshotMPTTrieNodeNotFound {
-            description("Trie node not found when loading Snapshot MPT."),
-            display("Trie node not found when loading Snapshot MPT."),
-        }
+    #[error("Db is unclean.")]
+    DbIsUnclean,
 
-        TooManyDeltaMPT {
-            description("Too many Delta MPTs created."),
-            display("Too many Delta MPTs created ({}).", DeltaMptId::max_value()),
-        }
+    #[error("Failed to create new snapshot by COW. Use XFS on linux or APFS on Mac.")]
+    SnapshotCowCreation,
 
-        DeltaMPTAlreadyExists {
-            description("Attempting to create a Delta MPT which already exists."),
-            display("Attempting to create a Delta MPT which already exists."),
-        }
+    #[error("Failed to copy a snapshot.")]
+    SnapshotCopyFailure,
 
-        DeltaMPTEntryNotFound {
-            description("Can't find requested Delta MPT in registry."),
-            display("Can't find requested Delta MPT in registry."),
-        }
+    #[error("Snapshot file not found.")]
+    SnapshotNotFound,
 
-        DeltaMPTDestroyErrors(e1: Option<Box<Error>>, e2: Option<Box<Error>>) {
-            description("Error(s) happened in Delta MPT destroy"),
-            display(
-                "Error(s) happened in Delta MPT destroy, error_1: {:?}, error_2: {:?}",
-                e1.as_ref().map(|x| format!("{}", &**x)),
-                e2.as_ref().map(|x| format!("{}", &**x)),
-            ),
-        }
+    #[error("Attempting to create or modify a Snapshot which already exists.")]
+    SnapshotAlreadyExists,
 
-        UnsupportedByFreshlySyncedSnapshot(op: &'static str) {
-            description("The operation isn't possible on freshly synced snapshot."),
-            display("The operation \"{}\" isn't possible on freshly synced snapshot.", op),
-        }
+    #[error("Trie node not found when loading Snapshot MPT.")]
+    SnapshotMPTTrieNodeNotFound,
 
-        InvalidTrieProof {
-            description("Trie proof is invalid."),
-            display("Trie proof is invalid."),
-        }
+    #[error("Too many Delta MPTs created ({}).", DeltaMptId::max_value())]
+    TooManyDeltaMPT,
 
-        InvalidSnapshotSyncProof {
-            description("Snapshot sync proof is invalid"),
-            display("Snapshot sync proof is invalid"),
-        }
+    #[error("Attempting to create a Delta MPT which already exists.")]
+    DeltaMPTAlreadyExists,
 
-        FailedToCreateUnitTestDataDir {
-            description("Failed to create unit test data dir."),
-            display("Failed to create unit test data dir."),
-        }
+    #[error("Can't find requested Delta MPT in registry.")]
+    DeltaMPTEntryNotFound,
 
-        ThreadPanicked(msg: String) {
-            description("Thread panicked."),
-            display("Thread panicked with message {:?}.", msg),
-        }
+    #[error(
+        "Error(s) happened in Delta MPT destroy, error_1: {e1:?}, error_2: {e2:?}"
+    )]
+    DeltaMPTDestroyErrors {
+        e1: Option<Box<Error>>,
+        e2: Option<Box<Error>>,
+    },
 
-        MpscError {
-            description("Error from std::sync::mpsc."),
-            display("Error from std::sync::mpsc."),
-        }
+    #[error(
+        "The operation \"{0}\" isn't possible on freshly synced snapshot."
+    )]
+    UnsupportedByFreshlySyncedSnapshot(&'static str),
 
-        SemaphoreTryAcquireError {
-            description("tokio::sync::Semaphore::try_acquire(): the semaphore is unavailable."),
-            display("tokio::sync::Semaphore::try_acquire(): the semaphore is unavailable."),
-        }
-    }
+    #[error("Trie proof is invalid.")]
+    InvalidTrieProof,
+
+    #[error("Snapshot sync proof is invalid")]
+    InvalidSnapshotSyncProof,
+
+    #[error("Failed to create unit test data dir.")]
+    FailedToCreateUnitTestDataDir,
+
+    #[error("Thread panicked with message {0:?}.")]
+    ThreadPanicked(String),
+
+    #[error("Error from std::sync::mpsc.")]
+    MpscError,
+
+    #[error(
+        "tokio::sync::Semaphore::try_acquire(): the semaphore is unavailable."
+    )]
+    SemaphoreTryAcquireError,
+
+    #[error("{0}")]
+    Msg(String),
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<String> for Error {
+    fn from(e: String) -> Self { Error::Msg(e) }
+}
+impl From<&str> for Error {
+    fn from(e: &str) -> Self { Error::Msg(e.into()) }
 }

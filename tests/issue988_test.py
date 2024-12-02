@@ -68,7 +68,7 @@ class Issue988Test(ConfluxTestFramework):
             attrs['to'] = contract_addr
         else:
             attrs['receiver'] = b''
-        tx_data = func(*args).buildTransaction(attrs)
+        tx_data = func(*args).build_transaction(attrs)
         tx_data['data'] = decode_hex(tx_data['data'])
         tx_data['pri_key'] = sender_key
         tx_data['gas_price'] = tx_data['gasPrice']
@@ -90,8 +90,8 @@ class Issue988Test(ConfluxTestFramework):
         attrs["gas"] = int_to_hex(gas)
         attrs["gasPrice"] = int_to_hex(gas_price)
         attrs["chainId"] = 0
-        attrs["to"] = Web3.toChecksumAddress(contract_addr)
-        tx = func(*args).buildTransaction(attrs)
+        attrs["to"] = Web3.to_checksum_address(contract_addr)
+        tx = func(*args).build_transaction(attrs)
         return RpcClient(self.nodes[0]).call(contract_addr, tx["data"])
 
     def run_test(self):
@@ -112,7 +112,7 @@ class Issue988Test(ConfluxTestFramework):
         gas = CONTRACT_DEFAULT_GAS
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
-        self.tx_conf = {"from":Web3.toChecksumAddress(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
+        self.tx_conf = {"from":Web3.to_checksum_address(encode_hex_0x(genesis_addr)), "nonce":int_to_hex(nonce), "gas":int_to_hex(gas), "gasPrice":int_to_hex(gas_price), "chainId":0}
 
         # setup balance for node 0
         node = self.nodes[0]

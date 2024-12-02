@@ -188,7 +188,7 @@ impl InProgressSnapshotTask {
         if let Some(join_handle) = self.thread_handle.take() {
             match join_handle.join() {
                 Ok(task_result) => Some(task_result),
-                Err(_) => Some(Err(ErrorKind::ThreadPanicked(format!(
+                Err(_) => Some(Err(Error::ThreadPanicked(format!(
                     "Background Snapshotting for {:?} panicked.",
                     self.snapshot_info
                 ))
@@ -417,7 +417,7 @@ impl StorageManager {
             let snapshot_associated_mpts_locked =
                 self.snapshot_associated_mpts_by_epoch.read();
             match snapshot_associated_mpts_locked.get(snapshot_epoch_id) {
-                None => bail!(ErrorKind::DeltaMPTEntryNotFound),
+                None => bail!(Error::DeltaMPTEntryNotFound),
                 Some(delta_mpts) => {
                     if delta_mpts.1.is_some() {
                         return Ok(delta_mpts.1.as_ref().unwrap().clone());
@@ -441,7 +441,7 @@ impl StorageManager {
             .read()
             .get(snapshot_epoch_id)
         {
-            None => bail!(ErrorKind::DeltaMPTEntryNotFound),
+            None => bail!(Error::DeltaMPTEntryNotFound),
             Some(mpts) => Ok(mpts.0.clone()),
         }
     }
@@ -461,7 +461,7 @@ impl StorageManager {
         let mut maybe_snapshot_entry =
             snapshot_associated_mpts_mut.get_mut(snapshot_epoch_id);
         if maybe_snapshot_entry.is_none() {
-            bail!(ErrorKind::SnapshotNotFound);
+            bail!(Error::SnapshotNotFound);
         };
         // DeltaMpt already exists
         if maybe_snapshot_entry.as_ref().unwrap().1.is_some() {
@@ -591,7 +591,7 @@ impl StorageManager {
                 let delta_db = maybe_delta_db.as_ref().unwrap();
                 while delta_height > 0 {
                     epoch_id = match delta_db.mpt.get_parent_epoch(&epoch_id)? {
-                        None => bail!(ErrorKind::DbValueError),
+                        None => bail!(Error::DbValueError),
                         Some(epoch_id) => epoch_id,
                     };
                     delta_height -= 1;
@@ -664,7 +664,7 @@ impl StorageManager {
                     }
 
                     task_finished_sender_cloned.lock().send(Some(snapshot_epoch_id))
-                        .or(Err(Error::from(ErrorKind::MpscError)))?;
+                        .or(Err(Error::from(Error::MpscError)))?;
                     drop(snapshot_info_map_locked);
 
                     let debug_snapshot_checkers =
@@ -1377,8 +1377,8 @@ impl StorageManager {
                         .delta_db_manager
                         .get_delta_db_name(&snapshot_epoch_id),
                 )
-                .or_else(|e| match e.kind() {
-                    ErrorKind::Io(io_err) => match io_err.kind() {
+                .or_else(|e| match &e {
+                    Error::Io(io_err) => match io_err.kind() {
                         std::io::ErrorKind::NotFound => Ok(()),
                         _ => Err(e),
                     },
@@ -1557,7 +1557,7 @@ impl MaybeDeltaTrieDestroyErrors {
         let e1 = self.delta_trie_destroy_error_1.take().map(|e| Box::new(e));
         let e2 = self.delta_trie_destroy_error_2.take().map(|e| Box::new(e));
         if e1.is_some() || e2.is_some() {
-            Err(ErrorKind::DeltaMPTDestroyErrors(e1, e2).into())
+            Err(Error::DeltaMPTDestroyErrors { e1, e2 }.into())
         } else {
             Ok(())
         }

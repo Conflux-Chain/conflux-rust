@@ -4,7 +4,7 @@ use std::{
 };
 
 use cfx_internal_common::StateRootWithAuxInfo;
-use cfx_storage::{state::StateTrait as StorageTrait, ErrorKind, Result};
+use cfx_storage::{state::StateTrait as StorageTrait, Error, Result};
 use cfx_types::H256;
 use primitives::StorageKeyWithSpace;
 use tiny_keccak::{Hasher, Keccak};
@@ -96,7 +96,7 @@ impl StorageTrait for InmemoryStorage {
     fn get_state_root(&self) -> Result<StateRootWithAuxInfo> {
         self.cached_state_root
             .clone()
-            .ok_or(ErrorKind::Msg("No state root".to_owned()).into())
+            .ok_or(Error::Msg("No state root".to_owned()).into())
     }
 
     fn commit(

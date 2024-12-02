@@ -10,9 +10,9 @@ from test_framework.util import assert_equal
 
 class OutOfBalanceTest(Web3Base):
     def run_test(self):
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
-        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
-        signed = self.evmAccount.signTransaction({
+        self.evmAccount = self.w3.eth.account.from_key(self.DEFAULT_TEST_ACCOUNT_KEY)
+        nonce = self.w3.eth.get_transaction_count(self.evmAccount.address)
+        signed = self.evmAccount.sign_transaction({
             "to": self.evmAccount.address,
             "value": default_config["TOTAL_COIN"],
             "gasPrice": 2,
@@ -22,7 +22,7 @@ class OutOfBalanceTest(Web3Base):
         })
 
         try:
-            self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+            self.w3.eth.send_raw_transaction(signed["raw_transaction"])
             AssertionError("expect out of balance error")
         except Exception as e:
             assert_equal(str(e), "{'code': -32003, 'message': 'insufficient funds for transfer'}")

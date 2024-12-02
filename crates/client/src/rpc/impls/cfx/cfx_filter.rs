@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use log::{debug, error, info, warn};
 use std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
@@ -18,6 +19,7 @@ use crate::rpc::{
 };
 use cfx_addr::Network;
 use cfx_types::{Space, H128, H256};
+use cfx_util_macros::bail;
 use cfxcore::{
     channel::Channel, errors::Error as CfxRpcError, BlockDataManager,
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,

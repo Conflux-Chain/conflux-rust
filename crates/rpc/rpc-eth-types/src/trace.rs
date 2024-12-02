@@ -4,8 +4,8 @@ use cfx_rpc_cfx_types::trace::{
 };
 use cfx_rpc_primitives::Bytes;
 use cfx_types::{H160, H256, U256};
+use cfx_util_macros::bail;
 use cfx_vm_types::{CallType as CfxCallType, CreateType as CfxCreateType};
-use error_chain::bail;
 use jsonrpc_core::Error as JsonRpcError;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::{
