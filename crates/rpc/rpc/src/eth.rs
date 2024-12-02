@@ -237,7 +237,7 @@ impl EthApi {
         } else if signed_trans.len() + failed_trans.len() == 0 {
             // For tx in transactions_pubkey_cache, we simply ignore them
             bail!(RpcError::from(EthApiError::PoolError(
-                RpcPoolError::ReplaceUnderpriced
+                RpcPoolError::AlreadyKnown
             )));
         } else if signed_trans.is_empty() {
             let tx_err = failed_trans.into_iter().next().expect("Not empty").1;
