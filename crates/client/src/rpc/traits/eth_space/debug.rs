@@ -38,4 +38,11 @@ pub trait Debug {
         &self, request: TransactionRequest, block_number: Option<BlockNumber>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> JsonRpcResult<GethTrace>;
+
+    #[rpc(name = "debug_traceCallMany")]
+    fn debug_trace_call_many(
+        &self, requests: Vec<TransactionRequest>,
+        block_number: Option<BlockNumber>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> JsonRpcResult<Vec<GethTrace>>;
 }

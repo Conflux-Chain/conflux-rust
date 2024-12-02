@@ -36,4 +36,11 @@ pub trait DebugApi {
         &self, request: TransactionRequest, block_number: Option<BlockNumber>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<GethTrace>;
+
+    #[method(name = "traceCallMany")]
+    async fn debug_trace_call_many(
+        &self, requests: Vec<TransactionRequest>,
+        block_number: Option<BlockNumber>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> RpcResult<Vec<GethTrace>>;
 }

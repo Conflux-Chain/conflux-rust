@@ -157,6 +157,99 @@ impl DebugApi {
         Ok(res.trace.clone())
     }
 
+    pub fn trace_call_many(
+        &self, requests: Vec<TransactionRequest>,
+        block_number: Option<BlockNumber>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> Result<Vec<GethTrace>, CoreError> {
+        let opts = opts.unwrap_or_default();
+        let block_num = block_number.unwrap_or_default();
+
+        let epoch_num = self
+            .get_block_epoch_num(block_num)
+            .map_err(|err| CoreError::Msg(err))?;
+
+        // validate epoch state
+        self.consensus_graph()
+            .validate_stated_epoch(&EpochNumber::Number(epoch_num))
+            .map_err(|err| CoreError::Msg(err))?;
+
+        let epoch_block_hashes = self
+            .consensus_graph()
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
+            .map_err(|err| CoreError::Msg(err))?;
+        let epoch_id = epoch_block_hashes
+            .last()
+            .ok_or(CoreError::Msg("should have block hash".to_string()))?;
+
+        // construct blocks from call_request
+        let chain_id = self.consensus.best_chain_id();
+
+        // construct transactions
+        let mut transactions = Vec::with_capacity(requests.len());
+        for mut request in requests {
+            if request.from.is_none() {
+                return Err(CoreError::InvalidParam(
+                    "from is required".to_string(),
+                    Default::default(),
+                ));
+            }
+
+            // nonce auto fill
+            if request.nonce.is_none() {
+                let nonce = self.consensus_graph().next_nonce(
+                    request.from.unwrap().with_evm_space(),
+                    BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(
+                        epoch_num,
+                    )),
+                    "num",
+                )?;
+                request.nonce = Some(nonce);
+            }
+
+            let signed_tx = request.sign_call(
+                chain_id.in_evm_space(),
+                self.max_estimation_gas_limit,
+            )?;
+
+            transactions.push(Arc::new(signed_tx));
+        }
+
+        let epoch_blocks = self
+            .consensus_graph()
+            .data_man
+            .blocks_by_hash_list(
+                &epoch_block_hashes,
+                true, /* update_cache */
+            )
+            .ok_or(CoreError::Msg("blocks should exist".to_string()))?;
+        let pivot_block = epoch_blocks
+            .last()
+            .ok_or(CoreError::Msg("should have block".to_string()))?;
+
+        let header = BlockHeaderBuilder::new()
+            .with_base_price(pivot_block.block_header.base_price())
+            .with_parent_hash(pivot_block.block_header.hash())
+            .with_height(epoch_num + 1)
+            .with_timestamp(pivot_block.block_header.timestamp() + 1)
+            .with_gas_limit(*pivot_block.block_header.gas_limit())
+            .build();
+        let block = Block::new(header, transactions);
+        let blocks: Vec<Arc<Block>> = vec![Arc::new(block)];
+
+        let traces = self.consensus_graph().collect_blocks_geth_trace(
+            *epoch_id,
+            epoch_num,
+            &blocks,
+            opts.tracing_options,
+            None,
+        )?;
+
+        let result = traces.iter().map(|val| val.trace.clone()).collect();
+
+        Ok(result)
+    }
+
     pub fn trace_block_by_num(
         &self, block_num: u64, opts: Option<GethDebugTracingOptions>,
     ) -> Result<Vec<TraceResult>, CoreError> {
@@ -285,6 +378,15 @@ impl DebugApiServer for DebugApi {
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<GethTrace> {
         self.trace_call(request, block_number, opts)
+            .map_err(|e| e.into())
+    }
+
+    async fn debug_trace_call_many(
+        &self, requests: Vec<TransactionRequest>,
+        block_number: Option<BlockNumber>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> RpcResult<Vec<GethTrace>> {
+        self.trace_call_many(requests, block_number, opts)
             .map_err(|e| e.into())
     }
 }

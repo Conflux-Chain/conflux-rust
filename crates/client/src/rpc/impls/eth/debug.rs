@@ -77,4 +77,14 @@ impl Debug for GethDebugHandler {
             .trace_call(request, block_number, opts)
             .map_err(|err| err.into())
     }
+
+    fn debug_trace_call_many(
+        &self, requests: Vec<TransactionRequest>,
+        block_number: Option<BlockNumber>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> JsonRpcResult<Vec<GethTrace>> {
+        self.inner
+            .trace_call_many(requests, block_number, opts)
+            .map_err(|err| err.into())
+    }
 }
