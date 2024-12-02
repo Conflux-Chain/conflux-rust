@@ -10,5 +10,5 @@ keccak-hash = { workspace = true }
 solidity-abi-derive = { workspace = true }
 
 [dev-dependencies]
-lazy_static = "1.4"
-rustc-hex = "2.1"
+lazy_static = { workspace = true }
+rustc-hex = { workspace = true }

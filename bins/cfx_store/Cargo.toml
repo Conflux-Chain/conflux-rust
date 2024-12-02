@@ -9,9 +9,9 @@ edition = "2021"
 docopt = "1.0"
 env_logger = { workspace = true }
 num_cpus = "1.6"
-rustc-hex = "2.1"
-serde = "1.0"
-serde_derive = "1.0"
+rustc-hex = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
 parking_lot = { workspace = true }
 cfxstore = { workspace = true }
 panic_hook = { workspace = true }
@@ -23,4 +23,4 @@ path = "src/main.rs"
 doc = false
 
 [dev-dependencies]
-tempdir = "0.3"
+tempdir = { workspace = true }

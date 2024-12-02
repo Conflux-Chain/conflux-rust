@@ -71,11 +71,11 @@ rlp = { workspace = true }
 rlp_derive = { workspace = true }
 rustc-hex = { workspace = true }
 secret-store = { workspace = true }
-serde = { version = "1.0", features = ["rc"] }
+serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 siphasher = "0.3"
-slab = "0.4"
+slab = { workspace = true }
 solidity-abi = { workspace = true }
 solidity-abi-derive = { workspace = true }
 sha3-macro = { workspace = true }
@@ -83,10 +83,10 @@ sqlite = "0.25"
 sqlite3-sys = "0.12"
 static_assertions = "1.1.0"
 strfmt = "0.1"
-tempdir = "0.3"
-threadpool = "1.0"
+tempdir = { workspace = true }
+threadpool = { workspace = true }
 throttling = { workspace = true }
-toml = "0.5.8"
+toml = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-timer = { workspace = true }
 tokio-stream = { workspace = true }

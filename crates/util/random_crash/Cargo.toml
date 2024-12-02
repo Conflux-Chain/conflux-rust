@@ -7,10 +7,10 @@ version = "1.0.0"
 edition = "2018"
 
 [dependencies]
-lazy_static = { version = "1.4" }
+lazy_static = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
-rand = "0.7"
+rand = { workspace = true }
 
 [features]
 random_crash = []

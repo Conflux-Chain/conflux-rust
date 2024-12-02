@@ -772,22 +772,28 @@ mod tests {
         let assembler = PacketWithLenAssembler::default();
 
         // packet not ready
-        assert_eq!(assembler.load(&mut vec![5].into()), None);
-        assert_eq!(assembler.load(&mut vec![5, 0, 0].into()), None);
-        assert_eq!(assembler.load(&mut vec![5, 0, 0, 4, 5, 1, 2].into()), None);
+        assert_eq!(assembler.load(&mut BytesMut::from(&vec![5][..])), None);
+        assert_eq!(
+            assembler.load(&mut BytesMut::from(&vec![5, 0, 0][..])),
+            None
+        );
+        assert_eq!(
+            assembler.load(&mut BytesMut::from(&vec![5, 0, 0, 4, 5, 1, 2][..])),
+            None
+        );
 
         // packet ready and length > 3
-        let mut buf = vec![5, 0, 0, 4, 5, 1, 2, 3].into();
+        let mut buf = BytesMut::from(&vec![5, 0, 0, 4, 5, 1, 2, 3][..]);
         assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2, 3, 4, 5]);
         assert_eq!(buf.is_empty(), true);
 
         // packet ready and length < 3
-        let mut buf = vec![2, 0, 0, 1, 2].into();
+        let mut buf = BytesMut::from(&vec![2, 0, 0, 1, 2][..]);
         assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2]);
         assert_eq!(buf.is_empty(), true);
 
         // packet ready with some data of the next packet
-        let mut buf = vec![5, 0, 0, 4, 5, 1, 2, 3, 6, 7].into();
+        let mut buf = BytesMut::from(&vec![5, 0, 0, 4, 5, 1, 2, 3, 6, 7][..]);
         assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2, 3, 4, 5]);
         assert_eq!(&buf[..], &[6, 7]);
     }
