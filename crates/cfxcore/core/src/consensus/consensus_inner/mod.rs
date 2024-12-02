@@ -2179,30 +2179,30 @@ impl ConsensusGraphInner {
             self.pivot_chain.len()
         );
 
-        let e;
-        // We first try to get it from the consensus. Note that we cannot use
-        // the info for the genesis because it may contain out-of-era
-        // blocks that is not maintained anymore.
-        match self.get_arena_index_from_epoch_number(epoch_number) {
-            Ok(pivot_arena_index) => {
-                if pivot_arena_index != self.cur_era_genesis_block_arena_index {
-                    return Ok(self
-                        .get_ordered_executable_epoch_blocks(pivot_arena_index)
-                        .iter()
-                        .map(|index| self.arena[*index].hash)
-                        .collect());
-                }
-                e = "Epoch set of the current genesis is not maintained".into();
-            }
-            Err(err) => e = err,
-        }
+        // let e;
+        // // We first try to get it from the consensus. Note that we cannot use
+        // // the info for the genesis because it may contain out-of-era
+        // // blocks that is not maintained anymore.
+        // match self.get_arena_index_from_epoch_number(epoch_number) {
+        //     Ok(pivot_arena_index) => {
+        //         if pivot_arena_index != self.cur_era_genesis_block_arena_index {
+        //             return Ok(self
+        //                 .get_ordered_executable_epoch_blocks(pivot_arena_index)
+        //                 .iter()
+        //                 .map(|index| self.arena[*index].hash)
+        //                 .collect());
+        //         }
+        //         e = "Epoch set of the current genesis is not maintained".into();
+        //     }
+        //     Err(err) => e = err,
+        // }
 
         self.data_man
             .executed_epoch_set_hashes_from_db(epoch_number)
             .ok_or(
                 format!(
-                    "Epoch set not in db epoch_number={}, in mem err={:?}",
-                    epoch_number, e
+                    "Epoch set not in db epoch_number={}",
+                    epoch_number,
                 )
                 .into(),
             )
