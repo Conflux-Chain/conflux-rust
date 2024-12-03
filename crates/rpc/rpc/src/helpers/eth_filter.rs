@@ -32,6 +32,7 @@ pub struct EthFilterHelper {
     polls: Mutex<PollManager<SyncPollFilter<Log>>>,
     unfinalized_epochs: Arc<RwLock<UnfinalizedEpochs>>,
     logs_filter_max_limit: Option<usize>,
+    executor: Arc<TokioRuntime>,
 }
 
 pub struct UnfinalizedEpochs {
@@ -62,16 +63,16 @@ impl EthFilterHelper {
             polls: Mutex::new(PollManager::new(poll_lifetime)),
             unfinalized_epochs: Default::default(),
             logs_filter_max_limit,
+            executor,
         };
 
         // start loop to receive epochs, to avoid re-org during filter query
-        filter_client.start_epochs_loop(epochs_ordered, executor);
+        filter_client.start_epochs_loop(epochs_ordered);
         filter_client
     }
 
     fn start_epochs_loop(
         &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
-        executor: Arc<TokioRuntime>,
     ) {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
@@ -115,7 +116,7 @@ impl EthFilterHelper {
             }
         };
 
-        executor.spawn(fut);
+        self.executor.spawn(fut);
     }
 
     fn retrieve_epoch_logs(

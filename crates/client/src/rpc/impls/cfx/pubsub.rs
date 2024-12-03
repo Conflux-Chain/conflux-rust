@@ -50,6 +50,8 @@ pub struct PubSubClient {
     epochs_subscribers: Arc<RwLock<Subscribers<Client>>>,
     logs_subscribers: Arc<RwLock<Subscribers<(Client, LogFilter)>>>,
     epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
+    new_block_hashes: Arc<Channel<H256>>,
+    heads_loop_started: Arc<RwLock<bool>>,
 }
 
 impl PubSubClient {
@@ -70,31 +72,41 @@ impl PubSubClient {
             network,
         });
 
-        // --------- newHeads ---------
-        // subscribe to the `new_block_hashes` channel
-        let receiver = notifications.new_block_hashes.subscribe();
-
-        // loop asynchronously
-        let handler_clone = handler.clone();
-
-        let fut = receiver.for_each(move |hash| {
-            handler_clone.notify_header(&hash);
-        });
-
-        handler.executor.spawn(fut);
-
         PubSubClient {
             handler,
             heads_subscribers,
             epochs_subscribers,
             logs_subscribers,
             epochs_ordered: notifications.epochs_ordered.clone(),
+            new_block_hashes: notifications.new_block_hashes.clone(),
+            heads_loop_started: Arc::new(RwLock::new(false)),
         }
     }
 
     /// Returns a chain notification handler.
     pub fn handler(&self) -> Weak<ChainNotificationHandler> {
         Arc::downgrade(&self.handler)
+    }
+
+    fn start_heads_loop(&self) {
+        let mut loop_started = self.heads_loop_started.write();
+        if *loop_started {
+            return;
+        }
+        *loop_started = true;
+
+        debug!("start_headers_loop");
+
+        let mut receiver = self.new_block_hashes.subscribe();
+        let handler_clone = self.handler.clone();
+
+        self.handler.executor.spawn(async move {
+            while let Some(hash) = receiver.recv().await {
+                debug!("head_loop: {:?}", hash);
+                // publish hash
+                handler_clone.notify_header(&hash);
+            }
+        });
     }
 
     // Start an async loop that continuously receives epoch notifications and
@@ -487,6 +499,7 @@ impl PubSub for PubSubClient {
             // --------- newHeads ---------
             (pubsub::Kind::NewHeads, None) => {
                 self.heads_subscribers.write().push(subscriber);
+                self.start_heads_loop();
                 return;
             }
             (pubsub::Kind::NewHeads, _) => {
