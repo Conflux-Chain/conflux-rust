@@ -2,9 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{io::IoError, service::ProtocolVersion, ProtocolId};
+use crate::{iolib::IoError, service::ProtocolVersion, ProtocolId};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{fmt, io, net};
+use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DisconnectReason {
@@ -110,124 +111,92 @@ impl fmt::Display for ThrottlingReason {
     }
 }
 
-error_chain! {
-    foreign_links {
-        SocketIo(IoError);
-    }
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    SocketIo(#[from] IoError),
 
-    errors {
-        #[doc = "Error concerning the network address parsing subsystem."]
-        AddressParse {
-            description("Failed to parse network address"),
-            display("Failed to parse network address"),
-        }
+    #[error("Failed to parse network address")]
+    AddressParse,
 
-        #[doc = "Error concerning the network address resolution subsystem."]
-        AddressResolve(err: Option<io::Error>) {
-            description("Failed to resolve network address"),
-            display("Failed to resolve network address {}", err.as_ref().map_or("".to_string(), |e| e.to_string())),
-        }
+    #[error("Failed to resolve network address {}", .0.as_ref().map_or("".to_string(), |e| e.to_string()))]
+    AddressResolve(Option<io::Error>),
 
-        #[doc = "Authentication failure"]
-        Auth {
-            description("Authentication failure"),
-            display("Authentication failure"),
-        }
+    #[error("Authentication failure")]
+    Auth,
 
-        BadProtocol {
-            description("Bad protocol"),
-            display("Bad protocol"),
-        }
+    #[error("Bad protocol")]
+    BadProtocol,
 
-        BadAddr {
-            description("Bad socket address"),
-            display("Bad socket address"),
-        }
+    #[error("Bad socket address")]
+    BadAddr,
 
-        Decoder(reason: String) {
-            description("Decoder error"),
-            display("Decoder error: reason={}", reason),
-        }
+    #[error("Decoder error: reason={0}")]
+    Decoder(String),
 
-        Expired {
-            description("Expired message"),
-            display("Expired message"),
-        }
+    #[error("Expired message")]
+    Expired,
 
-        Disconnect(reason: DisconnectReason) {
-            description("Peer disconnected"),
-            display("Peer disconnected: {}", reason),
-        }
+    #[error("Peer disconnected: {0}")]
+    Disconnect(DisconnectReason),
 
-        #[doc = "Invalid node id"]
-        InvalidNodeId {
-            description("Invalid node id"),
-            display("Invalid node id"),
-        }
+    #[error("Invalid node id")]
+    InvalidNodeId,
 
-        OversizedPacket {
-            description("Packet is too large"),
-            display("Packet is too large"),
-        }
+    #[error("Packet is too large")]
+    OversizedPacket,
 
-        Io(err: io::Error) {
-            description("IO Error"),
-            display("Unexpected IO error: {}", err),
-        }
+    #[error("Unexpected IO error: {0}")]
+    Io(io::Error),
 
-        MessageDeprecated{
-            protocol: ProtocolId,
-            msg_id: u16,
-            min_supported_version: ProtocolVersion
-        } {
-            description("Received message is deprecated"),
-            display(
-                "Received message is deprecated. Protocol {:?}, message id {}, \
-                min_supported_version {}", protocol, msg_id, min_supported_version
-            ),
-        }
+    #[error("Received message is deprecated. Protocol {protocol:?}, message id {msg_id}, \
+                min_supported_version {min_supported_version}")]
+    MessageDeprecated {
+        protocol: ProtocolId,
+        msg_id: u16,
+        min_supported_version: ProtocolVersion,
+    },
 
-        SendUnsupportedMessage{
-            protocol: ProtocolId,
-            msg_id: u16,
-            peer_protocol_version: Option<ProtocolVersion>,
-            min_supported_version: Option<ProtocolVersion>
-        } {
-            description("We are trying to send unsupported message to peer"),
-            display(
-                "We are trying to send unsupported message to peer. Protocol {:?},\
-                message id {}, peer_protocol_version {:?}, min_supported_version {:?}",
-                protocol, msg_id, peer_protocol_version, min_supported_version
-            ),
-        }
+    #[error("We are trying to send unsupported message to peer. Protocol {protocol:?},\
+                message id {msg_id}, peer_protocol_version {peer_protocol_version:?}, min_supported_version {min_supported_version:?}")]
+    SendUnsupportedMessage {
+        protocol: ProtocolId,
+        msg_id: u16,
+        peer_protocol_version: Option<ProtocolVersion>,
+        min_supported_version: Option<ProtocolVersion>,
+    },
 
-        Throttling(reason: ThrottlingReason) {
-            description("throttling failure"),
-            display("throttling failure: {}", reason),
-        }
-    }
+    #[error("throttling failure: {0}")]
+    Throttling(ThrottlingReason),
+
+    #[error("{0}")]
+    Msg(String),
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self { Error::from_kind(ErrorKind::Io(err)) }
+    fn from(err: io::Error) -> Self { Error::Io(err) }
 }
 
 impl From<rlp::DecoderError> for Error {
     fn from(err: rlp::DecoderError) -> Self {
-        ErrorKind::Decoder(format!("{}", err)).into()
+        Error::Decoder(format!("{}", err)).into()
     }
 }
 
-impl From<keylib::Error> for Error {
-    fn from(_err: keylib::Error) -> Self { ErrorKind::Auth.into() }
+impl From<crate::keylib::Error> for Error {
+    fn from(_err: crate::keylib::Error) -> Self { Error::Auth.into() }
 }
 
-impl From<keylib::crypto::Error> for Error {
-    fn from(_err: keylib::crypto::Error) -> Self { ErrorKind::Auth.into() }
+impl From<crate::keylib::crypto::Error> for Error {
+    fn from(_err: crate::keylib::crypto::Error) -> Self { Error::Auth.into() }
 }
 
 impl From<net::AddrParseError> for Error {
-    fn from(_err: net::AddrParseError) -> Self { ErrorKind::BadAddr.into() }
+    fn from(_err: net::AddrParseError) -> Self { Error::BadAddr.into() }
+}
+
+impl From<&str> for Error {
+    fn from(error: &str) -> Self { Error::Msg(error.to_string()) }
 }
 
 #[cfg(test)]

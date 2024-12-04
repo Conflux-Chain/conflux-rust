@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use log::{debug, info};
 use std::{
     collections::HashMap,
     fs::create_dir_all,
@@ -12,6 +13,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use cfx_rpc_builder::RpcServerHandle;
+use cfx_util_macros::bail;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
@@ -19,6 +22,7 @@ use parking_lot::{Condvar, Mutex};
 use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
 
+use crate::keylib::KeyPair;
 use blockgen::BlockGenerator;
 use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
@@ -49,11 +53,11 @@ use diem_crypto::{
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusVRFPrivateKey,
 };
-use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::NetworkService;
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
+use tokio::runtime::Runtime as TokioRuntime;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
 pub use crate::configuration::Configuration;
@@ -66,11 +70,13 @@ use crate::{
             cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
             eth_pubsub::PubSubClient as EthPubSubClient, pubsub::PubSubClient,
         },
-        setup_debug_rpc_apis, setup_public_eth_rpc_apis, setup_public_rpc_apis,
+        launch_async_rpc_servers, setup_debug_rpc_apis,
+        setup_public_eth_rpc_apis, setup_public_rpc_apis,
     },
     GENESIS_VERSION,
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
+use std::net::SocketAddr;
 
 pub mod delegate_convert;
 pub mod shutdown_handler;
@@ -250,11 +256,38 @@ pub fn initialize_common_modules(
     }
 
     let genesis_accounts = if conf.is_test_or_dev_mode() {
-        match conf.raw_conf.genesis_secrets {
-            Some(ref file) => {
-                genesis::load_secrets_file(file, secret_store.as_ref())?
+        match (
+            &conf.raw_conf.genesis_secrets,
+            &conf.raw_conf.genesis_evm_secrets,
+        ) {
+            (Some(file), evm_file) => {
+                // Load core space accounts
+                let mut accounts = genesis::load_secrets_file(
+                    file,
+                    secret_store.as_ref(),
+                    Space::Native,
+                )?;
+
+                // Load EVM space accounts if specified
+                if let Some(evm_file) = evm_file {
+                    let evm_accounts = genesis::load_secrets_file(
+                        evm_file,
+                        secret_store.as_ref(),
+                        Space::Ethereum,
+                    )?;
+                    accounts.extend(evm_accounts);
+                }
+                accounts
             }
-            None => genesis::default(conf.is_test_or_dev_mode()),
+            (None, Some(evm_file)) => {
+                // Only load EVM space accounts
+                genesis::load_secrets_file(
+                    evm_file,
+                    secret_store.as_ref(),
+                    Space::Ethereum,
+                )?
+            }
+            (None, None) => genesis::default(conf.is_test_or_dev_mode()),
         }
     } else {
         match conf.raw_conf.genesis_accounts {
@@ -482,6 +515,8 @@ pub fn initialize_not_light_node_modules(
         Runtime,
         Option<HttpServer>,
         Option<WSServer>,
+        TokioRuntime,
+        Option<RpcServerHandle>,
     ),
     String,
 > {
@@ -728,6 +763,24 @@ pub fn initialize_not_light_node_modules(
 
     network.start();
 
+    let tokio_runtime =
+        tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+
+    let eth_rpc_http_server_addr =
+        conf.raw_conf.jsonrpc_http_eth_port_v2.map(|port| {
+            format!("0.0.0.0:{}", port)
+                .parse::<SocketAddr>()
+                .expect("Invalid socket port")
+        });
+    let async_eth_rpc_http_server =
+        tokio_runtime.block_on(launch_async_rpc_servers(
+            conf.rpc_impl_config(),
+            consensus.clone(),
+            sync.clone(),
+            txpool.clone(),
+            eth_rpc_http_server_addr,
+        ))?;
+
     Ok((
         data_man,
         pow,
@@ -745,6 +798,8 @@ pub fn initialize_not_light_node_modules(
         runtime,
         eth_rpc_http_server,
         eth_rpc_ws_server,
+        tokio_runtime,
+        async_eth_rpc_http_server,
     ))
 }
 

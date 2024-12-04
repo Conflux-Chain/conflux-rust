@@ -17,6 +17,7 @@
 //! Request Provenance
 
 use cfx_types::H256;
+use serde::{Deserialize, Serialize};
 use std::{fmt, net::SocketAddr};
 
 /// RPC request origin

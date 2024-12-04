@@ -4,12 +4,11 @@ version = {workspace = true}
 edition = "2021"
 
 [dependencies]
-bigdecimal = "0.1.0"
-num-bigint = "0.2.6"
-mio = "0.6.8"
+bigdecimal = { workspace = true }
+num-bigint = { workspace = true }
 clap = { workspace = true }
-textwrap = "0.9"
-toml = "0.5.8"
+textwrap = { workspace = true }
+toml = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_derive = { workspace = true }
@@ -24,7 +23,7 @@ cfx-execute-helper = { workspace = true }
 cfx-statedb = { workspace = true }
 cfx-storage = { workspace = true }
 cfx-vm-types = { workspace = true }
-app_dirs = "1.2.1"
+app_dirs = { workspace = true }
 dir = { workspace = true }
 ctrlc = { workspace = true }
 jsonrpc-core = { workspace = true }
@@ -34,14 +33,13 @@ jsonrpc-derive = { workspace = true }
 jsonrpc-core-client = { workspace = true }
 jsonrpc-pubsub = { workspace = true }
 jsonrpc-ws-server = { workspace = true }
-error-chain = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 cfx-types = { workspace = true }
 cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
 runtime = { workspace = true }
-slab = "0.4"
+slab = { workspace = true }
 cfxcore = { workspace = true }
 network = { workspace = true }
 db = { workspace = true }
@@ -49,28 +47,28 @@ blockgen = { workspace = true }
 txgen = { workspace = true }
 secret-store = { workspace = true }
 primitives = { workspace = true }
-log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
+log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 rlp = { workspace = true }
 keccak-hash = { workspace = true }
 rand = { workspace = true }
-rand_08 = {package = "rand", version = "0.8.0"}
+rand_08 = { package = "rand", version = "0.8.0"}
 kvdb-rocksdb = { workspace = true }
-tempdir = "0.3"
+tempdir = { workspace = true }
 rustc-hex = { workspace = true }
 threadpool = { workspace = true }
 metrics = { workspace = true }
 delegate = { workspace = true }
-transient-hashmap = "0.4"
+transient-hashmap = { workspace = true }
 rand_xorshift = "0.2"
 itertools = { workspace = true }
 order-stat = "0.1"
-futures01 = "0.1"
-futures = { version = "0.3.3", features = ["compat"] }
+futures01 = { workspace = true }
+futures = { workspace = true, features = ["compat"] }
 rayon = { workspace = true }
 throttling = { workspace = true }
-tokio = { version = "1.6", features = ["full"] }
-tokio-stream = "0.1.4"
-tokio-timer = "0.2.13"
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
+tokio-timer = { workspace = true }
 malloc_size_of = { workspace = true }
 random-crash = { workspace = true }
 cfx-parameters = { workspace = true }
@@ -91,11 +89,10 @@ diem-types = { path = "../cfxcore/core/src/pos/types" }
 pow-types = {path = "../cfxcore/core/src/pos/types/pow-types" }
 executor-types = { path = "../cfxcore/core/src/pos/types/executor-types" }
 executor = { path = "../cfxcore/core/src/pos/consensus/executor" }
-fail = { workspace = true }
 storage-interface = { path = "../cfxcore/core/src/pos/storage/storage-interface" }
 consensus-types = {path = "../cfxcore/core/src/pos/consensus/consensus-types" }
-rpassword = "5.0.1"
-static_assertions = "1.1.0"
+rpassword = { workspace = true }
+static_assertions = { workspace = true }
 parity-version = { workspace = true }
 solidity-abi = { workspace = true }
 bls-signatures = { workspace = true }
@@ -115,6 +112,8 @@ cfx-rpc-primitives = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfx-rpc = { workspace = true }
 cfx-rpc-utils = { workspace = true }
+cfx-rpc-builder = { workspace = true }
+jsonrpsee = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.3"

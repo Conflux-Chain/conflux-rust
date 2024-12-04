@@ -20,7 +20,6 @@ cfx-statedb = { workspace = true }
 cfx-storage = { workspace = true }
 cfx-vm-tracer-derive = { workspace = true }
 cfx-types = { workspace = true }
-cfx-utils = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
@@ -33,7 +32,7 @@ db = { workspace = true }
 either = "1.5.3"
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
-futures = {version="0.3.3", features = ["compat"]}
+futures = { workspace = true, features = ["compat"]}
 hashbrown = "0.7.1"
 hibitset = { workspace = true }
 itertools = { workspace = true }
@@ -45,7 +44,7 @@ kvdb-rocksdb = { workspace = true }
 lazy_static = { workspace = true }
 link-cut-tree = { workspace = true }
 log = { workspace = true }
-log4rs = { version = "1.2.0", features = ["background_rotation", "gzip"] }
+log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 lru_time_cache = "0.9.0"
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
@@ -72,11 +71,11 @@ rlp = { workspace = true }
 rlp_derive = { workspace = true }
 rustc-hex = { workspace = true }
 secret-store = { workspace = true }
-serde = { version = "1.0", features = ["rc"] }
+serde = { workspace = true, features = ["rc"] }
 serde_derive = { workspace = true }
 serde_json = { workspace = true }
 siphasher = "0.3"
-slab = "0.4"
+slab = { workspace = true }
 solidity-abi = { workspace = true }
 solidity-abi-derive = { workspace = true }
 sha3-macro = { workspace = true }
@@ -84,13 +83,13 @@ sqlite = "0.25"
 sqlite3-sys = "0.12"
 static_assertions = "1.1.0"
 strfmt = "0.1"
-tempdir = "0.3"
-threadpool = "1.0"
+tempdir = { workspace = true }
+threadpool = { workspace = true }
 throttling = { workspace = true }
-toml = "0.5.8"
-tokio = { version = "1.6", features = ["full"] }
-tokio-timer = "0.2.13"
-tokio-stream = "0.1.4"
+toml = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tokio-timer = { workspace = true }
+tokio-stream = { workspace = true }
 unexpected = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
@@ -98,7 +97,7 @@ smart-default = "0.6.0"
 bls-signatures = { workspace = true }
 tiny-keccak = { workspace = true,  features = ["keccak"]}
 bcs = "0.1.2"
-async-trait = "0.1"
+async-trait = { workspace = true }
 num-derive = { version = "0.3.3", default-features = false }
 thiserror = { workspace = true }
 fallible = { path = "src/pos/common/fallible" }
@@ -126,7 +125,7 @@ anyhow = { workspace = true }
 once_cell = { workspace = true }
 move-core-types = { path = "src/pos/types/move-core-types" }
 pow-types = {path = "src/pos/types/pow-types" }
-async-oneshot = "0.5.0"
+async-oneshot = { workspace = true }
 proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 diem-temppath = { path = "src/pos/common/temppath" }
@@ -152,7 +151,6 @@ cfx-vm-types = { workspace = true, features = ["testonly_code"] }
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 consensus-types = { path = "src/pos/consensus/consensus-types", features = ["fuzzing"] }
-#tokio = { version = "0.2.11", features = ["time"] }
 
 [features]
 default = []
