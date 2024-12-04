@@ -3,6 +3,7 @@ name = "cfx-types"
 version = "0.2.0"
 license = "GPL-3.0"
 description = "Conflux types"
+edition = "2021"
 
 [dependencies]
 ethereum-types = { workspace = true }

@@ -103,7 +103,7 @@ class RpcErrorTest(Web3Base):
             wait_ms(1000)
             self.w3.eth.send_raw_transaction(signed["raw_transaction"])
         except Exception as e:
-            assert_equal(str(e), "{'code': -32603, 'message': 'replacement transaction underpriced'}")
+            assert_equal(str(e), "{'code': -32603, 'message': 'already known'}")
             return
         
     def zero_gas_price(self):

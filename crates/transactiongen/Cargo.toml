@@ -15,15 +15,15 @@ cfx-bytes = { workspace = true }
 primitives = { workspace = true }
 parking_lot = { workspace = true }
 rlp = { workspace = true }
-rand = "0.7"
-rustc-hex = "2.1"
+rand = { workspace = true }
+rustc-hex = { workspace = true }
 secret-store = { workspace = true }
 network = { workspace = true }
 cfxkey = { workspace = true }
-log = "0.4"
+log = { workspace = true }
 db = { workspace = true }
-toml = "0.5.8"
+toml = { workspace = true }
 io = { workspace = true }
 priority-send-queue = { workspace = true }
 metrics = { workspace = true }
-lazy_static = "1.4"
+lazy_static = { workspace = true }

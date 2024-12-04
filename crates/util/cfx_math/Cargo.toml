@@ -4,6 +4,7 @@ homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfx-math"
 version = "0.1.0"
+edition = "2021"
 
 [dependencies]
 num = "0.2"

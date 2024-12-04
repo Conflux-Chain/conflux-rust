@@ -9,7 +9,7 @@ extern crate substrate_bn as bn;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
-extern crate error_chain;
+extern crate cfx_util_macros;
 extern crate sha3_macro;
 
 /// Ethereum Builtins: Implements Ethereum's builtin contracts, ranging from

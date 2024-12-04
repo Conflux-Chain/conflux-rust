@@ -9,7 +9,7 @@ cfx-types = { workspace = true }
 cfg-if = "0.1"
 hashbrown = "0.7.1"
 winapi = "0.3.7"
-slab = "0.4"
+slab = { workspace = true }
 parking_lot = { workspace = true }
 smallvec = "1.4"
 

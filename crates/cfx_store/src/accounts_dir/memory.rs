@@ -14,13 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use cfxkey::Address;
+use cfx_types::Address;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
 use super::KeyDirectory;
-use Error;
-use SafeAccount;
+use crate::{Error, SafeAccount};
 
 /// Accounts in-memory storage.
 #[derive(Default)]

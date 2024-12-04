@@ -9,11 +9,11 @@ edition = "2021"
 cfx-types = { workspace = true }
 edit-distance = { workspace = true }
 parity-crypto = { workspace = true }
-parity-secp256k1 = { workspace = true }
+secp256k1 = { workspace = true, features = ["global-context", "rand", "recovery"]  }
 lazy_static = { workspace = true }
 log = { workspace = true }
 parity-wordlist = { workspace = true }
-rand = { workspace = true }
+rand = { version = "0.8" }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }

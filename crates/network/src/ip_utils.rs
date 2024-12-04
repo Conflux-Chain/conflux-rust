@@ -23,6 +23,7 @@
 use crate::{node_table::NodeEndpoint, NatType};
 use igd::{search_gateway, PortMappingProtocol, SearchOptions};
 use ipnetwork::IpNetwork;
+use log::{debug, trace};
 use natpmp::{Natpmp, Protocol, Response};
 use std::{
     io,
