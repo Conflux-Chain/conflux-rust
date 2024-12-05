@@ -83,6 +83,9 @@ sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = 
 [profile.test]
 debug-assertions = true
 
+[profile.test.package]
+parity-secp256k1 = { opt-level = 3 }
+
 [profile.bench]
 debug-assertions = true
 overflow-checks = true

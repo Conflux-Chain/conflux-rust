@@ -18,7 +18,7 @@ use super::{Address, Error, Public, Secret, SECP256K1};
 use cfx_types::address_util::AddressUtil;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parity_crypto::Keccak256 as _;
-use secp256k1::{PublicKey, SecretKey};
+use secp256k1::key;
 use std::fmt;
 
 pub fn public_to_address(public: &Public, type_nibble: bool) -> Address {
@@ -63,9 +63,10 @@ impl KeyPair {
     /// Create a pair from secret key
     pub fn from_secret(secret: Secret) -> Result<KeyPair, Error> {
         let context = &SECP256K1;
-        let s: SecretKey = SecretKey::from_slice(&secret[..])?;
-        let pub_key = PublicKey::from_secret_key(context, &s);
-        let serialized = pub_key.serialize_uncompressed();
+        let s: key::SecretKey =
+            key::SecretKey::from_slice(context, &secret[..])?;
+        let pub_key = key::PublicKey::from_secret_key(context, &s)?;
+        let serialized = pub_key.serialize_vec(context, false);
 
         let mut public = Public::default();
         public.as_bytes_mut().copy_from_slice(&serialized[1..65]);
@@ -79,8 +80,9 @@ impl KeyPair {
         Self::from_secret(Secret::from_unsafe_slice(slice)?)
     }
 
-    pub fn from_keypair(sec: SecretKey, publ: PublicKey) -> Self {
-        let serialized = publ.serialize_uncompressed();
+    pub fn from_keypair(sec: key::SecretKey, publ: key::PublicKey) -> Self {
+        let context = &SECP256K1;
+        let serialized = publ.serialize_vec(context, false);
         let secret = Secret::from(sec);
         let mut public = Public::default();
         public.as_bytes_mut().copy_from_slice(&serialized[1..65]);
