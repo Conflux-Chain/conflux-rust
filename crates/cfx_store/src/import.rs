@@ -22,7 +22,7 @@ use crate::{
     },
     Error,
 };
-use cfx_types::Address;
+use cfxkey::Address;
 use dir;
 
 /// Import an account from a file.
