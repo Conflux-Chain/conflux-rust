@@ -2,7 +2,7 @@ use alloy_rpc_types_trace::geth::{
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace,
     TraceResult,
 };
-use cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
+use cfx_rpc_eth_types::{BlockNumber, Bundle, SimulationContext, TransactionRequest};
 use cfx_types::H256;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
@@ -39,8 +39,11 @@ pub trait DebugApi {
 
     #[method(name = "traceCallMany")]
     async fn debug_trace_call_many(
-        &self, requests: Vec<TransactionRequest>,
-        block_number: Option<BlockNumber>,
+        &self, 
+        bundle: Bundle,
+        simulation_context: SimulationContext,
+        // state_override: Option<StateOverride>,
+        // timeout: Option<Duration>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<Vec<GethTrace>>;
 }

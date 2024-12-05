@@ -6,7 +6,7 @@ use alloy_rpc_types_trace::geth::{
 };
 use async_trait::async_trait;
 use cfx_rpc_eth_api::DebugApiServer;
-use cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
+use cfx_rpc_eth_types::{BlockNumber, Bundle, SimulationContext,TransactionRequest};
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 use cfx_types::{AddressSpaceUtil, Space, H256, U256};
 use cfxcore::{
@@ -158,12 +158,16 @@ impl DebugApi {
     }
 
     pub fn trace_call_many(
-        &self, requests: Vec<TransactionRequest>,
-        block_number: Option<BlockNumber>,
+        &self, 
+        bundle: Bundle,
+        simulation_context: SimulationContext,
+        // state_override: Option<StateOverride>,
+        // timeout: Option<Duration>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> Result<Vec<GethTrace>, CoreError> {
+        let requests = bundle.transactions;
         let opts = opts.unwrap_or_default();
-        let block_num = block_number.unwrap_or_default();
+        let block_num = simulation_context.block_number.unwrap_or_default();
 
         let epoch_num = self
             .get_block_epoch_num(block_num)
@@ -382,11 +386,14 @@ impl DebugApiServer for DebugApi {
     }
 
     async fn debug_trace_call_many(
-        &self, requests: Vec<TransactionRequest>,
-        block_number: Option<BlockNumber>,
+        &self, 
+        bundle: Bundle,
+        simulation_context: SimulationContext,
+        // state_override: Option<StateOverride>,
+        // timeout: Option<Duration>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<Vec<GethTrace>> {
-        self.trace_call_many(requests, block_number, opts)
+        self.trace_call_many(bundle, simulation_context, opts)
             .map_err(|e| e.into())
     }
 }
