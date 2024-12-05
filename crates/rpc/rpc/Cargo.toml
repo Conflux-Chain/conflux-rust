@@ -43,3 +43,8 @@ log = { workspace = true }
 runtime = { workspace = true }
 futures = { workspace = true }
 cfx-util-macros = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-timer = { workspace = true }
+serde = { workspace = true }

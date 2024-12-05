@@ -202,7 +202,6 @@ http = "1.0"
 # async
 tokio = "1.40"
 tokio-stream = "0.1.11"
-tokio-timer = "0.2.13"
 tokio-util = "0.7.4"
 tokio-test = "0.4.1"
 futures = "0.3.30"
@@ -219,8 +218,10 @@ tower-http = "0.5"
 reqwest = { version = "0.12", default-features = false }
 pin-project = "1.0.12"
 mio = "0.6.8"
+tracing-futures = "0.2"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package="tokio", features = ["full"] }
+tokio-timer = "0.2.13"
 
 # crypto & hash
 fixed-hash = "0.5"
