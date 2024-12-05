@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "2.4.0"
+version = "2.4.1-testnet"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc",
@@ -1488,7 +1488,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.4.0"
+version = "2.4.1-testnet"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
