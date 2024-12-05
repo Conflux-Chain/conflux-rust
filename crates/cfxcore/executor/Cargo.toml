@@ -42,9 +42,9 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 bls-signatures = { workspace = true }
 tiny-keccak = { workspace = true,  features = ["keccak"]}
-diem-crypto = { path = "../core/src/pos/crypto/crypto" }
-diem-types = { path = "../core/src/pos/types" }
-pow-types = {path = "../core/src/pos/types/pow-types" }
+diem-crypto = { workspace = true }
+diem-types = { workspace = true }
+pow-types = { workspace = true }
 impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
 typemap = { package = "typemap-ors", version = "1.0"}
