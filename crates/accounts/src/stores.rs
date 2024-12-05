@@ -22,7 +22,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use cfx_types::Address;
+use cfxkey::Address;
 use log::{trace, warn};
 
 use crate::AccountMeta;
