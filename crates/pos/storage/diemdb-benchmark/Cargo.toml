@@ -1,0 +1,28 @@
+[package]
+name = "diemdb-benchmark"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "DiemDb benchmark"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+byteorder = "1.4.3"
+indicatif = "0.15.0"
+itertools = { version = "0.10.0", default-features = false }
+rand = "0.8.3"
+structopt = "0.3.21"
+
+pos-ledger-db = { workspace = true }
+diem-jellyfish-merkle = { workspace = true }
+diem-config = { workspace = true }
+diem-types = { workspace = true }
+storage-interface = { workspace = true }
+
+[features]
+default = []
+fuzzing = ["diem-types/fuzzing"]

@@ -1,0 +1,64 @@
+[package]
+name = "pos-ledger-db"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem diemdb"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = { workspace = true }
+arc-swap = "1.2.0"
+byteorder = "1.4.3"
+itertools = { workspace = true }
+once_cell = { workspace = true }
+num-derive = "0.3.3"
+num-traits = "0.2.14"
+proptest = { version = "1.0.0", optional = true }
+proptest-derive = { version = "0.3.0", optional = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+accumulator = { workspace = true }
+bcs = "0.1.2"
+diem-config = { workspace = true }
+diem-crypto = { workspace = true }
+diem-jellyfish-merkle = { workspace = true }
+diem-logger = { workspace = true }
+diem-metrics = { workspace = true }
+diem-infallible = { workspace = true }
+diem-proptest-helpers = { workspace = true, optional = true }
+diem-temppath = { workspace = true, optional = true }
+diem-types = { workspace = true }
+num-variants = { workspace = true }
+schemadb = { workspace = true }
+storage-interface = { workspace = true }
+consensus-types = { workspace = true }
+executor-types = { workspace = true }
+
+[dev-dependencies]
+proptest = "1.0.0"
+proptest-derive = "0.3.0"
+rand = "0.8.3"
+
+diem-jellyfish-merkle = { workspace = true, features = ["fuzzing"] }
+diem-proptest-helpers = { workspace = true }
+diem-temppath = { workspace = true }
+diem-types = { workspace = true, features = ["fuzzing"] }
+move-core-types = { workspace = true }
+
+[features]
+default = []
+diemsum = []
+fuzzing = [
+    "proptest",
+    "proptest-derive",
+    "diem-proptest-helpers",
+    "diem-temppath",
+    "diem-crypto/fuzzing",
+    "diem-jellyfish-merkle/fuzzing",
+    "diem-types/fuzzing",
+]

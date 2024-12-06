@@ -24,7 +24,7 @@ cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
-channel = { path = "src/pos/common/channel" }
+channel = { workspace = true }
 clap = { workspace = true }
 dag = { workspace = true }
 derivative = "2.0.2"
@@ -32,7 +32,7 @@ db = { workspace = true }
 either = "1.5.3"
 fallible-iterator = "0.2"
 fs_extra = "1.1.0"
-futures = { workspace = true, features = ["compat"]}
+futures = { workspace = true, features = ["compat"] }
 hashbrown = "0.7.1"
 hibitset = { workspace = true }
 itertools = { workspace = true }
@@ -62,8 +62,8 @@ primitives = { workspace = true }
 priority-send-queue = { workspace = true }
 prometheus = { version = "0.7.0", default-features = false }
 rand = { workspace = true }
-rand_08 = {package = "rand", version = "0.8"}
-rand_xorshift="0.2"
+rand_08 = { package = "rand", version = "0.8" }
+rand_xorshift = "0.2"
 rangetools = "0.1.4"
 random-crash = { workspace = true }
 rayon = { workspace = true }
@@ -95,41 +95,41 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 smart-default = "0.6.0"
 bls-signatures = { workspace = true }
-tiny-keccak = { workspace = true,  features = ["keccak"]}
+tiny-keccak = { workspace = true, features = ["keccak"] }
 bcs = "0.1.2"
 async-trait = { workspace = true }
 num-derive = { version = "0.3.3", default-features = false }
 thiserror = { workspace = true }
-fallible = { path = "src/pos/common/fallible" }
+fallible = { workspace = true }
 mirai-annotations = { version = "1.10.1", default-features = false }
-bounded-executor = { path = "src/pos/common/bounded-executor" }
-diem-config = { path = "src/pos/config" }
-diem-crypto = { path = "src/pos/crypto/crypto" }
-diem-infallible = { path = "src/pos/common/infallible" }
-diem-logger = { path = "src/pos/common/logger" }
-diem-metrics = { path = "src/pos/common/metrics" }
-diem-secure-storage = { path = "src/pos/secure/storage" }
-diem-types = { path = "src/pos/types" }
-executor-types = { path = "src/pos/types/executor-types" }
-executor = {path = "src/pos/consensus/executor" }
-consensus-types = { path = "src/pos/consensus/consensus-types" }
-safety-rules = { path = "src/pos/consensus/safety-rules" }
-pos-ledger-db = { path = "src/pos/storage/pos-ledger-db" }
-cached-pos-ledger-db = { path = "src/pos/storage/cached-pos-ledger-db" }
-schemadb = { path = "src/pos/storage/schemadb" }
-storage-interface = { path = "src/pos/storage/storage-interface" }
-short-hex-str = { path = "src/pos/common/short-hex-str" }
-subscription-service = { path = "src/pos/common/subscription-service" }
+bounded-executor = { workspace = true }
+diem-config = { workspace = true }
+diem-crypto = { workspace = true }
+diem-infallible = { workspace = true }
+diem-logger = { workspace = true }
+diem-metrics = { workspace = true }
+diem-secure-storage = { workspace = true }
+diem-types = { workspace = true }
+executor-types = { workspace = true }
+executor = { workspace = true }
+consensus-types = { workspace = true }
+safety-rules = { workspace = true }
+pos-ledger-db = { workspace = true }
+cached-pos-ledger-db = { workspace = true }
+schemadb = { workspace = true }
+storage-interface = { workspace = true }
+short-hex-str = { workspace = true }
+subscription-service = { workspace = true }
 fail = { workspace = true }
 anyhow = { workspace = true }
 once_cell = { workspace = true }
-move-core-types = { path = "src/pos/types/move-core-types" }
-pow-types = {path = "src/pos/types/pow-types" }
+move-core-types = { workspace = true }
+pow-types = { workspace = true }
 async-oneshot = { workspace = true }
 proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
-diem-temppath = { path = "src/pos/common/temppath" }
-crash-handler = { path = "src/pos/common/crash-handler" }
+diem-temppath = { workspace = true }
+crash-handler = { workspace = true }
 heap-map = { workspace = true }
 impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
@@ -150,7 +150,7 @@ cfx-storage = { workspace = true, features = ["testonly_code"] }
 cfx-vm-types = { workspace = true, features = ["testonly_code"] }
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
-consensus-types = { path = "src/pos/consensus/consensus-types", features = ["fuzzing"] }
+consensus-types = { workspace = true, features = ["fuzzing"] }
 
 [features]
 default = []

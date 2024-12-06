@@ -1,0 +1,21 @@
+[package]
+name = "diem-storage-inspector"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+structopt = "0.3.21"
+tempfile = "3.2.0"
+
+pos-ledger-db = { workspace = true }
+diem-config = { workspace = true }
+diem-crypto = { workspace = true }
+diem-types = { workspace = true }
+diem-logger = { workspace = true }
+storage-interface = { workspace = true }
