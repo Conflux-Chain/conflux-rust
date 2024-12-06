@@ -20,6 +20,7 @@ import time
 from typing import Union
 import random
 
+from cfx_account import Account as CoreAccount
 from eth_account import Account
 
 from .authproxy import JSONRPCException
@@ -111,6 +112,14 @@ class ConfluxTestFramework:
             if "core" in space or "core" == space:
                 self.core_secrets.append(Account.create().key.hex())
             
+    @property
+    def core_accounts(self):
+        return [CoreAccount.from_key(key, network_id=DEFAULT_PY_TEST_CHAIN_ID) for key in self.core_secrets]
+    
+    @property
+    def evm_accounts(self):
+        return [Account.from_key(key) for key in self.evm_secrets]
+
     def main(self):
         """Main function. This should not be overridden by the subclass test scripts."""
 
