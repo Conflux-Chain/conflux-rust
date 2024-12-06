@@ -79,7 +79,7 @@ members = [
     "crates/pos/common/time-service",
     "crates/pos/config/generate-key",
     "crates/pos/config/global-constants",
-    "crates/pos/config/consensus-types",
+    "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
     "crates/pos/consensus/executor",
     "crates/pos/consensus/safety-rules",
@@ -210,8 +210,8 @@ diem-temppath = { path = "./crates/pos/common/temppath" }
 diem-time-service = { path = "./crates/pos/common/time-service" }
 generate-key = { path = "./crates/pos/config/generate-key" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
-consensus-types = { path = "./crates/pos/config/consensus-types" }
 diem-config = { path = "./crates/pos/config/config" }
+consensus-types = { path = "./crates/pos/consensus/consensus-types" }
 executor = { path = "./crates/pos/consensus/executor" }
 safety-rules = { path = "./crates/pos/consensus/safety-rules" }
 diem-crypto = { path = "./crates/pos/crypto/crypto" }

@@ -21,20 +21,24 @@ pub fn generate_key() -> Ed25519PrivateKey {
     Ed25519PrivateKey::generate(&mut rng)
 }
 
-pub fn generate_and_save_key<P: AsRef<Path>>(output_file: P) -> Ed25519PrivateKey {
+pub fn generate_and_save_key<P: AsRef<Path>>(
+    output_file: P,
+) -> Ed25519PrivateKey {
     let key = generate_key();
     save_key(key, output_file)
 }
 
-pub fn save_key<P: AsRef<Path>>(key: Ed25519PrivateKey, output_file: P) -> Ed25519PrivateKey {
+pub fn save_key<P: AsRef<Path>>(
+    key: Ed25519PrivateKey, output_file: P,
+) -> Ed25519PrivateKey {
     let output_file_path = output_file.as_ref();
     if output_file_path.exists() && !output_file_path.is_file() {
         panic!("Specified output file path is a directory");
     }
 
     let encoded = bcs::to_bytes(&key).expect("Unable to serialize keys");
-    let mut file =
-        File::create(output_file_path).expect("Unable to create/truncate file at specified path");
+    let mut file = File::create(output_file_path)
+        .expect("Unable to create/truncate file at specified path");
     file.write_all(&encoded)
         .expect("Unable to write key to file at specified path");
     key
@@ -42,7 +46,8 @@ pub fn save_key<P: AsRef<Path>>(key: Ed25519PrivateKey, output_file: P) -> Ed255
 
 pub fn load_key<P: AsRef<Path>>(input_file: P) -> Ed25519PrivateKey {
     let input_file_path = input_file.as_ref();
-    let data = fs::read(input_file_path).expect("Unable to read key at the specified path");
+    let data = fs::read(input_file_path)
+        .expect("Unable to read key at the specified path");
     bcs::from_bytes(&data).expect("Unable to parse key")
 }
 
