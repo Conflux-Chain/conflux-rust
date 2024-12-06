@@ -36,6 +36,7 @@ class TestGetTxReceiptByHash(RpcClient):
         assert_equal(receipt['storageCoveredBySponsor'], False)
         assert_equal(len(receipt['storageReleased']), 0)
         assert_equal(receipt['txExecErrorMsg'], None)
+        assert_equal(receipt['gasFee'], "0x5208")
 
     def test_receipt_with_storage_changes(self):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)

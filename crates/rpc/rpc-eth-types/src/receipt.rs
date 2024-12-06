@@ -44,6 +44,8 @@ pub struct Receipt {
     pub cumulative_gas_used: U256,
     /// Gas used
     pub gas_used: U256,
+    /// The gas fee charged in the execution of the transaction.
+    pub gas_fee: U256,
     /// Contract address
     pub contract_address: Option<H160>,
     /// Logs

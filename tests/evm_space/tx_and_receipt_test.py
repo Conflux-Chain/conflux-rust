@@ -42,6 +42,7 @@ class EvmTx2ReceiptTest(Web3Base):
         receipt = self.w3.eth.wait_for_transaction_receipt(return_tx_hash)
         assert_equal(receipt["status"], 1)
         assert_equal(receipt["gasUsed"], 21000)
+        assert_equal(receipt["gasFee"], "0x2673c")
         assert_equal(receipt["txExecErrorMsg"], None)
 
         tx = self.w3.eth.get_transaction(return_tx_hash)

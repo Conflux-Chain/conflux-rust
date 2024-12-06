@@ -355,6 +355,7 @@ impl EthApi {
             block_number: block_height,
             cumulative_gas_used: receipt.accumulated_gas_used,
             gas_used,
+            gas_fee: receipt.gas_fee,
             contract_address,
             logs,
             logs_bloom: receipt.log_bloom,
