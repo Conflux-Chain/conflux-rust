@@ -27,7 +27,6 @@ diem-secure-storage = { workspace = true }
 diem-time-service = { workspace = true }
 diem-types = { workspace = true }
 diem-temppath = { workspace = true }
-transaction-builder = { path = "../../language/transaction-builder" }
 
 [dev-dependencies]
 diem-config = { workspace = true, features = ["fuzzing"] }

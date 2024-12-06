@@ -31,7 +31,6 @@ tokio-stream = { workspace = true }
 tokio-util = { workspace = true, features = ["compat"] }
 
 executor = { workspace = true }
-executor-test-helpers = { path = "../../../execution/executor-test-helpers", optional = true }
 executor-types = { workspace = true }
 diem-jellyfish-merkle = { workspace = true }
 bcs = "0.1.2"
@@ -42,7 +41,6 @@ diem-logger = { workspace = true }
 diem-secure-push-metrics = { workspace = true }
 diem-temppath = { workspace = true }
 diem-types = { workspace = true }
-diem-vm = { path = "../../../language/diem-vm" }
 pos-ledger-db = { workspace = true }
 storage-interface = { workspace = true }
 
@@ -51,7 +49,6 @@ proptest = "1.0.0"
 warp = "0.3.0"
 
 backup-service = { path = "../backup-service" }
-executor-test-helpers = { path = "../../../execution/executor-test-helpers" }
 pos-ledger-db = { workspace = true, features = ["fuzzing"] }
 diem-config = { workspace = true }
 diem-proptest-helpers = { workspace = true }

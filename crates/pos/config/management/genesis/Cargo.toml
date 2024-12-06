@@ -29,12 +29,8 @@ diem-network-address-encryption = { workspace = true }
 diem-secure-storage = { workspace = true }
 diem-types = { workspace = true }
 diem-temppath = { workspace = true }
-diem-vm = { path = "../../../language/diem-vm" }
 pos-ledger-db = { workspace = true }
 storage-interface = { workspace = true }
-transaction-builder = { path = "../../../language/transaction-builder" }
-vm-genesis = { path = "../../../language/tools/vm-genesis" }
-
 [dev-dependencies]
 diem-config = { workspace = true, features = ["fuzzing"] }
 

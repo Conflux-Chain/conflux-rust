@@ -20,9 +20,6 @@ thiserror = "1.0.24"
 bcs = "0.1.2"
 diem-config = { workspace = true }
 diem-crypto = { workspace = true }
-diem-client = { path = "../../sdk/client", features = [
-    "blocking",
-], default-features = false }
 diem-logger = { workspace = true }
 diem-temppath = { workspace = true }
 diem-types = { workspace = true }

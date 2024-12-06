@@ -19,7 +19,6 @@ thiserror = "1.0.24"
 toml = { version = "0.5.8", default-features = false }
 
 bcs = "0.1.2"
-diem-client = { path = "../../../sdk/client", features = ["blocking"], default-features = false }
 diem-config = { workspace = true }
 diem-crypto = { workspace = true }
 diem-global-constants = { workspace = true }
@@ -28,7 +27,6 @@ diem-secure-storage = { workspace = true }
 diem-types = { workspace = true }
 diem-temppath = { workspace = true }
 fallible = { workspace = true }
-transaction-builder = { path = "../../../language/transaction-builder" }
 
 [features]
 testing = []

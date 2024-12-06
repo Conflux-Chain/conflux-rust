@@ -13,7 +13,6 @@ anyhow = "1.0.38"
 structopt = "0.3.21"
 tempfile = "3.2.0"
 
-compiled-stdlib = { path = "../../language/diem-framework/compiled" }
 pos-ledger-db = { workspace = true }
 diem-config = { workspace = true }
 diem-crypto = { workspace = true }
