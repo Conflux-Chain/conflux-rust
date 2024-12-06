@@ -16,6 +16,7 @@ import socket
 import threading
 import jsonrpcclient.exceptions
 import solcx
+import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
 from cfx_account.signers.local import LocalAccount  as CfxLocalAccount
