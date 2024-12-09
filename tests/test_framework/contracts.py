@@ -101,9 +101,12 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
     def cfx_contract(self, name) -> Type[ConfluxContract]:
         return cfx_contract(name, self)
     
-    def deploy_contract(self, name) -> ConfluxContract:
-        tx_hash = self.cfx_contract(name).constructor().transact({
-            "gasPrice": 1})
+    def deploy_contract(self, name, transact_args = {}) -> ConfluxContract:
+        if not transact_args:
+            transact_args = {
+                "gasPrice": 1
+            }
+        tx_hash = self.cfx_contract(name).constructor().transact(transact_args)
         receipt = tx_hash.executed()
         return self.cfx_contract(name)(cast(str, receipt["contractCreated"]))
     
