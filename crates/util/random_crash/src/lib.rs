@@ -5,7 +5,6 @@
 use lazy_static::lazy_static;
 /// This module can trigger random process crashes during testing.
 /// This is only used to insert crashes before db modifications.
-
 use log::info;
 
 use parking_lot::Mutex;
