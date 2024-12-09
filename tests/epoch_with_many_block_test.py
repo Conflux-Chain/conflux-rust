@@ -12,7 +12,7 @@ from test_framework.util import *
 TX_PER_BLOCK = 2571
 EXPECTED_EPOCH_VOLUME = 9
 MIN_NATIVE_BASE_PRICE = 10
-FORK_NUM = 2
+FORK_NUM = 3
 
 LAST_DUPLICATE_RATE = 0
 
@@ -81,7 +81,7 @@ class EpochWithManyBlockTest(ConfluxTestFramework):
         self.setup_nodes()
         
     # generate once
-    def gen_local_tx_pool(self, secrets: List[str], nonce: int=0):
+    def gen_local_tx_pool(self, secrets: List[str], nonce):
         txs = []
         for secret in secrets:
             txs.append(self.rpc.new_typed_tx(
@@ -172,8 +172,9 @@ class EpochWithManyBlockTest(ConfluxTestFramework):
         # time.sleep(5)
         # print latest epoch number
         print(f"latest epoch number: {self.rpc.epoch_number()}")
-        forks = self.test_with_duplicate_rate(blocks[-6], 0.5, tx_nonce=0)
-        forks = self.test_with_duplicate_rate(forks[0].tail_hash, 0.7, tx_nonce=1)
+        self.test_with_duplicate_rate(blocks[-6], 0.5, tx_nonce=0)
+        blocks = self.rpc.generate_blocks(20)
+        self.test_with_duplicate_rate(blocks[-6], 0.7, tx_nonce=1)
         
         self.log.info("Pass")
 
