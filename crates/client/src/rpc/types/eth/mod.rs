@@ -6,7 +6,7 @@ pub use cfx_rpc_eth_types::{
     eth_pubsub,
     trace::{LocalizedTrace, Res},
     trace_filter::TraceFilter,
-    AccountPendingTransactions, Block, BlockNumber, EthRpcLogFilter,
-    FilterChanges, Header, Log, Receipt, SyncInfo, SyncStatus, Transaction,
+    AccountPendingTransactions, Block, BlockNumber, Bundle, EthRpcLogFilter,
+    FilterChanges, Header, Log, Receipt, SimulationContext, SyncInfo, SyncStatus, Transaction,
     TransactionRequest,
 };
