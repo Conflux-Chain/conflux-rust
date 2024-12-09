@@ -10,9 +10,9 @@ from test_framework.util import *
 
 # 54,000,000 / 21000 = 2571.4x
 TX_PER_BLOCK = 2571
-EXPECTED_EPOCH_VOLUME = 9
+EXPECTED_EPOCH_VOLUME = 22
 MIN_NATIVE_BASE_PRICE = 10
-FORK_NUM = 3
+FORK_NUM = 7
 
 LAST_DUPLICATE_RATE = 0
 
@@ -52,8 +52,8 @@ class Fork:
 class EpochWithManyBlockTest(ConfluxTestFramework):
     # DAG structure:
     # ----| block |----| block |----| block |----| block |----| block |----| block |----| block |----| block |--
-    #   |                                                                |
-    #    -| block |----| block |----| block |----| block |----| block |- 
+    #   |                                                                            |
+    #    -| block |----| block |----| block |----| block |----| block |--------------
     #   |                                                                |
     #    -| block |----| block |----| block |----| block |----| block |- 
     #   |                                                                |
@@ -151,13 +151,16 @@ class EpochWithManyBlockTest(ConfluxTestFramework):
         shared_tx_list = self.gen_local_tx_pool(self.core_secrets[0:tx_list_volume_with_duplicate], nonce=tx_nonce)
             
         for index, fork in enumerate(forks):
-            self.log.info("start to generate tx list")
+            if index == 0:
+                fork.grow_length(block_per_fork+1)
+                continue
+            self.log.info(f"start to generate non-duplicate tx list of length {tx_list_volume-tx_list_volume_with_duplicate}")
             fork_tx_list = shared_tx_list + \
-                self.gen_local_tx_pool(self.core_secrets[index*tx_list_volume:(index+1)*tx_list_volume-tx_list_volume_with_duplicate], nonce=tx_nonce)
-
-        
+                self.gen_local_tx_pool(self.core_secrets[(index-1)*tx_list_volume+tx_list_volume_with_duplicate:index*tx_list_volume], nonce=tx_nonce)
             random.shuffle(fork_tx_list)
+            self.log.info(f"tx list length: {len(fork_tx_list)}")
             fork.grow_with_tx_list(fork_tx_list)
+            assert len(fork.chain) == block_per_fork + 1, f"fork {index} chain length is not {block_per_fork + 1}, but {len(fork.chain)}"
         
         forks[0].grow_with_referee([fork.tail_hash for fork in forks[1:]])
         forks[0].grow_length(20)
@@ -172,7 +175,7 @@ class EpochWithManyBlockTest(ConfluxTestFramework):
         # time.sleep(5)
         # print latest epoch number
         print(f"latest epoch number: {self.rpc.epoch_number()}")
-        self.test_with_duplicate_rate(blocks[-6], 0.5, tx_nonce=0)
+        self.test_with_duplicate_rate(blocks[-6], 0.6, tx_nonce=0)
         blocks = self.rpc.generate_blocks(20)
         self.test_with_duplicate_rate(blocks[-6], 0.7, tx_nonce=1)
         
