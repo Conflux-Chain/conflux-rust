@@ -10,10 +10,12 @@ target
 .phabricator*
 build/
 build_clippy/
-**/blockchain_db/
+**/blockchain_data/
+**/pos_db/
 **/sqlite_db/
 **/net_config/
 **/*.log
+**/stderr.txt
 **/testnet.toml
 *~
 .DS_Store
