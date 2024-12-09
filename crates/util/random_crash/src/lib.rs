@@ -5,10 +5,7 @@
 use lazy_static::lazy_static;
 /// This module can trigger random process crashes during testing.
 /// This is only used to insert crashes before db modifications.
-// #[macro_use]
-// extern crate lazy_static;
-// #[macro_use]
-// extern crate log;
+
 use log::info;
 
 use parking_lot::Mutex;
