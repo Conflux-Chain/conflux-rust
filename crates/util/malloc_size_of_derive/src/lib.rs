@@ -10,8 +10,8 @@
 
 //! A crate for deriving the MallocSizeOf trait.
 
-use synstructure::{decl_derive,quote};
 use syn::parse_quote;
+use synstructure::{decl_derive, quote};
 
 #[cfg(not(test))]
 decl_derive!([MallocSizeOf, attributes(ignore_malloc_size_of)] => malloc_size_of_derive);

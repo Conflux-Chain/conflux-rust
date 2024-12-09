@@ -29,7 +29,6 @@ mod worker;
 use mio::{deprecated::NotifyError, Poll, Token};
 use std::{cell::Cell, error, fmt};
 
-
 thread_local! {
     /// Stack size
     /// Should be modified if it is changed in Rust since it is no way
