@@ -36,6 +36,7 @@ use std::{
     sync::{Condvar as SCondvar, Mutex as SMutex},
     time::Duration,
 };
+use log::{warn, trace};
 
 const STACK_SIZE: usize = 16 * 1024 * 1024;
 

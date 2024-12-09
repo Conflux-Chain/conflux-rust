@@ -38,6 +38,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
+use log::{debug, error, warn, trace};
 
 // FIXME: Use a enum type instead for function calls.
 /// Timer ID
