@@ -572,9 +572,7 @@ impl RpcImpl {
                 // inconsistent block height
                 Ok(block)
             } else {
-                Err(RpcError::invalid_params(
-                    "Specified block header does not exist",
-                ))
+                Err(RpcError::internal_error())
             }
         };
 

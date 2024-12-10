@@ -766,7 +766,7 @@ impl EthApi {
 
             let latest_block = self
                 .fetch_block_by_height(newest_height)
-                .map_err(RpcError::invalid_params)?;
+                .map_err(|_| RpcError::internal_error())?;
 
             self.fee_history_cache
                 .update_to_latest_block(
@@ -775,7 +775,7 @@ impl EthApi {
                     block_count.as_u64(),
                     fetch_block_by_hash,
                 )
-                .map_err(RpcError::invalid_params)?;
+                .map_err(|_| RpcError::internal_error())?;
         }
 
         let mut fee_history = FeeHistory::new();
