@@ -32,6 +32,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
+use log::{trace, warn};
 use std::{
     sync::{Condvar as SCondvar, Mutex as SMutex},
     time::Duration,

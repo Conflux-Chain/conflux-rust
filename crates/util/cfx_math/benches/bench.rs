@@ -1,11 +1,3 @@
-extern crate cfx_math;
-extern crate cfx_types;
-extern crate criterion;
-extern crate num;
-extern crate rand;
-extern crate rand_xorshift;
-extern crate typenum;
-
 use cfx_math::{
     nth_inv_root,
     nth_root::{nth_root, RootDegree, RootInvParams},

@@ -5,7 +5,7 @@
 use super::{ABIDecodable, ABIDecodeError, ABIEncodable};
 use crate::{ABIPackedEncodable, ABIVariable};
 use cfx_types::{Address, U256};
-use lazy_static;
+use lazy_static::lazy_static;
 use rustc_hex::{FromHex, ToHex};
 use solidity_abi_derive::ABIVariable;
 use std::str::FromStr;
