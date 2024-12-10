@@ -778,7 +778,7 @@ use std::{
         Arc,
     },
 };
-use tokio::sync::Semaphore;
+use tokio02::sync::Semaphore;
 
 use super::snapshot_mpt_db_sqlite::{
     SnapshotMptDbSqlite, SNAPSHOT_MPT_DB_STATEMENTS,
