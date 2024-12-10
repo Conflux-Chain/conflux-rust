@@ -161,8 +161,6 @@ impl DebugApi {
         &self, 
         bundle: Bundle,
         simulation_context: SimulationContext,
-        // state_override: Option<StateOverride>,
-        // timeout: Option<Duration>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> Result<Vec<GethTrace>, CoreError> {
         let requests = bundle.transactions;
@@ -191,7 +189,7 @@ impl DebugApi {
 
         // construct transactions
         let mut transactions = Vec::with_capacity(requests.len());
-        for mut request in requests {
+        for request in requests {
             if request.from.is_none() {
                 return Err(CoreError::InvalidParam(
                     "from is required".to_string(),
@@ -201,14 +199,10 @@ impl DebugApi {
 
             // nonce auto fill
             if request.nonce.is_none() {
-                let nonce = self.consensus_graph().next_nonce(
-                    request.from.unwrap().with_evm_space(),
-                    BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(
-                        epoch_num,
-                    )),
-                    "num",
-                )?;
-                request.nonce = Some(nonce);
+                return Err(CoreError::InvalidParam(
+                    "nonce is required".to_string(),
+                    Default::default(),
+                ));
             }
 
             let signed_tx = request.sign_call(
