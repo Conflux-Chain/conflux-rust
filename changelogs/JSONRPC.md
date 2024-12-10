@@ -1,6 +1,7 @@
 # JSON-RPC CHANGELOG
 
 ## vNext
+1. Support gasFee in transaction receipt for espace RPC
 
 ## v2.4.1
 

@@ -1,7 +1,7 @@
 [package]
 name = "heap-map"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,7 +10,7 @@ malloc_size_of_derive = { workspace = true }
 malloc_size_of = { workspace = true }
 
 [dev-dependencies]
-rand = "0.8.0"
+rand = "0.8.0" # TODO: use workspace
 criterion = "0.3.0"
 
 [[bench]]

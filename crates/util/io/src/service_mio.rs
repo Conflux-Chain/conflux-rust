@@ -24,6 +24,7 @@ use crate::{
 };
 use crossbeam_deque;
 use lazy_static::lazy_static;
+use log::{debug, error, trace, warn};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use mio::{
     deprecated::{EventLoop, EventLoopBuilder, Handler, Sender},
