@@ -8,7 +8,7 @@ keywords = ["bitset", "container", "data-structures", "hierarchical"]
 categories = ["data-structures"]
 license = "MIT/Apache-2.0"
 authors = ["csheratt"]
-edition = "2015" # TODO: fail if 2018
+edition = "2021" # TODO: fail if 2018
 
 [dependencies]
 atom = "0.3"
