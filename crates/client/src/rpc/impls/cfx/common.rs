@@ -39,6 +39,7 @@ use cfx_addr::Network;
 use cfx_parameters::{
     rpc::GAS_PRICE_DEFAULT_VALUE, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
+use cfx_rpc_utils::error::jsonrpc_error_helpers::internal_rpc_err;
 use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
@@ -572,9 +573,7 @@ impl RpcImpl {
                 // inconsistent block height
                 Ok(block)
             } else {
-                Err(RpcError::invalid_params(
-                    "Specified block header does not exist",
-                ))
+                Err(internal_rpc_err("Specified block header does not exist"))
             }
         };
 
