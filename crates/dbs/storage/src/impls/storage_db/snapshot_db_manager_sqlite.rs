@@ -571,7 +571,7 @@ impl SnapshotDbManagerSqlite {
             "open mpt snapshot with write {:?}, new epoch height {}",
             snapshot_path, new_epoch_height
         );
-        let latest_mpt_semaphore_permit: tokio::sync::SemaphorePermit =
+        let latest_mpt_semaphore_permit: tokio02::sync::SemaphorePermit =
             executor::block_on(self.latest_mpt_snapshot_semaphore.acquire());
 
         if self
@@ -1576,7 +1576,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tokio::sync::Semaphore;
+use tokio02::sync::Semaphore;
 
 use super::{
     kvdb_sqlite_sharded::KvdbSqliteShardedBorrowMut,

@@ -288,6 +288,7 @@ tokio-stream = "0.1.11"
 tokio-timer = "0.2.13"
 tokio-util = "0.7.4"
 tokio-test = "0.4.1"
+tokio-io = "0.1"
 futures = "0.3.30"
 futures01 = "0.1"
 futures-core = "0.3"
@@ -304,6 +305,7 @@ pin-project = "1.0.12"
 mio = "0.6.8"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
+tokio01 = { version = "0.1", package = "tokio" }
 
 # crypto & hash
 fixed-hash = "0.5"
