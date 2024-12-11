@@ -42,7 +42,7 @@ pub trait Debug {
     #[rpc(name = "debug_traceCallMany")]
     fn debug_trace_call_many(
         &self, 
-        bundle: Bundle,
+        bundles: Vec<Bundle>,
         simulation_context: SimulationContext,
         // state_override: Option<StateOverride>,
         // timeout: Option<Duration>,

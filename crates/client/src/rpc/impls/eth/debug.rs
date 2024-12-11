@@ -80,14 +80,14 @@ impl Debug for GethDebugHandler {
 
     fn debug_trace_call_many(
         &self, 
-        bundle: Bundle,
+        bundles: Vec<Bundle>,
         simulation_context: SimulationContext,
         // state_override: Option<StateOverride>,
         // timeout: Option<Duration>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> JsonRpcResult<Vec<GethTrace>> {
         self.inner
-            .trace_call_many(bundle, simulation_context, opts)
+            .trace_call_many(bundles, simulation_context, opts)
             .map_err(|err| err.into())
     }
 }

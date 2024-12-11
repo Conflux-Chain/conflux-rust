@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use cfx_rpc_eth_api::DebugApiServer;
 use cfx_rpc_eth_types::{BlockNumber, Bundle, SimulationContext,TransactionRequest};
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
-use cfx_types::{AddressSpaceUtil, Space, H256, U256};
+use cfx_types::{AddressSpaceUtil, Space, H256, U256, H160};
 use cfxcore::{
     errors::Error as CoreError, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph,
@@ -19,6 +19,7 @@ use primitives::{
     Block, BlockHashOrEpochNumber, BlockHeaderBuilder, EpochNumber,
 };
 use std::sync::Arc;
+use std::collections::HashMap;
 
 pub struct DebugApi {
     consensus: SharedConsensusGraph,
@@ -159,11 +160,10 @@ impl DebugApi {
 
     pub fn trace_call_many(
         &self, 
-        bundle: Bundle,
+        bundles: Vec<Bundle>,
         simulation_context: SimulationContext,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> Result<Vec<GethTrace>, CoreError> {
-        let requests = bundle.transactions;
         let opts = opts.unwrap_or_default();
         let block_num = simulation_context.block_number.unwrap_or_default();
 
@@ -188,29 +188,67 @@ impl DebugApi {
         let chain_id = self.consensus.best_chain_id();
 
         // construct transactions
-        let mut transactions = Vec::with_capacity(requests.len());
-        for request in requests {
-            if request.from.is_none() {
-                return Err(CoreError::InvalidParam(
-                    "from is required".to_string(),
-                    Default::default(),
-                ));
+        let mut transactions = Vec::new();
+        // manually manage nonce
+        let mut nonce_map: HashMap<Option<H160>, Option<U256>> = HashMap::new();
+
+        for bundle in bundles {
+            let requests = bundle.transactions;
+
+            for mut request in requests {
+                if request.from.is_none() {
+                    return Err(CoreError::InvalidParam(
+                        "from is required".to_string(),
+                        Default::default(),
+                    ));
+                }
+    
+                // nonce auto fill
+                if request.nonce.is_none() {
+                    if let Some(value) = nonce_map.get(&request.from) {
+                        let nonce = value.unwrap() + U256::from(1);
+                        request.nonce = Some(nonce);
+                        nonce_map.insert(request.from, request.nonce);
+                    } else {
+                        let nonce = self.consensus_graph().next_nonce(
+                            request.from.unwrap().with_evm_space(),
+                            BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(
+                                epoch_num,
+                            )),
+                            "num",
+                        )?;
+                        request.nonce = Some(nonce);
+                        nonce_map.insert(request.from, request.nonce);
+                    }
+                } else {
+                    if let Some(value) = nonce_map.get(&request.from) {
+                        let nonce = value.unwrap() + U256::from(1);
+                        if request.nonce.unwrap() != nonce {
+                            continue;
+                        }
+                        nonce_map.insert(request.from, request.nonce);
+                    } else {
+                        let nonce = self.consensus_graph().next_nonce(
+                            request.from.unwrap().with_evm_space(),
+                            BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(
+                                epoch_num,
+                            )),
+                            "num",
+                        )?;
+                        if request.nonce.unwrap() != nonce {
+                            continue;
+                        }
+                        nonce_map.insert(request.from, request.nonce);
+                    }
+                }
+    
+                let signed_tx = request.sign_call(
+                    chain_id.in_evm_space(),
+                    self.max_estimation_gas_limit,
+                )?;
+    
+                transactions.push(Arc::new(signed_tx));
             }
-
-            // nonce auto fill
-            if request.nonce.is_none() {
-                return Err(CoreError::InvalidParam(
-                    "nonce is required".to_string(),
-                    Default::default(),
-                ));
-            }
-
-            let signed_tx = request.sign_call(
-                chain_id.in_evm_space(),
-                self.max_estimation_gas_limit,
-            )?;
-
-            transactions.push(Arc::new(signed_tx));
         }
 
         let epoch_blocks = self
@@ -247,6 +285,7 @@ impl DebugApi {
 
         Ok(result)
     }
+
 
     pub fn trace_block_by_num(
         &self, block_num: u64, opts: Option<GethDebugTracingOptions>,
@@ -381,13 +420,13 @@ impl DebugApiServer for DebugApi {
 
     async fn debug_trace_call_many(
         &self, 
-        bundle: Bundle,
+        bundles: Vec<Bundle>,
         simulation_context: SimulationContext,
         // state_override: Option<StateOverride>,
         // timeout: Option<Duration>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<Vec<GethTrace>> {
-        self.trace_call_many(bundle, simulation_context, opts)
+        self.trace_call_many(bundles, simulation_context, opts)
             .map_err(|e| e.into())
     }
 }

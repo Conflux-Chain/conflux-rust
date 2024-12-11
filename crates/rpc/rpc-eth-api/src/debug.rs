@@ -40,10 +40,8 @@ pub trait DebugApi {
     #[method(name = "traceCallMany")]
     async fn debug_trace_call_many(
         &self, 
-        bundle: Bundle,
+        bundles: Vec<Bundle>,
         simulation_context: SimulationContext,
-        // state_override: Option<StateOverride>,
-        // timeout: Option<Duration>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<Vec<GethTrace>>;
 }
