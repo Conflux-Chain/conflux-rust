@@ -233,6 +233,8 @@ secp256k1 = "0.30.0"
 # misc
 clap = "2"
 rand = "0.7"
+rand_xorshift = "0.2"
+rand_08 = { package = "rand", version = "0.8"}
 log = "0.4"
 log4rs = "1.2.0"
 env_logger = "0.11"

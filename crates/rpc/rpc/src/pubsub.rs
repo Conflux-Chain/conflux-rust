@@ -9,15 +9,12 @@ use cfx_rpc_eth_types::{
     eth_pubsub::{Kind as SubscriptionKind, Params, Result as PubSubResult},
     Header, Log,
 };
-use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
-    internal_rpc_err, invalid_params_rpc_err,
-};
+use cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_rpc_err;
 use cfx_types::{Space, H256};
 use cfxcore::{
-    channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
-    SharedConsensusGraph,
+    BlockDataManager, ConsensusGraph, Notifications, SharedConsensusGraph,
 };
-use futures::{compat::Future01CompatExt, StreamExt};
+use futures::StreamExt;
 use jsonrpsee::{
     core::SubscriptionResult, server::SubscriptionMessage, types::ErrorObject,
     PendingSubscriptionSink, SubscriptionSink,
@@ -28,23 +25,26 @@ use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,
 };
 use serde::Serialize;
-use std::{iter::zip, sync::Arc, time::Duration};
-use tokio::{runtime::Runtime, sync::broadcast, time::sleep};
-use tokio_stream::{
-    wrappers::{
-        errors::BroadcastStreamRecvError, BroadcastStream, ReceiverStream,
-    },
-    Stream,
+use std::{
+    collections::{HashMap, VecDeque},
+    iter::zip,
+    sync::Arc,
+    time::Duration,
 };
+use tokio::{runtime::Runtime, sync::broadcast, time::sleep};
+use tokio_stream::{wrappers::BroadcastStream, Stream};
+
+const BROADCAST_CHANNEL_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct PubSubApi {
     executor: Arc<Runtime>,
-    consensus: SharedConsensusGraph,
-    data_man: Arc<BlockDataManager>,
+    chain_data_provider: Arc<ChainDataProvider>,
     notifications: Arc<Notifications>,
     heads_loop_started: Arc<RwLock<bool>>,
     head_sender: Arc<broadcast::Sender<Header>>,
+    log_loop_started: Arc<RwLock<HashMap<LogFilter, bool>>>,
+    log_senders: Arc<RwLock<HashMap<LogFilter, broadcast::Sender<Log>>>>,
 }
 
 impl PubSubApi {
@@ -52,20 +52,49 @@ impl PubSubApi {
         consensus: SharedConsensusGraph, notifications: Arc<Notifications>,
         executor: Arc<Runtime>,
     ) -> PubSubApi {
-        let data_man = consensus.get_data_manager().clone();
-        let (head_sender, _) = broadcast::channel(100);
+        let (head_sender, _) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
+        let log_senders = Arc::new(RwLock::new(HashMap::new()));
+        let chain_data_provider =
+            Arc::new(ChainDataProvider::new(consensus.clone()));
+
         PubSubApi {
             executor,
             notifications,
-            consensus,
-            data_man,
             heads_loop_started: Arc::new(RwLock::new(false)),
             head_sender: Arc::new(head_sender),
+            log_senders,
+            chain_data_provider,
+            log_loop_started: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
     fn new_headers_stream(&self) -> impl Stream<Item = Header> {
         let receiver = self.head_sender.subscribe();
+        BroadcastStream::new(receiver)
+            .filter(|item| {
+                let res = match item {
+                    Ok(_) => true,
+                    Err(_) => false, /* there are two types of errors: closed
+                                      * and lagged, mainly lagged */
+                };
+                futures::future::ready(res)
+            })
+            .map(|item| item.expect("should not be an error"))
+    }
+
+    fn new_logs_stream(&self, filter: LogFilter) -> impl Stream<Item = Log> {
+        let receiver;
+        let senders = self.log_senders.read();
+        if !senders.contains_key(&filter) {
+            drop(senders);
+            let mut senders = self.log_senders.write();
+            let (tx, rx) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
+            senders.insert(filter, tx);
+            receiver = rx;
+        } else {
+            receiver = senders.get(&filter).unwrap().subscribe();
+        }
+
         BroadcastStream::new(receiver)
             .filter(|item| {
                 let res = match item {
@@ -77,36 +106,32 @@ impl PubSubApi {
             .map(|item| item.expect("should not be an error"))
     }
 
-    fn new_logs_stream(&self) -> impl Stream<Item = Log> {
-        tokio_stream::iter(vec![])
-    }
-
     fn start_heads_loop(&self) {
         let mut loop_started = self.heads_loop_started.write();
         if *loop_started {
             return;
         }
+        *loop_started = true;
 
         debug!("async start_headers_loop");
-        *loop_started = true;
-        let epochs_ordered = self.notifications.epochs_ordered.clone();
 
         // subscribe to the `epochs_ordered` channel
-        let mut receiver = epochs_ordered.subscribe();
-
-        // use queue to make sure we only process epochs once they have been
-        // executed
-        let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
-            (DEFERRED_STATE_EPOCH_COUNT - 1) as usize,
-        );
-
-        let self_clone = self.clone();
+        let mut receiver = self.notifications.epochs_ordered.subscribe();
+        let head_sender = self.head_sender.clone();
+        // clone everything we use in our async loop
+        let chain_data_provider = self.chain_data_provider.clone();
+        let heads_loop_started = self.heads_loop_started.clone();
 
         // loop asynchronously
         let fut = async move {
+            // use queue to make sure we only process epochs once they have been
+            // executed
+            let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
+                (DEFERRED_STATE_EPOCH_COUNT - 1) as usize,
+            );
+
             while let Some((epoch, hashes)) = receiver.recv().await {
                 debug!("epoch_loop: {:?}", (epoch, &hashes));
-
                 let (epoch, hashes) = match queue.push((epoch, hashes)) {
                     None => continue,
                     Some(e) => e,
@@ -114,18 +139,229 @@ impl PubSubApi {
 
                 // wait for epoch to be executed
                 let pivot = hashes.last().expect("empty epoch in pubsub");
-                self_clone.wait_for_epoch(&pivot).await;
+                chain_data_provider.wait_for_epoch(&pivot).await;
 
                 // publish epochs
-                let header = self_clone.get_pivot_block_header(epoch);
+                let header = chain_data_provider.get_pivot_block_header(epoch);
                 if let Some(header) = header {
-                    let _ = self_clone.head_sender.send(header);
-                    // todo handle error
+                    let send_res = head_sender.send(header);
+                    if send_res.is_err() { // stop the loop
+                        let mut loop_started = heads_loop_started.write();
+                        *loop_started = false;
+                        return;
+                    }
                 }
             }
         };
 
         self.executor.spawn(fut);
+    }
+
+    fn start_logs_loop(&self, filter: LogFilter) {
+        let mut loop_started = self.log_loop_started.write();
+        if loop_started.contains_key(&filter) {
+            return;
+        }
+        loop_started.insert(filter.clone(), true);
+
+        // subscribe to the `epochs_ordered` channel
+        let mut receiver = self.notifications.epochs_ordered.subscribe();
+        let senders = self.log_senders.read();
+        let tx = senders.get(&filter).unwrap().clone();
+
+        // clone everything we use in our async loop
+        let chain_data_provider = self.chain_data_provider.clone();
+        let loop_started = self.log_loop_started.clone();
+
+        // loop asynchronously
+        let fut = async move {
+            let mut last_epoch = 0;
+            let mut epochs: VecDeque<(u64, Vec<H256>, Vec<Log>)> =
+                VecDeque::new();
+            // use a queue to make sure we only process an epoch once it has
+            // been executed for sure
+            let mut queue = EpochQueue::<Vec<H256>>::with_capacity(
+                (DEFERRED_STATE_EPOCH_COUNT - 1) as usize,
+            );
+
+            while let Some(epoch) = receiver.recv().await {
+                let epoch = match queue.push(epoch) {
+                    None => continue,
+                    Some(e) => e,
+                };
+
+                // publish pivot chain reorg if necessary
+                if epoch.0 <= last_epoch {
+                    debug!("pivot chain reorg: {} -> {}", last_epoch, epoch.0);
+                    assert!(epoch.0 > 0, "Unexpected epoch number received.");
+
+                    let mut reverted = vec![];
+                    while let Some(e) = epochs.back() {
+                        if e.0 >= epoch.0 {
+                            reverted.push(epochs.pop_back().unwrap());
+                        } else {
+                            break;
+                        }
+                    }
+
+                    for (_, _, logs) in reverted.into_iter() {
+                        for mut log in logs.into_iter() {
+                            log.removed = true;
+                            // send removed logs
+                            let send_res = tx.send(log);
+                            if send_res.is_err() {
+                                let mut loop_started = loop_started.write();
+                                loop_started.remove(&filter);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                last_epoch = epoch.0;
+
+                let latest_finalized_epoch_number =
+                    chain_data_provider.latest_finalized_epoch_number();
+                while let Some(e) = epochs.front() {
+                    if e.0 < latest_finalized_epoch_number {
+                        epochs.pop_front();
+                    } else {
+                        break;
+                    }
+                }
+
+                let logs = chain_data_provider
+                    .get_epoch_logs(&filter, epoch.clone(), false)
+                    .await;
+                for log in logs.iter() {
+                    let send_res = tx.send(log.clone());
+                    // when send_res is an error, it means all the receiver has been
+                    // dropped and we should stop the loop
+                    if send_res.is_err() {
+                        let mut loop_started = loop_started.write();
+                        loop_started.remove(&filter);
+                        return;
+                    }
+                }
+                epochs.push_back((epoch.0, epoch.1, logs));
+            }
+        };
+
+        self.executor.spawn(fut);
+    }
+}
+
+#[async_trait::async_trait]
+impl EthPubSubApiServer for PubSubApi {
+    async fn subscribe(
+        &self, pending: PendingSubscriptionSink, kind: SubscriptionKind,
+        params: Option<Params>,
+    ) -> SubscriptionResult {
+        match (kind, params) {
+            (SubscriptionKind::NewHeads, None) => {
+                let sink = pending.accept().await?;
+                let stream = self
+                    .new_headers_stream()
+                    .map(|header| PubSubResult::Header(header));
+                self.executor.spawn(async move {
+                    let _ = pipe_from_stream(sink, stream).await;
+                });
+
+                // start the head stream
+                self.start_heads_loop();
+                Ok(())
+            }
+            (SubscriptionKind::NewHeads, _) => {
+                // reject
+                Err("Params should be empty".into())
+            }
+            (SubscriptionKind::Logs, None) => {
+                let mut filter = LogFilter::default();
+                filter.space = Space::Ethereum;
+
+                let sink = pending.accept().await?;
+                let stream = self
+                    .new_logs_stream(filter.clone())
+                    .map(|log| PubSubResult::Log(log));
+                self.executor.spawn(async {
+                    let _ = pipe_from_stream(sink, stream).await;
+                });
+
+                // start the log loop
+                self.start_logs_loop(filter);
+                Ok(())
+            }
+            (SubscriptionKind::Logs, Some(Params::Logs(filter))) => {
+                let filter = match filter
+                    .into_primitive(self.chain_data_provider.as_ref())
+                {
+                    Err(_e) => return Err("Invalid filter params".into()),
+                    Ok(filter) => filter,
+                };
+                let stream = self
+                    .new_logs_stream(filter.clone())
+                    .map(|log| PubSubResult::Log(log));
+                let sink = pending.accept().await?;
+                self.executor.spawn(async {
+                    let _ = pipe_from_stream(sink, stream).await;
+                });
+
+                // start the log loop
+                self.start_logs_loop(filter);
+                Ok(())
+            }
+            (_, _) => {
+                // reject
+                Err("Not supported".into())
+            }
+        }
+    }
+}
+
+pub struct ChainDataProvider {
+    consensus: SharedConsensusGraph,
+    data_man: Arc<BlockDataManager>,
+}
+
+impl ChainDataProvider {
+    pub fn new(consensus: SharedConsensusGraph) -> ChainDataProvider {
+        let data_man = consensus.get_data_manager().clone();
+        ChainDataProvider {
+            consensus,
+            data_man,
+        }
+    }
+
+    fn latest_finalized_epoch_number(&self) -> u64 {
+        self.consensus.latest_finalized_epoch_number()
+    }
+
+    fn consensus_graph(&self) -> &ConsensusGraph {
+        self.consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+    }
+
+    async fn get_epoch_logs(
+        &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
+    ) -> Vec<Log> {
+        let logs = match self.retrieve_epoch_logs(epoch).await {
+            Some(logs) => logs,
+            None => return vec![],
+        };
+
+        // apply filter to logs
+        let logs = logs
+            .iter()
+            .filter(|l| filter.matches(&l.entry))
+            .cloned()
+            .map(|l| Log::try_from_localized(l, self, removed))
+            .filter(|l| l.is_ok())
+            .map(|l| l.unwrap())
+            .collect();
+
+        return logs;
     }
 
     async fn wait_for_epoch(&self, pivot: &H256) -> Option<Arc<BlockReceipts>> {
@@ -208,13 +444,6 @@ impl PubSubApi {
         }
 
         unreachable!()
-    }
-
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
     }
 
     async fn get_phantom_block(
@@ -306,52 +535,15 @@ impl PubSubApi {
     }
 }
 
-#[async_trait::async_trait]
-impl EthPubSubApiServer for PubSubApi {
-    async fn subscribe(
-        &self, pending: PendingSubscriptionSink, kind: SubscriptionKind,
-        params: Option<Params>,
-    ) -> SubscriptionResult {
-        match (kind, params) {
-            (SubscriptionKind::NewHeads, None) => {
-                // start the head stream
-                self.start_heads_loop();
-                let sink = pending.accept().await?;
-                let stream = self
-                    .new_headers_stream()
-                    .map(|header| PubSubResult::Header(header));
-                self.executor.spawn(Box::pin(async move {
-                    let _ = pipe_from_stream(sink, stream).await;
-                }));
-                Ok(())
-            }
-            (SubscriptionKind::NewHeads, _) => {
-                // reject
-                Err("Params should be empty".into())
-            }
-            (SubscriptionKind::Logs, None) => {
-                // start the log stream
-                let sink = pending.accept().await?;
-                let stream = self.new_logs_stream();
-                self.executor.spawn(async {
-                    let _ = pipe_from_stream(sink, stream).await;
-                });
-                Ok(())
-            }
-            (SubscriptionKind::Logs, Some(Params::Logs(_filter))) => {
-                // start the log stream
-                let sink = pending.accept().await?;
-                let stream = self.new_logs_stream();
-                self.executor.spawn(async {
-                    let _ = pipe_from_stream(sink, stream).await;
-                });
-                Ok(())
-            }
-            (_, _) => {
-                // reject
-                Err("Not supported".into())
-            }
-        }
+impl BlockProvider for &ChainDataProvider {
+    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
+        self.consensus.get_block_epoch_number(hash)
+    }
+
+    fn get_block_hashes_by_epoch(
+        &self, epoch_number: EpochNumber,
+    ) -> Result<Vec<H256>, String> {
+        self.consensus.get_block_hashes_by_epoch(epoch_number)
     }
 }
 
@@ -371,6 +563,7 @@ impl From<SubscriptionSerializeError> for ErrorObject<'static> {
 }
 
 /// Pipes all stream items to the subscription sink.
+/// when the stream ends or the sink is closed, the function returns.
 async fn pipe_from_stream<T, St>(
     sink: SubscriptionSink, mut stream: St,
 ) -> Result<(), ErrorObject<'static>>
@@ -381,7 +574,7 @@ where
     loop {
         tokio::select! {
             _ = sink.closed() => {
-                // connection dropped
+                // connection dropped: when user unsubscribes or network closed
                 break Ok(())
             },
             maybe_item = stream.next() => {

@@ -1439,6 +1439,8 @@ dependencies = [
  "log",
  "parity-version",
  "primitives",
+ "rand 0.7.3",
+ "rand_xorshift 0.2.0",
  "serde",
  "serde_json",
  "strum_macros",
