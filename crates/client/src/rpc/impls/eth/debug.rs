@@ -1,7 +1,7 @@
 use crate::rpc::{
     errors::invalid_params_msg,
     traits::eth_space::debug::Debug,
-    types::eth::{BlockNumber, TransactionRequest},
+    types::eth::{BlockNumber, Bundle, SimulationContext, TransactionRequest},
 };
 use alloy_rpc_types_trace::geth::{
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace,
@@ -75,6 +75,19 @@ impl Debug for GethDebugHandler {
     ) -> JsonRpcResult<GethTrace> {
         self.inner
             .trace_call(request, block_number, opts)
+            .map_err(|err| err.into())
+    }
+
+    fn debug_trace_call_many(
+        &self, 
+        bundles: Vec<Bundle>,
+        simulation_context: SimulationContext,
+        // state_override: Option<StateOverride>,
+        // timeout: Option<Duration>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> JsonRpcResult<Vec<GethTrace>> {
+        self.inner
+            .trace_call_many(bundles, simulation_context, opts)
             .map_err(|err| err.into())
     }
 }

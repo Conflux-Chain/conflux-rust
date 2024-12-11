@@ -6,9 +6,9 @@ use alloy_rpc_types_trace::geth::{
 };
 use async_trait::async_trait;
 use cfx_rpc_eth_api::DebugApiServer;
-use cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
+use cfx_rpc_eth_types::{BlockNumber, Bundle, SimulationContext,TransactionRequest};
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
-use cfx_types::{AddressSpaceUtil, Space, H256, U256};
+use cfx_types::{AddressSpaceUtil, Space, H256, U256, H160};
 use cfxcore::{
     errors::Error as CoreError, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph,
@@ -19,6 +19,7 @@ use primitives::{
     Block, BlockHashOrEpochNumber, BlockHeaderBuilder, EpochNumber,
 };
 use std::sync::Arc;
+use std::collections::HashMap;
 
 pub struct DebugApi {
     consensus: SharedConsensusGraph,
@@ -157,6 +158,135 @@ impl DebugApi {
         Ok(res.trace.clone())
     }
 
+    pub fn trace_call_many(
+        &self, 
+        bundles: Vec<Bundle>,
+        simulation_context: SimulationContext,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> Result<Vec<GethTrace>, CoreError> {
+        let opts = opts.unwrap_or_default();
+        let block_num = simulation_context.block_number.unwrap_or_default();
+
+        let epoch_num = self
+            .get_block_epoch_num(block_num)
+            .map_err(|err| CoreError::Msg(err))?;
+
+        // validate epoch state
+        self.consensus_graph()
+            .validate_stated_epoch(&EpochNumber::Number(epoch_num))
+            .map_err(|err| CoreError::Msg(err))?;
+
+        let epoch_block_hashes = self
+            .consensus_graph()
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
+            .map_err(|err| CoreError::Msg(err))?;
+        let epoch_id = epoch_block_hashes
+            .last()
+            .ok_or(CoreError::Msg("should have block hash".to_string()))?;
+
+        // construct blocks from call_request
+        let chain_id = self.consensus.best_chain_id();
+
+        // construct transactions
+        let mut transactions = Vec::new();
+        // manually manage nonce
+        let mut nonce_map: HashMap<Option<H160>, Option<U256>> = HashMap::new();
+
+        for bundle in bundles {
+            let requests = bundle.transactions;
+
+            for mut request in requests {
+                if request.from.is_none() {
+                    return Err(CoreError::InvalidParam(
+                        "from is required".to_string(),
+                        Default::default(),
+                    ));
+                }
+    
+                // nonce auto fill
+                if request.nonce.is_none() {
+                    if let Some(value) = nonce_map.get(&request.from) {
+                        let nonce = value.unwrap() + U256::from(1);
+                        request.nonce = Some(nonce);
+                        nonce_map.insert(request.from, request.nonce);
+                    } else {
+                        let nonce = self.consensus_graph().next_nonce(
+                            request.from.unwrap().with_evm_space(),
+                            BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(
+                                epoch_num,
+                            )),
+                            "num",
+                        )?;
+                        request.nonce = Some(nonce);
+                        nonce_map.insert(request.from, request.nonce);
+                    }
+                } else {
+                    if let Some(value) = nonce_map.get(&request.from) {
+                        let nonce = value.unwrap() + U256::from(1);
+                        if request.nonce.unwrap() != nonce {
+                            continue;
+                        }
+                        nonce_map.insert(request.from, request.nonce);
+                    } else {
+                        let nonce = self.consensus_graph().next_nonce(
+                            request.from.unwrap().with_evm_space(),
+                            BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(
+                                epoch_num,
+                            )),
+                            "num",
+                        )?;
+                        if request.nonce.unwrap() != nonce {
+                            continue;
+                        }
+                        nonce_map.insert(request.from, request.nonce);
+                    }
+                }
+    
+                let signed_tx = request.sign_call(
+                    chain_id.in_evm_space(),
+                    self.max_estimation_gas_limit,
+                )?;
+    
+                transactions.push(Arc::new(signed_tx));
+            }
+        }
+
+        let epoch_blocks = self
+            .consensus_graph()
+            .data_man
+            .blocks_by_hash_list(
+                &epoch_block_hashes,
+                true, /* update_cache */
+            )
+            .ok_or(CoreError::Msg("blocks should exist".to_string()))?;
+        let pivot_block = epoch_blocks
+            .last()
+            .ok_or(CoreError::Msg("should have block".to_string()))?;
+
+        let header = BlockHeaderBuilder::new()
+            .with_base_price(pivot_block.block_header.base_price())
+            .with_parent_hash(pivot_block.block_header.hash())
+            .with_height(epoch_num + 1)
+            .with_timestamp(pivot_block.block_header.timestamp() + 1)
+            .with_gas_limit(*pivot_block.block_header.gas_limit())
+            .build();
+        let block = Block::new(header, transactions);
+        let blocks: Vec<Arc<Block>> = vec![Arc::new(block)];
+
+        let traces = self.consensus_graph().collect_blocks_geth_trace(
+            *epoch_id,
+            epoch_num,
+            &blocks,
+            opts.tracing_options,
+            None,
+        )?;
+
+        let result = traces.iter().map(|val| val.trace.clone()).collect();
+
+        Ok(result)
+    }
+
+
     pub fn trace_block_by_num(
         &self, block_num: u64, opts: Option<GethDebugTracingOptions>,
     ) -> Result<Vec<TraceResult>, CoreError> {
@@ -285,6 +415,18 @@ impl DebugApiServer for DebugApi {
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<GethTrace> {
         self.trace_call(request, block_number, opts)
+            .map_err(|e| e.into())
+    }
+
+    async fn debug_trace_call_many(
+        &self, 
+        bundles: Vec<Bundle>,
+        simulation_context: SimulationContext,
+        // state_override: Option<StateOverride>,
+        // timeout: Option<Duration>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> RpcResult<Vec<GethTrace>> {
+        self.trace_call_many(bundles, simulation_context, opts)
             .map_err(|e| e.into())
     }
 }

@@ -1,4 +1,4 @@
-use crate::rpc::types::eth::{BlockNumber, TransactionRequest};
+use crate::rpc::types::eth::{BlockNumber, Bundle, SimulationContext, TransactionRequest};
 use alloy_rpc_types_trace::geth::{
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace,
     TraceResult,
@@ -38,4 +38,14 @@ pub trait Debug {
         &self, request: TransactionRequest, block_number: Option<BlockNumber>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> JsonRpcResult<GethTrace>;
+
+    #[rpc(name = "debug_traceCallMany")]
+    fn debug_trace_call_many(
+        &self, 
+        bundles: Vec<Bundle>,
+        simulation_context: SimulationContext,
+        // state_override: Option<StateOverride>,
+        // timeout: Option<Duration>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> JsonRpcResult<Vec<GethTrace>>;
 }
