@@ -286,7 +286,7 @@ mod tests {
     };
 
     use jsonrpc_core::futures::{future, Future};
-    use tokio::{
+    use tokio01::{
         io,
         net::TcpStream,
         runtime::Runtime,
