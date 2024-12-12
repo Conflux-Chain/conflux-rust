@@ -53,15 +53,54 @@ members = [
     "crates/util/version",
     "crates/util/serde_utils",
     "crates/cfxcore/geth-tracer",
-    "crates/rpc/rpc-eth-types", 
+    "crates/rpc/rpc-eth-types",
     "crates/rpc/rpc-primitives",
-    "crates/rpc/rpc-cfx-types", 
+    "crates/rpc/rpc-cfx-types",
     "crates/rpc/rpc-eth-api",
     "crates/cfxcore/parity-trace-types",
     "crates/rpc/rpc",
     "crates/util/util-macros",
     "crates/rpc/rpc-utils",
     "crates/rpc/rpc-builder",
+    "crates/pos/common/bounded-executor",
+    "crates/pos/common/crash-handler",
+    "crates/pos/common/fallible",
+    "crates/pos/common/infallible",
+    "crates/pos/common/logger",
+    "crates/pos/common/metrics",
+    "crates/pos/common/metrics-core",
+    "crates/pos/common/nibble",
+    "crates/pos/common/num-variants",
+    "crates/pos/common/proptest-helpers",
+    "crates/pos/common/proxy",
+    "crates/pos/common/short-hex-str",
+    "crates/pos/common/subscription-service",
+    "crates/pos/common/temppath",
+    "crates/pos/common/time-service",
+    "crates/pos/config/generate-key",
+    "crates/pos/config/global-constants",
+    "crates/pos/consensus/consensus-types",
+    "crates/pos/config/config",
+    "crates/pos/consensus/executor",
+    "crates/pos/consensus/safety-rules",
+    "crates/pos/crypto/crypto",
+    "crates/pos/crypto/crypto-derive",
+    "crates/pos/secure/net",
+    "crates/pos/secure/push-metrics",
+    "crates/pos/secure/storage",
+    "crates/pos/storage/accumulator",
+    "crates/pos/storage/cached-pos-ledger-db",
+    "crates/pos/storage/jellyfish-merkle",
+    "crates/pos/storage/pos-ledger-db",
+    "crates/pos/storage/schemadb",
+    "crates/pos/storage/scratchpad",
+    "crates/pos/storage/state-view",
+    "crates/pos/storage/storage-interface",
+    "crates/pos/types/executor-types",
+    "crates/pos/types/move-core-types",
+    "crates/pos/types/pow-types",
+    "crates/pos/types/types",
+    "crates/pos/config/management/network-address-encryption",
 ]
 
 resolver = "2"
@@ -155,12 +194,56 @@ cfx-util-macros = { path = "./crates/util/util-macros" }
 cfx-rpc = { path = "./crates/rpc/rpc" }
 cfx-rpc-utils = { path = "./crates/rpc/rpc-utils" }
 cfx-rpc-builder = { path = "./crates/rpc/rpc-builder" }
-
+bounded-executor = { path = "./crates/pos/common/bounded-executor" }
+diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
+channel = { path = "./crates/pos/common/channel" }
+crash-handler = { path = "./crates/pos/common/crash-handler" }
+fallible = { path = "./crates/pos/common/fallible" }
+diem-infallible = { path = "./crates/pos/common/infallible" }
+diem-logger = { path = "./crates/pos/common/logger" }
+diem-metrics = { path = "./crates/pos/common/metrics" }
+diem-metrics-core = { path = "./crates/pos/common/metrics-core" }
+diem-nibble = { path = "./crates/pos/common/nibble" }
+num-variants = { path = "./crates/pos/common/num-variants" }
+diem-proptest-helpers = { path = "./crates/pos/common/proptest-helpers" }
+proxy = { path = "./crates/pos/common/proxy" }
+short-hex-str = { path = "./crates/pos/common/short-hex-str" }
+subscription-service = { path = "./crates/pos/common/subscription-service" }
+diem-temppath = { path = "./crates/pos/common/temppath" }
+diem-time-service = { path = "./crates/pos/common/time-service" }
+generate-key = { path = "./crates/pos/config/generate-key" }
+diem-global-constants = { path = "./crates/pos/config/global-constants" }
+diem-config = { path = "./crates/pos/config/config" }
+consensus-types = { path = "./crates/pos/consensus/consensus-types" }
+executor = { path = "./crates/pos/consensus/executor" }
+safety-rules = { path = "./crates/pos/consensus/safety-rules" }
+diem-crypto = { path = "./crates/pos/crypto/crypto" }
+diem-crypto-derive = { path = "./crates/pos/crypto/crypto-derive" }
+diem-secure-net = { path = "./crates/pos/secure/net" }
+diem-secure-push-metrics = { path = "./crates/pos/secure/push-metrics" }
+diem-secure-storage = { path = "./crates/pos/secure/storage" }
+accumulator = { path = "./crates/pos/storage/accumulator" }
+cached-pos-ledger-db = { path = "./crates/pos/storage/cached-pos-ledger-db" }
+diem-jellyfish-merkle = { path = "./crates/pos/storage/jellyfish-merkle" }
+pos-ledger-db = { path = "./crates/pos/storage/pos-ledger-db" }
+schemadb = { path = "./crates/pos/storage/schemadb" }
+scratchpad = { path = "./crates/pos/storage/scratchpad" }
+diem-state-view = { path = "./crates/pos/storage/state-view" }
+storage-client = { path = "./crates/pos/storage/storage-client" }
+storage-interface = { path = "./crates/pos/storage/storage-interface" }
+executor-types = { path = "./crates/pos/types/executor-types" }
+move-core-types = { path = "./crates/pos/types/move-core-types" }
+pow-types = { path = "./crates/pos/types/pow-types" }
+diem-types = { path = "./crates/pos/types/types" }
+diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 # proc-macros
 proc-macro2 = "1.0"
 quote = "1.0"
 
-serde = { version = "1.0", features = ["derive", "alloc"], default-features = false }
+serde = { version = "1.0", features = [
+    "derive",
+    "alloc",
+], default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1.0", default-features = false }
 hex = "0.4.3"
@@ -204,6 +287,7 @@ tokio = "1.40"
 tokio-stream = "0.1.11"
 tokio-util = "0.7.4"
 tokio-test = "0.4.1"
+tokio-io = "0.1"
 futures = "0.3.30"
 futures01 = "0.1"
 futures-core = "0.3"
@@ -220,14 +304,18 @@ pin-project = "1.0.12"
 mio = "0.6.8"
 tracing-futures = "0.2"
 # old version tokio 0.2
-tokio02 = { version = "0.2", package="tokio", features = ["full"] }
+tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
+tokio01 = { version = "0.1", package = "tokio" }
 tokio-timer = "0.2.13"
 
 # crypto & hash
 fixed-hash = "0.5"
 keccak-hash = "0.5"
 tiny-keccak = "2.0.2"
-bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = ["multicore", "blst"] }
+bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = [
+    "multicore",
+    "blst",
+] }
 secp256k1 = "0.30.0"
 
 # misc
@@ -269,15 +357,15 @@ rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "37
 
 # parity crates
 rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
-unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
+panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
+dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
 ethereum-types = "0.9"
 parity-wordlist = "1.3.0"
 parity-crypto = "0.9.0"
 parity-path = "0.1"
 parity-util-mem = { version = "0.5", default-features = false }
 parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
-substrate-bn = { git = "https://github.com/paritytech/bn", rev="63f8c587356a67b33c7396af98e065b66fca5dda", default-features = false }
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
+substrate-bn = { git = "https://github.com/paritytech/bn", rev = "63f8c587356a67b33c7396af98e065b66fca5dda", default-features = false }

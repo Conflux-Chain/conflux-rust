@@ -355,6 +355,7 @@ impl EthApi {
             block_number: block_height,
             cumulative_gas_used: receipt.accumulated_gas_used,
             gas_used,
+            gas_fee: receipt.gas_fee,
             contract_address,
             logs,
             logs_bloom: receipt.log_bloom,
@@ -765,7 +766,7 @@ impl EthApi {
 
             let latest_block = self
                 .fetch_block_by_height(newest_height)
-                .map_err(RpcError::invalid_params)?;
+                .map_err(|e| internal_rpc_err(e.to_string()))?;
 
             self.fee_history_cache
                 .update_to_latest_block(
@@ -774,7 +775,7 @@ impl EthApi {
                     block_count.as_u64(),
                     fetch_block_by_hash,
                 )
-                .map_err(RpcError::invalid_params)?;
+                .map_err(|e| internal_rpc_err(e.to_string()))?;
         }
 
         let mut fee_history = FeeHistory::new();

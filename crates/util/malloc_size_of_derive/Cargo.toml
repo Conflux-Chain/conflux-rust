@@ -5,6 +5,7 @@ authors = ["The Servo Project Developers"]
 license = "MIT/Apache-2.0"
 description = "Crate for Firefox memory reporting, not intended for external use"
 repository = "https://github.com/bholley/malloc_size_of_derive"
+edition = "2021"
 
 [lib]
 path = "src/lib.rs"

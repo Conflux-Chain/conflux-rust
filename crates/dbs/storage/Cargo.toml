@@ -40,7 +40,7 @@ serde_derive = { workspace = true }
 sqlite = "0.25"
 sqlite3-sys = "0.12"
 strfmt = "0.1"
-tokio = { version = "0.2", features = ["full"] }
+tokio02 = { workspace = true, features = ["full"] }
 once_cell = { workspace = true }
 parity-util-mem = { workspace = true, default-features = false }
 cfx-util-macros = { workspace = true }
