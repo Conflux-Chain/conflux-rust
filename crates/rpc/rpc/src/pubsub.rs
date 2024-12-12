@@ -145,7 +145,8 @@ impl PubSubApi {
                 let header = chain_data_provider.get_pivot_block_header(epoch);
                 if let Some(header) = header {
                     let send_res = head_sender.send(header);
-                    if send_res.is_err() { // stop the loop
+                    if send_res.is_err() {
+                        // stop the loop
                         let mut loop_started = heads_loop_started.write();
                         *loop_started = false;
                         return;
@@ -235,8 +236,9 @@ impl PubSubApi {
                     .await;
                 for log in logs.iter() {
                     let send_res = tx.send(log.clone());
-                    // when send_res is an error, it means all the receiver has been
-                    // dropped and we should stop the loop
+                    // when send_res is an error, it means all the receiver has
+                    // been dropped and we should stop the
+                    // loop
                     if send_res.is_err() {
                         let mut loop_started = loop_started.write();
                         loop_started.remove(&filter);
