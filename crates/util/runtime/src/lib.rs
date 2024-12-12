@@ -15,10 +15,6 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Tokio Runtime wrapper.
-
-pub extern crate futures;
-pub extern crate tokio;
-
 use futures::{future, Future, IntoFuture};
 use std::{
     fmt,

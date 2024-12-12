@@ -540,8 +540,6 @@ mod usable_size {
         if #[cfg(target_os = "windows")] {
 
             // default windows allocator
-            extern crate winapi;
-
             use self::winapi::um::heapapi::{GetProcessHeap, HeapSize, HeapValidate};
 
             /// Get the size of a heap block.

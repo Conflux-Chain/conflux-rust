@@ -2,13 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate cfxkey;
-extern crate env_logger;
-extern crate keccak_hash;
-extern crate rustc_hex;
-extern crate serde;
-extern crate serde_derive;
-
 use std::{
     env, fmt,
     fs::File,
