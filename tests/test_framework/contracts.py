@@ -40,7 +40,7 @@ INTERNAL_CONTRACT_MAP: Dict[InternalContractName, str] = {
 }
 
 
-def _load_contract_metadata(name: str):
+def load_contract_metadata(name: str):
     path = Path(join(dirname(__file__), "..", "test_contracts", "artifacts"))
     try:
         found_file = next(path.rglob(f"{name}.json"))
@@ -50,7 +50,7 @@ def _load_contract_metadata(name: str):
 
 
 def cfx_contract(name: str, framework: Optional[ConfluxTestFramework] = None):
-    metadata = _load_contract_metadata(name)
+    metadata = load_contract_metadata(name)
     if framework is None:
         raise ValueError("Framework cannot be None")
     w3: CWeb3 = getattr(framework, "w3")
