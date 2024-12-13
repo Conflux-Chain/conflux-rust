@@ -126,6 +126,14 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
 
     def cfx_contract(self, name) -> Type[ConfluxContract]:
         return cfx_contract(name, self)
+
+    def assert_tx_exec_error(self, tx_hash, err_msg):
+        self.client.wait_for_receipt(tx_hash)
+        receipt = self.client.get_transaction_receipt(tx_hash)
+        assert_equal(
+            receipt["txExecErrorMsg"],
+            err_msg
+        )
     
     def deploy_contract(self, name, transact_args = {}) -> ConfluxContract:
         tx_hash = self.cfx_contract(name).constructor().transact(transact_args)
