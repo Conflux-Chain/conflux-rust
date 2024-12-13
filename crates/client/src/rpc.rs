@@ -529,7 +529,7 @@ pub async fn launch_async_rpc_servers(
 
     // TODO: set transport rpc module according to config
     let transport_rpc_module_config =
-        TransportRpcModuleConfig::set_http(RpcModuleSelection::Standard);
+        TransportRpcModuleConfig::set_http(RpcModuleSelection::All);
 
     let transport_rpc_modules =
         rpc_module_builder.build(transport_rpc_module_config);
