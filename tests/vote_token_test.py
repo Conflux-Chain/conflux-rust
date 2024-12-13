@@ -10,8 +10,7 @@ from test_framework.block_gen_thread import BlockGenThread
 from test_framework.mininode import *
 from test_framework.util import *
 
-from web3 import Web3
-from web3.contract import Contract
+from conflux_web3.contract import ConfluxContract
 import random
 
 
@@ -20,8 +19,8 @@ class VoteTokenTest(ConfluxTestFrameworkForContract):
         super().__init__()
         self.vote_address = ""
         self.token_address = ""
-        self.token_contract: Contract = None
-        self.vote_contract: Contract = None
+        self.token_contract: ConfluxContract = None
+        self.vote_contract: ConfluxContract = None
         self.accounts = []
         self.num_of_options = 5
         self.gas_price = 1
@@ -31,23 +30,26 @@ class VoteTokenTest(ConfluxTestFrameworkForContract):
     def set_test_params(self):
         super().set_test_params()
         self.num_nodes = 1
+        self._add_genesis_secrets(5, "core")
 
     def setup_contract(self):
-        self.token_contract = self.cfx_contract("DummyErc20").deploy()
-        self.vote_contract = self.cfx_contract("AdvancedTokenVote1202").deploy()
+        self.token_contract = self.deploy_contract("DummyErc20")
+        self.vote_contract = self.deploy_contract("AdvancedTokenVote1202")
         self.log.info("Initializing contract")
 
     def run_test(self):
-        self.token_contract = self.cfx_contract("DummyErc20").deploy()
-        self.vote_contract = self.cfx_contract("AdvancedTokenVote1202").deploy()
-        self.log.info("Initializing contract")
-        self.accounts: List[Account] = self.initialize_accounts(5)
+        self.setup_contract()
+        accounts = self.core_accounts[1:6]
 
         for i in range(1):
-            self.vote_contract.functions.createIssue(i, self.token_contract.address, list(range(self.num_of_options)), [acc.address for acc in self.accounts], "v").cfx_transact(storage_limit = 5120)
+            self.vote_contract.functions.createIssue(i, self.token_contract.address, list(range(self.num_of_options)), [acc.address for acc in accounts], "v").transact({
+                "storageLimit": 5120,
+            }).executed()
             for _ in range(self.num_of_options):
                 vote_choice = random.randint(0, self.num_of_options - 1)
-                self.vote_contract.functions.vote(i, vote_choice).cfx_transact(storage_limit = 5120)
+                self.vote_contract.functions.vote(i, vote_choice).transact({
+                    "storageLimit": 5120,
+                }).executed()
             
 
 
