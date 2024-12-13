@@ -2045,6 +2045,7 @@ dependencies = [
  "throttling",
  "tokio 1.40.0",
  "tokio-stream",
+ "tokio-timer",
  "toml",
  "transient-hashmap",
  "txgen",

@@ -21,7 +21,10 @@ use cfxcore::{
     channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
     SharedConsensusGraph,
 };
-use futures::future::{FutureExt, TryFutureExt};
+use futures::{
+    compat::Future01CompatExt,
+    future::{FutureExt, TryFutureExt},
+};
 use itertools::zip;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_pubsub::{
@@ -39,7 +42,7 @@ use std::{
     sync::{Arc, Weak},
     time::Duration,
 };
-use tokio::time::sleep;
+use tokio_timer::sleep;
 
 type Client = Sink<pubsub::Result>;
 
@@ -366,7 +369,7 @@ impl ChainNotificationHandler {
                 Ok(Some(b)) => return Some(b),
                 Ok(None) => {
                     error!("Block not executed yet {:?}", pivot);
-                    let _ = sleep(POLL_INTERVAL_MS).await;
+                    let _ = sleep(POLL_INTERVAL_MS).compat().await;
                 }
                 Err(e) => {
                     error!("get_phantom_block_by_number failed {}", e);
@@ -425,7 +428,7 @@ impl ChainNotificationHandler {
                 Some(res) => return Some(res.block_receipts.clone()),
                 None => {
                     trace!("Cannot find receipts with {:?}/{:?}", block, pivot);
-                    let _ = sleep(POLL_INTERVAL_MS).await;
+                    let _ = sleep(POLL_INTERVAL_MS).compat().await;
                 }
             }
 
