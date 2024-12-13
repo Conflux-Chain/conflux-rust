@@ -118,6 +118,9 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         self.rpc = self.nodes[0].rpc
         self.client = RpcClient(self.nodes[0])
         start_p2p_connection(self.nodes)
+        # enable cfx_maxPriorityFeePerGas
+        # or Error(Epoch number larger than the current pivot chain tip) would be raised
+        self.client.generate_blocks_to_state(num_txs=1) 
 
         self.setup_w3()
 
@@ -125,10 +128,6 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         return cfx_contract(name, self)
     
     def deploy_contract(self, name, transact_args = {}) -> ConfluxContract:
-        if not transact_args:
-            transact_args = {
-                "gasPrice": 1
-            }
         tx_hash = self.cfx_contract(name).constructor().transact(transact_args)
         receipt = tx_hash.executed(timeout=30)
         return self.cfx_contract(name)(cast(str, receipt["contractCreated"]))
