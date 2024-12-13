@@ -338,7 +338,7 @@ fn add_meta_rpc_methods(
     // rpc_methods to return all available methods
     let methods: Vec<String> =
         handler.iter().map(|(method, _)| method).cloned().collect();
-    handler.add_method("rpc_methods", move |_| {
+    handler.add_sync_method("rpc_methods", move |_| {
         let method_list = methods
             .clone()
             .iter()
@@ -350,7 +350,7 @@ fn add_meta_rpc_methods(
     // rpc_modules
     let namespaces: Vec<String> =
         apis.into_iter().map(|item| format!("{}", item)).collect();
-    handler.add_method("rpc_modules", move |_| {
+    handler.add_sync_method("rpc_modules", move |_| {
         let ns = namespaces
             .clone()
             .iter()
