@@ -2,6 +2,7 @@ from conflux.utils import *
 from test_framework.contracts import ConfluxTestFrameworkForContract, ZERO_ADDRESS
 from test_framework.util import *
 from test_framework.mininode import *
+from web3.exceptions import Web3RPCError
 
 
 CIP118_NUMBER = 100
@@ -14,13 +15,13 @@ class CIP118ActivationTest(ConfluxTestFrameworkForContract):
 
     def run_test(self):
         try:
-            self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).cfx_call()
+            self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).call()
             raise Exception("Should fail")
-        except Exception as e:
-            assert_equal(e.response.data, 'VmError(InternalContract("unsupported function"))')
+        except Web3RPCError as e:
+            assert_equal(e.rpc_response['error']["data"], 'VmError(InternalContract("unsupported function"))')  # type: ignore
 
         self.wait_for_block(CIP118_NUMBER + 5)
-        self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).cfx_call()
+        self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).call()
 
     def wait_for_block(self, block_number, have_not_reach=False):
         if have_not_reach:
