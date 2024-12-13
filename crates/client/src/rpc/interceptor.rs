@@ -4,7 +4,7 @@
 
 use crate::rpc::errors::request_rejected_too_many_request_error;
 use cfx_util_macros::bail;
-use futures01::{lazy, Future};
+use futures::{future::lazy, FutureExt, TryFutureExt};
 use jsonrpc_core::{
     BoxFuture, Metadata, Params, RemoteProcedure, Result as RpcResult,
     RpcMethod,
@@ -26,8 +26,8 @@ pub trait RpcInterceptor: Send + Sync + 'static {
     fn before(&self, _name: &String) -> RpcResult<()>;
 
     fn around(
-        &self, _name: &String, method_call: BoxFuture<Value>,
-    ) -> BoxFuture<Value> {
+        &self, _name: &String, method_call: BoxFuture<RpcResult<Value>>,
+    ) -> BoxFuture<RpcResult<Value>> {
         method_call
     }
 }
@@ -119,19 +119,19 @@ where
     M: Metadata,
     I: RpcInterceptor,
 {
-    fn call(&self, params: Params, meta: M) -> BoxFuture<Value> {
+    fn call(&self, params: Params, meta: M) -> BoxFuture<RpcResult<Value>> {
         let name = self.name.clone();
         let interceptor = self.interceptor.clone();
-        let before_future = lazy(move || interceptor.before(&name));
+        let before_future = lazy(move |_| interceptor.before(&name));
 
         let method = self.method.clone();
         let method_call = self.interceptor.around(
             &self.name,
-            lazy(move || method.call(params, meta)).boxed(),
+            lazy(move |_| method.call(params, meta)).flatten().boxed(),
         );
         let method_future = before_future.and_then(move |_| method_call);
 
-        Box::new(method_future)
+        method_future.boxed()
     }
 }
 
@@ -206,23 +206,25 @@ impl RpcInterceptor for MetricsInterceptor {
     }
 
     fn around(
-        &self, name: &String, method_call: BoxFuture<Value>,
-    ) -> BoxFuture<Value> {
+        &self, name: &String, method_call: BoxFuture<RpcResult<Value>>,
+    ) -> BoxFuture<RpcResult<Value>> {
         let maybe_timer = METRICS_INTERCEPTOR_TIMERS
             .lock()
             .get(name)
             .map(|timer| timer.clone());
-        let setup = lazy(move || {
+        let setup = lazy(move |_| {
             Ok(maybe_timer
                 .as_ref()
                 .map(|timer| ScopeTimer::time_scope(timer.clone())))
         });
-        Box::new(setup.then(|timer: Result<_, ()>| {
-            method_call.then(|r| {
-                drop(timer);
-                r
+        setup
+            .then(|timer: Result<_, ()>| {
+                method_call.then(|r| async {
+                    drop(timer);
+                    r
+                })
             })
-        }))
+            .boxed()
     }
 }
 

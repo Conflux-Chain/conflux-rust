@@ -21,12 +21,9 @@ use cfxcore::{
     channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
     SharedConsensusGraph,
 };
-use futures::{
-    compat::Future01CompatExt,
-    future::{FutureExt, TryFutureExt},
-};
+use futures::future::{FutureExt, TryFutureExt};
 use itertools::zip;
-use jsonrpc_core::{futures::Future, Result as RpcResult};
+use jsonrpc_core::Result as RpcResult;
 use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     SubscriptionId,
@@ -42,7 +39,7 @@ use std::{
     sync::{Arc, Weak},
     time::Duration,
 };
-use tokio_timer::sleep;
+use tokio::time::sleep;
 
 type Client = Sink<pubsub::Result>;
 
@@ -237,22 +234,10 @@ pub struct ChainNotificationHandler {
 
 impl ChainNotificationHandler {
     // notify `subscriber` about `result` in a separate task
-    fn notify(exec: &Executor, subscriber: &Client, result: pubsub::Result) {
-        let fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
+    fn notify(subscriber: &Client, result: pubsub::Result) {
+        let _fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
             |e| warn!(target: "rpc", "Unable to send notification: {}", e),
         );
-
-        exec.spawn(fut)
-    }
-
-    // notify `subscriber` about `result` asynchronously
-    async fn notify_async(subscriber: &Client, result: pubsub::Result) {
-        let fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
-            |e| warn!(target: "rpc", "Unable to send notification: {}", e),
-        );
-
-        // convert futures01::Future into std::Future so that we can await
-        let _ = fut.compat().await;
     }
 
     // notify each subscriber about header `hash` concurrently
@@ -310,11 +295,7 @@ impl ChainNotificationHandler {
 
         debug!("Notify {}", epoch);
         for subscriber in subscribers.values() {
-            Self::notify(
-                &self.executor,
-                subscriber,
-                pubsub::Result::Header(header.clone()),
-            );
+            Self::notify(subscriber, pubsub::Result::Header(header.clone()));
         }
     }
 
@@ -322,7 +303,7 @@ impl ChainNotificationHandler {
         // send logs in order
         for mut log in logs.into_iter() {
             log.removed = true;
-            Self::notify_async(subscriber, pubsub::Result::Log(log)).await;
+            Self::notify(subscriber, pubsub::Result::Log(log));
         }
     }
 
@@ -354,11 +335,7 @@ impl ChainNotificationHandler {
         for log in logs {
             match log {
                 Ok(l) => {
-                    Self::notify_async(
-                        subscriber,
-                        pubsub::Result::Log(l.clone()),
-                    )
-                    .await;
+                    Self::notify(subscriber, pubsub::Result::Log(l.clone()));
                     ret.push(l);
                 }
                 Err(e) => {
@@ -389,7 +366,7 @@ impl ChainNotificationHandler {
                 Ok(Some(b)) => return Some(b),
                 Ok(None) => {
                     error!("Block not executed yet {:?}", pivot);
-                    let _ = sleep(POLL_INTERVAL_MS).compat().await;
+                    let _ = sleep(POLL_INTERVAL_MS).await;
                 }
                 Err(e) => {
                     error!("get_phantom_block_by_number failed {}", e);
@@ -448,7 +425,7 @@ impl ChainNotificationHandler {
                 Some(res) => return Some(res.block_receipts.clone()),
                 None => {
                     trace!("Cannot find receipts with {:?}/{:?}", block, pivot);
-                    let _ = sleep(POLL_INTERVAL_MS).compat().await;
+                    let _ = sleep(POLL_INTERVAL_MS).await;
                 }
             }
 

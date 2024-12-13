@@ -267,13 +267,13 @@ alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22
 revm = "8.0"
 
 # jsonrpc framework(old)
-jsonrpc-core = "15.1.0"
-jsonrpc-tcp-server = "15.1.0"
-jsonrpc-http-server = "15.1.0"
-jsonrpc-derive = "15.1.0"
-jsonrpc-core-client = "15.1.0"
-jsonrpc-pubsub = "15.1.0"
-jsonrpc-ws-server = "15.1.0"
+jsonrpc-core = "18.0.0"
+jsonrpc-tcp-server = "18.0.0"
+jsonrpc-http-server = "18.0.0"
+jsonrpc-derive = "18.0.0"
+jsonrpc-core-client = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
+jsonrpc-ws-server = "18.0.0"
 
 # jsonrpc framework(new)
 jsonrpsee = "0.24.4"
@@ -285,12 +285,10 @@ http = "1.0"
 # async
 tokio = "1.40"
 tokio-stream = "0.1.11"
-tokio-timer = "0.2.13"
 tokio-util = "0.7.4"
 tokio-test = "0.4.1"
 tokio-io = "0.1"
 futures = "0.3.30"
-futures01 = "0.1"
 futures-core = "0.3"
 futures-util = "0.3"
 hyper = "1.3"
