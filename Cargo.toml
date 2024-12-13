@@ -61,7 +61,7 @@ members = [
     "crates/rpc/rpc-eth/rpc",
     "crates/util/util-macros",
     "crates/rpc/rpc-utils",
-    "crates/rpc/rpc-eth/rpc-builder",
+    "crates/rpc/rpc-builder",
     "crates/pos/common/bounded-executor",
     "crates/pos/common/crash-handler",
     "crates/pos/common/fallible",
@@ -193,7 +193,7 @@ cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth/rpc-eth-api" }
 cfx-util-macros = { path = "./crates/util/util-macros" }
 cfx-rpc = { path = "./crates/rpc/rpc-eth/rpc" }
 cfx-rpc-utils = { path = "./crates/rpc/rpc-utils" }
-cfx-rpc-builder = { path = "./crates/rpc/rpc-eth/rpc-builder" }
+cfx-rpc-builder = { path = "./crates/rpc/rpc-builder" }
 bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }

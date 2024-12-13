@@ -59,7 +59,7 @@ The RPC implementation for eSpace is mainly located in the [crates/rpc](crates/r
 - [rpc-eth-types](../../crates/rpc/rpc-eth/rpc-eth-types/): RPC type definitions for eSpace.
 - [rpc-eth-api](../../crates/rpc/rpc-eth/rpc-eth-api/): RPC interface definitions for eSpace, organized by namespace.
 - [rpc](../../crates/rpc/rpc/): RPC interface implementation for eSpace.
-- [rpc-builder](../../crates/rpc/rpc-eth/rpc-builder/): Logic for RPC interface registration and service startup.
+- [rpc-builder](../../crates/rpc/rpc-builder/): Logic for RPC interface registration and service startup.
 - [rpc-utils](../../crates/rpc/rpc-utils/): Implementation of common utilities, such as error code definitions.
 
 The RPC implementation for Core Space is located in the [crates/client](../../crates/client) crate, developed using [jsonrpc-core](https://github.com/paritytech/jsonrpc)e. The core code is in the src/rpc directory.
