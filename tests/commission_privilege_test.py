@@ -10,14 +10,6 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
     def set_test_params(self):
         super().set_test_params()
         self.num_nodes = 1
-        
-    def assert_tx_exec_error(self, tx_hash, err_msg):
-        self.client.wait_for_receipt(tx_hash)
-        receipt = self.client.get_transaction_receipt(tx_hash)
-        assert_equal(
-            receipt["txExecErrorMsg"],
-            err_msg
-        )
 
     def run_test(self):
         bytes_per_key = 64
