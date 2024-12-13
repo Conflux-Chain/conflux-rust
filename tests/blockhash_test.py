@@ -23,7 +23,7 @@ class BlockHashFromStateTest(ConfluxTestFrameworkForContract):
             self.wait_for_block(i)
         self.wait_for_block(66000)
 
-        assert_equal(test_contract.functions.getBlockHash(100).call(), "0" * 64)
+        assert_equal(test_contract.functions.getBlockHash(100).call().hex(), "0" * 64)
         assert_equal(context_contract.functions.epochHash(100).call().hex(), "0" * 64)
         
 
