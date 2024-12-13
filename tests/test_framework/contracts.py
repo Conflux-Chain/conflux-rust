@@ -7,6 +7,13 @@ from typing import Literal, Dict, Type, Optional, cast, Union, List
 from conflux_web3 import Web3 as CWeb3
 from conflux_web3.contract import ConfluxContract
 from conflux_web3.client import ConfluxClient
+from typing import Any
+from web3.types import RPCEndpoint
+from conflux_web3._utils.rpc_abi import (
+    RPC
+)
+
+from conflux_web3.middleware.base import ConfluxWeb3Middleware
 
 from web3 import Web3
 from web3.eth import Eth
@@ -72,6 +79,8 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         self.conf_parameters["executive_trace"] = "true"  
         
     def setup_w3(self):
+        client = self.client
+        log = self.log
         self.w3 = CWeb3(CWeb3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].rpcport}/'))
         self.ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/'))
 
@@ -84,6 +93,22 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         self.ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(self.evm_secrets)) # type: ignore
         self.eth.default_account = self.evm_accounts[0].address
         
+        class TestNodeMiddleware(ConfluxWeb3Middleware):
+            def request_processor(self, method: RPCEndpoint, params: Any) -> Any:
+                if method == RPC.cfx_sendRawTransaction or method == RPC.cfx_sendTransaction:
+                    client.node.wait_for_phase(["NormalSyncPhase"])
+                return super().request_processor(method, params)
+
+            def response_processor(self, method: RPCEndpoint, response: Any):
+                if method == RPC.cfx_getTransactionReceipt:
+                    if "result" in response and response["result"] is None:
+                        log.debug("Auto generate 5 blocks because did not get tx receipt")
+                        client.generate_blocks_to_state(num_txs=1)  # why num_txs=1?
+                return response
+        self.w3.middleware_onion.add(TestNodeMiddleware)
+        
+    def start_block_gen(self):
+        BlockGenThread(self.nodes, self.log).start()
 
     def before_test(self):
         if "executive_trace" not in self.conf_parameters or not bool(self.conf_parameters["executive_trace"]):
@@ -95,8 +120,6 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         start_p2p_connection(self.nodes)
 
         self.setup_w3()
-        BlockGenThread(self.nodes, self.log).start()
-        self.deploy_create2()
 
     def cfx_contract(self, name) -> Type[ConfluxContract]:
         return cfx_contract(name, self)
@@ -107,7 +130,7 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
                 "gasPrice": 1
             }
         tx_hash = self.cfx_contract(name).constructor().transact(transact_args)
-        receipt = tx_hash.executed()
+        receipt = tx_hash.executed(timeout=30)
         return self.cfx_contract(name)(cast(str, receipt["contractCreated"]))
     
     def deploy_contract_2(self, name, seed, *args, **kwargs) -> ConfluxContract:
@@ -116,7 +139,9 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         contract_factory = self.cfx_contract(name)
         deploy_code = contract_factory.constructor(*args, **kwargs)._build_transaction()["data"]
         dest_address = self.create2factory.functions.callCreate2(seed, deploy_code).call()
-        self.create2factory.functions.callCreate2(seed, deploy_code).transact().executed()
+        tx_hash = self.create2factory.functions.callCreate2(seed, deploy_code).transact()
+        self.client.generate_blocks(10)
+        tx_hash.executed(timeout=30)
         return contract_factory(dest_address)
 
     def internal_contract(self, name: InternalContractName):

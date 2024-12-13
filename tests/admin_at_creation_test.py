@@ -17,8 +17,8 @@ class ClearAdminTest(ConfluxTestFrameworkForContract):
         sync_blocks(self.nodes)
 
     def run_test(self):
-        block_gen_thread = BlockGenThread(self.nodes, self.log)
-        block_gen_thread.start()
+        self.start_block_gen()
+        self.deploy_create2()
 
         genesis_addr = self.core_accounts[0].address
         test_account = self.core_accounts[1]
