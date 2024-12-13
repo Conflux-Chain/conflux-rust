@@ -146,9 +146,7 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         contract_factory = self.cfx_contract(name)
         deploy_code = contract_factory.constructor(*args, **kwargs)._build_transaction()["data"]
         dest_address = self.create2factory.functions.callCreate2(seed, deploy_code).call()
-        tx_hash = self.create2factory.functions.callCreate2(seed, deploy_code).transact()
-        self.client.generate_blocks(10)
-        tx_hash.executed(timeout=30)
+        self.create2factory.functions.callCreate2(seed, deploy_code).transact().executed()
         return contract_factory(dest_address)
 
     def internal_contract(self, name: InternalContractName):
@@ -189,6 +187,3 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
 
     def deploy_create2(self):
         self.create2factory = self.deploy_contract("Create2Factory")
-    
-if __name__ == "__main__":
-    ConfluxTestFrameworkForContract().main()
