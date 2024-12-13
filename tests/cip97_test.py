@@ -25,12 +25,12 @@ class CIP97Test(ConfluxTestFrameworkForContract):
             return int(self.rpc.cfx_getBlockByEpochNumber("latest_mined", False)["epochNumber"], 16)
         
         def deposit():
-            receipt = staking.deposit(1 * BASE).cfx_transact()
-            return int(receipt["gasUsed"], 16)
+            receipt = staking.deposit(1 * BASE).transact().executed()
+            return receipt["gasUsed"]
         
         def withdraw():
-            receipt = staking.withdraw(int(1.1 * BASE)).cfx_transact()
-            return int(receipt["gasUsed"], 16)
+            receipt = staking.withdraw(int(1.1 * BASE)).transact().executed()
+            return receipt["gasUsed"]
 
         for i in range(5):
             self.log.debug(f"deposit {i}")
