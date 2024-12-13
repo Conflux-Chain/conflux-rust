@@ -40,6 +40,5 @@ rustc-hex = { workspace = true }
 transient-hashmap = { workspace = true }
 tokio = { workspace = true }
 log = { workspace = true }
-runtime = { workspace = true }
 futures = { workspace = true }
 cfx-util-macros = { workspace = true }

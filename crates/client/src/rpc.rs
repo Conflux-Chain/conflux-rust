@@ -166,7 +166,7 @@ fn setup_rpc_apis(
                             rpc.consensus.clone(),
                             rpc.tx_pool.clone(),
                             eth_pubsub.epochs_ordered(),
-                            h.executor.clone(),
+                            pubsub.executor.clone(),
                             poll_lifetime,
                             rpc.config.get_logs_filter_max_limit,
                             h.network.clone(),
@@ -211,12 +211,12 @@ fn setup_rpc_apis(
 
                 if let Some(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
                 {
-                    if let Some(h) = eth_pubsub.handler().upgrade() {
+                    if let Some(_h) = eth_pubsub.handler().upgrade() {
                         let filter_client = EthFilterClient::new(
                             rpc.consensus.clone(),
                             rpc.tx_pool.clone(),
                             eth_pubsub.epochs_ordered(),
-                            h.executor.clone(),
+                            eth_pubsub.executor.clone(),
                             poll_lifetime,
                             rpc.config.get_logs_filter_max_limit,
                         )
