@@ -4,127 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bigdecimal = { workspace = true }
-num-bigint = { workspace = true }
-clap = { workspace = true }
-textwrap = { workspace = true }
-toml = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-serde_derive = { workspace = true }
-parking_lot = { workspace = true }
-io = { workspace = true }
-cfxkey = { workspace = true }
-cfxcore-accounts = { workspace = true }
-cfxstore = { workspace = true }
-cfx-internal-common = { workspace = true }
-cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
-cfx-statedb = { workspace = true }
-cfx-storage = { workspace = true }
-cfx-vm-types = { workspace = true }
-app_dirs = { workspace = true }
-dir = { workspace = true }
-ctrlc = { workspace = true }
 jsonrpc-core = { workspace = true }
-jsonrpc-tcp-server = { workspace = true }
-jsonrpc-http-server = { workspace = true }
-jsonrpc-derive = { workspace = true }
-jsonrpc-core-client = { workspace = true }
-jsonrpc-pubsub = { workspace = true }
-jsonrpc-ws-server = { workspace = true }
-lazy_static = { workspace = true }
 log = { workspace = true }
 cfx-types = { workspace = true }
 cfx-addr = { workspace = true }
-cfx-bytes = { workspace = true }
-runtime = { workspace = true }
-slab = { workspace = true }
 cfxcore = { workspace = true }
-network = { workspace = true }
-db = { workspace = true }
-blockgen = { workspace = true }
-txgen = { workspace = true }
-secret-store = { workspace = true }
 primitives = { workspace = true }
-log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
-rlp = { workspace = true }
-keccak-hash = { workspace = true }
-rand = { workspace = true }
-rand_08 = { package = "rand", version = "0.8.0" }
-kvdb-rocksdb = { workspace = true }
-tempdir = { workspace = true }
-rustc-hex = { workspace = true }
-threadpool = { workspace = true }
-metrics = { workspace = true }
-delegate = { workspace = true }
-transient-hashmap = { workspace = true }
-rand_xorshift = "0.2"
-itertools = { workspace = true }
-order-stat = "0.1"
-futures01 = { workspace = true }
-futures = { workspace = true, features = ["compat"] }
-rayon = { workspace = true }
-throttling = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
-tokio-stream = { workspace = true }
-tokio-timer = { workspace = true }
-malloc_size_of = { workspace = true }
-random-crash = { workspace = true }
-cfx-parameters = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
-crash-handler = { workspace = true }
-cached-pos-ledger-db = { workspace = true }
-pos-ledger-db = { workspace = true }
-diem-channel = { workspace = true }
-diem-config = { workspace = true }
-diem-crypto = { workspace = true }
-diem-logger = { workspace = true }
-diem-metrics = { workspace = true }
-diem-secure-storage = { workspace = true }
-diem-temppath = { workspace = true }
-diem-time-service = { workspace = true }
-diem-types = { workspace = true }
-pow-types = { workspace = true }
-executor-types = { workspace = true }
-executor = { workspace = true }
-storage-interface = { workspace = true }
-consensus-types = { workspace = true }
-rpassword = { workspace = true }
-static_assertions = { workspace = true }
-parity-version = { workspace = true }
-solidity-abi = { workspace = true }
-bls-signatures = { workspace = true }
-geth-tracer = { workspace = true }
-serde-utils = { workspace = true }
-
-anyhow = { workspace = true }
-thiserror = { workspace = true }
-alloy-primitives = { workspace = true }
-alloy-sol-types = { workspace = true }
-alloy-rpc-types-trace = { workspace = true }
-alloy-rpc-types = { workspace = true }
-revm = { workspace = true }
-cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
-cfx-rpc-primitives = { workspace = true }
 cfx-util-macros = { workspace = true }
-# cfx-rpc = { workspace = true }
-cfx-rpc-utils = { workspace = true }
-# cfx-rpc-builder = { workspace = true }
-jsonrpsee = { workspace = true }
-
-[dev-dependencies]
-criterion = "0.3"
-cfx-parameters = { workspace = true }
-cfx-executor = { workspace = true, features = ["testonly_code"] }
-serial_test = "0.5.1"
-
-[features]
-# Unfortunately cfg test attributes doesn't work across crates,
-# we have to define a feature for test code.
-# https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
-testonly_code = []
-u64_mpt_db_key = ["cfx-storage/u64_mpt_db_key"]
-
