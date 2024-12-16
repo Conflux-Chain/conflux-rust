@@ -11,9 +11,9 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter, EthRpcLogFilter as Filter,
-    FeeHistory, Header, Log, Receipt, SyncInfo, SyncStatus, Transaction,
-    TransactionRequest,
+    Block, BlockNumber as BlockId, BlockOverrides, EthRpcLogFilter,
+    EthRpcLogFilter as Filter, FeeHistory, Header, Log, Receipt, StateOverride,
+    SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::error::{
@@ -1236,12 +1236,12 @@ impl EthApiServer for EthApi {
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     async fn call(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_overrides: Option<StateOverride>,
-        // block_overrides: Option<Box<BlockOverrides>>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<StateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
+        let _ = block_overrides;
+        let _ = state_overrides;
         let (execution, _estimation) =
             self.exec_transaction(request, block_number)?;
 

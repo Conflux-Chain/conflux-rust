@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 
-syn = {version = "1", features=["parsing"]} # feature "extra-traits" for debug
+syn = { workspace = true, features=["parsing"]} # feature "extra-traits" for debug
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
 proc-macro-crate = "3"

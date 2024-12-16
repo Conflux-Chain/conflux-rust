@@ -82,9 +82,17 @@ impl AddressUtil for &[u8] {
     fn is_null_address(&self) -> bool { self.iter().all(|&byte| byte == 0u8) }
 }
 
+// parse hex string(support 0x prefix) to Address
+// Address::from_str does not support 0x prefix
+pub fn address(hex_literal: &str) -> Result<Address, hex::FromHexError> {
+    let hex_literal = hex_literal.strip_prefix("0x").unwrap_or(hex_literal);
+    let raw_bytes = hex::decode(hex_literal)?;
+    Ok(Address::from_slice(&raw_bytes))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Address, AddressUtil};
+    use super::{address, Address, AddressUtil};
 
     #[test]
     fn test_set_type_bits() {
@@ -102,5 +110,26 @@ mod tests {
             address.set_address_type_bits(type_bits);
             assert_eq!(address.address_type_bits(), type_bits);
         }
+    }
+
+    #[test]
+    fn test_address_util() {
+        let addr = address("0000000000000000000000000000000000000000").unwrap();
+        assert_eq!(addr, Address::zero());
+
+        let addr_err = address("123");
+        assert!(addr_err.is_err());
+
+        let addr =
+            address("0x0000000000000000000000000000000000000000").unwrap();
+        assert_eq!(addr, Address::zero());
+
+        use std::str::FromStr;
+        let addr =
+            Address::from_str("1234567890AbcdEF1234567890aBcdef12345678")
+                .unwrap();
+        let addr2 =
+            address("0x1234567890abcdef1234567890abcdef12345678").unwrap();
+        assert_eq!(addr, addr2);
     }
 }

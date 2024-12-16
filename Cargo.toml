@@ -236,9 +236,11 @@ move-core-types = { path = "./crates/pos/types/move-core-types" }
 pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
+
 # proc-macros
 proc-macro2 = "1.0"
 quote = "1.0"
+syn = "1.0"
 
 serde = { version = "1.0", features = [
     "derive",
@@ -366,3 +368,8 @@ parity-util-mem = { version = "0.5", default-features = false }
 parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 substrate-bn = { git = "https://github.com/paritytech/bn", rev = "63f8c587356a67b33c7396af98e065b66fca5dda", default-features = false }
+
+# misc-testing
+similar-asserts = "1.5"
+assert_matches = "1.5"
+serial_test = "3.0"

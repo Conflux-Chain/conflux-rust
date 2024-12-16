@@ -1,6 +1,7 @@
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter as Filter, FeeHistory,
-    Header, Log, Receipt, SyncStatus, Transaction, TransactionRequest,
+    Block, BlockNumber as BlockId, BlockOverrides, EthRpcLogFilter as Filter,
+    FeeHistory, Header, Log, Receipt, StateOverride, SyncStatus, Transaction,
+    TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index};
 use cfx_types::{Address, H256, H64, U256, U64};
@@ -199,11 +200,9 @@ pub trait EthApi {
     /// on the block chain.
     #[method(name = "call")]
     async fn call(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_overrides: Option<StateOverride>,
-        // block_overrides: Option<Box<BlockOverrides>>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<StateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes>;
 
     /// Simulate arbitrary number of transactions at an arbitrary blockchain
