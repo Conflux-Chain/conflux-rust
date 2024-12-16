@@ -4,7 +4,6 @@
 
 use crate::{trace_eth::LocalizedTrace as EthLocalizedTrace, RpcAddress};
 use cfx_addr::Network;
-// use cfx_executor::internal_contract::evm_map;
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_parity_trace_types::{
     Action as VmAction, ActionType as VmActionType, BlockExecTraces,

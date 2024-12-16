@@ -1441,7 +1441,6 @@ name = "cfx-rpc-cfx-types"
 version = "2.4.0"
 dependencies = [
  "cfx-addr",
- "cfx-executor",
  "cfx-parameters",
  "cfx-parity-trace-types",
  "cfx-rpc-primitives",
