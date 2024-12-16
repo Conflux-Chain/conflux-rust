@@ -187,3 +187,4 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
 
     def deploy_create2(self):
         self.create2factory = self.deploy_contract("Create2Factory")
+        self.client.generate_blocks(5)
