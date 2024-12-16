@@ -6,6 +6,7 @@ mod fee_history_cache_entry;
 mod phantom_block;
 mod rpc_impl_configuration;
 pub mod trace;
+pub mod trace_eth;
 pub mod trace_filter;
 pub mod traits;
 mod transaction_status;

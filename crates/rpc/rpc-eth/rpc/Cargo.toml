@@ -18,6 +18,7 @@ jsonrpsee = { workspace = true, features = ["server", "macros"] }
 cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
+cfx-rpc-cfx-impl = { workspace = true }
 async-trait = { workspace = true }
 keccak-hash = { workspace = true}
 parity-version = { workspace = true }
@@ -43,3 +44,4 @@ log = { workspace = true }
 runtime = { workspace = true }
 futures = { workspace = true }
 cfx-util-macros = { workspace = true }
+cfx-addr = { workspace = true }

@@ -7,7 +7,7 @@ mod filter;
 mod log;
 mod receipt;
 mod sync;
-pub mod trace;
+// pub mod trace;
 pub mod trace_filter;
 mod transaction;
 mod transaction_request;
@@ -23,7 +23,8 @@ pub use filter::*;
 pub use log::Log;
 pub use receipt::Receipt;
 pub use sync::{SyncInfo, SyncStatus};
-pub use trace::*;
+// pub use trace::*;
+pub use cfx_rpc_cfx_types::trace_eth::*;
 pub use trace_filter::TraceFilter;
 pub use transaction::Transaction;
 pub use transaction_request::{
