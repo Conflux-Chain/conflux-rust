@@ -53,16 +53,16 @@ members = [
     "crates/util/version",
     "crates/util/serde_utils",
     "crates/cfxcore/geth-tracer",
-    "crates/rpc/rpc-eth/rpc-eth-types",
+    "crates/rpc/rpc-eth-types",
     "crates/rpc/rpc-primitives",
-    "crates/rpc/rpc-cfx/rpc-cfx-types",
-    "crates/rpc/rpc-eth/rpc-eth-api",
+    "crates/rpc/rpc-cfx-types",
+    "crates/rpc/rpc-eth-api",
     "crates/cfxcore/parity-trace-types",
-    "crates/rpc/rpc-eth/rpc",
+    "crates/rpc/rpc-eth-impl",
     "crates/util/util-macros",
     "crates/rpc/rpc-utils",
     "crates/rpc/rpc-builder",
-    "crates/rpc/rpc-cfx/rpc-cfx-impl",
+    "crates/rpc/rpc-cfx-impl",
     "crates/pos/common/bounded-executor",
     "crates/pos/common/crash-handler",
     "crates/pos/common/fallible",
@@ -186,16 +186,16 @@ cfx-vm-interpreter = { path = "./crates/cfxcore/vm-interpreter" }
 geth-tracer = { path = "./crates/cfxcore/geth-tracer" }
 cfx-vm-types = { path = "./crates/cfxcore/vm-types" }
 cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
-cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth/rpc-eth-types" }
+cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
 cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
-cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx/rpc-cfx-types" }
+cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
 cfx-parity-trace-types = { path = "./crates/cfxcore/parity-trace-types" }
-cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth/rpc-eth-api" }
+cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth-api" }
 cfx-util-macros = { path = "./crates/util/util-macros" }
-cfx-rpc = { path = "./crates/rpc/rpc-eth/rpc" }
+cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
 cfx-rpc-utils = { path = "./crates/rpc/rpc-utils" }
 cfx-rpc-builder = { path = "./crates/rpc/rpc-builder" }
-cfx-rpc-cfx-impl = { path = "./crates/rpc/rpc-cfx/rpc-cfx-impl" }
+cfx-rpc-cfx-impl = { path = "./crates/rpc/rpc-cfx-impl" }
 bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }

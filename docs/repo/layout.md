@@ -55,9 +55,9 @@ Conflux provides a standard JSON-RPC 2.0 interface to allow external ecosystems 
 The RPC implementation for eSpace is mainly located in the [crates/rpc](crates/rpc) directory and is developed using the [jsonrpsee](https://github.com/paritytech/jsonrpsee) RPC framework. It includes multiple crates:
 
 - [rpc-primitives](../../crates/rpc/rpc-primitives/): Definitions of the raw types for RPC.
-- [rpc-cfx-types](../../crates/rpc/rpc-cfx/rpc-cfx-types/): RPC type definitions for Core Space.
-- [rpc-eth-types](../../crates/rpc/rpc-eth/rpc-eth-types/): RPC type definitions for eSpace.
-- [rpc-eth-api](../../crates/rpc/rpc-eth/rpc-eth-api/): RPC interface definitions for eSpace, organized by namespace.
+- [rpc-cfx-types](../../crates/rpc/rpc-cfx-types/): RPC type definitions for Core Space.
+- [rpc-eth-types](../../crates/rpc/rpc-eth-types/): RPC type definitions for eSpace.
+- [rpc-eth-api](../../crates/rpc/rpc-eth-api/): RPC interface definitions for eSpace, organized by namespace.
 - [rpc](../../crates/rpc/rpc/): RPC interface implementation for eSpace.
 - [rpc-builder](../../crates/rpc/rpc-builder/): Logic for RPC interface registration and service startup.
 - [rpc-utils](../../crates/rpc/rpc-utils/): Implementation of common utilities, such as error code definitions.
