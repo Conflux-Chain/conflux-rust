@@ -217,10 +217,6 @@ impl Executable for PassResult {
     }
 }
 
-// pub fn evm_map(address: Address) -> AddressWithSpace {
-//     Address::from(keccak(&address)).with_evm_space()
-// }
-
 pub fn process_trap<T>(
     result: vm::Result<(ActionParams, Box<dyn Resumable>)>,
     _phantom: PhantomData<T>,
