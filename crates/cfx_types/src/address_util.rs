@@ -1,4 +1,6 @@
 use super::Address;
+use crate::{space_util::AddressSpaceUtil, AddressWithSpace};
+use keccak_hash::keccak;
 
 pub const TYPE_BITS_BUILTIN: u8 = 0x00;
 pub const TYPE_BITS_CONTRACT: u8 = 0x80;
@@ -10,6 +12,8 @@ pub trait AddressUtil: Sized + Ord {
     fn type_byte_mut(&mut self) -> &mut u8;
 
     fn is_null_address(&self) -> bool;
+
+    fn evm_map(&self) -> AddressWithSpace;
 
     #[inline]
     fn address_type_bits(&self) -> u8 { self.type_byte() & 0xf0 }
@@ -69,6 +73,11 @@ impl AddressUtil for Address {
 
     #[inline]
     fn is_null_address(&self) -> bool { self.is_zero() }
+
+    #[inline]
+    fn evm_map(&self) -> AddressWithSpace {
+        Address::from(keccak(&self)).with_evm_space()
+    }
 }
 
 impl AddressUtil for &[u8] {
@@ -80,6 +89,11 @@ impl AddressUtil for &[u8] {
 
     #[inline]
     fn is_null_address(&self) -> bool { self.iter().all(|&byte| byte == 0u8) }
+
+    #[inline]
+    fn evm_map(&self) -> AddressWithSpace {
+        Address::from(keccak(&self)).with_evm_space()
+    }
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@
 
 use crate::{trace_eth::LocalizedTrace as EthLocalizedTrace, RpcAddress};
 use cfx_addr::Network;
-use cfx_executor::internal_contract::evm_map;
+// use cfx_executor::internal_contract::evm_map;
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_parity_trace_types::{
     Action as VmAction, ActionType as VmActionType, BlockExecTraces,
@@ -14,7 +14,7 @@ use cfx_parity_trace_types::{
     LocalizedTrace as PrimitiveLocalizedTrace, Outcome, TransactionExecTraces,
 };
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{Space, H160, H256, U256, U64};
+use cfx_types::{address_util::AddressUtil, Space, H160, H256, U256, U64};
 use cfx_vm_types::{CallType, CreateType};
 use primitives::SignedTransaction;
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
@@ -387,7 +387,7 @@ impl EpochTrace {
             if let Action::Call(action) = &t.action {
                 if action.to.hex_address == CROSS_SPACE_CONTRACT_ADDRESS {
                     mirror_address_map.insert(
-                        evm_map(action.from.hex_address).address,
+                        action.from.hex_address.evm_map().address,
                         action.from.clone(),
                     );
                 }
