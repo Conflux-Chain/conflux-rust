@@ -1367,9 +1367,11 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
  "async-trait",
+ "cfx-addr",
  "cfx-execute-helper",
  "cfx-executor",
  "cfx-parameters",
+ "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-types",
@@ -1417,6 +1419,21 @@ dependencies = [
  "strum",
  "thiserror",
  "tower",
+]
+
+[[package]]
+name = "cfx-rpc-cfx-impl"
+version = "0.1.0"
+dependencies = [
+ "cfx-addr",
+ "cfx-execute-helper",
+ "cfx-rpc-cfx-types",
+ "cfx-types",
+ "cfx-util-macros",
+ "cfxcore",
+ "jsonrpc-core 15.1.0",
+ "log",
+ "primitives",
 ]
 
 [[package]]
@@ -1959,6 +1976,7 @@ dependencies = [
  "cfx-parameters",
  "cfx-rpc",
  "cfx-rpc-builder",
+ "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
