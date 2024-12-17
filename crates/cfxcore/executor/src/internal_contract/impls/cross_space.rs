@@ -12,14 +12,13 @@ use crate::{
 use cfx_parameters::block::CROSS_SPACE_GAS_RATIO;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, Space, H256, U256,
 };
 use cfx_vm_interpreter::Finalize;
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, Context as _,
     CreateContractAddress, CreateType, GasLeft, ParamsType, Spec,
 };
-use keccak_hash::keccak;
 use solidity_abi::ABIEncodable;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -218,10 +217,6 @@ impl Executable for PassResult {
     }
 }
 
-pub fn evm_map(address: Address) -> AddressWithSpace {
-    Address::from(keccak(&address)).with_evm_space()
-}
-
 pub fn process_trap<T>(
     result: vm::Result<(ActionParams, Box<dyn Resumable>)>,
     _phantom: PhantomData<T>,
@@ -250,8 +245,8 @@ pub fn call_to_evmcore(
         };
     let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
-    let mapped_sender = evm_map(params.sender);
-    let mapped_origin = evm_map(params.original_sender);
+    let mapped_sender = params.sender.evm_map();
+    let mapped_origin = params.original_sender.evm_map();
 
     context.state.transfer_balance(
         &params.address.with_native_space(),
@@ -329,8 +324,8 @@ pub fn create_to_evmcore(
         };
     let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
-    let mapped_sender = evm_map(params.sender);
-    let mapped_origin = evm_map(params.original_sender);
+    let mapped_sender = params.sender.evm_map();
+    let mapped_origin = params.original_sender.evm_map();
 
     let value = params.value.value();
     context.state.transfer_balance(
@@ -403,7 +398,7 @@ pub fn withdraw_from_evmcore(
     sender: Address, value: U256, params: &ActionParams,
     context: &mut InternalRefContext,
 ) -> vm::Result<()> {
-    let mapped_address = evm_map(sender);
+    let mapped_address = sender.evm_map();
     let balance = context.state.balance(&mapped_address)?;
     if balance < value {
         internal_bail!(
@@ -438,11 +433,11 @@ pub fn withdraw_from_evmcore(
 pub fn mapped_balance(
     address: Address, context: &mut InternalRefContext,
 ) -> vm::Result<U256> {
-    Ok(context.state.balance(&evm_map(address))?)
+    Ok(context.state.balance(&address.evm_map())?)
 }
 
 pub fn mapped_nonce(
     address: Address, context: &mut InternalRefContext,
 ) -> vm::Result<U256> {
-    Ok(context.state.nonce(&evm_map(address))?)
+    Ok(context.state.nonce(&address.evm_map())?)
 }
