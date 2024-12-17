@@ -425,7 +425,6 @@ build_config! {
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
         (public_evm_rpc_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
-        // (public_evm_rpc_async_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
         (public_evm_rpc_async_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
         (single_mpt_space, (Option<Space>), None, |s| match s {
             "native" => Ok(Space::Native),
