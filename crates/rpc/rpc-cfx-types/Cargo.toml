@@ -29,3 +29,5 @@ cfx-parity-trace-types = { workspace = true }
 parity-version = { workspace = true }
 rand = { workspace = true }
 rand_xorshift = { workspace = true }
+
+[dev-dependencies]

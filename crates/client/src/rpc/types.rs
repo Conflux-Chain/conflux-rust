@@ -29,7 +29,6 @@ pub use self::{
         storage_collateral_info::StorageCollateralInfo,
         sync_graph_states::SyncGraphStates,
         token_supply_info::TokenSupplyInfo,
-        trace::EpochTrace,
         transaction::{PackedOrExecuted, Transaction, WrapTransaction},
         transaction_request::{
             self, CheckBalanceAgainstTransactionResponse,

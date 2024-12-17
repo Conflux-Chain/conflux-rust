@@ -1,28 +1,32 @@
-use crate::rpc::{
-    impls::cfx::TraceHandler,
-    traits::eth_space::trace::Trace as EthTrace,
-    types::{
-        eth::{
-            BlockNumber, LocalizedTrace as EthLocalizedTrace, Res as EthRes,
-            TraceFilter as EthTraceFilter,
-        },
-        Action as RpcAction,
-    },
-};
+use cfx_addr::Network;
 use cfx_execute_helper::exec_tracer::TraceFilter as PrimitiveTraceFilter;
+use cfx_rpc_cfx_impl::TraceHandler;
+use cfx_rpc_cfx_types::{
+    trace::Action as RpcAction,
+    trace_eth::{LocalizedTrace as EthLocalizedTrace, Res as EthRes},
+};
+use cfx_rpc_eth_api::TraceApiServer;
+use cfx_rpc_eth_types::{BlockNumber, LocalizedTrace, TraceFilter};
 use cfx_types::{Space, H256};
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
-use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
+use cfxcore::{errors::Result as CoreResult, SharedConsensusGraph};
+use jsonrpc_core::Error as RpcError;
+use jsonrpsee::core::RpcResult;
 use primitives::EpochNumber;
 
-pub struct EthTraceHandler {
-    pub trace_handler: TraceHandler,
+pub struct TraceApi {
+    trace_handler: TraceHandler,
 }
 
-impl EthTrace for EthTraceHandler {
-    fn block_traces(
+impl TraceApi {
+    pub fn new(consensus: SharedConsensusGraph, network: Network) -> TraceApi {
+        let trace_handler = TraceHandler::new(network, consensus);
+        TraceApi { trace_handler }
+    }
+
+    pub fn block_traces(
         &self, block_number: BlockNumber,
-    ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
+    ) -> CoreResult<Option<Vec<LocalizedTrace>>> {
         let phantom_block = match block_number {
             BlockNumber::Hash { hash, .. } => self
                 .trace_handler
@@ -30,7 +34,8 @@ impl EthTrace for EthTraceHandler {
                 .get_phantom_block_by_hash(
                     &hash, true, /* include_traces */
                 )
-                .map_err(JsonRpcError::invalid_params)?,
+                .map_err(RpcError::invalid_params)?,
+
             _ => self
                 .trace_handler
                 .consensus_graph()
@@ -39,7 +44,7 @@ impl EthTrace for EthTraceHandler {
                     None,
                     true, /* include_traces */
                 )
-                .map_err(JsonRpcError::invalid_params)?,
+                .map_err(RpcError::invalid_params)?,
         };
 
         unwrap_or_return!(phantom_block);
@@ -54,16 +59,16 @@ impl EthTrace for EthTraceHandler {
             for (action, result, subtraces) in
                 PrimitiveTraceFilter::space_filter(Space::Ethereum)
                     .filter_trace_pairs(tx_traces)
-                    .map_err(|_| JsonRpcError::internal_error())?
+                    .map_err(|_| RpcError::internal_error())?
             {
-                let mut eth_trace = EthLocalizedTrace {
+                let mut eth_trace = LocalizedTrace {
                     action: RpcAction::try_from(
                         action.action,
-                        self.trace_handler.inner.network,
+                        self.trace_handler.network,
                     )
-                    .map_err(|_| JsonRpcError::internal_error())?
+                    .map_err(|_| RpcError::internal_error())?
                     .try_into()
-                    .map_err(|_| JsonRpcError::internal_error())?,
+                    .map_err(|_| RpcError::internal_error())?,
                     result: EthRes::None,
                     trace_address: vec![],
                     subtraces,
@@ -78,9 +83,9 @@ impl EthTrace for EthTraceHandler {
                 eth_trace.set_result(
                     RpcAction::try_from(
                         result.action,
-                        self.trace_handler.inner.network,
+                        self.trace_handler.network,
                     )
-                    .map_err(|_| JsonRpcError::internal_error())?,
+                    .map_err(|_| RpcError::internal_error())?,
                 )?;
 
                 eth_traces.push(eth_trace);
@@ -90,9 +95,9 @@ impl EthTrace for EthTraceHandler {
         Ok(Some(eth_traces))
     }
 
-    fn filter_traces(
-        &self, filter: EthTraceFilter,
-    ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
+    pub fn filter_traces(
+        &self, filter: TraceFilter,
+    ) -> CoreResult<Option<Vec<LocalizedTrace>>> {
         // TODO(lpl): Use `TransactionExecTraces::filter_trace_pairs` to avoid
         // pairing twice.
         let primitive_filter = filter.into_primitive()?;
@@ -106,19 +111,18 @@ impl EthTrace for EthTraceHandler {
         Ok(Some(TraceHandler::to_eth_traces(traces)?))
     }
 
-    fn transaction_traces(
+    pub fn transaction_traces(
         &self, tx_hash: H256,
-    ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
-        let tx_index =
-            self.trace_handler.inner.data_man.transaction_index_by_hash(
-                &tx_hash, false, /* update_cache */
-            );
+    ) -> CoreResult<Option<Vec<EthLocalizedTrace>>> {
+        let tx_index = self
+            .trace_handler
+            .data_man
+            .transaction_index_by_hash(&tx_hash, false /* update_cache */);
 
         unwrap_or_return!(tx_index);
 
         let epoch_num = self
             .trace_handler
-            .inner
             .consensus
             .get_block_epoch_number(&tx_index.block_hash);
 
@@ -132,7 +136,7 @@ impl EthTrace for EthTraceHandler {
                 None,
                 true, /* include_traces */
             )
-            .map_err(JsonRpcError::invalid_params)?;
+            .map_err(RpcError::invalid_params)?;
 
         unwrap_or_return!(phantom_block);
 
@@ -150,7 +154,7 @@ impl EthTrace for EthTraceHandler {
         // convert traces
         let trace_pairs = PrimitiveTraceFilter::space_filter(Space::Ethereum)
             .filter_trace_pairs(tx_traces)
-            .map_err(JsonRpcError::invalid_params)?;
+            .map_err(RpcError::invalid_params)?;
 
         let mut eth_traces = Vec::new();
 
@@ -158,11 +162,11 @@ impl EthTrace for EthTraceHandler {
             let mut eth_trace = EthLocalizedTrace {
                 action: RpcAction::try_from(
                     action.action,
-                    self.trace_handler.inner.network,
+                    self.trace_handler.network,
                 )
-                .map_err(|_| JsonRpcError::internal_error())?
+                .map_err(|_| RpcError::internal_error())?
                 .try_into()
-                .map_err(|_| JsonRpcError::internal_error())?,
+                .map_err(|_| RpcError::internal_error())?,
                 result: EthRes::None,
                 trace_address: vec![],
                 subtraces,
@@ -175,16 +179,34 @@ impl EthTrace for EthTraceHandler {
             };
 
             eth_trace.set_result(
-                RpcAction::try_from(
-                    result.action,
-                    self.trace_handler.inner.network,
-                )
-                .map_err(|_| JsonRpcError::internal_error())?,
+                RpcAction::try_from(result.action, self.trace_handler.network)
+                    .map_err(|_| RpcError::internal_error())?,
             )?;
 
             eth_traces.push(eth_trace);
         }
 
         Ok(Some(eth_traces))
+    }
+}
+
+#[async_trait::async_trait]
+impl TraceApiServer for TraceApi {
+    async fn block_traces(
+        &self, block_number: BlockNumber,
+    ) -> RpcResult<Option<Vec<LocalizedTrace>>> {
+        self.block_traces(block_number).map_err(|err| err.into())
+    }
+
+    async fn filter_traces(
+        &self, filter: TraceFilter,
+    ) -> RpcResult<Option<Vec<LocalizedTrace>>> {
+        self.filter_traces(filter).map_err(|err| err.into())
+    }
+
+    async fn transaction_traces(
+        &self, tx_hash: H256,
+    ) -> RpcResult<Option<Vec<EthLocalizedTrace>>> {
+        self.transaction_traces(tx_hash).map_err(|err| err.into())
     }
 }

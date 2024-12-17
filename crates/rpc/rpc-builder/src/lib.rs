@@ -164,7 +164,12 @@ impl RpcRegistryInner {
         self
     }
 
-    pub fn trace_api(&self) -> TraceApi { TraceApi::new() }
+    pub fn trace_api(&self) -> TraceApi {
+        TraceApi::new(
+            self.consensus.clone(),
+            self.sync.network.get_network_type().clone(),
+        )
+    }
 
     pub fn debug_api(&self) -> DebugApi {
         DebugApi::new(
@@ -227,7 +232,12 @@ impl RpcRegistryInner {
                     )))
                     .into_rpc()
                     .into(),
-                    EthRpcModule::Trace => TraceApi::new().into_rpc().into(),
+                    EthRpcModule::Trace => TraceApi::new(
+                        self.consensus.clone(),
+                        self.sync.network.get_network_type().clone(),
+                    )
+                    .into_rpc()
+                    .into(),
                     EthRpcModule::Web3 => Web3Api.into_rpc().into(),
                     EthRpcModule::Rpc => {
                         RPCApi::new(module_version.clone()).into_rpc().into()

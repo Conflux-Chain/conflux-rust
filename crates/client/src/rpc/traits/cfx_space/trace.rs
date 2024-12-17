@@ -3,8 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    EpochNumber, EpochTrace, LocalizedBlockTrace, LocalizedTrace, TraceFilter,
+    EpochNumber, LocalizedBlockTrace, LocalizedTrace, TraceFilter,
 };
+use cfx_rpc_cfx_types::trace::EpochTrace;
 use cfx_types::H256;
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
