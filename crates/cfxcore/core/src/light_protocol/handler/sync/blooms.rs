@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate lru_time_cache;
-
 use cfx_types::Bloom;
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
