@@ -13,6 +13,7 @@ use rustc_hex::FromHex;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
+use crate::keylib::KeyPair;
 use cfx_executor::internal_contract::initialize_internal_contract_accounts;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -33,7 +34,6 @@ use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
 };
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
-use keylib::KeyPair;
 use primitives::{
     Action, Block, BlockHeaderBuilder, BlockReceipts, SignedTransaction,
 };
