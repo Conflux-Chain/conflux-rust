@@ -60,7 +60,7 @@ impl<'a> EstimationContext<'a> {
     }
 
     fn process_estimate_request(
-        &mut self, tx: &mut SignedTransaction, request: &EstimateRequest,
+        &mut self, tx: &mut SignedTransaction, request: &EstimateRequestMeta,
     ) -> DbResult<()> {
         if !request.has_sender {
             let mut random_hex = Address::random();
@@ -132,7 +132,7 @@ impl<'a> EstimationContext<'a> {
     }
 
     pub fn transact_virtual(
-        &mut self, mut tx: SignedTransaction, request: EstimateRequest,
+        &mut self, mut tx: SignedTransaction, request: EstimateRequestMeta,
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         if let Some(outcome) = self.check_cip130(&tx, &request) {
             return Ok(outcome);
@@ -173,7 +173,7 @@ impl<'a> EstimationContext<'a> {
     }
 
     fn check_cip130(
-        &self, tx: &SignedTransaction, request: &EstimateRequest,
+        &self, tx: &SignedTransaction, request: &EstimateRequestMeta,
     ) -> Option<(ExecutionOutcome, EstimateExt)> {
         let min_gas_limit = U256::from(tx.data().len() * 100);
         if !request.has_gas_limit || *tx.gas_limit() >= min_gas_limit {
@@ -205,7 +205,7 @@ impl<'a> EstimationContext<'a> {
     // can be afford by the sponsor, to guarantee the user pays for
     // the storage limit.
     fn two_pass_estimation(
-        &mut self, tx: &SignedTransaction, request: EstimateRequest,
+        &mut self, tx: &SignedTransaction, request: EstimateRequestMeta,
     ) -> DbResult<Result<(Executed, Option<u64>), ExecutionOutcome>> {
         // First pass
         let saved = self.state.save();
@@ -292,7 +292,7 @@ impl<'a> EstimationContext<'a> {
 
     fn enact_executed_by_estimation_request(
         &self, tx: SignedTransaction, mut executed: Executed,
-        overwrite_storage_limit: Option<u64>, request: &EstimateRequest,
+        overwrite_storage_limit: Option<u64>, request: &EstimateRequestMeta,
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         let estimated_storage_limit =
             overwrite_storage_limit.unwrap_or(storage_limit(&executed));
@@ -445,7 +445,7 @@ where F: Fn(&Address) -> Addr {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct EstimateRequest {
+pub struct EstimateRequestMeta {
     pub has_sender: bool,
     pub has_gas_limit: bool,
     pub has_gas_price: bool,
@@ -453,7 +453,7 @@ pub struct EstimateRequest {
     pub has_storage_limit: bool,
 }
 
-impl EstimateRequest {
+impl EstimateRequestMeta {
     fn recheck_gas_fee(&self) -> bool { self.has_sender && self.has_gas_price }
 
     fn charge_gas(&self) -> bool {

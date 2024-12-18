@@ -1,6 +1,6 @@
 use crate::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 use async_trait::async_trait;
-use cfx_execute_helper::estimation::EstimateRequest;
+use cfx_execute_helper::estimation::EstimateRequestMeta;
 use cfx_executor::executive::{
     string_revert_reason_decode, Executed, ExecutionError, ExecutionOutcome,
     TxDropError,
@@ -150,7 +150,7 @@ impl EthApi {
         // if gas_price and gas is zero, it is considered as not set
         request.unset_zero_gas_and_price();
 
-        let estimate_request = EstimateRequest {
+        let estimate_request = EstimateRequestMeta {
             has_sender: request.from.is_some(),
             has_gas_limit: request.gas.is_some(),
             has_gas_price: request.has_gas_price(),

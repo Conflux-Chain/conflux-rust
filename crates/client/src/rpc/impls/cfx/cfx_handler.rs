@@ -98,7 +98,7 @@ use crate::{
     },
 };
 use cfx_addr::Network;
-use cfx_execute_helper::estimation::EstimateRequest;
+use cfx_execute_helper::estimation::EstimateRequestMeta;
 use cfx_executor::state::State;
 use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
@@ -1486,7 +1486,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
-        let estimate_request = EstimateRequest {
+        let estimate_request = EstimateRequestMeta {
             has_sender: request.from.is_some(),
             has_gas_limit: request.gas.is_some(),
             has_gas_price: request.has_gas_price(),

@@ -39,7 +39,7 @@ use crate::{
     NodeType, Notifications,
 };
 use cfx_execute_helper::{
-    estimation::{EstimateExt, EstimateRequest},
+    estimation::{EstimateExt, EstimateRequestMeta},
     exec_tracer::{
         recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
         TraceFilter,
@@ -1429,7 +1429,7 @@ impl ConsensusGraph {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
-        request: EstimateRequest,
+        request: EstimateRequestMeta,
     ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
