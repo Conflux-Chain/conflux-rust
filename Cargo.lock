@@ -1394,6 +1394,7 @@ dependencies = [
  "primitives",
  "runtime",
  "rustc-hex",
+ "solidity-abi",
  "tokio 1.40.0",
  "transient-hashmap",
 ]
@@ -8180,6 +8181,7 @@ dependencies = [
 name = "solidity-abi"
 version = "0.1.0"
 dependencies = [
+ "cfx-bytes",
  "cfx-types",
  "keccak-hash",
  "lazy_static",
