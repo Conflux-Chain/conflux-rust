@@ -4,7 +4,7 @@ import sys
 
 
 # If this errors is changed, please let me know https://github.com/Conflux-Chain/rpc-errors/issues/new
-def test_get_block_by_epoch_number_errors(client: RpcClient):
+def test_get_epoch_number_errors(client: RpcClient):
     assert_raises_rpc_error(
         -32602,
         "Invalid params: invalid type: integer `1`, expected an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_finalized', 'latest_confirmed' or 'earliest'.",
