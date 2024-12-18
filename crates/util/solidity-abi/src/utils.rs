@@ -165,9 +165,10 @@ mod test {
         let input_hex = "08c379a0\
             0000000000000000000000000000000000000000000000000000000000000020\
             0000000000000000000000000000000000000000000000000000000000000018\
-            e699bae59586e4b88de8b6b3efbc8ce8afb7e58585e580bc0000000000000000";
+            5468697320697320616e206572726f72206d6573736167650000000000000000\
+            ";
         assert_eq!(
-            "智商不足，请充值".to_string(),
+            "This is an error message".to_string(),
             string_revert_reason_decode(&input_hex.from_hex().unwrap())
         );
     }
