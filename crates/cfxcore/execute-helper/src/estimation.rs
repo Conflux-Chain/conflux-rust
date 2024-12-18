@@ -29,12 +29,18 @@ enum SponsoredType {
     Collateral,
 }
 
+/// EstimateExt is the result of the estimation of a transaction. It contains
+/// the estimated gas limit and the estimated storage limit.
 #[derive(Default, Debug)]
 pub struct EstimateExt {
     pub estimated_gas_limit: U256,
     pub estimated_storage_limit: u64,
 }
 
+/// EstimationContext is the context for estimating a transaction.
+/// It can be used to virtually execute a transaction and get the estimation
+/// result (including gas estimation and execution output).
+/// The main function is `transact_virtual`.
 pub struct EstimationContext<'a> {
     state: &'a mut State,
     env: &'a Env,
@@ -399,6 +405,8 @@ impl<'a> EstimationContext<'a> {
     }
 }
 
+// Cal the estimated gas from the executed result
+// and apply cip130 to the estimation
 fn estimated_gas_limit(executed: &Executed, tx: &SignedTransaction) -> U256 {
     let cip130_min_gas_limit = U256::from(tx.data().len() * 100);
     let estimated =
@@ -414,6 +422,7 @@ fn storage_limit(executed: &Executed) -> u64 {
         .map_or(0, |x| x.collaterals.as_u64())
 }
 
+/// Decode the revert error and the innermost error.
 pub fn decode_error<F, Addr: Display>(
     executed: &Executed, format_address: F,
 ) -> (String, String, Vec<String>)

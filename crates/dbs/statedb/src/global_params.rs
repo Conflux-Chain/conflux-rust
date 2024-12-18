@@ -64,6 +64,7 @@ macro_rules! for_all_global_param_keys {
 }
 
 pub struct InterestRate;
+
 impl GlobalParamKey for InterestRate {
     const ID: usize = 0;
     const KEY: &'static [u8] = b"interest_rate";
@@ -76,6 +77,7 @@ impl GlobalParamKey for InterestRate {
 }
 
 pub struct AccumulateInterestRate;
+
 impl GlobalParamKey for AccumulateInterestRate {
     const ID: usize = InterestRate::ID + 1;
     const KEY: &'static [u8] = b"accumulate_interest_rate";
@@ -84,59 +86,69 @@ impl GlobalParamKey for AccumulateInterestRate {
 }
 
 pub struct TotalIssued;
+
 impl GlobalParamKey for TotalIssued {
     const ID: usize = AccumulateInterestRate::ID + 1;
     const KEY: &'static [u8] = b"total_issued_tokens";
 }
 
 pub struct TotalStaking;
+
 impl GlobalParamKey for TotalStaking {
     const ID: usize = TotalIssued::ID + 1;
     const KEY: &'static [u8] = b"total_staking_tokens";
 }
 
 pub struct TotalStorage;
+
 impl GlobalParamKey for TotalStorage {
     const ID: usize = TotalStaking::ID + 1;
     const KEY: &'static [u8] = b"total_storage_tokens";
 }
 
 pub struct TotalEvmToken;
+
 impl GlobalParamKey for TotalEvmToken {
     const ID: usize = TotalStorage::ID + 1;
     const KEY: &'static [u8] = b"total_evm_tokens";
 }
 
 pub struct UsedStoragePoints;
+
 impl GlobalParamKey for UsedStoragePoints {
     const ID: usize = TotalEvmToken::ID + 1;
     const KEY: &'static [u8] = b"used_storage_points";
 }
 
 pub struct ConvertedStoragePoints;
+
 impl GlobalParamKey for ConvertedStoragePoints {
     const ID: usize = UsedStoragePoints::ID + 1;
     const KEY: &'static [u8] = b"converted_storage_points_key";
 }
 
 pub struct TotalPosStaking;
+
 impl GlobalParamKey for TotalPosStaking {
     const ID: usize = ConvertedStoragePoints::ID + 1;
     const KEY: &'static [u8] = b"total_pos_staking_tokens";
 }
 
 pub struct DistributablePoSInterest;
+
 impl GlobalParamKey for DistributablePoSInterest {
     const ID: usize = TotalPosStaking::ID + 1;
     const KEY: &'static [u8] = b"distributable_pos_interest";
 }
 pub struct LastDistributeBlock;
+
 impl GlobalParamKey for LastDistributeBlock {
     const ID: usize = DistributablePoSInterest::ID + 1;
     const KEY: &'static [u8] = b"last_distribute_block";
 }
 
 pub struct PowBaseReward;
+
 impl GlobalParamKey for PowBaseReward {
     const ADDRESS: Address = PARAMS_CONTROL_CONTRACT_ADDRESS;
     const ID: usize = LastDistributeBlock::ID + 1;
@@ -144,12 +156,14 @@ impl GlobalParamKey for PowBaseReward {
 }
 
 pub struct TotalBurnt1559;
+
 impl GlobalParamKey for TotalBurnt1559 {
     const ID: usize = PowBaseReward::ID + 1;
     const KEY: &'static [u8] = b"total_burnt_tokens_by_cip1559";
 }
 
 pub struct BaseFeeProp;
+
 impl GlobalParamKey for BaseFeeProp {
     const ID: usize = TotalBurnt1559::ID + 1;
     const KEY: &'static [u8] = b"base_fee_prop";
