@@ -1398,7 +1398,6 @@ dependencies = [
  "thiserror",
  "tokio 1.40.0",
  "tokio-stream",
- "tokio-timer",
  "transient-hashmap",
 ]
 

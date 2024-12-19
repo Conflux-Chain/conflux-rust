@@ -305,7 +305,6 @@ tracing-futures = "0.2"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
 tokio01 = { version = "0.1", package = "tokio" }
-tokio-timer = "0.2.13"
 
 # crypto & hash
 fixed-hash = "0.5"
