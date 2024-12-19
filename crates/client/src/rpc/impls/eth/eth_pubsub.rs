@@ -286,7 +286,7 @@ pub struct ChainNotificationHandler {
 
 impl ChainNotificationHandler {
     fn latest_finalized_epoch_number(&self) -> u64 {
-        self.consensus.best_epoch_number()
+        self.consensus.latest_finalized_epoch_number()
     }
 
     fn get_header_by_epoch(&self, epoch: u64) -> Result<RpcHeader, String> {
