@@ -16,6 +16,7 @@ import socket
 import threading
 import jsonrpcclient.exceptions
 import solcx
+import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
 from cfx_account.signers.local import LocalAccount  as CfxLocalAccount
@@ -64,7 +65,13 @@ def assert_storage_occupied(receipt, addr, expected):
 
 
 def assert_storage_released(receipt, addr, expected):
-    assert_equal(receipt["storageReleased"].get(addr.lower(), 0), expected)
+    for storage_change_object in receipt["storageReleased"]:
+        if storage_change_object["address"] == addr:
+            assert_equal(storage_change_object["collaterals"], expected)
+            return
+    # not found in receipt
+    if expected != 0:
+        raise AssertionError(f"Storage released for address {addr} not found in receipt: {receipt['storageReleased']}")
 
 
 def assert_equal(thing1, thing2, *args):
