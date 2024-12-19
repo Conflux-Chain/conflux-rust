@@ -11,7 +11,10 @@ use jsonrpsee::types::ErrorObjectOwned;
 use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
 use serde_json::Value;
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    pin::Pin,
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -38,7 +41,7 @@ pub enum Error {
     Msg(String),
 }
 
-pub type BoxFuture<T> = Box<dyn future::Future<Item = T, Error = Error> + Send>;
+pub type BoxFuture<T> = Pin<Box<dyn future::Future<Output = Result<T>> + Send>>;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

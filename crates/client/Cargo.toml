@@ -62,13 +62,11 @@ transient-hashmap = { workspace = true }
 rand_xorshift = "0.2"
 itertools = { workspace = true }
 order-stat = "0.1"
-futures01 = { workspace = true }
 futures = { workspace = true, features = ["compat"] }
 rayon = { workspace = true }
 throttling = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-stream = { workspace = true }
-tokio-timer = { workspace = true }
 malloc_size_of = { workspace = true }
 random-crash = { workspace = true }
 cfx-parameters = { workspace = true }
@@ -115,6 +113,7 @@ cfx-rpc = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 cfx-rpc-builder = { workspace = true }
 jsonrpsee = { workspace = true }
+tokio-timer = "0.2"
 
 [dev-dependencies]
 criterion = "0.3"

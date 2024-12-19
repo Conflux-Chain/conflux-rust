@@ -1,7 +1,7 @@
 use std::convert::Into as StdInto;
 
 use jsonrpc_core::{
-    futures::{future::IntoFuture, Future},
+    futures::{FutureExt, TryFutureExt},
     BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
 };
 
@@ -19,9 +19,11 @@ impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for BoxFuture<T> {
     fn into(x: Self) -> BoxFuture<T> { x }
 }
 
-impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for CoreBoxFuture<T> {
-    fn into(x: Self) -> BoxFuture<T> {
-        Box::new(x.map_err(|rpc_error| Into::into(rpc_error)))
+impl<T: Send + Sync + 'static> Into<BoxFuture<JsonRpcResult<T>>>
+    for CoreBoxFuture<T>
+{
+    fn into(x: Self) -> BoxFuture<JsonRpcResult<T>> {
+        x.map_err(Into::into).boxed()
     }
 }
 
@@ -47,8 +49,10 @@ impl<T> Into<JsonRpcResult<T>> for CoreResult<T> {
 /// return RpcResult straight-forward. The delegate! macro with  #\[into\]
 /// attribute will automatically call this method to do the return type
 /// conversion.
-impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for CoreResult<T> {
-    fn into(x: Self) -> BoxFuture<T> {
-        into_jsonrpc_result(x).into_future().boxed()
+impl<T: Send + Sync + 'static> Into<BoxFuture<JsonRpcResult<T>>>
+    for CoreResult<T>
+{
+    fn into(x: Self) -> BoxFuture<JsonRpcResult<T>> {
+        async { into_jsonrpc_result(x) }.boxed()
     }
 }
