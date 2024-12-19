@@ -5,11 +5,11 @@
 use crate::{executive_observer::ExecutiveObserver, substate::Substate};
 use cfx_bytes::Bytes;
 use cfx_types::{AddressWithSpace, U256};
+use cfx_vm_types::Spec;
 use primitives::{
     receipt::{SortedStorageChanges, StorageChange},
     LogEntry, TransactionWithSignature,
 };
-use solidity_abi::{ABIDecodable, ABIDecodeError};
 use typemap::ShareDebugMap;
 
 use super::{
@@ -205,49 +205,4 @@ pub fn make_ext_result<O: ExecutiveObserver>(observer: O) -> ShareDebugMap {
     let mut ext_result = ShareDebugMap::custom();
     observer.drain_trace(&mut ext_result);
     ext_result
-}
-
-// abi decode string revert reason: Error(string)
-pub fn string_revert_reason_decode(output: &Bytes) -> String {
-    const MAX_LENGTH: usize = 50;
-    let decode_result = if output.len() < 4 {
-        Err(ABIDecodeError("Uncompleted Signature"))
-    } else {
-        let (sig, data) = output.split_at(4);
-        if sig != [8, 195, 121, 160] {
-            Err(ABIDecodeError("Unrecognized Signature"))
-        } else {
-            String::abi_decode(data)
-        }
-    };
-    match decode_result {
-        Ok(str) => {
-            if str.len() < MAX_LENGTH {
-                str
-            } else {
-                format!("{}...", str[..MAX_LENGTH].to_string())
-            }
-        }
-        Err(_) => "".to_string(),
-    }
-}
-
-use cfx_vm_types::Spec;
-
-#[cfg(test)]
-mod test {
-    use super::string_revert_reason_decode;
-    use rustc_hex::FromHex;
-
-    #[test]
-    fn test_decode_result() {
-        let input_hex = "08c379a0\
-            0000000000000000000000000000000000000000000000000000000000000020\
-            0000000000000000000000000000000000000000000000000000000000000018\
-            e699bae59586e4b88de8b6b3efbc8ce8afb7e58585e580bc0000000000000000";
-        assert_eq!(
-            "智商不足，请充值".to_string(),
-            string_revert_reason_decode(&input_hex.from_hex().unwrap())
-        );
-    }
 }

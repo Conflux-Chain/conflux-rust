@@ -49,7 +49,7 @@ impl<T> Receiver<T> {
     }
 }
 
-/// Implements an unbounded MPMC broadcast channel.
+/// Implements an unbounded SPMC broadcast channel.
 pub struct Channel<T> {
     // Used for generating subscription ids unique to this channel.
     id_allocator: UniqueId,

@@ -6,7 +6,6 @@ use crate::{
     cache_config::CacheConfig,
     cache_manager::{CacheId, CacheManager, CacheSize},
     consensus::consensus_inner::consensus_executor::RewardExecutionInfo,
-    ext_db::SystemDB,
     pow::{PowComputer, TargetDifficultyManager},
 };
 use cfx_executor::internal_contract::make_staking_events;
@@ -15,6 +14,7 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{Bloom, Space, H256};
+use db::SystemDB;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};

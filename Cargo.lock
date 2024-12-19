@@ -1366,9 +1366,11 @@ dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
  "async-trait",
+ "cfx-addr",
  "cfx-execute-helper",
  "cfx-executor",
  "cfx-parameters",
+ "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-types",
@@ -1390,7 +1392,13 @@ dependencies = [
  "parking_lot 0.11.2",
  "primitives",
  "rustc-hex",
+ "serde",
+ "serde_json",
+ "solidity-abi",
+ "thiserror",
  "tokio 1.40.0",
+ "tokio-stream",
+ "tokio-timer",
  "transient-hashmap",
 ]
 
@@ -1418,6 +1426,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-rpc-cfx-impl"
+version = "0.1.0"
+dependencies = [
+ "cfx-addr",
+ "cfx-execute-helper",
+ "cfx-rpc-cfx-types",
+ "cfx-types",
+ "cfx-util-macros",
+ "cfxcore",
+ "jsonrpc-core 18.0.0",
+ "log",
+ "primitives",
+]
+
+[[package]]
 name = "cfx-rpc-cfx-types"
 version = "2.4.0"
 dependencies = [
@@ -1432,6 +1455,8 @@ dependencies = [
  "log",
  "parity-version",
  "primitives",
+ "rand 0.7.3",
+ "rand_xorshift 0.2.0",
  "serde",
  "serde_json",
  "strum_macros",
@@ -1494,6 +1519,7 @@ dependencies = [
  "cfx-types",
  "jsonrpc-core 18.0.0",
  "jsonrpsee",
+ "jsonrpsee-core",
  "revm",
  "serde_json",
  "thiserror",
@@ -1956,6 +1982,7 @@ dependencies = [
  "cfx-parameters",
  "cfx-rpc",
  "cfx-rpc-builder",
+ "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
@@ -8000,6 +8027,7 @@ dependencies = [
 name = "solidity-abi"
 version = "0.1.0"
 dependencies = [
+ "cfx-bytes",
  "cfx-types",
  "keccak-hash",
  "lazy_static",

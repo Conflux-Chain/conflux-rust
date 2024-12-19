@@ -57,10 +57,11 @@ members = [
     "crates/rpc/rpc-cfx-types",
     "crates/rpc/rpc-eth-api",
     "crates/cfxcore/parity-trace-types",
-    "crates/rpc/rpc",
+    "crates/rpc/rpc-eth-impl",
     "crates/util/util-macros",
     "crates/rpc/rpc-utils",
     "crates/rpc/rpc-builder",
+    "crates/rpc/rpc-cfx-impl",
     "crates/pos/common/bounded-executor",
     "crates/pos/common/crash-handler",
     "crates/pos/common/fallible",
@@ -189,9 +190,10 @@ cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
 cfx-parity-trace-types = { path = "./crates/cfxcore/parity-trace-types" }
 cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth-api" }
 cfx-util-macros = { path = "./crates/util/util-macros" }
-cfx-rpc = { path = "./crates/rpc/rpc" }
+cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
 cfx-rpc-utils = { path = "./crates/rpc/rpc-utils" }
 cfx-rpc-builder = { path = "./crates/rpc/rpc-builder" }
+cfx-rpc-cfx-impl = { path = "./crates/rpc/rpc-cfx-impl" }
 bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
@@ -299,9 +301,11 @@ tower-http = "0.5"
 reqwest = { version = "0.12", default-features = false }
 pin-project = "1.0.12"
 mio = "0.6.8"
+tracing-futures = "0.2"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
 tokio01 = { version = "0.1", package = "tokio" }
+tokio-timer = "0.2.13"
 
 # crypto & hash
 fixed-hash = "0.5"
@@ -316,6 +320,8 @@ secp256k1 = "0.30.0"
 # misc
 clap = "2"
 rand = "0.7"
+rand_xorshift = "0.2"
+rand_08 = { package = "rand", version = "0.8"}
 log = "0.4"
 log4rs = "1.2.0"
 env_logger = "0.11"

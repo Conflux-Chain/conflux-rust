@@ -50,7 +50,7 @@ log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 rlp = { workspace = true }
 keccak-hash = { workspace = true }
 rand = { workspace = true }
-rand_08 = { package = "rand", version = "0.8.0" }
+rand_08 = { workspace = true }
 kvdb-rocksdb = { workspace = true }
 tempdir = { workspace = true }
 rustc-hex = { workspace = true }
@@ -58,7 +58,7 @@ threadpool = { workspace = true }
 metrics = { workspace = true }
 delegate = { workspace = true }
 transient-hashmap = { workspace = true }
-rand_xorshift = "0.2"
+rand_xorshift = { workspace = true }
 itertools = { workspace = true }
 order-stat = "0.1"
 futures = { workspace = true, features = ["compat"] }
@@ -105,6 +105,7 @@ alloy-rpc-types = { workspace = true }
 revm = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
+cfx-rpc-cfx-impl = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfx-rpc = { workspace = true }
