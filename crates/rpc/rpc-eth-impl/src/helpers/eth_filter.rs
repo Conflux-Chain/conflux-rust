@@ -17,14 +17,13 @@ use cfxcore::{
     channel::Channel, errors::Error as CfxRpcError, ConsensusGraph,
     ConsensusGraphTrait, SharedConsensusGraph, SharedTransactionPool,
 };
-use futures::{FutureExt, TryFutureExt};
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as RpcResult};
 use log::{debug, error, info};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,
 };
-use runtime::Executor;
+use tokio::runtime::Runtime;
 
 /// Eth filter rpc implementation for a full node.
 pub struct EthFilterHelper {
@@ -53,7 +52,7 @@ impl EthFilterHelper {
     /// Creates new Eth filter client.
     pub fn new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Executor,
+        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Arc<Runtime>,
         poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
     ) -> Self {
         let filter_client = EthFilterHelper {
@@ -71,7 +70,7 @@ impl EthFilterHelper {
 
     fn start_epochs_loop(
         &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
-        executor: Executor,
+        executor: Arc<Runtime>,
     ) {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
@@ -115,7 +114,6 @@ impl EthFilterHelper {
             }
         };
 
-        let fut = fut.unit_error().boxed().compat();
         executor.spawn(fut);
     }
 

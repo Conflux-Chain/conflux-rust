@@ -44,7 +44,6 @@ members = [
     "crates/util/metrics",
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
-    "crates/util/runtime",
     "crates/util/sha3-macro",
     "crates/util/solidity-abi",
     "crates/util/solidity-abi-derive",
@@ -145,7 +144,6 @@ priority-send-queue = { path = "./crates/util/priority-send-queue" }
 heap-map = { path = "./crates/util/heap-map" }
 treap-map = { path = "./crates/util/treap-map" }
 hibitset = { path = "./crates/util/hibitset" }
-runtime = { path = "./crates/util/runtime" }
 malloc_size_of = { path = "./crates/util/malloc_size_of" }
 delegate = { path = "./crates/util/delegate" }
 throttling = { path = "./crates/util/throttling" }
@@ -307,7 +305,6 @@ tracing-futures = "0.2"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
 tokio01 = { version = "0.1", package = "tokio" }
-tokio-timer = "0.2.13"
 
 # crypto & hash
 fixed-hash = "0.5"
