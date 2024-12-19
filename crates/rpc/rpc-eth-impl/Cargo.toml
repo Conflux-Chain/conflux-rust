@@ -45,3 +45,4 @@ runtime = { workspace = true }
 futures = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfx-addr = { workspace = true }
+solidity-abi = { workspace = true }

@@ -2,8 +2,7 @@ use crate::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 use async_trait::async_trait;
 use cfx_execute_helper::estimation::EstimateRequestMeta;
 use cfx_executor::executive::{
-    string_revert_reason_decode, Executed, ExecutionError, ExecutionOutcome,
-    TxDropError,
+    Executed, ExecutionError, ExecutionOutcome, TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_rpc_cfx_types::{
@@ -39,6 +38,7 @@ use primitives::{
     TransactionStatus, TransactionWithSignature,
 };
 use rustc_hex::ToHex;
+use solidity_abi::string_revert_reason_decode;
 
 type BlockNumber = BlockId;
 type BlockNumberOrTag = BlockId;

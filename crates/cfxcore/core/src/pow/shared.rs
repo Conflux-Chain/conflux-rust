@@ -1,4 +1,5 @@
 use primal::is_prime;
+use static_assertions::assert_eq_size;
 
 pub const DATASET_BYTES_INIT: u64 = 2 * (1 << 31);
 pub const DATASET_BYTES_GROWTH: u64 = 1 << 24;
