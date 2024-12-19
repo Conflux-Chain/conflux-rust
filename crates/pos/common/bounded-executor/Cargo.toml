@@ -11,7 +11,7 @@ edition = "2018"
 
 [dependencies]
 futures = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
