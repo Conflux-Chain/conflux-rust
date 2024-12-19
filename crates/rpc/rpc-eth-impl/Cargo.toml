@@ -50,3 +50,4 @@ tokio-stream = { workspace = true }
 tokio-timer = { workspace = true }
 serde = { workspace = true }
 cfx-addr = { workspace = true }
+solidity-abi = { workspace = true }

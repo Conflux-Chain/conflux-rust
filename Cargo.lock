@@ -1396,6 +1396,7 @@ dependencies = [
  "rustc-hex",
  "serde",
  "serde_json",
+ "solidity-abi",
  "thiserror",
  "tokio 1.40.0",
  "tokio-stream",
@@ -8188,6 +8189,7 @@ dependencies = [
 name = "solidity-abi"
 version = "0.1.0"
 dependencies = [
+ "cfx-bytes",
  "cfx-types",
  "keccak-hash",
  "lazy_static",

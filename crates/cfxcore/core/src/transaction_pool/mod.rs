@@ -8,8 +8,6 @@ mod garbage_collector;
 mod nonce_pool;
 mod transaction_pool_inner;
 
-extern crate rand;
-
 pub use self::transaction_pool_inner::TransactionStatus;
 use crate::{
     block_data_manager::BlockDataManager,

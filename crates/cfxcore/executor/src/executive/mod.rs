@@ -20,7 +20,7 @@ use primitives::{AccessList, SignedTransaction};
 use fresh_executive::FreshExecutive;
 use pre_checked_executive::PreCheckedExecutive;
 
-pub use executed::{string_revert_reason_decode, Executed};
+pub use executed::Executed;
 pub use execution_outcome::{ExecutionError, ExecutionOutcome, TxDropError};
 pub use transact_options::{
     ChargeCollateral, TransactOptions, TransactSettings,
