@@ -1393,8 +1393,13 @@ dependencies = [
  "primitives",
  "runtime",
  "rustc-hex",
+ "serde",
+ "serde_json",
  "solidity-abi",
+ "thiserror",
  "tokio 1.40.0",
+ "tokio-stream",
+ "tokio-timer",
  "transient-hashmap",
 ]
 
@@ -1451,6 +1456,8 @@ dependencies = [
  "log",
  "parity-version",
  "primitives",
+ "rand 0.7.3",
+ "rand_xorshift 0.2.0",
  "serde",
  "serde_json",
  "strum_macros",
@@ -1513,6 +1520,7 @@ dependencies = [
  "cfx-types",
  "jsonrpc-core 18.0.0",
  "jsonrpsee",
+ "jsonrpsee-core",
  "revm",
  "serde_json",
  "thiserror",
@@ -7311,7 +7319,7 @@ checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 name = "runtime"
 version = "0.1.0"
 dependencies = [
- "futures 0.1.31",
+ "futures01",
  "tokio 0.1.22",
 ]
 

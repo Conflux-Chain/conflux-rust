@@ -7,9 +7,7 @@ use crate::rpc::{
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::eth_space::eth_pubsub::EthPubSub as PubSub,
-    types::eth::{
-        eth_pubsub as pubsub, Header as RpcHeader, Log as RpcLog, Log,
-    },
+    types::eth::{eth_pubsub as pubsub, Header as RpcHeader, Log},
 };
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
@@ -46,7 +44,7 @@ use tokio_timer::sleep;
 
 type Client = Sink<pubsub::Result>;
 
-/// Cfx PubSub implementation.
+/// eth PubSub implementation.
 #[derive(Clone)]
 pub struct PubSubClient {
     handler: Arc<ChainNotificationHandler>,
@@ -329,7 +327,7 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| RpcLog::try_from_localized(l, self, removed));
+            .map(|l| Log::try_from_localized(l, self, removed));
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.
