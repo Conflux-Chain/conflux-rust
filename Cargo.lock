@@ -1235,6 +1235,7 @@ dependencies = [
  "cfx-math",
  "cfx-parameters",
  "cfx-parity-trace-types",
+ "cfx-rpc-eth-types",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
@@ -1437,7 +1438,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfxcore",
- "jsonrpc-core 15.1.0",
+ "jsonrpc-core 18.0.0",
  "log",
  "primitives",
 ]
@@ -7352,7 +7353,7 @@ checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 name = "runtime"
 version = "0.1.0"
 dependencies = [
- "futures01",
+ "futures 0.1.31",
  "tokio 0.1.22",
 ]
 

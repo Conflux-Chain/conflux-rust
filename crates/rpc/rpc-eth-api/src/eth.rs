@@ -242,10 +242,8 @@ pub trait EthApi {
     /// the transaction to complete.
     #[method(name = "estimateGas")]
     async fn estimate_gas(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_override: Option<StateOverride>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_override: Option<StateOverride>,
     ) -> RpcResult<U256>;
 
     /// Returns the current price per gas in wei.

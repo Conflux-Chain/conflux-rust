@@ -18,6 +18,7 @@ use std::{
 };
 
 use crate::hash::KECCAK_EMPTY_LIST_RLP;
+use cfx_rpc_eth_types::{BlockOverrides, EvmOverrides};
 use parking_lot::{Mutex, RwLock};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use rustc_hex::ToHex;
@@ -33,7 +34,7 @@ use cfx_storage::{
 };
 use cfx_types::{
     address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+    Space, SpaceMap, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
@@ -636,9 +637,15 @@ impl ConsensusExecutor {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-        request: EstimateRequestMeta,
+        request: EstimateRequestMeta, evm_overrides: EvmOverrides,
     ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
-        self.handler.call_virtual(tx, epoch_id, epoch_size, request)
+        self.handler.call_virtual(
+            tx,
+            epoch_id,
+            epoch_size,
+            request,
+            evm_overrides,
+        )
     }
 
     pub fn collect_blocks_geth_trace(
@@ -1578,7 +1585,7 @@ impl ConsensusExecutionHandler {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-        request: EstimateRequestMeta,
+        request: EstimateRequestMeta, evm_overrides: EvmOverrides,
     ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
@@ -1623,6 +1630,13 @@ impl ConsensusExecutionHandler {
             state_space,
         )?;
 
+        if evm_overrides.has_state() {
+            state.apply_override(
+                &evm_overrides.state.as_ref().unwrap(),
+                tx.space(),
+            )?;
+        }
+
         let time_stamp = best_block_header.timestamp();
 
         let miner = {
@@ -1637,7 +1651,7 @@ impl ConsensusExecutionHandler {
         let burnt_gas_price =
             base_gas_price.map_all(|x| state.burnt_gas_price(x));
 
-        let env = Env {
+        let mut env = Env {
             chain_id: self.machine.params().chain_id_map(block_height),
             number: start_block_number,
             author: miner,
@@ -1655,6 +1669,9 @@ impl ConsensusExecutionHandler {
             base_gas_price,
             burnt_gas_price,
         };
+        if evm_overrides.has_block() {
+            apply_env_overrides(&mut env, evm_overrides.block.unwrap());
+        }
         let spec = self.machine.spec(env.number, env.epoch_height);
         let mut ex = EstimationContext::new(
             &mut state,
@@ -1744,4 +1761,32 @@ impl ConsensusExecutionHandler {
 
 pub struct ConsensusExecutionConfiguration {
     pub executive_trace: bool,
+}
+
+fn apply_env_overrides(env: &mut Env, block_override: Box<BlockOverrides>) {
+    if let Some(number) = block_override.number {
+        env.number = number.as_u64();
+    }
+    if let Some(difficulty) = block_override.difficulty {
+        env.difficulty = difficulty;
+    }
+    if let Some(timestamp) = block_override.time {
+        env.timestamp = timestamp;
+    }
+    if let Some(gas_limit) = block_override.gas_limit {
+        env.gas_limit = U256::from(gas_limit);
+    }
+    if let Some(author) = block_override.coinbase {
+        env.author = author;
+    }
+    if let Some(_random) = block_override.random {
+        // conflux doesn't have random(prevRandao)
+    }
+    if let Some(base_fee) = block_override.base_fee {
+        env.base_gas_price = SpaceMap::new(base_fee, base_fee); // use same base_fee for both spaces
+    }
+
+    if let Some(_block_hash) = &block_override.block_hash {
+        // TODO impl
+    }
 }

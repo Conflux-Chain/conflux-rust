@@ -111,6 +111,10 @@ impl EvmOverrides {
     /// Returns `true` if the overrides contain block overrides.
     pub const fn has_block(&self) -> bool { self.block.is_some() }
 
+    pub const fn is_none(&self) -> bool {
+        self.state.is_none() && self.block.is_none()
+    }
+
     /// Adds state overrides to an existing instance.
     pub fn with_state(mut self, state: StateOverride) -> Self {
         self.state = Some(state);
