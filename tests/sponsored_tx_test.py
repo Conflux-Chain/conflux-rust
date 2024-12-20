@@ -104,7 +104,7 @@ class SponsoredTxTest(ConfluxTestFramework):
         assert_equal(receipt['storageCoveredBySponsor'], True)
 
         # addr1 call with larger storage limit, should be rejected for not enough balance
-        data = test_contract.functions.foo()._encode_transaction_data()
+        data = test_contract.functions.foo().encode_transaction_data()
         transaction = client.new_contract_tx(receiver=contract_addr, data_hex=encode_hex(data), priv_key=priv_key1,
                                              storage_limit=1025)
         # rejected for not enough balance

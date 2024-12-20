@@ -86,9 +86,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_change_storage_and_kill(self):
         storage_contract = self.deploy_contract_and_init(5)
         multi_calldata = [
-            storage_contract.functions.change(3)._encode_transaction_data(),
-            storage_contract.functions.change(4)._encode_transaction_data(),
-            storage_contract.functions.selfDestruct(self.genesis_addr3)._encode_transaction_data()
+            storage_contract.functions.change(3).encode_transaction_data(),
+            storage_contract.functions.change(4).encode_transaction_data(),
+            storage_contract.functions.selfDestruct(self.genesis_addr3).encode_transaction_data()
         ]
 
         if not self.is_sponsored:
@@ -110,9 +110,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_reset_storage_and_kill(self):
         storage_contract = self.deploy_contract_and_init(5)
         multi_calldata = [
-            storage_contract.functions.reset(3)._encode_transaction_data(),
-            storage_contract.functions.reset(4)._encode_transaction_data(),
-            storage_contract.functions.selfDestruct(self.genesis_addr3)._encode_transaction_data()
+            storage_contract.functions.reset(3).encode_transaction_data(),
+            storage_contract.functions.reset(4).encode_transaction_data(),
+            storage_contract.functions.selfDestruct(self.genesis_addr3).encode_transaction_data()
         ]
         receipt = storage_contract.functions.multiCall(multi_calldata).transact({
             "storageLimit": 0
@@ -127,9 +127,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_unchange_storage_and_kill(self):
         storage_contract = self.deploy_contract_and_init(5)
         multi_calldata = [
-            storage_contract.functions.set(3)._encode_transaction_data(),
-            storage_contract.functions.set(4)._encode_transaction_data(),
-            storage_contract.functions.selfDestruct(self.genesis_addr3)._encode_transaction_data()
+            storage_contract.functions.set(3).encode_transaction_data(),
+            storage_contract.functions.set(4).encode_transaction_data(),
+            storage_contract.functions.selfDestruct(self.genesis_addr3).encode_transaction_data()
         ]
         receipt = storage_contract.functions.multiCall(multi_calldata).transact({
             "storageLimit": 0
@@ -144,9 +144,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_set_new_storage_and_kill(self):
         storage_contract = self.deploy_contract_and_init(5)
         multi_calldata = [
-            storage_contract.functions.set(5)._encode_transaction_data(),
-            storage_contract.functions.set(6)._encode_transaction_data(),
-            storage_contract.functions.selfDestruct(self.genesis_addr3)._encode_transaction_data()
+            storage_contract.functions.set(5).encode_transaction_data(),
+            storage_contract.functions.set(6).encode_transaction_data(),
+            storage_contract.functions.selfDestruct(self.genesis_addr3).encode_transaction_data()
         ]
         if not self.is_sponsored:
             # The check of storage limit is earlier than kill contract. So even if the occupied entry is released in kill process, we still need enough storage_limit. 
@@ -167,9 +167,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_set_new_storage_and_later_kill(self):
         storage_contract = self.deploy_contract_and_init(5)
         multi_calldata = [
-            storage_contract.functions.change(4)._encode_transaction_data(),
-            storage_contract.functions.set(5)._encode_transaction_data(),
-            storage_contract.functions.set(6)._encode_transaction_data(),
+            storage_contract.functions.change(4).encode_transaction_data(),
+            storage_contract.functions.set(5).encode_transaction_data(),
+            storage_contract.functions.set(6).encode_transaction_data(),
         ]
         receipt = storage_contract.functions.multiCall(multi_calldata).transact({
             "storageLimit": 64 * 3
@@ -195,9 +195,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_touch_whitelist_and_kill(self):
         storage_contract = self.deploy_contract_and_set_whitelist(5)
         multi_calldata = [
-            storage_contract.functions.getSponsored(temp_address(3))._encode_transaction_data(),
-            storage_contract.functions.getSponsored(temp_address(4))._encode_transaction_data(),
-            storage_contract.functions.selfDestruct(self.genesis_addr3)._encode_transaction_data()
+            storage_contract.functions.getSponsored(temp_address(3)).encode_transaction_data(),
+            storage_contract.functions.getSponsored(temp_address(4)).encode_transaction_data(),
+            storage_contract.functions.selfDestruct(self.genesis_addr3).encode_transaction_data()
         ]
         receipt = storage_contract.functions.multiCall(multi_calldata).transact({
             "storageLimit": 0
@@ -214,9 +214,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_set_again_whitelist_and_kill(self):
         storage_contract = self.deploy_contract_and_set_whitelist(5)
         multi_calldata = [
-            storage_contract.functions.setSponsored(temp_address(3))._encode_transaction_data(),
-            storage_contract.functions.setSponsored(temp_address(4))._encode_transaction_data(),
-            storage_contract.functions.selfDestruct(self.genesis_addr3)._encode_transaction_data()
+            storage_contract.functions.setSponsored(temp_address(3)).encode_transaction_data(),
+            storage_contract.functions.setSponsored(temp_address(4)).encode_transaction_data(),
+            storage_contract.functions.selfDestruct(self.genesis_addr3).encode_transaction_data()
         ]
         if not self.is_sponsored:
             # The check of storage limit is earlier than kill contract. So even if the occupied entry is released in kill process, we still need enough storage_limit. 
@@ -238,9 +238,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_reset_whitelist_and_kill(self):
         storage_contract = self.deploy_contract_and_set_whitelist(5)
         multi_calldata = [
-            storage_contract.functions.resetSponsored(temp_address(3))._encode_transaction_data(),
-            storage_contract.functions.resetSponsored(temp_address(4))._encode_transaction_data(),
-            storage_contract.functions.selfDestruct(self.genesis_addr3)._encode_transaction_data()
+            storage_contract.functions.resetSponsored(temp_address(3)).encode_transaction_data(),
+            storage_contract.functions.resetSponsored(temp_address(4)).encode_transaction_data(),
+            storage_contract.functions.selfDestruct(self.genesis_addr3).encode_transaction_data()
         ]
         receipt = storage_contract.functions.multiCall(multi_calldata).transact({
             "storageLimit": 0
@@ -255,9 +255,9 @@ class ContractRemoveTest(ConfluxTestFramework):
     def test_set_new_whitelist_and_kill(self):
         storage_contract = self.deploy_contract_and_set_whitelist(5)
         multi_calldata = [
-            storage_contract.functions.setSponsored(temp_address(5))._encode_transaction_data(),
-            storage_contract.functions.setSponsored(temp_address(6))._encode_transaction_data(),
-            storage_contract.functions.selfDestruct(self.genesis_addr3)._encode_transaction_data()
+            storage_contract.functions.setSponsored(temp_address(5)).encode_transaction_data(),
+            storage_contract.functions.setSponsored(temp_address(6)).encode_transaction_data(),
+            storage_contract.functions.selfDestruct(self.genesis_addr3).encode_transaction_data()
         ]
         if not self.is_sponsored:
             # The check of storage limit is earlier than kill contract. So even if the occupied entry is released in kill process, we still need enough storage_limit. 
@@ -280,9 +280,9 @@ class ContractRemoveTest(ConfluxTestFramework):
 
         storage_contract = self.deploy_contract_and_set_whitelist(5)
         multi_calldata = [
-            storage_contract.functions.setSponsored(temp_address(4))._encode_transaction_data(),
-            storage_contract.functions.setSponsored(temp_address(5))._encode_transaction_data(),
-            storage_contract.functions.setSponsored(temp_address(6))._encode_transaction_data(),
+            storage_contract.functions.setSponsored(temp_address(4)).encode_transaction_data(),
+            storage_contract.functions.setSponsored(temp_address(5)).encode_transaction_data(),
+            storage_contract.functions.setSponsored(temp_address(6)).encode_transaction_data(),
         ]
         receipt = storage_contract.functions.multiCall(multi_calldata).transact({
             "storageLimit": 64 * 3
@@ -316,7 +316,7 @@ class ContractRemoveTest(ConfluxTestFramework):
     def deploy_contract_and_init(self, num_entries):
         storage_contract = self.deploy_contract("StorageExt", transact_args={"from": self.genesis_addr3})
 
-        multi_calldata = [storage_contract.functions.set(i)._encode_transaction_data() for i in range(num_entries)]
+        multi_calldata = [storage_contract.functions.set(i).encode_transaction_data() for i in range(num_entries)]
         storage_contract.functions.multiCall(multi_calldata).transact({
             "from": self.genesis_addr4,
             "storageLimit": 64 * num_entries
@@ -340,7 +340,7 @@ class ContractRemoveTest(ConfluxTestFramework):
     def deploy_contract_and_set_whitelist(self, num_entries):
         storage_contract = self.deploy_contract("StorageExt", transact_args={"from": self.genesis_addr3})
 
-        multi_calldata = [storage_contract.functions.setSponsored(temp_address(i))._encode_transaction_data() for i in range(num_entries)]
+        multi_calldata = [storage_contract.functions.setSponsored(temp_address(i)).encode_transaction_data() for i in range(num_entries)]
         storage_contract.functions.multiCall(multi_calldata).transact({
             "from": self.genesis_addr4,
             "storageLimit": 64 * num_entries
