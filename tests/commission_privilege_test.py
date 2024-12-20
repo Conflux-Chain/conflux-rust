@@ -12,6 +12,7 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         self.num_nodes = 1
 
     def run_test(self):
+        self.sponsorControl = self.internal_contract(name="SponsorWhitelistControl")
         bytes_per_key = 64
         collateral_per_storage_key = COLLATERAL_UNIT_IN_DRIP * 64
         # change upper tx gas limit to (GENESIS_GAS_LIMIT/2 - 1); -1 because below gas is set to upper_bound + 1
