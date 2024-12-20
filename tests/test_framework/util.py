@@ -939,6 +939,11 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
         assert is_in_pivot_block == False, "Transaction should be in non-pivot block"
         assert max_fee_per_gas >= burnt_fee_per_gas
 
+def assert_tx_exec_error(client: "RpcClient", tx_hash: str, err_msg: str):
+    client.wait_for_receipt(tx_hash)
+    receipt = client.get_transaction_receipt(tx_hash)
+    assert_equal(receipt["txExecErrorMsg"], err_msg)    
+
 
 InternalContractName = Literal["AdminControl", "SponsorWhitelistControl",
                                "Staking", "ConfluxContext", "PoSRegister", "CrossSpaceCall", "ParamsControl"]

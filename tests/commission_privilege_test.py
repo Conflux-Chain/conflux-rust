@@ -55,7 +55,7 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         b0 = client.get_balance(genesis_addr)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 0)
 
-        self.assert_tx_exec_error(self.sponsorControl.functions.setSponsorForGas(contract_addr, tx_gas_upper_bound).transact({
+        assert_tx_exec_error(client, self.sponsorControl.functions.setSponsorForGas(contract_addr, tx_gas_upper_bound).transact({
                 "value": tx_gas_upper_bound * 1000 - 1,
                 "gas": gas,
                 "storageLimit": 0,
@@ -214,8 +214,7 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         # new sponsor failed due to small sponsor_balance
         b3 = client.get_balance(addr3)
         sb = client.get_sponsor_balance_for_gas(contract_addr)
-        self.assert_tx_exec_error(
-            self.sponsorControl.functions.setSponsorForGas(contract_addr, tx_gas_upper_bound).transact({
+        assert_tx_exec_error(client, self.sponsorControl.functions.setSponsorForGas(contract_addr, tx_gas_upper_bound).transact({
                 "value": int(0.5 * 10**18),
                 "storageLimit": 0,
                 "from": self.cfx.address(addr3),
@@ -231,7 +230,8 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         # new sponsor failed due to small upper bound
         b3 = client.get_balance(addr3)
         sb = client.get_sponsor_balance_for_gas(contract_addr)
-        self.assert_tx_exec_error(
+        assert_tx_exec_error(
+            client,
             self.sponsorControl.functions.setSponsorForGas(contract_addr, tx_gas_upper_bound - 1).transact({
                 "value": 10**18,
                 "storageLimit": 0,
@@ -264,7 +264,8 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
 
         # sponsor the contract for collateral failed due to zero sponsor balance
         b3 = client.get_balance(addr3)
-        self.assert_tx_exec_error(
+        assert_tx_exec_error(
+            client,
             self.sponsorControl.functions.setSponsorForCollateral(contract_addr).transact({
                 "value": 0,
                 "storageLimit": 0,
@@ -300,7 +301,8 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         b1 = client.get_balance(addr1)
         assert_equal(client.get_collateral_for_storage(contract_addr), 0)
         assert_equal(client.get_collateral_for_storage(addr1), 0)
-        self.assert_tx_exec_error(
+        assert_tx_exec_error(
+            client,
             test_contract.functions.par_add(0,2).transact({
                 "from": self.cfx.address(addr1),
                 "storageLimit": bytes_per_key,
@@ -389,7 +391,8 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         sbc = client.get_sponsor_balance_for_collateral(contract_addr)
         sbg = client.get_sponsor_balance_for_gas(contract_addr)
         b2 = client.get_balance(addr2)
-        self.assert_tx_exec_error(
+        assert_tx_exec_error(
+            client,
             test_contract.functions.par_add(17,18).transact({
                 "from": self.cfx.address(addr2),
                 "storageLimit": 0,
@@ -454,7 +457,8 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         b0 = client.get_balance(genesis_addr)
         sb = client.get_sponsor_balance_for_collateral(contract_addr)
         err_msg = 'VmError(InternalContract("sponsor_balance is not enough to cover previous sponsor\'s sponsor_balance and collateral_for_storage"))'
-        self.assert_tx_exec_error(
+        assert_tx_exec_error(
+            client,
             self.sponsorControl.functions.setSponsorForCollateral(contract_addr).transact({
                 "value": sb + 1,
                 "storageLimit": 0,

@@ -1,8 +1,9 @@
-from test_framework.contracts import ConfluxTestFramework, RpcClient
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, wait_until
 import jsonrpcclient
 from conflux.config import default_config
 from conflux.utils import priv_to_addr
+from conflux.rpc import RpcClient
 from test_framework.blocktools import encode_hex_0x
 
 
