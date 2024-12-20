@@ -210,25 +210,23 @@ fn setup_rpc_apis(
 
                 if let Some(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
                 {
-                    if let Some(_h) = eth_pubsub.handler().upgrade() {
-                        let filter_client = EthFilterClient::new(
-                            rpc.consensus.clone(),
-                            rpc.tx_pool.clone(),
-                            eth_pubsub.epochs_ordered(),
-                            eth_pubsub.executor.clone(),
-                            poll_lifetime,
-                            rpc.config.get_logs_filter_max_limit,
-                        )
-                        .to_delegate();
+                    let filter_client = EthFilterClient::new(
+                        rpc.consensus.clone(),
+                        rpc.tx_pool.clone(),
+                        eth_pubsub.epochs_ordered(),
+                        eth_pubsub.executor.clone(),
+                        poll_lifetime,
+                        rpc.config.get_logs_filter_max_limit,
+                    )
+                    .to_delegate();
 
-                        extend_with_interceptor(
-                            &mut handler,
-                            &rpc.config,
-                            filter_client,
-                            throttling_conf,
-                            throttling_section,
-                        );
-                    }
+                    extend_with_interceptor(
+                        &mut handler,
+                        &rpc.config,
+                        filter_client,
+                        throttling_conf,
+                        throttling_section,
+                    );
                 }
             }
             Api::Debug => {
