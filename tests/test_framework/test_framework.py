@@ -693,6 +693,22 @@ class ConfluxTestFramework:
         else:
             return tx.hash_hex()
 
+    def initialize_accounts(self, number = 10, value = 100):
+        """
+        NOT RECOMMENDED. 
+        It is now recommended to use `self._add_genesis_account` 
+        in `set_test_params` to add genesis accounts.
+        
+        The generated accounts can be used from self.core_accounts or self.evm_accounts.
+        """
+        def initialize_new_account():
+            acct = self.cfx.account.create()
+            if value > 0:
+                self.cfx_transfer(acct.hex_address, value = value)
+            return acct
+        
+        return [initialize_new_account() for _ in range(number)]
+
 class SkipTest(Exception):
     """This exception is raised to skip a test"""
 

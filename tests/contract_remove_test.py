@@ -92,7 +92,7 @@ class ContractRemoveTest(ConfluxTestFrameworkForContract):
 
         if not self.is_sponsored:
             # The check of storage limit is earlier than kill contract. So even if the occupied entry is released in kill process, we still need enough storage_limit. 
-            self.assert_tx_exec_error(storage_contract.functions.multiCall(multi_calldata).transact({
+            assert_tx_exec_error(self.client, storage_contract.functions.multiCall(multi_calldata).transact({
                 "storageLimit": 0,
                 "gas": 3000000
             }).to_0x_hex(), "VmError(ExceedStorageLimit)")
@@ -149,7 +149,7 @@ class ContractRemoveTest(ConfluxTestFrameworkForContract):
         ]
         if not self.is_sponsored:
             # The check of storage limit is earlier than kill contract. So even if the occupied entry is released in kill process, we still need enough storage_limit. 
-            self.assert_tx_exec_error(storage_contract.functions.multiCall(multi_calldata).transact({
+            assert_tx_exec_error(self.client, storage_contract.functions.multiCall(multi_calldata).transact({
                 "storageLimit": 0,
                 "gas": 3000000
             }).to_0x_hex(), "VmError(ExceedStorageLimit)")
@@ -220,7 +220,7 @@ class ContractRemoveTest(ConfluxTestFrameworkForContract):
         if not self.is_sponsored:
             # The check of storage limit is earlier than kill contract. So even if the occupied entry is released in kill process, we still need enough storage_limit. 
             # For sponsor whitelist, the storage owner is changed even if the value does not change. This is a special case of storage owner behaviour
-            self.assert_tx_exec_error(storage_contract.functions.multiCall(multi_calldata).transact({
+            assert_tx_exec_error(self.client, storage_contract.functions.multiCall(multi_calldata).transact({
                 "storageLimit": 0,
                 "gas": 3000000
             }).to_0x_hex(), "VmError(ExceedStorageLimit)")
@@ -260,7 +260,7 @@ class ContractRemoveTest(ConfluxTestFrameworkForContract):
         ]
         if not self.is_sponsored:
             # The check of storage limit is earlier than kill contract. So even if the occupied entry is released in kill process, we still need enough storage_limit. 
-            self.assert_tx_exec_error(storage_contract.functions.multiCall(multi_calldata).transact({
+            assert_tx_exec_error(self.client, storage_contract.functions.multiCall(multi_calldata).transact({
                 "storageLimit": 0,
                 "gas": 3000000
             }).to_0x_hex(), "VmError(ExceedStorageLimit)")
