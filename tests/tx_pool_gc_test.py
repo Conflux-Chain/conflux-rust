@@ -11,7 +11,7 @@ class TxPoolGarbageCollectTest(ConfluxTestFrameworkForContract):
 
     def run_test(self):
         accounts = self.initialize_accounts(number = 11)
-        addr = accounts[0].address
+        addr = accounts[0].hex_address
         for i in range(1, 11):
             self.cfx_transfer(addr, 1, (i+10)  * (10**9), priv_key=accounts[i].key, execute=False)
 

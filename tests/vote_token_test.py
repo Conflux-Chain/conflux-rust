@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
 
-from conflux.utils import priv_to_addr
-from eth_utils import decode_hex
-from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS
-from test_framework.blocktools import create_transaction, encode_hex_0x
-from test_framework.contracts import ConfluxTestFrameworkForContract, Account
-from test_framework.block_gen_thread import BlockGenThread
+from test_framework.contracts import ConfluxTestFrameworkForContract
 from test_framework.mininode import *
 from test_framework.util import *
 

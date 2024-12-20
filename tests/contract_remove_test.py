@@ -4,7 +4,7 @@ import itertools
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *
-from test_framework.contracts import ConfluxTestFrameworkForContract, Account
+from test_framework.contracts import ConfluxTestFrameworkForContract
 
 SNAPSHOT_EPOCH = 60
 
@@ -40,7 +40,7 @@ class ContractRemoveTest(ConfluxTestFrameworkForContract):
 
     def run_test(self):
         self.genesis_addr = self.core_accounts[0].address
-        accounts: List[Account] = self.initialize_accounts(2, value = 1000)
+        accounts = self.initialize_accounts(2, value = 1000)
         self.genesis_addr3 = self.w3.cfx.address(accounts[0].address)
         self.genesis_key3 = accounts[0].key
         self.genesis_addr4 = self.w3.cfx.address(accounts[1].address)

@@ -3,7 +3,7 @@ from conflux_web3.contract.function import ConfluxContractFunction
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *
-from test_framework.contracts import ConfluxTestFrameworkForContract, Account
+from test_framework.contracts import ConfluxTestFrameworkForContract
 
 class OverlayAccountStorageTest(ConfluxTestFrameworkForContract):
     
@@ -13,7 +13,7 @@ class OverlayAccountStorageTest(ConfluxTestFrameworkForContract):
         self.genesis_key2 = self.evm_accounts[0].key
         self.genesis_addr2 = self.cfx.account.from_key(self.evm_accounts[0].key).address
 
-        accounts: List[Account] = self.initialize_accounts(2, value = 1000)
+        accounts = self.initialize_accounts(2, value = 1000)
 
         self.genesis_key3 = accounts[0].key
         self.genesis_addr3 = self.cfx.address(accounts[0].address)
