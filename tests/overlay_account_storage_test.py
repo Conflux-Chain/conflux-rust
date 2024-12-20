@@ -1,3 +1,4 @@
+from cfx_utils import CFX
 from conflux_web3.contract import ConfluxContract
 from conflux_web3.contract.function import ConfluxContractFunction
 from conflux.utils import *
@@ -134,7 +135,7 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
         assert_equal(len(receipt["storageReleased"]), 1)
 
         self.internal_contract("SponsorWhitelistControl").functions.setSponsorForCollateral(storage_contract.address).transact({
-            "value": 1000 * 10 ** 18
+            "value": CFX(1000)
         }).executed()
         storage_contract.functions.setSponsored(self.genesis_addr3).transact().executed()
 
@@ -157,7 +158,7 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
         assert_equal(len(receipt["storageReleased"]), 0)
 
         self.internal_contract("SponsorWhitelistControl").functions.setSponsorForCollateral(another_contract.address).transact({
-            "value": 1000 * 10 ** 18
+            "value": CFX(1000)
         }).executed()
         another_contract.functions.setSponsored(self.genesis_addr4).transact().executed()
 

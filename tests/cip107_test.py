@@ -1,4 +1,5 @@
-from conflux.rpc import RpcClient
+from decimal import Decimal
+from cfx_utils import CFX
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *
@@ -104,7 +105,7 @@ class StorageContract:
             self.storage.address, [ZERO_ADDRESS]).transact().executed()
         sponsorContract.setSponsorForCollateral(
             self.storage.address).transact({
-                "value": int(value*10**18)
+                "value": CFX(Decimal(value))
             }).executed()
 
     def set_entry(self, index):
@@ -172,7 +173,7 @@ class CIP107Test(ConfluxTestFramework):
         self.w3.wallet.add_account(acct)
 
         self.sponsorControl.functions.setSponsorForCollateral(storage.address()).transact({
-            "value": int(0.5*10**18),
+            "value": CFX(Decimal(0.5)),
             "from": acct.address
         }).executed()
         check.checked_tick(

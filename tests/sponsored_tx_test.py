@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from cfx_utils import CFX
 from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, charged_of_huge_gas
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
@@ -47,7 +48,7 @@ class SponsoredTxTest(ConfluxTestFramework):
         # sponsor the contract succeed
         b0 = client.get_balance(genesis_addr)
         control_contract.functions.setSponsorForGas(contract_addr, upper_bound).transact({
-            "value": 10 ** 18,
+            "value": CFX(1),
             "gas": gas,
         }).executed()
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from cfx_utils import CFX, Drip
 from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal
@@ -19,14 +20,14 @@ class AdminControlTest(ConfluxTestFramework):
         acct1 = self.cfx.account.create()
         self.log.info("addr=%s priv_key=%s", acct1.address, acct1.key.hex())
         self.cfx_transfer(acct1.hex_address, value = 5)
-        assert_equal(self.cfx.get_balance(acct1.address).to("CFX").value, 5)
+        assert_equal(self.cfx.get_balance(acct1.address).to("CFX"), CFX(5))
         self.w3.wallet.add_account(acct1)
         
 
         acct2 = self.cfx.account.create()
         self.log.info("addr2=%s priv_key2=%s", acct2.address, acct2.key.hex())
         self.cfx_transfer(acct2.hex_address, value = 5)
-        assert_equal(self.cfx.get_balance(acct2.address).to("CFX").value, 5)
+        assert_equal(self.cfx.get_balance(acct2.address).to("CFX"), CFX(5))
         self.w3.wallet.add_account(acct2)
 
         # deploy pay contract
@@ -46,12 +47,12 @@ class AdminControlTest(ConfluxTestFramework):
         b0 = self.cfx.get_balance(acct1.address)
         pay_contract.functions.recharge().transact({
             "from": acct1.address,
-            "value": 10 ** 18,
+            "value": CFX(1),
             "gas": gas,
             "gasPrice": 1,
         }).executed()
-        assert_equal(self.cfx.get_balance(contract_addr).value, 10 ** 18)
-        assert_equal(self.cfx.get_balance(acct1.address).value, b0.value - 10 ** 18 - charged_of_huge_gas(gas))
+        assert_equal(self.cfx.get_balance(contract_addr), CFX(1))
+        assert_equal(self.cfx.get_balance(acct1.address), b0 - CFX(1) - Drip(charged_of_huge_gas(gas)))
         assert_equal(self.cfx.get_admin(contract_addr), acct1.address.lower())
         
 
@@ -62,7 +63,7 @@ class AdminControlTest(ConfluxTestFramework):
             "gasPrice": 1
         }).executed()
         assert_equal(self.cfx.get_admin(contract_addr), acct1.address.lower())
-        assert_equal(self.cfx.get_balance(acct2.address).value, 5 * 10 ** 18 - charged_of_huge_gas(gas))
+        assert_equal(self.cfx.get_balance(acct2.address), CFX(5) - Drip(charged_of_huge_gas(gas)))
 
         # transfer admin (success)
         admin_control_contract.functions.setAdmin(contract_addr, acct2.address).transact({
@@ -79,10 +80,10 @@ class AdminControlTest(ConfluxTestFramework):
             "gas": gas,
             "gasPrice": 1,
         }).executed()
-        assert_equal(self.cfx.get_balance(contract_addr).value, 0)
-        assert_equal(self.cfx.get_balance(acct2.address).value, 6 * 10 ** 18 - charged_of_huge_gas(gas) * 2)
+        assert_equal(self.cfx.get_balance(contract_addr), 0)
+        assert_equal(self.cfx.get_balance(acct2.address), CFX(6) - Drip(charged_of_huge_gas(gas) * 2))
         assert_equal(self.cfx.get_collateral_for_storage(acct1.address), 0)
-        assert_equal(self.cfx.get_balance(acct1.address).value, b0.value + 512 * 976562500000000)
+        assert_equal(self.cfx.get_balance(acct1.address), b0 + Drip(512 * 976562500000000))
 
         self.log.info("Pass")
 
