@@ -27,7 +27,7 @@ class ClearAdminTest(ConfluxTestFrameworkForContract):
 
         # Clear admin by non-admin (fail)
         self.log.info("Test unable to clear admin by non-admin.")
-        self.adminControl.functions.setAdmin(create2factory_addr, ZERO_ADDRESS).transact({
+        self.internal_contract("AdminControl").functions.setAdmin(create2factory_addr, ZERO_ADDRESS).transact({
             "from": test_account.address
         })
         assert_equal(self.cfx.get_admin(create2factory_addr), genesis_addr)

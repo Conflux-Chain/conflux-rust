@@ -14,7 +14,6 @@ class TxPoolLargeNonceTest(ConfluxTestFramework):
     def run_test(self):
         self.genesis_key = default_config["GENESIS_PRI_KEY"]
         self.genesis_addr = encode_hex_0x(priv_to_addr(self.genesis_key))
-        self.client = RpcClient(self.nodes[0])
         self.client2 = RpcClient(self.nodes[1])
 
         tx = self.client.new_tx(receiver=self.genesis_addr, gas_price=1, nonce= 2 ** 129)

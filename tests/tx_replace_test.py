@@ -13,7 +13,6 @@ class TxReplaceTest(ConfluxTestFramework):
     def run_test(self):
         self.genesis_key = default_config["GENESIS_PRI_KEY"]
         self.genesis_addr = encode_hex_0x(priv_to_addr(self.genesis_key))
-        self.client = RpcClient(self.nodes[0])
 
         tx = self.client.new_tx(receiver=self.genesis_addr, gas_price=20, nonce=0)
         self.client.send_tx(tx, False)

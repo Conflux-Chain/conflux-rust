@@ -11,7 +11,7 @@ ZERO_ADDRESS = f"0x{'0'*40}"
 
 
 class CheckCollateral:
-    def __init__(self, framework: ConfluxTestFrameworkForContract, account):
+    def __init__(self, framework: "CIP107Test", account):
         self.framework = framework
         self.account = account
 
@@ -94,7 +94,7 @@ account_unused_collateral\t{self.account_unused_collateral / BASE * 16}'''
 
 
 class StorageContract:
-    def __init__(self, framework: ConfluxTestFrameworkForContract, seed=0):
+    def __init__(self, framework: "CIP107Test", seed=0):
         self.framework = framework
         self.storage = framework.deploy_contract_2("Storage", seed).functions
 
@@ -130,7 +130,7 @@ class StorageContract:
             }).executed()
 
     def suicide(self):
-        adminControl = self.framework.adminControl.functions
+        adminControl = self.framework.internal_contract("AdminControl").functions
         adminControl.destroy(self.storage.address).transact().executed()
 
     def address(self):
@@ -148,6 +148,7 @@ class CIP107Test(ConfluxTestFrameworkForContract):
         self.conf_parameters["dao_vote_transition_height"] = 1
 
     def run_test(self):
+        self.sponsorControl = self.w3.cfx.contract(name="SponsorWhitelistControl", with_deployment_info=True)
         self.deploy_create2()
         # Task 1: test if the collateral can be maintained correctly
         self.test_collateral_maintain()

@@ -11,7 +11,7 @@ import random
 import re
 from subprocess import CalledProcessError, check_output
 import time
-from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union
+from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union, Literal
 import socket
 import threading
 import jsonrpcclient.exceptions
@@ -24,7 +24,8 @@ from sys import platform
 import yaml
 import shutil
 import math
-
+from os.path import dirname, join
+from pathlib import Path
 
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
@@ -938,3 +939,16 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
         assert is_in_pivot_block == False, "Transaction should be in non-pivot block"
         assert max_fee_per_gas >= burnt_fee_per_gas
 
+
+InternalContractName = Literal["AdminControl", "SponsorWhitelistControl",
+                               "Staking", "ConfluxContext", "PoSRegister", "CrossSpaceCall", "ParamsControl"]
+
+
+
+def load_contract_metadata(name: str):
+    path = Path(join(dirname(__file__), "..", "test_contracts", "artifacts"))
+    try:
+        found_file = next(path.rglob(f"{name}.json"))
+        return json.loads(open(found_file, "r").read())
+    except StopIteration:
+        raise Exception(f"Cannot found contract {name}'s metadata")

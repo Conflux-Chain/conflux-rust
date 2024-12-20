@@ -14,6 +14,7 @@ class CIP118ActivationTest(ConfluxTestFrameworkForContract):
         self.conf_parameters["executive_trace"] = "true"
 
     def run_test(self):
+        self.sponsorControl = self.internal_contract(name="SponsorWhitelistControl")
         try:
             self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).call()
             raise Exception("Should fail")
