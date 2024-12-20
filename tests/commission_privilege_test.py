@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-from web3.exceptions import Web3RPCError
 from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, charged_of_huge_gas
-from test_framework.block_gen_thread import BlockGenThread
-from test_framework.contracts import ConfluxTestFrameworkForContract, ZERO_ADDRESS
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
-class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
+class CommissionPrivilegeTest(ConfluxTestFramework):
     def set_test_params(self):
-        super().set_test_params()
         self.num_nodes = 1
 
     def run_test(self):
+        self.w3 = self.cw3
         self.sponsorControl = self.internal_contract(name="SponsorWhitelistControl")
         bytes_per_key = 64
         collateral_per_storage_key = COLLATERAL_UNIT_IN_DRIP * 64

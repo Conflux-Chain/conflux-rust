@@ -1,19 +1,10 @@
 #!/usr/bin/env python3
-from cfx_utils import Drip
-
-from conflux.address import hex_to_b32_address
-from conflux.rpc import RpcClient, get_contract_function_data
 from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, charged_of_huge_gas
-from conflux.utils import priv_to_addr
-from test_framework.block_gen_thread import BlockGenThread
-from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
-from web3 import Web3
-from web3.contract import Contract
 
-class SponsoredTxTest(ConfluxTestFrameworkForContract):
+class SponsoredTxTest(ConfluxTestFramework):
     def __init__(self):
         super().__init__()
 
@@ -23,10 +14,10 @@ class SponsoredTxTest(ConfluxTestFrameworkForContract):
         self.balance_map = {self.genesis_priv_key: default_config['TOTAL_COIN']}
 
     def set_test_params(self):
-        super().set_test_params()
         self.num_nodes = 1
 
     def run_test(self):
+        self.w3 = self.cw3
         collateral_per_storage_key = COLLATERAL_UNIT_IN_DRIP * 64
         upper_bound = 5 * 10 ** 7
         gas = CONTRACT_DEFAULT_GAS

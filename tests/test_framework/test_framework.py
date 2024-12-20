@@ -451,6 +451,12 @@ class ConfluxTestFramework:
             def request_processor(self, method: RPCEndpoint, params: Any) -> Any:
                 if method == RPC.cfx_sendRawTransaction or method == RPC.cfx_sendTransaction:
                     client.node.wait_for_phase(["NormalSyncPhase"])
+                    
+                if method == RPC.cfx_maxPriorityFeePerGas:
+                    if client.epoch_number() == 0:
+                        # enable cfx_maxPriorityFeePerGas
+                        # or Error(Epoch number larger than the current pivot chain tip) would be raised
+                        client.generate_blocks_to_state(num_txs=1)
                 return super().request_processor(method, params)
 
             def response_processor(self, method: RPCEndpoint, response: Any):
@@ -610,7 +616,7 @@ class ConfluxTestFramework:
                                self.extra_conf_files, self.core_secrets, self.evm_secrets)
             
     def before_test(self):
-        pass
+        self.setup_w3()
 
     # wait for core space tx
     def wait_for_tx(self, all_txs, check_status=False):
@@ -646,10 +652,10 @@ class ConfluxTestFramework:
     def start_block_gen(self):
         BlockGenThread(self.nodes, self.log).start()
         
-    def enable_max_priority_fee_per_gas(self):
-        # enable cfx_maxPriorityFeePerGas
-        # or Error(Epoch number larger than the current pivot chain tip) would be raised
-        self.client.generate_blocks_to_state(num_txs=1)
+    # def enable_max_priority_fee_per_gas(self):
+    #     # enable cfx_maxPriorityFeePerGas
+    #     # or Error(Epoch number larger than the current pivot chain tip) would be raised
+    #     self.client.generate_blocks_to_state(num_txs=1)
 
     def cfx_contract(self, name) -> Type[ConfluxContract]:
         metadata = load_contract_metadata(name)

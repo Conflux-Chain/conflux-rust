@@ -1,11 +1,10 @@
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal
 
 
 
-class TxPoolGarbageCollectTest(ConfluxTestFrameworkForContract):
+class TxPoolGarbageCollectTest(ConfluxTestFramework):
     def set_test_params(self):
-        super().set_test_params()
         self.num_nodes = 1
         self.conf_parameters["tx_pool_size"] = "5"
 

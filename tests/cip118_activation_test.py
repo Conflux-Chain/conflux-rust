@@ -1,5 +1,5 @@
 from conflux.utils import *
-from test_framework.contracts import ConfluxTestFrameworkForContract, ZERO_ADDRESS
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
 from web3.exceptions import Web3RPCError
@@ -7,7 +7,7 @@ from web3.exceptions import Web3RPCError
 
 CIP118_NUMBER = 100
 
-class CIP118ActivationTest(ConfluxTestFrameworkForContract):
+class CIP118ActivationTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["cip118_transition_number"] = CIP118_NUMBER

@@ -4,7 +4,7 @@ import itertools
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 
 SNAPSHOT_EPOCH = 60
 
@@ -12,7 +12,7 @@ def temp_address(number: int):
     return Web3.to_checksum_address("{:#042x}".format(number + 100))
 
 
-class ContractRemoveTest(ConfluxTestFrameworkForContract):
+class ContractRemoveTest(ConfluxTestFramework):
     def __init__(self):
         super().__init__()
         self.has_range_delete_bug = False
@@ -27,7 +27,7 @@ class ContractRemoveTest(ConfluxTestFrameworkForContract):
         return not (self.has_collateral_bug or self.has_range_delete_bug)
 
     def set_test_params(self):
-        super().set_test_params()
+        self.num_nodes = 1
         
         self.conf_parameters["adaptive_weight_beta"] = "1"
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
@@ -39,6 +39,7 @@ class ContractRemoveTest(ConfluxTestFrameworkForContract):
         self.conf_parameters["next_hardfork_transition_number"] = 9999999
 
     def run_test(self):
+        self.w3 = self.cw3
         self.genesis_addr = self.core_accounts[0].address
         accounts = self.initialize_accounts(2, value = 1000)
         self.genesis_addr3 = self.w3.cfx.address(accounts[0].address)
