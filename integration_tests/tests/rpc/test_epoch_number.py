@@ -4,35 +4,8 @@ import sys
 
 
 # If this errors is changed, please let me know https://github.com/Conflux-Chain/rpc-errors/issues/new
-def test_get_epoch_number_errors(client: RpcClient):
-    assert_raises_rpc_error(
-        -32602,
-        "Invalid params: invalid type: integer `1`, expected an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_finalized', 'latest_confirmed' or 'earliest'.",
-        client.epoch_number,
-        1,
-    )
-    assert_raises_rpc_error(
-        -32602,
-        "Invalid params: expected a numbers with less than largest epoch number.",
-        client.epoch_number,
-        hex(sys.maxsize),
-    )
-    assert_raises_rpc_error(
-        -32602,
-        "Invalid params: Invalid epoch number: cannot parse integer from empty string.",
-        client.epoch_number,
-        "0x",
-    )
-    assert_raises_rpc_error(
-        -32602,
-        "Invalid params: Invalid epoch number: invalid digit found in string.",
-        client.epoch_number,
-        "0xZZZ",
-    )
+def test_get_epoch_number_errors(client: RpcClient, invalid_params_epoch):
 
-    assert_raises_rpc_error(
-        -32602,
-        "Invalid params: Invalid epoch number: missing 0x prefix.",
-        client.epoch_number,
-        hex(-1),
+    invalid_params_epoch.check_cases(
+        client.epoch_number, list(invalid_params_epoch.common_invalid_case.values())
     )
