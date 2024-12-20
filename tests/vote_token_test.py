@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from conflux.transactions import CONTRACT_DEFAULT_GAS
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 
@@ -9,7 +9,7 @@ from conflux_web3.contract import ConfluxContract
 import random
 
 
-class VoteTokenTest(ConfluxTestFrameworkForContract):
+class VoteTokenTest(ConfluxTestFramework):
     def __init__(self):
         super().__init__()
         self.vote_address = ""
@@ -23,7 +23,6 @@ class VoteTokenTest(ConfluxTestFrameworkForContract):
         self.tx_conf = {"gas":int_to_hex(self.gas), "gasPrice":int_to_hex(self.gas_price)}
 
     def set_test_params(self):
-        super().set_test_params()
         self.num_nodes = 1
         self._add_genesis_secrets(5, "core")
 

@@ -1,10 +1,14 @@
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 
-class StorageValueUnchangeTest(ConfluxTestFrameworkForContract):
+class StorageValueUnchangeTest(ConfluxTestFramework):
+    def set_test_params(self):
+        self.num_nodes = 1
+        
     def run_test(self):
+        self.w3 = self.cw3
         self.genesis_addr = self.core_accounts[0].address
         self.genesis_addr2 = self.cfx.account.from_key(self.evm_secrets[0]).address
         self.w3.wallet.add_account(self.evm_secrets[0])

@@ -1,10 +1,13 @@
 from conflux.utils import *
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
 
 
-class BlockHashFromStateTest(ConfluxTestFrameworkForContract):
+class BlockHashFromStateTest(ConfluxTestFramework):
+    def set_test_params(self):
+        self.num_nodes = 1
+    
     def run_test(self):
         genesis_hash = self.client.block_by_epoch(0)["hash"]
         for _ in range(5):

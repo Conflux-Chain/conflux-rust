@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 from conflux.transactions import CONTRACT_DEFAULT_GAS, charged_of_huge_gas
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal
 
-class AdminControlTest(ConfluxTestFrameworkForContract):
+class AdminControlTest(ConfluxTestFramework):
     def set_test_params(self):
-        super().set_test_params()
         self.num_nodes = 1
 
     def run_test(self):
+        self.w3 = self.cw3
         pay_contract = self.cfx_contract("CheckPay")
         admin_control_contract = self.internal_contract("AdminControl")
 
         self.log.info("Initializing contract")
-        client = self.client
         gas = CONTRACT_DEFAULT_GAS
-       
 
         # Setup balance for node 0  
         acct1 = self.cfx.account.create()

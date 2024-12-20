@@ -9,8 +9,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import assert_equal, assert_greater_than, assert_is_hex_string, assert_raises_rpc_error, connect_nodes, sync_blocks, get_contract_instance
-from test_framework.contracts import load_contract_metadata
+from test_framework.util import assert_equal, assert_greater_than, assert_is_hex_string, assert_raises_rpc_error, connect_nodes, sync_blocks, get_contract_instance, load_contract_metadata
 from web3 import Web3
 
 FULLNODE0 = 0

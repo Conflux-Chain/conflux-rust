@@ -2,7 +2,7 @@ from conflux.rpc import RpcClient
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 
 BASE = int(1e18)
 CIP107_NUMBER = 100
@@ -137,7 +137,7 @@ class StorageContract:
         return self.storage.address
 
 
-class CIP107Test(ConfluxTestFrameworkForContract):
+class CIP107Test(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["executive_trace"] = "true"
@@ -148,6 +148,7 @@ class CIP107Test(ConfluxTestFrameworkForContract):
         self.conf_parameters["dao_vote_transition_height"] = 1
 
     def run_test(self):
+        self.w3 = self.cw3
         self.sponsorControl = self.w3.cfx.contract(name="SponsorWhitelistControl", with_deployment_info=True)
         self.deploy_create2()
         # Task 1: test if the collateral can be maintained correctly

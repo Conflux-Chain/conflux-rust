@@ -3,11 +3,14 @@ from conflux_web3.contract.function import ConfluxContractFunction
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 
-class OverlayAccountStorageTest(ConfluxTestFrameworkForContract):
+class OverlayAccountStorageTest(ConfluxTestFramework):
+    def set_test_params(self):
+        self.num_nodes = 1
     
     def run_test(self):
+        self.w3 = self.cw3
         self.genesis_key1 = self.core_accounts[0].key
         self.genesis_addr1 = self.core_accounts[0].address
         self.genesis_key2 = self.evm_accounts[0].key

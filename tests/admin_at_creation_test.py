@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-from test_framework.block_gen_thread import BlockGenThread
-from test_framework.contracts import ConfluxTestFrameworkForContract, ZERO_ADDRESS
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
-from web3 import Web3
 
-class ClearAdminTest(ConfluxTestFrameworkForContract):
+class ClearAdminTest(ConfluxTestFramework):
     def set_test_params(self):
-        super().set_test_params()
         self.num_nodes = 8
         self._add_genesis_secrets(1, "core")
 

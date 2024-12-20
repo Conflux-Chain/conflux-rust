@@ -41,6 +41,8 @@ CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
 
 logger = logging.getLogger("TestFramework.utils")
 
+ZERO_ADDRESS = f"0x{'0'*40}"
+
 # Assert functions
 ##################
 
