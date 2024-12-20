@@ -36,8 +36,8 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
         def read_then_call(call_fn: ConfluxContractFunction, storage_contract: ConfluxContract, priv_key, before_value, after_value):
             call_contract = self.cfx_contract("StorageExt")(call_fn.address)
             return call_contract.functions.multiCallExternal([
-                storage_contract.functions.assertValue(0, before_value)._encode_transaction_data(),
-                call_fn._encode_transaction_data(),
+                storage_contract.functions.assertValue(0, before_value).encode_transaction_data(),
+                call_fn.encode_transaction_data(),
             ], [
                 storage_contract.address,
                 call_fn.address,
@@ -51,8 +51,8 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
         def read_revert_then_call(call_fn: ConfluxContractFunction, storage_contract: ConfluxContract, priv_key, before_value, after_value):
             call_contract = self.cfx_contract("StorageExt")(call_fn.address)
             return call_contract.functions.multiCallExternalWithFlag([
-                storage_contract.functions.assertValue(0, 999)._encode_transaction_data(),
-                call_fn._encode_transaction_data(),
+                storage_contract.functions.assertValue(0, 999).encode_transaction_data(),
+                call_fn.encode_transaction_data(),
             ], [
                 storage_contract.address,
                 call_fn.address,
@@ -64,14 +64,14 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
 
         def revert_on_first_call(call_fn: ConfluxContractFunction, storage_contract: ConfluxContract, priv_key, before_value, after_value):
             call_contract = self.cfx_contract("StorageExt")(call_fn.address)
-            call_data = call_fn._encode_transaction_data()
-            reverted_call = call_contract.functions.callAnother(call_fn.address, call_data, 4)._encode_transaction_data()
+            call_data = call_fn.encode_transaction_data()
+            reverted_call = call_contract.functions.callAnother(call_fn.address, call_data, 4).encode_transaction_data()
             return call_contract.functions.multiCallExternalWithFlag([
-                storage_contract.functions.assertValue(0, before_value)._encode_transaction_data(),
+                storage_contract.functions.assertValue(0, before_value).encode_transaction_data(),
                 reverted_call,
-                storage_contract.functions.assertValue(0, before_value)._encode_transaction_data(),
+                storage_contract.functions.assertValue(0, before_value).encode_transaction_data(),
                 call_data,
-                storage_contract.functions.assertValue(0, after_value)._encode_transaction_data(),
+                storage_contract.functions.assertValue(0, after_value).encode_transaction_data(),
             ], [
                 storage_contract.address,
                 call_fn.address,
@@ -86,14 +86,14 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
 
         def revert_on_second_call(call_fn: ConfluxContractFunction, storage_contract: ConfluxContract, priv_key, before_value, after_value):
             call_contract = self.cfx_contract("StorageExt")(call_fn.address)
-            call_data = call_fn._encode_transaction_data()
-            reverted_call = call_contract.functions.callAnother(call_fn.address, call_data, 4)._encode_transaction_data()
+            call_data = call_fn.encode_transaction_data()
+            reverted_call = call_contract.functions.callAnother(call_fn.address, call_data, 4).encode_transaction_data()
             return call_contract.functions.multiCallExternalWithFlag([
-                storage_contract.functions.assertValue(0, before_value)._encode_transaction_data(),
+                storage_contract.functions.assertValue(0, before_value).encode_transaction_data(),
                 call_data,
-                storage_contract.functions.assertValue(0, after_value)._encode_transaction_data(),
+                storage_contract.functions.assertValue(0, after_value).encode_transaction_data(),
                 reverted_call,
-                storage_contract.functions.assertValue(0, after_value)._encode_transaction_data(),
+                storage_contract.functions.assertValue(0, after_value).encode_transaction_data(),
             ], [
                 storage_contract.address,
                 call_fn.address,
@@ -151,7 +151,7 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
         assert_equal(len(receipt["storageReleased"]), 1)
 
 
-        fn = another_contract.functions.callAnother(storage_contract.address, storage_contract.functions.change(0)._encode_transaction_data(), 0)
+        fn = another_contract.functions.callAnother(storage_contract.address, storage_contract.functions.change(0).encode_transaction_data(), 0)
         receipt = self.customized_call(fn, priv_key = self.genesis_key4, task_index = 5)
         assert_storage_occupied(receipt, self.genesis_addr4, 0)
         assert_equal(len(receipt["storageReleased"]), 0)
@@ -161,7 +161,7 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
         }).executed()
         another_contract.functions.setSponsored(self.genesis_addr4).transact().executed()
 
-        fn = another_contract.functions.callAnother(storage_contract.address, storage_contract.functions.change(0)._encode_transaction_data(), 0)
+        fn = another_contract.functions.callAnother(storage_contract.address, storage_contract.functions.change(0).encode_transaction_data(), 0)
         receipt = self.customized_call(fn, priv_key = self.genesis_key4, task_index = 6)
         assert_storage_occupied(receipt, another_contract.address, 64)
         assert_storage_released(receipt, self.genesis_addr4, 64)
@@ -173,7 +173,7 @@ class OverlayAccountStorageTest(ConfluxTestFramework):
         assert_storage_released(receipt, another_contract.address, 64)
         assert_equal(len(receipt["storageReleased"]), 1)
 
-        fn = another_contract.functions.callAnother(storage_contract.address, storage_contract.functions.reset(0)._encode_transaction_data(), 0)
+        fn = another_contract.functions.callAnother(storage_contract.address, storage_contract.functions.reset(0).encode_transaction_data(), 0)
         receipt = self.customized_call(fn, priv_key = self.genesis_key2, task_index = 8)
         assert_storage_occupied(receipt, self.genesis_addr2, 0)
         assert_storage_released(receipt, storage_contract.address, 64)
