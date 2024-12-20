@@ -115,15 +115,20 @@ class ConfluxTestFramework:
             self,
             "num_nodes"), "Test must set self.num_nodes in set_test_params()"
 
-    # add random secrets to self.secrets
-    # when node starts, self.secrets will be used
-    # to generate genesis account for both EVM and Core
-    # each with 10000 CFX (10^21 drip)
+
     def _add_genesis_secrets(
         self,
         additional_secrets: int,
         space: Union[List[Literal["evm", "core"]], Literal["evm", "core"]]=["evm", "core"]
     ):
+        """
+        Add random secrets to `self.core_secrets` and `self.evm_secrets`.
+        When node starts, `self.core_secrets` and `self.evm_secrets` will be used
+        to generate genesis account for both EVM and Core
+        each with 10000 CFX (10^21 drip).
+        
+        The generated accounts can be used from `self.core_accounts` or `self.evm_accounts`.
+        """
         for _ in range(additional_secrets):
             if "evm" in space or "evm" == space:
                 self.evm_secrets.append(Account.create().key.hex())
@@ -186,10 +191,18 @@ class ConfluxTestFramework:
    
     @property
     def core_accounts(self):
+        """
+        Get the core space genesis accounts.
+        Amount can be added by `self._add_genesis_secrets(additional_secrets_count)`.
+        """
         return [CoreAccount.from_key(key, network_id=DEFAULT_PY_TEST_CHAIN_ID) for key in self.core_secrets]
     
     @property
     def evm_accounts(self):
+        """
+        Get the eSpace genesis accounts.
+        Amount can be added by `self._add_genesis_secrets(additional_secrets_count)`.
+        """
         return [Account.from_key(key) for key in self.evm_secrets]
 
     def main(self):

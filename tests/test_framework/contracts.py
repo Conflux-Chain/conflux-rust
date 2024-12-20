@@ -1,18 +1,10 @@
-from dataclasses import dataclass
-from typing import List
-
 from conflux_web3 import Web3 as CWeb3
 
-from test_framework.test_framework import ConfluxTestFramework, RpcClient
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
 BASE = int(1e18)
 ZERO_ADDRESS = f"0x{'0'*40}"
-
-@dataclass
-class Account:
-    address: str
-    key: str
 
 class ConfluxTestFrameworkForContract(ConfluxTestFramework):
     
@@ -37,11 +29,17 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         self.setup_w3()
         self.w3 = self.cw3
 
-    def initialize_accounts(self, number = 10, value = 100) -> List[Account]:
-        def initialize_new_account() -> Account:
-            (address, priv) = self.client.rand_account()
+    def initialize_accounts(self, number = 10, value = 100):
+        """
+        Not recommended now. It is now recommended to use `self._add_genesis_account` 
+        during param setting phase to add genesis accounts.
+        
+        The generated accounts can be used from self.core_accounts or self.evm_accounts.
+        """
+        def initialize_new_account():
+            acct = self.cfx.account.create()
             if value > 0:
-                self.cfx_transfer(address, value = value)
-            return Account(address, priv)
+                self.cfx_transfer(acct.hex_address, value = value)
+            return acct
         
         return [initialize_new_account() for _ in range(number)]
