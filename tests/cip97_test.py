@@ -1,16 +1,12 @@
-from conflux.rpc import RpcClient
 from conflux.utils import *
-from test_framework.contracts import ConfluxTestFrameworkForContract, BASE
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
 
-from os.path import dirname, realpath, join
-
 CFX = 10 ** 18
 
-class CIP97Test(ConfluxTestFrameworkForContract):
+class CIP97Test(ConfluxTestFramework):
     def set_test_params(self):
-        super().set_test_params()
         self.num_nodes = 1
         self.conf_parameters["dao_vote_transition_number"] = 100
         self.conf_parameters["hydra_transition_number"] = 90
@@ -22,15 +18,15 @@ class CIP97Test(ConfluxTestFrameworkForContract):
         staking = self.internal_contract("Staking").functions
 
         def get_current_epoch():
-            return int(self.rpc.cfx_getBlockByEpochNumber("latest_mined", False)["epochNumber"], 16)
+            return int(self.client.block_by_epoch("latest_mined", False)["epochNumber"], 16)
         
         def deposit():
-            receipt = staking.deposit(1 * BASE).cfx_transact()
-            return int(receipt["gasUsed"], 16)
+            receipt = staking.deposit(1 * CFX).transact().executed()
+            return receipt["gasUsed"]
         
         def withdraw():
-            receipt = staking.withdraw(int(1.1 * BASE)).cfx_transact()
-            return int(receipt["gasUsed"], 16)
+            receipt = staking.withdraw(int(1.1 * CFX)).transact().executed()
+            return receipt["gasUsed"]
 
         for i in range(5):
             self.log.debug(f"deposit {i}")

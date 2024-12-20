@@ -41,7 +41,6 @@ class P2PTest(ConfluxTestFramework):
         raw_create = erc20_contract.constructor().build_transaction(self.tx_conf)
         tx_data = decode_hex(raw_create["data"])
         tx_create = create_transaction(pri_key=genesis_key, receiver=b'', nonce=nonce, gas_price=gas_price, data=tx_data, gas=gas, value=0, storage_limit=1920)
-        self.client = RpcClient(self.nodes[0])
         c0 = self.client.get_collateral_for_storage(genesis_addr)
         self.client.send_tx(tx_create, True)
         receipt = self.client.get_transaction_receipt(tx_create.hash_hex())
