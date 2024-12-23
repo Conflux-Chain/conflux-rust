@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TypedNativeTransaction"],"struct":["Cip1559Transaction","Cip2930Transaction","NativeTransaction"]};

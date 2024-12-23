@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GENESIS_EPOCH","GENESIS_ROUND","GENESIS_TIMESTAMP_USECS","GENESIS_VERSION"],"struct":["BlockInfo","PivotBlockDecision","PivotBlockDecisionHasher"],"type":["Round","View"]};

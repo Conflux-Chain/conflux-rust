@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ACCOUNT_MODULE_NAME"],"mod":["addresses","coins","diem","event"],"static":["ACCOUNT_MODULE","ACCOUNT_MODULE_IDENTIFIER"]};

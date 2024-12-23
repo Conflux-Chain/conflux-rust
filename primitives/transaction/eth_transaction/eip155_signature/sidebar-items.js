@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_chain_replay_protection","extract_chain_id_from_legacy_v","extract_standard_v"]};

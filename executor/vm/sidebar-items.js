@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["verify_dispute"],"struct":["PosVM","Spec"],"trait":["ExecutableBuiltinTx","VMExecutor"]};

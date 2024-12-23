@@ -1,0 +1,261 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/rpc/rpc-utils/src/error/error_codes.rs`."><title>error_codes.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfx_rpc_utils" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../cfx_rpc_utils/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+</pre></div><pre class="rust"><code><span class="attr">#![allow(dead_code)]
+</span><span class="comment">// Copyright 2015-2019 Parity Technologies (UK) Ltd.
+// This file is part of Parity Ethereum.
+
+// Parity Ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Parity Ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Parity Ethereum.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
+
+</span><span class="doccomment">//! RPC Error codes and error objects
+
+/// JsonRPC spec reserved from and including -32768 to -32000 for
+/// pre-defined errors. The reminder of the space is available for
+/// application defined errors.
+///
+/// -32000 to -32099 is defined for "(JsonRPC) Server Error".
+///
+/// We use the same error code number as in Parity Ethereum wherever
+/// possible. Since the error code is almost used up by Parity, we
+/// further reserve [-31999, -31000] for Conflux's extra server error
+/// codes, in the range of "application defined errors" as defined by
+/// JsonRPC.
+
+/// When the number on the right is -32100, check the next variable below.
+///
+/// Please use the number on the right for new error code, then decrease it
+/// by 1.
+///
+/// Do not recycle deprecated error codes.
+</span><span class="kw">const </span>NEXT_SERVER_ERROR_CODE: i64 = -<span class="number">32078</span>;
+<span class="doccomment">/// When the above number is equal to -32100, take the number below on the
+/// right for new error code, then increase it by 1.
+</span><span class="kw">const </span>CFX_EXTRA_SERVER_ERROR_CODE: i64 = -<span class="number">31999</span>;
+
+<span class="doccomment">/// We reserve [-30999, 30000] for application error code. i.e. Error code
+/// which is defined specifically for a particular rpc.
+</span><span class="kw">const </span>CFX_EXTRA_APP_ERROR_CODE: i64 = -<span class="number">30999</span>;
+
+<span class="comment">/* Rpc functional related error codes. */
+</span><span class="doccomment">/// The request is not supported (yet) at this version.
+</span><span class="kw">pub const </span>UNSUPPORTED: i64 = -<span class="number">32000</span>;
+<span class="doccomment">/// The requested feature is deprecated.
+</span><span class="kw">pub const </span>DEPRECATED: i64 = -<span class="number">32070</span>;
+<span class="doccomment">/// The requested feature is experimental.
+</span><span class="kw">pub const </span>EXPERIMENTAL: i64 = -<span class="number">32071</span>;
+<span class="doccomment">/// The node is not able to serve the request due to configuration. e.g. Not
+/// mining, light node, not archive node.
+</span><span class="kw">pub const </span>INCAPABLE: i64 = -<span class="number">32073</span>;
+
+<span class="comment">/* Rpc usage related error codes */
+</span><span class="doccomment">/// When there are too many rpc requests. We limit the number of allowed rpc
+/// requests for attack prevention.
+</span><span class="kw">pub const </span>REQUEST_REJECTED_TOO_MANY_REQUESTS: i64 = -<span class="number">32072</span>;
+<span class="doccomment">/// When the request is considered too much for the rpc function.
+/// The consideration is set individually per rpc. It can be data too large,
+/// or it can be that some performance/security related parameter is outside
+/// the accepted range.
+///
+/// This is mostly an application error but it's generic enough to define it
+/// here.
+</span><span class="kw">pub const </span>REQUEST_REJECTED_LIMIT_DATA: i64 = -<span class="number">32041</span>;
+
+<span class="comment">/* Conflux node status related error codes
+ *
+ * When the node is not well-connected to the Conflux network, or when an
+ * ongoing attack is detected, the rpc server should stop providing
+ * on-chain information, and instead return a relevant error code.
+ */
+</span><span class="doccomment">/// No connection to trusted peers.
+</span><span class="kw">pub const </span>NO_TRUSTED_PEERS: i64 = -<span class="number">32074</span>;
+<span class="doccomment">/// No peers are currently connected or there is insufficient amount of
+/// peers connected.
+</span><span class="kw">pub const </span>NO_PEERS: i64 = -<span class="number">32066</span>;
+<span class="kw">pub const </span>CONFLUX_PIVOT_CHAIN_UNSTABLE: i64 = -<span class="number">32075</span>;
+<span class="doccomment">/// The node see a suspicious total mining power or block rate.
+/// It's likely that the node is under attack or the whole Conflux network
+/// enters an abnormal state.
+</span><span class="kw">pub const </span>SUSPICIOUS_MINING_RATE: i64 = -<span class="number">32076</span>;
+<span class="doccomment">/// When the node is still in catch up mode, it is not capable to handle
+/// certain requests. We will return this code in this situation.
+</span><span class="kw">pub const </span>REQUEST_REJECTED_IN_CATCH_UP: i64 = -<span class="number">32077</span>;
+
+<span class="comment">/* Other server error codes */
+</span><span class="doccomment">/// Any exception happened while processing the transaction. Mostly likely
+/// there is an internal error within the server state.
+///
+/// When the server can detect an error with the request itself, it should
+/// return another error code such as invalid params, or for example
+/// CALL_EXECUTION_ERROR.
+</span><span class="kw">pub const </span>EXCEPTION_ERROR: i64 = -<span class="number">32016</span>;
+<span class="doccomment">/// The error can be given to a request about a previous related request
+/// which we can not associate with.
+///
+/// In Parity it was used for rpc check_request(). In parity's comment:
+/// "Checks the progress of a previously posted request (transaction/sign).
+/// Should be given a valid send_transaction ID."
+</span><span class="kw">pub const </span>PREVIOUS_REQUEST_NOT_FOUND: i64 = -<span class="number">32042</span>;
+
+<span class="comment">// FIXME: Used in Parity for all Transaction related errors.
+// FIXME: We may process it as general invalid_params with error message?
+// FIXME: How do rpc clients handle errors from send_raw_transaction?
+
+/* Wallet/secret-store/signing related. */
+// FIXME: why didn't we use this error code?
+</span><span class="attr">#[cfg(any(test, feature = <span class="string">"accounts"</span>))]
+</span><span class="kw">pub const </span>ACCOUNT_LOCKED: i64 = -<span class="number">32020</span>;
+<span class="comment">// FIXME: why didn't we use this error code?
+</span><span class="attr">#[cfg(any(test, feature = <span class="string">"accounts"</span>))]
+</span><span class="kw">pub const </span>PASSWORD_INVALID: i64 = -<span class="number">32021</span>;
+<span class="comment">// FIXME: why didn't we use this error code?
+</span><span class="kw">pub const </span>ACCOUNT_ERROR: i64 = -<span class="number">32023</span>;
+<span class="doccomment">/// Encoding error happened in signing structured data. Related to EIP712.
+</span><span class="kw">pub const </span>ENCODING_ERROR: i64 = -<span class="number">32058</span>;
+
+<span class="comment">/* Other application error codes */
+</span><span class="doccomment">/// Call() execution error. This is clearly an application level error code,
+/// but we keep the error code to be ethereum rpc client compatible.
+</span><span class="kw">pub const </span>CALL_EXECUTION_ERROR: i64 = -<span class="number">32015</span>;
+
+<span class="comment">/* PoS chain is not started */
+</span><span class="kw">pub const </span>POS_NOT_ENABLED: i64 = -<span class="number">32078</span>;
+</code></pre></div></section></main></body></html>

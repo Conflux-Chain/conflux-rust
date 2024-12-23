@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SnapshotKeptToProvideSyncStatus"],"struct":["SnapshotInfo"],"trait":["OpenSnapshotMptTrait","SnapshotDbTrait"]};

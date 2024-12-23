@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MERKLE_NULL_NODE"],"struct":["StateRoot"],"type":["MerkleHash"]};

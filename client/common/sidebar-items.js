@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["initialize_common_modules","initialize_not_light_node_modules","initialize_txgens"],"mod":["delegate_convert","shutdown_handler"],"struct":["ClientComponents","PosDropHandle"],"trait":["ClientTrait"]};

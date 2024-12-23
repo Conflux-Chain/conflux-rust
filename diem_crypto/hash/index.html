@@ -1,0 +1,90 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This module defines traits and implementations of cryptographic hash functions for the Diem project."><title>diem_crypto::hash - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="diem_crypto" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../diem_crypto/index.html">diem_crypto</a><span class="version">0.1.0</span></h2></div><h2 class="location"><a href="#">Module hash</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#statics">Statics</a></li><li><a href="#traits">Traits</a></li></ul></section><h2><a href="../index.html">In crate diem_crypto</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../diem_crypto/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">diem_crypto</a>::<wbr><a class="mod" href="#">hash</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/diem_crypto/hash.rs.html#8-655">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This module defines traits and implementations of
+<a href="https://en.wikipedia.org/wiki/Cryptographic_hash_function">cryptographic hash functions</a>
+for the Diem project.</p>
+<p>It is designed to help authors protect against two types of real world
+attacks:</p>
+<ol>
+<li>
+<p><strong>Semantic Ambiguity</strong>: imagine that Alice has a private key and is using
+two different applications, X and Y. X asks Alice to sign a message
+saying    “I am Alice”. Alice accepts to sign this message in the context of
+X. However,    unbeknownst to Alice, in application Y, messages beginning
+with the letter “I”    represent transfers. “ am “ represents a transfer of
+500 coins and “Alice”    can be interpreted as a destination address. When
+Alice signed the message she    needed to be aware of how other applications
+might interpret that message.</p>
+</li>
+<li>
+<p><strong>Format Ambiguity</strong>: imagine a program that hashes a pair of strings. To
+hash the strings <code>a</code> and <code>b</code> it hashes <code>a + &quot;||&quot; + b</code>. The pair of
+strings <code>a=&quot;foo||&quot;, b = &quot;bar&quot;</code> and <code>a=&quot;foo&quot;, b = &quot;||bar&quot;</code> result in the
+same input to the hash function and therefore the same hash. This creates
+a collision.</p>
+</li>
+</ol>
+<p>Regarding (1), this library makes it easy for Diem developers to create as
+many new “hashable” Rust types as needed so that each Rust type hashed and
+signed in Diem has a unique meaning, that is, unambiguously captures the
+intent of a signer.</p>
+<p>Regarding (2), this library provides the <code>CryptoHasher</code> abstraction to
+easily manage cryptographic seeds for hashing. Hashing seeds aim to ensure
+that the hashes of values of a given type <code>MyNewStruct</code> never collide with
+hashes of values from another type.</p>
+<p>Finally, to prevent format ambiguity within a same type <code>MyNewStruct</code> and
+facilitate protocol specifications, we use <a href="https://docs.rs/bcs/">Binary Canonical Serialization (BCS)</a>
+as the recommended solution to write Rust values into a hasher.</p>
+<h2 id="quick-start"><a class="doc-anchor" href="#quick-start">§</a>Quick Start</h2>
+<p>To obtain a <code>hash()</code> method for any new type <code>MyNewStruct</code>, it is (strongly)
+recommended to use the derive macros of <code>serde</code> and <code>diem_crypto_derive</code> as
+follows:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>diem_crypto::hash::CryptoHash;
+<span class="kw">use </span>diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="attr">#[derive(Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+</span><span class="kw">struct </span>MyNewStruct {<span class="comment">/* ... */</span>}
+
+<span class="kw">let </span>value = MyNewStruct { <span class="comment">/*...*/ </span>};
+value.hash();</code></pre></div>
+<p>Under the hood, this will generate a new implementation <code>MyNewStructHasher</code>
+for the trait <code>CryptoHasher</code> and implement the trait <code>CryptoHash</code> for
+<code>MyNewStruct</code> using BCS.</p>
+<h2 id="implementing-new-hashers"><a class="doc-anchor" href="#implementing-new-hashers">§</a>Implementing New Hashers</h2>
+<p>The trait <code>CryptoHasher</code> captures the notion of a pre-seeded hash function,
+aka a “hasher”. New implementations can be defined in two ways.</p>
+<h3 id="derive-macro-recommended"><a class="doc-anchor" href="#derive-macro-recommended">§</a>Derive macro (recommended)</h3>
+<p>For any new structure <code>MyNewStruct</code> that needs to be hashed, it is
+recommended to simply use the derive macro <a href="https://doc.rust-lang.org/reference/procedural-macros.html"><code>CryptoHasher</code></a>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>diem_crypto_derive::CryptoHasher;
+<span class="kw">use </span>serde::Deserialize;
+<span class="attr">#[derive(Deserialize, CryptoHasher)]
+#[serde(rename = <span class="string">"OptionalCustomSerdeName"</span>)]
+</span><span class="kw">struct </span>MyNewStruct {<span class="comment">/* ... */</span>}</code></pre></div>
+<p>The macro <code>CryptoHasher</code> will define a hasher automatically called
+<code>MyNewStructHasher</code>, and derive a salt using the name of the type as seen by
+the Serde library. In the example above, this name was changed using the
+Serde parameter <code>rename</code>: the salt will be based on the value
+<code>OptionalCustomSerdeName</code> instead of the default name <code>MyNewStruct</code>.</p>
+<h3 id="customized-hashers"><a class="doc-anchor" href="#customized-hashers">§</a>Customized hashers</h3>
+<p><strong>IMPORTANT:</strong> Do NOT use this for new code unless you know what you are
+doing.</p>
+<p>This library also provides a few customized hashers defined in the code as
+follows:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">define_hasher! </span>{ (MyNewDataHasher, MY_NEW_DATA_HASHER, MY_NEW_DATA_SEED,
+<span class="string">b"MyUniqueSaltString"</span>) }</code></pre></div>
+<h2 id="using-a-hasher-directly"><a class="doc-anchor" href="#using-a-hasher-directly">§</a>Using a hasher directly</h2>
+<p><strong>IMPORTANT:</strong> Do NOT use this for new code unless you know what you are
+doing.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>diem_crypto::hash::{CryptoHasher, TestOnlyHasher};
+
+<span class="kw">let </span><span class="kw-2">mut </span>hasher = TestOnlyHasher::default();
+hasher.update(<span class="string">"Test message"</span>.as_bytes());
+<span class="kw">let </span>hash_value = hasher.finish();</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.EventAccumulatorHasher.html" title="struct diem_crypto::hash::EventAccumulatorHasher">EventAccumulatorHasher</a></div><div class="desc docblock-short">The hasher used to compute the hash of an internal node in the event accumulator.</div></li><li><div class="item-name"><a class="struct" href="struct.HashValue.html" title="struct diem_crypto::hash::HashValue">HashValue</a></div><div class="desc docblock-short">Output value of our hash function. Intentionally opaque for safety and
+modularity.</div></li><li><div class="item-name"><a class="struct" href="struct.HashValueBitIterator.html" title="struct diem_crypto::hash::HashValueBitIterator">HashValueBitIterator</a></div><div class="desc docblock-short">An iterator over <code>HashValue</code> that generates one bit for each iteration.</div></li><li><div class="item-name"><a class="struct" href="struct.HashValueParseError.html" title="struct diem_crypto::hash::HashValueParseError">HashValueParseError</a></div><div class="desc docblock-short">Parse error when attempting to construct a HashValue</div></li><li><div class="item-name"><a class="struct" href="struct.SparseMerkleInternalHasher.html" title="struct diem_crypto::hash::SparseMerkleInternalHasher">SparseMerkleInternalHasher</a></div><div class="desc docblock-short">The hasher used to compute the hash of an internal node in the Sparse Merkle Tree.</div></li><li><div class="item-name"><a class="struct" href="struct.TestOnlyHasher.html" title="struct diem_crypto::hash::TestOnlyHasher">TestOnlyHasher</a></div><div class="desc docblock-short">The hasher used only for testing. It doesn’t have a salt.</div></li><li><div class="item-name"><a class="struct" href="struct.TransactionAccumulatorHasher.html" title="struct diem_crypto::hash::TransactionAccumulatorHasher">TransactionAccumulatorHasher</a></div><div class="desc docblock-short">The hasher used to compute the hash of an internal node in the transaction accumulator.</div></li><li><div class="item-name"><a class="struct" href="struct.VoteProposalHasher.html" title="struct diem_crypto::hash::VoteProposalHasher">VoteProposalHasher</a></div><div class="desc docblock-short">The hasher used to compute the hash of an internal node in the transaction accumulator.</div></li></ul><h2 id="statics" class="section-header">Statics<a href="#statics" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="static" href="static.ACCUMULATOR_PLACEHOLDER_HASH.html" title="static diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH">ACCUMULATOR_PLACEHOLDER_HASH</a></div><div class="desc docblock-short">Placeholder hash of <code>Accumulator</code>.</div></li><li><div class="item-name"><a class="static" href="static.GENESIS_BLOCK_ID.html" title="static diem_crypto::hash::GENESIS_BLOCK_ID">GENESIS_BLOCK_ID</a></div><div class="desc docblock-short">Genesis block id is used as a parent of the very first block executed by the
+executor.</div></li><li><div class="item-name"><a class="static" href="static.PRE_GENESIS_BLOCK_ID.html" title="static diem_crypto::hash::PRE_GENESIS_BLOCK_ID">PRE_GENESIS_BLOCK_ID</a></div><div class="desc docblock-short">Block id reserved as the id of parent block of the genesis block.</div></li><li><div class="item-name"><a class="static" href="static.SPARSE_MERKLE_PLACEHOLDER_HASH.html" title="static diem_crypto::hash::SPARSE_MERKLE_PLACEHOLDER_HASH">SPARSE_MERKLE_PLACEHOLDER_HASH</a></div><div class="desc docblock-short">Placeholder hash of <code>SparseMerkleTree</code>.</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.CryptoHash.html" title="trait diem_crypto::hash::CryptoHash">CryptoHash</a></div><div class="desc docblock-short">A type that can be cryptographically hashed to produce a <code>HashValue</code>.</div></li><li><div class="item-name"><a class="trait" href="trait.CryptoHasher.html" title="trait diem_crypto::hash::CryptoHasher">CryptoHasher</a></div><div class="desc docblock-short">A trait for representing the state of a cryptographic hasher.</div></li><li><div class="item-name"><a class="trait" href="trait.TestOnlyHash.html" title="trait diem_crypto::hash::TestOnlyHash">TestOnlyHash</a></div><div class="desc docblock-short">Provides a test_only_hash() method that can be used in tests on types that
+implement <code>serde::Serialize</code>.</div></li></ul></section></div></main></body></html>

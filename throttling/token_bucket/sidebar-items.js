@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ThrottleResult"],"struct":["ThrottleTokens","ThrottledManager","TokenBucket","TokenBucketManager"]};

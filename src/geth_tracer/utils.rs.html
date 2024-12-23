@@ -1,0 +1,211 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/cfxcore/geth-tracer/src/utils.rs`."><title>utils.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="geth_tracer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../geth_tracer/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+</pre></div><pre class="rust"><code><span class="doccomment">//! Util functions for revm related ops
+</span><span class="kw">use </span>alloy_primitives::{hex, B256};
+<span class="kw">use </span>alloy_sol_types::{ContractError, GenericRevertReason};
+<span class="kw">use </span>cfx_types::{Address, H160, H256, U256};
+<span class="kw">use </span>cfx_vm_interpreter::instructions::{INSTRUCTIONS, INSTRUCTIONS_CANCUN};
+<span class="kw">use </span>revm::primitives::{Address <span class="kw">as </span>RAddress, U256 <span class="kw">as </span>RU256};
+
+<span class="doccomment">/// creates the memory data in 32byte chunks
+/// see &lt;https://github.com/ethereum/go-ethereum/blob/366d2169fbc0e0f803b68c042b77b6b480836dbc/eth/tracers/logger/logger.go#L450-L452&gt;
+</span><span class="attr">#[inline]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>convert_memory(data: <span class="kw-2">&amp;</span>[u8]) -&gt; Vec&lt;String&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>memory = Vec::with_capacity((data.len() + <span class="number">31</span>) / <span class="number">32</span>);
+    <span class="kw">for </span>idx <span class="kw">in </span>(<span class="number">0</span>..data.len()).step_by(<span class="number">32</span>) {
+        <span class="kw">let </span>len = std::cmp::min(idx + <span class="number">32</span>, data.len());
+        memory.push(hex::encode(<span class="kw-2">&amp;</span>data[idx..len]));
+    }
+    memory
+}
+
+<span class="doccomment">/// Get the gas used, accounting for refunds
+</span><span class="attr">#[inline]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>gas_used(spent: u64, refunded: u64) -&gt; u64 {
+    <span class="kw">let </span>refund_quotient = <span class="number">5</span>;
+    spent - (refunded).min(spent / refund_quotient)
+}
+
+<span class="doccomment">/// Returns a non empty revert reason if the output is a revert/error.
+</span><span class="attr">#[inline]
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>maybe_revert_reason(output: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+    <span class="kw">let </span>reason = <span class="kw">match </span>GenericRevertReason::decode(output)<span class="question-mark">? </span>{
+        GenericRevertReason::ContractError(err) =&gt; {
+            <span class="kw">match </span>err {
+                <span class="comment">// return the raw revert reason and don't use the revert's
+                // display message
+                </span>ContractError::Revert(revert) =&gt; revert.reason,
+                err =&gt; err.to_string(),
+            }
+        }
+        GenericRevertReason::RawString(err) =&gt; err,
+    };
+    <span class="kw">if </span>reason.is_empty() {
+        <span class="prelude-val">None
+    </span>} <span class="kw">else </span>{
+        <span class="prelude-val">Some</span>(reason)
+    }
+}
+
+<span class="doccomment">/// Returns the number of items pushed on the stack by a given opcode.
+/// This used to determine how many stack etries to put in the `push` element
+/// in a parity vmTrace.
+/// The value is obvious for most opcodes, but SWAP* and DUP* are a bit weird,
+/// and we handle those as they are handled in parity vmtraces.
+/// For reference: &lt;https://github.com/ledgerwatch/erigon/blob/9b74cf0384385817459f88250d1d9c459a18eab1/turbo/jsonrpc/trace_adhoc.go#L451&gt;
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>stack_push_count(step_op: u8, cancun_enabled: bool) -&gt; usize {
+    <span class="kw">match </span>cancun_enabled {
+        <span class="bool-val">true </span>=&gt; <span class="kw">match </span>INSTRUCTIONS_CANCUN.get(step_op <span class="kw">as </span>usize) {
+            <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(instruct)) =&gt; instruct.ret,
+            <span class="kw">_ </span>=&gt; <span class="number">0</span>,
+        },
+        <span class="bool-val">false </span>=&gt; <span class="kw">match </span>INSTRUCTIONS.get(step_op <span class="kw">as </span>usize) {
+            <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(instruct)) =&gt; instruct.ret,
+            <span class="kw">_ </span>=&gt; <span class="number">0</span>,
+        },
+    }
+}
+
+<span class="comment">// convert from cfx U256 to alloy U256
+</span><span class="kw">pub fn </span>to_alloy_u256(u: U256) -&gt; RU256 {
+    <span class="kw">let </span><span class="kw-2">mut </span>be_bytes: [u8; <span class="number">32</span>] = [<span class="number">0</span>; <span class="number">32</span>];
+    u.to_big_endian(<span class="kw-2">&amp;mut </span>be_bytes);
+    RU256::from_be_bytes(be_bytes)
+}
+
+<span class="kw">pub fn </span>to_alloy_address(h: H160) -&gt; RAddress {
+    RAddress::from_slice(h.as_bytes())
+}
+
+<span class="kw">pub fn </span>to_alloy_h256(h: H256) -&gt; B256 { B256::from(h.<span class="number">0</span>) }
+
+<span class="kw">pub fn </span>from_alloy_address(address: RAddress) -&gt; Address {
+    Address::from_slice(address.as_slice())
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span>alloy_sol_types::{GenericContractError, SolInterface};
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>decode_revert_reason() {
+        <span class="kw">let </span>err = GenericContractError::Revert(<span class="string">"my revert"</span>.into());
+        <span class="kw">let </span>encoded = err.abi_encode();
+        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>encoded).unwrap();
+        <span class="macro">assert_eq!</span>(reason, <span class="string">"my revert"</span>);
+    }
+
+    <span class="comment">// &lt;https://etherscan.io/tx/0x105707c8e3b3675a8424a7b0820b271cbe394eaf4d5065b03c273298e3a81314&gt;
+    </span><span class="attr">#[test]
+    </span><span class="kw">fn </span>decode_revert_reason_with_error() {
+        <span class="kw">let </span>err = <span class="macro">hex!</span>(<span class="string">"08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000024556e697377617056323a20494e53554646494349454e545f494e5055545f414d4f554e5400000000000000000000000000000000000000000000000000000080"</span>);
+        <span class="kw">let </span>reason = maybe_revert_reason(<span class="kw-2">&amp;</span>err[..]).unwrap();
+        <span class="macro">assert_eq!</span>(reason, <span class="string">"UniswapV2: INSUFFICIENT_INPUT_AMOUNT"</span>);
+    }
+}
+</code></pre></div></section></main></body></html>

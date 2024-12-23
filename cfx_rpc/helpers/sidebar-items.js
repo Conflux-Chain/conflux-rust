@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_FEE_HISTORY_CACHE_BLOCK_COUNT"],"mod":["eth_filter","poll_filter","poll_manager"],"struct":["ChainInfo","EpochQueue","FeeHistoryCache"]};

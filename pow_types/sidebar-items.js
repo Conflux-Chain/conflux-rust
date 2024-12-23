@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StakingEvent"],"struct":["FakePowHandler"],"trait":["PowInterface"]};

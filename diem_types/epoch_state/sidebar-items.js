@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"static":["HARDCODED_COMMITTEE_FOR_EPOCH"],"struct":["EpochState"]};

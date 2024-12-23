@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["AES_GCM_TAGLEN","MAX_SIZE_NOISE_MSG"],"enum":["NoiseError"],"fn":["decrypted_len","encrypted_len","handshake_init_msg_len","handshake_resp_msg_len"],"struct":["InitiatorHandshakeState","NoiseConfig","NoiseSession","ResponderHandshakeState"]};

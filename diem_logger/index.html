@@ -1,0 +1,142 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This crates provides an API for logging in diem."><title>diem_logger - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="diem_logger" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../diem_logger/index.html">diem_logger</a><span class="version">0.1.0</span></h2></div><div class="sidebar-elems"><ul class="block">
+            <li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#constants">Constants</a></li><li><a href="#traits">Traits</a></li><li><a href="#functions">Functions</a></li><li><a href="#derives">Derive Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../diem_logger/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">diem_logger</a><button id="copy-path" title="Copy item path to clipboard"><img src="../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../src/diem_logger/lib.rs.html#8-196">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This crates provides an API for logging in diem.</p>
+<h2 id="instrumenting-with-logs"><a class="doc-anchor" href="#instrumenting-with-logs">§</a>Instrumenting with Logs</h2><h3 id="basic-instrumenting-with-logs"><a class="doc-anchor" href="#basic-instrumenting-with-logs">§</a>Basic instrumenting with Logs</h3>
+<p>A set of logging macros (<code>info!</code>, <code>error!</code>, <code>warn!</code>, <code>debug!</code>, and <code>trace!</code>)
+is provided for emitting logs at different levels. All of these macros
+support the addition of providing structured data along with a formatted
+text message.  For guidelines on which level to use, see the <a href="https://developers.diem.com/docs/core/coding-guidelines#logging">coding guidelines</a>.</p>
+<p>The below examples do no type checking for structured log fields, and
+instead just serialize whatever is given.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>diem_logger::info;
+
+<span class="kw">let </span>world = <span class="string">"world!"</span>;
+
+<span class="comment">// Formatted message, similar to `printf!`
+</span><span class="macro">info!</span>(<span class="string">"hello {}"</span>, world);
+<span class="comment">// =&gt; '{"level":"info", "message": "hello world!"}'
+
+// Structured data can be logged using the format 'key = value'
+// where value implements Serialize.  This can be used for indexing and search later.
+</span><span class="kw">let </span>value1 = <span class="number">5</span>;
+<span class="macro">info!</span>(key1 = value1);
+<span class="comment">// =&gt; '{"level":"info", "data": {"key1": 5}}'
+
+// You can even set multiple key/value pairs and a format message together
+</span><span class="kw">let </span>value2 = <span class="bool-val">false</span>;
+<span class="macro">info!</span>(key1 = value1, key2 = value2, <span class="string">"hello {}"</span>, world);
+<span class="comment">// =&gt; '{"level":"info", "data": {"key1": 5, "key2": false}, "message": "hello world!"}'
+
+// Structured data can also use `Display` or `Debug` outputs instead.
+// Using the sigil `?` for debug and `%` for display.
+</span><span class="kw">let </span>value1 = <span class="number">5</span>;
+<span class="macro">info!</span>(debug_key = <span class="question-mark">?</span>value1, display_key = %value1);
+<span class="comment">// =&gt; '{"level":"info", "data": {"display_key": 5, "debug_key": 5}}'</span></code></pre></div>
+<h4 id="note"><a class="doc-anchor" href="#note">§</a>Note</h4>
+<p>Arguments used in a formatted message are <strong>not</strong> captured and included as
+structured data. Everything after the format string literal e.g. <code>&quot;hello {}&quot;</code> are only used in the format string.</p>
+<h3 id="preferred-instrumenting-with-logs-typed-schemas"><a class="doc-anchor" href="#preferred-instrumenting-with-logs-typed-schemas">§</a>Preferred instrumenting with Logs (Typed Schemas)</h3>
+<p>The <code>Schema</code> trait can be used to implement typed logging schemas. This can
+either be implemented by hand or derived using the <code>Schema</code> derive
+proc-macro, implementing the <code>Schema</code> trait for the struct as well as
+providing setters for all fields.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>diem_logger::{info, Schema};
+
+<span class="attr">#[derive(Schema)]
+</span><span class="kw">struct </span>LogSchema&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="comment">// Log using this type's Serialize impl
+    </span>a: usize,
+    <span class="comment">// Log using this type's Debug impl
+    </span><span class="attr">#[schema(debug)]
+    </span>b: <span class="prelude-ty">Option</span>&lt;Vec&lt;bool&gt;&gt;,
+    <span class="comment">// Log using this type's Display impl
+    </span><span class="attr">#[schema(display)]
+    </span>c: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str&gt;,
+}
+
+<span class="kw">let </span>log = LogSchema {
+    a: <span class="number">5</span>,
+    b: <span class="prelude-val">None</span>,
+    c: <span class="prelude-val">None</span>,
+};
+
+<span class="comment">// Automatic setters are named based on the field names, and handle `Option`
+// None fields will be ignored
+</span><span class="macro">info!</span>(log.c(<span class="string">"radiant"</span>));
+<span class="comment">// =&gt; '{"level":"info", "data": { "a": 5, "c": "radiant"}}'
+
+</span><span class="attr">#[derive(Schema)]
+</span><span class="kw">struct </span>OtherSchema&lt;<span class="lifetime">'a</span>&gt; {
+    val: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>str&gt;,
+}
+
+<span class="kw">let </span>log = LogSchema {
+    a: <span class="number">5</span>,
+    b: <span class="prelude-val">None</span>,
+    c: <span class="prelude-val">None</span>,
+};
+<span class="kw">let </span>other = OtherSchema { val: <span class="prelude-val">None </span>};
+
+<span class="comment">// Schemas can be combined
+</span><span class="macro">info!</span>(
+    other.val(<span class="string">"awesome"</span>), <span class="comment">// First schema
+    </span>log                   <span class="comment">// Second schema has fields added to it all
+</span>);
+<span class="comment">// =&gt; '{"level":"info", "data": { "a": 5, "val":"awesome"}}'
+
+</span><span class="kw">let </span>log = LogSchema {
+    a: <span class="number">5</span>,
+    b: <span class="prelude-val">None</span>,
+    c: <span class="prelude-val">None</span>,
+};
+<span class="kw">let </span>other = OtherSchema { val: <span class="prelude-val">None </span>};
+
+<span class="comment">// Schemas can be combined with one off fields and messages like above
+</span><span class="macro">info!</span>(
+    other.val(<span class="string">"awesome"</span>), <span class="comment">// First schema
+    </span>log,                  <span class="comment">// Second schema has fields added to it all
+    </span>new_field = <span class="string">"new"</span>,    <span class="comment">// Basic structured fields
+    </span><span class="string">"Message: {}"</span>,        <span class="comment">// Format messages
+    </span><span class="string">"Some message" </span><span class="comment">// Format message fields (not added to indexed fields)
+</span>);
+<span class="comment">// =&gt; {"level":"info", "message": "Message: Some message",
+//     "data": { "a": 5, "val":"awesome", "new_field": "new"}}'</span></code></pre></div>
+<h3 id="sampling-logs"><a class="doc-anchor" href="#sampling-logs">§</a>Sampling logs</h3>
+<p>Sometimes logging a large amount of data is expensive.  In order to log
+information only part of the time, we’ve added a <code>sample!</code> macro that’s
+configurable on how often we want to execute some code.</p>
+<p><code>SampleRate</code> determines how often the sampled statement will occur.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>diem_logger::{
+    info,
+    sample::{<span class="self">self</span>, SampleRate, Sampling},
+};
+<span class="kw">use </span>std::time::Duration;
+
+<span class="comment">// Sampled based on frequency of events, log only every 2 logs
+</span><span class="macro">sample!</span>(SampleRate::Frequency(<span class="number">2</span>), <span class="macro">info!</span>(<span class="string">"Long log"</span>));
+
+<span class="comment">// Sampled based on time passed, log at most once a minute
+</span><span class="macro">sample!</span>(
+    SampleRate::Duration(Duration::from_secs(<span class="number">60</span>)),
+    <span class="macro">info!</span>(<span class="string">"Long log"</span>)
+);</code></pre></div>
+<h2 id="configuration"><a class="doc-anchor" href="#configuration">§</a>Configuration</h2>
+<p>In order for logs to be captured and emitted a Logger needs to be
+instantiated. This can be done by using the <code>Logger</code> type:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>diem_logger::{Level, Logger};
+
+Logger::builder().level(Level::Info).build();</code></pre></div>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="json_log/index.html" title="mod diem_logger::json_log">json_log</a></div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod diem_logger::prelude">prelude</a></div></li><li><div class="item-name"><a class="mod" href="sample/index.html" title="mod diem_logger::sample">sample</a></div><div class="desc docblock-short">Periodic sampling for logs, metrics, and other use cases through a simple
+macro</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.debug.html" title="macro diem_logger::debug">debug</a></div><div class="desc docblock-short">Log at the <code>debug</code> level</div></li><li><div class="item-name"><a class="macro" href="macro.error.html" title="macro diem_logger::error">error</a></div><div class="desc docblock-short">Log at the <code>error</code> level</div></li><li><div class="item-name"><a class="macro" href="macro.event.html" title="macro diem_logger::event">event</a></div><div class="desc docblock-short">Writes event to event stream
+Example:
+event!(“committed”, block=“b”);</div></li><li><div class="item-name"><a class="macro" href="macro.info.html" title="macro diem_logger::info">info</a></div><div class="desc docblock-short">Log at the <code>info</code> level</div></li><li><div class="item-name"><a class="macro" href="macro.log.html" title="macro diem_logger::log">log</a></div><div class="desc docblock-short">Log at the given level, it’s recommended to use a specific level macro
+instead</div></li><li><div class="item-name"><a class="macro" href="macro.sample.html" title="macro diem_logger::sample">sample</a></div><div class="desc docblock-short">Samples a given function at a <code>SampleRate</code>, useful for periodically emitting
+logs or metrics on high throughput pieces of code.</div></li><li><div class="item-name"><a class="macro" href="macro.trace.html" title="macro diem_logger::trace">trace</a></div><div class="desc docblock-short">Log at the <code>trace</code> level</div></li><li><div class="item-name"><a class="macro" href="macro.warn.html" title="macro diem_logger::warn">warn</a></div><div class="desc docblock-short">Log at the <code>warn</code> level</div></li></ul><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.DiemLogger.html" title="struct diem_logger::DiemLogger">DiemLogger</a></div></li><li><div class="item-name"><a class="struct" href="struct.DiemLoggerBuilder.html" title="struct diem_logger::DiemLoggerBuilder">DiemLoggerBuilder</a></div><div class="desc docblock-short">A builder for a <code>DiemLogger</code>, configures what, where, and how to write logs.</div></li><li><div class="item-name"><a class="struct" href="struct.Event.html" title="struct diem_logger::Event">Event</a></div><div class="desc docblock-short">An individual structured logging event from a log line.  Includes the</div></li><li><div class="item-name"><a class="struct" href="struct.Filter.html" title="struct diem_logger::Filter">Filter</a></div><div class="desc docblock-short">A logging filter to determine which logs to keep or remove based on
+<code>Directive</code>s</div></li><li><div class="item-name"><a class="struct" href="struct.Key.html" title="struct diem_logger::Key">Key</a></div><div class="desc docblock-short">The key part of a logging key value pair e.g. <code>info!(key = value)</code></div></li><li><div class="item-name"><a class="struct" href="struct.KeyValue.html" title="struct diem_logger::KeyValue">KeyValue</a></div><div class="desc docblock-short">The logging key value pair e.g. <code>info!(key = value)</code></div></li><li><div class="item-name"><a class="struct" href="struct.Logger.html" title="struct diem_logger::Logger">Logger</a></div></li><li><div class="item-name"><a class="struct" href="struct.Metadata.html" title="struct diem_logger::Metadata">Metadata</a></div><div class="desc docblock-short">Associated metadata with every log to identify what kind of log and where it
+came from</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.Level.html" title="enum diem_logger::Level">Level</a></div><div class="desc docblock-short">Logging levels, used for stratifying logs, and disabling less important ones
+for performance reasons</div></li><li><div class="item-name"><a class="enum" href="enum.LevelFilter.html" title="enum diem_logger::LevelFilter">LevelFilter</a></div><div class="desc docblock-short">A definition of the most verbose <code>Level</code> allowed, or completely off.</div></li><li><div class="item-name"><a class="enum" href="enum.SecurityEvent.html" title="enum diem_logger::SecurityEvent">SecurityEvent</a></div></li><li><div class="item-name"><a class="enum" href="enum.Value.html" title="enum diem_logger::Value">Value</a></div><div class="desc docblock-short">The value part of a logging key value pair e.g. <code>info!(key = value)</code></div></li></ul><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="constant" href="constant.CHANNEL_SIZE.html" title="constant diem_logger::CHANNEL_SIZE">CHANNEL_SIZE</a></div><div class="desc docblock-short">Default size of log write channel, if the channel is full, logs will be
+dropped</div></li></ul><h2 id="traits" class="section-header">Traits<a href="#traits" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="trait" href="trait.Schema.html" title="trait diem_logger::Schema">Schema</a></div><div class="desc docblock-short">A schema of key-value pairs.</div></li><li><div class="item-name"><a class="trait" href="trait.Visitor.html" title="trait diem_logger::Visitor">Visitor</a></div><div class="desc docblock-short">A visitor for the key-value pairs in a <a href="trait.Schema.html"><code>Schema</code></a>.</div></li><li><div class="item-name"><a class="trait" href="trait.Writer.html" title="trait diem_logger::Writer">Writer</a></div><div class="desc docblock-short">An trait encapsulating the operations required for writing logs.</div></li></ul><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="fn" href="fn.flush.html" title="fn diem_logger::flush">flush</a></div><div class="desc docblock-short">Flush the global <code>Logger</code></div></li></ul><h2 id="derives" class="section-header">Derive Macros<a href="#derives" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="derive" href="derive.Schema.html" title="derive diem_logger::Schema">Schema</a></div></li></ul></section></div></main></body></html>

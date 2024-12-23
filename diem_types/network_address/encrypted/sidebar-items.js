@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["AES_GCM_NONCE_LEN","AES_GCM_TAG_LEN","HKDF_SALT","KEY_LEN","TEST_SHARED_VAL_NETADDR_KEY","TEST_SHARED_VAL_NETADDR_KEY_VERSION"],"struct":["EncNetworkAddress"],"type":["Key","KeyVersion"]};

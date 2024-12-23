@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["contract_address","gas_required_for"],"mod":["executed","execution_outcome","transact_options"],"struct":["ExecutiveContext"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["POS_TERM_EPOCHS"],"struct":["PowHandler"]};

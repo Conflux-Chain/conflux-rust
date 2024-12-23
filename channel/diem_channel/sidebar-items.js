@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ElementStatus"],"fn":["new"],"struct":["Receiver","Sender"]};

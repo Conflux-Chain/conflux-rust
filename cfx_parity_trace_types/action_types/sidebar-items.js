@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Action","ActionType","Outcome"],"struct":["Call","CallResult","Create","CreateResult","InternalTransferAction"]};

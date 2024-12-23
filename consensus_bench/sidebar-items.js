@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CHECKER_SLEEP_PERIOD"],"fn":["check_results","initialize_logger","main"]};

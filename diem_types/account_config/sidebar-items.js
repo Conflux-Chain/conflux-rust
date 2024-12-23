@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["dispute_address","election_select_address","pivot_chain_select_address","register_address","retire_address","reward_distribution_address","unlock_address","update_voting_power_address"],"mod":["constants","resources"]};

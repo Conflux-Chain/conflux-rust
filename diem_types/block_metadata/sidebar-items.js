@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["new_block_event_key"],"static":["NEW_BLOCK_EVENT_PATH"],"struct":["BlockMetadata","DiemBlockResource","NewBlockEvent"]};

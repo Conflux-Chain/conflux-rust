@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_CF_NAME"],"enum":["ScanDirection"],"macro":["define_schema"],"mod":["schema"],"struct":["DB","SchemaBatch","SchemaIterator"],"type":["ColumnFamilyName","Options","ReadOptions"]};

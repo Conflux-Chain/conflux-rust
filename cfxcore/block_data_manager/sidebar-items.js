@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["NULLU64"],"enum":["DbType"],"mod":["block_data_types","db_gc_manager","db_manager","tx_data_manager"],"struct":["BlockDataManager","DataManagerConfiguration","InvalidBlockSet"]};

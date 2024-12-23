@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_simple_block","create_simple_block_impl","initialize_data_manager","initialize_synchronization_graph","initialize_synchronization_graph_with_data_manager"]};

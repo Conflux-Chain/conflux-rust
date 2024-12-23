@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"move_core_types":[["impl !<a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Sized.html\" title=\"trait core::marker::Sized\">Sized</a> for <a class=\"struct\" href=\"move_core_types/identifier/struct.IdentStr.html\" title=\"struct move_core_types::identifier::IdentStr\">IdentStr</a>",1,["move_core_types::identifier::IdentStr"]]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

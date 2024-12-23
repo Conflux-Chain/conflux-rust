@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["DeltaDbManagerTrait","DeltaDbTrait"],"type":["DeltaDbOwnedReadTraitObj","DeltaDbTransactionTraitObj"]};

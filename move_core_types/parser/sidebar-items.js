@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parse_transaction_argument","parse_transaction_arguments","parse_type_tag","parse_type_tags"]};

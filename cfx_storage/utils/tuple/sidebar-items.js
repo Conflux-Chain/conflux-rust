@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["placeholders"],"struct":["ElementNoConstrain"],"trait":["ElementConstrainMark","ElementSatisfy","IndexGetExt","IterCallFamilyTrait","OfElementSatisfiesOnTuple","TestTupleIndexExt","TupleGetIndexExt","TupleIndex","TupleIndexExt","TupleIndexUpTo","TupleIterFromTo","TupleIterate","TupleIterateFromTo"]};

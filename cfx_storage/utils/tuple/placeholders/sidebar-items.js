@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["PLACEHOLDERS"],"struct":["AllPlaceholders","_0","_1","_10","_11","_12","_13","_2","_3","_4","_5","_6","_7","_8","_9"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["StateIndex","StateManager"],"trait":["ReplicatedStateManagerTrait","StateManagerTrait"],"type":["SharedStateManager"]};

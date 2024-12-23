@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An implementation of HKDF, the HMAC-based Extract-and-Expand Key Derivation Function for the Diem project based on RFC 5869."><title>diem_crypto::hkdf - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="diem_crypto" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../diem_crypto/index.html">diem_crypto</a><span class="version">0.1.0</span></h2></div><h2 class="location"><a href="#">Module hkdf</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li></ul></section><h2><a href="../index.html">In crate diem_crypto</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../diem_crypto/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../index.html">diem_crypto</a>::<wbr><a class="mod" href="#">hkdf</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../src/diem_crypto/hkdf.rs.html#8-180">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An implementation of HKDF, the HMAC-based Extract-and-Expand Key Derivation
+Function for the Diem project based on <a href="https://tools.ietf.org/html/rfc5869">RFC 5869</a>.</p>
+<p>The key derivation function (KDF) is intended to support a wide range of
+applications and requirements, and is conservative in its use of
+cryptographic hash functions. In particular, this implementation is
+compatible with hash functions that output 256 bits or more, such as SHA256,
+SHA3-256 and SHA512.</p>
+<p>HKDF follows the “extract-then-expand” paradigm, where the KDF logically
+consists of two modules: the first stage takes the input keying material
+(the seed) and “extracts” from it a fixed-length pseudorandom key, and then
+the second stage “expands” this key into several additional pseudorandom
+keys (the output of the KDF). For convenience, a function that runs both
+steps in a single call is provided. Note that along with an initial
+high-entropy seed, a user can optionally provide salt and app-info
+byte-arrays for extra security guarantees and domain separation.</p>
+<h2 id="applications"><a class="doc-anchor" href="#applications">§</a>Applications</h2>
+<p>HKDF is intended for use in a wide variety of KDF applications (see <a href="https://en.wikipedia.org/wiki/Key_derivation_function">Key derivation function</a>), including:
+a) derivation of keys from an origin high-entropy master seed. This is the
+recommended approach for generating keys in Diem, especially when a True
+Random Generator is not available. b) derivation of session keys from a
+shared Diffie-Hellman value in a key-agreement protocol. c) combining
+entropy from multiple sources of randomness, such as entropy collected
+from system events, user’s keystrokes, /dev/urandom etc. The combined seed
+can then be used to generate cryptographic keys for account, network and
+transaction signing keys among the others. d) hierarchical private key
+derivation, similarly to Bitcoin’s BIP32 protocol for easier key management.
+e) hybrid key generation that combines a master seed with a PRNG output for
+extra security guarantees against a master seed leak or low PRNG entropy.</p>
+<h2 id="recommendations"><a class="doc-anchor" href="#recommendations">§</a>Recommendations</h2>
+<p><strong>Salt</strong>
+HKDF can operate with and without random ‘salt’. The use of salt adds to the
+strength of HKDF, ensuring independence between different uses of the hash
+function, supporting “source-independent” extraction, and strengthening the
+HKDF use. The salt value should be a random string of the same length as the
+hash output. A shorter or less random salt value can still make a
+contribution to the security of the output key material. Salt values should
+be independent of the input keying material. In particular, an application
+needs to make sure that salt values are not chosen or manipulated by an
+attacker.</p>
+<p><em>Application info</em>
+Key expansion accepts an optional ‘info’ value to which the application
+assigns some meaning. Its objective is to bind the derived key material to
+application- and context-specific information.  For example, ‘info’ may
+contain a protocol number, algorithm identifier, child key number (similarly to <a href="https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki">BIP32</a>), etc. The only technical requirement for ‘info’ is that
+it be independent of the seed.</p>
+<p><strong>Which function to use: extract, expand or both?</strong>
+Unless absolutely sure of what they are doing, applications should use both
+steps — if only for the sake of compatibility with the general case.</p>
+<h2 id="example"><a class="doc-anchor" href="#example">§</a>Example</h2>
+<p>Run HKDF extract-then-expand so as to return 64 bytes, using ‘salt’, ‘seed’
+and ‘info’ as inputs.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>diem_crypto::hkdf::Hkdf;
+<span class="kw">use </span>sha2::Sha256;
+
+<span class="comment">// some bytes required for this example.
+</span><span class="kw">let </span>raw_bytes = [<span class="number">2u8</span>; <span class="number">10</span>];
+<span class="comment">// define salt
+</span><span class="kw">let </span>salt = <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>raw_bytes[<span class="number">0</span>..<span class="number">4</span>]);
+<span class="comment">// define seed - in production this is recommended to be a 32 bytes or longer random seed.
+</span><span class="kw">let </span>seed = [<span class="number">3u8</span>; <span class="number">32</span>];
+<span class="comment">// define application info
+</span><span class="kw">let </span>info = <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>raw_bytes[<span class="number">4</span>..<span class="number">10</span>]);
+
+<span class="comment">// HKDF extract-then-expand 64-bytes output
+</span><span class="kw">let </span>derived_bytes = Hkdf::&lt;Sha256&gt;::extract_then_expand(salt, <span class="kw-2">&amp;</span>seed, info, <span class="number">64</span>);
+<span class="macro">assert_eq!</span>(derived_bytes.unwrap().len(), <span class="number">64</span>)</code></pre></div>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.Hkdf.html" title="struct diem_crypto::hkdf::Hkdf">Hkdf</a></div><div class="desc docblock-short">Structure representing the HKDF, capable of HKDF-Extract and HKDF-Expand
+operations, as defined in RFC 5869.</div></li></ul><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="enum" href="enum.HkdfError.html" title="enum diem_crypto::hkdf::HkdfError">HkdfError</a></div><div class="desc docblock-short">An error type for HKDF key derivation issues.</div></li></ul></section></div></main></body></html>

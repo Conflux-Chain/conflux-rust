@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TEST_SEED"],"struct":["KeyPair"]};

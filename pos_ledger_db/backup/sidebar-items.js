@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["backup_handler","restore_handler"]};

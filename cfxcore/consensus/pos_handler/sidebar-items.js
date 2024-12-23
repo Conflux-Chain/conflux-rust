@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["read_initial_nodes_from_file","save_initial_nodes_to_file"],"struct":["PosBlock","PosConfiguration","PosConnection","PosHandler"],"trait":["PosInterface"],"type":["PosVerifier"]};

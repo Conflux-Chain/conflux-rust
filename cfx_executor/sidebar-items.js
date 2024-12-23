@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":["group_impl_is_active","impl_function_type","internal_bail","make_function_table","make_solidity_contract","make_solidity_event","make_solidity_function","return_if","try_loaded","unwrap_or_return"],"mod":["context","executive","internal_contract","machine","observer","spec","stack","state","substate"]};

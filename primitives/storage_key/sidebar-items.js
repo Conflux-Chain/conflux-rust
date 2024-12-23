@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DELTA_MPT_KEY_PADDING_BYTES"],"enum":["StorageKey"],"struct":["DeltaMptKeyPadding","FromKeyBytesResult","GENESIS_DELTA_MPT_KEY_PADDING","StorageKeyWithSpace"],"trait":["ConditionalReturnValue"],"type":["CheckInput","SkipInputCheck"]};

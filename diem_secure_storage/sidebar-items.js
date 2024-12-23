@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Capability","Error","Identity","Storage"],"fn":["from_base64","to_base64"],"struct":["GetResponse","GitHubStorage","InMemoryStorage","NamespacedStorage","OnDiskStorage","Permission","Policy","PublicKeyResponse","VaultStorage"],"trait":["CryptoKVStorage","CryptoStorage","KVStorage"]};

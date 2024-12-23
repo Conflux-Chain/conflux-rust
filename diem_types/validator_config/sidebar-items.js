@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ValidatorConfig","ValidatorConfigResource","ValidatorOperatorConfigResource"],"type":["ConsensusPrivateKey","ConsensusPublicKey","ConsensusSignature","ConsensusVRFPrivateKey","ConsensusVRFProof","ConsensusVRFPublicKey","MultiConsensusPrivateKey","MultiConsensusPublicKey","MultiConsensusSignature"]};

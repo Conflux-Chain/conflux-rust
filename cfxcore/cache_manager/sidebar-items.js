@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CacheId"],"struct":["CacheManager","CacheSize"]};

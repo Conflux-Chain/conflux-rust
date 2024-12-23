@@ -1,0 +1,64 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Pivot hint provides validation support during blockchain synchronization and historical data execution by leveraging trusted pivot chain information from authoritative sources."><title>cfxcore::consensus::pivot_hint - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfxcore" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../cfxcore/index.html">cfxcore</a><span class="version">2.4.0</span></h2></div><h2 class="location"><a href="#">Module pivot_hint</a></h2><div class="sidebar-elems"><section><ul class="block"><li><a href="#structs">Structs</a></li></ul></section><h2><a href="../index.html">In cfxcore::consensus</a></h2></div></nav><div class="sidebar-resizer"></div>
+    <main><div class="width-limiter"><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../cfxcore/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="main-heading"><h1>Module <a href="../../index.html">cfxcore</a>::<wbr><a href="../index.html">consensus</a>::<wbr><a class="mod" href="#">pivot_hint</a><button id="copy-path" title="Copy item path to clipboard"><img src="../../../static.files/clipboard-7571035ce49a181d.svg" width="19" height="18" alt="Copy item path"></button></h1><span class="out-of-band"><a class="src" href="../../../src/cfxcore/consensus/pivot_hint/mod.rs.html#1-270">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Pivot hint provides validation support during blockchain synchronization and
+historical data execution by leveraging trusted pivot chain information from
+authoritative sources.</p>
+<p>During the synchronization process of archive nodes, when processing
+historical data, pivot hints help prevent execution on forked branches and
+protect against problematic historical states that occurred on
+mainnet/testnet chains.</p>
+<h2 id="file-structure"><a class="doc-anchor" href="#file-structure">§</a>File Structure</h2>
+<p>The pivot hint file consists of three main parts:</p>
+<ul>
+<li>Header Part (28 bytes): Contains configuration parameters</li>
+<li>Page Digests Part: A list of keccak hashes for each page</li>
+<li>Pages Part: Sequential storage of all pages</li>
+</ul>
+<h2 id="page-organization"><a class="doc-anchor" href="#page-organization">§</a>Page Organization</h2>
+<p>Blocks are organized into pages based on several configurable parameters:</p>
+<ul>
+<li><code>range_max</code>: Upper bound (exclusive) of block heights for stored hashes</li>
+<li><code>page_interval</code>: Number of consecutive blocks in each page</li>
+<li>Each page contains:
+<ul>
+<li>Major section: Full hashes for blocks every <code>major_interval</code> heights</li>
+<li>Minor section: Hash prefixes (in length of <code>minor_hash_length``) for blocks every </code>minor_interval` heights</li>
+</ul>
+</li>
+</ul>
+<h2 id="parameter-constraints"><a class="doc-anchor" href="#parameter-constraints">§</a>Parameter Constraints</h2>
+<p>The following parameters must maintain integer multiple relationships:</p>
+<ul>
+<li><code>range_max</code> must be a multiple of <code>page_interval</code></li>
+<li><code>page_interval</code> must be a multiple of <code>major_interval</code></li>
+<li><code>major_interval</code> must be a multiple of <code>minor_interval</code></li>
+</ul>
+<h2 id="fork-validation"><a class="doc-anchor" href="#fork-validation">§</a>Fork Validation</h2>
+<p>During fork validation, when the consensus layer attempts to switch the
+pivot chain from branch A to branch B, it must provide:</p>
+<ul>
+<li><code>fork_at</code>: The first block height where branch A and B diverge</li>
+<li><code>me_height</code>: The last block height of branch B</li>
+<li>A query interface to retrieve block hashes on branch B within range
+[fork_at, me_height]</li>
+</ul>
+<p>The validation process follows these rules:</p>
+<ul>
+<li>If [fork_at, me_height] covers with major section records, validation uses
+the last recorded full hash</li>
+<li>If no major section records covered but minor section overlap exists,
+validation uses minor section records (note: this may allow switching to
+branches that aren’t on the final main chain)</li>
+<li>If neither major nor minor section overlap exists, the switch is allowed</li>
+</ul>
+<p>When <code>fork_at</code> exceeds <code>range_max</code>, it indicates the fork point is beyond
+the static file records, and the switch is automatically allowed.</p>
+<h2 id="loading-process"><a class="doc-anchor" href="#loading-process">§</a>Loading Process</h2>
+<ol>
+<li>Load and validate Header Part parameters</li>
+<li>Load Page Digests Part and verify against predetermined Pivot Hint
+Checksum</li>
+<li>Keep Page Digests in memory</li>
+<li>Verify each page against Page Digests when loading to prevent corruption</li>
+</ol>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="struct" href="struct.PivotHint.html" title="struct cfxcore::consensus::pivot_hint::PivotHint">PivotHint</a></div><div class="desc docblock-short">Manages pivot block hash records for chain fork validation during sync
+process.</div></li><li><div class="item-name"><a class="struct" href="struct.PivotHintConfig.html" title="struct cfxcore::consensus::pivot_hint::PivotHintConfig">PivotHintConfig</a></div><div class="desc docblock-short">Configuration for initializing PivotHint.</div></li></ul></section></div></main></body></html>

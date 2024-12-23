@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["DerefMutPlusImplOrBorrowMutSelf","DerefMutPlusSelf","DerefPlusImplOrBorrowSelf","DerefPlusSelf","ImplOrBorrowMutSelf","ImplOrBorrowSelf"]};

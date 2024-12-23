@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_future","topological_sort"],"trait":["DAG","Graph","RichDAG","RichTreeGraph","SetLike","TreeGraph"]};

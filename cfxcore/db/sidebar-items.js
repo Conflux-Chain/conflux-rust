@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["COL_BLAMED_HEADER_VERIFIED_ROOTS","COL_BLOCKS","COL_BLOCK_TRACES","COL_EPOCH_NUMBER","COL_HASH_BY_BLOCK_NUMBER","COL_MISC","COL_REWARD_BY_POS_EPOCH","COL_TX_INDEX","NUM_COLUMNS"],"enum":["CacheUpdatePolicy"],"trait":["Cache","Key","Readable","Writable"]};

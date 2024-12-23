@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LedgerInfoWithSignatures","LedgerInfoWithSignaturesUnchecked"],"fn":["deserialize_ledger_info_unchecked"],"struct":["LedgerInfo","LedgerInfoHasher","LedgerInfoWithV0","LedgerInfoWithV0Unchecked"]};

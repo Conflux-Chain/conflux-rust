@@ -1,0 +1,179 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/cfxcore/core/src/pos/mempool/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="cfxcore" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../cfxcore/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+</pre></div><pre class="rust"><code><span class="comment">// Copyright (c) The Diem Core Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
+</span><span class="attr">#![forbid(unsafe_code)]
+</span><span class="comment">// Increase recursion limit to allow for use of select! macro.
+
+</span><span class="doccomment">//! Mempool is used to hold transactions that have been submitted but not yet
+//! agreed upon and executed.
+//!
+//! **Flow**: AC sends transactions into mempool which holds them for a period
+//! of time before sending them into consensus.  When a new transaction is
+//! added, Mempool shares this transaction with other nodes in the system.  This
+//! is a form of “shared mempool” in that transactions between mempools are
+//! shared with other validators.  This helps maintain a pseudo global ordering
+//! since when a validator receives a transaction from another mempool, it will
+//! be ordered when added in the ordered queue of the recipient validator. To
+//! reduce network consumption, in “shared mempool” each validator is
+//! responsible for delivery of its own transactions (we don't rebroadcast
+//! transactions originated on a different peer). Also we only broadcast
+//! transactions that have some chance to be included in next block: their
+//! sequence number equals to the next sequence number of account or sequential
+//! to it. For example, if the current sequence number for an account is 2 and
+//! local mempool contains transactions with sequence numbers 2,3,4,7,8, then
+//! only transactions 2, 3 and 4 will be broadcast.
+//!
+//! Consensus pulls transactions from mempool rather than mempool pushing into
+//! consensus. This is done so that while consensus is not yet ready for
+//! transactions, we keep ordering based on gas and consensus can let
+//! transactions build up.  This allows for batching of transactions into a
+//! single consensus block as well as prioritizing by gas price. Mempool doesn't
+//! keep track of transactions that were sent to Consensus. On each get_block
+//! request, Consensus additionally sends a set of transactions that were pulled
+//! from Mempool so far but were not committed yet. This is done so Mempool can
+//! be agnostic about different Consensus proposal branches.  Once a transaction
+//! is fully executed and written to storage,  Consensus notifies Mempool about
+//! it which later drops it from its internal state.
+//!
+//! **Internals**: Internally Mempool is modeled as `HashMap&lt;AccountAddress,
+//! AccountTransactions&gt;` with various indexes built on top of it. The main
+//! index `PriorityIndex` is an ordered queue of transactions that are “ready”
+//! to be included in next block(i.e. have sequence number sequential to current
+//! for account). This queue is ordered by gas price so that if a client is
+//! willing to pay more (than other clients) per unit of execution, then they
+//! can enter consensus earlier. Note that although global ordering is
+//! maintained by gas price, for a single account, transactions are ordered by
+//! sequence number.
+//!
+//! All transactions that are not ready to be included in the next block are
+//! part of separate `ParkingLotIndex`. They will be moved to the ordered queue
+//! once some event unblocks them. For example, Mempool has transaction with
+//! sequence number 4, while current sequence number for that account is 3. Such
+//! transaction is considered to be “non-ready”. Then callback from Consensus
+//! notifies that transaction was committed(i.e. transaction 3 was submitted to
+//! different node). Such event “unblocks” local transaction and txn4 will be
+//! moved to OrderedQueue.
+//!
+//! Mempool only holds a limited number of transactions to prevent OOMing the
+//! system. Additionally there's a limit of number of transactions per account
+//! to prevent different abuses/attacks
+//!
+//! Transactions in Mempool have two types of expirations: systemTTL and
+//! client-specified expiration. Once we hit either of those, the transaction is
+//! removed from Mempool. SystemTTL is checked periodically in the background,
+//! while the client-specified expiration is checked on every Consensus commit
+//! request. We use a separate system TTL to ensure that a transaction won't
+//! remain stuck in Mempool forever, even if Consensus doesn't make progress
+
+</span><span class="comment">//#[cfg(any(test, feature = "fuzzing"))]
+//mod tests;
+</span><span class="kw">pub use </span>shared_mempool::{
+    bootstrap, network,
+    types::{
+        gen_mempool_reconfig_subscription, CommitNotification, CommitResponse,
+        CommittedTransaction, ConsensusRequest, ConsensusResponse,
+        MempoolClientSender, SubmissionStatus, TransactionExclusion,
+    },
+};
+<span class="comment">//#[cfg(any(test, feature = "fuzzing"))]
+//pub use tests::{fuzzing, mocks};
+
+</span><span class="kw">mod </span>core_mempool;
+<span class="kw">mod </span>counters;
+<span class="kw">mod </span>logging;
+<span class="kw">mod </span>shared_mempool;
+</code></pre></div></section></main></body></html>

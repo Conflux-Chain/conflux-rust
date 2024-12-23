@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BASE_PRICE_CHANGE_DENOMINATOR"],"fn":["compute_next_price","compute_next_price_tuple","estimate_gas_used_boundary","estimate_max_possible_gas"],"static":["CIP112_TRANSITION_HEIGHT"],"struct":["BasePrice","BlockHeader","BlockHeaderBuilder","BlockHeaderRlpPart"]};

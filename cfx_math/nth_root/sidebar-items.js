@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["nth_inv_root","nth_root"],"trait":["NthRoot","RootDegree","RootInvParams"]};

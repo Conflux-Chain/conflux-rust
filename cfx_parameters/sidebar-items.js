@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["RATIO_BASE_HUNDRED","RATIO_BASE_TEN","WORKER_COMPUTATION_PARALLELISM"],"mod":["block","consensus","consensus_internal","genesis","internal_contract_addresses","light","pow","rpc","staking","sync","tx_pool"],"struct":["DaoControlParameters"]};
