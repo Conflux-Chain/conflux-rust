@@ -119,7 +119,7 @@ def run_single_round(options):
             "pubsub",
             "evm_space",
             ]
-    slow_tests = {"full_node_tests/p2p_era_test.py", "pos/retire_param_hard_fork_test.py", "pos/hard_fork_test.py", "rpc_test.py"}
+    slow_tests = {"full_node_tests/p2p_era_test.py", "pos/retire_param_hard_fork_test.py"}
 
     # By default, run all *_test.py files in the specified subfolders.
     for subdir in test_subdirs:
