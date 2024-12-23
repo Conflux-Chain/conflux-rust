@@ -9,5 +9,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-futures01 = { workspace = true }
+futures01 = { version = "0.1", package = "futures" }
 tokio = "~0.1.9"
