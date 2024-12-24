@@ -11,11 +11,12 @@ import random
 import re
 from subprocess import CalledProcessError, check_output
 import time
-from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union
+from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union, Literal
 import socket
 import threading
 import jsonrpcclient.exceptions
 import solcx
+import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
 from cfx_account.signers.local import LocalAccount  as CfxLocalAccount
@@ -23,7 +24,8 @@ from sys import platform
 import yaml
 import shutil
 import math
-
+from os.path import dirname, join
+from pathlib import Path
 
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
@@ -38,6 +40,8 @@ CONFLUX_RPC_WAIT_TIMEOUT = 60
 CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
 
 logger = logging.getLogger("TestFramework.utils")
+
+ZERO_ADDRESS = f"0x{'0'*40}"
 
 # Assert functions
 ##################
@@ -64,7 +68,13 @@ def assert_storage_occupied(receipt, addr, expected):
 
 
 def assert_storage_released(receipt, addr, expected):
-    assert_equal(receipt["storageReleased"].get(addr.lower(), 0), expected)
+    for storage_change_object in receipt["storageReleased"]:
+        if storage_change_object["address"] == addr:
+            assert_equal(storage_change_object["collaterals"], expected)
+            return
+    # not found in receipt
+    if expected != 0:
+        raise AssertionError(f"Storage released for address {addr} not found in receipt: {receipt['storageReleased']}")
 
 
 def assert_equal(thing1, thing2, *args):
@@ -931,3 +941,21 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
         assert is_in_pivot_block == False, "Transaction should be in non-pivot block"
         assert max_fee_per_gas >= burnt_fee_per_gas
 
+def assert_tx_exec_error(client: "RpcClient", tx_hash: str, err_msg: str):
+    client.wait_for_receipt(tx_hash)
+    receipt = client.get_transaction_receipt(tx_hash)
+    assert_equal(receipt["txExecErrorMsg"], err_msg)    
+
+
+InternalContractName = Literal["AdminControl", "SponsorWhitelistControl",
+                               "Staking", "ConfluxContext", "PoSRegister", "CrossSpaceCall", "ParamsControl"]
+
+
+
+def load_contract_metadata(name: str):
+    path = Path(join(dirname(__file__), "..", "test_contracts", "artifacts"))
+    try:
+        found_file = next(path.rglob(f"{name}.json"))
+        return json.loads(open(found_file, "r").read())
+    except StopIteration:
+        raise Exception(f"Cannot found contract {name}'s metadata")

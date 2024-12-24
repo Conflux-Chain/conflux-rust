@@ -2,7 +2,7 @@
 
 set -e
 
-pip3 install cfx-account eth-utils py-ecc rlp trie coincurve safe-pysha3 web3==7.4.0 py-solc-x jsonrpcclient==3.3.6 asyncio websockets pyyaml numpy
+pip3 install cfx-account eth-utils py-ecc rlp trie coincurve safe-pysha3 conflux-web3==1.4.0b5 web3 py-solc-x jsonrpcclient==3.3.6 asyncio websockets pyyaml numpy
 
 python3 -m solcx.install v0.5.17
 

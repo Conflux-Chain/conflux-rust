@@ -1,26 +1,28 @@
 from conflux.utils import *
-from test_framework.contracts import ConfluxTestFrameworkForContract, ZERO_ADDRESS
+from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
+from web3.exceptions import Web3RPCError
 
 
 CIP118_NUMBER = 100
 
-class CIP118ActivationTest(ConfluxTestFrameworkForContract):
+class CIP118ActivationTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["cip118_transition_number"] = CIP118_NUMBER
         self.conf_parameters["executive_trace"] = "true"
 
     def run_test(self):
+        self.sponsorControl = self.internal_contract(name="SponsorWhitelistControl")
         try:
-            self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).cfx_call()
+            self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).call()
             raise Exception("Should fail")
-        except Exception as e:
-            assert_equal(e.response.data, 'VmError(InternalContract("unsupported function"))')
+        except Web3RPCError as e:
+            assert_equal(e.rpc_response['error']["data"], 'VmError(InternalContract("unsupported function"))')  # type: ignore
 
         self.wait_for_block(CIP118_NUMBER + 5)
-        self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).cfx_call()
+        self.sponsorControl.functions.getAvailableStoragePoints(ZERO_ADDRESS).call()
 
     def wait_for_block(self, block_number, have_not_reach=False):
         if have_not_reach:
