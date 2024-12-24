@@ -25,7 +25,6 @@ use cfxcore::{
     TransactionPool,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use runtime::Runtime;
 
 pub struct LightClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
@@ -36,7 +35,6 @@ pub struct LightClientExtraComponents {
     pub rpc_http_server: Option<HttpServer>,
     pub rpc_tcp_server: Option<TcpServer>,
     pub rpc_ws_server: Option<WsServer>,
-    pub runtime: Runtime,
     pub secret_store: Arc<SecretStore>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
@@ -71,8 +69,8 @@ impl LightClient {
             accounts,
             notifications,
             pubsub,
-            runtime,
             eth_pubsub,
+            _tokio_runtime,
         ) = initialize_common_modules(
             &mut conf,
             exit.clone(),
@@ -183,7 +181,6 @@ impl LightClient {
                 rpc_http_server,
                 rpc_tcp_server,
                 rpc_ws_server,
-                runtime,
                 secret_store,
                 txpool,
                 pow,
