@@ -262,7 +262,13 @@ fn setup_rpc_apis(
                     rpc.consensus.clone(),
                     rpc.config.max_estimation_gas_limit,
                 );
-                handler.extend_with(geth_debug.to_delegate());
+                extend_with_interceptor(
+                    &mut handler,
+                    &rpc.config,
+                    geth_debug.to_delegate(),
+                    throttling_conf,
+                    throttling_section,
+                );
             }
             Api::Test => {
                 handler.extend_with(
