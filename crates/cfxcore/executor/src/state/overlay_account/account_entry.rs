@@ -3,6 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use super::OverlayAccount;
+use cfx_parameters::genesis::GENESIS_ACCOUNT_ADDRESS;
+use cfx_types::AddressWithSpace;
+use primitives::Account;
+use AccountEntry::*;
 
 /// Entry object in cache and checkpoint layers, adding additional markers
 /// like dirty bits to the `OverlayAccount` structure.
@@ -16,18 +20,13 @@ pub enum AccountEntry {
     Cached(OverlayAccount, bool),
 }
 
-use cfx_parameters::genesis::GENESIS_ACCOUNT_ADDRESS;
-use cfx_types::AddressWithSpace;
-use primitives::Account;
-use AccountEntry::*;
-
 impl AccountEntry {
     pub fn new_dirty(account: OverlayAccount) -> AccountEntry {
         Cached(account, true)
     }
 
     /// Contruct `AccountEntry` from account loaded from statedb.
-    pub fn new_loaded(account: Option<Account>) -> AccountEntry {
+    pub fn from_loaded(account: Option<Account>) -> AccountEntry {
         match account {
             Some(acc) => Cached(
                 OverlayAccount::from_loaded(&acc.address().clone(), acc),

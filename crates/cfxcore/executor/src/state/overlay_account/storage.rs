@@ -7,12 +7,12 @@ use cfx_parameters::{
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
-use cfx_types::{Address, Space, U256};
+use cfx_types::{Address, Space, H256, U256};
 
 use primitives::{
     SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
 };
-use std::collections::hash_map::Entry::*;
+use std::collections::{hash_map::Entry::*, HashMap};
 
 use super::OverlayAccount;
 
@@ -196,21 +196,13 @@ impl OverlayAccount {
     pub fn storage_entry_at(
         &self, db: &StateDbGeneric, key: &[u8],
     ) -> DbResult<StorageValue> {
-        Ok(if let Some(owner) = self.cached_entry_at(key) {
-            owner
-        } else if self.fresh_storage() {
+        Ok(if let Some(value) = self.cached_entry_at(key) {
+            value
+        } else if self.fresh_storage() || self.storage_overrided {
             StorageValue::default()
         } else {
             self.get_and_cache_storage(db, key)?
         })
-    }
-
-    pub fn transient_storage_at(&self, key: &[u8]) -> U256 {
-        self.transient_storage_cache
-            .read()
-            .get(key)
-            .cloned()
-            .unwrap_or_default()
     }
 
     fn get_and_cache_storage(
@@ -229,6 +221,41 @@ impl OverlayAccount {
             .write()
             .insert(key.to_vec(), storage_value.clone());
         Ok(storage_value)
+    }
+
+    // used for state override.diff
+    pub fn update_storage_read_cache(&mut self, key: Vec<u8>, value: U256) {
+        let storage_value = StorageValue {
+            owner: Some(self.address.address),
+            value,
+        };
+        self.storage_read_cache
+            .write()
+            .insert(key.to_vec(), storage_value);
+    }
+
+    pub fn apply_diff_to_storage_read_cache(
+        &mut self, diff: &HashMap<H256, H256>,
+    ) {
+        for (key, value) in diff.iter() {
+            let key = key.as_bytes().to_vec();
+            let value = U256::from_big_endian(value.as_bytes()); // TODO check this is correct
+            self.update_storage_read_cache(key, value);
+        }
+    }
+
+    pub fn override_storage_read_cache(&mut self, state: &HashMap<H256, H256>) {
+        self.storage_read_cache.write().clear();
+        self.apply_diff_to_storage_read_cache(state);
+        self.storage_overrided = true;
+    }
+
+    pub fn transient_storage_at(&self, key: &[u8]) -> U256 {
+        self.transient_storage_cache
+            .read()
+            .get(key)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn transient_set_storage(&mut self, key: Vec<u8>, value: U256) {

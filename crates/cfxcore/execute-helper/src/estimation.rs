@@ -29,12 +29,18 @@ enum SponsoredType {
     Collateral,
 }
 
+/// EstimateExt is the result of the estimation of a transaction. It contains
+/// the estimated gas limit and the estimated storage limit.
 #[derive(Default, Debug)]
 pub struct EstimateExt {
     pub estimated_gas_limit: U256,
     pub estimated_storage_limit: u64,
 }
 
+/// EstimationContext is the context for estimating a transaction.
+/// It can be used to virtually execute a transaction and get the estimation
+/// result (including gas estimation and execution output).
+/// The main function is `transact_virtual`.
 pub struct EstimationContext<'a> {
     state: &'a mut State,
     env: &'a Env,
@@ -60,7 +66,7 @@ impl<'a> EstimationContext<'a> {
     }
 
     fn process_estimate_request(
-        &mut self, tx: &mut SignedTransaction, request: &EstimateRequest,
+        &mut self, tx: &mut SignedTransaction, request: &EstimateRequestMeta,
     ) -> DbResult<()> {
         if !request.has_sender {
             let mut random_hex = Address::random();
@@ -132,7 +138,7 @@ impl<'a> EstimationContext<'a> {
     }
 
     pub fn transact_virtual(
-        &mut self, mut tx: SignedTransaction, request: EstimateRequest,
+        &mut self, mut tx: SignedTransaction, request: EstimateRequestMeta,
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         if let Some(outcome) = self.check_cip130(&tx, &request) {
             return Ok(outcome);
@@ -173,7 +179,7 @@ impl<'a> EstimationContext<'a> {
     }
 
     fn check_cip130(
-        &self, tx: &SignedTransaction, request: &EstimateRequest,
+        &self, tx: &SignedTransaction, request: &EstimateRequestMeta,
     ) -> Option<(ExecutionOutcome, EstimateExt)> {
         let min_gas_limit = U256::from(tx.data().len() * 100);
         if !request.has_gas_limit || *tx.gas_limit() >= min_gas_limit {
@@ -205,7 +211,7 @@ impl<'a> EstimationContext<'a> {
     // can be afford by the sponsor, to guarantee the user pays for
     // the storage limit.
     fn two_pass_estimation(
-        &mut self, tx: &SignedTransaction, request: EstimateRequest,
+        &mut self, tx: &SignedTransaction, request: EstimateRequestMeta,
     ) -> DbResult<Result<(Executed, Option<u64>), ExecutionOutcome>> {
         // First pass
         let saved = self.state.save();
@@ -292,7 +298,7 @@ impl<'a> EstimationContext<'a> {
 
     fn enact_executed_by_estimation_request(
         &self, tx: SignedTransaction, mut executed: Executed,
-        overwrite_storage_limit: Option<u64>, request: &EstimateRequest,
+        overwrite_storage_limit: Option<u64>, request: &EstimateRequestMeta,
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         let estimated_storage_limit =
             overwrite_storage_limit.unwrap_or(storage_limit(&executed));
@@ -399,6 +405,8 @@ impl<'a> EstimationContext<'a> {
     }
 }
 
+// Cal the estimated gas from the executed result
+// and apply cip130 to the estimation
 fn estimated_gas_limit(executed: &Executed, tx: &SignedTransaction) -> U256 {
     let cip130_min_gas_limit = U256::from(tx.data().len() * 100);
     let estimated =
@@ -414,6 +422,7 @@ fn storage_limit(executed: &Executed) -> u64 {
         .map_or(0, |x| x.collaterals.as_u64())
 }
 
+/// Decode the revert error and the innermost error.
 pub fn decode_error<F, Addr: Display>(
     executed: &Executed, format_address: F,
 ) -> (String, String, Vec<String>)
@@ -445,7 +454,7 @@ where F: Fn(&Address) -> Addr {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct EstimateRequest {
+pub struct EstimateRequestMeta {
     pub has_sender: bool,
     pub has_gas_limit: bool,
     pub has_gas_price: bool,
@@ -453,7 +462,7 @@ pub struct EstimateRequest {
     pub has_storage_limit: bool,
 }
 
-impl EstimateRequest {
+impl EstimateRequestMeta {
     fn recheck_gas_fee(&self) -> bool { self.has_sender && self.has_gas_price }
 
     fn charge_gas(&self) -> bool {

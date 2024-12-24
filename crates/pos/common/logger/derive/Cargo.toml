@@ -12,6 +12,6 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.64", features = ["extra-traits"] }
+syn = { workspace = true, features = ["extra-traits"] }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }

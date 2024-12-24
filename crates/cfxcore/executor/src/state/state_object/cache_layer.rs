@@ -84,7 +84,7 @@ impl State {
 
         // Load the account and insert to cache
         let mut account_entry =
-            AccountEntry::new_loaded(self.db.get_account(address)?);
+            AccountEntry::from_loaded(self.db.get_account(address)?);
         Self::load_account_ext_fields(require, &mut account_entry, &self.db)?;
 
         self.cache.write().insert(*address, account_entry);
@@ -188,7 +188,7 @@ impl State {
             Occupied(e) => e.into_mut(),
             Vacant(e) => {
                 let address = *e.key();
-                e.insert(AccountEntry::new_loaded(db.get_account(&address)?))
+                e.insert(AccountEntry::from_loaded(db.get_account(&address)?))
             }
         };
         Self::load_account_ext_fields(require, account_entry, db)?;
