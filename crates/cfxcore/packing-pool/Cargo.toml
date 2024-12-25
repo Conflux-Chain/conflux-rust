@@ -13,7 +13,7 @@ treap-map = { workspace = true }
 heap-map = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
-rand_xorshift = "0.2"
+rand_xorshift = { workspace = true }
 typenum = "1.17.0"
 rand = { workspace = true }
 

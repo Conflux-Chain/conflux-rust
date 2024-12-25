@@ -9,6 +9,8 @@ use cfx_rpc_eth_types::StateOverride;
 use cfx_statedb::{Error as DbError, Result as DbResult};
 use cfx_types::{AddressWithSpace, Space, H256, U256};
 
+/// Apply the state override to the state object, only used for rpc call eg
+/// eth_call, eth_estimateGas etc.
 impl State {
     // Apply the state override to the state object, used for rpc call eg
     // eth_call
@@ -61,7 +63,7 @@ impl State {
             }
 
             if account.move_precompile_to.is_some() {
-                // TODO: impl move precompile
+                // TODO: impl move precompile to logic
             }
         }
         Ok(())

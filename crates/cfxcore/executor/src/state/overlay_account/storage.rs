@@ -239,7 +239,7 @@ impl OverlayAccount {
     ) {
         for (key, value) in diff.iter() {
             let key = key.as_bytes().to_vec();
-            let value = U256::from_big_endian(value.as_bytes()); // TODO check this is correct
+            let value = U256::from_big_endian(value.as_bytes());
             self.update_storage_read_cache(key, value);
         }
     }
