@@ -18,6 +18,7 @@ strum = { workspace = true, features = ["derive"]  }
 alloy-primitives = { workspace = true}
 thiserror = { workspace = true }
 
+jsonrpc-core ={ workspace = true}
 jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server"] }
@@ -32,3 +33,17 @@ cfxcore = { workspace = true }
 cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
+throttling = { workspace = true }
+cfx-util-macros = { workspace = true }
+log = { workspace = true }
+cfx-rpc-utils = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[dependencies.futures-util]
+version = "0.3.14"
+features = [
+    "io",
+    "async-await-macro",
+]

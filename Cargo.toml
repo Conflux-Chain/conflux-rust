@@ -101,7 +101,8 @@ members = [
     "crates/pos/types/move-core-types",
     "crates/pos/types/pow-types",
     "crates/pos/types/types",
-    "crates/pos/config/management/network-address-encryption",
+    "crates/pos/config/management/network-address-encryption", 
+    "crates/rpc/rpc-middlewares",
 ]
 
 resolver = "2"
