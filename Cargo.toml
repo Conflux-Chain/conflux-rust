@@ -197,6 +197,7 @@ cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
 cfx-rpc-utils = { path = "./crates/rpc/rpc-utils" }
 cfx-rpc-builder = { path = "./crates/rpc/rpc-builder" }
 cfx-rpc-cfx-impl = { path = "./crates/rpc/rpc-cfx-impl" }
+cfx-rpc-middlewares = { path = "./crates/rpc/rpc-middlewares" }
 bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }

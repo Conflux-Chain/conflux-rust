@@ -41,6 +41,7 @@
 
 use std::net::SocketAddr;
 
+use cfx_rpc_middlewares::{Metrics, Throttle};
 use jsonrpsee::{
     core::client::ClientT,
     rpc_params,
@@ -52,7 +53,6 @@ use jsonrpsee::{
     ws_client::WsClientBuilder,
 };
 use log::debug;
-use rpc_middlewares::{Metrics, Throttle};
 
 #[derive(Clone)]
 pub struct Logger<S>(S);
@@ -101,10 +101,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
     debug!("throttling config path: {:?}", config_path);
 
     let rpc_middleware = RpcServiceBuilder::new()
-        // .layer_fn(|s|
-        // ThrottleInterceptor::new(Some("/Users/dayong/myspace/mywork/
-        // conflux-rust/crates/rpc/rpc-middlewares/src/throttling.toml"),
-        // "test",s))
         .layer_fn(move |s| {
             Throttle::new(Some(config_path.to_str().unwrap()), "test", s)
         })

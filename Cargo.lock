@@ -1413,6 +1413,7 @@ dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-types",
+ "cfx-rpc-middlewares",
  "cfx-rpc-utils",
  "cfx-types",
  "cfx-util-macros",
@@ -1501,6 +1502,28 @@ dependencies = [
  "serde-utils",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "cfx-rpc-middlewares"
+version = "2.4.0"
+dependencies = [
+ "anyhow",
+ "cfx-rpc-utils",
+ "cfx-util-macros",
+ "futures 0.3.30",
+ "futures-util",
+ "jsonrpc-core 15.1.0",
+ "jsonrpsee",
+ "jsonrpsee-types",
+ "lazy_static",
+ "log",
+ "metrics",
+ "parking_lot 0.11.2",
+ "rustls 0.21.12",
+ "throttling",
+ "tokio 1.40.0",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -7693,28 +7716,6 @@ checksum = "ffc936cf8a7ea60c58f030fd36a612a48f440610214dc54bc36431f9ea0c3efb"
 dependencies = [
  "libc",
  "winapi 0.3.9",
-]
-
-[[package]]
-name = "rpc-middlewares"
-version = "2.4.0"
-dependencies = [
- "anyhow",
- "cfx-rpc-utils",
- "cfx-util-macros",
- "futures 0.3.30",
- "futures-util",
- "jsonrpc-core 15.1.0",
- "jsonrpsee",
- "jsonrpsee-types",
- "lazy_static",
- "log",
- "metrics",
- "parking_lot 0.11.2",
- "rustls 0.21.12",
- "throttling",
- "tokio 1.40.0",
- "tracing-subscriber",
 ]
 
 [[package]]

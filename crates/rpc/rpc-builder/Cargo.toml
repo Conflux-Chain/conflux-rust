@@ -37,6 +37,7 @@ throttling = { workspace = true }
 cfx-util-macros = { workspace = true }
 log = { workspace = true }
 cfx-rpc-utils = { workspace = true }
+cfx-rpc-middlewares = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

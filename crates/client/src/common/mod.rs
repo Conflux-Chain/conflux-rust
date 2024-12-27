@@ -775,6 +775,7 @@ pub fn initialize_not_light_node_modules(
     let async_eth_rpc_http_server =
         tokio_runtime.block_on(launch_async_rpc_servers(
             conf.rpc_impl_config(),
+            conf.raw_conf.throttling_conf.clone(),
             conf.raw_conf.public_evm_rpc_async_apis.clone(),
             consensus.clone(),
             sync.clone(),

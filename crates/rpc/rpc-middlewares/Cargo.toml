@@ -1,5 +1,5 @@
 [package]
-name = "rpc-middlewares"
+name = "cfx-rpc-middlewares"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
