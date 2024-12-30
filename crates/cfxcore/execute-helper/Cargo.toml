@@ -30,7 +30,7 @@ serde_json = { workspace = true, default-features = false, features = [
 solidity-abi = { workspace = true }
 strum_macros = { workspace = true }
 pow-types = { workspace = true }
-typemap = { package = "typemap-ors", version = "1.0"}
+typemap = { package = "typemap-ors", version = "1.0" }
 
 alloy-primitives = { workspace = true }
 alloy-sol-types = "0.7.1"

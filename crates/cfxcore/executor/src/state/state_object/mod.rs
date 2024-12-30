@@ -43,6 +43,8 @@ mod storage_entry;
 
 mod reward;
 
+mod state_override;
+
 #[cfg(test)]
 mod tests;
 
@@ -64,8 +66,9 @@ use super::{
     overlay_account::{AccountEntry, OverlayAccount, RequireFields},
 };
 use crate::substate::Substate;
+use cfx_rpc_eth_types::StateOverride;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
-use cfx_types::AddressWithSpace;
+use cfx_types::{AddressWithSpace, Space};
 use parking_lot::RwLock;
 use std::collections::{BTreeSet, HashMap};
 
@@ -107,6 +110,14 @@ impl State {
             checkpoints: Default::default(),
             global_stat: world_stat,
         })
+    }
+
+    pub fn new_with_override(
+        db: StateDb, state_override: &StateOverride, space: Space,
+    ) -> DbResult<Self> {
+        let mut state = Self::new(db)?;
+        state.apply_override(state_override, space)?;
+        Ok(state)
     }
 
     pub fn prefetch_accounts(
