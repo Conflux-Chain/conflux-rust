@@ -150,7 +150,7 @@ class CIP107Test(ConfluxTestFramework):
 
     def run_test(self):
         self.w3 = self.cw3
-        self.sponsorControl = self.w3.cfx.contract(name="SponsorWhitelistControl", with_deployment_info=True)
+        self.sponsorControl = self.internal_contract(name="SponsorWhitelistControl")
         self.deploy_create2()
         # Task 1: test if the collateral can be maintained correctly
         self.test_collateral_maintain()
