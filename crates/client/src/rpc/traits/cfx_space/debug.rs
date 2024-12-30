@@ -77,7 +77,7 @@ pub trait LocalRpc {
     #[rpc(name = "cfx_sendTransaction")]
     fn send_transaction(
         &self, tx: TransactionRequest, password: Option<String>,
-    ) -> BoxFuture<H256>;
+    ) -> BoxFuture<JsonRpcResult<H256>>;
 
     /// Returns accounts list.
     #[rpc(name = "cfx_accounts")]

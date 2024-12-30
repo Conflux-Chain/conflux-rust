@@ -21,7 +21,7 @@ pub use self::{
     impls::{
         admin::suicide,
         context::{block_hash_slot, epoch_hash_slot},
-        cross_space::{evm_map, Resume},
+        cross_space::Resume,
         params_control::{
             get_settled_param_vote_count, get_settled_pos_staking_for_votes,
             settle_current_votes, storage_point_prop, AllParamsVoteCount,

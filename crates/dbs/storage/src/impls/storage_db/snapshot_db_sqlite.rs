@@ -244,7 +244,7 @@ use crate::{
 use primitives::MerkleHash;
 
 use std::{path::Path, sync::Arc};
-use tokio::sync::Semaphore;
+use tokio02::sync::Semaphore;
 
 use super::{
     kvdb_sqlite_sharded::{

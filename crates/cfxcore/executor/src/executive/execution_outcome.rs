@@ -1,4 +1,4 @@
-use super::executed::{string_revert_reason_decode, Executed};
+use super::executed::Executed;
 use crate::unwrap_or_return;
 use cfx_types::{Address, H256, U256, U512};
 use cfx_vm_types as vm;
@@ -6,6 +6,7 @@ use primitives::{
     log_entry::build_bloom, receipt::StorageChange, LogEntry, Receipt,
     SignedTransaction, TransactionStatus,
 };
+use solidity_abi::string_revert_reason_decode;
 
 #[derive(Debug)]
 pub enum ExecutionOutcome {

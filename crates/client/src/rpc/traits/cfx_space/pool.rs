@@ -10,7 +10,6 @@ use crate::rpc::types::{
 use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
-
 /// Transaction pool RPCs
 #[rpc(server)]
 pub trait TransactionPool {
@@ -39,12 +38,12 @@ pub trait TransactionPool {
     #[rpc(name = "txpool_accountPendingInfo")]
     fn account_pending_info(
         &self, address: RpcAddress,
-    ) -> BoxFuture<Option<AccountPendingInfo>>;
+    ) -> BoxFuture<JsonRpcResult<Option<AccountPendingInfo>>>;
 
     /// Get transaction pending info by account address
     #[rpc(name = "txpool_accountPendingTransactions")]
     fn account_pending_transactions(
         &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
-    ) -> BoxFuture<AccountPendingTransactions>;
+    ) -> BoxFuture<JsonRpcResult<AccountPendingTransactions>>;
 }

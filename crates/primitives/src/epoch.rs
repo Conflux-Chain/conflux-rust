@@ -10,7 +10,7 @@ pub type EpochId = H256;
 pub const NULL_EPOCH: EpochId = KECCAK_EMPTY;
 
 /// Uniquely identifies epoch.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum EpochNumber {
     /// Epoch number within canon blockchain.
     Number(u64),

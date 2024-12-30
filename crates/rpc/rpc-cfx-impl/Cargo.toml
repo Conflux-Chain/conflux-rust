@@ -1,0 +1,15 @@
+[package]
+name = "cfx-rpc-cfx-impl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cfx-execute-helper = { workspace = true }
+jsonrpc-core = { workspace = true }
+log = { workspace = true }
+cfx-types = { workspace = true }
+cfx-addr = { workspace = true }
+cfxcore = { workspace = true }
+primitives = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }
+cfx-util-macros = { workspace = true }

@@ -1509,6 +1509,7 @@ mod tests {
     use super::{
         DeferredPool, InsertResult, TransactionPoolInner, TxWithReadyInfo,
     };
+    use crate::keylib::{Generator, KeyPair, Random};
     use cfx_executor::{
         machine::{Machine, VmFactory},
         spec::CommonParams,
@@ -1518,7 +1519,6 @@ mod tests {
     };
     use cfx_types::{Address, AddressSpaceUtil, Space, SpaceMap, U256};
     use itertools::Itertools;
-    use keylib::{Generator, KeyPair, Random};
     use primitives::{
         block_header::compute_next_price_tuple,
         transaction::{

@@ -1,5 +1,7 @@
 use cfx_execute_helper::exec_tracer::BlockExecTraces;
-use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
+use cfx_internal_common::{
+    impl_db_encoding_as_rlp, DatabaseDecodable, DatabaseEncodable,
+};
 use cfx_types::{Address, Bloom, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;

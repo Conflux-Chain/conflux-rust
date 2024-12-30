@@ -16,10 +16,10 @@
 
 //! Tokio Runtime wrapper.
 
-pub extern crate futures;
+pub extern crate futures01;
 pub extern crate tokio;
 
-use futures::{future, Future, IntoFuture};
+use futures01::{future, Future, IntoFuture};
 use std::{
     fmt,
     sync::mpsc,
@@ -47,14 +47,14 @@ impl Runtime {
             "Building a Tokio runtime will only fail when mio components \
              cannot be initialized (catastrophic)",
         );
-        let (stop, stopped) = futures::oneshot();
+        let (stop, stopped) = futures01::oneshot();
         let (tx, rx) = mpsc::channel();
         let handle = thread::spawn(move || {
             tx.send(runtime.executor())
                 .expect("Rx is blocking upper thread.");
             runtime
                 .block_on(
-                    futures::empty()
+                    futures01::empty()
                         .select(stopped)
                         .map(|_| ())
                         .map_err(|_| ()),
@@ -258,7 +258,7 @@ impl<F: Future<Item = (), Error = ()> + Send + 'static> future::Executor<F>
 
 /// A handle to a runtime. Dropping the handle will cause runtime to shutdown.
 pub struct RuntimeHandle {
-    close: Option<futures::Complete<()>>,
+    close: Option<futures01::Complete<()>>,
     handle: Option<thread::JoinHandle<()>>,
 }
 

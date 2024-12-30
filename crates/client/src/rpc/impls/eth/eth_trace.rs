@@ -59,7 +59,7 @@ impl EthTrace for EthTraceHandler {
                 let mut eth_trace = EthLocalizedTrace {
                     action: RpcAction::try_from(
                         action.action,
-                        self.trace_handler.network,
+                        self.trace_handler.inner.network,
                     )
                     .map_err(|_| JsonRpcError::internal_error())?
                     .try_into()
@@ -78,7 +78,7 @@ impl EthTrace for EthTraceHandler {
                 eth_trace.set_result(
                     RpcAction::try_from(
                         result.action,
-                        self.trace_handler.network,
+                        self.trace_handler.inner.network,
                     )
                     .map_err(|_| JsonRpcError::internal_error())?,
                 )?;
@@ -109,15 +109,16 @@ impl EthTrace for EthTraceHandler {
     fn transaction_traces(
         &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
-        let tx_index = self
-            .trace_handler
-            .data_man
-            .transaction_index_by_hash(&tx_hash, false /* update_cache */);
+        let tx_index =
+            self.trace_handler.inner.data_man.transaction_index_by_hash(
+                &tx_hash, false, /* update_cache */
+            );
 
         unwrap_or_return!(tx_index);
 
         let epoch_num = self
             .trace_handler
+            .inner
             .consensus
             .get_block_epoch_number(&tx_index.block_hash);
 
@@ -157,7 +158,7 @@ impl EthTrace for EthTraceHandler {
             let mut eth_trace = EthLocalizedTrace {
                 action: RpcAction::try_from(
                     action.action,
-                    self.trace_handler.network,
+                    self.trace_handler.inner.network,
                 )
                 .map_err(|_| JsonRpcError::internal_error())?
                 .try_into()
@@ -174,8 +175,11 @@ impl EthTrace for EthTraceHandler {
             };
 
             eth_trace.set_result(
-                RpcAction::try_from(result.action, self.trace_handler.network)
-                    .map_err(|_| JsonRpcError::internal_error())?,
+                RpcAction::try_from(
+                    result.action,
+                    self.trace_handler.inner.network,
+                )
+                .map_err(|_| JsonRpcError::internal_error())?,
             )?;
 
             eth_traces.push(eth_trace);

@@ -17,7 +17,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use hash::KECCAK_EMPTY_LIST_RLP;
+use crate::hash::KECCAK_EMPTY_LIST_RLP;
 use parking_lot::{Mutex, RwLock};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use rustc_hex::ToHex;

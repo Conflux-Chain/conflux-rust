@@ -1,12 +1,12 @@
 use cfx_executor::{
     executive::{
-        string_revert_reason_decode, ChargeCollateral, Executed,
-        ExecutionError, ExecutionOutcome, ExecutiveContext, TransactOptions,
-        TransactSettings,
+        ChargeCollateral, Executed, ExecutionError, ExecutionOutcome,
+        ExecutiveContext, TransactOptions, TransactSettings,
     },
     machine::Machine,
     state::{CleanupMode, State},
 };
+use solidity_abi::string_revert_reason_decode;
 
 use super::observer::{
     exec_tracer::ErrorUnwind, gasman::GasLimitEstimation, Observer,
