@@ -454,6 +454,29 @@
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
 <a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -738,15 +761,12 @@
     <span class="kw">use </span>std::{
         net::{Shutdown, SocketAddr},
         sync::Arc,
-        thread, time,
     };
-
-    <span class="kw">use </span>jsonrpc_core::futures::{future, Future};
-    <span class="kw">use </span>tokio01::{
-        io,
+    <span class="kw">use </span>tokio02::{
+        io::{AsyncReadExt, AsyncWriteExt},
         net::TcpStream,
         runtime::Runtime,
-        timer::timeout::{<span class="self">self</span>, Timeout},
+        time::delay_for,
     };
 
     <span class="kw">pub struct </span>VoidManager;
@@ -759,21 +779,31 @@
         <span class="kw">let </span><span class="kw-2">mut </span>runtime = Runtime::new()
             .expect(<span class="string">"Tokio Runtime should be created with no errors"</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>data_vec = data.as_bytes().to_vec();
-        data_vec.extend(<span class="string">b"\n"</span>);
+        runtime.block_on(<span class="kw">async </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>stream = TcpStream::connect(addr)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Should connect to server"</span>);
 
-        <span class="kw">let </span>stream = TcpStream::connect(addr)
-            .and_then(<span class="kw">move </span>|stream| io::write_all(stream, data_vec))
-            .and_then(|(stream, <span class="kw">_</span>)| {
-                stream.shutdown(Shutdown::Write).unwrap();
-                io::read_to_end(stream, Vec::with_capacity(<span class="number">2048</span>))
-            })
-            .and_then(|(_stream, read_buf)| future::ok(read_buf));
-        <span class="kw">let </span>result = runtime
-            .block_on(stream)
-            .expect(<span class="string">"Runtime should run with no errors"</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>data_vec = data.as_bytes().to_vec();
+            data_vec.extend(<span class="string">b"\n"</span>);
 
-        result
+            stream
+                .write_all(<span class="kw-2">&amp;</span>data_vec)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Should write data to stream"</span>);
+
+            stream
+                .shutdown(Shutdown::Write)
+                .expect(<span class="string">"Should shutdown write half"</span>);
+
+            <span class="kw">let </span><span class="kw-2">mut </span>read_buf = Vec::with_capacity(<span class="number">2048</span>);
+            stream
+                .read_to_end(<span class="kw-2">&amp;mut </span>read_buf)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Should read data from stream"</span>);
+
+            read_buf
+        })
     }
 
     <span class="attr">#[test]
@@ -863,49 +893,65 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>runtime = Runtime::new()
             .expect(<span class="string">"Tokio Runtime should be created with no errors"</span>);
-        <span class="kw">let </span>read_buf0 = <span class="macro">vec!</span>[<span class="number">0u8</span>; auth_response.len()];
-        <span class="kw">let </span>read_buf1 = Vec::with_capacity(<span class="number">2048</span>);
-        <span class="kw">let </span>stream = TcpStream::connect(<span class="kw-2">&amp;</span>addr)
-            .and_then(<span class="kw">move </span>|stream| {
-                io::write_all(stream, auth_request)
-            })
-            .and_then(|(stream, <span class="kw">_</span>)| {
-                io::read_exact(stream, read_buf0)
-            })
-            .map_err(|err| <span class="macro">panic!</span>(<span class="string">"{:?}"</span>, err))
-            .and_then(<span class="kw">move </span>|(stream, read_buf0)| {
-                <span class="macro">assert_eq!</span>(String::from_utf8(read_buf0).unwrap(), auth_response);
-                <span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Received authorization confirmation"</span>);
-                Timeout::new(future::ok(stream), ::std::time::Duration::from_millis(<span class="number">100</span>))
-            })
-            .map_err(|err: timeout::Error&lt;()&gt;| <span class="macro">panic!</span>(<span class="string">"Timeout: {:?}"</span>, err))
-            .and_then(<span class="kw">move </span>|stream| {
-                <span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Pusing work to peers"</span>);
-                stratum.push_work_all(<span class="string">r#"{ "00040008", "100500" }"#</span>.to_owned())
-                    .expect(<span class="string">"Pushing work should produce no errors"</span>);
-                Timeout::new(future::ok(stream), ::std::time::Duration::from_millis(<span class="number">100</span>))
-            })
-            .map_err(|err: timeout::Error&lt;()&gt;| <span class="macro">panic!</span>(<span class="string">"Timeout: {:?}"</span>, err))
-            .and_then(|stream| {
-                <span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Ready to read work from server"</span>);
-                thread::sleep(time::Duration::from_millis(<span class="number">100</span>));
-                stream.shutdown(Shutdown::Write).unwrap();
-                io::read_to_end(stream, read_buf1)
-            })
-            .and_then(|(<span class="kw">_</span>, read_buf1)| {
-                <span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Received work from server"</span>);
-                future::ok(read_buf1)
-            });
-        <span class="kw">let </span>response = String::from_utf8(
-            runtime
-                .block_on(stream)
-                .expect(<span class="string">"Runtime should run with no errors"</span>),
-        )
-        .expect(<span class="string">"Response should be utf-8"</span>);
+
+        <span class="kw">let </span>response = runtime.block_on(<span class="kw">async </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>stream = TcpStream::connect(<span class="kw-2">&amp;</span>addr)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Should connect to server"</span>);
+
+            <span class="comment">// Write auth request
+            </span>stream
+                .write_all(<span class="kw-2">&amp;</span>auth_request)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Should write auth request"</span>);
+
+            <span class="comment">// Read auth response
+            </span><span class="kw">let </span><span class="kw-2">mut </span>read_buf0 = <span class="macro">vec!</span>[<span class="number">0u8</span>; auth_response.len()];
+            stream
+                .read_exact(<span class="kw-2">&amp;mut </span>read_buf0)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Should read auth response"</span>);
+
+            <span class="macro">assert_eq!</span>(String::from_utf8(read_buf0).unwrap(), auth_response);
+            <span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Received authorization confirmation"</span>);
+
+            <span class="comment">// Wait a bit
+            </span>delay_for(std::time::Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+
+            <span class="comment">// Push work
+            </span><span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Pusing work to peers"</span>);
+            stratum
+                .push_work_all(<span class="string">r#"{ "00040008", "100500" }"#</span>.to_owned())
+                .expect(<span class="string">"Pushing work should produce no errors"</span>);
+
+            <span class="comment">// Wait a bit
+            </span>delay_for(std::time::Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+
+            <span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Ready to read work from server"</span>);
+            delay_for(std::time::Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+
+            stream
+                .shutdown(Shutdown::Write)
+                .expect(<span class="string">"Should shutdown write half"</span>);
+
+            <span class="comment">// Read work response
+            </span><span class="kw">let </span><span class="kw-2">mut </span>read_buf1 = Vec::with_capacity(<span class="number">2048</span>);
+            stream
+                .read_to_end(<span class="kw-2">&amp;mut </span>read_buf1)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Should read work response"</span>);
+
+            <span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Received work from server"</span>);
+            read_buf1
+        });
+
+        <span class="kw">let </span>response =
+            String::from_utf8(response).expect(<span class="string">"Response should be utf-8"</span>);
 
         <span class="macro">assert_eq!</span>(
             <span class="string">"{ \"id\": 17, \"method\": \"mining.notify\", \"params\": { \"00040008\", \"100500\" } }\n"</span>,
-            response);
+            response
+        );
     }
 }
 </code></pre></div></section></main></body></html>
