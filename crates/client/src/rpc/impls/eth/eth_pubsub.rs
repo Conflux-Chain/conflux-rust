@@ -147,8 +147,7 @@ impl PubSubClient {
 
                 debug!("Notify {}", epoch);
                 let mut ids_to_remove = vec![];
-                for id in subscribers.keys() {
-                    let subscriber = subscribers.get(id).unwrap();
+                for (id, subscriber) in subscribers.iter() {
                     let send_res = notify(
                         subscriber,
                         pubsub::Result::Header(header.clone()),
