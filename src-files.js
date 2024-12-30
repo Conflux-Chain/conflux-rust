@@ -92,7 +92,6 @@ var srcIndex = new Map(JSON.parse('[\
 ["priority_send_queue",["",[],["lib.rs"]]],\
 ["proxy",["",[],["lib.rs"]]],\
 ["random_crash",["",[],["lib.rs"]]],\
-["runtime",["",[],["lib.rs"]]],\
 ["safety_rules",["",[],["configurable_validator_signer.rs","consensus_state.rs","counters.rs","error.rs","lib.rs","local_client.rs","logging.rs","persistent_safety_storage.rs","process.rs","remote_service.rs","safety_rules.rs","safety_rules_manager.rs","serializer.rs","t_safety_rules.rs","thread.rs"]]],\
 ["schemadb",["",[],["lib.rs","metrics.rs","schema.rs"]]],\
 ["scratchpad",["",[["sparse_merkle",[],["mod.rs","node.rs"]]],["lib.rs"]]],\

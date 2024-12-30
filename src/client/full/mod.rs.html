@@ -98,10 +98,6 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -122,7 +118,6 @@
 };
 <span class="kw">use </span>malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 <span class="kw">use </span>parking_lot::{Condvar, Mutex};
-<span class="kw">use </span>runtime::Runtime;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::runtime::Runtime <span class="kw">as </span>TokioRuntime;
 
@@ -134,7 +129,6 @@
     <span class="kw">pub </span>rpc_tcp_server: <span class="prelude-ty">Option</span>&lt;TcpServer&gt;,
     <span class="kw">pub </span>debug_rpc_ws_server: <span class="prelude-ty">Option</span>&lt;WsServer&gt;,
     <span class="kw">pub </span>rpc_ws_server: <span class="prelude-ty">Option</span>&lt;WsServer&gt;,
-    <span class="kw">pub </span>runtime: Runtime,
     <span class="kw">pub </span>sync: Arc&lt;SynchronizationService&gt;,
     <span class="kw">pub </span>txpool: Arc&lt;TransactionPool&gt;,
     <span class="kw">pub </span>pow: Arc&lt;PowComputer&gt;,
@@ -143,7 +137,7 @@
     <span class="doccomment">/// Handle to the started ETH RPC server. This is version 2 of the ETH RPC.
     /// Which use Rust async I/O
     </span><span class="kw">pub </span>eth_rpc_server_handle: <span class="prelude-ty">Option</span>&lt;RpcServerHandle&gt;,
-    <span class="kw">pub </span>tokio_runtime: TokioRuntime,
+    <span class="kw">pub </span>tokio_runtime: Arc&lt;TokioRuntime&gt;,
 }
 
 <span class="kw">impl </span>MallocSizeOf <span class="kw">for </span>FullClientExtraComponents {
@@ -174,7 +168,6 @@
             debug_rpc_ws_server,
             rpc_ws_server,
             pos_handler,
-            runtime,
             eth_rpc_http_server,
             eth_rpc_ws_server,
             tokio_runtime,
@@ -192,7 +185,6 @@
                 rpc_tcp_server,
                 debug_rpc_ws_server,
                 rpc_ws_server,
-                runtime,
                 sync,
                 txpool,
                 pow,

@@ -400,8 +400,6 @@
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     iter::zip,
@@ -421,14 +419,13 @@
     channel::Channel, errors::Error <span class="kw">as </span>CfxRpcError, ConsensusGraph,
     ConsensusGraphTrait, SharedConsensusGraph, SharedTransactionPool,
 };
-<span class="kw">use </span>futures::{FutureExt, TryFutureExt};
 <span class="kw">use </span>jsonrpc_core::{Error <span class="kw">as </span>RpcError, ErrorCode, <span class="prelude-ty">Result </span><span class="kw">as </span>RpcResult};
 <span class="kw">use </span>log::{debug, error, info};
 <span class="kw">use </span>parking_lot::{Mutex, RwLock};
 <span class="kw">use </span>primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,
 };
-<span class="kw">use </span>runtime::Executor;
+<span class="kw">use </span>tokio::runtime::Runtime;
 
 <span class="doccomment">/// Eth filter rpc implementation for a full node.
 </span><span class="kw">pub struct </span>EthFilterHelper {
@@ -457,7 +454,7 @@
     <span class="doccomment">/// Creates new Eth filter client.
     </span><span class="kw">pub fn </span>new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;, executor: Executor,
+        epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;, executor: Arc&lt;Runtime&gt;,
         poll_lifetime: u32, logs_filter_max_limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>filter_client = EthFilterHelper {
@@ -475,7 +472,7 @@
 
     <span class="kw">fn </span>start_epochs_loop(
         <span class="kw-2">&amp;</span><span class="self">self</span>, epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;,
-        executor: Executor,
+        executor: Arc&lt;Runtime&gt;,
     ) {
         <span class="comment">// subscribe to the `epochs_ordered` channel
         </span><span class="kw">let </span><span class="kw-2">mut </span>receiver = epochs_ordered.subscribe();
@@ -519,7 +516,6 @@
             }
         };
 
-        <span class="kw">let </span>fut = fut.unit_error().boxed().compat();
         executor.spawn(fut);
     }
 

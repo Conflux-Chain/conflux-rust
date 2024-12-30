@@ -598,6 +598,24 @@
 <a href="#596" id="596">596</a>
 <a href="#597" id="597">597</a>
 <a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -619,28 +637,24 @@
     channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
     SharedConsensusGraph,
 };
-<span class="kw">use </span>futures::{
-    compat::Future01CompatExt,
-    future::{FutureExt, TryFutureExt},
-};
+<span class="kw">use </span>futures::channel::mpsc::TrySendError;
 <span class="kw">use </span>itertools::zip;
 <span class="kw">use </span>jsonrpc_core::Result <span class="kw">as </span>RpcResult;
 <span class="kw">use </span>jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
-    SubscriptionId,
+    SinkResult, SubscriptionId,
 };
 <span class="kw">use </span>log::{debug, error, info, trace, warn};
 <span class="kw">use </span>parking_lot::RwLock;
 <span class="kw">use </span>primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,
 };
-<span class="kw">use </span>runtime::Executor;
 <span class="kw">use </span>std::{
     collections::VecDeque,
     sync::{Arc, Weak},
     time::Duration,
 };
-<span class="kw">use </span>tokio_timer::sleep;
+<span class="kw">use </span>tokio::{runtime::Runtime, time::sleep};
 
 <span class="kw">type </span>Client = Sink&lt;pubsub::Result&gt;;
 
@@ -651,24 +665,22 @@
     heads_subscribers: Arc&lt;RwLock&lt;Subscribers&lt;Client&gt;&gt;&gt;,
     logs_subscribers: Arc&lt;RwLock&lt;Subscribers&lt;(Client, LogFilter)&gt;&gt;&gt;,
     epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;,
-    consensus: SharedConsensusGraph,
     heads_loop_started: Arc&lt;RwLock&lt;bool&gt;&gt;,
+    <span class="kw">pub </span>executor: Arc&lt;Runtime&gt;,
 }
 
 <span class="kw">impl </span>PubSubClient {
     <span class="doccomment">/// Creates new `PubSubClient`.
     </span><span class="kw">pub fn </span>new(
-        executor: Executor, consensus: SharedConsensusGraph,
+        executor: Arc&lt;Runtime&gt;, consensus: SharedConsensusGraph,
         notifications: Arc&lt;Notifications&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
         <span class="kw">let </span>logs_subscribers = Arc::new(RwLock::new(Subscribers::default()));
 
         <span class="kw">let </span>handler = Arc::new(ChainNotificationHandler {
-            executor,
             consensus: consensus.clone(),
             data_man: consensus.get_data_manager().clone(),
-            heads_subscribers: heads_subscribers.clone(),
         });
 
         PubSubClient {
@@ -676,8 +688,8 @@
             heads_subscribers,
             logs_subscribers,
             epochs_ordered: notifications.epochs_ordered.clone(),
-            consensus: consensus.clone(),
             heads_loop_started: Arc::new(RwLock::new(<span class="bool-val">false</span>)),
+            executor,
         }
     }
 
@@ -698,8 +710,10 @@
 
         <span class="macro">debug!</span>(<span class="string">"start_headers_loop"</span>);
         <span class="kw-2">*</span>loop_started = <span class="bool-val">true</span>;
+
         <span class="kw">let </span>epochs_ordered = <span class="self">self</span>.epochs_ordered.clone();
         <span class="kw">let </span>handler_clone = <span class="self">self</span>.handler.clone();
+        <span class="kw">let </span>this = <span class="self">self</span>.clone();
 
         <span class="comment">// subscribe to the `epochs_ordered` channel
         </span><span class="kw">let </span><span class="kw-2">mut </span>receiver = epochs_ordered.subscribe();
@@ -725,13 +739,54 @@
                 handler_clone.wait_for_epoch(<span class="kw-2">&amp;</span>pivot).<span class="kw">await</span>;
 
                 <span class="comment">// publish epochs
-                </span>handler_clone.notify_header(epoch);
+                </span><span class="kw">let </span>subscribers = this.heads_subscribers.read();
+
+                <span class="comment">// do not retrieve anything unnecessarily
+                </span><span class="kw">if </span>subscribers.is_empty() {
+                    <span class="macro">debug!</span>(<span class="string">"subscribers is empty"</span>);
+                    epochs_ordered.unsubscribe(receiver.id);
+                    <span class="kw">let </span><span class="kw-2">mut </span>loop_started = this.heads_loop_started.write();
+                    <span class="kw-2">*</span>loop_started = <span class="bool-val">false</span>;
+                    <span class="kw">return</span>;
+                }
+
+                <span class="kw">let </span>header = handler_clone.get_header_by_epoch(epoch);
+
+                <span class="kw">let </span>header = <span class="kw">match </span>header {
+                    <span class="prelude-val">Ok</span>(h) =&gt; h,
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">error!</span>(
+                            <span class="string">"Unexpected error while constructing RpcHeader: {:?}"</span>,
+                            e
+                        );
+                        <span class="kw">continue</span>;
+                    }
+                };
+
+                <span class="macro">debug!</span>(<span class="string">"Notify {}"</span>, epoch);
+                <span class="kw">let </span><span class="kw-2">mut </span>ids_to_remove = <span class="macro">vec!</span>[];
+                <span class="kw">for </span>(id, subscriber) <span class="kw">in </span>subscribers.iter() {
+                    <span class="kw">let </span>send_res = notify(
+                        subscriber,
+                        pubsub::Result::Header(header.clone()),
+                    );
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = send_res {
+                        <span class="kw">if </span>err.is_disconnected() {
+                            ids_to_remove.push(id.clone());
+                        }
+                    }
+                }
+
+                drop(subscribers);
+                <span class="kw">for </span>id <span class="kw">in </span>ids_to_remove {
+                    this.heads_subscribers
+                        .write()
+                        .remove(<span class="kw-2">&amp;</span>SubscriptionId::String(id.as_string()));
+                }
             }
         };
 
-        <span class="comment">// run futures@0.3 future on tokio@0.1 executor
-        </span><span class="kw">let </span>fut = fut.unit_error().boxed().compat();
-        <span class="self">self</span>.handler.executor.spawn(fut);
+        <span class="self">self</span>.executor.spawn(fut);
     }
 
     <span class="comment">// Start an async loop that continuously receives epoch notifications and
@@ -753,8 +808,6 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>queue = EpochQueue::&lt;Vec&lt;H256&gt;&gt;::with_capacity(
             (DEFERRED_STATE_EPOCH_COUNT - <span class="number">1</span>) <span class="kw">as </span>usize,
         );
-
-        <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
 
         <span class="comment">// loop asynchronously
         </span><span class="kw">let </span>fut = <span class="kw">async move </span>{
@@ -795,14 +848,14 @@
                     }
 
                     <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, logs) <span class="kw">in </span>reverted.into_iter() {
-                        handler.notify_removed_logs(<span class="kw-2">&amp;</span>sub, logs).<span class="kw">await</span>;
+                        <span class="kw">let _ </span>= handler.notify_removed_logs(<span class="kw-2">&amp;</span>sub, logs).<span class="kw">await</span>;
                     }
                 }
 
                 last_epoch = epoch.<span class="number">0</span>;
 
                 <span class="kw">let </span>latest_finalized_epoch_number =
-                    consensus.latest_finalized_epoch_number();
+                    handler.latest_finalized_epoch_number();
                 <span class="kw">while let </span><span class="prelude-val">Some</span>(e) = epochs.front() {
                     <span class="kw">if </span>e.<span class="number">0 </span>&lt; latest_finalized_epoch_number {
                         epochs.pop_front();
@@ -812,49 +865,48 @@
                 }
 
                 <span class="comment">// publish matching logs
-                </span><span class="kw">let </span>logs = handler
+                </span><span class="kw">let </span>noti_res = handler
                     .notify_logs(<span class="kw-2">&amp;</span>sub, filter, epoch.clone(), <span class="bool-val">false</span>)
                     .<span class="kw">await</span>;
-                epochs.push_back((epoch.<span class="number">0</span>, epoch.<span class="number">1</span>, logs));
+
+                <span class="kw">match </span>noti_res {
+                    <span class="prelude-val">Ok</span>(logs) =&gt; {
+                        epochs.push_back((epoch.<span class="number">0</span>, epoch.<span class="number">1</span>, logs));
+                    }
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">error!</span>(
+                            <span class="string">"Unexpected error while notifying logs: {:?}"</span>,
+                            e
+                        );
+                        <span class="kw">if </span>e.is_disconnected() {
+                            <span class="comment">// subscriber disconnected, terminate loop
+                            </span>epochs_ordered.unsubscribe(receiver.id);
+                            subscribers.write().remove(
+                                <span class="kw-2">&amp;</span>SubscriptionId::String(id.as_string()),
+                            );
+                            <span class="kw">return</span>;
+                        }
+                    }
+                }
             }
         };
 
-        <span class="comment">// run futures@0.3 future on tokio@0.1 executor
-        </span><span class="kw">let </span>fut = fut.unit_error().boxed().compat();
-        <span class="self">self</span>.handler.executor.spawn(fut);
+        <span class="self">self</span>.executor.spawn(fut);
     }
 }
 
 <span class="doccomment">/// PubSub notification handler.
 </span><span class="kw">pub struct </span>ChainNotificationHandler {
-    <span class="kw">pub </span>executor: Executor,
     consensus: SharedConsensusGraph,
     data_man: Arc&lt;BlockDataManager&gt;,
-    heads_subscribers: Arc&lt;RwLock&lt;Subscribers&lt;Client&gt;&gt;&gt;,
 }
 
 <span class="kw">impl </span>ChainNotificationHandler {
-    <span class="comment">// notify `subscriber` about `result` in a separate task
-    </span><span class="kw">fn </span>notify(subscriber: <span class="kw-2">&amp;</span>Client, result: pubsub::Result) {
-        <span class="kw">let </span>_fut = subscriber.notify(<span class="prelude-val">Ok</span>(result)).map(|<span class="kw">_</span>| ()).map_err(
-            |e| <span class="macro">warn!</span>(target: <span class="string">"rpc"</span>, <span class="string">"Unable to send notification: {}"</span>, e),
-        );
+    <span class="kw">fn </span>latest_finalized_epoch_number(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        <span class="self">self</span>.consensus.latest_finalized_epoch_number()
     }
 
-    <span class="comment">// notify each subscriber about header `hash` concurrently
-    // NOTE: multiple calls to this method will result in concurrent
-    // notifications, so the headers published might be reordered.
-    </span><span class="kw">fn </span>notify_header(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) {
-        <span class="macro">info!</span>(<span class="string">"notifnotify_epochy_header({:?})"</span>, epoch);
-
-        <span class="kw">let </span>subscribers = <span class="self">self</span>.heads_subscribers.read();
-
-        <span class="comment">// do not retrieve anything unnecessarily
-        </span><span class="kw">if </span>subscribers.is_empty() {
-            <span class="macro">debug!</span>(<span class="string">"subscribers is empty"</span>);
-            <span class="kw">return</span>;
-        }
-
+    <span class="kw">fn </span>get_header_by_epoch(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Result</span>&lt;RpcHeader, String&gt; {
         <span class="kw">let </span>phantom_block = {
             <span class="comment">// keep read lock to ensure consistent view
             </span><span class="kw">let </span>_inner = <span class="self">self</span>.consensus_graph().inner.read();
@@ -867,7 +919,7 @@
             <span class="kw">let </span>pb = <span class="kw">match </span>block {
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">debug!</span>(<span class="string">"Invalid params {:?}"</span>, e);
-                    <span class="kw">return</span>;
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                 }
                 <span class="prelude-val">Ok</span>(pb) =&gt; pb,
             };
@@ -875,43 +927,30 @@
             pb
         };
 
-        <span class="kw">let </span>header: <span class="prelude-ty">Result</span>&lt;RpcHeader, String&gt; = <span class="kw">match </span>phantom_block {
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="macro">debug!</span>(<span class="string">"Phantom block is none"</span>);
-                <span class="kw">return</span>;
-            }
-            <span class="prelude-val">Some</span>(pb) =&gt; <span class="prelude-val">Ok</span>(RpcHeader::from_phantom(<span class="kw-2">&amp;</span>pb)),
-        };
-
-        <span class="kw">let </span>header = <span class="kw">match </span>header {
-            <span class="prelude-val">Ok</span>(h) =&gt; h,
-            <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">error!</span>(
-                    <span class="string">"Unexpected error while constructing RpcHeader: {:?}"</span>,
-                    e
-                );
-                <span class="kw">return</span>;
-            }
-        };
-
-        <span class="macro">debug!</span>(<span class="string">"Notify {}"</span>, epoch);
-        <span class="kw">for </span>subscriber <span class="kw">in </span>subscribers.values() {
-            <span class="self">Self</span>::notify(subscriber, pubsub::Result::Header(header.clone()));
-        }
+        phantom_block.map_or(<span class="prelude-val">Err</span>(<span class="string">"Phantom block is none"</span>.into()), |pb| {
+            <span class="prelude-val">Ok</span>(RpcHeader::from_phantom(<span class="kw-2">&amp;</span>pb))
+        })
     }
 
-    <span class="kw">async fn </span>notify_removed_logs(<span class="kw-2">&amp;</span><span class="self">self</span>, subscriber: <span class="kw-2">&amp;</span>Client, logs: Vec&lt;Log&gt;) {
+    <span class="kw">async fn </span>notify_removed_logs(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, subscriber: <span class="kw-2">&amp;</span>Client, logs: Vec&lt;Log&gt;,
+    ) -&gt; SinkResult {
         <span class="comment">// send logs in order
         </span><span class="kw">for </span><span class="kw-2">mut </span>log <span class="kw">in </span>logs.into_iter() {
             log.removed = <span class="bool-val">true</span>;
-            <span class="self">Self</span>::notify(subscriber, pubsub::Result::Log(log));
+            <span class="kw">let </span>send_res = notify(subscriber, pubsub::Result::Log(log));
+            <span class="kw">if </span>send_res.is_err() {
+                <span class="kw">return </span>send_res;
+            }
         }
+
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>notify_logs(
         <span class="kw-2">&amp;</span><span class="self">self</span>, subscriber: <span class="kw-2">&amp;</span>Client, filter: LogFilter, epoch: (u64, Vec&lt;H256&gt;),
         removed: bool,
-    ) -&gt; Vec&lt;Log&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Log&gt;, TrySendError&lt;String&gt;&gt; {
         <span class="macro">debug!</span>(<span class="string">"notify_logs({:?})"</span>, epoch);
 
         <span class="comment">// NOTE: calls to DbManager are supposed to be cached
@@ -919,7 +958,7 @@
         // subscriber? would it be better to do this once for each epoch?
         </span><span class="kw">let </span>logs = <span class="kw">match </span><span class="self">self</span>.retrieve_epoch_logs(epoch).<span class="kw">await </span>{
             <span class="prelude-val">Some</span>(logs) =&gt; logs,
-            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="macro">vec!</span>[],
+            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[]),
         };
 
         <span class="comment">// apply filter to logs
@@ -936,7 +975,11 @@
         <span class="kw">for </span>log <span class="kw">in </span>logs {
             <span class="kw">match </span>log {
                 <span class="prelude-val">Ok</span>(l) =&gt; {
-                    <span class="self">Self</span>::notify(subscriber, pubsub::Result::Log(l.clone()));
+                    <span class="kw">let </span>send_res =
+                        notify(subscriber, pubsub::Result::Log(l.clone()));
+                    <span class="kw">if </span>send_res.is_err() {
+                        <span class="kw">return </span>send_res.map(|<span class="kw">_</span>| ret);
+                    }
                     ret.push(l);
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
@@ -948,7 +991,7 @@
             }
         }
 
-        ret
+        <span class="prelude-val">Ok</span>(ret)
     }
 
     <span class="kw">async fn </span>get_phantom_block(
@@ -967,7 +1010,7 @@
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(b)) =&gt; <span class="kw">return </span><span class="prelude-val">Some</span>(b),
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
                     <span class="macro">error!</span>(<span class="string">"Block not executed yet {:?}"</span>, pivot);
-                    <span class="kw">let _ </span>= sleep(POLL_INTERVAL_MS).compat().<span class="kw">await</span>;
+                    <span class="kw">let _ </span>= sleep(POLL_INTERVAL_MS).<span class="kw">await</span>;
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">error!</span>(<span class="string">"get_phantom_block_by_number failed {}"</span>, e);
@@ -1026,7 +1069,7 @@
                 <span class="prelude-val">Some</span>(res) =&gt; <span class="kw">return </span><span class="prelude-val">Some</span>(res.block_receipts.clone()),
                 <span class="prelude-val">None </span>=&gt; {
                     <span class="macro">trace!</span>(<span class="string">"Cannot find receipts with {:?}/{:?}"</span>, block, pivot);
-                    <span class="kw">let _ </span>= sleep(POLL_INTERVAL_MS).compat().<span class="kw">await</span>;
+                    <span class="kw">let _ </span>= sleep(POLL_INTERVAL_MS).<span class="kw">await</span>;
                 }
             }
 
@@ -1109,18 +1152,6 @@
     }
 }
 
-<span class="kw">impl </span>BlockProvider <span class="kw">for </span><span class="kw-2">&amp;</span>PubSubClient {
-    <span class="kw">fn </span>get_block_epoch_number(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>H256) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-        <span class="self">self</span>.consensus.get_block_epoch_number(hash)
-    }
-
-    <span class="kw">fn </span>get_block_hashes_by_epoch(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_number: EpochNumber,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;H256&gt;, String&gt; {
-        <span class="self">self</span>.consensus.get_block_hashes_by_epoch(epoch_number)
-    }
-}
-
 <span class="kw">impl </span>BlockProvider <span class="kw">for </span><span class="kw-2">&amp;</span>ChainNotificationHandler {
     <span class="kw">fn </span>get_block_epoch_number(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>H256) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
         <span class="self">self</span>.consensus.get_block_epoch_number(hash)
@@ -1165,7 +1196,7 @@
             }
             (pubsub::Kind::Logs, <span class="prelude-val">Some</span>(pubsub::Params::Logs(filter))) =&gt; {
                 <span class="macro">info!</span>(<span class="string">"eth pubsub logs with filter"</span>);
-                <span class="kw">match </span>filter.into_primitive(<span class="self">self</span>) {
+                <span class="kw">match </span>filter.into_primitive(<span class="self">self</span>.handler.as_ref()) {
                     <span class="prelude-val">Err</span>(e) =&gt; e.into(),
                     <span class="prelude-val">Ok</span>(filter) =&gt; {
                         <span class="kw">let </span>id = <span class="self">self
@@ -1195,5 +1226,10 @@
 
         <span class="prelude-val">Ok</span>(res0 || res1)
     }
+}
+
+<span class="comment">// notify `subscriber` about `result` in a separate task
+</span><span class="kw">fn </span>notify(subscriber: <span class="kw-2">&amp;</span>Client, result: pubsub::Result) -&gt; SinkResult {
+    subscriber.notify(<span class="prelude-val">Ok</span>(result))
 }
 </code></pre></div></section></main></body></html>

@@ -284,8 +284,8 @@
 <span class="kw">use </span>cfxcore::{channel::Channel, SharedConsensusGraph, SharedTransactionPool};
 <span class="kw">use </span>jsonrpsee::core::RpcResult;
 <span class="kw">use </span>primitives::filter::LogFilter;
-<span class="kw">use </span>runtime::Executor;
 <span class="kw">use </span>std::{collections::VecDeque, sync::Arc};
+<span class="kw">use </span>tokio::runtime::Runtime;
 
 <span class="kw">type </span>PendingTransactionFilterKind = ();
 
@@ -296,7 +296,7 @@
 <span class="kw">impl </span>EthFilterApi {
     <span class="kw">pub fn </span>new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;, executor: Executor,
+        epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;, executor: Arc&lt;Runtime&gt;,
         poll_lifetime: u32, logs_filter_max_limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     ) -&gt; EthFilterApi {
         <span class="kw">let </span>eth_filter = EthFilterHelper::new(
