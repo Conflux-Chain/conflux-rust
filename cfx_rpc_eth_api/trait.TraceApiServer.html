@@ -3,13 +3,13 @@
     // Required methods
     fn <a href="#tymethod.block_traces" class="fn">block_traces</a>&lt;'life0, 'async_trait&gt;(
         &amp;'life0 self,
-        block_number: <a class="enum" href="../cfx_rpc_eth_types/block_number/enum.BlockNumber.html" title="enum cfx_rpc_eth_types::block_number::BlockNumber">BlockNumber</a>
+        block_number: BlockNumber
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;LocalizedTrace&gt;&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
              'life0: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.filter_traces" class="fn">filter_traces</a>&lt;'life0, 'async_trait&gt;(
         &amp;'life0 self,
-        filter: <a class="struct" href="../cfx_rpc_eth_types/trace_filter/struct.TraceFilter.html" title="struct cfx_rpc_eth_types::trace_filter::TraceFilter">TraceFilter</a>
+        filter: TraceFilter
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;LocalizedTrace&gt;&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
              'life0: 'async_trait</span>;
@@ -25,13 +25,13 @@
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Server trait implementation for the <code>TraceApi</code> RPC API.</p>
 </div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.block_traces" class="method"><a class="src rightside" href="../src/cfx_rpc_eth_api/trace.rs.html#9-11">source</a><h4 class="code-header">fn <a href="#tymethod.block_traces" class="fn">block_traces</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
-    block_number: <a class="enum" href="../cfx_rpc_eth_types/block_number/enum.BlockNumber.html" title="enum cfx_rpc_eth_types::block_number::BlockNumber">BlockNumber</a>
+    block_number: BlockNumber
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;LocalizedTrace&gt;&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Returns all traces produced at the given block.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.filter_traces" class="method"><a class="src rightside" href="../src/cfx_rpc_eth_api/trace.rs.html#15-17">source</a><h4 class="code-header">fn <a href="#tymethod.filter_traces" class="fn">filter_traces</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
-    filter: <a class="struct" href="../cfx_rpc_eth_types/trace_filter/struct.TraceFilter.html" title="struct cfx_rpc_eth_types::trace_filter::TraceFilter">TraceFilter</a>
+    filter: TraceFilter
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;LocalizedTrace&gt;&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Returns all traces matching the provided filter.</p>
