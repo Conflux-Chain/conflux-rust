@@ -1862,7 +1862,7 @@ dependencies = [
  "smallvec 1.13.2",
  "tempdir",
  "time 0.1.45",
- "tiny-keccak 1.5.0",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
