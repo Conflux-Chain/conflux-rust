@@ -38,7 +38,6 @@ log = { workspace = true }
 cfx-types = { workspace = true }
 cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
-runtime = { workspace = true }
 slab = { workspace = true }
 cfxcore = { workspace = true }
 network = { workspace = true }
@@ -113,7 +112,6 @@ cfx-rpc = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 cfx-rpc-builder = { workspace = true }
 jsonrpsee = { workspace = true }
-tokio-timer = "0.2"
 
 [dev-dependencies]
 criterion = "0.3"
