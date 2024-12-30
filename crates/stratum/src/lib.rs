@@ -293,9 +293,7 @@ mod tests {
     pub struct VoidManager;
 
     impl JobDispatcher for VoidManager {
-        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> {
-            Ok(())
-        }
+        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> { Ok(()) }
     }
 
     fn dummy_request(addr: &SocketAddr, data: &str) -> Vec<u8> {
