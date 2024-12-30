@@ -30,14 +30,12 @@ mod constants;
 mod error;
 mod id_provider;
 mod module;
-mod result;
 
 use cfx_rpc_middlewares::{Metrics, Throttle};
 pub use error::*;
 pub use id_provider::EthSubscriptionIdProvider;
 use log::debug;
 pub use module::{EthRpcModule, RpcModuleSelection};
-pub use result::*;
 
 use cfx_rpc::{helpers::ChainInfo, *};
 use cfx_rpc_cfx_types::RpcImplConfiguration;

@@ -17,7 +17,7 @@
 //! RPC Requests Statistics
 
 use jsonrpc_core as core;
-use jsonrpc_core::futures::future::Either;
+use jsonrpc_core::futures::future::{Either, FutureExt};
 use log::debug;
 use order_stat;
 use parking_lot::RwLock;
@@ -208,7 +208,7 @@ impl<M: core::Metadata, T: ActivityNotifier> core::Middleware<M>
     ) -> Either<Self::Future, X>
     where
         F: FnOnce(core::Request, M) -> X,
-        X: core::futures::Future<Item = Option<core::Response>, Error = ()>
+        X: core::futures::Future<Output = Option<core::Response>>
             + Send
             + 'static,
     {
@@ -234,7 +234,7 @@ impl<M: core::Metadata, T: ActivityNotifier> core::Middleware<M>
             res
         });
 
-        Either::A(Box::new(future))
+        Either::Left(future.boxed())
     }
 }
 

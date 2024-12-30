@@ -70,7 +70,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use hash::{keccak, H256};
+use crate::hash::{keccak, H256};
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 

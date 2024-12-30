@@ -1,8 +1,9 @@
-from conflux.rpc import RpcClient
+from decimal import Decimal
+from cfx_utils import CFX
 from conflux.utils import *
 from test_framework.util import *
 from test_framework.mininode import *
-from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.test_framework import ConfluxTestFramework
 
 BASE = int(1e18)
 CIP107_NUMBER = 100
@@ -11,7 +12,7 @@ ZERO_ADDRESS = f"0x{'0'*40}"
 
 
 class CheckCollateral:
-    def __init__(self, framework: ConfluxTestFrameworkForContract, account):
+    def __init__(self, framework: "CIP107Test", account):
         self.framework = framework
         self.account = account
 
@@ -30,26 +31,25 @@ class CheckCollateral:
 
     def tick(self):
         client = self.framework.client
-        collateralInfo = client.get_collateral_info()
-        self.total_storage_point = int(
-            collateralInfo["convertedStoragePoints"], 0)
-        self.total_collateral = int(collateralInfo["totalStorageTokens"], 0)
-        self.total_used_storage_point = int(
-            collateralInfo["usedStoragePoints"], 0)
+        cfx = self.framework.cfx
+        collateralInfo = cfx.get_collateral_info()
+        self.total_storage_point = collateralInfo["convertedStoragePoints"]
+        self.total_collateral = collateralInfo["totalStorageTokens"]
+        self.total_used_storage_point = collateralInfo["usedStoragePoints"]
 
-        self.account_used_storage_point = client.get_used_storage_points(
-            self.account)
-        self.account_unused_storage_point = client.get_unused_storage_points(
-            self.account)
-        self.account_used_collateral = client.get_collateral_for_storage(
-            self.account)
-        self.account_unused_collateral = client.get_sponsor_balance_for_collateral(
-            self.account)
+        self.account_used_storage_point = cfx.get_sponsor_info(
+            self.account)["usedStoragePoints"]
+        self.account_unused_storage_point = cfx.get_sponsor_info(
+            self.account)["availableStoragePoints"]
+        self.account_used_collateral = int(cfx.get_collateral_for_storage(
+            self.account))
+        self.account_unused_collateral = cfx.get_sponsor_info(
+            self.account)["sponsorBalanceForCollateral"].value
 
         # Compute adjusted total_issued, elimating influence from block reward and storage interest
-        supplyInfo = client.get_supply_info()
+        supplyInfo = cfx.get_supply_info()
 
-        x = int(supplyInfo["totalIssued"], 0) // (BASE//160) * (BASE//160)
+        x = supplyInfo["totalIssued"].value // (BASE//160) * (BASE//160)
         x -= client.epoch_number() * 2 * BASE
         self.total_issued = x
 
@@ -75,12 +75,12 @@ class CheckCollateral:
             else:
                 expect_diff = kwargs.get(attr, 0) * BASE / 16
 
-            if actual_diff != expect_diff:
+            if int(actual_diff) != int(expect_diff):
                 raise AssertionError(
-                    f"Assert attribute {attr} failed: expected {expect_diff}, actual {actual_diff}: {old[attr]} --> {getattr(self, attr)}")
+                    f"Assert attribute {attr} failed: expected {int(expect_diff)}, actual {int(actual_diff)}: {old[attr]} --> {getattr(self, attr)}")
 
         actual_value = self.framework.sponsorControl.functions.getAvailableStoragePoints(
-            self.account).cfx_call()
+            self.account).call()
         assert_equal(self.account_unused_storage_point, actual_value)
 
     def __str__(self):
@@ -95,40 +95,50 @@ account_unused_collateral\t{self.account_unused_collateral / BASE * 16}'''
 
 
 class StorageContract:
-    def __init__(self, framework: ConfluxTestFrameworkForContract, seed=0):
+    def __init__(self, framework: "CIP107Test", seed=0):
         self.framework = framework
-        self.storage = framework.cfx_contract("Storage").deploy2(seed).functions
+        self.storage = framework.deploy_contract_2("Storage", seed).functions
 
     def set_sponsor(self, value):
         sponsorContract = self.framework.sponsorControl.functions
         sponsorContract.addPrivilegeByAdmin(
-            self.storage.address, [ZERO_ADDRESS]).cfx_transact()
+            self.storage.address, [ZERO_ADDRESS]).transact().executed()
         sponsorContract.setSponsorForCollateral(
-            self.storage.address).cfx_transact(value=value)
+            self.storage.address).transact({
+                "value": CFX(Decimal(value))
+            }).executed()
 
     def set_entry(self, index):
         if isinstance(index, list):
             for i in index:
-                self.storage.change(i).cfx_transact(storage_limit=64)
+                self.storage.change(i).transact({
+                    "storageLimit": 64
+                }).executed()
         else:
-            self.storage.change(index).cfx_transact(storage_limit=64)
+            self.storage.change(index).transact({
+                "storageLimit": 64
+            }).executed()
 
     def reset_entry(self, index):
         if isinstance(index, list):
             for i in index:
-                self.storage.reset(i).cfx_transact(storage_limit=64)
+                self.storage.reset(i).transact({
+                    "storageLimit": 64
+                }).executed()
         else:
-            self.storage.reset(index).cfx_transact(storage_limit=64)
+            self.storage.reset(index).transact({
+                "storageLimit": 64
+            }).executed()
 
     def suicide(self):
-        adminControl = self.framework.adminControl.functions
-        adminControl.destroy(self.storage.address).cfx_transact()
+        adminControl = self.framework.internal_contract("AdminControl").functions
+        adminControl.destroy(self.storage.address).transact().executed()
 
     def address(self):
         return self.storage.address
 
 
-class CIP107Test(ConfluxTestFrameworkForContract):
+class CIP107Test(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["executive_trace"] = "true"
@@ -139,6 +149,9 @@ class CIP107Test(ConfluxTestFrameworkForContract):
         self.conf_parameters["dao_vote_transition_height"] = 1
 
     def run_test(self):
+        self.w3 = self.cw3
+        self.sponsorControl = self.internal_contract(name="SponsorWhitelistControl")
+        self.deploy_create2()
         # Task 1: test if the collateral can be maintained correctly
         self.test_collateral_maintain()
 
@@ -155,8 +168,14 @@ class CIP107Test(ConfluxTestFrameworkForContract):
         storage.set_sponsor(0.25)
         check.checked_tick(
             total_storage_point=2, total_collateral=None, total_issued=-2, account_unused_collateral=2, account_unused_storage_point=2)
+        
+        acct = self.cfx.account.from_key(self.evm_accounts[0].key)
+        self.w3.wallet.add_account(acct)
 
-        self.sponsorControl.functions.setSponsorForCollateral(storage.address()).cfx_transact(value=0.5, priv_key=-1)
+        self.sponsorControl.functions.setSponsorForCollateral(storage.address()).transact({
+            "value": CFX(Decimal(0.5)),
+            "from": acct.address
+        }).executed()
         check.checked_tick(
             total_storage_point=3, total_collateral=None, total_issued=-3, account_unused_collateral=3, account_unused_storage_point=3)
 
@@ -169,11 +188,11 @@ class CIP107Test(ConfluxTestFrameworkForContract):
         paramsControl = self.internal_contract("ParamsControl").functions
 
         # Obtain DAO Votes
-        stakingControl.deposit(1_000_000 * BASE).cfx_transact()
+        stakingControl.deposit(1_000_000 * BASE).transact().executed()
         current_block_number = int(self.client.get_status()["blockNumber"], 0)
         locked_time = 5 * 15_768_000  # MINED_BLOCK_COUNT_PER_QUARTER
         stakingControl.voteLock(
-            1_000_000 * BASE, current_block_number + locked_time).cfx_transact()
+            1_000_000 * BASE, current_block_number + locked_time).transact().executed()
 
         # Set block number to the middle of a voting period
         vote_tick = int((self.client.epoch_number() + CIP104_PERIOD / 2) //
@@ -181,9 +200,9 @@ class CIP107Test(ConfluxTestFrameworkForContract):
         self.wait_for_block(vote_tick)
 
         # Vote
-        current_round = paramsControl.currentRound().cfx_call()
+        current_round = paramsControl.currentRound().call()
         paramsControl.castVote(current_round, [{"topic_index": 2, "votes": [
-                               0, 1_000_000 * BASE, 0]}]).cfx_transact()
+                               0, 1_000_000 * BASE, 0]}]).transact().executed()
 
         storage.set_sponsor(3.75)
         check.checked_tick(
@@ -191,31 +210,31 @@ class CIP107Test(ConfluxTestFrameworkForContract):
 
         self.wait_for_block(vote_tick + CIP104_PERIOD * 1, have_not_reach=True)
         paramsControl.castVote(
-            current_round + 1, [{"topic_index": 2, "votes": [0, 1_000_000 * BASE, 0]}]).cfx_transact()
+            current_round + 1, [{"topic_index": 2, "votes": [0, 1_000_000 * BASE, 0]}]).transact().executed()
         storage.set_sponsor(3.75)
         check.checked_tick(
             total_storage_point=30, total_issued=-30, total_collateral=None, account_unused_collateral=30, account_unused_storage_point=30)
 
         self.wait_for_block(vote_tick + CIP104_PERIOD * 2, have_not_reach=True)
         paramsControl.castVote(
-            current_round + 2, [{"topic_index": 2, "votes": [0, 0, 1_000_000 * BASE]}]).cfx_transact()
+            current_round + 2, [{"topic_index": 2, "votes": [0, 0, 1_000_000 * BASE]}]).transact().executed()
         storage.set_sponsor(3.75)
         check.checked_tick(
             total_storage_point=40, total_issued=-40, total_collateral=None, account_unused_collateral=20, account_unused_storage_point=40)
 
         self.wait_for_block(vote_tick + CIP104_PERIOD * 3, have_not_reach=True)
         paramsControl.castVote(
-            current_round + 3, [{"topic_index": 2, "votes": [0, 0, 1_000_000 * BASE]}]).cfx_transact()
+            current_round + 3, [{"topic_index": 2, "votes": [0, 0, 1_000_000 * BASE]}]).transact().executed()
         storage.set_sponsor(3.75)
         check.checked_tick(
             total_storage_point=48, total_issued=-48, total_collateral=None, account_unused_collateral=12, account_unused_storage_point=48)
 
         self.wait_for_block(vote_tick + CIP104_PERIOD * 4, have_not_reach=True)
         paramsControl.castVote(
-            current_round + 4, [{"topic_index": 2, "votes": [0, 0, 1_000_000 * BASE]}]).cfx_transact()
+            current_round + 4, [{"topic_index": 2, "votes": [0, 0, 1_000_000 * BASE]}]).transact().executed()
         self.wait_for_block(vote_tick + CIP104_PERIOD * 5, have_not_reach=True)
         paramsControl.castVote(
-            current_round + 5, [{"topic_index": 2, "votes": [0, 0, 1_000_000 * BASE]}]).cfx_transact()
+            current_round + 5, [{"topic_index": 2, "votes": [0, 0, 1_000_000 * BASE]}]).transact().executed()
         self.wait_for_block(vote_tick + CIP104_PERIOD * 7, have_not_reach=True)
 
         storage.set_sponsor(3.75)

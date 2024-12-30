@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod epoch_queue;
 mod subscribers;
 
 pub use cfx_rpc::helpers::{
@@ -10,8 +9,7 @@ pub use cfx_rpc::helpers::{
         limit_logs, PollFilter, SyncPollFilter, MAX_BLOCK_HISTORY_SIZE,
     },
     poll_manager::PollManager,
-    MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+    EpochQueue, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
 };
 pub use cfx_rpc_primitives::{maybe_vec_into, VariadicValue};
-pub use epoch_queue::EpochQueue;
 pub use subscribers::{Id as SubscriberId, Subscribers};

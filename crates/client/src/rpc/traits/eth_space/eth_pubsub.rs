@@ -3,12 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::eth::eth_pubsub as pubsub;
-///! Cfx PUB-SUB rpc interface.
+///! eth PUB-SUB rpc interface.
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::{typed, SubscriptionId};
 
-/// Cfx PUB-SUB rpc interface.
+/// eth PUB-SUB rpc interface.
 #[rpc(server)]
 pub trait EthPubSub {
     type Metadata;

@@ -37,11 +37,11 @@ pub trait Cfx {
 
     /// Returns current gas price.
     #[rpc(name = "cfx_gasPrice")]
-    fn gas_price(&self) -> BoxFuture<U256>;
+    fn gas_price(&self) -> BoxFuture<JsonRpcResult<U256>>;
 
     /// Returns current max_priority_fee
     #[rpc(name = "cfx_maxPriorityFeePerGas")]
-    fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
+    fn max_priority_fee_per_gas(&self) -> BoxFuture<JsonRpcResult<U256>>;
 
     /// Returns highest epoch number.
     #[rpc(name = "cfx_epochNumber")]
@@ -54,86 +54,86 @@ pub trait Cfx {
     fn balance(
         &self, addr: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> BoxFuture<U256>;
+    ) -> BoxFuture<JsonRpcResult<U256>>;
 
     /// Returns admin of the given contract
     #[rpc(name = "cfx_getAdmin")]
     fn admin(
         &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<Option<RpcAddress>>;
+    ) -> BoxFuture<JsonRpcResult<Option<RpcAddress>>>;
 
     /// Returns sponsor information of the given contract
     #[rpc(name = "cfx_getSponsorInfo")]
     fn sponsor_info(
         &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<SponsorInfo>;
+    ) -> BoxFuture<JsonRpcResult<SponsorInfo>>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getStakingBalance")]
     fn staking_balance(
         &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<U256>;
+    ) -> BoxFuture<JsonRpcResult<U256>>;
 
     /// Returns deposit list of the given account.
     #[rpc(name = "cfx_getDepositList")]
     fn deposit_list(
         &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<Vec<DepositInfo>>;
+    ) -> BoxFuture<JsonRpcResult<Vec<DepositInfo>>>;
 
     /// Returns vote list of the given account.
     #[rpc(name = "cfx_getVoteList")]
     fn vote_list(
         &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<Vec<VoteStakeInfo>>;
+    ) -> BoxFuture<JsonRpcResult<Vec<VoteStakeInfo>>>;
 
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getCollateralForStorage")]
     fn collateral_for_storage(
         &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<U256>;
+    ) -> BoxFuture<JsonRpcResult<U256>>;
 
     /// Returns the code at given address at given time (epoch number).
     #[rpc(name = "cfx_getCode")]
     fn code(
         &self, addr: RpcAddress,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> BoxFuture<Bytes>;
+    ) -> BoxFuture<JsonRpcResult<Bytes>>;
 
     /// Returns storage entries from a given contract.
     #[rpc(name = "cfx_getStorageAt")]
     fn storage_at(
         &self, addr: RpcAddress, pos: U256,
         block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> BoxFuture<Option<H256>>;
+    ) -> BoxFuture<JsonRpcResult<Option<H256>>>;
 
     #[rpc(name = "cfx_getStorageRoot")]
     fn storage_root(
         &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
-    ) -> BoxFuture<Option<StorageRoot>>;
+    ) -> BoxFuture<JsonRpcResult<Option<StorageRoot>>>;
 
     /// Returns block with given hash.
     #[rpc(name = "cfx_getBlockByHash")]
     fn block_by_hash(
         &self, block_hash: H256, include_txs: bool,
-    ) -> BoxFuture<Option<Block>>;
+    ) -> BoxFuture<JsonRpcResult<Option<Block>>>;
 
     /// Returns block with given hash and pivot chain assumption.
     #[rpc(name = "cfx_getBlockByHashWithPivotAssumption")]
     fn block_by_hash_with_pivot_assumption(
         &self, block_hash: H256, pivot_hash: H256, epoch_number: U64,
-    ) -> BoxFuture<Block>;
+    ) -> BoxFuture<JsonRpcResult<Block>>;
 
     /// Returns block with given epoch number.
     #[rpc(name = "cfx_getBlockByEpochNumber")]
     fn block_by_epoch_number(
         &self, epoch_number: EpochNumber, include_txs: bool,
-    ) -> BoxFuture<Option<Block>>;
+    ) -> BoxFuture<JsonRpcResult<Option<Block>>>;
 
     /// Returns block with given block number.
     #[rpc(name = "cfx_getBlockByBlockNumber")]
     fn block_by_block_number(
         &self, block_number: U64, include_txs: bool,
-    ) -> BoxFuture<Option<Block>>;
+    ) -> BoxFuture<JsonRpcResult<Option<Block>>>;
 
     /// Returns best block hash.
     #[rpc(name = "cfx_getBestBlockHash")]
@@ -144,7 +144,7 @@ pub trait Cfx {
     #[rpc(name = "cfx_getNextNonce")]
     fn next_nonce(
         &self, addr: RpcAddress, epoch_number: Option<BlockHashOrEpochNumber>,
-    ) -> BoxFuture<U256>;
+    ) -> BoxFuture<JsonRpcResult<U256>>;
 
     //        /// Returns the number of transactions in a block with given hash.
     //        #[rpc(name = "cfx_getBlockTransactionCountByHash")]
@@ -173,26 +173,28 @@ pub trait Cfx {
 
     /// Returns logs matching the filter provided.
     #[rpc(name = "cfx_getLogs")]
-    fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
+    fn get_logs(
+        &self, filter: CfxRpcLogFilter,
+    ) -> BoxFuture<JsonRpcResult<Vec<RpcLog>>>;
 
     /// Get transaction by its hash.
     #[rpc(name = "cfx_getTransactionByHash")]
     fn transaction_by_hash(
         &self, tx_hash: H256,
-    ) -> BoxFuture<Option<Transaction>>;
+    ) -> BoxFuture<JsonRpcResult<Option<Transaction>>>;
 
     /// Get transaction pending info by account address
     #[rpc(name = "cfx_getAccountPendingInfo")]
     fn account_pending_info(
         &self, address: RpcAddress,
-    ) -> BoxFuture<Option<AccountPendingInfo>>;
+    ) -> BoxFuture<JsonRpcResult<Option<AccountPendingInfo>>>;
 
     /// Get transaction pending info by account address
     #[rpc(name = "cfx_getAccountPendingTransactions")]
     fn account_pending_transactions(
         &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<U64>,
-    ) -> BoxFuture<AccountPendingTransactions>;
+    ) -> BoxFuture<JsonRpcResult<AccountPendingTransactions>>;
 
     /// Return estimated gas and collateral usage.
     #[rpc(name = "cfx_estimateGasAndCollateral")]
@@ -204,7 +206,7 @@ pub trait Cfx {
     fn fee_history(
         &self, block_count: HexU64, newest_block: EpochNumber,
         reward_percentiles: Option<Vec<f64>>,
-    ) -> BoxFuture<CfxFeeHistory>;
+    ) -> BoxFuture<JsonRpcResult<CfxFeeHistory>>;
 
     /// Check if user balance is enough for the transaction.
     #[rpc(name = "cfx_checkBalanceAgainstTransaction")]
@@ -212,7 +214,7 @@ pub trait Cfx {
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
         epoch: Option<EpochNumber>,
-    ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
+    ) -> BoxFuture<JsonRpcResult<CheckBalanceAgainstTransactionResponse>>;
 
     #[rpc(name = "cfx_getBlocksByEpoch")]
     fn blocks_by_epoch(
@@ -227,31 +229,31 @@ pub trait Cfx {
     #[rpc(name = "cfx_getTransactionReceipt")]
     fn transaction_receipt(
         &self, tx_hash: H256,
-    ) -> BoxFuture<Option<RpcReceipt>>;
+    ) -> BoxFuture<JsonRpcResult<Option<RpcReceipt>>>;
 
     /// Return account related states of the given account
     #[rpc(name = "cfx_getAccount")]
     fn account(
         &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
-    ) -> BoxFuture<RpcAccount>;
+    ) -> BoxFuture<JsonRpcResult<RpcAccount>>;
 
     /// Returns interest rate of the given epoch
     #[rpc(name = "cfx_getInterestRate")]
     fn interest_rate(
         &self, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<U256>;
+    ) -> BoxFuture<JsonRpcResult<U256>>;
 
     /// Returns accumulate interest rate of the given epoch
     #[rpc(name = "cfx_getAccumulateInterestRate")]
     fn accumulate_interest_rate(
         &self, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<U256>;
+    ) -> BoxFuture<JsonRpcResult<U256>>;
 
     /// Returns accumulate interest rate of the given epoch
     #[rpc(name = "cfx_getPoSEconomics")]
     fn pos_economics(
         &self, epoch_number: Option<EpochNumber>,
-    ) -> BoxFuture<PoSEconomics>;
+    ) -> BoxFuture<JsonRpcResult<PoSEconomics>>;
 
     #[rpc(name = "cfx_getConfirmationRiskByHash")]
     fn confirmation_risk_by_hash(
