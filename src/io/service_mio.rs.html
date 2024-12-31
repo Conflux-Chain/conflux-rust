@@ -1549,7 +1549,7 @@
         <span class="kw-2">*</span><span class="self">self</span>.network_poll_thread.lock() = <span class="prelude-val">Some</span>(thread);
     }
 
-    <span class="doccomment">/// Regiter an IO handler with the event loop.
+    <span class="doccomment">/// Register an IO handler with the event loop.
     </span><span class="kw">pub fn </span>register_handler(
         <span class="kw-2">&amp;</span><span class="self">self</span>, handler: Arc&lt;<span class="kw">dyn </span>IoHandler&lt;Message&gt; + Send&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), IoError&gt; {
