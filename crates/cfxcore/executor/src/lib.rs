@@ -5,12 +5,11 @@
 
 #[macro_use]
 extern crate log;
-extern crate substrate_bn as bn;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate cfx_util_macros;
-extern crate sha3_macro;
+use substrate_bn as bn;
 
 /// Ethereum Builtins: Implements Ethereum's builtin contracts, ranging from
 /// address `0x1` to `0x9`.
