@@ -1,8 +1,10 @@
-use cfx_rpc_utils::error::jsonrpsee_error_helpers::jsonrpc_error_to_error_object_owned;
 use futures::{future::lazy, FutureExt};
 use futures_util::future::BoxFuture;
-use jsonrpc_core::Result as RpcResult;
-use jsonrpsee::server::{middleware::rpc::RpcServiceT, MethodResponse};
+// use jsonrpc_core::Result as RpcResult;
+use jsonrpsee::{
+    core::RpcResult,
+    server::{middleware::rpc::RpcServiceT, MethodResponse},
+};
 use jsonrpsee_types::Request;
 use lazy_static::lazy_static;
 use log::debug;
@@ -67,12 +69,9 @@ where S: RpcServiceT<'a> + Send + Sync + Clone + 'static
                 .boxed()
             }
             Err(e) => {
-                return Box::pin(async move {
-                    MethodResponse::error(
-                        req.id,
-                        jsonrpc_error_to_error_object_owned(e),
-                    )
-                })
+                return Box::pin(
+                    async move { MethodResponse::error(req.id, e) },
+                )
                 .boxed()
             }
         }

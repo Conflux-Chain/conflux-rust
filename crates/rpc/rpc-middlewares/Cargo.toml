@@ -15,7 +15,7 @@ license-file.workspace = true
 [dependencies]
 jsonrpc-core = { workspace = true }
 jsonrpsee = { workspace = true ,features = ["server","ws-client"]}
-rustls = { version = "0.21", features = ["dangerous_configuration"] }
+rustls = { workspace = true, features = ["dangerous_configuration"] }
 throttling = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }

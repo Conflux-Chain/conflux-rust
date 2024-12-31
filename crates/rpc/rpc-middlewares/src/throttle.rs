@@ -5,8 +5,10 @@ use cfx_rpc_utils::error::{
 use cfx_util_macros::bail;
 use futures::FutureExt;
 use futures_util::future::BoxFuture;
-use jsonrpc_core::Result as RpcResult;
-use jsonrpsee::server::{middleware::rpc::RpcServiceT, MethodResponse};
+use jsonrpsee::{
+    core::RpcResult,
+    server::{middleware::rpc::RpcServiceT, MethodResponse},
+};
 use jsonrpsee_types::Request;
 use log::debug;
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
@@ -43,16 +45,17 @@ impl<S> Throttle<S> {
             ThrottleResult::Success => Ok(()),
             ThrottleResult::Throttled(wait_time) => {
                 debug!("RPC {} throttled in {:?}", name, wait_time);
-                bail!(request_rejected_too_many_request_error(Some(format!(
-                    "throttled in {:?}",
-                    wait_time
-                ))))
+                let err = request_rejected_too_many_request_error(Some(
+                    format!("throttled in {:?}", wait_time),
+                ));
+                bail!(jsonrpc_error_to_error_object_owned(err))
             }
             ThrottleResult::AlreadyThrottled => {
                 debug!("RPC {} already throttled", name);
-                bail!(request_rejected_too_many_request_error(Some(
-                    "already throttled, please try again later".into()
-                )))
+                let err = request_rejected_too_many_request_error(Some(
+                    "already throttled, please try again later".into(),
+                ));
+                bail!(jsonrpc_error_to_error_object_owned(err))
             }
         }
     }
@@ -74,13 +77,8 @@ where S: RpcServiceT<'a> + Send + Sync + Clone + 'static
             }
             Err(e) => {
                 debug!("throttle interceptor: method `{}` failed", req.method);
-                Box::pin(async move {
-                    MethodResponse::error(
-                        req.id,
-                        jsonrpc_error_to_error_object_owned(e),
-                    )
-                })
-                .boxed()
+                Box::pin(async move { MethodResponse::error(req.id, e) })
+                    .boxed()
             }
         }
     }

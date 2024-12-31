@@ -22,7 +22,6 @@ jsonrpc-core ={ workspace = true}
 jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server"] }
-# tower-http = { workspace = true, features = ["full"] }
 tower = { workspace = true, features = ["full"] }
 http.workspace = true
 pin-project = { workspace = true }
@@ -38,13 +37,7 @@ cfx-util-macros = { workspace = true }
 log = { workspace = true }
 cfx-rpc-utils = { workspace = true }
 cfx-rpc-middlewares = { workspace = true }
+futures-util = { workspace = true, features = ["io", "async-await-macro"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
-
-[dependencies.futures-util]
-version = "0.3.14"
-features = [
-    "io",
-    "async-await-macro",
-]
