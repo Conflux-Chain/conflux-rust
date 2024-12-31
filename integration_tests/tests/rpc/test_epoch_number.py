@@ -1,38 +1,44 @@
 from integration_tests.conflux.rpc import RpcClient
-from integration_tests.test_framework.util import assert_equal, assert_raises_rpc_error
-import sys
+from integration_tests.test_framework.util import assert_raises_rpc_error
+from integration_tests.test_framework.util.epoch import (
+    epoch_invalid_epoch_type_error,
+    epoch_epoch_number_too_large_error,
+    epoch_empty_epoch_string_error,
+    epoch_invalid_digit_epoch_error,
+    epoch_missing_hex_prefix_error,
+)
 
 
 # If this errors is changed, please let me know https://github.com/Conflux-Chain/rpc-errors/issues/new
 def test_get_epoch_number_errors(client: RpcClient):
     assert_raises_rpc_error(
-        -32602,
-        "Invalid params: invalid type: integer `1`, expected an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_finalized', 'latest_confirmed' or 'earliest'.",
+        epoch_invalid_epoch_type_error.error_code,
+        epoch_invalid_epoch_type_error.error_msg,
         client.epoch_number,
-        1,
+        epoch_invalid_epoch_type_error.epoch,
     )
     assert_raises_rpc_error(
-        -32602,
-        "Invalid params: expected a numbers with less than largest epoch number.",
+        epoch_epoch_number_too_large_error.error_code,
+        epoch_epoch_number_too_large_error.error_msg,
         client.epoch_number,
-        hex(sys.maxsize),
+        epoch_epoch_number_too_large_error.epoch,
     )
     assert_raises_rpc_error(
-        -32602,
-        "Invalid params: Invalid epoch number: cannot parse integer from empty string.",
+        epoch_empty_epoch_string_error.error_code,
+        epoch_empty_epoch_string_error.error_msg,
         client.epoch_number,
-        "0x",
+        epoch_empty_epoch_string_error.epoch,
     )
     assert_raises_rpc_error(
-        -32602,
-        "Invalid params: Invalid epoch number: invalid digit found in string.",
+        epoch_invalid_digit_epoch_error.error_code,
+        epoch_invalid_digit_epoch_error.error_msg,
         client.epoch_number,
-        "0xZZZ",
+        epoch_invalid_digit_epoch_error.epoch,
     )
 
     assert_raises_rpc_error(
-        -32602,
-        "Invalid params: Invalid epoch number: missing 0x prefix.",
+        epoch_missing_hex_prefix_error.error_code,
+        epoch_missing_hex_prefix_error.error_msg,
         client.epoch_number,
-        hex(-1),
+        epoch_missing_hex_prefix_error.epoch,
     )
