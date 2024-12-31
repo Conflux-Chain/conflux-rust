@@ -105,21 +105,19 @@ def framework_class() -> Type[ConfluxTestFramework]:
     class DefaultFramework(ConfluxTestFramework):
         def set_test_params(self):
             self.num_nodes = 1
-            self.conf_parameters = {
-                "executive_trace": "true",
-                "public_rpc_apis": "\"cfx,debug,test,pubsub,trace\"",
-                # Disable 1559 for RPC tests temporarily
-                "cip1559_transition_height": str(99999999),
-            }
+            self.conf_parameters["min_native_base_price"] = 10000
+            self.conf_parameters["next_hardfork_transition_height"] = 1
+            self.conf_parameters["next_hardfork_transition_number"] = 1
+
         def setup_network(self):
             self.setup_nodes()
             self.rpc = RpcClient(self.nodes[0])
     return DefaultFramework
 
 @pytest.fixture(scope="module")
-def network(framework_class: Type[ConfluxTestFramework], port_min: int, request: pytest.FixtureRequest):
+def network(framework_class: Type[ConfluxTestFramework], port_min: int, additional_secrets: int, request: pytest.FixtureRequest):
     try:
-        framework = framework_class(port_min)
+        framework = framework_class(port_min, additional_secrets)
     except Exception as e:
         pytest.fail(f"Failed to setup framework: {e}")
     yield framework
@@ -130,3 +128,23 @@ def port_min(worker_id: str) -> int:
     # worker_id is "master" or "gw0", "gw1", etc.
     index = int(worker_id.split("gw")[1]) if "gw" in worker_id else 0
     return PORT_MIN + index * PORT_RANGE
+
+@pytest.fixture(scope="module")
+def additional_secrets():
+    return 0
+
+@pytest.fixture(scope="module")
+def cw3(network: ConfluxTestFramework):
+    return network.cw3
+
+@pytest.fixture(scope="module")
+def ew3(network: ConfluxTestFramework):
+    return network.ew3
+
+@pytest.fixture(scope="module")
+def core_accounts(network: ConfluxTestFramework):
+    return network.core_accounts
+
+@pytest.fixture(scope="module")
+def evm_accounts(network: ConfluxTestFramework):
+    return network.evm_accounts
