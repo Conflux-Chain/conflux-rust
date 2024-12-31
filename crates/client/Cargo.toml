@@ -60,7 +60,7 @@ delegate = { workspace = true }
 transient-hashmap = { workspace = true }
 rand_xorshift = { workspace = true }
 itertools = { workspace = true }
-order-stat = "0.1"
+order-stat = { workspace = true }
 futures = { workspace = true, features = ["compat"] }
 rayon = { workspace = true }
 throttling = { workspace = true }
@@ -114,10 +114,10 @@ cfx-rpc-builder = { workspace = true }
 jsonrpsee = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-executor = { workspace = true, features = ["testonly_code"] }
-serial_test = "0.5.1"
+serial_test = { workspace = true }
 
 [features]
 # Unfortunately cfg test attributes doesn't work across crates,
