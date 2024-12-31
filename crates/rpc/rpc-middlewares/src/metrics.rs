@@ -1,6 +1,5 @@
 use futures::{future::lazy, FutureExt};
 use futures_util::future::BoxFuture;
-// use jsonrpc_core::Result as RpcResult;
 use jsonrpsee::{
     core::RpcResult,
     server::{middleware::rpc::RpcServiceT, MethodResponse},
