@@ -99,7 +99,7 @@ fn test_struct() {
             assert_eq!(
                 no_space.matches(&$e.replace(" ", "")).count(),
                 $count,
-                "counting occurences of {:?} in {:?} (whitespace-insensitive)",
+                "counting occurrences of {:?} in {:?} (whitespace-insensitive)",
                 $e,
                 expanded
             )

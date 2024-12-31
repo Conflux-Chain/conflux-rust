@@ -6,4 +6,4 @@ description = "Conflux bytes"
 edition = "2021"
 
 [dependencies]
-ethcore-bytes = "0.1.1"
+ethcore-bytes = { workspace = true }

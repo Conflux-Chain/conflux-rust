@@ -518,16 +518,19 @@ where
 
 // start espace rpc server v2(async)
 pub async fn launch_async_rpc_servers(
-    config: RpcImplConfiguration, apis: RpcModuleSelection,
-    consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-    tx_pool: SharedTransactionPool, addr: Option<SocketAddr>,
+    rpc_conf: RpcImplConfiguration, throttling_conf_file: Option<String>,
+    apis: RpcModuleSelection, consensus: SharedConsensusGraph,
+    sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+    addr: Option<SocketAddr>,
 ) -> Result<Option<RpcServerHandle>, String> {
     if addr.is_none() {
         return Ok(None);
     }
 
+    let enable_metrics = rpc_conf.enable_metrics;
+
     let rpc_module_builder =
-        RpcModuleBuilder::new(config, consensus, sync, tx_pool);
+        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool);
 
     info!(
         "Enabled evm async rpc modules: {:?}",
@@ -545,7 +548,7 @@ pub async fn launch_async_rpc_servers(
         .with_http_address(addr.unwrap());
 
     let server_handle = server_config
-        .start(&transport_rpc_modules)
+        .start(&transport_rpc_modules, throttling_conf_file, enable_metrics)
         .await
         .map_err(|e| e.to_string())?;
 
