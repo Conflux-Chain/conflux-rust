@@ -10,11 +10,12 @@ import random
 import re
 from subprocess import CalledProcessError, check_output
 import time
-from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union
+from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union, Literal
 import socket
 import threading
 import jsonrpcclient.exceptions
 import solcx
+import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
 from cfx_account.signers.local import LocalAccount  as CfxLocalAccount
@@ -22,6 +23,8 @@ from sys import platform
 import yaml
 import shutil
 import math
+from os.path import dirname, join
+from pathlib import Path
 
 from integration_tests.test_framework.simple_rpc_proxy import SimpleRpcProxy
 from .. import coverage
@@ -352,10 +355,30 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000, har
         shutil.copyfile(os.path.join(private_keys_dir, "pow_sk"+str(n)), os.path.join(datadir, 'pow_sk'))
 
 
-def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}):
+def _will_create_genesis_secret_file(conf_parameters, core_secrets: list[str], evm_secrets: list[str]):
+    if conf_parameters.get("genesis_secrets") == None:
+        return len(core_secrets) > 1 or len(evm_secrets) > 1  # initial genesis secrets are already set
+    if conf_parameters.get("genesis_secrets") and (len(core_secrets) > 0 or len(evm_secrets) > 0):
+        warnings.warn("genesis_secrets is set and extra secrets are provided. extra secrets will be ignored.")
+    return False
+
+def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}, core_secrets: list[str] = [], evm_secrets: list[str] = []):
     datadir = get_datadir_path(dirname, n)
     if not os.path.isdir(datadir):
         os.makedirs(datadir)
+
+    if _will_create_genesis_secret_file(conf_parameters, core_secrets, evm_secrets):
+        genesis_file_path = os.path.join(datadir, "genesis_secrets.txt")
+        with open(genesis_file_path, 'w') as f:
+            for secret in core_secrets:
+                f.write(secret + "\n")
+            conf_parameters.update({"genesis_secrets": f"\"{genesis_file_path}\""})
+        genesis_evm_file_path = os.path.join(datadir, "genesis_evm_secrets.txt")
+        with open(genesis_evm_file_path, 'w') as f:
+            for secret in evm_secrets:
+                f.write(secret + "\n")
+            conf_parameters.update({"genesis_evm_secrets": f"\"{genesis_evm_file_path}\""})
+
     with open(
             os.path.join(datadir, "conflux.conf"), 'w', encoding='utf8') as f:
         local_conf = {
@@ -908,4 +931,21 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
         # max fee per gas should be greater than burnt fee per gas
         assert is_in_pivot_block == False, "Transaction should be in non-pivot block"
         assert max_fee_per_gas >= burnt_fee_per_gas
+
+def assert_tx_exec_error(client: "RpcClient", tx_hash: str, err_msg: str):
+    client.wait_for_receipt(tx_hash)
+    receipt = client.get_transaction_receipt(tx_hash)
+    assert_equal(receipt["txExecErrorMsg"], err_msg)    
+
+
+InternalContractName = Literal["AdminControl", "SponsorWhitelistControl",
+                               "Staking", "ConfluxContext", "PoSRegister", "CrossSpaceCall", "ParamsControl"]
+
+def load_contract_metadata(name: str):
+    path = Path(join(dirname(__file__), "..", "..", "..", "tests", "test_contracts", "artifacts"))
+    try:
+        found_file = next(path.rglob(f"{name}.json"))
+        return json.loads(open(found_file, "r").read())
+    except StopIteration:
+        raise Exception(f"Cannot found contract {name}'s metadata")
 

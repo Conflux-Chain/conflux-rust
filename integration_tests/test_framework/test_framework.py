@@ -4,9 +4,10 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Base class for RPC testing."""
 import pytest
+from typing import List, Literal, Union, Any, cast, Type
 from integration_tests.conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from integration_tests.conflux.messages import Transactions
-from integration_tests.conflux.rpc import RpcClient
+from integration_tests.conflux.rpc import RpcClient, default_config
 from enum import Enum
 from http.client import CannotSendRequest
 import logging
@@ -17,8 +18,20 @@ import shutil
 import sys
 import tempfile
 import time
-from typing import Union
 import random
+from functools import cached_property
+from conflux_web3 import Web3 as CWeb3
+from conflux_web3.middleware.base import ConfluxWeb3Middleware
+from conflux_web3._utils.rpc_abi import (
+    RPC
+)
+from conflux_web3.contract import ConfluxContract
+from web3 import Web3
+from web3.middleware import Web3Middleware
+from web3.middleware.signing import SignAndSendRawMiddlewareBuilder
+from web3.types import RPCEndpoint
+from cfx_account import Account as CoreAccount
+from eth_account import Account
 
 from .authproxy import JSONRPCException
 from . import coverage
@@ -42,7 +55,11 @@ from .util import (
     sync_blocks,
     sync_mempools,
     wait_until,
+    assert_tx_exec_error,
+    load_contract_metadata,
+    InternalContractName,
 )
+from .block_gen_thread import BlockGenThread
 
 class TestStatus(Enum):
     PASSED = 1
@@ -53,6 +70,8 @@ class TestStatus(Enum):
 TEST_EXIT_PASSED = 0
 TEST_EXIT_FAILED = 1
 TEST_EXIT_SKIPPED = 77
+
+Web3NotSetupError = ValueError("w3 is not initialized, please call self.setup_w3() first")
 
 
 class ConfluxTestFramework:
@@ -70,7 +89,9 @@ class ConfluxTestFramework:
     The __init__() and main() methods should not be overridden.
 
     This class also contains various public and private helper methods."""
-    
+
+    _cw3: Union[CWeb3, None] = None
+    _ew3: Union[Web3, None] = None
     num_nodes: int
     rpc: RpcClient
     
@@ -156,9 +177,12 @@ class ConfluxTestFramework:
             type=str)
         return parser
 
-    def __init__(self, port_min: int):
+    def __init__(self, port_min: int, additional_secrets: int=0):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
         arg_parser = self._get_parser()
+        self.core_secrets: list[str] = [default_config["GENESIS_PRI_KEY"].hex()]  # type: ignore
+        self.evm_secrets: list[str] = [default_config["GENESIS_PRI_KEY_2"].hex()]  # type: ignore
+        self._add_genesis_secrets(additional_secrets)
         self.port_min = port_min
         self.setup_clean_chain = True
         self.nodes: list[TestNode] = []
@@ -254,6 +278,95 @@ class ConfluxTestFramework:
         if cleanup_tree_on_exit:
             shutil.rmtree(self.options.tmpdir)
 
+    def _add_genesis_secrets(
+        self,
+        additional_secrets: int,
+        space: Union[List[Literal["evm", "core"]], Literal["evm", "core"]]=["evm", "core"]
+    ):
+        """
+        Add random secrets to `self.core_secrets` and `self.evm_secrets`.
+        When node starts, `self.core_secrets` and `self.evm_secrets` will be used
+        to generate genesis account for both EVM and Core
+        each with 10000 CFX (10^21 drip).
+        
+        The generated accounts can be used from `self.core_accounts` or `self.evm_accounts`.
+        """
+        for _ in range(additional_secrets):
+            if "evm" in space or "evm" == space:
+                self.evm_secrets.append(Account.create().key.hex())
+            if "core" in space or "core" == space:
+                self.core_secrets.append(Account.create().key.hex())
+
+    @cached_property
+    def client(self) -> RpcClient:
+        """Get the RPC client, using the first node.
+        The RPC client is 
+
+        Returns:
+            RpcClient: used to send RPC requests to the node.
+                For example, self.client.cfx_getBalance(...) or self.client.eth_getBalance(...)
+                It should be noticed that the parameters are usually not formatted. 
+                Certain methods also provide formatted parameters, for example, self.client.epoch_number().
+                Please check the source code for more details.
+        """
+        return RpcClient(self.nodes[0])
+
+    @property
+    def cw3(self) -> CWeb3:
+        """Get the Conflux Web3 instance, initialized by self.setup_w3().
+
+        Raises:
+            Web3NotSetupError: If the Web3 instance is not initialized.
+
+        Returns:
+            CWeb3: The Conflux Web3 instance.
+        """
+        if self._cw3 is None:
+            raise Web3NotSetupError
+        return self._cw3
+    
+    @property
+    def ew3(self) -> Web3:
+        """Get the EVM Web3 instance, initialized by self.setup_w3().
+
+        Raises:
+            Web3NotSetupError: If the Web3 instance is not initialized.
+
+        Returns:
+            Web3: The EVM Web3 instance.
+        """
+        if self._ew3 is None:
+            raise Web3NotSetupError
+        return self._ew3
+    
+    @property
+    def cfx(self):
+        if self._cw3 is None:
+            raise Web3NotSetupError
+        return self._cw3.cfx
+    
+    @property
+    def eth(self):
+        if self._ew3 is None:
+            raise Web3NotSetupError
+        return self._ew3.eth
+   
+    @property
+    def core_accounts(self):
+        """
+        Get the core space genesis accounts.
+        Amount can be added by `self._add_genesis_secrets(additional_secrets_count)`.
+        """
+        return [CoreAccount.from_key(key, network_id=DEFAULT_PY_TEST_CHAIN_ID) for key in self.core_secrets]
+    
+    @property
+    def evm_accounts(self):
+        """
+        Get the eSpace genesis accounts.
+        Amount can be added by `self._add_genesis_secrets(additional_secrets_count)`.
+        """
+        return [Account.from_key(key) for key in self.evm_secrets]
+
     # Methods to override in subclass test scripts.
     def set_test_params(self):
         """Tests must this method to change default values for number of nodes, topology, etc"""
@@ -288,6 +401,43 @@ class ConfluxTestFramework:
         """Override this method to customize test node setup"""
         self.add_nodes(self.num_nodes, genesis_nodes=genesis_nodes, binary=binary, is_consortium=is_consortium)
         self.start_nodes()
+    
+    def setup_w3(self):
+        """Setup w3 and ew3 for EVM and Conflux.
+        This method should be called before any test.
+        Use self.w3 and self.ew3 to access the web3 instances.
+        Use self.cfx and self.eth to access the Conflux and EVM RPC clients.
+        """
+        client = RpcClient(self.nodes[0])
+        log = self.log
+        self._cw3 = CWeb3(CWeb3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].rpcport}/'))
+        self._ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/'))
+        self.cw3.wallet.add_accounts(self.core_accounts)
+        self.cw3.cfx.default_account = self.core_accounts[0].address
+        
+        self.ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(self.evm_secrets)) # type: ignore
+        self.eth.default_account = self.evm_accounts[0].address
+        
+        class TestNodeMiddleware(ConfluxWeb3Middleware):
+            def request_processor(self, method: RPCEndpoint, params: Any) -> Any:
+                if method == RPC.cfx_sendRawTransaction or method == RPC.cfx_sendTransaction or method == "eth_sendRawTransaction" or method == "eth_sendTransaction":
+                    client.node.wait_for_phase(["NormalSyncPhase"])
+                    
+                if method == RPC.cfx_maxPriorityFeePerGas or method == "eth_maxPriorityFeePerGas":
+                    if client.epoch_number() == 0:
+                        # enable cfx_maxPriorityFeePerGas
+                        # or Error(Epoch number larger than the current pivot chain tip) would be raised
+                        client.generate_blocks_to_state(num_txs=1)
+                return super().request_processor(method, params)
+
+            def response_processor(self, method: RPCEndpoint, response: Any):
+                if method == RPC.cfx_getTransactionReceipt or method == "eth_getTransactionReceipt":
+                    if "result" in response and response["result"] is None:
+                        log.debug("Auto generate 5 blocks because did not get tx receipt")
+                        client.generate_blocks_to_state(num_txs=1)  # why num_txs=1?
+                return response
+        self.cw3.middleware_onion.add(TestNodeMiddleware)
+        self.ew3.middleware_onion.add(TestNodeMiddleware)
 
     def add_nodes(self, num_nodes, genesis_nodes=None, rpchost=None, binary=None, auto_recovery=False,
                   recovery_timeout=30, is_consortium=True):
@@ -435,10 +585,11 @@ class ConfluxTestFramework:
 
         for i in range(self.num_nodes):
             initialize_datadir(self.options.tmpdir, i, self.port_min, self.conf_parameters,
-                               self.extra_conf_files)
+                               self.extra_conf_files, self.core_secrets, self.evm_secrets)
             
     def before_test(self):
-        pass
+        self.client.generate_blocks_to_state(num_txs=1)
+        self.setup_w3()
 
     # wait for core space tx
     def wait_for_tx(self, all_txs, check_status=False):
@@ -469,7 +620,23 @@ class ConfluxTestFramework:
             for i in receipts:
                 if int(i["outcomeStatus"], 0) != 0:
                     raise AssertionError("Receipt states the execution failes: {}".format(i))
-        return receipts    
+        return receipts   
+
+    def start_block_gen(self):
+        BlockGenThread(self.nodes, self.log).start()
+        
+    def cfx_contract(self, name) -> Type[ConfluxContract]:
+        metadata = load_contract_metadata(name)
+        return self.cfx.contract(
+            abi=metadata["abi"], bytecode=metadata["bytecode"])
+
+    def internal_contract(self, name: InternalContractName):
+        return self.cfx.contract(name=name, with_deployment_info=True)
+
+    def deploy_contract(self, name, transact_args = {}) -> ConfluxContract:
+        tx_hash = self.cfx_contract(name).constructor().transact(transact_args)
+        receipt = tx_hash.executed(timeout=30)
+        return self.cfx_contract(name)(cast(str, receipt["contractCreated"]))
 
 class SkipTest(Exception):
     """This exception is raised to skip a test"""
