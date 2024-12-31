@@ -517,10 +517,16 @@ impl RpcServerConfig {
             }
         }
 
+        let mut result = RpcServerHandle {
+            http_local_addr: None,
+            ws_local_addr: None,
+            http: None,
+            ws: None,
+        };
         if let Some(builder) = self.ws_server_config {
             let server = builder
                 .ws_only()
-                .set_rpc_middleware(rpc_middleware)
+                .set_rpc_middleware(rpc_middleware.clone())
                 .build(ws_socket_addr)
                 .await
                 .map_err(|err| {
@@ -536,12 +542,9 @@ impl RpcServerConfig {
             let ws_handle = ws_server.map(|ws_server| {
                 ws_server.start(modules.ws.clone().expect("ws server error"))
             });
-            return Ok(RpcServerHandle {
-                http_local_addr: None,
-                ws_local_addr,
-                http: None,
-                ws: ws_handle,
-            });
+
+            result.ws = ws_handle;
+            result.ws_local_addr = ws_local_addr;
         }
 
         if let Some(builder) = self.http_server_config {
@@ -566,15 +569,11 @@ impl RpcServerConfig {
                     .start(modules.http.clone().expect("http server error"))
             });
 
-            return Ok(RpcServerHandle {
-                http_local_addr,
-                ws_local_addr: None,
-                http: http_handle,
-                ws: None,
-            });
+            result.http = http_handle;
+            result.http_local_addr = http_local_addr;
         }
 
-        Err(RpcError::Custom("No valid server configured".to_string()))
+        Ok(result)
     }
 }
 

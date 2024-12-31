@@ -25,7 +25,7 @@ impl<S> Metrics<S> {
     pub fn new(service: S) -> Self { Self { service } }
 }
 
-impl<'a, S> Metrics<S> {
+impl<S> Metrics<S> {
     fn before(&self, name: &String) -> RpcResult<()> {
         // Use a global variable here because `http` and `web3` setup different
         // interceptors for the same RPC API.
