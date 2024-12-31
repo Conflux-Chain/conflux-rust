@@ -697,7 +697,7 @@
     }
 }
 
-<span class="attr">#[derive(Default, DeriveMallocSizeOf)]
+<span class="attr">#[derive(Default, DeriveMallocSizeOf, Clone)]
 </span><span class="kw">pub struct </span>TokenBucketManager {
     <span class="comment">// manage buckets by name
     </span>buckets: HashMap&lt;String, Arc&lt;Mutex&lt;TokenBucket&gt;&gt;&gt;,

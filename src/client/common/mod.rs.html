@@ -857,6 +857,7 @@
 <a href="#855" id="855">855</a>
 <a href="#856" id="856">856</a>
 <a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1631,6 +1632,7 @@
     <span class="kw">let </span>async_eth_rpc_http_server =
         tokio_runtime.block_on(launch_async_rpc_servers(
             conf.rpc_impl_config(),
+            conf.raw_conf.throttling_conf.clone(),
             conf.raw_conf.public_evm_rpc_async_apis.clone(),
             consensus.clone(),
             sync.clone(),

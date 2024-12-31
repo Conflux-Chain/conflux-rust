@@ -821,20 +821,6 @@
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
-<a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a>
-<a href="#829" id="829">829</a>
-<a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a>
-<a href="#833" id="833">833</a>
-<a href="#834" id="834">834</a>
-<a href="#835" id="835">835</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
@@ -868,8 +854,10 @@
 <span class="kw">mod </span>id_provider;
 <span class="kw">mod </span>module;
 
+<span class="kw">use </span>cfx_rpc_middlewares::{Metrics, Throttle};
 <span class="kw">pub use </span>error::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>id_provider::EthSubscriptionIdProvider;
+<span class="kw">use </span>log::debug;
 <span class="kw">pub use </span>module::{EthRpcModule, RpcModuleSelection};
 
 <span class="kw">use </span>cfx_rpc::{helpers::ChainInfo, <span class="kw-2">*</span>};
@@ -1104,7 +1092,7 @@
 /// started, See also [`ServerBuilder::build`] and
 /// [`Server::start`](jsonrpsee::server::Server::start).
 </span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>RpcServerConfig&lt;RpcMiddleware = Identity&gt; {
+</span><span class="kw">pub struct </span>RpcServerConfig {
     <span class="doccomment">/// Configs for JSON-RPC Http.
     </span>http_server_config: <span class="prelude-ty">Option</span>&lt;ServerBuilder&lt;Identity, Identity&gt;&gt;,
     <span class="doccomment">/// Allowed CORS Domains for http
@@ -1117,12 +1105,12 @@
     </span>ws_cors_domains: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// Address where to bind the ws server to
     </span>ws_addr: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
-    <span class="doccomment">/// Configurable RPC middleware
-    </span><span class="attr">#[allow(dead_code)]
-    </span>rpc_middleware: RpcServiceBuilder&lt;RpcMiddleware&gt;,
-}
+    <span class="comment">// /// Configurable RPC middleware
+    // #[allow(dead_code)]
+    // rpc_middleware: RpcServiceBuilder&lt;RpcMiddleware&gt;,
+</span>}
 
-<span class="kw">impl </span>Default <span class="kw">for </span>RpcServerConfig&lt;Identity&gt; {
+<span class="kw">impl </span>Default <span class="kw">for </span>RpcServerConfig {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             http_server_config: <span class="prelude-val">None</span>,
@@ -1131,8 +1119,8 @@
             ws_server_config: <span class="prelude-val">None</span>,
             ws_cors_domains: <span class="prelude-val">None</span>,
             ws_addr: <span class="prelude-val">None</span>,
-            rpc_middleware: RpcServiceBuilder::new(),
-        }
+            <span class="comment">// rpc_middleware: RpcServiceBuilder::new(),
+        </span>}
     }
 }
 
@@ -1174,23 +1162,23 @@
     </span>}
 }
 
-<span class="kw">impl</span>&lt;RpcMiddleware&gt; RpcServerConfig&lt;RpcMiddleware&gt; {
+<span class="kw">impl </span>RpcServerConfig {
     <span class="doccomment">/// Configure rpc middleware
-    </span><span class="kw">pub fn </span>set_rpc_middleware&lt;T&gt;(
-        <span class="self">self</span>, rpc_middleware: RpcServiceBuilder&lt;T&gt;,
-    ) -&gt; RpcServerConfig&lt;T&gt; {
-        RpcServerConfig {
-            http_server_config: <span class="self">self</span>.http_server_config,
-            http_cors_domains: <span class="self">self</span>.http_cors_domains,
-            http_addr: <span class="self">self</span>.http_addr,
-            ws_server_config: <span class="self">self</span>.ws_server_config,
-            ws_cors_domains: <span class="self">self</span>.ws_cors_domains,
-            ws_addr: <span class="self">self</span>.ws_addr,
-            rpc_middleware,
-        }
-    }
+    </span><span class="comment">// pub fn set_rpc_middleware&lt;T&gt;(
+    //     self, rpc_middleware: RpcServiceBuilder&lt;T&gt;,
+    // ) -&gt; RpcServerConfig&lt;T&gt; {
+    //     RpcServerConfig {
+    //         http_server_config: self.http_server_config,
+    //         http_cors_domains: self.http_cors_domains,
+    //         http_addr: self.http_addr,
+    //         ws_server_config: self.ws_server_config,
+    //         ws_cors_domains: self.ws_cors_domains,
+    //         ws_addr: self.ws_addr,
+    //         rpc_middleware,
+    //     }
+    // }
 
-    <span class="doccomment">/// Configure the cors domains for http _and_ ws
+    </span><span class="doccomment">/// Configure the cors domains for http _and_ ws
     </span><span class="kw">pub fn </span>with_cors(<span class="self">self</span>, cors_domain: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">self</span>.with_http_cors(cors_domain.clone())
             .with_ws_cors(cors_domain)
@@ -1263,9 +1251,20 @@
     // Returns the [`RpcServerHandle`] with the handle to the started servers.
     </span><span class="kw">pub async fn </span>start(
         <span class="self">self</span>, modules: <span class="kw-2">&amp;</span>TransportRpcModules,
+        throttling_conf_file: <span class="prelude-ty">Option</span>&lt;String&gt;, enable_metrics: bool,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;RpcServerHandle, RpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>http_handle = <span class="prelude-val">None</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>ws_handle = <span class="prelude-val">None</span>;
+        <span class="comment">// TODO: handle enable metrics
+        </span><span class="macro">debug!</span>(<span class="string">"enable metrics: {}"</span>, enable_metrics);
+
+        <span class="kw">let </span>rpc_middleware = RpcServiceBuilder::new()
+            .layer_fn(<span class="kw">move </span>|s| {
+                Throttle::new(
+                    throttling_conf_file.as_ref().map(|s| s.as_str()),
+                    <span class="string">"rpc"</span>,
+                    s,
+                )
+            })
+            .layer_fn(|s| Metrics::new(s));
 
         <span class="kw">let </span>http_socket_addr =
             <span class="self">self</span>.http_addr.unwrap_or(SocketAddr::V4(SocketAddrV4::new(
@@ -1305,22 +1304,8 @@
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(builder) = <span class="self">self</span>.http_server_config {
                 <span class="kw">let </span>server = builder
-                    <span class="comment">// .set_http_middleware(
-                    //     tower::ServiceBuilder::new()
-                    //         .option_layer(Self::maybe_cors_layer(cors)?)
-                    //         .option_layer(Self::maybe_jwt_layer(self.
-                    // jwt_secret)), )
-                    // .set_rpc_middleware(
-                    //     self.rpc_middleware.clone().layer(
-                    //         modules
-                    //             .http
-                    //             .as_ref()
-                    //             .or(modules.ws.as_ref())
-                    //             .map(RpcRequestMetrics::same_port)
-                    //             .unwrap_or_default(),
-                    //     ),
-                    // )
-                    </span>.build(http_socket_addr)
+                    .set_rpc_middleware(rpc_middleware)
+                    .build(http_socket_addr)
                     .<span class="kw">await
                     </span>.map_err(|err| {
                         RpcError::server_error(
@@ -1338,39 +1323,34 @@
                     modules.http.as_ref().or(modules.ws.as_ref())
                 {
                     <span class="kw">let </span>handle = server.start(module.clone());
-                    http_handle = <span class="prelude-val">Some</span>(handle.clone());
-                    ws_handle = <span class="prelude-val">Some</span>(handle);
+                    <span class="kw">let </span>http_handle = <span class="prelude-val">Some</span>(handle.clone());
+                    <span class="kw">let </span>ws_handle = <span class="prelude-val">Some</span>(handle);
+
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(RpcServerHandle {
+                        http_local_addr: <span class="prelude-val">Some</span>(addr),
+                        ws_local_addr: <span class="prelude-val">Some</span>(addr),
+                        http: http_handle,
+                        ws: ws_handle,
+                    });
                 }
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(RpcServerHandle {
-                    http_local_addr: <span class="prelude-val">Some</span>(addr),
-                    ws_local_addr: <span class="prelude-val">Some</span>(addr),
-                    http: http_handle,
-                    ws: ws_handle,
-                });
+
+                <span class="kw">return </span><span class="prelude-val">Err</span>(RpcError::Custom(
+                    <span class="string">"No valid RpcModule found from modules"</span>.to_string(),
+                ));
             }
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>ws_local_addr = <span class="prelude-val">None</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>ws_server = <span class="prelude-val">None</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>http_local_addr = <span class="prelude-val">None</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>http_server = <span class="prelude-val">None</span>;
-
+        <span class="kw">let </span><span class="kw-2">mut </span>result = RpcServerHandle {
+            http_local_addr: <span class="prelude-val">None</span>,
+            ws_local_addr: <span class="prelude-val">None</span>,
+            http: <span class="prelude-val">None</span>,
+            ws: <span class="prelude-val">None</span>,
+        };
         <span class="kw">if let </span><span class="prelude-val">Some</span>(builder) = <span class="self">self</span>.ws_server_config {
             <span class="kw">let </span>server = builder
                 .ws_only()
-                <span class="comment">// .set_http_middleware(
-                //     tower::ServiceBuilder::new()
-                //         .option_layer(Self::maybe_cors_layer(self.
-                // ws_cors_domains.clone())?)
-                //         .option_layer(Self::maybe_jwt_layer(self.
-                // jwt_secret)), )
-                // .set_rpc_middleware(
-                //     self.rpc_middleware
-                //         .clone()
-                //         .layer(modules.ws.as_ref().
-                // map(RpcRequestMetrics::ws).unwrap_or_default()),
-                // )
-                </span>.build(ws_socket_addr)
+                .set_rpc_middleware(rpc_middleware.clone())
+                .build(ws_socket_addr)
                 .<span class="kw">await
                 </span>.map_err(|err| {
                     RpcError::server_error(err, ServerKind::WS(ws_socket_addr))
@@ -1380,25 +1360,21 @@
                 RpcError::server_error(err, ServerKind::WS(ws_socket_addr))
             })<span class="question-mark">?</span>;
 
-            ws_local_addr = <span class="prelude-val">Some</span>(addr);
-            ws_server = <span class="prelude-val">Some</span>(server);
+            <span class="kw">let </span>ws_local_addr = <span class="prelude-val">Some</span>(addr);
+            <span class="kw">let </span>ws_server = <span class="prelude-val">Some</span>(server);
+            <span class="kw">let </span>ws_handle = ws_server.map(|ws_server| {
+                ws_server.start(modules.ws.clone().expect(<span class="string">"ws server error"</span>))
+            });
+
+            result.ws = ws_handle;
+            result.ws_local_addr = ws_local_addr;
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(builder) = <span class="self">self</span>.http_server_config {
             <span class="kw">let </span>server = builder
                 .http_only()
-                <span class="comment">// .set_http_middleware(
-                //     tower::ServiceBuilder::new()
-                //         .option_layer(Self::maybe_cors_layer(self.
-                // http_cors_domains.clone())?)
-                //         .option_layer(Self::maybe_jwt_layer(self.
-                // jwt_secret)), )
-                // .set_rpc_middleware(
-                //     self.rpc_middleware.clone().layer(
-                //         modules.http.as_ref().map(RpcRequestMetrics::http).
-                // unwrap_or_default(),     ),
-                // )
-                </span>.build(http_socket_addr)
+                .set_rpc_middleware(rpc_middleware)
+                .build(http_socket_addr)
                 .<span class="kw">await
                 </span>.map_err(|err| {
                     RpcError::server_error(
@@ -1409,22 +1385,18 @@
             <span class="kw">let </span>local_addr = server.local_addr().map_err(|err| {
                 RpcError::server_error(err, ServerKind::Http(http_socket_addr))
             })<span class="question-mark">?</span>;
-            http_local_addr = <span class="prelude-val">Some</span>(local_addr);
-            http_server = <span class="prelude-val">Some</span>(server);
+            <span class="kw">let </span>http_local_addr = <span class="prelude-val">Some</span>(local_addr);
+            <span class="kw">let </span>http_server = <span class="prelude-val">Some</span>(server);
+            <span class="kw">let </span>http_handle = http_server.map(|http_server| {
+                http_server
+                    .start(modules.http.clone().expect(<span class="string">"http server error"</span>))
+            });
+
+            result.http = http_handle;
+            result.http_local_addr = http_local_addr;
         }
 
-        http_handle = http_server.map(|http_server| {
-            http_server.start(modules.http.clone().expect(<span class="string">"http server error"</span>))
-        });
-        ws_handle = ws_server.map(|ws_server| {
-            ws_server.start(modules.ws.clone().expect(<span class="string">"ws server error"</span>))
-        });
-        <span class="prelude-val">Ok</span>(RpcServerHandle {
-            http_local_addr,
-            ws_local_addr,
-            http: http_handle,
-            ws: ws_handle,
-        })
+        <span class="prelude-val">Ok</span>(result)
     }
 }
 

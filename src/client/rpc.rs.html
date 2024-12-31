@@ -553,6 +553,9 @@
 <a href="#551" id="551">551</a>
 <a href="#552" id="552">552</a>
 <a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1073,16 +1076,19 @@
 
 <span class="comment">// start espace rpc server v2(async)
 </span><span class="kw">pub async fn </span>launch_async_rpc_servers(
-    config: RpcImplConfiguration, apis: RpcModuleSelection,
-    consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-    tx_pool: SharedTransactionPool, addr: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
+    rpc_conf: RpcImplConfiguration, throttling_conf_file: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    apis: RpcModuleSelection, consensus: SharedConsensusGraph,
+    sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+    addr: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RpcServerHandle&gt;, String&gt; {
     <span class="kw">if </span>addr.is_none() {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
+    <span class="kw">let </span>enable_metrics = rpc_conf.enable_metrics;
+
     <span class="kw">let </span>rpc_module_builder =
-        RpcModuleBuilder::new(config, consensus, sync, tx_pool);
+        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool);
 
     <span class="macro">info!</span>(
         <span class="string">"Enabled evm async rpc modules: {:?}"</span>,
@@ -1100,7 +1106,7 @@
         .with_http_address(addr.unwrap());
 
     <span class="kw">let </span>server_handle = server_config
-        .start(<span class="kw-2">&amp;</span>transport_rpc_modules)
+        .start(<span class="kw-2">&amp;</span>transport_rpc_modules, throttling_conf_file, enable_metrics)
         .<span class="kw">await
         </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>;
 
