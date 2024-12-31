@@ -21,14 +21,14 @@ app_dirs = { workspace = true }
 dir = { workspace = true }
 cfxstore = { workspace = true }
 cfxcore-accounts = { workspace = true }
-home = "0.5.0"
+home = { workspace = true }
 rpassword = { workspace = true }
 io = { workspace = true }
 ctrlc = { workspace = true }
-jsonrpc-core = "18.0.0"
-jsonrpc-tcp-server = "18.0.0"
-jsonrpc-http-server = "18.0.0"
-jsonrpc-core-client = { version = "18.0.0", features = ["http"] }
+jsonrpc-core = { workspace = true }
+jsonrpc-tcp-server = { workspace = true }
+jsonrpc-http-server = { workspace = true }
+jsonrpc-core-client = { workspace = true, features = ["http"] }
 log = { workspace = true }
 slab = { workspace = true }
 cfxcore = { workspace = true }
@@ -58,10 +58,10 @@ pos-ledger-db = { workspace = true }
 executor = { workspace = true }                                           # used by pos-genesis-tool
 storage-interface = { workspace = true }
 move-core-types = { workspace = true }
-bcs = "0.1.3"
+bcs = { workspace = true }
 tempdir = { workspace = true }
 hex = { workspace = true }
-base64ct = "=1.1.1"
+base64ct = { workspace = true }
 parity-version = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 bls-signatures = { workspace = true }

@@ -18,7 +18,6 @@ use cfxcore::{
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
-use runtime::Runtime;
 use std::sync::Arc;
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -30,7 +29,6 @@ pub struct FullClientExtraComponents {
     pub rpc_tcp_server: Option<TcpServer>,
     pub debug_rpc_ws_server: Option<WsServer>,
     pub rpc_ws_server: Option<WsServer>,
-    pub runtime: Runtime,
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
@@ -39,7 +37,7 @@ pub struct FullClientExtraComponents {
     /// Handle to the started ETH RPC server. This is version 2 of the ETH RPC.
     /// Which use Rust async I/O
     pub eth_rpc_server_handle: Option<RpcServerHandle>,
-    pub tokio_runtime: TokioRuntime,
+    pub tokio_runtime: Arc<TokioRuntime>,
 }
 
 impl MallocSizeOf for FullClientExtraComponents {
@@ -70,7 +68,6 @@ impl FullClient {
             debug_rpc_ws_server,
             rpc_ws_server,
             pos_handler,
-            runtime,
             eth_rpc_http_server,
             eth_rpc_ws_server,
             tokio_runtime,
@@ -88,7 +85,6 @@ impl FullClient {
                 rpc_tcp_server,
                 debug_rpc_ws_server,
                 rpc_ws_server,
-                runtime,
                 sync,
                 txpool,
                 pow,

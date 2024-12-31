@@ -44,7 +44,6 @@ members = [
     "crates/util/metrics",
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
-    "crates/util/runtime",
     "crates/util/sha3-macro",
     "crates/util/solidity-abi",
     "crates/util/solidity-abi-derive",
@@ -145,7 +144,6 @@ priority-send-queue = { path = "./crates/util/priority-send-queue" }
 heap-map = { path = "./crates/util/heap-map" }
 treap-map = { path = "./crates/util/treap-map" }
 hibitset = { path = "./crates/util/hibitset" }
-runtime = { path = "./crates/util/runtime" }
 malloc_size_of = { path = "./crates/util/malloc_size_of" }
 delegate = { path = "./crates/util/delegate" }
 throttling = { path = "./crates/util/throttling" }
@@ -307,7 +305,6 @@ tracing-futures = "0.2"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
 tokio01 = { version = "0.1", package = "tokio" }
-tokio-timer = "0.2.13"
 
 # crypto & hash
 fixed-hash = "0.5"
@@ -343,6 +340,22 @@ tempdir = "0.3"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
 transient-hashmap = "0.4"
+num_cpus = "1.6"
+home = "0.5.0"
+bcs = "0.1.3"
+base64ct = "=1.1.1"
+order-stat = "0.1"
+criterion = "0.3"
+time = "0.1.34"
+smallvec = "1.4"
+matches = "0.1"
+siphasher = "0.3"
+natpmp = "0.2"
+byte-unit = "1.1.0"
+enum-map = "0.4.0"
+enum-map-derive = "0.4.0"
+igd = "0.10"
+ipnetwork = "0.12.6"
 
 bigdecimal = "0.1.0"
 num-bigint = "0.2.6"
@@ -370,6 +383,7 @@ parity-util-mem = { version = "0.5", default-features = false }
 parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 substrate-bn = { git = "https://github.com/paritytech/bn", rev = "63f8c587356a67b33c7396af98e065b66fca5dda", default-features = false }
+ethcore-bytes = "0.1.1"
 
 # misc-testing
 similar-asserts = "1.5"

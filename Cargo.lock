@@ -1392,7 +1392,6 @@ dependencies = [
  "parity-version",
  "parking_lot 0.11.2",
  "primitives",
- "runtime",
  "rustc-hex",
  "serde",
  "serde_json",
@@ -1400,7 +1399,6 @@ dependencies = [
  "thiserror",
  "tokio 1.40.0",
  "tokio-stream",
- "tokio-timer",
  "transient-hashmap",
 ]
 
@@ -1602,7 +1600,7 @@ dependencies = [
  "keccak-hash",
  "log",
  "parking_lot 0.11.2",
- "tokio 0.1.22",
+ "tokio 0.2.25",
  "tokio-io",
 ]
 
@@ -1867,7 +1865,7 @@ dependencies = [
  "smallvec 1.13.2",
  "tempdir",
  "time 0.1.45",
- "tiny-keccak 1.5.0",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
@@ -2054,7 +2052,6 @@ dependencies = [
  "revm",
  "rlp 0.4.6",
  "rpassword",
- "runtime",
  "rustc-hex",
  "secret-store",
  "serde",
@@ -2075,7 +2072,6 @@ dependencies = [
  "throttling",
  "tokio 1.40.0",
  "tokio-stream",
- "tokio-timer",
  "toml",
  "transient-hashmap",
  "txgen",
@@ -7343,14 +7339,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48fd7bd8a6377e15ad9d42a8ec25371b94ddc67abe7c8b9127bec79bebaaae18"
 
 [[package]]
-name = "runtime"
-version = "0.1.0"
-dependencies = [
- "futures 0.1.31",
- "tokio 0.1.22",
-]
-
-[[package]]
 name = "rust_decimal"
 version = "1.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7507,6 +7495,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "scc"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28e1c91382686d21b5ac7959341fcb9780fa7c03773646995a87c950fa7be640"
+dependencies = [
+ "sdd",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7587,6 +7584,12 @@ dependencies = [
  "salsa20 0.9.0",
  "sha2 0.10.6",
 ]
+
+[[package]]
+name = "sdd"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "478f121bb72bbf63c52c93011ea1791dca40140dfe13f8336c4c5ac952c33aa9"
 
 [[package]]
 name = "sec1"
@@ -7822,24 +7825,27 @@ dependencies = [
 
 [[package]]
 name = "serial_test"
-version = "0.5.1"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0bccbcf40c8938196944a3da0e133e031a33f4d6b72db3bda3cc556e361905d"
+checksum = "1b258109f244e1d6891bf1053a55d63a5cd4f8f4c30cf9a1280989f80e7a1fa9"
 dependencies = [
- "lazy_static",
- "parking_lot 0.11.2",
+ "futures 0.3.30",
+ "log",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "scc",
  "serial_test_derive",
 ]
 
 [[package]]
 name = "serial_test_derive"
-version = "0.5.1"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2acd6defeddb41eb60bb468f8825d0cfd0c2a76bc03bfd235b6a1dc4f6a1ad5"
+checksum = "5d69265a08751de7844521fd15003ae0a888e035773ba05695c5c759a6f89eef"
 dependencies = [
  "proc-macro2 1.0.85",
  "quote 1.0.36",
- "syn 1.0.109",
+ "syn 2.0.66",
 ]
 
 [[package]]
