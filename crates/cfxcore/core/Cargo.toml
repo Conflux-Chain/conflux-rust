@@ -88,7 +88,6 @@ threadpool = { workspace = true }
 throttling = { workspace = true }
 toml = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tokio-timer = { workspace = true }
 tokio-stream = { workspace = true }
 unexpected = { workspace = true }
 strum = { workspace = true }

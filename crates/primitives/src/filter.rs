@@ -180,7 +180,7 @@ impl error::Error for FilterError {
     fn description(&self) -> &str { "Filter error" }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LogFilter {
     EpochLogFilter {
         from_epoch: EpochNumber,
@@ -199,7 +199,7 @@ pub enum LogFilter {
 }
 
 /// Log event Filter.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct LogFilterParams {
     /// Search addresses.
     ///

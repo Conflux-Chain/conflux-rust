@@ -1,7 +1,7 @@
-use cfx_parity_trace_types::Outcome;
-use cfx_rpc_cfx_types::trace::{
+use crate::trace::{
     Action as RpcCfxAction, LocalizedTrace as RpcCfxLocalizedTrace,
 };
+use cfx_parity_trace_types::Outcome;
 use cfx_rpc_primitives::Bytes;
 use cfx_types::{H160, H256, U256};
 use cfx_util_macros::bail;

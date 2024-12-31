@@ -34,7 +34,7 @@ use cfx_types::{
 };
 use futures::{
     future::{self, Either},
-    stream, try_join, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+    stream, try_join, StreamExt, TryStreamExt,
 };
 use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
@@ -46,6 +46,7 @@ use primitives::{
 };
 use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
+use tokio::time::timeout;
 
 pub struct TxInfo {
     pub tx: SignedTransaction,
@@ -57,23 +58,11 @@ pub struct TxInfo {
     pub prior_gas_used: U256,
 }
 
-// As of now, the jsonrpc crate uses legacy futures (futures@0.1 and tokio@0.1).
-// Because of this, our RPC runtime cannot handle tokio@0.2 timing primitives.
-// As a temporary workaround, we use the old `tokio_timer::Timeout` instead.
 async fn with_timeout<T>(
     d: Duration, msg: String,
     fut: impl Future<Output = Result<T, LightError>> + Send + Sync,
 ) -> Result<T, LightError> {
-    // convert `fut` into futures@0.1
-    let fut = fut.unit_error().boxed().compat();
-
-    // set timeout
-    let with_timeout = tokio_timer::Timeout::new(fut, d);
-
-    // convert back to std::future
-    use futures::compat::Future01CompatExt;
-    let with_timeout = with_timeout.compat();
-
+    let with_timeout = timeout(d, fut);
     // set error message
     with_timeout
         .await

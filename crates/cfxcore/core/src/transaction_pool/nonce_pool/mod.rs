@@ -388,10 +388,12 @@ impl NoncePool {
 #[cfg(test)]
 mod nonce_pool_test {
     use super::{InsertResult, NoncePool, TxWithReadyInfo};
-    use crate::transaction_pool::TransactionPoolError;
+    use crate::{
+        keylib::{Generator, KeyPair, Random},
+        transaction_pool::TransactionPoolError,
+    };
     use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
     use cfx_types::{Address, U128, U256};
-    use keylib::{Generator, KeyPair, Random};
     use primitives::{
         transaction::native_transaction::NativeTransaction, Action,
         SignedTransaction, Transaction,

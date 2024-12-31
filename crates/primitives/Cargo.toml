@@ -18,13 +18,13 @@ rlp = { workspace = true }
 rlp_derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_derive = { workspace = true }
-siphasher = "0.3"
+siphasher = { workspace = true }
 unexpected = { workspace = true }
 once_cell = { workspace = true }
 cfx-parameters = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { workspace = true }
 serde_json = { workspace = true }
 itertools = { workspace = true }
 

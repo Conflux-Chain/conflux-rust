@@ -3,8 +3,9 @@ use super::{
     trace_types::ExecTrace,
     ExecTraceKey,
 };
-use cfx_executor::executive::{string_revert_reason_decode, Executed};
+use cfx_executor::executive::Executed;
 use cfx_types::Address;
+use solidity_abi::string_revert_reason_decode;
 
 /// An executive tracer only records errors during EVM unwind.
 ///

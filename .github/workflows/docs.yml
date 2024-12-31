@@ -1,0 +1,34 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          # rustc 1.77.0-nightly
+          # build doc index.html needs nightly
+          toolchain: nightly-2024-01-29
+
+      - name: Build Docs
+        env:
+          RUSTDOCFLAGS: "--enable-index-page -Z unstable-options"
+        run: |
+          cargo +nightly-2024-01-29  doc --no-deps
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/doc

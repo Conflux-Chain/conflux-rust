@@ -4,6 +4,7 @@
 
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 
+use cfx_rpc_builder::RpcModuleSelection;
 use lazy_static::*;
 use log::{error, warn};
 use parking_lot::RwLock;
@@ -424,6 +425,7 @@ build_config! {
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
         (public_evm_rpc_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
+        (public_evm_rpc_async_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
         (single_mpt_space, (Option<Space>), None, |s| match s {
             "native" => Ok(Space::Native),
             "evm" => Ok(Space::Ethereum),

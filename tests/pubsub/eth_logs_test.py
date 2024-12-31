@@ -78,10 +78,8 @@ class PubSubTest(ConfluxTestFramework):
         # initialize Conflux account
         priv_key = default_config['GENESIS_PRI_KEY']
         self.cfxAccount = self.rpc[FULLNODE0].GENESIS_ADDR
-
-        ip = self.nodes[0].ip
-        port = self.nodes[0].ethrpcport
-        self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
+        self.setup_w3()
+        self.w3 = self.ew3
         assert_equal(self.w3.is_connected(), True)
 
         # initialize EVM account

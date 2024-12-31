@@ -18,30 +18,24 @@ use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
 };
 use cfx_types::{Space, H256};
-use cfxcore::{
-    channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
-};
-use futures::{
-    compat::Future01CompatExt,
-    future::{join_all, FutureExt, TryFutureExt},
-};
+use cfxcore::{BlockDataManager, Notifications, SharedConsensusGraph};
+use futures::future::join_all;
 use itertools::zip;
-use jsonrpc_core::{futures::Future, Result as RpcResult};
+use jsonrpc_core::Result as RpcResult;
 use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
-    SubscriptionId,
+    SinkResult, SubscriptionId,
 };
 use log::{debug, error, trace, warn};
 use parking_lot::RwLock;
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts,
 };
-use runtime::Executor;
 use std::{
     sync::{Arc, Weak},
     time::Duration,
 };
-use tokio_timer::sleep;
+use tokio::{runtime::Runtime, time::sleep};
 
 type Client = Sink<pubsub::Result>;
 
@@ -52,13 +46,15 @@ pub struct PubSubClient {
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
     epochs_subscribers: Arc<RwLock<Subscribers<Client>>>,
     logs_subscribers: Arc<RwLock<Subscribers<(Client, LogFilter)>>>,
-    epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
+    heads_loop_started: Arc<RwLock<bool>>,
+    notifications: Arc<Notifications>,
+    pub executor: Arc<Runtime>,
 }
 
 impl PubSubClient {
     /// Creates new `PubSubClient`.
     pub fn new(
-        executor: Executor, consensus: SharedConsensusGraph,
+        executor: Arc<Runtime>, consensus: SharedConsensusGraph,
         notifications: Arc<Notifications>, network: Network,
     ) -> Self {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
@@ -66,39 +62,92 @@ impl PubSubClient {
         let logs_subscribers = Arc::new(RwLock::new(Subscribers::default()));
 
         let handler = Arc::new(ChainNotificationHandler {
-            executor,
             consensus: consensus.clone(),
             data_man: consensus.get_data_manager().clone(),
-            heads_subscribers: heads_subscribers.clone(),
             network,
         });
-
-        // --------- newHeads ---------
-        // subscribe to the `new_block_hashes` channel
-        let receiver = notifications.new_block_hashes.subscribe();
-
-        // loop asynchronously
-        let handler_clone = handler.clone();
-
-        let fut = receiver.for_each(move |hash| {
-            handler_clone.notify_header(&hash);
-        });
-
-        // run futures@0.3 future on tokio@0.1 executor
-        handler.executor.spawn(fut.unit_error().boxed().compat());
 
         PubSubClient {
             handler,
             heads_subscribers,
             epochs_subscribers,
             logs_subscribers,
-            epochs_ordered: notifications.epochs_ordered.clone(),
+            heads_loop_started: Arc::new(RwLock::new(false)),
+            notifications,
+            executor,
         }
     }
 
     /// Returns a chain notification handler.
     pub fn handler(&self) -> Weak<ChainNotificationHandler> {
         Arc::downgrade(&self.handler)
+    }
+
+    fn start_head_loop(&self) {
+        let mut loop_started = self.heads_loop_started.write();
+        if *loop_started {
+            return;
+        }
+
+        debug!("start_headers_loop");
+        *loop_started = true;
+
+        // --------- newHeads ---------
+        // subscribe to the `new_block_hashes` channel
+        let new_block_hashes = self.notifications.new_block_hashes.clone();
+        let mut receiver = new_block_hashes.subscribe();
+
+        // loop asynchronously
+        let handler_clone = self.handler.clone();
+        let this = self.clone();
+
+        let fut = async move {
+            while let Some(hash) = receiver.recv().await {
+                // handler_clone.notify_header(&hash);
+                let subscribers = this.heads_subscribers.read();
+
+                // do not retrieve anything unnecessarily
+                if subscribers.is_empty() {
+                    new_block_hashes.unsubscribe(receiver.id);
+                    let mut loop_started = this.heads_loop_started.write();
+                    *loop_started = false;
+                    break;
+                }
+
+                let header = match handler_clone.get_header_by_hash(&hash) {
+                    Ok(h) => h,
+                    Err(e) => {
+                        error!(
+                            "Unexpected error while constructing RpcHeader: {:?}",
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                let mut ids_to_remove = vec![];
+                for (id, subscriber) in subscribers.iter() {
+                    let send_res = notify(
+                        subscriber,
+                        pubsub::Result::Header(header.clone()),
+                    );
+                    if let Err(err) = send_res {
+                        if err.is_disconnected() {
+                            ids_to_remove.push(id.clone());
+                        }
+                    }
+                }
+
+                drop(subscribers);
+                for id in ids_to_remove {
+                    this.heads_subscribers
+                        .write()
+                        .remove(&SubscriptionId::String(id.as_string()));
+                }
+            }
+        };
+
+        self.executor.spawn(fut);
     }
 
     // Start an async loop that continuously receives epoch notifications and
@@ -109,7 +158,7 @@ impl PubSubClient {
 
         // clone everything we use in our async loop
         let subscribers = self.epochs_subscribers.clone();
-        let epochs_ordered = self.epochs_ordered.clone();
+        let epochs_ordered = self.notifications.epochs_ordered.clone();
         let handler = self.handler.clone();
 
         // subscribe to the `epochs_ordered` channel
@@ -152,13 +201,20 @@ impl PubSubClient {
                 }
 
                 // publish epochs
-                handler.notify_epoch(sub, (epoch, hashes)).await;
+                let send_res = handler.notify_epoch(sub, (epoch, hashes)).await;
+                if let Err(err) = send_res {
+                    if err.is_disconnected() {
+                        epochs_ordered.unsubscribe(receiver.id);
+                        subscribers
+                            .write()
+                            .remove(&SubscriptionId::String(id.as_string()));
+                        return;
+                    }
+                }
             }
         };
 
-        // run futures@0.3 future on tokio@0.1 executor
-        let fut = fut.unit_error().boxed().compat();
-        self.handler.executor.spawn(fut);
+        self.executor.spawn(fut);
     }
 
     // Start an async loop that continuously receives epoch notifications and
@@ -169,7 +225,7 @@ impl PubSubClient {
 
         // clone everything we use in our async loop
         let subscribers = self.logs_subscribers.clone();
-        let epochs_ordered = self.epochs_ordered.clone();
+        let epochs_ordered = self.notifications.epochs_ordered.clone();
         let handler = self.handler.clone();
 
         // subscribe to the `epochs_ordered` channel
@@ -213,116 +269,73 @@ impl PubSubClient {
                 last_epoch = epoch.0;
 
                 // publish matching logs
-                handler.notify_logs(&sub, filter, epoch).await;
+                let send_res = handler.notify_logs(&sub, filter, epoch).await;
+                if let Err(err) = send_res {
+                    if err.is_disconnected() {
+                        epochs_ordered.unsubscribe(receiver.id);
+                        subscribers
+                            .write()
+                            .remove(&SubscriptionId::String(id.as_string()));
+                        return;
+                    }
+                }
             }
         };
 
-        // run futures@0.3 future on tokio@0.1 executor
-        let fut = fut.unit_error().boxed().compat();
-        self.handler.executor.spawn(fut);
+        self.executor.spawn(fut);
     }
 }
 
 /// PubSub notification handler.
 pub struct ChainNotificationHandler {
-    pub executor: Executor,
     consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
-    heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
     pub network: Network,
 }
 
 impl ChainNotificationHandler {
-    // notify `subscriber` about `result` in a separate task
-    fn notify(exec: &Executor, subscriber: &Client, result: pubsub::Result) {
-        let fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
-            |e| warn!(target: "rpc", "Unable to send notification: {}", e),
-        );
-
-        exec.spawn(fut)
-    }
-
-    // notify `subscriber` about `result` asynchronously
-    async fn notify_async(subscriber: &Client, result: pubsub::Result) {
-        let fut = subscriber.notify(Ok(result)).map(|_| ()).map_err(
-            |e| warn!(target: "rpc", "Unable to send notification: {}", e),
-        );
-
-        // convert futures01::Future into std::Future so that we can await
-        let _ = fut.compat().await;
-    }
-
-    // notify each subscriber about header `hash` concurrently
-    // NOTE: multiple calls to this method will result in concurrent
-    // notifications, so the headers published might be reordered.
-    fn notify_header(&self, hash: &H256) {
-        trace!("notify_header({:?})", hash);
-
-        let subscribers = self.heads_subscribers.read();
-
-        // do not retrieve anything unnecessarily
-        if subscribers.is_empty() {
-            return;
-        }
-
+    fn get_header_by_hash(&self, hash: &H256) -> Result<RpcHeader, String> {
         let header = match self.data_man.block_header_by_hash(hash) {
             Some(h) => {
                 RpcHeader::new(&*h, self.network, self.consensus.clone())
             }
-            None => return warn!("Unable to retrieve header for {:?}", hash),
+            None => return Err("Header not found".to_string()),
         };
 
-        let header = match header {
-            Ok(h) => h,
-            Err(e) => {
-                error!(
-                    "Unexpected error while constructing RpcHeader: {:?}",
-                    e
-                );
-                return;
-            }
-        };
-
-        for subscriber in subscribers.values() {
-            Self::notify(
-                &self.executor,
-                subscriber,
-                pubsub::Result::Header(header.clone()),
-            );
-        }
+        header
     }
 
-    async fn notify_epoch(&self, subscriber: Client, epoch: (u64, Vec<H256>)) {
+    async fn notify_epoch(
+        &self, subscriber: Client, epoch: (u64, Vec<H256>),
+    ) -> SinkResult {
         trace!("notify_epoch({:?})", epoch);
 
         let (epoch, hashes) = epoch;
         let hashes = hashes.into_iter().map(H256::from).collect();
 
-        Self::notify_async(
+        notify(
             &subscriber,
             pubsub::Result::Epoch {
                 epoch_number: epoch.into(),
                 epoch_hashes_ordered: hashes,
             },
         )
-        .await
     }
 
     async fn notify_revert(&self, subscriber: &Client, epoch: u64) {
         trace!("notify_revert({:?})", epoch);
 
-        Self::notify_async(
+        let _ = notify(
             subscriber,
             pubsub::Result::ChainReorg {
                 revert_to: epoch.into(),
             },
-        )
-        .await
+        );
     }
 
     async fn notify_logs(
         &self, subscriber: &Client, filter: LogFilter, epoch: (u64, Vec<H256>),
-    ) {
+    ) -> SinkResult {
         trace!("notify_logs({:?})", epoch);
 
         // NOTE: calls to DbManager are supposed to be cached
@@ -330,7 +343,7 @@ impl ChainNotificationHandler {
         // subscriber? would it be better to do this once for each epoch?
         let logs = match self.retrieve_epoch_logs(epoch).await {
             Some(logs) => logs,
-            None => return,
+            None => return Ok(()),
         };
 
         // apply filter to logs
@@ -346,7 +359,10 @@ impl ChainNotificationHandler {
         for log in logs {
             match log {
                 Ok(l) => {
-                    Self::notify_async(subscriber, pubsub::Result::Log(l)).await
+                    let send_res = notify(subscriber, pubsub::Result::Log(l));
+                    if send_res.is_err() {
+                        return send_res;
+                    }
                 }
                 Err(e) => {
                     error!(
@@ -356,6 +372,7 @@ impl ChainNotificationHandler {
                 }
             }
         }
+        Ok(())
     }
 
     // attempt to retrieve block receipts from BlockDataManager
@@ -384,7 +401,7 @@ impl ChainNotificationHandler {
                 Some(res) => return Some(res.block_receipts.clone()),
                 None => {
                     trace!("Cannot find receipts with {:?}/{:?}", block, pivot);
-                    let _ = sleep(POLL_INTERVAL_MS).compat().await;
+                    let _ = sleep(POLL_INTERVAL_MS).await;
                 }
             }
 
@@ -494,6 +511,7 @@ impl PubSub for PubSubClient {
             // --------- newHeads ---------
             (pubsub::Kind::NewHeads, None) => {
                 self.heads_subscribers.write().push(subscriber);
+                self.start_head_loop();
                 return;
             }
             (pubsub::Kind::NewHeads, _) => {
@@ -555,4 +573,8 @@ impl PubSub for PubSubClient {
 
         Ok(res0 || res1 || res2)
     }
+}
+
+fn notify(subscriber: &Client, result: pubsub::Result) -> SinkResult {
+    subscriber.notify(Ok(result))
 }

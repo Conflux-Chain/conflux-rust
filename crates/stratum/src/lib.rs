@@ -282,15 +282,12 @@ mod tests {
     use std::{
         net::{Shutdown, SocketAddr},
         sync::Arc,
-        thread, time,
     };
-
-    use jsonrpc_core::futures::{future, Future};
-    use tokio::{
-        io,
+    use tokio02::{
+        io::{AsyncReadExt, AsyncWriteExt},
         net::TcpStream,
         runtime::Runtime,
-        timer::timeout::{self, Timeout},
+        time::delay_for,
     };
 
     pub struct VoidManager;
@@ -303,21 +300,31 @@ mod tests {
         let mut runtime = Runtime::new()
             .expect("Tokio Runtime should be created with no errors");
 
-        let mut data_vec = data.as_bytes().to_vec();
-        data_vec.extend(b"\n");
+        runtime.block_on(async {
+            let mut stream = TcpStream::connect(addr)
+                .await
+                .expect("Should connect to server");
 
-        let stream = TcpStream::connect(addr)
-            .and_then(move |stream| io::write_all(stream, data_vec))
-            .and_then(|(stream, _)| {
-                stream.shutdown(Shutdown::Write).unwrap();
-                io::read_to_end(stream, Vec::with_capacity(2048))
-            })
-            .and_then(|(_stream, read_buf)| future::ok(read_buf));
-        let result = runtime
-            .block_on(stream)
-            .expect("Runtime should run with no errors");
+            let mut data_vec = data.as_bytes().to_vec();
+            data_vec.extend(b"\n");
 
-        result
+            stream
+                .write_all(&data_vec)
+                .await
+                .expect("Should write data to stream");
+
+            stream
+                .shutdown(Shutdown::Write)
+                .expect("Should shutdown write half");
+
+            let mut read_buf = Vec::with_capacity(2048);
+            stream
+                .read_to_end(&mut read_buf)
+                .await
+                .expect("Should read data from stream");
+
+            read_buf
+        })
     }
 
     #[test]
@@ -407,48 +414,64 @@ mod tests {
 
         let mut runtime = Runtime::new()
             .expect("Tokio Runtime should be created with no errors");
-        let read_buf0 = vec![0u8; auth_response.len()];
-        let read_buf1 = Vec::with_capacity(2048);
-        let stream = TcpStream::connect(&addr)
-            .and_then(move |stream| {
-                io::write_all(stream, auth_request)
-            })
-            .and_then(|(stream, _)| {
-                io::read_exact(stream, read_buf0)
-            })
-            .map_err(|err| panic!("{:?}", err))
-            .and_then(move |(stream, read_buf0)| {
-                assert_eq!(String::from_utf8(read_buf0).unwrap(), auth_response);
-                trace!(target: "stratum", "Received authorization confirmation");
-                Timeout::new(future::ok(stream), ::std::time::Duration::from_millis(100))
-            })
-            .map_err(|err: timeout::Error<()>| panic!("Timeout: {:?}", err))
-            .and_then(move |stream| {
-                trace!(target: "stratum", "Pusing work to peers");
-                stratum.push_work_all(r#"{ "00040008", "100500" }"#.to_owned())
-                    .expect("Pushing work should produce no errors");
-                Timeout::new(future::ok(stream), ::std::time::Duration::from_millis(100))
-            })
-            .map_err(|err: timeout::Error<()>| panic!("Timeout: {:?}", err))
-            .and_then(|stream| {
-                trace!(target: "stratum", "Ready to read work from server");
-                thread::sleep(time::Duration::from_millis(100));
-                stream.shutdown(Shutdown::Write).unwrap();
-                io::read_to_end(stream, read_buf1)
-            })
-            .and_then(|(_, read_buf1)| {
-                trace!(target: "stratum", "Received work from server");
-                future::ok(read_buf1)
-            });
-        let response = String::from_utf8(
-            runtime
-                .block_on(stream)
-                .expect("Runtime should run with no errors"),
-        )
-        .expect("Response should be utf-8");
+
+        let response = runtime.block_on(async {
+            let mut stream = TcpStream::connect(&addr)
+                .await
+                .expect("Should connect to server");
+
+            // Write auth request
+            stream
+                .write_all(&auth_request)
+                .await
+                .expect("Should write auth request");
+
+            // Read auth response
+            let mut read_buf0 = vec![0u8; auth_response.len()];
+            stream
+                .read_exact(&mut read_buf0)
+                .await
+                .expect("Should read auth response");
+
+            assert_eq!(String::from_utf8(read_buf0).unwrap(), auth_response);
+            trace!(target: "stratum", "Received authorization confirmation");
+
+            // Wait a bit
+            delay_for(std::time::Duration::from_millis(100)).await;
+
+            // Push work
+            trace!(target: "stratum", "Pusing work to peers");
+            stratum
+                .push_work_all(r#"{ "00040008", "100500" }"#.to_owned())
+                .expect("Pushing work should produce no errors");
+
+            // Wait a bit
+            delay_for(std::time::Duration::from_millis(100)).await;
+
+            trace!(target: "stratum", "Ready to read work from server");
+            delay_for(std::time::Duration::from_millis(100)).await;
+
+            stream
+                .shutdown(Shutdown::Write)
+                .expect("Should shutdown write half");
+
+            // Read work response
+            let mut read_buf1 = Vec::with_capacity(2048);
+            stream
+                .read_to_end(&mut read_buf1)
+                .await
+                .expect("Should read work response");
+
+            trace!(target: "stratum", "Received work from server");
+            read_buf1
+        });
+
+        let response =
+            String::from_utf8(response).expect("Response should be utf-8");
 
         assert_eq!(
             "{ \"id\": 17, \"method\": \"mining.notify\", \"params\": { \"00040008\", \"100500\" } }\n",
-            response);
+            response
+        );
     }
 }
