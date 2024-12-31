@@ -1289,7 +1289,6 @@ dependencies = [
  "cfx-bytes",
  "cfx-parameters",
  "cfx-types",
- "cfx-vm-types",
  "derivative",
  "lazy_static",
  "log",
