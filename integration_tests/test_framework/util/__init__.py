@@ -24,8 +24,8 @@ import shutil
 import math
 
 from integration_tests.test_framework.simple_rpc_proxy import SimpleRpcProxy
-from . import coverage
-from .authproxy import AuthServiceProxy, JSONRPCException
+from .. import coverage
+from ..authproxy import AuthServiceProxy, JSONRPCException
 if TYPE_CHECKING:
     from conflux.rpc import RpcClient
 
@@ -286,7 +286,7 @@ def wait_until(predicate,
 ################
 
 def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000):
-    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
+    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../../target/release/pos-genesis-tool")
     try:
         if pkfile is None:
             check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
