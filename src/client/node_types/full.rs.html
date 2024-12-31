@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/client/src/archive/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/client/src/node_types/full.rs`."><title>full.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-b1a3e7f8283b8434.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (635124704 2024-01-27)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
             <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
     <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
@@ -98,23 +98,6 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -138,11 +121,11 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::runtime::Runtime <span class="kw">as </span>TokioRuntime;
 
-<span class="kw">pub struct </span>ArchiveClientExtraComponents {
+<span class="kw">pub struct </span>FullClientExtraComponents {
     <span class="kw">pub </span>consensus: Arc&lt;ConsensusGraph&gt;,
     <span class="kw">pub </span>debug_rpc_http_server: <span class="prelude-ty">Option</span>&lt;HttpServer&gt;,
     <span class="kw">pub </span>rpc_http_server: <span class="prelude-ty">Option</span>&lt;HttpServer&gt;,
-    <span class="kw">pub </span>debug_rpc_tpc_server: <span class="prelude-ty">Option</span>&lt;TcpServer&gt;,
+    <span class="kw">pub </span>debug_rpc_tcp_server: <span class="prelude-ty">Option</span>&lt;TcpServer&gt;,
     <span class="kw">pub </span>rpc_tcp_server: <span class="prelude-ty">Option</span>&lt;TcpServer&gt;,
     <span class="kw">pub </span>debug_rpc_ws_server: <span class="prelude-ty">Option</span>&lt;WsServer&gt;,
     <span class="kw">pub </span>rpc_ws_server: <span class="prelude-ty">Option</span>&lt;WsServer&gt;,
@@ -157,27 +140,20 @@
     <span class="kw">pub </span>tokio_runtime: Arc&lt;TokioRuntime&gt;,
 }
 
-<span class="kw">impl </span>MallocSizeOf <span class="kw">for </span>ArchiveClientExtraComponents {
-    <span class="kw">fn </span>size_of(<span class="kw-2">&amp;</span><span class="self">self</span>, ops: <span class="kw-2">&amp;mut </span>MallocSizeOfOps) -&gt; usize {
-        <span class="kw">let </span>tx_pool_size = <span class="self">self</span>.txpool.size_of(ops);
-        <span class="kw">let </span>consensus_graph_size = <span class="self">self</span>.consensus.size_of(ops);
-        <span class="kw">let </span>sync_graph_size =
-            <span class="self">self</span>.sync.get_synchronization_graph().size_of(ops);
-        tx_pool_size + consensus_graph_size + sync_graph_size
-    }
+<span class="kw">impl </span>MallocSizeOf <span class="kw">for </span>FullClientExtraComponents {
+    <span class="kw">fn </span>size_of(<span class="kw-2">&amp;</span><span class="self">self</span>, _ops: <span class="kw-2">&amp;mut </span>MallocSizeOfOps) -&gt; usize { <span class="macro">unimplemented!</span>() }
 }
 
-<span class="kw">pub struct </span>ArchiveClient {}
+<span class="kw">pub struct </span>FullClient {}
 
-<span class="kw">impl </span>ArchiveClient {
+<span class="kw">impl </span>FullClient {
     <span class="comment">// Start all key components of Conflux and pass out their handles
     </span><span class="kw">pub fn </span>start(
         <span class="kw-2">mut </span>conf: Configuration, exit: Arc&lt;(Mutex&lt;bool&gt;, Condvar)&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
-        Box&lt;ClientComponents&lt;BlockGenerator, ArchiveClientExtraComponents&gt;&gt;,
+        Box&lt;ClientComponents&lt;BlockGenerator, FullClientExtraComponents&gt;&gt;,
         String,
     &gt; {
-        <span class="self">Self</span>::process_config(<span class="kw-2">&amp;mut </span>conf);
         <span class="kw">let </span>(
             data_man,
             pow,
@@ -187,7 +163,7 @@
             blockgen,
             debug_rpc_http_server,
             rpc_http_server,
-            debug_rpc_tpc_server,
+            debug_rpc_tcp_server,
             rpc_tcp_server,
             debug_rpc_ws_server,
             rpc_ws_server,
@@ -196,20 +172,16 @@
             eth_rpc_ws_server,
             tokio_runtime,
             eth_rpc_server_handle,
-        ) = initialize_not_light_node_modules(
-            <span class="kw-2">&amp;mut </span>conf,
-            exit,
-            NodeType::Archive,
-        )<span class="question-mark">?</span>;
+        ) = initialize_not_light_node_modules(<span class="kw-2">&amp;mut </span>conf, exit, NodeType::Full)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(<span class="kw-2">&amp;</span>data_man),
             blockgen: <span class="prelude-val">Some</span>(blockgen),
             pos_handler: <span class="prelude-val">Some</span>(pos_handler),
-            other_components: ArchiveClientExtraComponents {
+            other_components: FullClientExtraComponents {
                 consensus,
                 debug_rpc_http_server,
                 rpc_http_server,
-                debug_rpc_tpc_server,
+                debug_rpc_tcp_server,
                 rpc_tcp_server,
                 debug_rpc_ws_server,
                 rpc_ws_server,
@@ -222,12 +194,6 @@
                 tokio_runtime,
             },
         }))
-    }
-
-    <span class="kw">fn </span>process_config(conf: <span class="kw-2">&amp;mut </span>Configuration) {
-        <span class="kw">if </span>conf.raw_conf.max_outgoing_peers_archive.is_none() {
-            conf.raw_conf.max_outgoing_peers_archive = <span class="prelude-val">Some</span>(<span class="number">8</span>);
-        }
     }
 }
 </code></pre></div></section></main></body></html>

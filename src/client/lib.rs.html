@@ -21,7 +21,6 @@
 <a href="#19" id="19">19</a>
 <a href="#20" id="20">20</a>
 <a href="#21" id="21">21</a>
-<a href="#22" id="22">22</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -34,12 +33,11 @@
 <span class="attr">#[macro_use]
 </span><span class="kw">mod </span>config_macro;
 <span class="kw">pub mod </span>accounts;
-<span class="kw">pub mod </span>archive;
 <span class="kw">pub mod </span>common;
 <span class="kw">pub mod </span>configuration;
-<span class="kw">pub mod </span>full;
-<span class="kw">pub mod </span>light;
+<span class="kw">mod </span>node_types;
 <span class="kw">pub mod </span>rpc;
+<span class="kw">pub use </span>node_types::{archive, full, light};
 
 <span class="doccomment">/// Used in Genesis author to indicate test-net/main-net version.
 /// Increased for every test-net/main-net release with reset.
