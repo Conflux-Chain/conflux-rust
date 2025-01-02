@@ -31,6 +31,8 @@
 <a href="#29" id="29">29</a>
 <a href="#30" id="30">30</a>
 <a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>block;
 <span class="kw">mod </span>block_number;
 <span class="kw">mod </span>errors;
@@ -39,13 +41,14 @@
 <span class="kw">mod </span>filter;
 <span class="kw">mod </span>log;
 <span class="kw">mod </span>receipt;
+<span class="kw">mod </span>state;
 <span class="kw">mod </span>sync;
 <span class="kw">pub mod </span>trace_filter;
 <span class="kw">mod </span>transaction;
 <span class="kw">mod </span>transaction_request;
 <span class="kw">mod </span>tx_pool;
 
-<span class="kw">pub use </span>block::{Block, Header};
+<span class="kw">pub use </span>block::{Block, BlockOverrides, Header};
 <span class="kw">pub use </span>block_number::BlockNumber;
 <span class="kw">pub use </span>cfx_rpc_cfx_types::trace_eth::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>cfx_rpc_primitives::{Bytes, U64};
@@ -55,6 +58,7 @@
 <span class="kw">pub use </span>filter::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>log::Log;
 <span class="kw">pub use </span>receipt::Receipt;
+<span class="kw">pub use </span>state::{AccountOverride, EvmOverrides, StateOverride};
 <span class="kw">pub use </span>sync::{SyncInfo, SyncStatus};
 <span class="kw">pub use </span>trace_filter::TraceFilter;
 <span class="kw">pub use </span>transaction::Transaction;

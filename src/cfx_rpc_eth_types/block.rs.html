@@ -348,6 +348,71 @@
 <a href="#346" id="346">346</a>
 <a href="#347" id="347">347</a>
 <a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -370,9 +435,12 @@
 
 </span><span class="kw">use crate</span>::{Bytes, Transaction};
 <span class="kw">use </span>cfx_rpc_cfx_types::PhantomBlock;
-<span class="kw">use </span>cfx_types::{hexstr_to_h256, Bloom <span class="kw">as </span>H2048, Space, H160, H256, H64, U256};
+<span class="kw">use </span>cfx_types::{
+    hexstr_to_h256, Address, Bloom <span class="kw">as </span>H2048, Space, H160, H256, H64, U256,
+};
 <span class="kw">use </span>primitives::receipt::EVM_SPACE_SUCCESS;
-<span class="kw">use </span>serde::{Serialize, Serializer};
+<span class="kw">use </span>serde::{Deserialize, Serialize, Serializer};
+<span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">const </span>SHA3_HASH_OF_EMPTY_UNCLE: <span class="kw-2">&amp;</span>str =
     <span class="string">"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"</span>;
@@ -655,6 +723,68 @@
     // 		}
     //     }
 </span>}
+
+<span class="doccomment">/// BlockOverrides is a set of header fields to override.
+</span><span class="attr">#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = <span class="string">"camelCase"</span>, deny_unknown_fields)]
+</span><span class="kw">pub struct </span>BlockOverrides {
+    <span class="doccomment">/// Overrides the block number.
+    ///
+    /// For `eth_callMany` this will be the block number of the first simulated
+    /// block. Each following block increments its block number by 1
+    </span><span class="comment">// Note: geth uses `number`, erigon uses `blockNumber`
+    </span><span class="attr">#[serde(
+        default,
+        skip_serializing_if = <span class="string">"Option::is_none"</span>,
+        alias = <span class="string">"blockNumber"
+    </span>)]
+    </span><span class="kw">pub </span>number: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+    <span class="doccomment">/// Overrides the difficulty of the block.
+    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span><span class="kw">pub </span>difficulty: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+    <span class="doccomment">/// Overrides the timestamp of the block.
+    </span><span class="comment">// Note: geth uses `time`, erigon uses `timestamp`
+    </span><span class="attr">#[serde(
+            default,
+            skip_serializing_if = <span class="string">"Option::is_none"</span>,
+            alias = <span class="string">"timestamp"</span>,
+            <span class="comment">// with = "alloy_serde::quantity::opt"
+        </span>)]
+    </span><span class="kw">pub </span>time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="doccomment">/// Overrides the gas limit of the block.
+    </span><span class="attr">#[serde(
+            default,
+            skip_serializing_if = <span class="string">"Option::is_none"</span>,
+            <span class="comment">// with = "alloy_serde::quantity::opt"
+        </span>)
+    ]
+    </span><span class="kw">pub </span>gas_limit: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="doccomment">/// Overrides the coinbase address of the block.
+    </span><span class="attr">#[serde(
+        default,
+        skip_serializing_if = <span class="string">"Option::is_none"</span>,
+        alias = <span class="string">"feeRecipient"
+    </span>)]
+    </span><span class="kw">pub </span>coinbase: <span class="prelude-ty">Option</span>&lt;Address&gt;,
+    <span class="doccomment">/// Overrides the prevrandao of the block.
+    </span><span class="attr">#[serde(
+        default,
+        skip_serializing_if = <span class="string">"Option::is_none"</span>,
+        alias = <span class="string">"prevRandao"
+    </span>)]
+    </span><span class="kw">pub </span>random: <span class="prelude-ty">Option</span>&lt;H256&gt;,
+    <span class="doccomment">/// Overrides the basefee of the block.
+    </span><span class="attr">#[serde(
+        default,
+        skip_serializing_if = <span class="string">"Option::is_none"</span>,
+        alias = <span class="string">"baseFeePerGas"
+    </span>)]
+    </span><span class="kw">pub </span>base_fee: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+    <span class="doccomment">/// A dictionary that maps blockNumber to a user-defined hash. It can be
+    /// queried from the EVM opcode BLOCKHASH.
+    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span><span class="kw">pub </span>block_hash: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;u64, H256&gt;&gt;,
+}
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["TYPE_BITS_BUILTIN","TYPE_BITS_CONTRACT","TYPE_BITS_USER_ACCOUNT"],"trait":["AddressUtil"]};
+window.SIDEBAR_ITEMS = {"constant":["TYPE_BITS_BUILTIN","TYPE_BITS_CONTRACT","TYPE_BITS_USER_ACCOUNT"],"fn":["hex_to_address"],"trait":["AddressUtil"]};
