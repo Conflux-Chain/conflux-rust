@@ -336,12 +336,12 @@ where
 mod pool_tests {
     use std::{collections::HashSet, sync::atomic::AtomicUsize};
 
+    use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
     use crate::{
-        mock_tx::MockTransaction, rand::SeedableRng,
-        transaction::PackingPoolTransaction, PackingBatch, PackingPool,
-        PackingPoolConfig, SampleTag,
+        mock_tx::MockTransaction, transaction::PackingPoolTransaction,
+        PackingBatch, PackingPool, PackingPoolConfig, SampleTag,
     };
 
     fn default_pool(
