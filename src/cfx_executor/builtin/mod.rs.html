@@ -1488,6 +1488,8 @@
 <a href="#1486" id="1486">1486</a>
 <a href="#1487" id="1487">1487</a>
 <a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -2002,20 +2004,20 @@
 
 <span class="kw">fn </span>read_fr(
     reader: <span class="kw-2">&amp;mut </span>io::Chain&lt;<span class="kw-2">&amp;</span>[u8], io::Repeat&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;::bn::Fr, Error&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">crate</span>::bn::Fr, Error&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">32</span>];
 
     reader
         .read_exact(<span class="kw-2">&amp;mut </span>buf[..])
         .expect(<span class="string">"reading from zero-extended memory cannot fail; qed"</span>);
-    ::bn::Fr::from_slice(<span class="kw-2">&amp;</span>buf[<span class="number">0</span>..<span class="number">32</span>])
+    <span class="kw">crate</span>::bn::Fr::from_slice(<span class="kw-2">&amp;</span>buf[<span class="number">0</span>..<span class="number">32</span>])
         .map_err(|<span class="kw">_</span>| Error::from(<span class="string">"Invalid field element"</span>))
 }
 
 <span class="kw">fn </span>read_point(
     reader: <span class="kw-2">&amp;mut </span>io::Chain&lt;<span class="kw-2">&amp;</span>[u8], io::Repeat&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;::bn::G1, Error&gt; {
-    <span class="kw">use </span>bn::{AffineG1, Fq, Group, G1};
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">crate</span>::bn::G1, Error&gt; {
+    <span class="kw">use </span><span class="kw">crate</span>::bn::{AffineG1, Fq, Group, G1};
 
     <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">32</span>];
 
@@ -2044,7 +2046,7 @@
     </span><span class="kw">fn </span>execute(
         <span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>[u8], output: <span class="kw-2">&amp;mut </span>BytesRef,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-        <span class="kw">use </span>bn::AffineG1;
+        <span class="kw">use </span><span class="kw">crate</span>::bn::AffineG1;
 
         <span class="kw">let </span><span class="kw-2">mut </span>padded_input = input.chain(io::repeat(<span class="number">0</span>));
         <span class="kw">let </span>p1 = read_point(<span class="kw-2">&amp;mut </span>padded_input)<span class="question-mark">?</span>;
@@ -2072,7 +2074,7 @@
     </span><span class="kw">fn </span>execute(
         <span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>[u8], output: <span class="kw-2">&amp;mut </span>BytesRef,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-        <span class="kw">use </span>bn::AffineG1;
+        <span class="kw">use </span><span class="kw">crate</span>::bn::AffineG1;
 
         <span class="kw">let </span><span class="kw-2">mut </span>padded_input = input.chain(io::repeat(<span class="number">0</span>));
         <span class="kw">let </span>p = read_point(<span class="kw-2">&amp;mut </span>padded_input)<span class="question-mark">?</span>;
@@ -2121,7 +2123,9 @@
     <span class="kw">fn </span>execute_with_error(
         <span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>[u8], output: <span class="kw-2">&amp;mut </span>BytesRef,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-        <span class="kw">use </span>bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
+        <span class="kw">use </span><span class="kw">crate</span>::bn::{
+            pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2,
+        };
 
         <span class="kw">let </span>elements = input.len() / <span class="number">192</span>; <span class="comment">// (a, b_a, b_b - each 64-byte affine coordinates)
         </span><span class="kw">let </span>ret_val = <span class="kw">if </span>input.len() == <span class="number">0 </span>{

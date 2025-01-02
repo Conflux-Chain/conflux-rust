@@ -977,12 +977,12 @@
 </span><span class="kw">mod </span>pool_tests {
     <span class="kw">use </span>std::{collections::HashSet, sync::atomic::AtomicUsize};
 
+    <span class="kw">use </span>rand::SeedableRng;
     <span class="kw">use </span>rand_xorshift::XorShiftRng;
 
     <span class="kw">use crate</span>::{
-        mock_tx::MockTransaction, rand::SeedableRng,
-        transaction::PackingPoolTransaction, PackingBatch, PackingPool,
-        PackingPoolConfig, SampleTag,
+        mock_tx::MockTransaction, transaction::PackingPoolTransaction,
+        PackingBatch, PackingPool, PackingPoolConfig, SampleTag,
     };
 
     <span class="kw">fn </span>default_pool(

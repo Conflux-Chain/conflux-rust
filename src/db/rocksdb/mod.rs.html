@@ -107,9 +107,6 @@
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -130,10 +127,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-</span><span class="kw">extern crate </span>core;
-<span class="kw">extern crate </span>kvdb_rocksdb;
-
-<span class="kw">use </span><span class="self">self</span>::kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
+</span><span class="kw">use </span>kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
 <span class="kw">use </span>std::{io, path::Path, str::FromStr, sync::Arc};
 
 <span class="kw">pub struct </span>SystemDB {

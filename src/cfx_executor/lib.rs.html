@@ -63,7 +63,6 @@
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Conflux Executor: A Rust crate for the core logic of executing transactions
 //! on the Conflux blockchain. It encapsulates all the necessary logic for a
 //! consensus node during execution, focusing solely on the execution logic
@@ -71,12 +70,11 @@
 
 </span><span class="attr">#[macro_use]
 </span><span class="kw">extern crate </span>log;
-<span class="kw">extern crate </span>substrate_bn <span class="kw">as </span>bn;
 <span class="attr">#[macro_use]
 </span><span class="kw">extern crate </span>lazy_static;
 <span class="attr">#[macro_use]
 </span><span class="kw">extern crate </span>cfx_util_macros;
-<span class="kw">extern crate </span>sha3_macro;
+<span class="kw">use </span>substrate_bn <span class="kw">as </span>bn;
 
 <span class="doccomment">/// Ethereum Builtins: Implements Ethereum's builtin contracts, ranging from
 /// address `0x1` to `0x9`.
