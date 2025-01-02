@@ -24,7 +24,7 @@ members = [
     "crates/cfxcore/executor",
     "crates/cfxcore/internal_common",
     "crates/cfxcore/packing-pool",
-    "crates/cfxcore/parameters",
+    "crates/parameters",
     "crates/dbs/statedb",
     "crates/dbs/storage",
     "crates/cfxcore/vm-interpreter",
@@ -56,7 +56,7 @@ members = [
     "crates/rpc/rpc-primitives",
     "crates/rpc/rpc-cfx-types",
     "crates/rpc/rpc-eth-api",
-    "crates/cfxcore/parity-trace-types",
+    "crates/rpc/parity-trace-types",
     "crates/rpc/rpc-eth-impl",
     "crates/util/util-macros",
     "crates/rpc/rpc-utils",
@@ -177,7 +177,7 @@ secret-store = { path = "./crates/secret_store" }
 cfxstore = { path = "./crates/cfx_store" }
 network = { path = "./crates/network" }
 cfxcore = { path = "./crates/cfxcore/core" }
-cfx-parameters = { path = "./crates/cfxcore/parameters" }
+cfx-parameters = { path = "./crates/parameters" }
 cfx-execute-helper = { path = "./crates/cfxcore/execute-helper" }
 cfx-executor = { path = "./crates/cfxcore/executor" }
 cfx-packing-pool = { path = "./crates/cfxcore/packing-pool" }
@@ -188,7 +188,7 @@ cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
 cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
 cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
 cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
-cfx-parity-trace-types = { path = "./crates/cfxcore/parity-trace-types" }
+cfx-parity-trace-types = { path = "./crates/rpc/parity-trace-types" }
 cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth-api" }
 cfx-util-macros = { path = "./crates/util/util-macros" }
 cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
@@ -358,6 +358,7 @@ enum-map = "0.4.0"
 enum-map-derive = "0.4.0"
 igd = "0.10"
 ipnetwork = "0.12.6"
+derivative = "2.0.2"
 
 bigdecimal = "0.1.0"
 num-bigint = "0.2.6"
