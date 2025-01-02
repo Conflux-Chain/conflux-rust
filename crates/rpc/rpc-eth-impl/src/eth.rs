@@ -10,9 +10,9 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter, EthRpcLogFilter as Filter,
-    FeeHistory, Header, Log, Receipt, SyncInfo, SyncStatus, Transaction,
-    TransactionRequest,
+    Block, BlockNumber as BlockId, BlockOverrides, EthRpcLogFilter,
+    EthRpcLogFilter as Filter, EvmOverrides, FeeHistory, Header, Log, Receipt,
+    StateOverride, SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::error::{
@@ -99,7 +99,7 @@ impl EthApi {
 
     pub fn exec_transaction(
         &self, mut request: TransactionRequest,
-        block_number_or_hash: Option<BlockNumber>,
+        block_number_or_hash: Option<BlockNumber>, evm_overrides: EvmOverrides,
     ) -> CoreResult<(Executed, U256)> {
         let consensus_graph = self.consensus_graph();
 
@@ -120,6 +120,19 @@ impl EthApi {
             {
                 return Err(RpcError::from(
                     RpcInvalidTransactionError::TipAboveFeeCap,
+                )
+                .into());
+            }
+        }
+
+        if evm_overrides.has_state() {
+            let state_override = evm_overrides.state.as_ref().unwrap();
+            let invalid_item = state_override.iter().any(|(_, item)| {
+                item.state.is_some() && item.state_diff.is_some()
+            });
+            if invalid_item {
+                return Err(invalid_params_msg(
+                    "Cannot set both state and stateDiff in stateOverride",
                 )
                 .into());
             }
@@ -167,6 +180,7 @@ impl EthApi {
             &signed_tx,
             epoch,
             estimate_request,
+            evm_overrides,
         )?;
 
         let executed = match execution_outcome {
@@ -1236,14 +1250,13 @@ impl EthApiServer for EthApi {
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     async fn call(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_overrides: Option<StateOverride>,
-        // block_overrides: Option<Box<BlockOverrides>>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<StateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
+        let evm_overrides = EvmOverrides::new(state_overrides, block_overrides);
         let (execution, _estimation) =
-            self.exec_transaction(request, block_number)?;
+            self.exec_transaction(request, block_number, evm_overrides)?;
 
         Ok(execution.output.into())
     }
@@ -1282,13 +1295,12 @@ impl EthApiServer for EthApi {
     /// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
     async fn estimate_gas(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_override: Option<StateOverride>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_override: Option<StateOverride>,
     ) -> RpcResult<U256> {
+        let evm_overrides = EvmOverrides::new(state_override, None);
         let (_, estimated_gas) =
-            self.exec_transaction(request, block_number)?;
+            self.exec_transaction(request, block_number, evm_overrides)?;
 
         Ok(estimated_gas)
     }

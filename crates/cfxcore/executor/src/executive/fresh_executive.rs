@@ -63,7 +63,9 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         context: ExecutiveContext<'a>, tx: &'a SignedTransaction,
         options: TransactOptions<O>,
     ) -> Self {
-        let TransactOptions { observer, settings } = options;
+        let TransactOptions {
+            observer, settings, ..
+        } = options;
         let base_gas = gas_required_for(
             tx.action() == &Action::Create,
             &tx.data(),

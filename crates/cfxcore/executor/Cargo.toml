@@ -54,6 +54,7 @@ c-kzg = { version = "1.0.2", default-features = false}
 once_cell = { workspace = true }
 rayon = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
 
 [dev-dependencies]
 cfx-statedb = { workspace = true, features = ["testonly_code"]}

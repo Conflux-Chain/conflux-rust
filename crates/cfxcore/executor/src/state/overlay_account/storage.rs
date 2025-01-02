@@ -7,12 +7,12 @@ use cfx_parameters::{
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
-use cfx_types::{Address, Space, U256};
+use cfx_types::{Address, Space, H256, U256};
 
 use primitives::{
     SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
 };
-use std::collections::hash_map::Entry::*;
+use std::collections::{hash_map::Entry::*, HashMap};
 
 use super::OverlayAccount;
 
@@ -196,9 +196,9 @@ impl OverlayAccount {
     pub fn storage_entry_at(
         &self, db: &StateDbGeneric, key: &[u8],
     ) -> DbResult<StorageValue> {
-        Ok(if let Some(owner) = self.cached_entry_at(key) {
-            owner
-        } else if self.fresh_storage() {
+        Ok(if let Some(value) = self.cached_entry_at(key) {
+            value
+        } else if self.fresh_storage() || self.storage_overrided {
             StorageValue::default()
         } else {
             self.get_and_cache_storage(db, key)?
@@ -238,6 +238,33 @@ impl OverlayAccount {
     pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {
         self.address.space == Space::Native
             && self.address.address != SYSTEM_STORAGE_ADDRESS
+    }
+
+    // used for state override.diff
+    pub fn update_storage_read_cache(&mut self, key: Vec<u8>, value: U256) {
+        let owner = if self.address.space == Space::Native {
+            Some(self.address.address)
+        } else {
+            None
+        };
+        let storage_value = StorageValue { owner, value };
+        self.storage_read_cache
+            .write()
+            .insert(key.to_vec(), storage_value);
+    }
+
+    pub fn override_storage_read_cache(
+        &mut self, state: &HashMap<H256, H256>, complete_override: bool,
+    ) {
+        if complete_override {
+            self.storage_read_cache.write().clear();
+            self.storage_overrided = true;
+        }
+        for (key, value) in state.iter() {
+            let key = key.as_bytes().to_vec();
+            let value = U256::from_big_endian(value.as_bytes());
+            self.update_storage_read_cache(key, value);
+        }
     }
 
     pub fn change_storage_value(
