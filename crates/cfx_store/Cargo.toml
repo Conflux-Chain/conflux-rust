@@ -15,14 +15,14 @@ serde = { workspace = true }
 serde_json = { workspace = true, features = ["std"] }
 serde_derive = { workspace = true }
 rustc-hex = { workspace = true }
-tiny-keccak = "1.4"
-time = "0.1.34"
+tiny-keccak = { workspace = true }
+time = { workspace = true }
 parking_lot = { workspace = true }
 parity-crypto = { workspace = true, features = ["publickey"] }
 dir = { workspace = true }
-smallvec = "1.4"
+smallvec = { workspace = true }
 parity-wordlist = { workspace = true }
 tempdir = { workspace = true }
 
 [dev-dependencies]
-matches = "0.1"
+matches = { workspace = true }

@@ -14,6 +14,8 @@ class Web3Base(ConfluxTestFramework):
     DEFAULT_TEST_ACCOUNT_KEY = "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
     TEST_CHAIN_ID = 10
+    
+    w3: Web3
 
     def set_test_params(self):
         self.num_nodes = 1
@@ -26,9 +28,8 @@ class Web3Base(ConfluxTestFramework):
         self.start_node(0, ["--archive"])
         self.rpc = RpcClient(self.nodes[0])
 
-        ip = self.nodes[0].ip
-        port = self.nodes[0].ethrpcport
-        self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
+        self.setup_w3()
+        self.w3 = self.ew3
         assert_equal(self.w3.is_connected(), True)
 
     def cross_space_transfer(self, to, value):

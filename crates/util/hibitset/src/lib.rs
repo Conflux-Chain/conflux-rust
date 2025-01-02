@@ -45,13 +45,6 @@
 #![deny(missing_docs)]
 #![allow(clippy::all)]
 
-extern crate atom;
-extern crate malloc_size_of;
-#[cfg(test)]
-extern crate rand;
-#[cfg(feature = "parallel")]
-extern crate rayon;
-
 mod atomic;
 mod iter;
 mod ops;

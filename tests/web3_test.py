@@ -123,9 +123,8 @@ class Web3Test(ConfluxTestFramework):
     def run_test(self):
         time.sleep(3)
 
-        ip = self.nodes[0].ip
-        port = self.nodes[0].ethrpcport
-        self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
+        self.setup_w3()
+        self.w3 = self.ew3
 
         assert_equal(self.w3.is_connected(), True)
         account = self.w3.eth.account.from_key(

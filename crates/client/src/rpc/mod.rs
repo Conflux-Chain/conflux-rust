@@ -166,7 +166,7 @@ fn setup_rpc_apis(
                             rpc.consensus.clone(),
                             rpc.tx_pool.clone(),
                             eth_pubsub.epochs_ordered(),
-                            h.executor.clone(),
+                            pubsub.executor.clone(),
                             poll_lifetime,
                             rpc.config.get_logs_filter_max_limit,
                             h.network.clone(),
@@ -210,25 +210,23 @@ fn setup_rpc_apis(
 
                 if let Some(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
                 {
-                    if let Some(h) = eth_pubsub.handler().upgrade() {
-                        let filter_client = EthFilterClient::new(
-                            rpc.consensus.clone(),
-                            rpc.tx_pool.clone(),
-                            eth_pubsub.epochs_ordered(),
-                            h.executor.clone(),
-                            poll_lifetime,
-                            rpc.config.get_logs_filter_max_limit,
-                        )
-                        .to_delegate();
+                    let filter_client = EthFilterClient::new(
+                        rpc.consensus.clone(),
+                        rpc.tx_pool.clone(),
+                        eth_pubsub.epochs_ordered(),
+                        eth_pubsub.executor.clone(),
+                        poll_lifetime,
+                        rpc.config.get_logs_filter_max_limit,
+                    )
+                    .to_delegate();
 
-                        extend_with_interceptor(
-                            &mut handler,
-                            &rpc.config,
-                            filter_client,
-                            throttling_conf,
-                            throttling_section,
-                        );
-                    }
+                    extend_with_interceptor(
+                        &mut handler,
+                        &rpc.config,
+                        filter_client,
+                        throttling_conf,
+                        throttling_section,
+                    );
                 }
             }
             Api::Debug => {
@@ -520,16 +518,19 @@ where
 
 // start espace rpc server v2(async)
 pub async fn launch_async_rpc_servers(
-    config: RpcImplConfiguration, apis: RpcModuleSelection,
-    consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-    tx_pool: SharedTransactionPool, addr: Option<SocketAddr>,
+    rpc_conf: RpcImplConfiguration, throttling_conf_file: Option<String>,
+    apis: RpcModuleSelection, consensus: SharedConsensusGraph,
+    sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+    addr: Option<SocketAddr>,
 ) -> Result<Option<RpcServerHandle>, String> {
     if addr.is_none() {
         return Ok(None);
     }
 
+    let enable_metrics = rpc_conf.enable_metrics;
+
     let rpc_module_builder =
-        RpcModuleBuilder::new(config, consensus, sync, tx_pool);
+        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool);
 
     info!(
         "Enabled evm async rpc modules: {:?}",
@@ -547,7 +548,7 @@ pub async fn launch_async_rpc_servers(
         .with_http_address(addr.unwrap());
 
     let server_handle = server_config
-        .start(&transport_rpc_modules)
+        .start(&transport_rpc_modules, throttling_conf_file, enable_metrics)
         .await
         .map_err(|e| e.to_string())?;
 

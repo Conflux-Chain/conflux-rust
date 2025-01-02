@@ -252,7 +252,7 @@ impl FromStr for TokenBucket {
     }
 }
 
-#[derive(Default, DeriveMallocSizeOf)]
+#[derive(Default, DeriveMallocSizeOf, Clone)]
 pub struct TokenBucketManager {
     // manage buckets by name
     buckets: HashMap<String, Arc<Mutex<TokenBucket>>>,
