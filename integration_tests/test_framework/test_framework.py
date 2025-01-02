@@ -405,13 +405,13 @@ class ConfluxTestFramework:
     def setup_w3(self):
         """Setup w3 and ew3 for EVM and Conflux.
         This method should be called before any test.
-        Use self.w3 and self.ew3 to access the web3 instances.
-        Use self.cfx and self.eth to access the Conflux and EVM RPC clients.
+        Use self.cw3 and self.ew3 to access the web3 instances.
+        Use self.cw3.cfx and self.ew3.eth to access the Conflux and EVM RPC clients.
         """
         client = RpcClient(self.nodes[0])
         log = self.log
         self._cw3 = CWeb3(CWeb3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].rpcport}/'))
-        self._ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/'))
+        self._ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcportv2}/'))
         self.cw3.wallet.add_accounts(self.core_accounts)
         self.cw3.cfx.default_account = self.core_accounts[0].address
         
@@ -436,6 +436,7 @@ class ConfluxTestFramework:
                         log.debug("Auto generate 5 blocks because did not get tx receipt")
                         client.generate_blocks_to_state(num_txs=1)  # why num_txs=1?
                 return response
+        
         self.cw3.middleware_onion.add(TestNodeMiddleware)
         self.ew3.middleware_onion.add(TestNodeMiddleware)
 
