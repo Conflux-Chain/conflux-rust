@@ -101,6 +101,7 @@ members = [
     "crates/pos/types/pow-types",
     "crates/pos/types/types",
     "crates/pos/config/management/network-address-encryption",
+    "crates/rpc/rpc-middlewares",
 ]
 
 resolver = "2"
@@ -194,6 +195,7 @@ cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
 cfx-rpc-utils = { path = "./crates/rpc/rpc-utils" }
 cfx-rpc-builder = { path = "./crates/rpc/rpc-builder" }
 cfx-rpc-cfx-impl = { path = "./crates/rpc/rpc-cfx-impl" }
+cfx-rpc-middlewares = { path = "./crates/rpc/rpc-middlewares" }
 bounded-executor = { path = "./crates/pos/common/bounded-executor" }
 diem-channel = { path = "./crates/pos/common/channel", package = "channel" }
 channel = { path = "./crates/pos/common/channel" }
@@ -320,7 +322,7 @@ secp256k1 = "0.30.0"
 clap = "2"
 rand = "0.7"
 rand_xorshift = "0.2"
-rand_08 = { package = "rand", version = "0.8"}
+rand_08 = { package = "rand", version = "0.8" }
 log = "0.4"
 log4rs = "1.2.0"
 env_logger = "0.11"
@@ -365,6 +367,7 @@ docopt = "1.0"
 vergen = "7.0.0"
 target_info = "0.1"
 libc = "0.2"
+rustls = "0.21"
 
 # conflux forked crates
 rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "3773afe5b953997188f37c39308105b5deb0faac" }

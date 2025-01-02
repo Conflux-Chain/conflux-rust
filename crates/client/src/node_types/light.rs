@@ -96,7 +96,7 @@ impl LightClient {
             data_man.clone(),
         ));
 
-        let debug_rpc_http_server = super::rpc::start_http(
+        let debug_rpc_http_server = crate::rpc::start_http(
             conf.local_http_config(),
             setup_debug_rpc_apis_light(
                 common_impl.clone(),
@@ -107,7 +107,7 @@ impl LightClient {
             ),
         )?;
 
-        let debug_rpc_tcp_server = super::rpc::start_tcp(
+        let debug_rpc_tcp_server = crate::rpc::start_tcp(
             conf.local_tcp_config(),
             setup_debug_rpc_apis_light(
                 common_impl.clone(),
@@ -119,7 +119,7 @@ impl LightClient {
             RpcExtractor,
         )?;
 
-        let rpc_tcp_server = super::rpc::start_tcp(
+        let rpc_tcp_server = crate::rpc::start_tcp(
             conf.tcp_config(),
             setup_public_rpc_apis_light(
                 common_impl.clone(),
@@ -131,7 +131,7 @@ impl LightClient {
             RpcExtractor,
         )?;
 
-        let debug_rpc_ws_server = super::rpc::start_ws(
+        let debug_rpc_ws_server = crate::rpc::start_ws(
             conf.local_ws_config(),
             setup_public_rpc_apis_light(
                 common_impl.clone(),
@@ -143,7 +143,7 @@ impl LightClient {
             RpcExtractor,
         )?;
 
-        let rpc_ws_server = super::rpc::start_ws(
+        let rpc_ws_server = crate::rpc::start_ws(
             conf.ws_config(),
             setup_public_rpc_apis_light(
                 common_impl.clone(),
@@ -155,7 +155,7 @@ impl LightClient {
             RpcExtractor,
         )?;
 
-        let rpc_http_server = super::rpc::start_http(
+        let rpc_http_server = crate::rpc::start_http(
             conf.http_config(),
             setup_public_rpc_apis_light(
                 common_impl,
