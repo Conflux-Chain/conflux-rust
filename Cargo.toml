@@ -348,7 +348,6 @@ bcs = "0.1.3"
 base64ct = "=1.1.1"
 order-stat = "0.1"
 criterion = "0.3"
-serial_test = "0.5.1"
 time = "0.1.34"
 smallvec = "1.4"
 matches = "0.1"
@@ -388,3 +387,8 @@ parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 substrate-bn = { git = "https://github.com/paritytech/bn", rev = "63f8c587356a67b33c7396af98e065b66fca5dda", default-features = false }
 ethcore-bytes = "0.1.1"
+
+# misc-testing
+similar-asserts = "1.5"
+assert_matches = "1.5"
+serial_test = "3.0"
