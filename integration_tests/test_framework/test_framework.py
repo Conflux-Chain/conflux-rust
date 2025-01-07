@@ -35,7 +35,7 @@ from eth_account import Account
 
 from .authproxy import JSONRPCException
 from . import coverage
-from .mininode import start_p2p_connection
+from .mininode import start_p2p_connection, NetworkThread
 from .test_node import TestNode
 from .util import (
     CONFLUX_RPC_WAIT_TIMEOUT,
@@ -94,6 +94,8 @@ class ConfluxTestFramework:
     _ew3: Union[Web3, None] = None
     num_nodes: int
     rpc: RpcClient
+    
+    network_thread: NetworkThread
     
     def _get_parser(self) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
@@ -222,6 +224,10 @@ class ConfluxTestFramework:
                 default=tempfile.mkdtemp(prefix="conflux_test_"))
 
         self._start_logging()
+        
+        self.log.debug('Setting up network thread')
+        self.network_thread = NetworkThread()
+        self.network_thread.start()
 
         if self.options.random_seed is not None:
             random.seed(self.options.random_seed)
@@ -277,6 +283,9 @@ class ConfluxTestFramework:
         logging.shutdown()
         if cleanup_tree_on_exit:
             shutil.rmtree(self.options.tmpdir)
+            
+        self.log.debug('Closing down network thread')
+        self.network_thread.close()
 
     def _add_genesis_secrets(
         self,
@@ -588,7 +597,6 @@ class ConfluxTestFramework:
                                self.extra_conf_files, self.core_secrets, self.evm_secrets)
             
     def before_test(self):
-        self.client.generate_blocks_to_state(num_txs=1)
         self.setup_w3()
 
     # wait for core space tx
