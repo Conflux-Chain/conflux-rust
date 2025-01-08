@@ -457,6 +457,7 @@ class NetworkThread(threading.Thread):
         wait_until(lambda: not self.network_event_loop.is_running(), timeout=timeout)
         self.network_event_loop.close()
         self.join(timeout)
+        NetworkThread.network_event_loop = None  # type: ignore
 
 
 def start_p2p_connection(nodes: list, remote=False):

@@ -95,8 +95,6 @@ class ConfluxTestFramework:
     num_nodes: int
     rpc: RpcClient
     
-    network_thread: NetworkThread
-    
     def _get_parser(self) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
         parser.add_argument(
@@ -188,7 +186,6 @@ class ConfluxTestFramework:
         self.port_min = port_min
         self.setup_clean_chain = True
         self.nodes: list[TestNode] = []
-        self.network_thread = None
         self.mocktime = 0
         self.rpc_timewait = CONFLUX_RPC_WAIT_TIMEOUT
         self.supports_cli = False
@@ -248,6 +245,8 @@ class ConfluxTestFramework:
             self.log.exception(f"{request.session.testsfailed} tests failed")
 
         self.log.debug('Closing down network thread')
+        self.network_thread.close()
+
         if not self.options.noshutdown:
             self.log.info("Stopping nodes")
             if self.nodes:
@@ -284,8 +283,6 @@ class ConfluxTestFramework:
         if cleanup_tree_on_exit:
             shutil.rmtree(self.options.tmpdir)
             
-        self.log.debug('Closing down network thread')
-        self.network_thread.close()
 
     def _add_genesis_secrets(
         self,
