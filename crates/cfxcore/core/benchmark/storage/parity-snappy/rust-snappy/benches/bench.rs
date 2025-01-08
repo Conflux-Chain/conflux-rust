@@ -14,11 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-#![feature(test)]
-extern crate test;
 
-extern crate parity_snappy as snappy;
-extern crate rand;
+use parity_snappy as snappy;
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,3 @@
-extern crate cmake;
-
 use std::env;
 use std::fs;
 
