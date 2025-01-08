@@ -240,31 +240,26 @@ impl OverlayAccount {
             && self.address.address != SYSTEM_STORAGE_ADDRESS
     }
 
-    // used for state override.diff
-    pub fn update_storage_read_cache(&mut self, key: Vec<u8>, value: U256) {
-        assert!(self.storage_write_checkpoint.is_none());
-        let owner = if self.address.space == Space::Native {
-            Some(self.address.address)
-        } else {
-            None
-        };
-        let storage_value = StorageValue { owner, value };
-        self.storage_read_cache
-            .write()
-            .insert(key.to_vec(), storage_value);
-    }
-
     pub fn override_storage_read_cache(
-        &mut self, state: &HashMap<H256, H256>, complete_override: bool,
+        &mut self, account_storage: &HashMap<H256, H256>,
+        complete_override: bool,
     ) {
         if complete_override {
             self.storage_read_cache.write().clear();
             self.storage_overrided = true;
         }
-        for (key, value) in state.iter() {
+        assert!(self.storage_write_checkpoint.is_none());
+        for (key, value) in account_storage {
             let key = key.as_bytes().to_vec();
             let value = U256::from_big_endian(value.as_bytes());
-            self.update_storage_read_cache(key, value);
+            // self.update_storage_read_cache(key, value);
+            let owner = if self.address.space == Space::Native {
+                Some(self.address.address)
+            } else {
+                None
+            };
+            let storage_value = StorageValue { owner, value };
+            self.storage_read_cache.write().insert(key, storage_value);
         }
     }
 

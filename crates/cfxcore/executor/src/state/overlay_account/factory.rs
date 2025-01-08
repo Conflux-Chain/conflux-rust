@@ -55,14 +55,14 @@ impl OverlayAccount {
         overlay_account
     }
 
-    pub fn from_loaded_and_override(
+    pub fn from_loaded_with_override(
         address: &AddressWithSpace, account: Account,
         acc_overrides: &AccountOverride,
     ) -> Self {
         let mut acc = Self::from_loaded(address, account);
 
         if let Some(balance) = acc_overrides.balance {
-            let curr_balance = acc.balance().clone();
+            let curr_balance = *acc.balance();
             if curr_balance > U256::zero() {
                 acc.sub_balance(&curr_balance);
             }
@@ -73,26 +73,21 @@ impl OverlayAccount {
             acc.set_nonce(&U256::from(nonce));
         }
 
-        if let Some(code) = acc_overrides.code.clone() {
-            acc.init_code(code, address.address);
+        if let Some(code) = acc_overrides.code.as_ref() {
+            acc.init_code(code.clone(), address.address);
         }
 
         match (
-            acc_overrides.state.clone(),
-            acc_overrides.state_diff.clone(),
+            acc_overrides.state.as_ref(),
+            acc_overrides.state_diff.as_ref(),
         ) {
-            (Some(state), None) => {
-                acc.override_storage_read_cache(&state, true);
+            (Some(state_override), None) => {
+                acc.override_storage_read_cache(state_override, true);
             }
             (None, Some(diff)) => {
-                acc.override_storage_read_cache(&diff, false);
+                acc.override_storage_read_cache(diff, false);
             }
-            (Some(_state), Some(_diff)) => unreachable!(), /* the rpc layer */
-            // will check
-            // this, so it
-            // should not
-            // happen here
-            (None, None) => {}
+            (_, _) => {}
         }
 
         if acc_overrides.move_precompile_to.is_some() {

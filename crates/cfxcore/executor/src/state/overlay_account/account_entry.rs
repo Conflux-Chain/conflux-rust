@@ -38,13 +38,13 @@ impl AccountEntry {
         }
     }
 
-    pub fn from_loaded_and_override(
+    pub fn from_loaded_with_override(
         address: &AddressWithSpace, account: Option<Account>,
         acc_overrides: &AccountOverride,
     ) -> Self {
         let acc = account.unwrap_or_else(|| Account::new_empty(address));
         Cached(
-            OverlayAccount::from_loaded_and_override(
+            OverlayAccount::from_loaded_with_override(
                 address,
                 acc,
                 acc_overrides,

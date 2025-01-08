@@ -12,6 +12,7 @@ impl State {
     ) -> DbResult<()> {
         assert!(self.checkpoints.read().is_empty());
 
+        let mut cache = self.cache.write();
         for (address, account) in state_override.iter() {
             let addr_with_space = AddressWithSpace {
                 address: address.to_owned(),
@@ -19,13 +20,13 @@ impl State {
             };
 
             let loaded_account = self.db.get_account(&addr_with_space)?;
-            let account_entry = AccountEntry::from_loaded_and_override(
+            let account_entry = AccountEntry::from_loaded_with_override(
                 &addr_with_space,
                 loaded_account,
                 account,
             );
 
-            self.cache.write().insert(addr_with_space, account_entry);
+            cache.insert(addr_with_space, account_entry);
         }
         Ok(())
     }
