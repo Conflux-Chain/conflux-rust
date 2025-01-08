@@ -189,6 +189,7 @@ impl OverlayAccount {
             && self.address.address.is_builtin_address();
         (self.is_newly_created_contract && !builtin_address)
             || self.pending_db_clear
+            || self.storage_overrided
     }
 }
 

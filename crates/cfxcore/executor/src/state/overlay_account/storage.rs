@@ -198,7 +198,7 @@ impl OverlayAccount {
     ) -> DbResult<StorageValue> {
         Ok(if let Some(value) = self.cached_entry_at(key) {
             value
-        } else if self.fresh_storage() || self.storage_overrided {
+        } else if self.fresh_storage() {
             StorageValue::default()
         } else {
             self.get_and_cache_storage(db, key)?
@@ -242,6 +242,7 @@ impl OverlayAccount {
 
     // used for state override.diff
     pub fn update_storage_read_cache(&mut self, key: Vec<u8>, value: U256) {
+        assert!(self.storage_write_checkpoint.is_none());
         let owner = if self.address.space == Space::Native {
             Some(self.address.address)
         } else {

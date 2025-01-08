@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use cfx_rpc_eth_types::AccountOverride;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
 use keccak_hash::KECCAK_EMPTY;
 use parking_lot::RwLock;
@@ -52,6 +53,53 @@ impl OverlayAccount {
         };
 
         overlay_account
+    }
+
+    pub fn from_loaded_and_override(
+        address: &AddressWithSpace, account: Account,
+        acc_overrides: &AccountOverride,
+    ) -> Self {
+        let mut acc = Self::from_loaded(address, account);
+
+        if let Some(balance) = acc_overrides.balance {
+            let curr_balance = acc.balance().clone();
+            if curr_balance > U256::zero() {
+                acc.sub_balance(&curr_balance);
+            }
+            acc.add_balance(&balance);
+        }
+
+        if let Some(nonce) = acc_overrides.nonce {
+            acc.set_nonce(&U256::from(nonce));
+        }
+
+        if let Some(code) = acc_overrides.code.clone() {
+            acc.init_code(code, address.address);
+        }
+
+        match (
+            acc_overrides.state.clone(),
+            acc_overrides.state_diff.clone(),
+        ) {
+            (Some(state), None) => {
+                acc.override_storage_read_cache(&state, true);
+            }
+            (None, Some(diff)) => {
+                acc.override_storage_read_cache(&diff, false);
+            }
+            (Some(_state), Some(_diff)) => unreachable!(), /* the rpc layer */
+            // will check
+            // this, so it
+            // should not
+            // happen here
+            (None, None) => {}
+        }
+
+        if acc_overrides.move_precompile_to.is_some() {
+            // TODO: impl move precompile to logic
+        }
+
+        acc
     }
 
     /// Create an OverlayAccount of basic account when the account doesn't exist
