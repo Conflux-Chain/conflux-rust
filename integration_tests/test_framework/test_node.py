@@ -75,7 +75,7 @@ class TestNode:
         self.process = None
         self.rpc_connected = False
         self.rpc: SimpleRpcProxy = None # type: ignore
-        self.ethrpc = None
+        self.ethrpc: SimpleRpcProxy = None
         self.ethrpc_connected = False
         self.log = logging.getLogger('TestFramework.node%d' % index)
         self.cleanup_on_exit = True
