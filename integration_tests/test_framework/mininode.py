@@ -10,7 +10,7 @@ from eth_utils import decode_hex
 from integration_tests.conflux import utils
 from integration_tests.conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from integration_tests.conflux.messages import *
-import asyncore
+import asyncio
 from collections import defaultdict
 from io import BytesIO
 import rlp
@@ -30,7 +30,7 @@ from integration_tests.test_framework.util import wait_until, get_ip_address
 logger = logging.getLogger("TestFramework.mininode")
 
 
-class P2PConnection(asyncore.dispatcher):
+class P2PConnection(asyncio.Protocol):
     """A low-level connection object to a node's P2P interface.
 
     This class is responsible for:
@@ -42,76 +42,70 @@ class P2PConnection(asyncore.dispatcher):
 
     This class contains no logic for handling the P2P message payloads. It must be
     sub-classed and the on_message() callback overridden."""
+    
+    protocol: bytes
 
     def __init__(self):
         self.chain_id = None
-        assert not network_thread_running()
-
-        super().__init__(map=mininode_socket_map)
+        self._transport = None
 
     def set_chain_id(self, chain_id):
         self.chain_id = chain_id
+    
+    @property
+    def is_connected(self):
+        return self._transport is not None
 
     def peer_connect(self, dstaddr, dstport):
+        assert not self.is_connected
         self.dstaddr = dstaddr
         self.dstport = dstport
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self.sendbuf = b""
         self.recvbuf = b""
-        self.state = "connecting"
-        self.disconnect = False
         self.had_hello = False
 
         logger.debug('Connecting to Conflux Node: %s:%d' %
                      (self.dstaddr, self.dstport))
+        
+        loop = NetworkThread.network_event_loop
+        conn_gen_unsafe = loop.create_connection(lambda: self, host=self.dstaddr, port=self.dstport)
+        conn_gen = lambda: loop.call_soon_threadsafe(loop.create_task, conn_gen_unsafe)
+        return conn_gen
 
-        try:
-            self.connect((dstaddr, dstport))
-        except Exception as e:
-            logger.debug("network connect error" + str(e))
-            self.handle_close()
 
     def peer_disconnect(self):
-        # Connection could have already been closed by other end.
-        if self.state == "connected":
-            self.disconnect_node()
+        NetworkThread.network_event_loop.call_soon_threadsafe(lambda: self._transport and self._transport.abort())
 
     # Connection and disconnection methods
 
-    def handle_connect(self):
-        """asyncore callback when a connection is opened."""
-        if self.state != "connected":
-            logger.debug("Connected & Listening: %s:%d" %
-                         (self.dstaddr, self.dstport))
-            self.state = "connected"
-            self.on_open()
+    def connection_made(self, transport):
+        """asyncio callback when a connection is opened."""
+        assert not self._transport
+        logger.debug("Connected & Listening: %s:%d" %
+                        (self.dstaddr, self.dstport))
+        self._transport = transport
+        self.on_open()
+        
+    def on_open(self):
+        pass
 
-    def handle_close(self):
-        """asyncore callback when a connection is closed."""
-        logger.debug("Closing connection to: %s:%d" %
-                     (self.dstaddr, self.dstport))
-        self.state = "closed"
+    def connection_lost(self, exc):
+        """asyncio callback when a connection is closed."""
+        if exc:
+            logger.warning("Connection lost to {}:{} due to {}".format(self.dstaddr, self.dstport, exc))
+        else:
+            logger.debug("Closed connection to: %s:%d" % (self.dstaddr, self.dstport))
+        self._transport = None
         self.recvbuf = b""
-        self.sendbuf = b""
-        try:
-            self.close()
-        except:
-            pass
         self.on_close()
 
-    def disconnect_node(self):
-        """Disconnect the p2p connection.
 
-        Called by the test logic thread. Causes the p2p connection
-        to be disconnected on the next iteration of the asyncore loop."""
-        self.disconnect = True
+    def on_close(self):
+        pass
 
     # Socket read methods
 
-    def handle_read(self):
-        """asyncore callback when data is read from the socket."""
-        buf = self.recv(8192)
+    def data_received(self, buf):
+        """asyncio callback when data is read from the socket."""
         if len(buf) > 0:
             self.recvbuf += buf
             self._on_data()
@@ -206,34 +200,7 @@ class P2PConnection(asyncore.dispatcher):
         """Callback for processing a protocol-specific P2P payload. Must be overridden by derived class."""
         raise NotImplementedError
 
-    # Socket write methods
-
-    def writable(self):
-        """asyncore method to determine whether the handle_write() callback should be called on the next loop."""
-        with mininode_lock:
-            pre_connection = self.state == "connecting"
-            length = len(self.sendbuf)
-        return (length > 0 or pre_connection)
-
-    def handle_write(self):
-        """asyncore callback when data should be written to the socket."""
-        with mininode_lock:
-            # asyncore does not expose socket connection, only the first read/write
-            # event, thus we must check connection manually here to know when we
-            # actually connect
-            if self.state == "connecting":
-                self.handle_connect()
-            if not self.writable():
-                return
-
-            try:
-                sent = self.send(self.sendbuf)
-            except:
-                self.handle_close()
-                return
-            self.sendbuf = self.sendbuf[sent:]
-
-    def send_packet(self, packet_id, payload, pushbuf=False):
+    def send_packet(self, packet_id, payload):
         """Send a P2P message over the socket.
 
         This method takes a P2P payload, builds the P2P header and adds
@@ -244,21 +211,13 @@ class P2PConnection(asyncore.dispatcher):
         self.send_data(buf)
 
 
-    def send_data(self, data, pushbuf=False):
-        if self.state != "connected" and not pushbuf:
+    def send_data(self, data):
+        if not self.is_connected:
             raise IOError('Not connected, no pushbuf')
 
         buf = self.assemble_connection_packet(data)
 
-        with mininode_lock:
-            if (len(self.sendbuf) == 0 and not pushbuf):
-                try:
-                    sent = self.send(buf)
-                    self.sendbuf = buf[sent:]
-                except BlockingIOError:
-                    self.sendbuf = buf
-            else:
-                self.sendbuf += buf
+        NetworkThread.network_event_loop.call_soon_threadsafe(lambda: self._transport and self._transport.write(buf))
 
     def send_protocol_packet(self, payload):
         """Send packet of protocols"""
@@ -321,7 +280,7 @@ class P2PInterface(P2PConnection):
         self.remote = remote
 
     def peer_connect(self, *args, **kwargs):
-        super().peer_connect(*args, **kwargs)
+        return super().peer_connect(*args, **kwargs)
 
     def wait_for_status(self, timeout=60):
         wait_until(lambda: self.had_status, timeout=timeout, lock=mininode_lock)
@@ -465,10 +424,6 @@ class P2PInterface(P2PConnection):
         resp = BlockHashes(reqid=msg.reqid, hashes=[])
         self.send_protocol_msg(resp)
 
-# Keep our own socket map for asyncore, so that we can track disconnects
-# ourselves (to work around an issue with closing an asyncore socket when
-# using select)
-mininode_socket_map = dict()
 
 # One lock for synchronizing all data access between the networking thread (see
 # NetworkThread below) and the thread running the test logic.  For simplicity,
@@ -483,46 +438,27 @@ class DefaultNode(P2PInterface):
         super().__init__(genesis, remote)
 
 class NetworkThread(threading.Thread):
+    network_event_loop: asyncio.AbstractEventLoop = None  # type: ignore
 
     def __init__(self):
         super().__init__(name="NetworkThread")
+        # There is only one event loop and no more than one thread must be created
+        assert not self.network_event_loop
+
+        NetworkThread.network_event_loop = asyncio.new_event_loop()
 
     def run(self):
-        while mininode_socket_map:
-            # We check for whether to disconnect outside of the asyncore
-            # loop to work around the behavior of asyncore when using
-            # select
-            disconnected = []
-            for fd, obj in mininode_socket_map.items():
-                if obj.disconnect:
-                    disconnected.append(obj)
-            [obj.handle_close() for obj in disconnected]
-            asyncore.loop(0.1, use_poll=True, map=mininode_socket_map, count=1)
-        logger.debug("Network thread closing")
+        """Start the network thread."""
+        self.network_event_loop.run_forever()
 
+    def close(self, timeout=10):
+        """Close the connections and network event loop."""
+        self.network_event_loop.call_soon_threadsafe(self.network_event_loop.stop)
+        wait_until(lambda: not self.network_event_loop.is_running(), timeout=timeout)
+        self.network_event_loop.close()
+        self.join(timeout)
+        NetworkThread.network_event_loop = None  # type: ignore
 
-def network_thread_running():
-    """Return whether the network thread is running."""
-    return any([thread.name == "NetworkThread" for thread in threading.enumerate()])
-
-
-def network_thread_start():
-    """Start the network thread."""
-    assert not network_thread_running()
-
-    NetworkThread().start()
-
-
-def network_thread_join(timeout=10):
-    """Wait timeout seconds for the network thread to terminate.
-
-    Throw if network thread doesn't terminate in timeout seconds."""
-    network_threads = [
-        thread for thread in threading.enumerate() if thread.name == "NetworkThread"]
-    assert len(network_threads) <= 1
-    for thread in network_threads:
-        thread.join(timeout)
-        assert not thread.is_alive()
 
 def start_p2p_connection(nodes: list, remote=False):
     if len(nodes) == 0:
@@ -537,8 +473,6 @@ def start_p2p_connection(nodes: list, remote=False):
         p2p_connections.append(conn)
         node.add_p2p_connection(conn)
 
-    network_thread_start()
-    
     for p2p in p2p_connections:
         p2p.wait_for_status()
 
