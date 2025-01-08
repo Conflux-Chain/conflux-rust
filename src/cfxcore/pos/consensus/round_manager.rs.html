@@ -1439,6 +1439,11 @@
 <a href="#1437" id="1437">1437</a>
 <a href="#1438" id="1438">1438</a>
 <a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -1910,6 +1915,11 @@
             );
         } <span class="kw">else </span>{
             <span class="macro">diem_debug!</span>(<span class="string">"Skip election for elected"</span>);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(node_data) = pos_state.account_node_data(author) {
+                <span class="kw">if </span>node_data.lock_status().force_retired().is_some() {
+                    <span class="macro">warn!</span>(<span class="string">"The node stops elections for force retire!"</span>);
+                }
+            }
         }
         <span class="prelude-val">Ok</span>(())
     }
