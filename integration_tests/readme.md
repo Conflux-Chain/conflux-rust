@@ -51,6 +51,18 @@ pytest integration_tests/tests -vv -n logical --dist loadscope
 > 
 > `--dist loadscope` controls how tests are distributed. The provided configuration groups tests by their scope—functions within the same module or methods within the same test class—and assigns each group to a single worker.
 
+Use pytest options to filter tests:
+
+```bash
+pytest integration_tests/tests -k test_name
+
+# Run tests in a specific file
+pytest integration_tests/tests/test_file.py
+
+# Run tests in a specific class
+pytest integration_tests/tests/test_file.py::test_name
+```
+
 #### VSCode
 
 Put the below configuration in `.vscode/settings.json`:
@@ -111,3 +123,32 @@ def network(framework_class: Type[ConfluxTestFramework], port_min: int, request:
 In the tests, you can start by directly using the `network` fixture for the test framework setup.
 
 You can overwrite the `framework_class` fixture in the test file to customize the test framework setup. Check [cip137_test.py](./tests/cip137_test.py) for an example.
+
+#### Common Fixtures
+
+Basic Fixtures:
+
+1. **`framework_class`**: The test framework class used to configure test parameters and start the test network. If a custom test framework (e.g., with specific parameters) is needed, this fixture can be overridden.  
+2. **`network`**: An instance of the `framework_class`.
+
+Core Space Fixtures:
+
+1. **`cw3`**: An instance of `python-conflux-sdk`.  
+2. **`core_accounts`**: Core Space accounts with a predefined CFX balance, ready for sending transactions.  
+3. **`client`**: An instance of [`RpcClient`](./conflux/rpc.py) that wraps Core Space RPC interfaces for easier usage.
+
+eSpace Fixtures:
+
+1. **`ew3`**: An instance of `web3.py`.  
+2. **`evm_accounts`**: eSpace accounts with a predefined CFX balance, ready for sending transactions.  
+
+### Add tests
+
+Create a new test file in the `tests` directory. The filename must include `test`, for example, `my_test.py`. Then, add test methods in the file with names that include `test`.
+
+```python
+def test_hello():
+    assert True
+```
+
+## FAQs

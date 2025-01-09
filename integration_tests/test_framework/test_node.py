@@ -54,13 +54,13 @@ class TestNode:
             self.ip = ip
             self.user = user
             self.rpcport = rpcport if rpcport is not None else remote_rpc_port(self.index)
-            self.ethrpcport = evm_rpc_port(self.index)
         else:
             self.ip = "127.0.0.1"
             self.rpcport = rpc_port(self.index)
-            self.ethrpcport = evm_rpc_port(self.index)
             self.ethwsport = evm_rpc_ws_port(self.index)
             self.pubsubport = pubsub_port(self.index)
+        self.ethrpcport = evm_rpc_port(self.index)
+        self.ethrpcportv2 = evm_rpc_port_v2(self.index)
         self.port = str(p2p_port(index))
         if self.rpchost is None:
             self.rpchost = ip  # + ":" + str(rpc_port(index))
@@ -75,7 +75,7 @@ class TestNode:
         self.process = None
         self.rpc_connected = False
         self.rpc: SimpleRpcProxy = None # type: ignore
-        self.ethrpc = None
+        self.ethrpc: SimpleRpcProxy = None
         self.ethrpc_connected = False
         self.log = logging.getLogger('TestFramework.node%d' % index)
         self.cleanup_on_exit = True
