@@ -141,7 +141,6 @@ eSpace Fixtures:
 
 1. **`ew3`**: An instance of `web3.py`.  
 2. **`evm_accounts`**: eSpace accounts with a predefined CFX balance, ready for sending transactions.  
-3. **`call_rpc`**: A utility function for calling RPC methods not supported by the SDK, specifically for eSpace RPC interfaces.
 
 ### Add tests
 
