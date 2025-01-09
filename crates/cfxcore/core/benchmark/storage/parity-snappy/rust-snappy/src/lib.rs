@@ -15,11 +15,6 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Snappy compression bindings.
-extern crate libc;
-extern crate parity_snappy_sys;
-#[cfg(test)]
-extern crate rand;
-
 use libc::size_t;
 use parity_snappy_sys as snappy;
 use std::fmt;
