@@ -105,7 +105,7 @@ def test_four_byte_trace(ew3, token_transfer):
     four_byte_trace = ew3.manager.request_blocking('debug_traceTransaction', [transfer_hash, {"tracer": "4byteTracer"}])
     assert four_byte_trace == {'0xa9059cbb-64': 1}
 
-def check_call_trace(ew3, token_transfer):
+def test_call_trace(ew3, token_transfer):
     transfer_hash = token_transfer["tx_hash"]
     call_trace = ew3.manager.request_blocking('debug_traceTransaction', [transfer_hash, {"tracer": "callTracer"}])
     assert call_trace["from"] == "0x0e768d12395c8abfdedf7b1aeb0dd1d27d5e2a7f"
@@ -114,7 +114,7 @@ def check_call_trace(ew3, token_transfer):
     assert call_trace["value"] == "0x0"
     assert call_trace["output"] == "0x0000000000000000000000000000000000000000000000000000000000000001"
 
-def check_opcode_trace_with_config(ew3, token_transfer):
+def test_opcode_trace_with_config(ew3, token_transfer):
     tx_hash = token_transfer["tx_hash"]
     trace = ew3.manager.request_blocking('debug_traceTransaction', [tx_hash, {
         "enableMemory": True,
