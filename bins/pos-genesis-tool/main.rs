@@ -21,7 +21,7 @@ use std::{
 
 use docopt::Docopt;
 use log::*;
-use rand::{rngs::StdRng, SeedableRng};
+use rand_08::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
 use serde::Deserialize;
 use tempdir::TempDir;

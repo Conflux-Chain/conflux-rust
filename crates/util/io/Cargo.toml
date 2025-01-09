@@ -14,9 +14,9 @@ crossbeam-channel = "0.4"
 parking_lot = { workspace = true }
 log = { workspace = true }
 slab = { workspace = true }
-num_cpus = "1.8"
+num_cpus = { workspace = true }
 timer = "0.2"
-time = "0.1"
+time = { workspace = true }
 metrics = { workspace = true }
 lazy_static = { workspace = true }
 

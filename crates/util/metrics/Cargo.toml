@@ -7,7 +7,7 @@ edition = "2021"
 lazy_static = { workspace = true }
 parking_lot = { workspace = true }
 timer = "0.2.0"
-time = "0.1"
+time = { workspace = true }
 rand = { workspace = true }
 influx_db_client = "0.5.1"
 log = { workspace = true }
@@ -19,7 +19,7 @@ serde = { workspace = true }
 duration-str = "0.5.1"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { workspace = true }
 
 [[bench]]
 name = "benchmark"
