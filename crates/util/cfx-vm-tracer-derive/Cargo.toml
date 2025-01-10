@@ -9,6 +9,6 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-syn = "1"
+syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }

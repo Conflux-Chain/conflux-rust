@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 substrate-bn = { workspace = true, default-features = false }
-byteorder = "1.0"
+byteorder = { workspace = true }
 cfxkey = { workspace = true }
 cfx-bytes = { workspace = true }
 cfx-math = { workspace = true }
@@ -25,7 +25,7 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
-num = "0.2"
+num = { workspace = true }
 parity-crypto = { workspace = true }
 parking_lot = { workspace = true }
 primitives = { workspace = true }
@@ -45,12 +45,12 @@ tiny-keccak = { workspace = true,  features = ["keccak"]}
 diem-crypto = { workspace = true }
 diem-types = { workspace = true }
 pow-types = { workspace = true }
-impl-trait-for-tuples = "^0.2"
-impl-tools = "^0.10"
-typemap = { package = "typemap-ors", version = "1.0"}
+impl-trait-for-tuples = { workspace = true }
+impl-tools = { workspace = true }
+typemap = { workspace = true }
 hex-literal = { workspace = true }
-derive_more = "0.99"
-c-kzg = { version = "1.0.2", default-features = false}
+derive_more = { workspace = true }
+c-kzg = { workspace = true }
 once_cell = { workspace = true }
 rayon = { workspace = true }
 cfx-parity-trace-types = { workspace = true }

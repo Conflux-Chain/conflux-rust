@@ -12,7 +12,7 @@ cfx-parameters = { workspace = true }
 cfx-db-errors = { workspace = true }
 cfx-storage = { workspace = true }
 cfx-types = { workspace = true }
-hashbrown = "0.7.1"
+hashbrown = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 primitives = { workspace = true, optional = true }
