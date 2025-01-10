@@ -7,15 +7,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-fnv = "1.0"
+fnv = { workspace = true }
 mio = { workspace = true }
-crossbeam-deque = "0.7"
-crossbeam-channel = "0.4"
+crossbeam-deque = { workspace = true }
+crossbeam-channel = { workspace = true }
 parking_lot = { workspace = true }
 log = { workspace = true }
 slab = { workspace = true }
 num_cpus = { workspace = true }
-timer = "0.2"
+timer = { workspace = true }
 time = { workspace = true }
 metrics = { workspace = true }
 lazy_static = { workspace = true }

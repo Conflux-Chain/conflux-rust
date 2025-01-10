@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 num = { workspace = true }
 cfx-types = { workspace = true }
-unroll = "0.1.5"
+unroll = { workspace = true }
 typenum = { workspace = true }
 
 [dev-dependencies]

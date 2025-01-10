@@ -242,6 +242,7 @@ diem-network-address-encryption = { path = "./crates/pos/config/management/netwo
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = "1.0"
+proc-macro-crate = "3"
 
 serde = { version = "1.0", features = [
     "derive",
@@ -261,6 +262,8 @@ anyhow = "1.0"
 parking_lot = "0.11"
 rayon = "1.10"
 threadpool = "1.7"
+crossbeam-deque = "0.7"
+crossbeam-channel = "0.4"
 
 # alloy & revm
 alloy-sol-types = "0.7.2"
@@ -308,6 +311,7 @@ tracing-futures = "0.2"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
 tokio01 = { version = "0.1", package = "tokio" }
+timer = "0.2" # outdated
 
 # crypto & hash
 fixed-hash = "0.5"
@@ -396,6 +400,13 @@ fs_extra = "1.1.0"
 fs-swap = "0.2.4"
 regex = "1.3.1"
 cfg-if = "0.1"
+unroll = "0.1.5"
+atom = "0.3"
+fnv = "1.0"
+winapi = "0.3.7"
+synstructure = "0.12"
+lru-cache = "0.1"
+duration-str = "0.5.1"
 
 # conflux forked crates
 rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "3773afe5b953997188f37c39308105b5deb0faac" }
@@ -428,3 +439,4 @@ proptest-derive = "0.3.0"
 sqlite = "0.25"
 sqlite3-sys = "0.12"
 kvdb = "0.4"
+influx_db_client = "0.5.1"
