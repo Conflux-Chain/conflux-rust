@@ -8,7 +8,6 @@ description.workspace = true
 documentation.workspace = true
 
 [dependencies]
-# mio = { workspace = true }
 clap = { workspace = true, features = ["yaml"] }
 textwrap = { workspace = true }
 toml = { workspace = true }
@@ -41,7 +40,7 @@ primitives = { workspace = true }
 log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 rlp = { workspace = true }
 keccak-hash = { workspace = true }
-rand = "0.8.3"
+rand_08 = { workspace = true }
 kvdb-rocksdb = { workspace = true }
 client = { workspace = true }
 cfx-types = { workspace = true }

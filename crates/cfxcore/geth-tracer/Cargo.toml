@@ -14,12 +14,12 @@ license-file.workspace = true
 
 [dependencies]
 alloy-primitives = { workspace = true }
-alloy-sol-types = "0.7.1"
-revm = { version = "8.0", default-features = false, features = ["std"] }
+alloy-sol-types = { workspace = true }
+revm = { workspace = true, default-features = false, features = ["std"] }
 alloy-rpc-types-trace = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-types = { workspace = true }
 cfx-executor = { workspace = true }
-typemap = { package = "typemap-ors", version = "1.0"}
+typemap = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 primitives = { workspace = true }

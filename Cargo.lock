@@ -1794,7 +1794,6 @@ dependencies = [
  "primal",
  "primitives",
  "priority-send-queue",
- "prometheus 0.7.0",
  "proptest",
  "proptest-derive",
  "rand 0.7.3",
@@ -2883,7 +2882,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.11.2",
  "pipe-logger-lib",
- "prometheus 0.12.0",
+ "prometheus",
  "serde",
  "serde_json",
 ]
@@ -2899,7 +2898,7 @@ dependencies = [
  "futures 0.3.30",
  "hyper 0.14.25",
  "once_cell",
- "prometheus 0.12.0",
+ "prometheus",
  "rusty-fork",
  "serde_json",
  "tokio 1.40.0",
@@ -2909,7 +2908,7 @@ dependencies = [
 name = "diem-metrics-core"
 version = "0.1.0"
 dependencies = [
- "prometheus 0.12.0",
+ "prometheus",
 ]
 
 [[package]]
@@ -6927,19 +6926,6 @@ dependencies = [
 
 [[package]]
 name = "prometheus"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5567486d5778e2c6455b1b90ff1c558f29e751fc018130fa182e15828e728af1"
-dependencies = [
- "cfg-if 0.1.10",
- "fnv",
- "lazy_static",
- "quick-error",
- "spin 0.5.2",
-]
-
-[[package]]
-name = "prometheus"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5986aa8d62380092d2f50f8b1cdba9cb9b6731ffd4b25b51fd126b6c3e05b99c"
@@ -7482,14 +7468,11 @@ dependencies = [
  "auto_impl",
  "bitflags 2.5.0",
  "bitvec 1.0.1",
- "c-kzg",
  "cfg-if 1.0.0",
- "derive_more",
  "dyn-clone",
  "enumn",
  "hashbrown 0.14.3",
  "hex",
- "once_cell",
  "serde",
 ]
 

@@ -10,13 +10,13 @@ edition = "2021"
 malloc_size_of = { workspace = true }
 primitives = { workspace = true }
 rand = { workspace = true }
-rand_xorshift = "0.2"
+rand_xorshift = { workspace = true }
 
 [dev-dependencies]
-rand_chacha = "0.2.1"
+rand_chacha = { workspace = true }
 cfx-types = { workspace = true }
 cfxkey = { workspace = true }
-criterion = "0.3.0"
+criterion = { workspace = true }
 
 [features]
 testonly_code = []
