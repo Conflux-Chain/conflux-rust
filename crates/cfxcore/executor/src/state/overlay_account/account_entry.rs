@@ -17,7 +17,6 @@ pub enum AccountEntry {
 }
 
 use cfx_parameters::genesis::GENESIS_ACCOUNT_ADDRESS;
-use cfx_rpc_eth_types::AccountOverride;
 use cfx_types::AddressWithSpace;
 use primitives::Account;
 use AccountEntry::*;
@@ -36,21 +35,6 @@ impl AccountEntry {
             ),
             None => DbAbsent,
         }
-    }
-
-    pub fn from_loaded_with_override(
-        address: &AddressWithSpace, account: Option<Account>,
-        acc_overrides: &AccountOverride,
-    ) -> Self {
-        let acc = account.unwrap_or_else(|| Account::new_empty(address));
-        Cached(
-            OverlayAccount::from_loaded_with_override(
-                address,
-                acc,
-                acc_overrides,
-            ),
-            true,
-        )
     }
 
     pub fn is_dirty(&self) -> bool { matches!(self, Cached(_, true)) }

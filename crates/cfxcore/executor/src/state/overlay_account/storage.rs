@@ -7,12 +7,12 @@ use cfx_parameters::{
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
-use cfx_types::{Address, Space, H256, U256};
+use cfx_types::{Address, Space, U256};
 
 use primitives::{
     SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
 };
-use std::collections::{hash_map::Entry::*, HashMap};
+use std::collections::hash_map::Entry::*;
 
 use super::OverlayAccount;
 
@@ -238,29 +238,6 @@ impl OverlayAccount {
     pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {
         self.address.space == Space::Native
             && self.address.address != SYSTEM_STORAGE_ADDRESS
-    }
-
-    pub fn override_storage_read_cache(
-        &mut self, account_storage: &HashMap<H256, H256>,
-        complete_override: bool,
-    ) {
-        if complete_override {
-            self.storage_read_cache.write().clear();
-            self.storage_overrided = true;
-        }
-        assert!(self.storage_write_checkpoint.is_none());
-        for (key, value) in account_storage {
-            let key = key.as_bytes().to_vec();
-            let value = U256::from_big_endian(value.as_bytes());
-            // self.update_storage_read_cache(key, value);
-            let owner = if self.address.space == Space::Native {
-                Some(self.address.address)
-            } else {
-                None
-            };
-            let storage_value = StorageValue { owner, value };
-            self.storage_read_cache.write().insert(key, storage_value);
-        }
     }
 
     pub fn change_storage_value(

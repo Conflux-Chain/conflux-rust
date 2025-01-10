@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use cfx_rpc_eth_types::AccountOverride;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
 use keccak_hash::KECCAK_EMPTY;
 use parking_lot::RwLock;
@@ -53,48 +52,6 @@ impl OverlayAccount {
         };
 
         overlay_account
-    }
-
-    pub fn from_loaded_with_override(
-        address: &AddressWithSpace, account: Account,
-        acc_overrides: &AccountOverride,
-    ) -> Self {
-        let mut acc = Self::from_loaded(address, account);
-
-        if let Some(balance) = acc_overrides.balance {
-            let curr_balance = *acc.balance();
-            if curr_balance > U256::zero() {
-                acc.sub_balance(&curr_balance);
-            }
-            acc.add_balance(&balance);
-        }
-
-        if let Some(nonce) = acc_overrides.nonce {
-            acc.set_nonce(&U256::from(nonce));
-        }
-
-        if let Some(code) = acc_overrides.code.as_ref() {
-            acc.init_code(code.clone(), address.address);
-        }
-
-        match (
-            acc_overrides.state.as_ref(),
-            acc_overrides.state_diff.as_ref(),
-        ) {
-            (Some(state_override), None) => {
-                acc.override_storage_read_cache(state_override, true);
-            }
-            (None, Some(diff)) => {
-                acc.override_storage_read_cache(diff, false);
-            }
-            (_, _) => {}
-        }
-
-        if acc_overrides.move_precompile_to.is_some() {
-            // TODO: impl move precompile to logic
-        }
-
-        acc
     }
 
     /// Create an OverlayAccount of basic account when the account doesn't exist

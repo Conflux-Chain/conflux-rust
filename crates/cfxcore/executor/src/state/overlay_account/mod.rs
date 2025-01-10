@@ -45,6 +45,8 @@ mod storage;
 
 mod checkpoints;
 
+mod state_override;
+
 #[cfg(test)]
 mod tests;
 
