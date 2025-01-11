@@ -9,45 +9,26 @@ documentation.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["yaml"] }
-textwrap = { workspace = true }
-toml = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_derive = { workspace = true }
 parking_lot = { workspace = true }
-panic_hook = { workspace = true }
-app_dirs = { workspace = true }
-dir = { workspace = true }
 cfxstore = { workspace = true }
-cfxcore-accounts = { workspace = true }
-home = { workspace = true }
 rpassword = { workspace = true }
 io = { workspace = true }
-ctrlc = { workspace = true }
 jsonrpc-core = { workspace = true }
-jsonrpc-tcp-server = { workspace = true }
-jsonrpc-http-server = { workspace = true }
 jsonrpc-core-client = { workspace = true, features = ["http"] }
 log = { workspace = true }
-slab = { workspace = true }
 cfxcore = { workspace = true }
 network = { workspace = true }
 db = { workspace = true }
-blockgen = { workspace = true }
-txgen = { workspace = true }
-secret-store = { workspace = true }
 primitives = { workspace = true }
 log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 rlp = { workspace = true }
-keccak-hash = { workspace = true }
 rand_08 = { workspace = true }
-kvdb-rocksdb = { workspace = true }
 client = { workspace = true }
 cfx-types = { workspace = true }
-threadpool = { workspace = true }
 docopt = { workspace = true }
 cfxkey = { workspace = true }
-parity-wordlist = { workspace = true }
 rustc-hex = { workspace = true }
 env_logger = { workspace = true }
 malloc_size_of = { workspace = true }
@@ -56,11 +37,8 @@ diem-types = { workspace = true }
 pos-ledger-db = { workspace = true }
 executor = { workspace = true }                                           # used by pos-genesis-tool
 storage-interface = { workspace = true }
-move-core-types = { workspace = true }
 bcs = { workspace = true }
 tempdir = { workspace = true }
-hex = { workspace = true }
-base64ct = { workspace = true }
 parity-version = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 bls-signatures = { workspace = true }

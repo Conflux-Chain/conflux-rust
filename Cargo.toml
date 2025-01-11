@@ -150,7 +150,7 @@ sha3-macro = { path = "./crates/util/sha3-macro" }
 dag = { path = "./crates/util/dag" }
 cfx-vm-tracer-derive = { path = "./crates/util/cfx-vm-tracer-derive" }
 parity-version = { path = "./crates/util/version" }
-log-device = { path = "./crates/util/log_device" }
+#log-device = { path = "./crates/util/log_device" }
 solidity-abi-derive = { path = "./crates/util/solidity-abi-derive" }
 io = { path = "./crates/util/io" }
 metrics = { path = "./crates/util/metrics" }
@@ -209,7 +209,7 @@ short-hex-str = { path = "./crates/pos/common/short-hex-str" }
 subscription-service = { path = "./crates/pos/common/subscription-service" }
 diem-temppath = { path = "./crates/pos/common/temppath" }
 diem-time-service = { path = "./crates/pos/common/time-service" }
-generate-key = { path = "./crates/pos/config/generate-key" }
+#generate-key = { path = "./crates/pos/config/generate-key" }
 diem-global-constants = { path = "./crates/pos/config/global-constants" }
 diem-config = { path = "./crates/pos/config/config" }
 consensus-types = { path = "./crates/pos/consensus/consensus-types" }
@@ -227,7 +227,7 @@ pos-ledger-db = { path = "./crates/pos/storage/pos-ledger-db" }
 schemadb = { path = "./crates/pos/storage/schemadb" }
 scratchpad = { path = "./crates/pos/storage/scratchpad" }
 diem-state-view = { path = "./crates/pos/storage/state-view" }
-storage-client = { path = "./crates/pos/storage/storage-client" }
+#storage-client = { path = "./crates/pos/storage/storage-client" }
 storage-interface = { path = "./crates/pos/storage/storage-interface" }
 executor-types = { path = "./crates/pos/types/executor-types" }
 move-core-types = { path = "./crates/pos/types/move-core-types" }
@@ -258,8 +258,8 @@ rustc-hex = "2.1"
 hex-literal = "0.4.1"
 
 # error handling
-fail = "0.4.0"
-thiserror = "1.0.63"
+fail = "0.5.1"
+thiserror = "2.0.11"
 anyhow = "1.0"
 
 # parallelism
