@@ -12,5 +12,4 @@ proc-macro2 = { workspace = true }
 keccak-hash = { workspace = true }
 
 [lib]
-name = "sha3_macro"
 proc-macro = true
