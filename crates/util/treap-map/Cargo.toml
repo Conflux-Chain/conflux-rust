@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# malloc_size_of_derive = {path = "../malloc_size_of_derive"}
 malloc_size_of = { workspace = true }
 primitives = { workspace = true }
 rand = { workspace = true }

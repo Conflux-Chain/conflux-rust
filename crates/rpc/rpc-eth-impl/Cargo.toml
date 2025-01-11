@@ -21,8 +21,6 @@ cfx-rpc-primitives = { workspace = true }
 cfx-rpc-cfx-impl = { workspace = true }
 async-trait = { workspace = true }
 keccak-hash = { workspace = true}
-parity-version = { workspace = true }
-clap = { workspace = true }
 alloy-rpc-types = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
 cfxcore = { workspace = true }

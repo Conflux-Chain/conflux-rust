@@ -36,8 +36,6 @@ diem-types = { workspace = true }
 num-variants = { workspace = true }
 schemadb = { workspace = true }
 storage-interface = { workspace = true }
-consensus-types = { workspace = true }
-executor-types = { workspace = true }
 
 [dev-dependencies]
 proptest = "1.0.0"

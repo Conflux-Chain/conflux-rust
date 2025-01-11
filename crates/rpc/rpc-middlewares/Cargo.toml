@@ -13,9 +13,7 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jsonrpc-core = { workspace = true }
 jsonrpsee = { workspace = true ,features = ["server","ws-client"]}
-rustls = { workspace = true, features = ["dangerous_configuration"] }
 throttling = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }

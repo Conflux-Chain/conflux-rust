@@ -13,9 +13,7 @@ cfx-types = { workspace = true }
 keccak-hash = { workspace = true }
 primitives = { workspace = true }
 rlp = { workspace = true }
-rlp_derive = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
-serde_derive = { workspace = true }
 solidity-abi = { workspace = true }
 
 [features]

@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cfx-types = { workspace = true }
 parking_lot = { workspace = true }
 rand = { workspace = true }
 malloc_size_of = { workspace = true }
-malloc_size_of_derive = { workspace = true }
