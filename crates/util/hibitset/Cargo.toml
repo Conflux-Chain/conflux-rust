@@ -13,7 +13,6 @@ edition = "2021"
 [dependencies]
 atom = { workspace = true }
 malloc_size_of = { workspace = true }
-malloc_size_of_derive = { workspace = true }
 rayon = { workspace = true, optional = true }
 
 [dev-dependencies]

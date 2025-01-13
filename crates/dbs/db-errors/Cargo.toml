@@ -13,4 +13,3 @@ rlp = { workspace = true }
 sqlite = { workspace = true }
 strfmt = { workspace = true }
 thiserror ={ workspace = true }
-cfx-util-macros ={ workspace = true}
