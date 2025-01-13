@@ -2,6 +2,7 @@ import pytest
 import argparse
 import os
 from typing import Type
+from eth_utils import decode_hex
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
 from integration_tests.conflux.rpc import RpcClient
@@ -148,3 +149,19 @@ def core_accounts(network: ConfluxTestFramework):
 @pytest.fixture(scope="module")
 def evm_accounts(network: ConfluxTestFramework):
     return network.evm_accounts
+
+@pytest.fixture(scope="module")
+def cross_space_transfer(network: ConfluxTestFramework):
+    def _cross_space_transfer(to, value):
+        to = to.replace('0x', '')
+        tx = network.rpc.new_tx(
+            value=value,
+            receiver="0x0888000000000000000000000000000000000006",
+            data=decode_hex(f"0xda8d5daf{to}000000000000000000000000"),
+            nonce=network.rpc.get_nonce(network.rpc.GENESIS_ADDR),
+            gas=1000000,
+        )
+        balance = network.rpc.get_balance(network.rpc.GENESIS_ADDR)
+        network.rpc.send_tx(tx, True)
+        
+    return _cross_space_transfer

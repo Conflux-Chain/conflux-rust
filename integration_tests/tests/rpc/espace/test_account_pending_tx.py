@@ -22,8 +22,6 @@ def test_account_pending_tx(ew3, evm_accounts):
 
     raw_tx = signed_tx.raw_transaction.hex()
 
-    print(raw_tx)
-
     tx_hash = ew3.eth.send_raw_transaction(raw_tx)
 
     pending_txs = ew3.manager.request_blocking('eth_getAccountPendingTransactions', [new_account.address])

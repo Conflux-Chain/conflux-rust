@@ -338,7 +338,10 @@ class RpcClient:
             self.generate_blocks_to_state(num_txs=num_txs)
 
         def check_tx():
-            self.generate_block(num_txs)
+            block_hash = self.generate_block(num_txs)
+            print(block_hash)
+            epoch = self.epoch_number()
+            print(epoch)
             return checktx(self.node, tx_hash)
 
         try:

@@ -1,29 +1,4 @@
 import pytest
-from integration_tests.test_framework.util import load_contract_metadata
-
-@pytest.fixture(scope="module")
-def erc20_contract(ew3, evm_accounts):
-    account = evm_accounts[0]
-    contract_meta = load_contract_metadata("MyToken")
-    # deploy contract
-    TokenContract = ew3.eth.contract(abi=contract_meta['abi'], bytecode=contract_meta['bytecode'])
-    tx_hash = TokenContract.constructor(account.address).transact()
-    ew3.eth.wait_for_transaction_receipt(tx_hash)
-
-    # create erc20 contract instance
-    deploy_receipt = ew3.eth.get_transaction_receipt(tx_hash)
-    assert deploy_receipt["status"] == 1
-    erc20_address = deploy_receipt["contractAddress"]
-    token_contract = ew3.eth.contract(address=erc20_address, abi=contract_meta['abi'])
-
-    # mint 100 tokens to creator
-    mint_hash = token_contract.functions.mint(account.address, ew3.to_wei(100, "ether")).transact()
-    ew3.eth.wait_for_transaction_receipt(mint_hash)
-    
-    return {
-        "contract": token_contract,
-        "deploy_hash": tx_hash,
-    }
 
 @pytest.fixture(scope="module")
 def token_transfer(erc20_contract, ew3):
