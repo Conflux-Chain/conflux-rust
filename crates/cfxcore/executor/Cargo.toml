@@ -15,7 +15,6 @@ cfx-math = { workspace = true }
 cfx-internal-common = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-statedb = { workspace = true }
-cfx-vm-tracer-derive = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
@@ -23,26 +22,17 @@ cfx-util-macros = { workspace = true }
 keccak-hash = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
-malloc_size_of = { workspace = true }
-malloc_size_of_derive = { workspace = true }
 num = { workspace = true }
 parity-crypto = { workspace = true }
 parking_lot = { workspace = true }
 primitives = { workspace = true }
 rlp ={ workspace = true }
-rlp_derive = { workspace = true }
 rustc-hex = { workspace = true }
-serde = { workspace = true, features = ["rc"] }
-serde_derive = { workspace = true }
-serde_json = { workspace = true }
 solidity-abi = { workspace = true }
 solidity-abi-derive = { workspace = true }
 sha3-macro = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
 bls-signatures = { workspace = true }
 tiny-keccak = { workspace = true,  features = ["keccak"]}
-diem-crypto = { workspace = true }
 diem-types = { workspace = true }
 pow-types = { workspace = true }
 impl-trait-for-tuples = { workspace = true }

@@ -7,12 +7,9 @@ edition = "2021"
 lazy_static = { workspace = true }
 parking_lot = { workspace = true }
 timer = { workspace = true }
-time = { workspace = true }
 rand = { workspace = true }
 influx_db_client = { workspace = true }
 log = { workspace = true }
-log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
-futures = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }

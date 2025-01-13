@@ -12,7 +12,6 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.38"
 once_cell = "1.7.2"
-diem-config = { workspace = true }
 diem-logger = { workspace = true }
 diem-metrics = { workspace = true }
 rocksdb = { workspace = true }

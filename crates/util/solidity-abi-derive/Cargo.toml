@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
 syn = { workspace = true, features=["parsing"] } # feature "extra-traits" for debug
 quote = { workspace = true }
 proc-macro2 = { workspace = true }

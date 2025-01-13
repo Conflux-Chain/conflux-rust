@@ -7,31 +7,24 @@ version = { workspace = true }
 edition = "2021"
 
 [dependencies]
-bit-set = { workspace = true }
-substrate-bn = { workspace = true, default-features = false }
 byteorder = { workspace = true }
 cfxkey = { workspace = true }
 cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
-cfx-math = { workspace = true }
 cfx-internal-common = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-statedb = { workspace = true }
 cfx-storage = { workspace = true }
-cfx-vm-tracer-derive = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
-cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 channel = { workspace = true }
 clap = { workspace = true }
 dag = { workspace = true }
-derivative = { workspace = true }
 db = { workspace = true }
 either = { workspace = true }
 fallible-iterator = { workspace = true }
-fs_extra = { workspace = true }
 futures = { workspace = true, features = ["compat"] }
 hashbrown = { workspace = true }
 hibitset = { workspace = true }
@@ -40,7 +33,6 @@ io = { workspace = true }
 jsonrpc-core = { workspace = true }
 keccak-hash = { workspace = true }
 kvdb = { workspace = true }
-kvdb-rocksdb = { workspace = true }
 lazy_static = { workspace = true }
 link-cut-tree = { workspace = true }
 log = { workspace = true }
@@ -48,14 +40,10 @@ log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 lru_time_cache = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
-memmap = { workspace = true }
-memoffset = { workspace = true }
-memory-cache = { workspace = true }
 metrics = { workspace = true }
 network = { workspace = true }
 num = { workspace = true }
 num-traits = { workspace = true, default-features = false }
-parity-crypto = { workspace = true }
 parking_lot = { workspace = true }
 primal = { workspace = true }
 primitives = { workspace = true }
@@ -64,7 +52,6 @@ rand = { workspace = true }
 rand_08 = { workspace = true }
 rand_xorshift = { workspace = true }
 rangetools = { workspace = true }
-random-crash = { workspace = true }
 rayon = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
@@ -76,13 +63,7 @@ serde_json = { workspace = true }
 siphasher = { workspace = true }
 slab = { workspace = true }
 solidity-abi = { workspace = true }
-solidity-abi-derive = { workspace = true }
-sha3-macro = { workspace = true }
-sqlite = { workspace = true }
-sqlite3-sys = { workspace = true }
 static_assertions = { workspace = true }
-strfmt = { workspace = true }
-tempdir = { workspace = true }
 threadpool = { workspace = true }
 throttling = { workspace = true }
 toml = { workspace = true }
@@ -106,7 +87,6 @@ diem-crypto = { workspace = true }
 diem-infallible = { workspace = true }
 diem-logger = { workspace = true }
 diem-metrics = { workspace = true }
-diem-secure-storage = { workspace = true }
 diem-types = { workspace = true }
 executor-types = { workspace = true }
 executor = { workspace = true }
@@ -123,14 +103,11 @@ anyhow = { workspace = true }
 once_cell = { workspace = true }
 move-core-types = { workspace = true }
 pow-types = { workspace = true }
-async-oneshot = { workspace = true }
 proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 diem-temppath = { workspace = true }
 crash-handler = { workspace = true }
 heap-map = { workspace = true }
-impl-trait-for-tuples = { workspace = true }
-impl-tools = { workspace = true }
 treap-map = { workspace = true }
 cfx-packing-pool = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
@@ -140,10 +117,8 @@ cfx-rpc-eth-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 cfx-rpc-utils = { workspace = true }
 cfx-util-macros = { workspace = true }
-parity-util-mem = { workspace = true, default-features = false }
 
 [dev-dependencies]
-criterion = { workspace = true }
 cfx-storage = { workspace = true, features = ["testonly_code"] }
 cfx-vm-types = { workspace = true, features = ["testonly_code"] }
 proptest = { workspace = true }

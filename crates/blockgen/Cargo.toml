@@ -7,21 +7,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { workspace = true }
 cfxcore = { workspace = true }
-cfxkey = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-stratum = { workspace = true }
 cfx-types = { workspace = true }
-db = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 metrics = { workspace = true }
-network = { workspace = true }
 primitives = { workspace = true }
 parking_lot = { workspace = true }
-rlp = { workspace = true }
 rand = { workspace = true }
-secret-store = { workspace = true }
-toml = { workspace = true }
 txgen = { workspace = true }

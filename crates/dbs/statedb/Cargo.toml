@@ -18,7 +18,6 @@ parking_lot = { workspace = true }
 primitives = { workspace = true, optional = true }
 rlp = { workspace = true }
 tiny-keccak = { workspace = true }
-lazy_static = { workspace = true }
 cfx-util-macros ={ workspace = true}
 
 [dev-dependencies]

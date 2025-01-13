@@ -11,8 +11,6 @@ edition = "2018"
 
 [dependencies]
 get_if_addrs = { version = "0.5.3", default-features = false }
-log = { workspace = true, features = ["serde"] }
-mirai-annotations = "1.10.1"
 rand = "0.8.3"
 serde = { version = "1.0.124", features = ["rc"], default-features = false }
 serde_yaml = "0.8.17"
@@ -20,7 +18,6 @@ thiserror = "1.0.24"
 
 bcs = "0.1.2"
 diem-crypto = { workspace = true }
-diem-crypto-derive = { workspace = true }
 diem-global-constants = { workspace = true }
 diem-logger = { workspace = true }
 diem-network-address-encryption = { workspace = true }

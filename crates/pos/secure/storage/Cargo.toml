@@ -30,7 +30,6 @@ diem-types = { workspace = true }
 
 [dev-dependencies]
 diem-crypto = { workspace = true, features = ["fuzzing"] }
-diem-crypto-derive = { workspace = true }
 rand = "0.8.3"
 
 [features]
