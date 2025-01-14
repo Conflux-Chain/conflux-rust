@@ -43,6 +43,8 @@ mod storage_entry;
 
 mod reward;
 
+mod state_override;
+
 #[cfg(test)]
 mod tests;
 

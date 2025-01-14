@@ -45,6 +45,8 @@ mod storage;
 
 mod checkpoints;
 
+mod state_override;
+
 #[cfg(test)]
 mod tests;
 
@@ -156,6 +158,12 @@ pub struct OverlayAccount {
     /// cleared later. It will be set when such a contract has been killed
     /// since last commit.
     pending_db_clear: bool,
+
+    /// Indicates whether the storage cache entries of this account have been
+    /// overrided by the passed-in storage entries.
+    /// When this flag is set, the storage entries will only be read from the
+    /// cache
+    storage_overrided: bool,
 }
 
 impl OverlayAccount {
@@ -183,6 +191,7 @@ impl OverlayAccount {
             && self.address.address.is_builtin_address();
         (self.is_newly_created_contract && !builtin_address)
             || self.pending_db_clear
+            || self.storage_overrided
     }
 }
 
