@@ -216,7 +216,11 @@ impl TransactionRequest {
         let tx = Transaction::Native(typed_native_tx);
         let password = password.map(Password::from);
         let sig = accounts
-            .sign(self.from.unwrap().into(), password, tx.signature_hash())
+            .sign(
+                self.from.unwrap().into(),
+                password,
+                tx.hash_for_compute_signature(),
+            )
             // TODO: sign error into secret store error codes.
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 

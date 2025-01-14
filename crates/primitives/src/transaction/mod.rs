@@ -397,10 +397,10 @@ impl Transaction {
         base_price + self.priority_gas_price(base_price)
     }
 
-    // This function returns the hash value used in transaction signature. It is
-    // different from transaction hash. The transaction hash also contains
-    // signatures.
-    pub fn signature_hash(&self) -> H256 {
+    // This function returns the hash value used in calculating the transaction
+    // signature. It is different from transaction hash. The transaction
+    // hash also contains signatures.
+    pub fn hash_for_compute_signature(&self) -> H256 {
         let mut s = RlpStream::new();
         let mut type_prefix = vec![];
         match self {
@@ -444,8 +444,11 @@ impl Transaction {
     }
 
     pub fn sign(self, secret: &Secret) -> SignedTransaction {
-        let sig = crate::keylib::sign(secret, &self.signature_hash())
-            .expect("data is valid and context has signing capabilities; qed");
+        let sig =
+            crate::keylib::sign(secret, &self.hash_for_compute_signature())
+                .expect(
+                    "data is valid and context has signing capabilities; qed",
+                );
         let tx_with_sig = self.with_signature(sig);
         let public = tx_with_sig
             .recover_public()
@@ -843,7 +846,7 @@ impl TransactionWithSignature {
 
     /// Used to compute hash of created transactions
     fn compute_hash(mut self) -> TransactionWithSignature {
-        let hash = keccak(&*self.rlp_bytes());
+        let hash = keccak(&*self.transaction.rlp_bytes());
         self.hash = hash;
         self
     }
@@ -881,7 +884,10 @@ impl TransactionWithSignature {
 
     /// Recovers the public key of the sender.
     pub fn recover_public(&self) -> Result<Public, keylib::Error> {
-        Ok(recover(&self.signature(), &self.unsigned.signature_hash())?)
+        Ok(recover(
+            &self.signature(),
+            &self.unsigned.hash_for_compute_signature(),
+        )?)
     }
 
     pub fn rlp_size(&self) -> usize {
@@ -1017,7 +1023,7 @@ impl SignedTransaction {
             Ok(verify_public(
                 &public,
                 &self.signature(),
-                &self.unsigned.signature_hash(),
+                &self.unsigned.hash_for_compute_signature(),
             )?)
         } else {
             Ok(true)
