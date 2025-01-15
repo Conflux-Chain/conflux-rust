@@ -149,3 +149,7 @@ def core_accounts(network: ConfluxTestFramework):
 @pytest.fixture(scope="module")
 def evm_accounts(network: ConfluxTestFramework):
     return network.evm_accounts
+
+@pytest.fixture(scope="module")
+def receiver_account(ew3):
+    return ew3.eth.account.create()
