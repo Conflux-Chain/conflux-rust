@@ -1,7 +1,9 @@
 import pytest
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
 from integration_tests.test_framework.util import *
-# from integration_tests.test_framework.blocktools import encode_hex_0x
+from eth_utils import decode_hex
+from integration_tests.conflux.rpc import RpcClient
+from integration_tests.test_framework.blocktools import encode_hex_0x
 
 @pytest.fixture(scope="module")
 def framework_class():
@@ -12,8 +14,12 @@ def framework_class():
             self.conf_parameters["evm_transaction_block_ratio"] = str(1)
             self.conf_parameters["executive_trace"] = "true"
             self.conf_parameters["cip1559_transition_height"] = str(1)
-            self.conf_parameters["min_eth_base_price"] = 20 * (10**9)
+            # self.conf_parameters["min_eth_base_price"] = 20 * (10**9)
             self.conf_parameters["tx_pool_allow_gas_over_half_block"] = "true"
+
+        def setup_network(self):
+            self.setup_nodes()
+            self.rpc = RpcClient(self.nodes[0])
     return Framework
 
 def test_cross_space_transfer(cw3, ew3, erc20_contract, evm_accounts, network):
@@ -43,9 +49,9 @@ def test_tx_and_receipt(ew3, evm_accounts, receiver_account, network):
     assert receipt["gasFee"] == "0x5208"
     assert receipt["txExecErrorMsg"] == None
 
-    # tx = ew3.eth.get_transaction(tx_hash)
-    # ret1 = network.nodes[0].debug_getTransactionsByEpoch(hex(receipt["blockNumber"]))
-    # ret2 = network.nodes[0].debug_getTransactionsByBlock(encode_hex_0x(tx["blockHash"]))
-    # assert len(ret1) == 1
-    # assert len(ret2) == 1
-    # assert ret1[0] == ret2[0]
+    tx = ew3.eth.get_transaction(tx_hash)
+    ret1 = network.nodes[0].debug_getTransactionsByEpoch(hex(receipt["blockNumber"]))
+    ret2 = network.nodes[0].debug_getTransactionsByBlock(encode_hex_0x(tx["blockHash"]))
+    assert len(ret1) == 1
+    assert len(ret2) == 1
+    assert ret1[0] == ret2[0]

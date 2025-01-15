@@ -2,6 +2,30 @@ from integration_tests.test_framework.util import *
 
 # send tx rpc error tests
 
+def test_valid_tx(ew3, evm_accounts):
+    account = evm_accounts[0]
+    nonce = ew3.eth.get_transaction_count(account.address)
+
+    signed = account.sign_transaction({
+        "to": account.address,
+        "value": 1,
+        "maxFeePerGas": 1,
+        "maxPriorityFeePerGas": 1,
+        "gas": 21000,
+        "nonce": nonce,
+        "chainId": 10,
+    })
+
+    tx_hash = ew3.eth.send_raw_transaction(signed["raw_transaction"])
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
+
+    next_nonce = ew3.eth.get_transaction_count(account.address)
+    assert_equal(next_nonce, nonce + 1)
+
+    tx = ew3.eth.get_transaction(tx_hash)
+    assert_equal(tx["nonce"], nonce)
+    assert_equal(tx["type"], 2)
+
 def test_invalid_chain_id(ew3, evm_accounts):
     account = evm_accounts[0]
     nonce = ew3.eth.get_transaction_count(account.address)
@@ -142,27 +166,3 @@ def test_zero_gas_price(ew3, evm_accounts):
     except Exception as e:
         assert_equal(str(e), "{'code': -32603, 'message': 'transaction underpriced'}")
         return
-
-def test_valid_tx(ew3, evm_accounts):
-    account = evm_accounts[0]
-    nonce = ew3.eth.get_transaction_count(account.address)
-
-    signed = account.sign_transaction({
-        "to": account.address,
-        "value": 1,
-        "maxFeePerGas": 1,
-        "maxPriorityFeePerGas": 1,
-        "gas": 21000,
-        "nonce": nonce,
-        "chainId": 10,
-    })
-
-    tx_hash = ew3.eth.send_raw_transaction(signed["raw_transaction"])
-    ew3.eth.wait_for_transaction_receipt(tx_hash)
-
-    next_nonce = ew3.eth.get_transaction_count(account.address)
-    assert_equal(next_nonce, nonce + 1)
-
-    tx = ew3.eth.get_transaction(tx_hash)
-    assert_equal(tx["nonce"], nonce)
-    assert_equal(tx["type"], 2)

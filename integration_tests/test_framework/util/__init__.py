@@ -25,7 +25,7 @@ import shutil
 import math
 from os.path import dirname, join
 from pathlib import Path
-from web3.exceptions import Web3RPCError
+from web3.exceptions import Web3RPCError, ContractLogicError
 
 from integration_tests.test_framework.simple_rpc_proxy import SimpleRpcProxy
 from .. import coverage
@@ -194,6 +194,12 @@ def assert_raises_web3_rpc_error(code: Optional[int], message: Optional[str], fu
             if not getattr(error, "data", None) or (err_data_ not in cast(str, error['data'])):
                 raise AssertionError(f"Expected substring not found: {error['data']}")
         return True
+    except ContractLogicError as e:
+        if (message is not None) and (message not in e.message):
+            raise AssertionError(f"Expected substring not found: {e.message}")
+        if (err_data_ is not None):
+            if not getattr(e, "data", None) or (err_data_ not in cast(str, e.data)):
+                raise AssertionError(f"Expected substring not found: {e.data}")
     except Exception as e:
         raise AssertionError("Unexpected exception raised: " + type(e).__name__)
     else:

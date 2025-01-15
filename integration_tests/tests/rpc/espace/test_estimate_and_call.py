@@ -60,21 +60,18 @@ def test_revert(ew3):
     custom_err_msg = "execution reverted: revert:"
     custom_err_data = "0xcf47918100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
 
-    assert_raises_web3_rpc_error(3, custom_err_msg, ew3.eth.estimate_gas, call_request, err_data_=custom_err_data)
-    assert_raises_web3_rpc_error(3, custom_err_msg, ew3.eth.call, call_request, err_data_=custom_err_data)
-
-    # try:
-    #     ew3.manager.request_blocking('eth_estimateGas', [call_request])
-    # except Exception as e:
-    #     assert custom_err_msg in e.rpc_response['error']['message']
-    #     assert e.rpc_response['error']['code'] == 3
-    #     assert e.rpc_response['error']['data'] == custom_err_data
-    # try:
-    #     ew3.manager.request_blocking('eth_call', [call_request])
-    # except Exception as e:
-    #     assert custom_err_msg in e.rpc_response['error']['message']
-    #     assert e.rpc_response['error']['code'] == 3
-    #     assert e.rpc_response['error']['data'] == custom_err_data
+    try:
+        ew3.manager.request_blocking('eth_estimateGas', [call_request])
+    except Exception as e:
+        assert custom_err_msg in e.rpc_response['error']['message']
+        assert e.rpc_response['error']['code'] == 3
+        assert e.rpc_response['error']['data'] == custom_err_data
+    try:
+        ew3.manager.request_blocking('eth_call', [call_request])
+    except Exception as e:
+        assert custom_err_msg in e.rpc_response['error']['message']
+        assert e.rpc_response['error']['code'] == 3
+        assert e.rpc_response['error']['data'] == custom_err_data
 
 def test_eth_call_unkown_field(ew3):
     call_request = {

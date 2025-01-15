@@ -27,14 +27,9 @@ def test_eth_call_support_both_data_and_input(erc20_contract, ew3, evm_accounts)
 def test_empty_block_tx_root(ew3, network):
     empty_hash = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
     block_number = ew3.eth.block_number
-    network.rpc.generate_block(1) # seems this method is not functional
-    # network.rpc.generate_block(1)
-    # network.rpc.generate_block(1)
-    # network.rpc.generate_block(1)
-    # network.rpc.generate_block(1)
-    network.rpc.generate_blocks(10)
-    block_number2 = ew3.eth.block_number
-    print(block_number, block_number2)
+    network.rpc.generate_blocks(5) # need to generate a few more blocks to make the block_number + 1 available 
+    # block_number2 = ew3.eth.block_number
+    # print("block_number", block_number2)
     block = ew3.eth.get_block(block_number + 1)
     assert block["receiptsRoot"].to_0x_hex() == empty_hash
     assert block["transactionsRoot"].to_0x_hex() == empty_hash
