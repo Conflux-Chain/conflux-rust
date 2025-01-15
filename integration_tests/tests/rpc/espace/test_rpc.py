@@ -36,5 +36,5 @@ def test_empty_block_tx_root(ew3, network):
     block_number2 = ew3.eth.block_number
     print(block_number, block_number2)
     block = ew3.eth.get_block(block_number + 1)
-    assert block["receiptsRoot"] == empty_hash
-    assert block["transactionsRoot"] == empty_hash
+    assert block["receiptsRoot"].to_0x_hex() == empty_hash
+    assert block["transactionsRoot"].to_0x_hex() == empty_hash
