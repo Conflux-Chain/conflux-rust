@@ -1,6 +1,7 @@
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter as Filter, FeeHistory,
-    Header, Log, Receipt, SyncStatus, Transaction, TransactionRequest,
+    AccountPendingTransactions, Block, BlockNumber as BlockId,
+    EthRpcLogFilter as Filter, FeeHistory, Header, Log, Receipt, SyncStatus,
+    Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index};
 use cfx_types::{Address, H256, H64, U256, U64};
@@ -327,6 +328,10 @@ pub trait EthApi {
     #[method(name = "sendRawTransaction")]
     async fn send_raw_transaction(&self, bytes: Bytes) -> RpcResult<H256>;
 
+    /// @alias of `eth_sendRawTransaction`.
+    #[method(name = "submitTransaction")]
+    async fn submit_transaction(&self, transaction: Bytes) -> RpcResult<H256>;
+
     /// Returns an Ethereum specific signature with:
     /// sign(keccak256("\x19Ethereum Signed Message:\n"
     /// + len(message) + message))).
@@ -360,4 +365,10 @@ pub trait EthApi {
     /// Returns logs matching given filter object.
     #[method(name = "getLogs")]
     async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>>;
+
+    #[method(name = "getAccountPendingTransactions")]
+    async fn account_pending_transactions(
+        &self, address: Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> RpcResult<AccountPendingTransactions>;
 }

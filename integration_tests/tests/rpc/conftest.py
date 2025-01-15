@@ -4,4 +4,4 @@ from integration_tests.conflux.rpc import RpcClient
 
 @pytest.fixture(scope="module")
 def client(network: ConfluxTestFramework) -> RpcClient:
-    return network.rpc
+    return network.client
