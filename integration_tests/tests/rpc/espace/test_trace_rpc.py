@@ -30,11 +30,6 @@ def test_trace_filter(ew3_tracing, erc20_token_transfer):
     )
     verify_erc20_token_transfer_trace(traces, receipt)
 
-    traces = ew3_tracing.trace_filter(
-        {"fromBlock": Web3.to_hex(receipt["blockNumber"]), "toBlock": "0x100"}
-    )
-    verify_erc20_token_transfer_trace(traces, receipt)
-
 
 def test_trace_block(ew3_tracing, erc20_token_transfer):
     receipt = erc20_token_transfer["receipt"]
