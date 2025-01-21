@@ -1,3 +1,4 @@
+from conflux_web3 import Web3
 import pytest
 import argparse
 import os
@@ -5,6 +6,7 @@ from typing import Type
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
 from integration_tests.conflux.rpc import RpcClient
+from web3.tracing import Tracing
 
 TMP_DIR = None
 
@@ -138,8 +140,13 @@ def cw3(network: ConfluxTestFramework):
     return network.cw3
 
 @pytest.fixture(scope="module")
-def ew3(network: ConfluxTestFramework):
+def ew3(network: ConfluxTestFramework) -> Web3:
     return network.ew3
+
+@pytest.fixture(scope="module")
+def ew3_tracing(ew3): 
+    tracing: 'Tracing' = ew3.tracing
+    return tracing
 
 @pytest.fixture(scope="module")
 def core_accounts(network: ConfluxTestFramework):

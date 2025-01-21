@@ -1,0 +1,70 @@
+from web3 import Web3
+from integration_tests.test_framework.util import load_contract_metadata
+from integration_tests.test_framework.test_framework import ConfluxTestFramework
+from integration_tests.conflux.rpc import RpcClient
+from typing import Dict, Type
+import pytest
+from web3.types import TxReceipt
+
+
+@pytest.fixture(scope="module")
+def framework_class() -> Type[ConfluxTestFramework]:
+    class DefaultFramework(ConfluxTestFramework):
+        def set_test_params(self):
+            self.num_nodes = 1
+            self.conf_parameters["min_native_base_price"] = 10000
+            self.conf_parameters["next_hardfork_transition_height"] = 1
+            self.conf_parameters["next_hardfork_transition_number"] = 1
+            self.conf_parameters["public_evm_rpc_async_apis"] = (
+                '"all"'  # open all async apis
+            )
+            self.conf_parameters["executive_trace"] = "true"
+
+        def setup_network(self):
+            self.setup_nodes()
+            self.rpc = RpcClient(self.nodes[0])
+
+    return DefaultFramework
+
+
+@pytest.fixture(scope="module")
+def erc20_contract(ew3, evm_accounts):
+    account = evm_accounts[0]
+    contract_meta = load_contract_metadata("MyToken")
+    # deploy contract
+    TokenContract = ew3.eth.contract(
+        abi=contract_meta["abi"], bytecode=contract_meta["bytecode"]
+    )
+    tx_hash = TokenContract.constructor(account.address).transact()
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
+
+    # create erc20 contract instance
+    deploy_receipt = ew3.eth.get_transaction_receipt(tx_hash)
+    assert deploy_receipt["status"] == 1
+    erc20_address = deploy_receipt["contractAddress"]
+    token_contract = ew3.eth.contract(address=erc20_address, abi=contract_meta["abi"])
+
+    # mint 100 tokens to creator
+    mint_hash = token_contract.functions.mint(
+        account.address, ew3.to_wei(100, "ether")
+    ).transact()
+    ew3.eth.wait_for_transaction_receipt(mint_hash)
+
+    return {
+        "contract": token_contract,
+        "deploy_hash": tx_hash,
+    }
+
+
+@pytest.fixture(scope="module")
+def erc20_token_transfer(erc20_contract, ew3: Web3) -> Dict[str, TxReceipt]:
+    to_address = ew3.eth.account.create().address
+    token_contract = erc20_contract["contract"]
+    transfer_hash = token_contract.functions.transfer(
+        to_address, ew3.to_wei(1, "ether")
+    ).transact()
+    receipt: TxReceipt = ew3.eth.wait_for_transaction_receipt(transfer_hash)
+    return {
+        "tx_hash": transfer_hash,
+        "receipt": receipt,
+    }
