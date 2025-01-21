@@ -756,7 +756,7 @@ where Message: Send + Sync + 'static
         *self.network_poll_thread.lock() = Some(thread);
     }
 
-    /// Regiter an IO handler with the event loop.
+    /// Register an IO handler with the event loop.
     pub fn register_handler(
         &self, handler: Arc<dyn IoHandler<Message> + Send>,
     ) -> Result<(), IoError> {

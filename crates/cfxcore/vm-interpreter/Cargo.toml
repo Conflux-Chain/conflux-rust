@@ -7,7 +7,7 @@ version = "2.0.2"
 edition = "2021"
 
 [dependencies]
-bit-set = "0.4"
+bit-set = { workspace = true }
 cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }

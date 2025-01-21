@@ -11,8 +11,6 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-extern crate proc_macro;
-
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::{

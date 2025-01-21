@@ -14,11 +14,9 @@ arc-swap = "1.2.0"
 itertools = { workspace = true }
 
 diem-crypto = { workspace = true }
-diem-infallible = { workspace = true }
 diem-types = { workspace = true }
 
 [dev-dependencies]
-proptest = "1.0.0"
 
 [features]
 default = []

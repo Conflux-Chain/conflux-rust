@@ -1,0 +1,29 @@
+[package]
+name = "cfx-rpc-middlewares"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+jsonrpsee = { workspace = true ,features = ["server","ws-client"]}
+throttling = { workspace = true }
+futures-util = { workspace = true }
+log = { workspace = true }
+jsonrpsee-types = { workspace = true }
+cfx-rpc-utils = { workspace = true }
+cfx-util-macros = { workspace = true }
+lazy_static = { workspace = true }  
+parking_lot = { workspace = true }
+metrics = { workspace = true }
+futures = { workspace = true }
+tracing-subscriber = {version = "=0.3.0",features = ["env-filter"]}
+anyhow = {workspace = true}
+tokio = { workspace = true }

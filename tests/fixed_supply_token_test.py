@@ -6,7 +6,7 @@ from test_framework.smart_contract_bench_base import SmartContractBenchBase
 from web3 import Web3
 import os
 
-from test_framework.util import get_contract_instance
+from test_framework.util import load_contract_metadata
 
 
 class FixedTokenSupplyTokenTest(SmartContractBenchBase):
@@ -18,9 +18,11 @@ class FixedTokenSupplyTokenTest(SmartContractBenchBase):
         self.accounts = []
 
     def setup_contract(self):
-        file_dir = os.path.dirname(os.path.realpath(__file__))
-        self.contract = get_contract_instance(source=os.path.join(file_dir, "contracts/fixed_supply_token.sol"),
-                                                   contract_name="FixedSupplyToken")
+        metadata = load_contract_metadata("ERC20")
+        self.contract = Web3().eth.contract(
+            abi=metadata["abi"],
+            bytecode=metadata["bytecode"],
+        )
         self.log.info("Initializing contract")
 
         transaction = self.call_contract_function(self.contract, "constructor", [], self.default_account_key, storage_limit=20000)
