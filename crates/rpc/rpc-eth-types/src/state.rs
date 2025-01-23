@@ -33,12 +33,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A set of account overrides
-pub type StateOverride = HashMap<Address, AccountOverride>;
+pub type RpcStateOverride = HashMap<Address, RpcAccountOverride>;
 
-/// Custom account override used in call
+/// Custom account override used in rpc call
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
-pub struct AccountOverride {
+pub struct RpcAccountOverride {
     /// Fake balance to set for the account before executing the call.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub balance: Option<U256>,
@@ -72,6 +72,43 @@ pub struct AccountOverride {
     )]
     pub move_precompile_to: Option<Address>,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AccountStateOverrideMode {
+    State(HashMap<H256, H256>),
+    Diff(HashMap<H256, H256>),
+    None,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AccountOverride {
+    pub balance: Option<U256>,
+    pub nonce: Option<u64>,
+    pub code: Option<Bytes>,
+    pub state: AccountStateOverrideMode,
+    pub move_precompile_to: Option<Address>,
+}
+
+impl TryFrom<RpcAccountOverride> for AccountOverride {
+    type Error = &'static str;
+
+    fn try_from(value: RpcAccountOverride) -> Result<Self, Self::Error> {
+        Ok(Self {
+            balance: value.balance,
+            nonce: value.nonce,
+            code: value.code,
+            state: match (value.state, value.state_diff) {
+                (Some(state), None) => AccountStateOverrideMode::State(state),
+                (None, Some(diff)) => AccountStateOverrideMode::Diff(diff),
+                (None, None) => AccountStateOverrideMode::None,
+                _ => return Err("state and stateDiff are mutually exclusive"),
+            },
+            move_precompile_to: value.move_precompile_to,
+        })
+    }
+}
+
+pub type StateOverride = HashMap<Address, AccountOverride>;
 
 /// Helper type that bundles various overrides for EVM Execution.
 ///
@@ -137,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_default_account_override() {
-        let acc_override = AccountOverride::default();
+        let acc_override = RpcAccountOverride::default();
         assert!(acc_override.balance.is_none());
         assert!(acc_override.nonce.is_none());
         assert!(acc_override.code.is_none());
@@ -155,7 +192,7 @@ mod tests {
             }
         }"#;
 
-        let _: StateOverride = serde_json::from_str(invalid_json).unwrap();
+        let _: RpcStateOverride = serde_json::from_str(invalid_json).unwrap();
     }
 
     #[test]
@@ -168,7 +205,7 @@ mod tests {
             }
         }"#;
 
-        let state_override: StateOverride =
+        let state_override: RpcStateOverride =
             serde_json::from_str(large_values_json).unwrap();
         let acc = state_override
             .get(&address("1234567890123456789012345678901234567890").unwrap())
@@ -185,7 +222,7 @@ mod tests {
                 "code": "0x6080604052348015600e575f80fd5b50600436106026575f3560e01c80632096525514602a575b5f80fd5b60306044565b604051901515815260200160405180910390f35b5f604e600242605e565b5f0360595750600190565b505f90565b5f82607757634e487b7160e01b5f52601260045260245ffd5b50069056fea2646970667358221220287f77a4262e88659e3fb402138d2ee6a7ff9ba86bae487a95aa28156367d09c64736f6c63430008140033"
             }
         }"#;
-        let state_override: StateOverride = serde_json::from_str(s).unwrap();
+        let state_override: RpcStateOverride = serde_json::from_str(s).unwrap();
         let acc = state_override
             .get(&address("0000000000000000000000000000000000000124").unwrap())
             .unwrap();
@@ -206,7 +243,7 @@ mod tests {
                     }
                 }
             }"#;
-        let state_override: StateOverride = serde_json::from_str(s).unwrap();
+        let state_override: RpcStateOverride = serde_json::from_str(s).unwrap();
         let acc = state_override
             .get(&address("1b5212AF6b76113afD94cD2B5a78a73B7d7A8222").unwrap())
             .unwrap();

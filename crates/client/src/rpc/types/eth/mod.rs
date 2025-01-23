@@ -3,10 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 pub use cfx_rpc_eth_types::{
-    eth_pubsub, trace_filter::TraceFilter, AccountPendingTransactions, Block,
-    BlockNumber, BlockOverrides, EthRpcLogFilter, EvmOverrides, FilterChanges,
-    Header, Log, Receipt, StateOverride, SyncInfo, SyncStatus, Transaction,
-    TransactionRequest,
+    eth_pubsub, trace_filter::TraceFilter, AccountOverride,
+    AccountPendingTransactions, Block, BlockNumber, BlockOverrides,
+    EthRpcLogFilter, EvmOverrides, FilterChanges, Header, Log, Receipt,
+    RpcStateOverride, SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 
 pub use cfx_rpc_cfx_types::trace_eth::{LocalizedTrace, Res};

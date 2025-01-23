@@ -1,5 +1,5 @@
 use super::{AccountEntry, OverlayAccount};
-use cfx_rpc_eth_types::AccountOverride;
+use cfx_rpc_eth_types::{AccountOverride, AccountStateOverrideMode};
 use cfx_types::{AddressWithSpace, Space, H256, U256};
 use primitives::{Account, StorageValue};
 use std::{collections::HashMap, sync::Arc};
@@ -44,17 +44,14 @@ impl OverlayAccount {
             acc.init_code(code.clone(), address.address);
         }
 
-        match (
-            acc_overrides.state.as_ref(),
-            acc_overrides.state_diff.as_ref(),
-        ) {
-            (Some(state_override), None) => {
+        match &acc_overrides.state {
+            AccountStateOverrideMode::State(state_override) => {
                 acc.override_storage_read_cache(state_override, true);
             }
-            (None, Some(diff)) => {
+            AccountStateOverrideMode::Diff(diff) => {
                 acc.override_storage_read_cache(diff, false);
             }
-            (_, _) => {}
+            AccountStateOverrideMode::None => {}
         }
 
         if acc_overrides.move_precompile_to.is_some() {

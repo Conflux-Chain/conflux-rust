@@ -9,8 +9,8 @@ use crate::rpc::{
     types::{
         eth::{
             AccountPendingTransactions, Block as RpcBlock, BlockNumber,
-            BlockOverrides, EthRpcLogFilter, EvmOverrides, Log, Receipt,
-            StateOverride, SyncStatus, Transaction, TransactionRequest,
+            BlockOverrides, EthRpcLogFilter, Log, Receipt, RpcStateOverride,
+            SyncStatus, Transaction, TransactionRequest,
         },
         Bytes, FeeHistory, Index, U64 as HexU64,
     },
@@ -263,20 +263,18 @@ impl Eth for EthHandler {
     fn call(
         &self, request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
-        state_overrides: Option<StateOverride>,
+        state_overrides: Option<RpcStateOverride>,
         block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
         debug!(
             "RPC Request: eth_call(request={:?}, block_num={:?})",
             request, block_number_or_hash
         );
-
-        let evm_overrides = EvmOverrides::new(state_overrides, block_overrides);
-
         let (execution, _estimation) = self.inner.exec_transaction(
             request,
             block_number_or_hash,
-            evm_overrides,
+            state_overrides,
+            block_overrides,
         )?;
 
         Ok(execution.output.into())
@@ -285,17 +283,17 @@ impl Eth for EthHandler {
     fn estimate_gas(
         &self, request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
-        state_override: Option<StateOverride>,
+        state_overrides: Option<RpcStateOverride>,
     ) -> RpcResult<U256> {
         debug!(
             "RPC Request: eth_estimateGas(request={:?}, block_num={:?})",
             request, block_number_or_hash
         );
-        let evm_overrides = EvmOverrides::new(state_override, None);
         let (_, estimated_gas) = self.inner.exec_transaction(
             request,
             block_number_or_hash,
-            evm_overrides,
+            state_overrides,
+            None,
         )?;
 
         Ok(estimated_gas)
