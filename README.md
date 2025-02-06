@@ -31,10 +31,13 @@ Unit tests come together with the Rust code. They can be invoked via `cargo test
 [Getting Started](https://doc.confluxnetwork.org/docs/general/run-a-node/)
 page for more information. 
 
-Integration tests are Python test scripts with the `_test.py` suffix in the `tests` directory. 
+Integration tests are Python test scripts with the `_test.py` suffix in the `tests` directory and in the `integration_tests/tests` directory.
 To run these tests, first compile Conflux in _release_ mode using `cargo build --release` and 
 fetch all submodule using `git submodule update --remote --recursive --init`.
-Then, you can run all integration tests using the script `tests/test_all.py`.
+Then, you can run all integration tests using:
+
+- `tests/test_all.py` for tests in the `tests` directory
+- `pytest ./integration_tests/tests -vv -n 6 --dist loadscope` for tests in the `integration_tests` directory
 
 ## Resources
 
