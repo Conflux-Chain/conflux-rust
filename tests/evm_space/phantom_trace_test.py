@@ -31,7 +31,7 @@ def number_to_topic(number):
 def mapped_address(hex_addr):
     return "0x" + keccak(bytes.fromhex(hex_addr.replace("0x", "")))[12:].hex()
 
-class PhantomTransactionTest(Web3Base):
+class PhantomTraceTest(Web3Base):
     def run_test(self):
         # initialize Conflux account
         self.cfxPrivkey = default_config['GENESIS_PRI_KEY']
@@ -610,4 +610,4 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(filtered, None)
 
 if __name__ == "__main__":
-    PhantomTransactionTest().main()
+    PhantomTraceTest().main()

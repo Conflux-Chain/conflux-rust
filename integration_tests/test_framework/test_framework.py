@@ -635,6 +635,11 @@ class ConfluxTestFramework:
         metadata = load_contract_metadata(name)
         return self.cfx.contract(
             abi=metadata["abi"], bytecode=metadata["bytecode"])
+    
+    def evm_contract(self, name):
+        metadata = load_contract_metadata(name)
+        return self.eth.contract(
+            abi=metadata["abi"], bytecode=metadata["bytecode"])
 
     def internal_contract(self, name: InternalContractName):
         return self.cfx.contract(name=name, with_deployment_info=True)
@@ -643,6 +648,11 @@ class ConfluxTestFramework:
         tx_hash = self.cfx_contract(name).constructor().transact(transact_args)
         receipt = tx_hash.executed(timeout=30)
         return self.cfx_contract(name)(cast(str, receipt["contractCreated"]))
+    
+    def deploy_evm_contract(self,name,transact_args = {}):
+        tx_hash = self.evm_contract(name).constructor().transact(transact_args)
+        receipt = self.eth.wait_for_transaction_receipt(tx_hash)
+        return self.evm_contract(name)(cast(str, receipt["contractAddress"]))
 
 class SkipTest(Exception):
     """This exception is raised to skip a test"""
