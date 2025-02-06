@@ -675,7 +675,6 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
     """
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
-    threads = []
     num_nodes = len(nodes)
     sample = min(num_nodes - 1, sample)
 
@@ -699,6 +698,7 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
 
     for i in range(0, num_nodes, max_parallel):
         batch = range(i, min(i + max_parallel, num_nodes))
+        threads = []
         for j in batch:
             t = ConnectThread(nodes, j, peer[j], latencies, log, min_peers=sample)
             t.start()
