@@ -9,7 +9,7 @@ from integration_tests.conflux.utils import sha3 as keccak
 
 TEST_EVENT_TOPIC = encode_hex_0x(keccak(b"TestEvent(uint256)"))
 
-
+# TODO: add test case
 def test_a(gen_txs):
     pass
 
