@@ -1,8 +1,9 @@
+from hexbytes import HexBytes
 from web3 import Web3
 from integration_tests.test_framework.util import load_contract_metadata
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
 from integration_tests.conflux.rpc import RpcClient
-from typing import Dict, Type
+from typing import Dict, Type, TypedDict
 import pytest
 from web3.types import TxReceipt
 
@@ -55,9 +56,12 @@ def erc20_contract(ew3, evm_accounts):
         "deploy_hash": tx_hash,
     }
 
+class ERC20TransferResult(TypedDict):
+    tx_hash: HexBytes
+    receipt: TxReceipt
 
 @pytest.fixture(scope="module")
-def erc20_token_transfer(erc20_contract, ew3: Web3) -> Dict[str, TxReceipt]:
+def erc20_token_transfer(erc20_contract, ew3: Web3) -> ERC20TransferResult:
     to_address = ew3.eth.account.create().address
     token_contract = erc20_contract["contract"]
     transfer_hash = token_contract.functions.transfer(
