@@ -8,7 +8,7 @@ use cfxkey::Address;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
 
-use super::{AccessList, AuthorizationList, AuthorizationListItem};
+use super::{AccessList, AuthorizationListItem};
 
 #[derive(
     Default,
