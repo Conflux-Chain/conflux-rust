@@ -433,6 +433,10 @@ impl<'a> ContextTrait for Context<'a> {
             return Ok(*gas);
         }
 
+        if self.spec.cip7702 && data.first().cloned() == Some(0xef){
+            return Err(Error::CreateContractStartingWithEF);
+        }
+
         self.insert_create_address_to_substate();
 
         let create_data_gas = self.spec.create_data_gas

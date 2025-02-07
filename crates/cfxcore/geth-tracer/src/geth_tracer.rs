@@ -452,6 +452,7 @@ pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
             Error::InvalidAddress(_) => todo!(), /* when selfdestruct refund */
             // address is invalid will emit this error
             Error::ConflictAddress(_) => InstructionResult::CreateCollision,
+            Error::CreateContractStartingWithEF => InstructionResult::CreateContractStartingWithEF,
         },
     };
     result
