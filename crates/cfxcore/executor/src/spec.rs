@@ -136,6 +136,7 @@ pub struct TransitionsEpochHeight {
     /// CIP-133: Enhanced Block Hash Query
     pub cip133e: BlockHeight,
     pub cip1559: BlockHeight,
+    pub cip7702: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -194,6 +195,7 @@ impl CommonParams {
         spec.cip144 = number >= self.transition_numbers.cip144;
         spec.cip145 = number >= self.transition_numbers.cip145;
         spec.cip1559 = height >= self.transition_heights.cip1559;
+        spec.cip7702 = height >= self.transition_heights.cip7702;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         if spec.cancun_opcodes {
             spec.sload_gas = 800;

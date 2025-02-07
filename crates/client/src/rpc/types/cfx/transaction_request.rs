@@ -206,6 +206,7 @@ impl TransactionRequest {
                     access_list: to_primitive_access_list(access_list),
                 })
             }
+            // TODO(7702): support transaction 7702
             x => {
                 return Err(
                     invalid_params("Unrecognized transaction type", x).into()
@@ -297,6 +298,7 @@ impl TransactionRequest {
                 data,
                 access_list: to_primitive_access_list(access_list),
             }),
+            // TODO(7702): support 7702 transaction
             x => {
                 return Err(
                     invalid_params("Unrecognized transaction type", x).into()

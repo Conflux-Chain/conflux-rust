@@ -4,10 +4,11 @@ use crate::{
     TransactionWithSignatureSerializePart,
 };
 use cfx_types::{AddressWithSpace, H256, U256};
+use cfxkey::Address;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
 
-use super::AccessList;
+use super::{AccessList, AuthorizationList, AuthorizationListItem};
 
 #[derive(
     Default,
@@ -88,7 +89,6 @@ pub struct Cip2930Transaction {
     pub epoch_height: u64,
     pub chain_id: u32,
     pub data: Bytes,
-    // We do not use `AccessList` here because we need `Vec` for rlp derive.
     pub access_list: Vec<AccessListItem>,
 }
 
@@ -114,8 +114,33 @@ pub struct Cip1559Transaction {
     pub epoch_height: u64,
     pub chain_id: u32,
     pub data: Bytes,
-    // We do not use `AccessList` here because we need `Vec` for rlp derive.
     pub access_list: Vec<AccessListItem>,
+}
+
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    RlpEncodable,
+    RlpDecodable,
+    Serialize,
+    Deserialize,
+)]
+pub struct Cip7702Transaction {
+    pub nonce: U256,
+    pub max_priority_fee_per_gas: U256,
+    pub max_fee_per_gas: U256,
+    pub gas: U256,
+    pub destination: Address,
+    pub value: U256,
+    pub storage_limit: u64,
+    pub epoch_height: u64,
+    pub chain_id: u32,
+    pub data: Bytes,
+    pub access_list: Vec<AccessListItem>,
+    pub authorization_list: Vec<AuthorizationListItem>,
 }
 
 macro_rules! access_common_ref {
@@ -125,6 +150,7 @@ macro_rules! access_common_ref {
                 TypedNativeTransaction::Cip155(tx) => &tx.$field,
                 TypedNativeTransaction::Cip2930(tx) => &tx.$field,
                 TypedNativeTransaction::Cip1559(tx) => &tx.$field,
+                TypedNativeTransaction::Cip7702(tx) => &tx.$field,
             }
         }
     };
@@ -137,8 +163,6 @@ impl TypedNativeTransaction {
 
     access_common_ref!(nonce, U256);
 
-    access_common_ref!(action, Action);
-
     access_common_ref!(value, U256);
 
     access_common_ref!(chain_id, u32);
@@ -147,19 +171,30 @@ impl TypedNativeTransaction {
 
     access_common_ref!(storage_limit, u64);
 
+    pub fn action(&self) -> Action {
+        match self {
+            TypedNativeTransaction::Cip155(tx) => tx.action,
+            TypedNativeTransaction::Cip2930(tx) => tx.action,
+            TypedNativeTransaction::Cip1559(tx) => tx.action,
+            TypedNativeTransaction::Cip7702(tx) => Action::Call(tx.destination),
+        }
+    }
+
     pub fn gas_price(&self) -> &U256 {
         match self {
             Cip155(tx) => &tx.gas_price,
-            Cip1559(tx) => &tx.max_fee_per_gas,
             Cip2930(tx) => &tx.gas_price,
+            Cip1559(tx) => &tx.max_fee_per_gas,
+            Cip7702(tx) => &tx.max_fee_per_gas,
         }
     }
 
     pub fn max_priority_gas_price(&self) -> &U256 {
         match self {
             Cip155(tx) => &tx.gas_price,
-            Cip1559(tx) => &tx.max_priority_fee_per_gas,
             Cip2930(tx) => &tx.gas_price,
+            Cip1559(tx) => &tx.max_priority_fee_per_gas,
+            Cip7702(tx) => &tx.max_priority_fee_per_gas,
         }
     }
 
@@ -168,6 +203,16 @@ impl TypedNativeTransaction {
             Cip155(tx) => &mut tx.nonce,
             Cip2930(tx) => &mut tx.nonce,
             Cip1559(tx) => &mut tx.nonce,
+            Cip7702(tx) => &mut tx.nonce,
+        }
+    }
+
+    pub fn data_mut(&mut self) -> &mut Vec<u8> {
+        match self {
+            Cip155(tx) => &mut tx.data,
+            Cip2930(tx) => &mut tx.data,
+            Cip1559(tx) => &mut tx.data,
+            Cip7702(tx) => &mut tx.data,
         }
     }
 
@@ -176,6 +221,7 @@ impl TypedNativeTransaction {
             Cip155(_tx) => None,
             Cip2930(tx) => Some(&tx.access_list),
             Cip1559(tx) => Some(&tx.access_list),
+            Cip7702(tx) => Some(&tx.access_list),
         }
     }
 }
@@ -185,6 +231,7 @@ pub enum TypedNativeTransaction {
     Cip155(NativeTransaction),
     Cip2930(Cip2930Transaction),
     Cip1559(Cip1559Transaction),
+    Cip7702(Cip7702Transaction),
 }
 
 impl TypedNativeTransaction {

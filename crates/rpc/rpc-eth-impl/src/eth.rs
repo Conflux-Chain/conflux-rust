@@ -350,7 +350,7 @@ impl EthApi {
             from: tx.sender().address,
             to: match tx.action() {
                 Action::Create => None,
-                Action::Call(addr) => Some(*addr),
+                Action::Call(addr) => Some(addr),
             },
             block_number: block_height,
             cumulative_gas_used: receipt.accumulated_gas_used,
