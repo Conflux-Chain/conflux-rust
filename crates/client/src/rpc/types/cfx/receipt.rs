@@ -117,7 +117,7 @@ impl Receipt {
 
         let (address, action, space) = match transaction.unsigned {
             Transaction::Native(ref unsigned) => {
-                if Action::Create == *unsigned.action()
+                if Action::Create == unsigned.action()
                     && outcome_status == TransactionStatus::Success
                 {
                     let (mut created_address, _) = contract_address(
@@ -139,7 +139,7 @@ impl Receipt {
             }
             Transaction::Ethereum(ref unsigned) => {
                 if include_eth_receipt {
-                    if Action::Create == *unsigned.action()
+                    if Action::Create == unsigned.action()
                         && outcome_status == TransactionStatus::Success
                     {
                         let (created_address, _) = contract_address(
