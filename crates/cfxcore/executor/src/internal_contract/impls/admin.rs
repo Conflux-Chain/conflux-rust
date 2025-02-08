@@ -32,10 +32,24 @@ pub fn suicide(
     state: &mut State, spec: &Spec, substate: &mut Substate,
     tracer: &mut dyn TracerTrait,
 ) -> vm::Result<()> {
-    substate.suicides.insert(contract_address.clone());
+    // After EIP-6780, contract can only be killed in the same transaction as
+    // its creation.
+    let soft_suicide =
+        spec.eip6780 && !substate.contains_contract_create(contract_address);
+
     let balance = state.balance(contract_address)?;
 
-    if refund_address == contract_address
+    if !soft_suicide {
+        tracer.selfdestruct(
+            &contract_address.address,
+            &refund_address.address,
+            balance,
+        );
+
+        substate.suicides.insert(contract_address.clone());
+    }
+
+    if (refund_address == contract_address && !soft_suicide)
         || (!spec.is_valid_address(&refund_address.address)
             && refund_address.space == Space::Native)
     {
@@ -54,7 +68,7 @@ pub fn suicide(
         if contract_address.space == Space::Ethereum {
             state.sub_total_evm_tokens(balance);
         }
-    } else {
+    } else if refund_address != contract_address {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address.address, refund_address.address, balance);
         tracer.trace_internal_transfer(
             AddressPocket::Balance(*contract_address),

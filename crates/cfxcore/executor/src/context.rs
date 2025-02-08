@@ -474,12 +474,8 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        let contract_address = self.origin.address;
         let contract_address_with_space =
             self.origin.address.with_space(self.space);
-        let balance = self.state.balance(&contract_address_with_space)?;
-        self.tracer
-            .selfdestruct(&contract_address, refund_address, balance);
 
         suicide_impl(
             &contract_address_with_space,
@@ -572,8 +568,7 @@ impl<'a> Context<'a> {
     pub fn insert_create_address_to_substate(&mut self) {
         if let Some(create_address) = self.create_address {
             self.substate
-                .contracts_created
-                .push(create_address.with_space(self.space));
+                .record_contract_create(create_address.with_space(self.space));
         }
     }
 }
