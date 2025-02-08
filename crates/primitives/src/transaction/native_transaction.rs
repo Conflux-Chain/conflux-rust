@@ -150,7 +150,6 @@ macro_rules! access_common_ref {
                 TypedNativeTransaction::Cip155(tx) => &tx.$field,
                 TypedNativeTransaction::Cip2930(tx) => &tx.$field,
                 TypedNativeTransaction::Cip1559(tx) => &tx.$field,
-                TypedNativeTransaction::Cip7702(tx) => &tx.$field,
             }
         }
     };
@@ -176,7 +175,6 @@ impl TypedNativeTransaction {
             TypedNativeTransaction::Cip155(tx) => tx.action,
             TypedNativeTransaction::Cip2930(tx) => tx.action,
             TypedNativeTransaction::Cip1559(tx) => tx.action,
-            TypedNativeTransaction::Cip7702(tx) => Action::Call(tx.destination),
         }
     }
 
@@ -185,7 +183,6 @@ impl TypedNativeTransaction {
             Cip155(tx) => &tx.gas_price,
             Cip2930(tx) => &tx.gas_price,
             Cip1559(tx) => &tx.max_fee_per_gas,
-            Cip7702(tx) => &tx.max_fee_per_gas,
         }
     }
 
@@ -194,7 +191,6 @@ impl TypedNativeTransaction {
             Cip155(tx) => &tx.gas_price,
             Cip2930(tx) => &tx.gas_price,
             Cip1559(tx) => &tx.max_priority_fee_per_gas,
-            Cip7702(tx) => &tx.max_priority_fee_per_gas,
         }
     }
 
@@ -203,7 +199,6 @@ impl TypedNativeTransaction {
             Cip155(tx) => &mut tx.nonce,
             Cip2930(tx) => &mut tx.nonce,
             Cip1559(tx) => &mut tx.nonce,
-            Cip7702(tx) => &mut tx.nonce,
         }
     }
 
@@ -212,7 +207,6 @@ impl TypedNativeTransaction {
             Cip155(tx) => &mut tx.data,
             Cip2930(tx) => &mut tx.data,
             Cip1559(tx) => &mut tx.data,
-            Cip7702(tx) => &mut tx.data,
         }
     }
 
@@ -221,7 +215,6 @@ impl TypedNativeTransaction {
             Cip155(_tx) => None,
             Cip2930(tx) => Some(&tx.access_list),
             Cip1559(tx) => Some(&tx.access_list),
-            Cip7702(tx) => Some(&tx.access_list),
         }
     }
 }
@@ -231,7 +224,6 @@ pub enum TypedNativeTransaction {
     Cip155(NativeTransaction),
     Cip2930(Cip2930Transaction),
     Cip1559(Cip1559Transaction),
-    Cip7702(Cip7702Transaction),
 }
 
 impl TypedNativeTransaction {
