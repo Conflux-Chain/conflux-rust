@@ -155,33 +155,45 @@ build_config! {
         (pivot_hint_path, (Option<String>), None)
         (pivot_hint_checksum, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
+        (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
+        (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
+        (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
+        // FIXME: this is part of spec.
+        (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
+
+
+        // Hardfork section
+        // V1.1
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
+        // V2.0
         (hydra_transition_number, (Option<u64>), None)
         (hydra_transition_height, (Option<u64>), None)
-        (dao_vote_transition_number, (Option<u64>), None)
-        (dao_vote_transition_height, (Option<u64>), None)
         (cip43_init_end_number, (Option<u64>), None)
         (cip78_patch_transition_number,(Option<u64>),None)
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
+        // V2.1
+        (dao_vote_transition_number, (Option<u64>), None)
+        (dao_vote_transition_height, (Option<u64>), None)
         (cip105_transition_number, (Option<u64>), None)
+        (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
+        // V2.2
         (sigma_fix_transition_number, (Option<u64>), None)
+        // V2.3
         (cip107_transition_number, (Option<u64>), None)
         (cip112_transition_height, (Option<u64>), None)
         (cip118_transition_number, (Option<u64>), None)
         (cip119_transition_number, (Option<u64>), None)
-        (next_hardfork_transition_number, (Option<u64>), None)
-        (next_hardfork_transition_height, (Option<u64>), None)
+        // V2.4
+        (base_fee_burn_transition_number, (Option<u64>), None)
+        (base_fee_burn_transition_height, (Option<u64>), None)
         (cip1559_transition_height, (Option<u64>), None)
         (cancun_opcodes_transition_number, (Option<u64>), None)
-        (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
-        (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
-        (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
-        (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
-        // FIXME: this is part of spec.
-        (transaction_epoch_bound, (u64), TRANSACTION_DEFAULT_EPOCH_BOUND)
+        // V2.5
+        (eoa_code_transition_height, (Option<u64>), None)
+
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -1454,23 +1466,23 @@ impl Configuration {
         // 1559 hardfork (V2.4)
         //
         set_conf!(
-            self.raw_conf.next_hardfork_transition_number.unwrap_or(default_transition_time);
+            self.raw_conf.base_fee_burn_transition_number.unwrap_or(default_transition_time);
             params.transition_numbers => { cip131, cip132, cip133b, cip137, cip144, cip145 }
         );
         set_conf!(
-            self.raw_conf.next_hardfork_transition_height.unwrap_or(default_transition_time);
+            self.raw_conf.base_fee_burn_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip130, cip133e }
         );
         // TODO: disable 1559 test during dev
         params.transition_heights.cip1559 = self
             .raw_conf
             .cip1559_transition_height
-            .or(self.raw_conf.next_hardfork_transition_height)
+            .or(self.raw_conf.base_fee_burn_transition_height)
             .unwrap_or(non_genesis_default_transition_time);
         params.transition_numbers.cancun_opcodes = self
             .raw_conf
             .cancun_opcodes_transition_number
-            .or(self.raw_conf.next_hardfork_transition_number)
+            .or(self.raw_conf.base_fee_burn_transition_number)
             .unwrap_or(default_transition_time);
 
         if params.transition_heights.cip1559
@@ -1478,6 +1490,14 @@ impl Configuration {
         {
             panic!("1559 can not be activated earlier than pos reference: 1559 (epoch {}), pos (epoch {})", params.transition_heights.cip1559, self.raw_conf.pos_reference_enable_height);
         }
+
+        //
+        // 7702 hardfork (V2.5)
+        //
+        set_conf!(
+            self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
+            params.transition_heights => { cip7702 }
+        )
     }
 }
 

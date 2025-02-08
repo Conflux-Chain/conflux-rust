@@ -123,7 +123,7 @@ impl<'a> EstimationContext<'a> {
                             &tx.sender().address,
                         )?
                     {
-                        return Ok(Some(*to));
+                        return Ok(Some(to));
                     }
                 }
             }

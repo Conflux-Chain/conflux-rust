@@ -671,10 +671,15 @@ impl VerificationConfig {
     ) -> PackingCheckResult {
         let cip90a = height >= transitions.cip90a;
         let cip1559 = height >= transitions.cip1559;
+        let cip7702 = height >= transitions.cip7702;
 
         let (can_pack, later_pack) =
             Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
                 if !Self::check_eip1559_transaction(tx, cip1559, mode) {
+                    return false;
+                }
+
+                if !Self::check_eip7702_transaction(tx, cip7702, mode) {
                     return false;
                 }
 
@@ -757,6 +762,7 @@ impl VerificationConfig {
         let cip90a = height >= transitions.cip90a;
         let cip130 = height >= transitions.cip130;
         let cip1559 = height >= transitions.cip1559;
+        let cip7702 = height >= transitions.cip7702;
 
         if let Transaction::Native(ref tx) = tx.unsigned {
             Self::verify_transaction_epoch_height(
@@ -772,6 +778,10 @@ impl VerificationConfig {
         }
 
         if !Self::check_eip1559_transaction(tx, cip1559, &mode) {
+            bail!(TransactionError::FutureTransactionType)
+        }
+
+        if !Self::check_eip7702_transaction(tx, cip7702, &mode) {
             bail!(TransactionError::FutureTransactionType)
         }
 
@@ -805,9 +815,24 @@ impl VerificationConfig {
 
         use VerifyTxLocalMode::*;
         match mode {
-            VerifyTxMode::Local(Full, _spec) => cip1559,
+            VerifyTxMode::Local(Full, spec) => cip1559 && spec.cip1559,
             VerifyTxMode::Local(MaybeLater, _spec) => true,
             VerifyTxMode::Remote => cip1559,
+        }
+    }
+
+    fn check_eip7702_transaction(
+        tx: &TransactionWithSignature, cip7702: bool, mode: &VerifyTxMode,
+    ) -> bool {
+        if !tx.after_7702() {
+            return true;
+        }
+
+        use VerifyTxLocalMode::*;
+        match mode {
+            VerifyTxMode::Local(Full, spec) => cip7702 && spec.cip7702,
+            VerifyTxMode::Local(MaybeLater, _spec) => true,
+            VerifyTxMode::Remote => cip7702,
         }
     }
 
@@ -828,7 +853,7 @@ impl VerificationConfig {
 
         if let Some(spec) = maybe_spec {
             let tx_intrinsic_gas = gas_required_for(
-                *tx.action() == Action::Create,
+                tx.action() == Action::Create,
                 &tx.data(),
                 tx.access_list(),
                 &spec,
