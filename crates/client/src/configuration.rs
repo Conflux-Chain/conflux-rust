@@ -185,16 +185,14 @@ build_config! {
         (cip118_transition_number, (Option<u64>), None)
         (cip119_transition_number, (Option<u64>), None)
         // V2.4
-        (base_fee_hardfork_transition_number, (Option<u64>), None)
-        (base_fee_hardfork_transition_height, (Option<u64>), None)
+        (base_fee_burn_transition_number, (Option<u64>), None)
+        (base_fee_burn_transition_height, (Option<u64>), None)
         (cip1559_transition_height, (Option<u64>), None)
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
         // V2.5
-        (eoa_hardfork_transition_height, (Option<u64>), None)
-
-
+        (eoa_code_transition_height, (Option<u64>), None)
 
 
         // Mining section.
@@ -1468,23 +1466,23 @@ impl Configuration {
         // 1559 hardfork (V2.4)
         //
         set_conf!(
-            self.raw_conf.base_fee_hardfork_transition_number.unwrap_or(default_transition_time);
+            self.raw_conf.base_fee_burn_transition_number.unwrap_or(default_transition_time);
             params.transition_numbers => { cip131, cip132, cip133b, cip137, cip144, cip145 }
         );
         set_conf!(
-            self.raw_conf.base_fee_hardfork_transition_height.unwrap_or(default_transition_time);
+            self.raw_conf.base_fee_burn_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip130, cip133e }
         );
         // TODO: disable 1559 test during dev
         params.transition_heights.cip1559 = self
             .raw_conf
             .cip1559_transition_height
-            .or(self.raw_conf.base_fee_hardfork_transition_height)
+            .or(self.raw_conf.base_fee_burn_transition_height)
             .unwrap_or(non_genesis_default_transition_time);
         params.transition_numbers.cancun_opcodes = self
             .raw_conf
             .cancun_opcodes_transition_number
-            .or(self.raw_conf.base_fee_hardfork_transition_number)
+            .or(self.raw_conf.base_fee_burn_transition_number)
             .unwrap_or(default_transition_time);
 
         if params.transition_heights.cip1559
@@ -1497,7 +1495,7 @@ impl Configuration {
         // 7702 hardfork (V2.5)
         //
         set_conf!(
-            self.raw_conf.eoa_hardfork_transition_height.unwrap_or(default_transition_time);
+            self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip7702 }
         )
     }
