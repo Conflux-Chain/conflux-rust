@@ -3,8 +3,10 @@ use crate::{state::CleanupMode, try_loaded};
 use cfx_bytes::Bytes;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    Space, H256, U256,
 };
+use cfx_vm_types::CODE_PREFIX_7702;
 use keccak_hash::KECCAK_EMPTY;
 #[cfg(test)]
 use primitives::StorageLayout;
@@ -134,10 +136,46 @@ impl State {
         Ok(acc.code())
     }
 
+    pub fn code_with_hash_on_call(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<(Option<Arc<Vec<u8>>>, H256)> {
+        let authority_acc = try_loaded!(
+            self.read_account_ext_lock(address, RequireFields::Code)
+        );
+        let authority_code = authority_acc.code();
+        let authority_code_hash = authority_acc.code_hash();
+
+        let (code, code_hash) = if address.space == Space::Native {
+            // Core space does not support-7702
+            (authority_code, authority_code_hash)
+        } else if let Some(delegated_address) = authority_code
+            .as_ref()
+            .and_then(|x| extract_7702_payload(&**x))
+        {
+            let delegated_acc = try_loaded!(self.read_account_ext_lock(
+                &delegated_address.with_space(address.space),
+                RequireFields::Code
+            ));
+            (delegated_acc.code(), delegated_acc.code_hash())
+        } else {
+            (authority_code, authority_code_hash)
+        };
+
+        Ok((code, code_hash))
+    }
+
     pub fn init_code(
         &mut self, address: &AddressWithSpace, code: Bytes, owner: Address,
     ) -> DbResult<()> {
         self.write_account_lock(address)?.init_code(code, owner);
+        Ok(())
+    }
+
+    pub fn set_authorization(
+        &mut self, authority: &AddressWithSpace, address: &Address,
+    ) -> DbResult<()> {
+        self.write_account_lock(authority)?
+            .set_authorization(address);
         Ok(())
     }
 
@@ -160,5 +198,18 @@ impl State {
     ) -> DbResult<()> {
         self.write_account_lock(address)?.set_storage_layout(layout);
         Ok(())
+    }
+}
+
+fn extract_7702_payload(code: &[u8]) -> Option<Address> {
+    if code.starts_with(CODE_PREFIX_7702) {
+        let (_prefix, payload) = code.split_at(CODE_PREFIX_7702.len());
+        if payload.len() == Address::len_bytes() {
+            Some(Address::from_slice(payload))
+        } else {
+            None
+        }
+    } else {
+        None
     }
 }

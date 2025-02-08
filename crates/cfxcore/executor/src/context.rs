@@ -331,10 +331,8 @@ impl<'a> ContextTrait for Context<'a> {
         {
             (Some(contract.code()), contract.code_hash())
         } else {
-            (
-                self.state.code(&code_address_with_space)?,
-                self.state.code_hash(&code_address_with_space)?,
-            )
+            self.state
+                .code_with_hash_on_call(&code_address_with_space)?
         };
 
         let mut params = ActionParams {

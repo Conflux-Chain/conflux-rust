@@ -22,6 +22,8 @@
 use cfx_types::{address_util::AddressUtil, Address};
 use primitives::{block::BlockHeight, BlockNumber};
 
+pub const CODE_PREFIX_7702: &'static [u8] = b"\xef\x01\x00";
+
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
 pub struct Spec {
@@ -134,6 +136,8 @@ pub struct Spec {
     pub wasm: Option<WasmCosts>,
     /// The magnification of gas storage occupying related operaions.
     pub evm_gas_ratio: usize,
+    /// `PER_EMPTY_ACCOUNT_COST` in CIP-7702
+    pub per_empty_account_cost: usize,
     /// CIP-43: Introduce Finality via Voting Among Staked
     pub cip43_init: bool,
     pub cip43_contract: bool,
@@ -305,6 +309,7 @@ impl Spec {
             access_list_storage_key_gas: 1900,
             access_list_address_gas: 2400,
             suicide_to_new_account_cost: 25000,
+            per_empty_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
             kill_empty: true,

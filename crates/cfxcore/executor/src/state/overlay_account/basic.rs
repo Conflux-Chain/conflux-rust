@@ -1,7 +1,8 @@
 use cfx_bytes::Bytes;
 use cfx_types::{Address, AddressWithSpace, H256, U256};
+use cfx_vm_types::CODE_PREFIX_7702;
 use keccak_hash::{keccak, KECCAK_EMPTY};
-use primitives::CodeInfo;
+use primitives::{storage::STORAGE_LAYOUT_REGULAR_V0, CodeInfo};
 use std::sync::Arc;
 
 use super::OverlayAccount;
@@ -42,6 +43,26 @@ impl OverlayAccount {
             code: Arc::new(code),
             owner,
         });
+    }
+
+    pub fn set_authorization(&mut self, address: &Address) {
+        self.address.assert_ethereum();
+
+        self.inc_nonce();
+
+        if !address.is_zero() {
+            let mut code = CODE_PREFIX_7702.to_vec();
+            code.extend_from_slice(&address[..]);
+            self.code_hash = keccak(&code);
+            self.code = Some(CodeInfo {
+                code: Arc::new(code),
+                owner: Address::zero(),
+            });
+            self.storage_layout_change = Some(STORAGE_LAYOUT_REGULAR_V0);
+        } else {
+            self.code_hash = KECCAK_EMPTY;
+            self.code = None;
+        }
     }
 
     pub(super) fn is_code_loaded(&self) -> bool {

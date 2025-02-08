@@ -23,9 +23,17 @@ use cfx_vm_types::{
 };
 
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
-use primitives::{transaction::Action, SignedTransaction};
+use cfx_types::{
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, U256, U512,
+};
+use cfxkey::{public_to_address, Signature};
+use keccak_hash::keccak;
+use primitives::{
+    transaction::Action, AuthorizationListItem, SignedTransaction,
+};
+use rlp::RlpStream;
 use std::{convert::TryInto, sync::Arc};
+use vm::CODE_PREFIX_7702;
 
 pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
     pub context: ExecutiveContext<'a>,
@@ -49,6 +57,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             }
             return self.finalize_on_insufficient_balance(actual_gas_cost);
         }
+
+        self.process_cip7702_authorization()?;
 
         let params = self.make_action_params()?;
         if self.tx.space() == Space::Native
@@ -195,6 +205,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 } else {
                     sender.address
                 };
+                let (code, code_hash) =
+                    state.code_with_hash_on_call(&receipient)?;
                 Ok(ActionParams {
                     space: sender.space,
                     code_address: receipient.address,
@@ -205,8 +217,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                     gas: init_gas,
                     gas_price: cost.gas_price,
                     value: ActionValue::Transfer(*tx.value()),
-                    code: state.code(&receipient)?,
-                    code_hash: state.code_hash(&receipient)?,
+                    code,
+                    code_hash,
                     data: Some(tx.data().clone()),
                     call_type: CallType::Call,
                     create_type: CreateType::None,
@@ -615,6 +627,99 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         };
 
         Ok(outcome)
+    }
+}
+
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
+    fn process_cip7702_authorization(&mut self) -> DbResult<()> {
+        const MAGIC: u8 = 0x05;
+
+        let Some(authorization_list) = self.tx.authorization_list() else {
+            return Ok(());
+        };
+
+        let current_chain_id =
+            self.context.env.chain_id[&Space::Ethereum] as u64;
+        let state = &mut self.context.state;
+
+        for AuthorizationListItem {
+            chain_id,
+            address,
+            nonce,
+            y_parity,
+            r,
+            s,
+        } in authorization_list.iter()
+        {
+            // 1. Verify the chain id is either 0 or the chain's current ID.
+            if *chain_id != 0 && *chain_id != current_chain_id {
+                continue;
+            }
+
+            // 2. Verify the nonce is less than 2**64 - 1
+            if *nonce == u64::MAX {
+                continue;
+            }
+
+            let valid_signature = {
+                let r: H256 = BigEndianHash::from_uint(r);
+                let s: H256 = BigEndianHash::from_uint(s);
+                let signature = Signature::from_rsv(&r, &s, *y_parity);
+                if !signature.is_valid() {
+                    continue;
+                }
+                signature
+            };
+
+            // 3. authority = ecrecover(keccak(MAGIC || rlp([chain_id, address,
+            //    nonce])), y_parity, r, s)
+            let authorization_hash = {
+                let mut rlp = RlpStream::new_list(3);
+                rlp.append(chain_id).append(address).append(nonce);
+
+                let mut hash_input = vec![MAGIC];
+                hash_input.extend_from_slice(rlp.as_raw());
+
+                keccak(hash_input)
+            };
+            let authority = if let Ok(public) =
+                cfxkey::recover(&valid_signature, &authorization_hash)
+            {
+                public_to_address(&public, /* type_nibble */ false)
+                    .with_evm_space()
+            } else {
+                continue;
+            };
+
+            // 4. Add authority to accessed_addresses
+            // Conflux does not support warm/cold storage yet.
+
+            // 5. Verify the code of authority is either empty or already
+            //    delegated.
+            let can_set_code = state.code(&authority)?.map_or(true, |x| {
+                x.len() == Address::len_bytes() + CODE_PREFIX_7702.len()
+                    && x.starts_with(CODE_PREFIX_7702)
+            });
+            if !can_set_code {
+                continue;
+            }
+
+            // 6. Verify the nonce of authority is equal to nonce. In case
+            //    authority does not exist in the trie, verify that nonce is
+            //    equal to 0.
+            if state.nonce(&authority)? != (*nonce).into() {
+                continue;
+            }
+
+            // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the
+            //    global refund counter if authority exists in the trie.
+            // Conflux has no refund mechanism yet.
+
+            // 8. Set the code of authority to be 0xef0100 || address.
+            // 9. Increase the nonce of authority by one
+            state.set_authorization(&authority, address)?;
+        }
+        Ok(())
     }
 }
 

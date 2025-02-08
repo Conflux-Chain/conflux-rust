@@ -856,6 +856,7 @@ impl VerificationConfig {
                 tx.action() == Action::Create,
                 &tx.data(),
                 tx.access_list(),
+                tx.authorization_len(),
                 &spec,
             );
             if *tx.gas() < (tx_intrinsic_gas as usize).into() {

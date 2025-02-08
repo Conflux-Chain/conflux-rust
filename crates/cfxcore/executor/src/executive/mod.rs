@@ -64,7 +64,8 @@ impl<'a> ExecutiveContext<'a> {
 }
 
 pub fn gas_required_for(
-    is_create: bool, data: &[u8], access_list: Option<&AccessList>, spec: &Spec,
+    is_create: bool, data: &[u8], access_list: Option<&AccessList>,
+    authorization_len: usize, spec: &Spec,
 ) -> u64 {
     let init_gas = (if is_create {
         spec.tx_create_gas
@@ -94,7 +95,10 @@ pub fn gas_required_for(
         0
     };
 
-    init_gas + data_gas + access_gas
+    let authorization_gas =
+        spec.per_empty_account_cost as u64 * authorization_len as u64;
+
+    init_gas + data_gas + access_gas + authorization_gas
 }
 
 pub fn contract_address(
