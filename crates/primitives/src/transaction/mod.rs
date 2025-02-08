@@ -52,7 +52,6 @@ pub const EIP1559_TYPE: u8 = 0x02;
 pub const EIP7702_TYPE: u8 = 0x04;
 pub const CIP2930_TYPE: u8 = 0x01;
 pub const CIP1559_TYPE: u8 = 0x02;
-pub const CIP7702_TYPE: u8 = 0x04;
 
 /// Shorter id for transactions in compact blocks
 // TODO should be u48
@@ -384,8 +383,7 @@ impl Transaction {
             Transaction::Native(TypedNativeTransaction::Cip1559(_))
             | Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => 2,
 
-            Transaction::Native(TypedNativeTransaction::Cip7702(_))
-            | Transaction::Ethereum(EthereumTransaction::Eip7702(_)) => 4,
+            Transaction::Ethereum(EthereumTransaction::Eip7702(_)) => 4,
         }
     }
 
@@ -452,11 +450,6 @@ impl Transaction {
                 s.append(tx);
                 type_prefix.extend_from_slice(TYPED_NATIVE_TX_PREFIX);
                 type_prefix.push(CIP2930_TYPE);
-            }
-            Transaction::Native(TypedNativeTransaction::Cip7702(tx)) => {
-                s.append(tx);
-                type_prefix.extend_from_slice(TYPED_NATIVE_TX_PREFIX);
-                type_prefix.push(EIP7702_TYPE);
             }
             Transaction::Ethereum(EthereumTransaction::Eip155(tx)) => {
                 s.append(tx);
@@ -637,16 +630,15 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 s.append(&self.v);
                 s.append(&self.r);
                 s.append(&self.s);
-            }
-            Transaction::Native(TypedNativeTransaction::Cip7702(ref tx)) => {
-                s.append_raw(TYPED_NATIVE_TX_PREFIX, 0);
-                s.append_raw(&[CIP7702_TYPE], 0);
-                s.begin_list(4);
-                s.append(tx);
-                s.append(&self.v);
-                s.append(&self.r);
-                s.append(&self.s);
-            }
+            } /* Transaction::Native(TypedNativeTransaction::Cip7702(ref tx))
+               * => {     s.append_raw(TYPED_NATIVE_TX_PREFIX,
+               * 0);     s.append_raw(&[CIP7702_TYPE], 0);
+               *     s.begin_list(4);
+               *     s.append(tx);
+               *     s.append(&self.v);
+               *     s.append(&self.r);
+               *     s.append(&self.s);
+               * } */
         }
     }
 }
@@ -757,25 +749,6 @@ impl Decodable for TransactionWithSignatureSerializePart {
                             Ok(TransactionWithSignatureSerializePart {
                                 unsigned: Transaction::Native(
                                     TypedNativeTransaction::Cip1559(tx),
-                                ),
-                                v,
-                                r,
-                                s,
-                            })
-                        }
-                        CIP7702_TYPE => {
-                            let rlp = Rlp::new(&rlp.as_raw()[4..]);
-                            if rlp.item_count()? != 4 {
-                                return Err(DecoderError::RlpIncorrectListLen);
-                            }
-
-                            let tx = rlp.val_at(0)?;
-                            let v = rlp.val_at(1)?;
-                            let r = rlp.val_at(2)?;
-                            let s = rlp.val_at(3)?;
-                            Ok(TransactionWithSignatureSerializePart {
-                                unsigned: Transaction::Native(
-                                    TypedNativeTransaction::Cip7702(tx),
                                 ),
                                 v,
                                 r,
