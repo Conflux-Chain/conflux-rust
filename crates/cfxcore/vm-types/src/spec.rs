@@ -191,6 +191,7 @@ pub struct Spec {
     pub cip145: bool,
     pub cip7702: bool,
     pub eip3607: bool,
+    pub eip6780: bool,
 }
 
 /// Wasm cost table
@@ -349,6 +350,7 @@ impl Spec {
             cip144: false,
             cip7702: false,
             eip3607: false,
+            eip6780: false,
         }
     }
 

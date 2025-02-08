@@ -1496,7 +1496,7 @@ impl Configuration {
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip7702, eip3607 }
+            params.transition_heights => { cip7702, eip3607, eip6780 }
         )
     }
 }
