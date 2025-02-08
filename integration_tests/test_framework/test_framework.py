@@ -489,7 +489,7 @@ class ConfluxTestFramework:
                     no_pssh=no_pssh,
                 ))
 
-    def start_node(self, i, extra_args=None, phase_to_wait=["NormalSyncPhase"], wait_time=30, *args, **kwargs):
+    def start_node(self, i:int, extra_args=None, phase_to_wait=["NormalSyncPhase"], wait_time=30, *args, **kwargs):
         """Start a bitcoind"""
 
         node = self.nodes[i]
