@@ -97,6 +97,8 @@ impl Substate {
     }
 
     pub fn contains_contract_create(&self, address: &AddressWithSpace) -> bool {
+        dbg!(&self.contracts_created);
+        dbg!(&self.contracts_created_set);
         self.contracts_created_set.contains(address)
     }
 

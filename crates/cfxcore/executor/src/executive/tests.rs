@@ -258,6 +258,7 @@ fn test_suicide_when_creation() {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(0));
+    params.create_type = CreateType::CREATE;
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);

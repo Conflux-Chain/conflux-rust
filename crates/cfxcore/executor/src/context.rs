@@ -483,6 +483,8 @@ impl<'a> ContextTrait for Context<'a> {
             self.state,
             &self.spec,
             &mut self.substate,
+            self.callstack
+                .creating_contract(&contract_address_with_space),
             self.tracer,
         )
     }
@@ -852,6 +854,7 @@ mod tests {
         refund_account.set_user_account_type_bits();
 
         let mut setup = TestSetup::new();
+        setup.spec.eip6780 = false;
         let state = &mut setup.state;
         let mut origin = get_test_origin();
 
