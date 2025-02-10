@@ -1288,6 +1288,12 @@ impl RpcImpl {
                 "Transaction can not be executed".into(),
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(call_execution_error(
+                "Transaction can not be executed".into(),
+                format! {"tx sender has contract code: {:?}", address}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
@@ -1332,6 +1338,12 @@ impl RpcImpl {
             ) => bail!(call_execution_error(
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
+            )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(call_execution_error(
+                "Can not estimate: transaction sender has code".into(),
+                format! {"transaction sender has code {:?}", address}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(

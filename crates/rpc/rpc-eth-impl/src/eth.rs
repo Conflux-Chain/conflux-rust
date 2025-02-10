@@ -186,6 +186,11 @@ impl EthApi {
             ) => bail!(invalid_input_rpc_err(
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(invalid_input_rpc_err(
+                format! {"tx sender has contract code: {:?}", address}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }

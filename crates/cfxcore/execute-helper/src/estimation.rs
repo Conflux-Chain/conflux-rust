@@ -468,6 +468,7 @@ impl EstimateRequest {
             charge_gas: self.charge_gas(),
             check_epoch_bound: false,
             check_base_price: self.has_gas_price,
+            forbid_eoa_with_code: false,
         }
     }
 

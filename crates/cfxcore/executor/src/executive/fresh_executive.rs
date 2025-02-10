@@ -87,6 +87,10 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         // Validate transaction nonce
         early_return_on_err!(self.check_nonce()?);
 
+        if self.context.spec.eip3607 && self.settings.forbid_eoa_with_code {
+            early_return_on_err!(self.check_from_eoa_with_code()?);
+        }
+
         // Validate transaction epoch height.
         if self.settings.check_epoch_bound {
             early_return_on_err!(self.check_epoch_bound()?);
@@ -126,6 +130,21 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
                     expected: nonce,
                     got: *tx.nonce(),
                 },
+            ))
+        } else {
+            Ok(())
+        })
+    }
+
+    fn check_from_eoa_with_code(
+        &self,
+    ) -> DbResult<Result<(), ExecutionOutcome>> {
+        let sender = self.tx.sender();
+        let code = self.context.state.code(&sender)?;
+        let no_code = code.map_or(true, |x| x.is_empty());
+        Ok(if !no_code {
+            Err(ExecutionOutcome::NotExecutedDrop(
+                TxDropError::SenderWithCode(sender.address),
             ))
         } else {
             Ok(())

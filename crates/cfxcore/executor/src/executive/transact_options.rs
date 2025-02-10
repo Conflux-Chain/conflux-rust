@@ -21,6 +21,7 @@ pub struct TransactSettings {
     pub charge_gas: bool,
     pub check_base_price: bool,
     pub check_epoch_bound: bool,
+    pub forbid_eoa_with_code: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -37,6 +38,7 @@ impl TransactSettings {
             charge_gas: true,
             check_epoch_bound: true,
             check_base_price: true,
+            forbid_eoa_with_code: true,
         }
     }
 }
