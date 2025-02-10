@@ -71,6 +71,9 @@ pub enum TxDropError {
 
     /// Not enough gas limit for large transacton, only for estimation
     NotEnoughGasLimit { expected: U256, got: U256 },
+
+    /// The EOA sender with contract code is forbidded by EIP-3607
+    SenderWithCode(Address),
 }
 
 #[derive(Debug, PartialEq)]

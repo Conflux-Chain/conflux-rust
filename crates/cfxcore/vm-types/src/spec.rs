@@ -186,6 +186,7 @@ pub struct Spec {
     /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
     pub cip145: bool,
     pub cip7702: bool,
+    pub eip3607: bool,
 }
 
 /// Wasm cost table
@@ -342,6 +343,7 @@ impl Spec {
             cancun_opcodes: false,
             cip144: false,
             cip7702: false,
+            eip3607: false,
         }
     }
 
