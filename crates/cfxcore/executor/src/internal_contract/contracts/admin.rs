@@ -47,6 +47,7 @@ impl SimpleExecutionTrait for Destroy {
             context.spec,
             context.substate,
             context.tracer,
+            &context.callstack,
         )
     }
 }
