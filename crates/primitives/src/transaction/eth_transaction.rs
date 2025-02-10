@@ -1,8 +1,8 @@
 use super::AuthorizationListItem;
 use crate::{
     bytes::Bytes, transaction::AccessList, AccessListItem, Action,
-    SignedTransaction, Transaction, TransactionWithSignature,
-    TransactionWithSignatureSerializePart,
+    AuthorizationList, SignedTransaction, Transaction,
+    TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
 use cfx_types::{AddressWithSpace, H256, U256};
 use cfxkey::Address;
@@ -288,6 +288,14 @@ impl EthereumTransaction {
             Eip2930(tx) => Some(&tx.access_list),
             Eip1559(tx) => Some(&tx.access_list),
             Eip7702(tx) => Some(&tx.access_list),
+        }
+    }
+
+    pub fn authorization_list(&self) -> Option<&AuthorizationList> {
+        if let Eip7702(tx) = self {
+            Some(&tx.authorization_list)
+        } else {
+            None
         }
     }
 }

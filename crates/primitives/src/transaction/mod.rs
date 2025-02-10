@@ -9,7 +9,7 @@ pub mod native_transaction;
 
 pub use eth_transaction::{
     Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
-    EthereumTransaction,
+    Eip7702Transaction, EthereumTransaction,
 };
 pub use native_transaction::{
     Cip1559Transaction, Cip2930Transaction, NativeTransaction,
@@ -38,8 +38,6 @@ use std::{
     ops::{Deref, DerefMut},
 };
 use unexpected::OutOfBounds;
-
-use self::eth_transaction::Eip7702Transaction;
 
 /// Fake address for unsigned transactions.
 pub const UNSIGNED_SENDER: Address = H160([0xff; 20]);
@@ -276,7 +274,7 @@ pub type AccessList = Vec<AccessListItem>;
 pub struct AuthorizationListItem {
     pub chain_id: u64,
     pub address: Address,
-    pub nonce: U256,
+    pub nonce: u64,
     pub y_parity: u8,
     pub r: U256,
     pub s: U256,
@@ -416,6 +414,17 @@ impl Transaction {
             Transaction::Native(tx) => tx.access_list(),
             Transaction::Ethereum(tx) => tx.access_list(),
         }
+    }
+
+    pub fn authorization_list(&self) -> Option<&AuthorizationList> {
+        match self {
+            Transaction::Native(_tx) => None,
+            Transaction::Ethereum(tx) => tx.authorization_list(),
+        }
+    }
+
+    pub fn authorization_len(&self) -> usize {
+        self.authorization_list().map_or(0, Vec::len)
     }
 }
 
