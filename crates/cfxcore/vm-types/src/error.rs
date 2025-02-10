@@ -120,6 +120,8 @@ pub enum Error {
     InvalidAddress(Address),
     /// Create a contract on an address with existing contract
     ConflictAddress(Address),
+    /// EIP-3541: Reject new contract code starting with the 0xEF byte
+    CreateContractStartingWithEF,
 }
 
 #[derive(Debug)]
@@ -195,6 +197,9 @@ impl fmt::Display for Error {
             InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
             ConflictAddress(ref addr) => {
                 write!(f, "Contract creation on an existing address: {}", addr)
+            }
+            CreateContractStartingWithEF => {
+                write!(f, "Create contract starting with EF")
             }
         }
     }
