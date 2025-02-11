@@ -244,6 +244,15 @@ impl RpcRegistryInner {
                     EthRpcModule::Rpc => {
                         RPCApi::new(module_version.clone()).into_rpc().into()
                     }
+                    EthRpcModule::Parity => {
+                        let eth_api = EthApi::new(
+                            self.config.clone(),
+                            self.consensus.clone(),
+                            self.sync.clone(),
+                            self.tx_pool.clone(),
+                        );
+                        ParityApi::new(eth_api).into_rpc().into()
+                    }
                 })
                 .clone()
         };
