@@ -87,7 +87,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         // Validate transaction nonce
         early_return_on_err!(self.check_nonce()?);
 
-        if self.context.spec.eip3607 && self.settings.forbid_eoa_with_code {
+        if self.context.spec.cip152 && self.settings.forbid_eoa_with_code {
             early_return_on_err!(self.check_from_eoa_with_code()?);
         }
 

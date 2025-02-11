@@ -135,10 +135,16 @@ pub struct TransitionsEpochHeight {
     pub cip130: BlockHeight,
     /// CIP-133: Enhanced Block Hash Query
     pub cip133e: BlockHeight,
+    /// CIP-1559: Fee Market Change for Conflux
     pub cip1559: BlockHeight,
+    /// CIP-150: Reject New Contract Code Starting with the 0xEF byte
+    pub cip150: BlockHeight,
+    /// CIP-151: SELFDESTRUCT only in Same Transaction
+    pub cip151: BlockHeight,
+    /// CIP-152: Reject Transactions from Senders with Deployed Code
+    pub cip152: BlockHeight,
+    /// CIP-7702: Set Code for EOA
     pub cip7702: BlockHeight,
-    pub eip3607: BlockHeight,
-    pub eip6780: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -197,9 +203,10 @@ impl CommonParams {
         spec.cip144 = number >= self.transition_numbers.cip144;
         spec.cip145 = number >= self.transition_numbers.cip145;
         spec.cip1559 = height >= self.transition_heights.cip1559;
+        spec.cip150 = height >= self.transition_heights.cip150;
+        spec.cip151 = height >= self.transition_heights.cip151;
+        spec.cip152 = height >= self.transition_heights.cip152;
         spec.cip7702 = height >= self.transition_heights.cip7702;
-        spec.eip3607 = height >= self.transition_heights.eip3607;
-        spec.eip6780 = height >= self.transition_heights.eip6780;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         if spec.cancun_opcodes {
             spec.sload_gas = 800;

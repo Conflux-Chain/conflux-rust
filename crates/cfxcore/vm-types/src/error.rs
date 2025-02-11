@@ -120,7 +120,7 @@ pub enum Error {
     InvalidAddress(Address),
     /// Create a contract on an address with existing contract
     ConflictAddress(Address),
-    /// EIP-3541: Reject new contract code starting with the 0xEF byte
+    /// CIP-150: Reject new contract code starting with the 0xEF byte
     CreateContractStartingWithEF,
 }
 

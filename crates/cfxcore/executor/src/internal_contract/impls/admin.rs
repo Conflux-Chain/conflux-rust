@@ -33,12 +33,12 @@ pub fn suicide(
     state: &mut State, spec: &Spec, substate: &mut Substate,
     creating_contract: bool, tracer: &mut dyn TracerTrait,
 ) -> vm::Result<()> {
-    // After EIP-6780, contract can only be killed in the same transaction as
+    // After CIP-151, contract can only be killed in the same transaction as
     // its creation.
     let contract_create_in_same_tx = substate
         .contains_contract_create(contract_address)
         || creating_contract;
-    let soft_suicide = spec.eip6780 && !contract_create_in_same_tx;
+    let soft_suicide = spec.cip151 && !contract_create_in_same_tx;
 
     let balance = state.balance(contract_address)?;
 
