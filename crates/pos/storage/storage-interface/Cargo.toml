@@ -22,7 +22,6 @@ diem-secure-net = { workspace = true }
 diem-state-view = { workspace = true }
 diem-types = { workspace = true }
 scratchpad = { workspace = true }
-move-core-types = { workspace = true }
 
 [features]
 default = []

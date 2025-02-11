@@ -4,7 +4,7 @@ homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "consensus_bench"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 cfxcore = { workspace = true }

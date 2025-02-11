@@ -1,14 +1,6 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
-extern crate cfxkey;
-extern crate env_logger;
-extern crate keccak_hash;
-extern crate rustc_hex;
-extern crate serde;
-extern crate serde_derive;
-
 use std::{
     env, fmt,
     fs::File,
@@ -21,7 +13,7 @@ use std::{
 
 use docopt::Docopt;
 use log::*;
-use rand::{rngs::StdRng, SeedableRng};
+use rand_08::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
 use serde::Deserialize;
 use tempdir::TempDir;

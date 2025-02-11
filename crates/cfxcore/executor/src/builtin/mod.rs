@@ -512,20 +512,20 @@ impl Impl for ModexpImpl {
 
 fn read_fr(
     reader: &mut io::Chain<&[u8], io::Repeat>,
-) -> Result<::bn::Fr, Error> {
+) -> Result<crate::bn::Fr, Error> {
     let mut buf = [0u8; 32];
 
     reader
         .read_exact(&mut buf[..])
         .expect("reading from zero-extended memory cannot fail; qed");
-    ::bn::Fr::from_slice(&buf[0..32])
+    crate::bn::Fr::from_slice(&buf[0..32])
         .map_err(|_| Error::from("Invalid field element"))
 }
 
 fn read_point(
     reader: &mut io::Chain<&[u8], io::Repeat>,
-) -> Result<::bn::G1, Error> {
-    use bn::{AffineG1, Fq, Group, G1};
+) -> Result<crate::bn::G1, Error> {
+    use crate::bn::{AffineG1, Fq, Group, G1};
 
     let mut buf = [0u8; 32];
 
@@ -554,7 +554,7 @@ impl Impl for Bn128AddImpl {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
-        use bn::AffineG1;
+        use crate::bn::AffineG1;
 
         let mut padded_input = input.chain(io::repeat(0));
         let p1 = read_point(&mut padded_input)?;
@@ -582,7 +582,7 @@ impl Impl for Bn128MulImpl {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
-        use bn::AffineG1;
+        use crate::bn::AffineG1;
 
         let mut padded_input = input.chain(io::repeat(0));
         let p = read_point(&mut padded_input)?;
@@ -631,7 +631,9 @@ impl Bn128PairingImpl {
     fn execute_with_error(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
-        use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
+        use crate::bn::{
+            pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2,
+        };
 
         let elements = input.len() / 192; // (a, b_a, b_b - each 64-byte affine coordinates)
         let ret_val = if input.len() == 0 {

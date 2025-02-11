@@ -58,7 +58,8 @@ The RPC implementation for eSpace is mainly located in the [crates/rpc](crates/r
 - [rpc-cfx-types](../../crates/rpc/rpc-cfx-types/): RPC type definitions for Core Space.
 - [rpc-eth-types](../../crates/rpc/rpc-eth-types/): RPC type definitions for eSpace.
 - [rpc-eth-api](../../crates/rpc/rpc-eth-api/): RPC interface definitions for eSpace, organized by namespace.
-- [rpc](../../crates/rpc/rpc/): RPC interface implementation for eSpace.
+- [rpc-eth-impl](../../crates/rpc/rpc-eth-impl/): RPC interface implementation for eSpace.
+- [rpc-cfx-impl](../../crates/rpc/rpc-cfx-impl/): RPC interface implementation for Core Space.
 - [rpc-builder](../../crates/rpc/rpc-builder/): Logic for RPC interface registration and service startup.
 - [rpc-utils](../../crates/rpc/rpc-utils/): Implementation of common utilities, such as error code definitions.
 

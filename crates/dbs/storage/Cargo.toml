@@ -7,41 +7,38 @@ version = "1.0.0"
 edition = "2021"
 
 [dependencies]
-cfg-if = "0.1"
-cfx-bytes = { workspace = true }
+cfg-if = { workspace = true }
 cfx-db-errors = { workspace = true }
 cfx-internal-common = { workspace = true }
 cfx-types = { workspace = true }
 delegate = "0.5.0"
-derivative = "2.0.2"
-fallible-iterator = "0.2"
-fs_extra = "1.1.0"
+derivative = { workspace = true }
+fallible-iterator = { workspace = true }
+fs_extra = { workspace = true }
 futures = { workspace = true, features = ["compat"] }
-hashbrown = "0.7.1"
+hashbrown = { workspace = true }
 keccak-hash = { workspace = true }
-kvdb = "0.4"
+kvdb = { workspace = true }
 kvdb-rocksdb = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
-memoffset = "0.5.1"
+memoffset = { workspace = true }
 parking_lot = { workspace = true }
 primitives = { workspace = true, optional = true }
 rand = { workspace = true }
-rand_chacha = "0.2.1"
+rand_chacha = { workspace = true }
 random-crash = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
-serde_derive = { workspace = true }
-sqlite = "0.25"
-sqlite3-sys = "0.12"
-strfmt = "0.1"
+sqlite = { workspace = true }
+sqlite3-sys = { workspace = true }
+strfmt = { workspace = true }
 tokio02 = { workspace = true, features = ["full"] }
-once_cell = { workspace = true }
 parity-util-mem = { workspace = true, default-features = false }
 cfx-util-macros = { workspace = true }
 

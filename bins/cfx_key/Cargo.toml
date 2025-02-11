@@ -10,10 +10,8 @@ docopt = { workspace = true }
 env_logger = { workspace = true }
 cfxkey = { workspace = true }
 panic_hook = { workspace = true }
-parity-wordlist= { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
-serde_derive = { workspace = true }
 threadpool = { workspace = true }
 
 [[bin]]

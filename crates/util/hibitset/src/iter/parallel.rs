@@ -30,8 +30,6 @@ impl<T> BitParIter<T> {
     /// # Examples
     ///
     /// ```
-    /// # extern crate rayon;
-    /// # extern crate hibitset;
     /// # use hibitset::{BitSet, BitSetLike};
     /// # use rayon::iter::ParallelIterator;
     /// # fn main() {

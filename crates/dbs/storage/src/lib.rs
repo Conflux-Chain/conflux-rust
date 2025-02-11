@@ -6,7 +6,6 @@
 #![allow(clippy::mut_from_ref, clippy::cast_ref_to_mut, clippy::drop_ref)]
 #![allow(deprecated)]
 
-//extern crate futures;
 #[macro_use]
 extern crate cfx_util_macros;
 #[macro_use]

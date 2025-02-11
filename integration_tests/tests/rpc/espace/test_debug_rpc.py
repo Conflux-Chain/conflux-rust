@@ -1,14 +1,3 @@
-import pytest
-
-@pytest.fixture(scope="module")
-def token_transfer(erc20_contract, ew3):
-    to_address = ew3.eth.account.create().address
-    token_contract = erc20_contract["contract"]
-    transfer_hash = token_contract.functions.transfer(to_address, ew3.to_wei(1, "ether")).transact()
-    ew3.eth.wait_for_transaction_receipt(transfer_hash)
-    return {
-        "tx_hash": transfer_hash,
-    }
 
 def test_trace_simple_cfx_transfer(ew3, evm_accounts):
     account = evm_accounts[0]
@@ -42,8 +31,8 @@ def test_trace_deploy_contract(ew3, erc20_contract):
 
     assert tx_trace["structLogs"][oplog_len-1]["op"] == "RETURN"
 
-def test_transfer_trace(ew3, token_transfer):
-    transfer_hash = token_transfer["tx_hash"]
+def test_transfer_trace(ew3, erc20_token_transfer):
+    transfer_hash = erc20_token_transfer["tx_hash"]
     transfer_trace = ew3.manager.request_blocking('debug_traceTransaction', [transfer_hash])
 
     assert transfer_trace["failed"] == False
@@ -51,18 +40,18 @@ def test_transfer_trace(ew3, token_transfer):
     assert oplog_len > 0
     assert transfer_trace["structLogs"][oplog_len-1]["op"] == "RETURN"
 
-def test_noop_trace(ew3, token_transfer):
-    transfer_hash = token_transfer["tx_hash"]
+def test_noop_trace(ew3, erc20_token_transfer):
+    transfer_hash = erc20_token_transfer["tx_hash"]
     noop_trace = ew3.manager.request_blocking('debug_traceTransaction', [transfer_hash, {"tracer": "noopTracer"}])
     assert noop_trace == {}
 
-def test_four_byte_trace(ew3, token_transfer):
-    transfer_hash = token_transfer["tx_hash"]
+def test_four_byte_trace(ew3, erc20_token_transfer):
+    transfer_hash = erc20_token_transfer["tx_hash"]
     four_byte_trace = ew3.manager.request_blocking('debug_traceTransaction', [transfer_hash, {"tracer": "4byteTracer"}])
     assert four_byte_trace == {'0xa9059cbb-64': 1}
 
-def test_call_trace(ew3, token_transfer):
-    transfer_hash = token_transfer["tx_hash"]
+def test_call_trace(ew3, erc20_token_transfer):
+    transfer_hash = erc20_token_transfer["tx_hash"]
     call_trace = ew3.manager.request_blocking('debug_traceTransaction', [transfer_hash, {"tracer": "callTracer"}])
     assert call_trace["from"] == "0x0e768d12395c8abfdedf7b1aeb0dd1d27d5e2a7f"
     # assert call_trace["to"] == "0xe2182fba747b5706a516d6cf6bf62d6117ef86ea"
@@ -70,8 +59,8 @@ def test_call_trace(ew3, token_transfer):
     assert call_trace["value"] == "0x0"
     assert call_trace["output"] == "0x0000000000000000000000000000000000000000000000000000000000000001"
 
-def test_opcode_trace_with_config(ew3, token_transfer):
-    tx_hash = token_transfer["tx_hash"]
+def test_opcode_trace_with_config(ew3, erc20_token_transfer):
+    tx_hash = erc20_token_transfer["tx_hash"]
     trace = ew3.manager.request_blocking('debug_traceTransaction', [tx_hash, {
         "enableMemory": True,
         "disableStack": False,
