@@ -154,7 +154,7 @@ fn test_sender_balance() {
     assert_eq!(state.balance(&address).unwrap(), U256::from(0x7));
     // We create a contract successfully, the substate contracts_created length
     // should be 1?
-    assert_eq!(substate.contracts_created.len(), 1);
+    assert_eq!(substate.contracts_created().len(), 1);
 }
 
 #[test]
@@ -226,7 +226,7 @@ fn test_create_contract_out_of_depth() {
     assert_eq!(gas_left, U256::from(62_970));
     // We create a contract successfully, the substate contracts_created length
     // should be 1?
-    assert_eq!(substate.contracts_created.len(), 1);
+    assert_eq!(substate.contracts_created().len(), 1);
 }
 
 #[test]
@@ -258,6 +258,7 @@ fn test_suicide_when_creation() {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(0));
+    params.create_type = CreateType::CREATE;
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);

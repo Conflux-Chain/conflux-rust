@@ -4,6 +4,7 @@
 
 use crate::{
     executive_observer::{AddressPocket, TracerTrait},
+    stack::CallStackInfo,
     state::State,
     substate::{cleanup_mode, Substate},
 };
@@ -30,12 +31,28 @@ fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
 pub fn suicide(
     contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
     state: &mut State, spec: &Spec, substate: &mut Substate,
-    tracer: &mut dyn TracerTrait,
+    creating_contract: bool, tracer: &mut dyn TracerTrait,
 ) -> vm::Result<()> {
-    substate.suicides.insert(contract_address.clone());
+    // After EIP-6780, contract can only be killed in the same transaction as
+    // its creation.
+    let contract_create_in_same_tx = substate
+        .contains_contract_create(contract_address)
+        || creating_contract;
+    let soft_suicide = spec.eip6780 && !contract_create_in_same_tx;
+
     let balance = state.balance(contract_address)?;
 
-    if refund_address == contract_address
+    if !soft_suicide {
+        tracer.selfdestruct(
+            &contract_address.address,
+            &refund_address.address,
+            balance,
+        );
+
+        substate.suicides.insert(contract_address.clone());
+    }
+
+    if (refund_address == contract_address && !soft_suicide)
         || (!spec.is_valid_address(&refund_address.address)
             && refund_address.space == Space::Native)
     {
@@ -54,7 +71,7 @@ pub fn suicide(
         if contract_address.space == Space::Ethereum {
             state.sub_total_evm_tokens(balance);
         }
-    } else {
+    } else if refund_address != contract_address {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address.address, refund_address.address, balance);
         tracer.trace_internal_transfer(
             AddressPocket::Balance(*contract_address),
@@ -82,14 +99,14 @@ pub fn set_admin(
     let requester = &params.sender;
     debug!(
         "set_admin requester {:?} contract {:?}, \
-         new_admin {:?}, contract_in_creation {:?}",
+         new_admin {:?}, admin_control_in_creation {:?}",
         requester,
         contract_address,
         new_admin_address,
-        context.callstack.contract_in_creation(),
+        context.callstack.admin_control_in_creation(),
     );
 
-    let clear_admin_in_create = context.callstack.contract_in_creation()
+    let clear_admin_in_create = context.callstack.admin_control_in_creation()
         == Some(&contract_address.with_native_space())
         && new_admin_address.is_null_address();
 
@@ -115,6 +132,7 @@ pub fn set_admin(
 pub fn destroy(
     contract_address: Address, params: &ActionParams, state: &mut State,
     spec: &Spec, substate: &mut Substate, tracer: &mut dyn TracerTrait,
+    callstack: &CallStackInfo,
 ) -> vm::Result<()> {
     debug!("contract_address={:?}", contract_address);
 
@@ -127,6 +145,7 @@ pub fn destroy(
             state,
             spec,
             substate,
+            callstack.creating_contract(&contract_address.with_native_space()),
             tracer,
         )
     } else {
