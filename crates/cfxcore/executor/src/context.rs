@@ -856,7 +856,7 @@ mod tests {
         refund_account.set_user_account_type_bits();
 
         let mut setup = TestSetup::new();
-        setup.spec.eip6780 = false;
+        setup.spec.cip151 = false;
         let state = &mut setup.state;
         let mut origin = get_test_origin();
 

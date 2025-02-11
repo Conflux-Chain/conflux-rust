@@ -180,6 +180,7 @@ pub struct Spec {
     pub cip133_core: bool,
     /// CIP-137: Base Fee Sharing in CIP-1559
     pub cip137: bool,
+    /// CIP-1559: Fee Market Change for Conflux
     pub cip1559: bool,
     /// CIP-141: Disable Subroutine Opcodes
     /// CIP-142: Transient Storage Opcodes
@@ -189,9 +190,14 @@ pub struct Spec {
     pub cip144: bool,
     /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
     pub cip145: bool,
+    /// CIP-150: Reject New Contract Code Starting with the 0xEF byte
+    pub cip150: bool,
+    /// CIP-151: SELFDESTRUCT only in Same Transaction
+    pub cip151: bool,
+    /// CIP-152: Reject Transactions from Senders with Deployed Code
+    pub cip152: bool,
+    /// CIP-7702: Set Code for EOA
     pub cip7702: bool,
-    pub eip3607: bool,
-    pub eip6780: bool,
 }
 
 /// Wasm cost table
@@ -348,9 +354,10 @@ impl Spec {
             cip1559: false,
             cancun_opcodes: false,
             cip144: false,
+            cip150: false,
+            cip151: false,
+            cip152: false,
             cip7702: false,
-            eip3607: false,
-            eip6780: false,
         }
     }
 
