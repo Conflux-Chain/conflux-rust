@@ -66,40 +66,12 @@ macro_rules! build_config{
             // Replace the ones from config file with the ones
             // from commandline if duplicates.
             pub fn parse(matches: &clap::ArgMatches) -> Result<RawConfiguration, String> {
-                let mut config = RawConfiguration::default();
+                let mut config = if let Some(config_filename) = matches.value_of("config")  {
+                    RawConfiguration::from_file(config_filename)?
 
-                let config_filename = matches.value_of("config");
-                if config_filename.is_some() {
-                    let mut config_file = File::open(config_filename.unwrap())
-                        .map_err(|e| format!("failed to open configuration file: {:?}", e))?;
-
-                    let mut config_str = String::new();
-                    config_file
-                        .read_to_string(&mut config_str)
-                        .map_err(|e| format!("failed to read configuration file: {:?}", e))?;
-
-                    let config_value = config_str.parse::<toml::Value>()
-                        .map_err(|e| format!("failed to parse configuration file: {:?}", e))?;
-                    $(
-                        if let Some(value) = config_value.get(stringify!($name)) {
-                            config.$name = if_option!(
-                                $($type)+,
-                                THEN{ Some(value.clone().try_into().map_err(|e| format!("Invalid {}: err={:?}", stringify!($name), e).to_owned())?) }
-                                ELSE{ value.clone().try_into().map_err(|e| format!("Invalid {}: err={:?}", stringify!($name), e).to_owned())? }
-                            );
-                        }
-                    )*
-                    $(
-                        if let Some(value) = config_value.get(stringify!($c_name)) {
-                            config.$c_name = if_option!(
-                                $($c_type)+,
-                                THEN{ Some($converter(value.as_str().unwrap())?) }
-                                ELSE{ $converter(value.as_str().unwrap())? }
-                            )
-                        }
-                    )*
-                }
-
+                } else {
+                    RawConfiguration::default()
+                };
                 $(
                     if let Some(value) = matches.value_of(underscore_to_hyphen!(stringify!($name))) {
                         config.$name = if_option!(
@@ -120,6 +92,41 @@ macro_rules! build_config{
                 )*
                 Ok(config)
             }
+            pub fn from_file(config_path: &str) ->  Result<RawConfiguration, String> {
+
+                let mut config = RawConfiguration::default();
+
+                let mut config_file = File::open(config_path)
+                .map_err(|e| format!("failed to open configuration file: {:?}", e))?;
+
+                let mut config_str = String::new();
+                config_file
+                    .read_to_string(&mut config_str)
+                    .map_err(|e| format!("failed to read configuration file: {:?}", e))?;
+
+                let config_value = config_str.parse::<toml::Value>()
+                    .map_err(|e| format!("failed to parse configuration file: {:?}", e))?;
+                $(
+                    if let Some(value) = config_value.get(stringify!($name)) {
+                        config.$name = if_option!(
+                            $($type)+,
+                            THEN{ Some(value.clone().try_into().map_err(|e| format!("Invalid {}: err={:?}", stringify!($name), e).to_owned())?) }
+                            ELSE{ value.clone().try_into().map_err(|e| format!("Invalid {}: err={:?}", stringify!($name), e).to_owned())? }
+                        );
+                    }
+                )*
+
+                $(
+                  if let Some(value) = config_value.get(stringify!($c_name)) {
+                        config.$c_name = if_option!(
+                            $($c_type)+,
+                            THEN{ Some($converter(value.as_str().unwrap())?) }
+                            ELSE{ $converter(value.as_str().unwrap())? }
+                        )
+                    }
+                )*
+                Ok(config)
+         }
         }
     }
 }
