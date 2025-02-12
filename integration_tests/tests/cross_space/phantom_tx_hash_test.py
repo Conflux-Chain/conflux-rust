@@ -4,8 +4,6 @@ import pytest
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
 from eth_utils import decode_hex
 
-from integration_tests.tests.cross_space.util import encode_u256
-
 
 @pytest.fixture(scope="module")
 def framework_class() -> Type[ConfluxTestFramework]:
@@ -56,7 +54,7 @@ def test_withdrawFromMapped_phantom_tx_hash_unique(cw3, ew3, core_accounts, evm_
 
 
 def test_callEVM_phantom_tx_hash_unique(cw3, ew3, core_accounts, evm_accounts, evm_contract, internal_contracts):
-    call_hex = evm_contract.encode_abi("emitEVM",[1])
+    call_hex = evm_contract.encode_abi("emitEVM", [1])
     print("call_hex", call_hex)
     cross_space_call = internal_contracts["CrossSpaceCall"]
 

@@ -4,11 +4,6 @@ import pytest
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
 
-# CROSS_SPACE_CALL_NAME = "../contracts/CrossSpaceCall"
-CROSS_SPACE_CALL_ADDRESS = "0x0888000000000000000000000000000000000006"
-
-# CONFLUX_CONTRACT_NAME = "CrossSpaceTraceTestConfluxSide"
-# EVM_CONTRACT_NAME = "CrossSpaceTraceTestEVMSide"
 
 @pytest.fixture(scope="module")
 def framework_class() -> Type[ConfluxTestFramework]:

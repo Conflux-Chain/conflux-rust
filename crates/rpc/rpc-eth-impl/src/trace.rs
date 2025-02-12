@@ -108,18 +108,18 @@ impl TraceApi {
 
     pub fn filter_traces(
         &self, filter: TraceFilter,
-    ) -> CoreResult<Option<Vec<LocalizedTrace>>> {
+    ) -> CoreResult<Vec<LocalizedTrace>> {
         // TODO(lpl): Use `TransactionExecTraces::filter_trace_pairs` to avoid
         // pairing twice.
         let primitive_filter = filter.into_primitive()?;
 
         let traces =
             match self.trace_handler.filter_traces_impl(primitive_filter)? {
-                None => return Ok(None),
+                None => return Ok(Vec::new()),
                 Some(traces) => traces,
             };
 
-        Ok(Some(TraceHandler::to_eth_traces(traces)?))
+        Ok(TraceHandler::to_eth_traces(traces)?)
     }
 
     pub fn transaction_traces(
@@ -221,7 +221,7 @@ impl TraceApiServer for TraceApi {
 
     async fn filter_traces(
         &self, filter: TraceFilter,
-    ) -> RpcResult<Option<Vec<LocalizedTrace>>> {
+    ) -> RpcResult<Vec<LocalizedTrace>> {
         self.filter_traces(filter).map_err(|err| err.into())
     }
 

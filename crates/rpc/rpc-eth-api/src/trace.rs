@@ -14,7 +14,7 @@ pub trait TraceApi {
     #[method(name = "filter")]
     async fn filter_traces(
         &self, filter: TraceFilter,
-    ) -> RpcResult<Option<Vec<LocalizedTrace>>>;
+    ) -> RpcResult<Vec<LocalizedTrace>>;
 
     /// Returns all traces produced at the given transaction.
     #[method(name = "transaction")]
