@@ -23,3 +23,6 @@ alloy-sol-types = { workspace = true }
 revm = { workspace = true }
 thiserror = { workspace = true }
 jsonrpsee-core = { workspace = true }
+
+[features]
+accounts = []

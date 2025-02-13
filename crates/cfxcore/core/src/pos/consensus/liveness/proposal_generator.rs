@@ -46,6 +46,7 @@ mod proposal_generator_test;
 /// TxnManager should be aware of the pending transactions in the branch that it
 /// is extending, such that it will filter them out to avoid transaction
 /// duplication.
+#[allow(dead_code)]
 pub struct ProposalGenerator {
     // The account address of this validator
     author: Author,

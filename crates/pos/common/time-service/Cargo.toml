@@ -32,3 +32,4 @@ tokio-test = { workspace = true }
 default = []
 async = ["futures", "pin-project", "tokio"]
 testing = ["async"]
+fuzzing = []

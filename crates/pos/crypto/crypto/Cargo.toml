@@ -60,6 +60,7 @@ fuzzing = ["proptest", "proptest-derive", "cloneable-private-keys"]
 fiat = ["curve25519-dalek/fiat_u64_backend", "ed25519-dalek/fiat_u64_backend", "x25519-dalek/fiat_u64_backend"]
 u64 = ["curve25519-dalek/u64_backend", "ed25519-dalek/u64_backend", "x25519-dalek/u64_backend"]
 u32 = ["curve25519-dalek/u32_backend", "ed25519-dalek/u32_backend", "x25519-dalek/u32_backend"]
+batch = []
 
 [[bench]]
 name = "noise"
@@ -76,3 +77,6 @@ harness = false
 [[bench]]
 name = "vrf"
 harness = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }

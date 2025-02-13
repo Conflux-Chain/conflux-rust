@@ -23,3 +23,7 @@ cfx-executor = { workspace = true }
 typemap = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 primitives = { workspace = true }
+serde = { workspace = true }
+
+[features]
+serde = []
