@@ -16,15 +16,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Cache Docker layers
-        uses: actions/cache@v3
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - name: Build and generate docs
+      - name: Build docker image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -34,7 +26,9 @@ jobs:
 
       - name: Generate documentation
         run: |
-          docker run --rm -v $(pwd):/app -w /app doc-builder:latest \
+          mkdir -p target
+          chmod -R 777 target
+          docker run --rm -v $(pwd)/target:/app/target -w /app doc-builder:latest \
             bash -c "RUSTDOCFLAGS='--enable-index-page -Z unstable-options' cargo +nightly-2024-01-29 doc --no-deps"
 
       - name: Deploy
