@@ -22,3 +22,4 @@ build_clippy/
 tests/artifacts/**/*.dbg.json
 venv
 .venv
+**/node_modules/**

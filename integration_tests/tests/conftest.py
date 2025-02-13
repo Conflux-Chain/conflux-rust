@@ -140,7 +140,7 @@ def cw3(network: ConfluxTestFramework):
     return network.cw3
 
 @pytest.fixture(scope="module")
-def ew3(network: ConfluxTestFramework) -> Web3:
+def ew3(network: ConfluxTestFramework):
     return network.ew3
 
 @pytest.fixture(scope="module")

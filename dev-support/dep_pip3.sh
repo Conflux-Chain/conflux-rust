@@ -4,6 +4,8 @@ set -e
 
 pip3 install cfx-account eth-utils py-ecc rlp trie coincurve safe-pysha3 conflux-web3==1.4.0b5 web3 jsonrpcclient==3.3.6 asyncio websockets pyyaml numpy
 
+cd integration_tests/test_framework/util/eip7702/viem_scripts && npm install
+
 # TODO cross platform
 #yum install clang snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel
 #   wget https://github.com/facebook/zstd/archive/v1.1.3.tar.gz
