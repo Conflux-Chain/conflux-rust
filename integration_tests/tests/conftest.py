@@ -3,7 +3,6 @@ import pytest
 import argparse
 import os
 from typing import Type
-from eth_utils import decode_hex
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
 from integration_tests.conflux.rpc import RpcClient
@@ -157,6 +156,3 @@ def core_accounts(network: ConfluxTestFramework):
 def evm_accounts(network: ConfluxTestFramework):
     return network.evm_accounts
 
-@pytest.fixture(scope="module")
-def receiver_account(ew3):
-    return ew3.eth.account.create()

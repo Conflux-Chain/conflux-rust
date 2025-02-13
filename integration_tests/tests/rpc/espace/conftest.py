@@ -73,3 +73,7 @@ def erc20_token_transfer(erc20_contract, ew3: Web3) -> ERC20TransferResult:
         "tx_hash": transfer_hash,
         "receipt": receipt,
     }
+
+@pytest.fixture(scope="module")
+def receiver_account(ew3):
+    return ew3.eth.account.create()

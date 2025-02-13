@@ -1,4 +1,3 @@
-
 def test_trace_simple_cfx_transfer(ew3, evm_accounts):
     account = evm_accounts[0]
     to_address = ew3.eth.account.create().address
