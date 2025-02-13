@@ -327,6 +327,7 @@ macro_rules! access_common {
         }
     };
 }
+
 impl Transaction {
     access_common_ref!(gas, U256);
 

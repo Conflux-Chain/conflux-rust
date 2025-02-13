@@ -1,6 +1,14 @@
 # JSON-RPC CHANGELOG
 
+## v2.5.0
+
+EIP-7702 related RPC:
+
+1. eth_call & eth_estimateGas
+2. transaction related RPCs: eth_getTransactionByHash, eth_blockByNumber, eth_blockByHash, eth_getBlockReceipts, parity_getBlockReceipts
+
 ## vNext
+
 1. Support gasFee in transaction receipt for espace RPC
 
 ## v2.4.1
