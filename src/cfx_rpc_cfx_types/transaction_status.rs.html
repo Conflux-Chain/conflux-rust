@@ -26,7 +26,7 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>serde::Serialize;
 
 <span class="doccomment">/// Transaction status in the transaction pool.
-</span><span class="attr">#[derive(Serialize)]
+</span><span class="attr">#[derive(Serialize, Clone)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub enum </span>TransactionStatus {
     Packed,
@@ -34,7 +34,7 @@
     Pending(PendingReason),
 }
 
-<span class="attr">#[derive(Serialize)]
+<span class="attr">#[derive(Serialize, Clone)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub enum </span>PendingReason {
     FutureNonce,

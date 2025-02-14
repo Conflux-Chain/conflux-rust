@@ -1421,6 +1421,51 @@
 <a href="#1419" id="1419">1419</a>
 <a href="#1420" id="1420">1420</a>
 <a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cfx_execute_helper::estimation::EstimateRequest;
@@ -1433,9 +1478,9 @@
 };
 <span class="kw">use </span>cfx_rpc_eth_api::EthApiServer;
 <span class="kw">use </span>cfx_rpc_eth_types::{
-    Block, BlockNumber <span class="kw">as </span>BlockId, EthRpcLogFilter, EthRpcLogFilter <span class="kw">as </span>Filter,
-    FeeHistory, Header, Log, Receipt, SyncInfo, SyncStatus, Transaction,
-    TransactionRequest,
+    AccountPendingTransactions, Block, BlockNumber <span class="kw">as </span>BlockId, EthRpcLogFilter,
+    EthRpcLogFilter <span class="kw">as </span>Filter, FeeHistory, Header, Log, Receipt, SyncInfo,
+    SyncStatus, Transaction, TransactionRequest,
 };
 <span class="kw">use </span>cfx_rpc_primitives::{Bytes, Index, U64 <span class="kw">as </span>HexU64};
 <span class="kw">use </span>cfx_rpc_utils::error::{
@@ -2414,6 +2459,35 @@
 
         <span class="prelude-val">Ok</span>(total_reward * evm_ratio / <span class="number">300</span>)
     }
+
+    <span class="kw">pub fn </span>account_pending_transactions(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, address: Address, maybe_start_nonce: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+        maybe_limit: <span class="prelude-ty">Option</span>&lt;U64&gt;,
+    ) -&gt; CoreResult&lt;AccountPendingTransactions&gt; {
+        <span class="kw">let </span>(pending_txs, tx_status, pending_count) = <span class="self">self
+            </span>.tx_pool()
+            .get_account_pending_transactions(
+                <span class="kw-2">&amp;</span>Address::from(address).with_evm_space(),
+                maybe_start_nonce,
+                maybe_limit.map(|limit| limit.as_usize()),
+                <span class="self">self</span>.best_epoch_number(),
+            )
+            .map_err(|e| CoreError::from(e))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(AccountPendingTransactions {
+            pending_transactions: pending_txs
+                .into_iter()
+                .map(|tx| {
+                    Transaction::from_signed(
+                        <span class="kw-2">&amp;</span>tx,
+                        (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+                        (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+                    )
+                })
+                .collect(),
+            first_tx_status: tx_status,
+            pending_count: pending_count.into(),
+        })
+    }
 }
 
 <span class="kw">impl </span>BlockProvider <span class="kw">for </span><span class="kw-2">&amp;</span>EthApi {
@@ -2821,6 +2895,10 @@
         <span class="prelude-val">Ok</span>(r)
     }
 
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, raw: Bytes) -&gt; RpcResult&lt;H256&gt; {
+        <span class="self">self</span>.send_raw_transaction(raw).<span class="kw">await
+    </span>}
+
     <span class="doccomment">/// Returns an Ethereum specific signature with:
     /// sign(keccak256("\x19Ethereum Signed Message:\n"
     /// + len(message) + message))).
@@ -2840,6 +2918,18 @@
 
     <span class="kw">async fn </span>logs(<span class="kw-2">&amp;</span><span class="self">self</span>, filter: Filter) -&gt; RpcResult&lt;Vec&lt;Log&gt;&gt; {
         <span class="self">self</span>.logs(filter).map_err(|err| err.into())
+    }
+
+    <span class="kw">async fn </span>account_pending_transactions(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, address: Address, maybe_start_nonce: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+        maybe_limit: <span class="prelude-ty">Option</span>&lt;U64&gt;,
+    ) -&gt; RpcResult&lt;AccountPendingTransactions&gt; {
+        <span class="self">self</span>.account_pending_transactions(
+            address,
+            maybe_start_nonce,
+            maybe_limit,
+        )
+        .map_err(|err| err.into())
     }
 }
 </code></pre></div></section></main></body></html>

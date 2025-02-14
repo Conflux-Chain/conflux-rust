@@ -17,7 +17,7 @@
 <span class="kw">use </span>cfx_types::U64;
 <span class="kw">use </span>serde::Serialize;
 
-<span class="attr">#[derive(Default, Serialize)]
+<span class="attr">#[derive(Default, Serialize, Clone)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>AccountPendingTransactions {
     <span class="kw">pub </span>pending_transactions: Vec&lt;Transaction&gt;,
