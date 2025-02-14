@@ -1334,6 +1334,7 @@ dependencies = [
  "cfx-parameters",
  "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
+ "cfx-rpc-common-impl",
  "cfx-rpc-eth-api",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
@@ -1388,7 +1389,9 @@ version = "0.1.0"
 dependencies = [
  "cfx-addr",
  "cfx-execute-helper",
+ "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
+ "cfx-rpc-common-impl",
  "cfx-types",
  "cfx-util-macros",
  "cfxcore",
@@ -1416,6 +1419,19 @@ dependencies = [
  "serde",
  "serde_json",
  "strum_macros",
+]
+
+[[package]]
+name = "cfx-rpc-common-impl"
+version = "2.4.0"
+dependencies = [
+ "cfx-addr",
+ "cfx-execute-helper",
+ "cfx-parity-trace-types",
+ "cfx-rpc-cfx-types",
+ "cfx-rpc-eth-types",
+ "cfx-types",
+ "slice-group-by",
 ]
 
 [[package]]
@@ -1907,10 +1923,12 @@ dependencies = [
  "cfx-executor",
  "cfx-internal-common",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-rpc",
  "cfx-rpc-builder",
  "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
+ "cfx-rpc-common-impl",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
  "cfx-rpc-utils",
@@ -8108,6 +8126,12 @@ checksum = "6528351c9bc8ab22353f9d776db39a20288e8d6c37ef8cfe3317cf875eecfc2d"
 dependencies = [
  "autocfg 1.1.0",
 ]
+
+[[package]]
+name = "slice-group-by"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "826167069c09b99d56f31e9ae5c99049e932a98c9dc2dac47645b08dbbf76ba7"
 
 [[package]]
 name = "smallvec"
