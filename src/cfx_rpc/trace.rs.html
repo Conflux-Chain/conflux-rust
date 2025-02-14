@@ -212,8 +212,31 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_addr::Network;
-<span class="kw">use </span>cfx_execute_helper::exec_tracer::TraceFilter <span class="kw">as </span>PrimitiveTraceFilter;
+<span class="kw">use </span>cfx_execute_helper::exec_tracer::{
+    construct_parity_trace, TraceWithPosition,
+};
 <span class="kw">use </span>cfx_rpc_cfx_impl::TraceHandler;
 <span class="kw">use </span>cfx_rpc_cfx_types::{
     trace::Action <span class="kw">as </span>RpcAction,
@@ -221,11 +244,12 @@
 };
 <span class="kw">use </span>cfx_rpc_eth_api::TraceApiServer;
 <span class="kw">use </span>cfx_rpc_eth_types::{BlockNumber, LocalizedTrace, TraceFilter};
-<span class="kw">use </span>cfx_types::{Space, H256};
+<span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>cfx_util_macros::unwrap_option_or_return_result_none <span class="kw">as </span>unwrap_or_return;
 <span class="kw">use </span>cfxcore::{errors::Result <span class="kw">as </span>CoreResult, SharedConsensusGraph};
 <span class="kw">use </span>jsonrpc_core::Error <span class="kw">as </span>RpcError;
 <span class="kw">use </span>jsonrpsee::core::RpcResult;
+<span class="kw">use </span>log::warn;
 <span class="kw">use </span>primitives::EpochNumber;
 
 <span class="kw">pub struct </span>TraceApi {
@@ -269,23 +293,31 @@
 
         <span class="kw">for </span>(idx, tx_traces) <span class="kw">in </span>phantom_block.traces.into_iter().enumerate() {
             <span class="kw">let </span>tx_hash = phantom_block.transactions[idx].hash();
+            <span class="comment">// convert traces
+            </span><span class="kw">let </span>trace_pairs =
+                construct_parity_trace(<span class="kw-2">&amp;</span>tx_traces).map_err(|e| {
+                    <span class="macro">warn!</span>(<span class="string">"Internal error on trace reconstruction: {}"</span>, e);
+                    RpcError::internal_error()
+                })<span class="question-mark">?</span>;
 
-            <span class="kw">for </span>(action, result, subtraces) <span class="kw">in
-                </span>PrimitiveTraceFilter::space_filter(Space::Ethereum)
-                    .filter_trace_pairs(tx_traces)
-                    .map_err(|<span class="kw">_</span>| RpcError::internal_error())<span class="question-mark">?
-            </span>{
+            <span class="kw">for </span>TraceWithPosition {
+                action,
+                result,
+                child_count,
+                trace_path,
+            } <span class="kw">in </span>trace_pairs
+            {
                 <span class="kw">let </span><span class="kw-2">mut </span>eth_trace = LocalizedTrace {
                     action: RpcAction::try_from(
-                        action.action,
+                        action.action.clone(),
                         <span class="self">self</span>.trace_handler.network,
                     )
                     .map_err(|<span class="kw">_</span>| RpcError::internal_error())<span class="question-mark">?
                     </span>.try_into()
                     .map_err(|<span class="kw">_</span>| RpcError::internal_error())<span class="question-mark">?</span>,
                     result: EthRes::None,
-                    trace_address: <span class="macro">vec!</span>[],
-                    subtraces,
+                    trace_address: trace_path,
+                    subtraces: child_count,
                     transaction_position: <span class="prelude-val">Some</span>(idx),
                     transaction_hash: <span class="prelude-val">Some</span>(tx_hash),
                     block_number,
@@ -296,7 +328,7 @@
 
                 eth_trace.set_result(
                     RpcAction::try_from(
-                        result.action,
+                        result.action.clone(),
                         <span class="self">self</span>.trace_handler.network,
                     )
                     .map_err(|<span class="kw">_</span>| RpcError::internal_error())<span class="question-mark">?</span>,
@@ -366,24 +398,31 @@
         <span class="kw">let </span>tx_traces = phantom_block.traces[id].clone();
 
         <span class="comment">// convert traces
-        </span><span class="kw">let </span>trace_pairs = PrimitiveTraceFilter::space_filter(Space::Ethereum)
-            .filter_trace_pairs(tx_traces)
-            .map_err(RpcError::invalid_params)<span class="question-mark">?</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>eth_traces = Vec::new();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>eth_traces = Vec::new();
+        <span class="kw">let </span>trace_pairs = construct_parity_trace(<span class="kw-2">&amp;</span>tx_traces).map_err(|e| {
+            <span class="macro">warn!</span>(<span class="string">"Internal error on trace reconstruction: {}"</span>, e);
+            RpcError::internal_error()
+        })<span class="question-mark">?</span>;
 
-        <span class="kw">for </span>(action, result, subtraces) <span class="kw">in </span>trace_pairs {
+        <span class="kw">for </span>TraceWithPosition {
+            action,
+            result,
+            child_count,
+            trace_path,
+        } <span class="kw">in </span>trace_pairs
+        {
             <span class="kw">let </span><span class="kw-2">mut </span>eth_trace = EthLocalizedTrace {
                 action: RpcAction::try_from(
-                    action.action,
+                    action.action.clone(),
                     <span class="self">self</span>.trace_handler.network,
                 )
                 .map_err(|<span class="kw">_</span>| RpcError::internal_error())<span class="question-mark">?
                 </span>.try_into()
                 .map_err(|<span class="kw">_</span>| RpcError::internal_error())<span class="question-mark">?</span>,
                 result: EthRes::None,
-                trace_address: <span class="macro">vec!</span>[],
-                subtraces,
+                trace_address: trace_path,
+                subtraces: child_count,
                 transaction_position: <span class="prelude-val">Some</span>(id),
                 transaction_hash: <span class="prelude-val">Some</span>(tx.hash()),
                 block_number: epoch_num,
@@ -393,8 +432,11 @@
             };
 
             eth_trace.set_result(
-                RpcAction::try_from(result.action, <span class="self">self</span>.trace_handler.network)
-                    .map_err(|<span class="kw">_</span>| RpcError::internal_error())<span class="question-mark">?</span>,
+                RpcAction::try_from(
+                    result.action.clone(),
+                    <span class="self">self</span>.trace_handler.network,
+                )
+                .map_err(|<span class="kw">_</span>| RpcError::internal_error())<span class="question-mark">?</span>,
             )<span class="question-mark">?</span>;
 
             eth_traces.push(eth_trace);

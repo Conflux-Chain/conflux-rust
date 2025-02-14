@@ -190,6 +190,20 @@
 <a href="#188" id="188">188</a>
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::rpc::{
     impls::cfx::TraceHandler,
     traits::eth_space::trace::Trace <span class="kw">as </span>EthTrace,
@@ -201,10 +215,13 @@
         Action <span class="kw">as </span>RpcAction,
     },
 };
-<span class="kw">use </span>cfx_execute_helper::exec_tracer::TraceFilter <span class="kw">as </span>PrimitiveTraceFilter;
-<span class="kw">use </span>cfx_types::{Space, H256};
+<span class="kw">use </span>cfx_execute_helper::exec_tracer::{
+    construct_parity_trace, TraceWithPosition,
+};
+<span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>cfx_util_macros::unwrap_option_or_return_result_none <span class="kw">as </span>unwrap_or_return;
 <span class="kw">use </span>jsonrpc_core::{Error <span class="kw">as </span>JsonRpcError, <span class="prelude-ty">Result </span><span class="kw">as </span>JsonRpcResult};
+<span class="kw">use </span>log::warn;
 <span class="kw">use </span>primitives::EpochNumber;
 
 <span class="kw">pub struct </span>EthTraceHandler {
@@ -243,22 +260,26 @@
         <span class="kw">for </span>(idx, tx_traces) <span class="kw">in </span>phantom_block.traces.into_iter().enumerate() {
             <span class="kw">let </span>tx_hash = phantom_block.transactions[idx].hash();
 
-            <span class="kw">for </span>(action, result, subtraces) <span class="kw">in
-                </span>PrimitiveTraceFilter::space_filter(Space::Ethereum)
-                    .filter_trace_pairs(tx_traces)
-                    .map_err(|<span class="kw">_</span>| JsonRpcError::internal_error())<span class="question-mark">?
-            </span>{
+            <span class="kw">for </span>TraceWithPosition {
+                action,
+                result,
+                child_count,
+                trace_path,
+            } <span class="kw">in </span>construct_parity_trace(<span class="kw-2">&amp;</span>tx_traces).map_err(|e| {
+                <span class="macro">warn!</span>(<span class="string">"Internal error on trace reconstruction: {}"</span>, e);
+                JsonRpcError::internal_error()
+            })<span class="question-mark">? </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>eth_trace = EthLocalizedTrace {
                     action: RpcAction::try_from(
-                        action.action,
+                        action.action.clone(),
                         <span class="self">self</span>.trace_handler.inner.network,
                     )
                     .map_err(|<span class="kw">_</span>| JsonRpcError::internal_error())<span class="question-mark">?
                     </span>.try_into()
                     .map_err(|<span class="kw">_</span>| JsonRpcError::internal_error())<span class="question-mark">?</span>,
                     result: EthRes::None,
-                    trace_address: <span class="macro">vec!</span>[],
-                    subtraces,
+                    trace_address: trace_path,
+                    subtraces: child_count,
                     transaction_position: <span class="prelude-val">Some</span>(idx),
                     transaction_hash: <span class="prelude-val">Some</span>(tx_hash),
                     block_number,
@@ -269,7 +290,7 @@
 
                 eth_trace.set_result(
                     RpcAction::try_from(
-                        result.action,
+                        result.action.clone(),
                         <span class="self">self</span>.trace_handler.inner.network,
                     )
                     .map_err(|<span class="kw">_</span>| JsonRpcError::internal_error())<span class="question-mark">?</span>,
@@ -340,24 +361,31 @@
         <span class="kw">let </span>tx_traces = phantom_block.traces[id].clone();
 
         <span class="comment">// convert traces
-        </span><span class="kw">let </span>trace_pairs = PrimitiveTraceFilter::space_filter(Space::Ethereum)
-            .filter_trace_pairs(tx_traces)
-            .map_err(JsonRpcError::invalid_params)<span class="question-mark">?</span>;
+        </span><span class="kw">let </span>trace_pairs = construct_parity_trace(<span class="kw-2">&amp;</span>tx_traces).map_err(|e| {
+            <span class="macro">warn!</span>(<span class="string">"Internal error on trace reconstruction: {}"</span>, e);
+            JsonRpcError::internal_error()
+        })<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>eth_traces = Vec::new();
 
-        <span class="kw">for </span>(action, result, subtraces) <span class="kw">in </span>trace_pairs {
+        <span class="kw">for </span>TraceWithPosition {
+            action,
+            result,
+            child_count,
+            trace_path,
+        } <span class="kw">in </span>trace_pairs
+        {
             <span class="kw">let </span><span class="kw-2">mut </span>eth_trace = EthLocalizedTrace {
                 action: RpcAction::try_from(
-                    action.action,
+                    action.action.clone(),
                     <span class="self">self</span>.trace_handler.inner.network,
                 )
                 .map_err(|<span class="kw">_</span>| JsonRpcError::internal_error())<span class="question-mark">?
                 </span>.try_into()
                 .map_err(|<span class="kw">_</span>| JsonRpcError::internal_error())<span class="question-mark">?</span>,
                 result: EthRes::None,
-                trace_address: <span class="macro">vec!</span>[],
-                subtraces,
+                trace_address: trace_path,
+                subtraces: child_count,
                 transaction_position: <span class="prelude-val">Some</span>(id),
                 transaction_hash: <span class="prelude-val">Some</span>(tx.hash()),
                 block_number: epoch_num,
@@ -368,7 +396,7 @@
 
             eth_trace.set_result(
                 RpcAction::try_from(
-                    result.action,
+                    result.action.clone(),
                     <span class="self">self</span>.trace_handler.inner.network,
                 )
                 .map_err(|<span class="kw">_</span>| JsonRpcError::internal_error())<span class="question-mark">?</span>,

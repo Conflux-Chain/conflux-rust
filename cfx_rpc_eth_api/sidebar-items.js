@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":["DebugApiServer","EthApiServer","EthFilterApiServer","EthPubSubApiServer","NetApiServer","RpcApiServer","TraceApiServer","Web3ApiServer"]};
+window.SIDEBAR_ITEMS = {"trait":["DebugApiServer","EthApiServer","EthFilterApiServer","EthPubSubApiServer","NetApiServer","ParityApiServer","RpcApiServer","TraceApiServer","Web3ApiServer"]};

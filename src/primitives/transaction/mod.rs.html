@@ -1032,6 +1032,12 @@
 <a href="#1030" id="1030">1030</a>
 <a href="#1031" id="1031">1031</a>
 <a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1431,10 +1437,10 @@
         base_price + <span class="self">self</span>.priority_gas_price(base_price)
     }
 
-    <span class="comment">// This function returns the hash value used in transaction signature. It is
-    // different from transaction hash. The transaction hash also contains
-    // signatures.
-    </span><span class="kw">pub fn </span>signature_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 {
+    <span class="comment">// This function returns the hash value used in calculating the transaction
+    // signature. It is different from transaction hash. The transaction
+    // hash also contains signatures.
+    </span><span class="kw">pub fn </span>hash_for_compute_signature(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; H256 {
         <span class="kw">let </span><span class="kw-2">mut </span>s = RlpStream::new();
         <span class="kw">let </span><span class="kw-2">mut </span>type_prefix = <span class="macro">vec!</span>[];
         <span class="kw">match </span><span class="self">self </span>{
@@ -1478,8 +1484,11 @@
     }
 
     <span class="kw">pub fn </span>sign(<span class="self">self</span>, secret: <span class="kw-2">&amp;</span>Secret) -&gt; SignedTransaction {
-        <span class="kw">let </span>sig = <span class="kw">crate</span>::keylib::sign(secret, <span class="kw-2">&amp;</span><span class="self">self</span>.signature_hash())
-            .expect(<span class="string">"data is valid and context has signing capabilities; qed"</span>);
+        <span class="kw">let </span>sig =
+            <span class="kw">crate</span>::keylib::sign(secret, <span class="kw-2">&amp;</span><span class="self">self</span>.hash_for_compute_signature())
+                .expect(
+                    <span class="string">"data is valid and context has signing capabilities; qed"</span>,
+                );
         <span class="kw">let </span>tx_with_sig = <span class="self">self</span>.with_signature(sig);
         <span class="kw">let </span>public = tx_with_sig
             .recover_public()
@@ -1877,7 +1886,7 @@
 
     <span class="doccomment">/// Used to compute hash of created transactions
     </span><span class="kw">fn </span>compute_hash(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; TransactionWithSignature {
-        <span class="kw">let </span>hash = keccak(<span class="kw-2">&amp;*</span><span class="self">self</span>.rlp_bytes());
+        <span class="kw">let </span>hash = keccak(<span class="kw-2">&amp;*</span><span class="self">self</span>.transaction.rlp_bytes());
         <span class="self">self</span>.hash = hash;
         <span class="self">self
     </span>}
@@ -1915,7 +1924,10 @@
 
     <span class="doccomment">/// Recovers the public key of the sender.
     </span><span class="kw">pub fn </span>recover_public(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Public, keylib::Error&gt; {
-        <span class="prelude-val">Ok</span>(recover(<span class="kw-2">&amp;</span><span class="self">self</span>.signature(), <span class="kw-2">&amp;</span><span class="self">self</span>.unsigned.signature_hash())<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(recover(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.signature(),
+            <span class="kw-2">&amp;</span><span class="self">self</span>.unsigned.hash_for_compute_signature(),
+        )<span class="question-mark">?</span>)
     }
 
     <span class="kw">pub fn </span>rlp_size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
@@ -2051,7 +2063,7 @@
             <span class="prelude-val">Ok</span>(verify_public(
                 <span class="kw-2">&amp;</span>public,
                 <span class="kw-2">&amp;</span><span class="self">self</span>.signature(),
-                <span class="kw-2">&amp;</span><span class="self">self</span>.unsigned.signature_hash(),
+                <span class="kw-2">&amp;</span><span class="self">self</span>.unsigned.hash_for_compute_signature(),
             )<span class="question-mark">?</span>)
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)

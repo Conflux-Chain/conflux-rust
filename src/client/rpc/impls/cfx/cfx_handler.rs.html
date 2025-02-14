@@ -3065,7 +3065,7 @@
             (<span class="number">1</span>, <span class="number">0</span>) =&gt; {
                 <span class="kw">let </span>tx_hash = signed_trans[<span class="number">0</span>].hash();
                 <span class="self">self</span>.sync.append_received_transactions(signed_trans);
-                <span class="prelude-val">Ok</span>(tx_hash.into())
+                <span class="prelude-val">Ok</span>(tx_hash)
             }
             <span class="kw">_ </span>=&gt; {
                 <span class="comment">// This should never happen

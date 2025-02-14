@@ -821,6 +821,15 @@
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
@@ -1066,6 +1075,15 @@
                     EthRpcModule::Web3 =&gt; Web3Api.into_rpc().into(),
                     EthRpcModule::Rpc =&gt; {
                         RPCApi::new(module_version.clone()).into_rpc().into()
+                    }
+                    EthRpcModule::Parity =&gt; {
+                        <span class="kw">let </span>eth_api = EthApi::new(
+                            <span class="self">self</span>.config.clone(),
+                            <span class="self">self</span>.consensus.clone(),
+                            <span class="self">self</span>.sync.clone(),
+                            <span class="self">self</span>.tx_pool.clone(),
+                        );
+                        ParityApi::new(eth_api).into_rpc().into()
                     }
                 })
                 .clone()

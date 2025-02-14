@@ -125,6 +125,13 @@
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -193,40 +200,12 @@
             // Replace the ones from config file with the ones
             // from commandline if duplicates.
             </span><span class="kw">pub fn </span>parse(matches: <span class="kw-2">&amp;</span>clap::ArgMatches) -&gt; <span class="prelude-ty">Result</span>&lt;RawConfiguration, String&gt; {
-                <span class="kw">let </span><span class="kw-2">mut </span>config = RawConfiguration::default();
+                <span class="kw">let </span><span class="kw-2">mut </span>config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config_filename) = matches.value_of(<span class="string">"config"</span>)  {
+                    RawConfiguration::from_file(config_filename)<span class="question-mark">?
 
-                <span class="kw">let </span>config_filename = matches.value_of(<span class="string">"config"</span>);
-                <span class="kw">if </span>config_filename.is_some() {
-                    <span class="kw">let </span><span class="kw-2">mut </span>config_file = File::open(config_filename.unwrap())
-                        .map_err(|e| <span class="macro">format!</span>(<span class="string">"failed to open configuration file: {:?}"</span>, e))<span class="question-mark">?</span>;
-
-                    <span class="kw">let </span><span class="kw-2">mut </span>config_str = String::new();
-                    config_file
-                        .read_to_string(<span class="kw-2">&amp;mut </span>config_str)
-                        .map_err(|e| <span class="macro">format!</span>(<span class="string">"failed to read configuration file: {:?}"</span>, e))<span class="question-mark">?</span>;
-
-                    <span class="kw">let </span>config_value = config_str.parse::&lt;toml::Value&gt;()
-                        .map_err(|e| <span class="macro">format!</span>(<span class="string">"failed to parse configuration file: {:?}"</span>, e))<span class="question-mark">?</span>;
-                    $(
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = config_value.get(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>)) {
-                            config.<span class="macro-nonterminal">$name </span>= <span class="macro">if_option!</span>(
-                                $(<span class="macro-nonterminal">$</span><span class="kw">type</span>)+,
-                                <span class="macro-nonterminal">THEN</span>{ <span class="prelude-val">Some</span>(value.clone().try_into().map_err(|e| <span class="macro">format!</span>(<span class="string">"Invalid {}: err={:?}"</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>), e).to_owned())<span class="question-mark">?</span>) }
-                                ELSE{ value.clone().try_into().map_err(|e| <span class="macro">format!</span>(<span class="string">"Invalid {}: err={:?}"</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>), e).to_owned())<span class="question-mark">? </span>}
-                            );
-                        }
-                    )*
-                    $(
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = config_value.get(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$c_name</span>)) {
-                            config.<span class="macro-nonterminal">$c_name </span>= <span class="macro">if_option!</span>(
-                                $(<span class="macro-nonterminal">$c_type</span>)+,
-                                THEN{ <span class="prelude-val">Some</span>(<span class="macro-nonterminal">$converter</span>(value.as_str().unwrap())<span class="question-mark">?</span>) }
-                                ELSE{ <span class="macro-nonterminal">$converter</span>(value.as_str().unwrap())<span class="question-mark">? </span>}
-                            )
-                        }
-                    )*
-                }
-
+                </span>} <span class="kw">else </span>{
+                    RawConfiguration::default()
+                };
                 $(
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = matches.value_of(<span class="macro">underscore_to_hyphen!</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))) {
                         config.<span class="macro-nonterminal">$name </span>= <span class="macro">if_option!</span>(
@@ -247,6 +226,41 @@
                 )*
                 <span class="prelude-val">Ok</span>(config)
             }
+            <span class="kw">pub fn </span>from_file(config_path: <span class="kw-2">&amp;</span>str) -&gt;  <span class="prelude-ty">Result</span>&lt;RawConfiguration, String&gt; {
+
+                <span class="kw">let </span><span class="kw-2">mut </span>config = RawConfiguration::default();
+
+                <span class="kw">let </span><span class="kw-2">mut </span>config_file = File::open(config_path)
+                .map_err(|e| <span class="macro">format!</span>(<span class="string">"failed to open configuration file: {:?}"</span>, e))<span class="question-mark">?</span>;
+
+                <span class="kw">let </span><span class="kw-2">mut </span>config_str = String::new();
+                config_file
+                    .read_to_string(<span class="kw-2">&amp;mut </span>config_str)
+                    .map_err(|e| <span class="macro">format!</span>(<span class="string">"failed to read configuration file: {:?}"</span>, e))<span class="question-mark">?</span>;
+
+                <span class="kw">let </span>config_value = config_str.parse::&lt;toml::Value&gt;()
+                    .map_err(|e| <span class="macro">format!</span>(<span class="string">"failed to parse configuration file: {:?}"</span>, e))<span class="question-mark">?</span>;
+                $(
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = config_value.get(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>)) {
+                        config.<span class="macro-nonterminal">$name </span>= <span class="macro">if_option!</span>(
+                            $(<span class="macro-nonterminal">$</span><span class="kw">type</span>)+,
+                            <span class="macro-nonterminal">THEN</span>{ <span class="prelude-val">Some</span>(value.clone().try_into().map_err(|e| <span class="macro">format!</span>(<span class="string">"Invalid {}: err={:?}"</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>), e).to_owned())<span class="question-mark">?</span>) }
+                            ELSE{ value.clone().try_into().map_err(|e| <span class="macro">format!</span>(<span class="string">"Invalid {}: err={:?}"</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>), e).to_owned())<span class="question-mark">? </span>}
+                        );
+                    }
+                )*
+
+                $(
+                  <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = config_value.get(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$c_name</span>)) {
+                        config.<span class="macro-nonterminal">$c_name </span>= <span class="macro">if_option!</span>(
+                            $(<span class="macro-nonterminal">$c_type</span>)+,
+                            THEN{ <span class="prelude-val">Some</span>(<span class="macro-nonterminal">$converter</span>(value.as_str().unwrap())<span class="question-mark">?</span>) }
+                            ELSE{ <span class="macro-nonterminal">$converter</span>(value.as_str().unwrap())<span class="question-mark">? </span>}
+                        )
+                    }
+                )*
+                <span class="prelude-val">Ok</span>(config)
+         }
         }
     }
 }
