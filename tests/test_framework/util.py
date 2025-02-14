@@ -15,7 +15,6 @@ from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union, 
 import socket
 import threading
 import jsonrpcclient.exceptions
-import solcx
 import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
@@ -33,8 +32,6 @@ from .authproxy import AuthServiceProxy, JSONRPCException
 from conflux.config import default_config
 if TYPE_CHECKING:
     from conflux.rpc import RpcClient
-
-solcx.set_solc_version('v0.5.17')
 
 CONFLUX_RPC_WAIT_TIMEOUT = 60
 CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
@@ -758,14 +755,15 @@ def get_contract_instance(contract_dict=None,
     w3 = web3.Web3()
     contract = None
     if source and contract_name:
-        output = solcx.compile_files([source])
-        if platform == "win32":
-            source = os.path.abspath(source).replace("\\","/")
-        contract_dict = output[f"{source}:{contract_name}"]
-        if "bin" in contract_dict:
-            contract_dict["bytecode"] = contract_dict.pop("bin")
-        elif "code" in contract_dict:
-            contract_dict["bytecode"] = contract_dict.pop("code")
+        raise Exception("deprecated")
+        # output = solcx.compile_files([source])
+        # if platform == "win32":
+        #     source = os.path.abspath(source).replace("\\","/")
+        # contract_dict = output[f"{source}:{contract_name}"]
+        # if "bin" in contract_dict:
+        #     contract_dict["bytecode"] = contract_dict.pop("bin")
+        # elif "code" in contract_dict:
+        #     contract_dict["bytecode"] = contract_dict.pop("code")
     if contract_dict:
         contract = w3.eth.contract(
             abi=contract_dict['abi'], bytecode=contract_dict['bytecode'], address=address)

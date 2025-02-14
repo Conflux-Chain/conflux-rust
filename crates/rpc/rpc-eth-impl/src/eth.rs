@@ -10,10 +10,10 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    AccountOverride, Block, BlockNumber as BlockId, BlockOverrides,
-    EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides, FeeHistory,
-    Header, Log, Receipt, RpcStateOverride, SyncInfo, SyncStatus, Transaction,
-    TransactionRequest,
+    AccountOverride, AccountPendingTransactions, Block, BlockNumber as BlockId,
+    BlockOverrides, EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides,
+    FeeHistory, Header, Log, Receipt, RpcStateOverride, SyncInfo, SyncStatus,
+    Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::error::{
@@ -1016,6 +1016,35 @@ impl EthApi {
 
         Ok(total_reward * evm_ratio / 300)
     }
+
+    pub fn account_pending_transactions(
+        &self, address: Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> CoreResult<AccountPendingTransactions> {
+        let (pending_txs, tx_status, pending_count) = self
+            .tx_pool()
+            .get_account_pending_transactions(
+                &Address::from(address).with_evm_space(),
+                maybe_start_nonce,
+                maybe_limit.map(|limit| limit.as_usize()),
+                self.best_epoch_number(),
+            )
+            .map_err(|e| CoreError::from(e))?;
+        Ok(AccountPendingTransactions {
+            pending_transactions: pending_txs
+                .into_iter()
+                .map(|tx| {
+                    Transaction::from_signed(
+                        &tx,
+                        (None, None, None),
+                        (None, None),
+                    )
+                })
+                .collect(),
+            first_tx_status: tx_status,
+            pending_count: pending_count.into(),
+        })
+    }
 }
 
 impl BlockProvider for &EthApi {
@@ -1427,6 +1456,10 @@ impl EthApiServer for EthApi {
         Ok(r)
     }
 
+    async fn submit_transaction(&self, raw: Bytes) -> RpcResult<H256> {
+        self.send_raw_transaction(raw).await
+    }
+
     /// Returns an Ethereum specific signature with:
     /// sign(keccak256("\x19Ethereum Signed Message:\n"
     /// + len(message) + message))).
@@ -1446,5 +1479,17 @@ impl EthApiServer for EthApi {
 
     async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>> {
         self.logs(filter).map_err(|err| err.into())
+    }
+
+    async fn account_pending_transactions(
+        &self, address: Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> RpcResult<AccountPendingTransactions> {
+        self.account_pending_transactions(
+            address,
+            maybe_start_nonce,
+            maybe_limit,
+        )
+        .map_err(|err| err.into())
     }
 }

@@ -250,6 +250,7 @@ proc-macro-crate = "3"
 serde = { version = "1.0", features = [
     "derive",
     "alloc",
+    "rc"
 ], default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1.0", default-features = false }

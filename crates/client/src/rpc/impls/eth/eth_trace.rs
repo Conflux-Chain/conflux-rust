@@ -9,10 +9,13 @@ use crate::rpc::{
         Action as RpcAction,
     },
 };
-use cfx_execute_helper::exec_tracer::TraceFilter as PrimitiveTraceFilter;
-use cfx_types::{Space, H256};
+use cfx_execute_helper::exec_tracer::{
+    construct_parity_trace, TraceWithPosition,
+};
+use cfx_types::H256;
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
 use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
+use log::warn;
 use primitives::EpochNumber;
 
 pub struct EthTraceHandler {
@@ -51,22 +54,26 @@ impl EthTrace for EthTraceHandler {
         for (idx, tx_traces) in phantom_block.traces.into_iter().enumerate() {
             let tx_hash = phantom_block.transactions[idx].hash();
 
-            for (action, result, subtraces) in
-                PrimitiveTraceFilter::space_filter(Space::Ethereum)
-                    .filter_trace_pairs(tx_traces)
-                    .map_err(|_| JsonRpcError::internal_error())?
-            {
+            for TraceWithPosition {
+                action,
+                result,
+                child_count,
+                trace_path,
+            } in construct_parity_trace(&tx_traces).map_err(|e| {
+                warn!("Internal error on trace reconstruction: {}", e);
+                JsonRpcError::internal_error()
+            })? {
                 let mut eth_trace = EthLocalizedTrace {
                     action: RpcAction::try_from(
-                        action.action,
+                        action.action.clone(),
                         self.trace_handler.inner.network,
                     )
                     .map_err(|_| JsonRpcError::internal_error())?
                     .try_into()
                     .map_err(|_| JsonRpcError::internal_error())?,
                     result: EthRes::None,
-                    trace_address: vec![],
-                    subtraces,
+                    trace_address: trace_path,
+                    subtraces: child_count,
                     transaction_position: Some(idx),
                     transaction_hash: Some(tx_hash),
                     block_number,
@@ -77,7 +84,7 @@ impl EthTrace for EthTraceHandler {
 
                 eth_trace.set_result(
                     RpcAction::try_from(
-                        result.action,
+                        result.action.clone(),
                         self.trace_handler.inner.network,
                     )
                     .map_err(|_| JsonRpcError::internal_error())?,
@@ -148,24 +155,31 @@ impl EthTrace for EthTraceHandler {
         let tx_traces = phantom_block.traces[id].clone();
 
         // convert traces
-        let trace_pairs = PrimitiveTraceFilter::space_filter(Space::Ethereum)
-            .filter_trace_pairs(tx_traces)
-            .map_err(JsonRpcError::invalid_params)?;
+        let trace_pairs = construct_parity_trace(&tx_traces).map_err(|e| {
+            warn!("Internal error on trace reconstruction: {}", e);
+            JsonRpcError::internal_error()
+        })?;
 
         let mut eth_traces = Vec::new();
 
-        for (action, result, subtraces) in trace_pairs {
+        for TraceWithPosition {
+            action,
+            result,
+            child_count,
+            trace_path,
+        } in trace_pairs
+        {
             let mut eth_trace = EthLocalizedTrace {
                 action: RpcAction::try_from(
-                    action.action,
+                    action.action.clone(),
                     self.trace_handler.inner.network,
                 )
                 .map_err(|_| JsonRpcError::internal_error())?
                 .try_into()
                 .map_err(|_| JsonRpcError::internal_error())?,
                 result: EthRes::None,
-                trace_address: vec![],
-                subtraces,
+                trace_address: trace_path,
+                subtraces: child_count,
                 transaction_position: Some(id),
                 transaction_hash: Some(tx.hash()),
                 block_number: epoch_num,
@@ -176,7 +190,7 @@ impl EthTrace for EthTraceHandler {
 
             eth_trace.set_result(
                 RpcAction::try_from(
-                    result.action,
+                    result.action.clone(),
                     self.trace_handler.inner.network,
                 )
                 .map_err(|_| JsonRpcError::internal_error())?,

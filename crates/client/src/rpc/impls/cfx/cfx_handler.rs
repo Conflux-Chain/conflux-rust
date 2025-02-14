@@ -575,7 +575,7 @@ impl RpcImpl {
             (1, 0) => {
                 let tx_hash = signed_trans[0].hash();
                 self.sync.append_received_transactions(signed_trans);
-                Ok(tx_hash.into())
+                Ok(tx_hash)
             }
             _ => {
                 // This should never happen
