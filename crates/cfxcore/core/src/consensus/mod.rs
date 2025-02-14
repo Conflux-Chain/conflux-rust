@@ -49,6 +49,7 @@ use cfx_execute_helper::{
 use cfx_executor::{
     executive::ExecutionOutcome, spec::CommonParams, state::State,
 };
+use cfx_rpc_eth_types::EvmOverrides;
 use geth_tracer::GethTraceWithHash;
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
@@ -1429,7 +1430,7 @@ impl ConsensusGraph {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
-        request: EstimateRequest,
+        request: EstimateRequest, evm_overrides: EvmOverrides,
     ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
@@ -1440,8 +1441,13 @@ impl ConsensusGraph {
         } else {
             bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
         };
-        self.executor
-            .call_virtual(tx, &epoch_id, epoch_size, request)
+        self.executor.call_virtual(
+            tx,
+            &epoch_id,
+            epoch_size,
+            request,
+            evm_overrides,
+        )
     }
 
     pub fn collect_epoch_geth_trace(

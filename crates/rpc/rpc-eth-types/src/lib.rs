@@ -23,7 +23,10 @@ pub use fee_history::FeeHistory;
 pub use filter::*;
 pub use log::Log;
 pub use receipt::Receipt;
-pub use state::{AccountOverride, EvmOverrides, StateOverride};
+pub use state::{
+    AccountOverride, AccountStateOverrideMode, EvmOverrides,
+    RpcAccountOverride, RpcStateOverride, StateOverride,
+};
 pub use sync::{SyncInfo, SyncStatus};
 pub use trace_filter::TraceFilter;
 pub use transaction::Transaction;

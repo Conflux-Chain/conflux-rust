@@ -1208,6 +1208,7 @@ dependencies = [
  "cfx-math",
  "cfx-parameters",
  "cfx-parity-trace-types",
+ "cfx-rpc-eth-types",
  "cfx-statedb",
  "cfx-storage",
  "cfx-types",
