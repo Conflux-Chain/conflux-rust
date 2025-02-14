@@ -156,3 +156,15 @@ def core_accounts(network: ConfluxTestFramework):
 def evm_accounts(network: ConfluxTestFramework):
     return network.evm_accounts
 
+@pytest.fixture(scope="module")
+def internal_contracts(network: ConfluxTestFramework):
+    return {
+        "AdminControl": network.internal_contract("AdminControl"),
+        "SponsorWhitelistControl": network.internal_contract("SponsorWhitelistControl"),
+        "Staking": network.internal_contract("Staking"),
+        "ConfluxContext": network.internal_contract("ConfluxContext"),
+        "PoSRegister": network.internal_contract("PoSRegister"),
+        "CrossSpaceCall": network.internal_contract("CrossSpaceCall"),
+        "ParamsControl": network.internal_contract("ParamsControl"),
+    }
+
