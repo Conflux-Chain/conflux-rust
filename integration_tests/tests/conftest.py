@@ -167,3 +167,4 @@ def internal_contracts(network: ConfluxTestFramework):
         "CrossSpaceCall": network.internal_contract("CrossSpaceCall"),
         "ParamsControl": network.internal_contract("ParamsControl"),
     }
+

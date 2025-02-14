@@ -265,6 +265,8 @@ pub enum EthRpcModule {
     Web3,
     /// `rpc_` module
     Rpc,
+    /// `parity_` module
+    Parity,
 }
 
 impl EthRpcModule {
@@ -307,6 +309,7 @@ impl FromStr for EthRpcModule {
             // "txpool" => Self::Txpool,
             "web3" => Self::Web3,
             "rpc" => Self::Rpc,
+            "parity" => Self::Parity,
             _ => return Err(ParseError::VariantNotFound),
         })
     }

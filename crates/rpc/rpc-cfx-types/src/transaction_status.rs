@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 /// Transaction status in the transaction pool.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum TransactionStatus {
     Packed,
@@ -9,7 +9,7 @@ pub enum TransactionStatus {
     Pending(PendingReason),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub enum PendingReason {
     FutureNonce,
