@@ -1,0 +1,8 @@
+{
+  "name": "viem-wrapper",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "viem": "^2.23.1"
+  }
+} 

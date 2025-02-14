@@ -145,6 +145,8 @@ impl State {
         let authority_code = authority_acc.code();
         let authority_code_hash = authority_acc.code_hash();
 
+        std::mem::drop(authority_acc);
+
         let (code, code_hash) = if address.space == Space::Native {
             // Core space does not support-7702
             (authority_code, authority_code_hash)
