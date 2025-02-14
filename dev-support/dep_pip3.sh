@@ -12,7 +12,7 @@ pip3 install cfx-account eth-utils py-ecc rlp trie coincurve safe-pysha3 conflux
 
 # set server path to fix ci issue
 export PATH="/home/ubuntu/.nvm/versions/node/v20.18.3/bin:$PATH"
-cd integration_tests/test_framework/util/eip7702/viem_scripts && npm install
+cd integration_tests/test_framework/util/eip7702/viem_scripts && npm install &&cd ../../../../../
 
 # TODO cross platform
 #yum install clang snappy snappy-devel zlib zlib-devel bzip2 bzip2-devel lz4-devel
