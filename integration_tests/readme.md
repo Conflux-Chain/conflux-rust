@@ -56,6 +56,10 @@ Use pytest options to filter tests:
 ```bash
 pytest integration_tests/tests -k test_name
 
+# or 
+
+pytest integration_tests/tests/test_file.py::test_name
+
 # Run tests in a specific file
 pytest integration_tests/tests/test_file.py
 
@@ -71,9 +75,10 @@ Put the below configuration in `.vscode/settings.json`:
 {
     "python.testing.pytestArgs": [
         "integration_tests/tests",
-        "-vv",
-        "-n", "logical",
-        "--dist", "loadscope",
+        "-vv",  // show more logs
+        "-s", // show the print statements in the test
+        // "-n", "logical", // run tests in parallel
+        // "--dist", "loadscope", // tests are grouped by module(single python file)
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true
@@ -81,6 +86,9 @@ Put the below configuration in `.vscode/settings.json`:
 ```
 
 Then you can see the tests in VSCode test explorer. You can run tests by clicking the test name.
+
+> `-n` and `--dist` are commented out by default. You can uncomment them to run tests in parallel.
+> But it should note that if you run tests in parallel, the test logs will be hidden by default.
 
 ## Add New Tests
 
