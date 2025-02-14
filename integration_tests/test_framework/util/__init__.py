@@ -24,6 +24,7 @@ import shutil
 import math
 from os.path import dirname, join
 from pathlib import Path
+from web3.exceptions import Web3RPCError, ContractLogicError
 
 from integration_tests.test_framework.simple_rpc_proxy import SimpleRpcProxy
 from .. import coverage
@@ -172,6 +173,32 @@ def try_rpc(code: Optional[int], message: Optional[str], fun: Callable, err_data
     except Exception as e:
         raise AssertionError("Unexpected exception raised: " +
                              type(e).__name__)
+    else:
+        return False
+    
+def assert_raises_web3_rpc_error(code: Optional[int], message: Optional[str], fun: Callable, *args, err_data_: Optional[str]=None, **kwds):
+    try:
+        fun(*args, **kwds)
+    except Web3RPCError as e:
+        error = e.rpc_response['error']
+        # JSONRPCException was thrown as expected. Check the code and message values are correct.
+        if (code is not None) and (code != error["code"]):
+            raise AssertionError(
+                "Unexpected JSONRPC error code %i" % error["code"])
+        if (message is not None) and (message not in cast(str, error['message'])):
+            raise AssertionError(f"Expected substring not found: {error['message']}")
+        if (err_data_ is not None):
+            if not getattr(error, "data", None) or (err_data_ not in cast(str, error['data'])):
+                raise AssertionError(f"Expected substring not found: {error['data']}")
+        return True
+    except ContractLogicError as e:
+        if (message is not None) and (message not in e.message):
+            raise AssertionError(f"Expected substring not found: {e.message}")
+        if (err_data_ is not None):
+            if not getattr(e, "data", None) or (err_data_ not in cast(str, e.data)):
+                raise AssertionError(f"Expected substring not found: {e.data}")
+    except Exception as e:
+        raise AssertionError("Unexpected exception raised: " + type(e).__name__)
     else:
         return False
 
