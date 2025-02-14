@@ -17,6 +17,7 @@ CHECK_BUILD=1
 CHECK_CLIPPY=2
 CHECK_UNIT_TEST=3
 CHECK_INT_TEST=4
+CHECK_PY_TEST=5
 
 function check_build {
     local -n inner_result=$1
@@ -91,13 +92,29 @@ function check_integration_tests {
         # Make symbolic link for conflux binary to where integration test assumes its existence.
         rm -f target; ln -s build target
         ./tests/test_all.py --max-workers $TEST_MAX_WORKERS --max-retries $TEST_MAX_RETRIES | tee /dev/stderr
-        pytest ./integration_tests/tests -vv -n $TEST_MAX_WORKERS --dist loadscope | tee /dev/stderr
     )
     local exit_code=$?
     popd > /dev/null
 
     if [[ $exit_code -ne 0 ]]; then
         result="Integration test failed."$'\n'"$result"
+    fi
+    inner_result=($exit_code "$result")
+}
+
+function check_pytests {
+    local -n inner_result=$1
+
+    pushd $ROOT_DIR > /dev/null
+    local result
+    result=$(
+        pytest ./integration_tests/tests -vv -n $TEST_MAX_WORKERS --dist loadscope | tee /dev/stderr
+    )
+    local exit_code=$?
+    popd > /dev/null
+    
+    if [[ $exit_code -ne 0 ]]; then
+        result="Pytest failed."$'\n'"$result"
     fi
     inner_result=($exit_code "$result")
 }
@@ -129,4 +146,6 @@ declare -a test_result; check_fmt_and_clippy test_result; save_test_result test_
 declare -a test_result; check_unit_tests test_result; save_test_result test_result $CHECK_UNIT_TEST
 # Integration test
 declare -a test_result; check_integration_tests test_result; save_test_result test_result $CHECK_INT_TEST
+# Pytest
+declare -a test_result; check_pytests test_result; save_test_result test_result $CHECK_PY_TEST
 
