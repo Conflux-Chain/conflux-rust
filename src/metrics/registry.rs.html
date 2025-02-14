@@ -52,6 +52,10 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -94,7 +98,11 @@
     ) {
         <span class="kw">let </span>group_entry =
             <span class="self">self</span>.groups.entry(group_name).or_insert_with(HashMap::new);
-        <span class="macro">assert!</span>(!group_entry.contains_key(<span class="kw-2">&amp;</span>metric_name));
+        <span class="macro">assert!</span>(
+            !group_entry.contains_key(<span class="kw-2">&amp;</span>metric_name),
+            <span class="string">"Metric name {:?} already exists in the group "</span>,
+            <span class="kw-2">&amp;</span>metric_name
+        );
         group_entry.insert(metric_name, metric);
     }
 
