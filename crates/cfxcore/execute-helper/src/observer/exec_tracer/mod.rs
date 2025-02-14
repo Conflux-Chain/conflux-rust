@@ -12,7 +12,6 @@ pub use cfx_parity_trace_types::{
         self, Action, ActionType, Call, CallResult, Create, CreateResult,
         InternalTransferAction, Outcome,
     },
-    conversion::{construct_parity_trace, TraceWithPosition},
     filter::{self, TraceFilter},
     trace_types::{
         self, BlockExecTraces, ExecTrace, LocalizedTrace, TransactionExecTraces,
