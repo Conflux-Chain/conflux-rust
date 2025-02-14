@@ -14,11 +14,6 @@ from integration_tests.test_framework.util.common import (
 from integration_tests.conflux.utils import sha3 as keccak
 from integration_tests.conflux.config import default_config
 
-CONFLUX_CONTRACT_PATH = "../../../tests/contracts/CrossSpaceEventTest/CrossSpaceEventTestConfluxSide.bytecode"
-EVM_CONTRACT_PATH = "../../../tests/contracts/CrossSpaceEventTest/CrossSpaceEventTestEVMSide.bytecode"
-
-TEST_EVENT_TOPIC = encode_hex_0x(keccak(b"TestEvent(uint256)"))
-
 @pytest.fixture(scope="module")
 def framework_class():
     class PhantomTransactionTestEnv(ConfluxTestFramework):
