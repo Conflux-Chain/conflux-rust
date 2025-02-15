@@ -1,11 +1,18 @@
-use crate::{Action, ExecTrace, TransactionExecTraces};
+use cfx_parity_trace_types::{Action, ExecTrace};
 
 /// Converts raw EVM execution steps into Parity-compatible trace entries,
 /// pairing each action (call/create) with its corresponding result.
 pub fn construct_parity_trace<'a>(
-    traces: &'a TransactionExecTraces,
+    tx_traces: &'a [ExecTrace],
 ) -> Result<Box<dyn 'a + Iterator<Item = TraceWithPosition<'a>>>, String> {
-    let call_hierarchy = build_call_hierarchy(traces)?;
+    let empty_traces = !tx_traces
+        .iter()
+        .any(|x| !matches!(x.action, Action::InternalTransferAction(_)));
+    if empty_traces {
+        return Ok(Box::new(std::iter::empty()));
+    }
+
+    let call_hierarchy = build_call_hierarchy(tx_traces)?;
     Ok(call_hierarchy.flatten_into_traces(vec![]))
 }
 
@@ -91,7 +98,7 @@ impl<'a> ResolvedTraceNode<'a> {
 /// Builds hierarchical call structure from raw traces.
 /// Returns root node of the execution tree.
 pub fn build_call_hierarchy<'a>(
-    traces: &'a TransactionExecTraces,
+    traces: &'a [ExecTrace],
 ) -> Result<ResolvedTraceNode<'a>, String> {
     // Stack tracks unclosed actions and their collected children
     let mut unclosed_actions: Vec<(ActionTrace, Vec<ResolvedTraceNode>)> =
@@ -99,7 +106,6 @@ pub fn build_call_hierarchy<'a>(
 
     // Filter out internal transfer events (handled separately)
     let mut iter = traces
-        .0
         .iter()
         .filter(|x| !matches!(x.action, Action::InternalTransferAction(_)));
 
