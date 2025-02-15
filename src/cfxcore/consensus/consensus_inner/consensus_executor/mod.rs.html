@@ -1747,6 +1747,40 @@
 <a href="#1745" id="1745">1745</a>
 <a href="#1746" id="1746">1746</a>
 <a href="#1747" id="1747">1747</a>
+<a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
+<a href="#1753" id="1753">1753</a>
+<a href="#1754" id="1754">1754</a>
+<a href="#1755" id="1755">1755</a>
+<a href="#1756" id="1756">1756</a>
+<a href="#1757" id="1757">1757</a>
+<a href="#1758" id="1758">1758</a>
+<a href="#1759" id="1759">1759</a>
+<a href="#1760" id="1760">1760</a>
+<a href="#1761" id="1761">1761</a>
+<a href="#1762" id="1762">1762</a>
+<a href="#1763" id="1763">1763</a>
+<a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
+<a href="#1770" id="1770">1770</a>
+<a href="#1771" id="1771">1771</a>
+<a href="#1772" id="1772">1772</a>
+<a href="#1773" id="1773">1773</a>
+<a href="#1774" id="1774">1774</a>
+<a href="#1775" id="1775">1775</a>
+<a href="#1776" id="1776">1776</a>
+<a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1811,7 +1845,7 @@
     EstimateExt, EstimateRequest, EstimationContext,
 };
 <span class="kw">use </span>cfx_executor::{
-    executive::ExecutionOutcome,
+    executive::{ExecutionOutcome, ExecutiveContext},
     machine::Machine,
     state::{
         distribute_pos_interest, update_pos_status, CleanupMode, State,
@@ -1822,6 +1856,7 @@
 <span class="kw">use </span>geth_tracer::GethTraceWithHash;
 
 <span class="kw">use </span>alloy_rpc_types_trace::geth::GethDebugTracingOptions;
+<span class="kw">use </span>cfx_rpc_eth_types::EvmOverrides;
 
 <span class="kw">use </span><span class="self">self</span>::epoch_execution::{GethTask, VirtualCall};
 
@@ -2385,9 +2420,15 @@
 
     <span class="kw">pub fn </span>call_virtual(
         <span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>SignedTransaction, epoch_id: <span class="kw-2">&amp;</span>H256, epoch_size: usize,
-        request: EstimateRequest,
+        request: EstimateRequest, evm_overrides: EvmOverrides,
     ) -&gt; CoreResult&lt;(ExecutionOutcome, EstimateExt)&gt; {
-        <span class="self">self</span>.handler.call_virtual(tx, epoch_id, epoch_size, request)
+        <span class="self">self</span>.handler.call_virtual(
+            tx,
+            epoch_id,
+            epoch_size,
+            request,
+            evm_overrides,
+        )
     }
 
     <span class="kw">pub fn </span>collect_blocks_geth_trace(
@@ -3327,7 +3368,7 @@
 
     <span class="kw">pub fn </span>call_virtual(
         <span class="kw-2">&amp;</span><span class="self">self</span>, tx: <span class="kw-2">&amp;</span>SignedTransaction, epoch_id: <span class="kw-2">&amp;</span>H256, epoch_size: usize,
-        request: EstimateRequest,
+        request: EstimateRequest, evm_overrides: EvmOverrides,
     ) -&gt; CoreResult&lt;(ExecutionOutcome, EstimateExt)&gt; {
         <span class="kw">let </span>best_block_header = <span class="self">self</span>.data_man.block_header_by_hash(epoch_id);
         <span class="kw">if </span>best_block_header.is_none() {
@@ -3366,11 +3407,20 @@
             Space::Native =&gt; <span class="prelude-val">None</span>,
             Space::Ethereum =&gt; <span class="prelude-val">Some</span>(Space::Ethereum),
         };
-        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.get_state_by_epoch_id_and_space(
+        <span class="kw">let </span>statedb = <span class="self">self</span>.get_statedb_by_epoch_id_and_space(
             epoch_id,
             best_block_header.height(),
             state_space,
         )<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="kw">if </span>evm_overrides.has_state() {
+            State::new_with_override(
+                statedb,
+                <span class="kw-2">&amp;</span>evm_overrides.state.as_ref().unwrap(),
+                tx.space(),
+            )<span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            State::new(statedb)<span class="question-mark">?
+        </span>};
 
         <span class="kw">let </span>time_stamp = best_block_header.timestamp();
 
@@ -3386,7 +3436,7 @@
         <span class="kw">let </span>burnt_gas_price =
             base_gas_price.map_all(|x| state.burnt_gas_price(x));
 
-        <span class="kw">let </span>env = Env {
+        <span class="kw">let </span><span class="kw-2">mut </span>env = Env {
             chain_id: <span class="self">self</span>.machine.params().chain_id_map(block_height),
             number: start_block_number,
             author: miner,
@@ -3404,6 +3454,12 @@
             base_gas_price,
             burnt_gas_price,
         };
+        <span class="kw">if </span>evm_overrides.has_block() {
+            ExecutiveContext::apply_env_overrides(
+                <span class="kw-2">&amp;mut </span>env,
+                evm_overrides.block.unwrap(),
+            );
+        }
         <span class="kw">let </span>spec = <span class="self">self</span>.machine.spec(env.number, env.epoch_height);
         <span class="kw">let </span><span class="kw-2">mut </span>ex = EstimationContext::new(
             <span class="kw-2">&amp;mut </span>state,
@@ -3455,6 +3511,19 @@
     <span class="kw">fn </span>get_state_by_epoch_id_and_space(
         <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_id: <span class="kw-2">&amp;</span>H256, epoch_height: u64, state_space: <span class="prelude-ty">Option</span>&lt;Space&gt;,
     ) -&gt; DbResult&lt;State&gt; {
+        <span class="kw">let </span>state_db = <span class="self">self</span>.get_statedb_by_epoch_id_and_space(
+            epoch_id,
+            epoch_height,
+            state_space,
+        )<span class="question-mark">?</span>;
+        <span class="kw">let </span>state = State::new(state_db)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(state)
+    }
+
+    <span class="kw">fn </span>get_statedb_by_epoch_id_and_space(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_id: <span class="kw-2">&amp;</span>H256, epoch_height: u64, state_space: <span class="prelude-ty">Option</span>&lt;Space&gt;,
+    ) -&gt; DbResult&lt;StateDb&gt; {
         <span class="comment">// Keep the lock until we get the desired State, otherwise the State may
         // expire.
         </span><span class="kw">let </span>state_availability_boundary =
@@ -3483,11 +3552,10 @@
                 )<span class="question-mark">?
                 </span>.ok_or(<span class="string">"state deleted"</span>)<span class="question-mark">?</span>,
         );
-        <span class="kw">let </span>state = State::new(state_db)<span class="question-mark">?</span>;
 
         drop(state_availability_boundary);
 
-        <span class="prelude-val">Ok</span>(state)
+        <span class="prelude-val">Ok</span>(state_db)
     }
 }
 

@@ -1466,6 +1466,35 @@
 <a href="#1464" id="1464">1464</a>
 <a href="#1465" id="1465">1465</a>
 <a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cfx_execute_helper::estimation::EstimateRequest;
@@ -1478,9 +1507,10 @@
 };
 <span class="kw">use </span>cfx_rpc_eth_api::EthApiServer;
 <span class="kw">use </span>cfx_rpc_eth_types::{
-    AccountPendingTransactions, Block, BlockNumber <span class="kw">as </span>BlockId, EthRpcLogFilter,
-    EthRpcLogFilter <span class="kw">as </span>Filter, FeeHistory, Header, Log, Receipt, SyncInfo,
-    SyncStatus, Transaction, TransactionRequest,
+    AccountOverride, AccountPendingTransactions, Block, BlockNumber <span class="kw">as </span>BlockId,
+    BlockOverrides, EthRpcLogFilter, EthRpcLogFilter <span class="kw">as </span>Filter, EvmOverrides,
+    FeeHistory, Header, Log, Receipt, RpcStateOverride, SyncInfo, SyncStatus,
+    Transaction, TransactionRequest,
 };
 <span class="kw">use </span>cfx_rpc_primitives::{Bytes, Index, U64 <span class="kw">as </span>HexU64};
 <span class="kw">use </span>cfx_rpc_utils::error::{
@@ -1507,6 +1537,7 @@
 };
 <span class="kw">use </span>rustc_hex::ToHex;
 <span class="kw">use </span>solidity_abi::string_revert_reason_decode;
+<span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">type </span>BlockNumber = BlockId;
 <span class="kw">type </span>BlockNumberOrTag = BlockId;
@@ -1568,6 +1599,8 @@
     <span class="kw">pub fn </span>exec_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>request: TransactionRequest,
         block_number_or_hash: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+        state_overrides: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+        block_overrides: <span class="prelude-ty">Option</span>&lt;Box&lt;BlockOverrides&gt;&gt;,
     ) -&gt; CoreResult&lt;(Executed, U256)&gt; {
         <span class="kw">let </span>consensus_graph = <span class="self">self</span>.consensus_graph();
 
@@ -1592,6 +1625,26 @@
                 .into());
             }
         }
+
+        <span class="kw">let </span>state_overrides = <span class="kw">match </span>state_overrides {
+            <span class="prelude-val">Some</span>(states) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>state_overrides = HashMap::new();
+                <span class="kw">for </span>(address, rpc_account_override) <span class="kw">in </span>states {
+                    <span class="kw">let </span>account_override =
+                        AccountOverride::try_from(rpc_account_override)
+                            .map_err(|err| {
+                                CoreError::InvalidParam(
+                                    err.into(),
+                                    Default::default(),
+                                )
+                            })<span class="question-mark">?</span>;
+                    state_overrides.insert(address, account_override);
+                }
+                <span class="prelude-val">Some</span>(state_overrides)
+            }
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+        };
+        <span class="kw">let </span>evm_overrides = EvmOverrides::new(state_overrides, block_overrides);
 
         <span class="kw">let </span>epoch = <span class="kw">match </span>block_number_or_hash.unwrap_or_default() {
             BlockNumber::Hash { hash, .. } =&gt; {
@@ -1635,6 +1688,7 @@
             <span class="kw-2">&amp;</span>signed_tx,
             epoch,
             estimate_request,
+            evm_overrides,
         )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>executed = <span class="kw">match </span>execution_outcome {
@@ -2733,14 +2787,16 @@
     </span><span class="doccomment">/// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     </span><span class="kw">async fn </span>call(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: TransactionRequest,
-        block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
-        <span class="comment">// state_overrides: Option&lt;StateOverride&gt;,
-        // block_overrides: Option&lt;Box&lt;BlockOverrides&gt;&gt;,
-    </span>) -&gt; RpcResult&lt;Bytes&gt; {
-        <span class="kw">let </span>(execution, _estimation) =
-            <span class="self">self</span>.exec_transaction(request, block_number)<span class="question-mark">?</span>;
+        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+        state_overrides: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+        block_overrides: <span class="prelude-ty">Option</span>&lt;Box&lt;BlockOverrides&gt;&gt;,
+    ) -&gt; RpcResult&lt;Bytes&gt; {
+        <span class="kw">let </span>(execution, _estimation) = <span class="self">self</span>.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            block_overrides,
+        )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(execution.output.into())
     }
@@ -2779,13 +2835,15 @@
     </span><span class="doccomment">/// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
     </span><span class="kw">async fn </span>estimate_gas(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: TransactionRequest,
-        block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
-        <span class="comment">// state_override: Option&lt;StateOverride&gt;,
-    </span>) -&gt; RpcResult&lt;U256&gt; {
-        <span class="kw">let </span>(<span class="kw">_</span>, estimated_gas) =
-            <span class="self">self</span>.exec_transaction(request, block_number)<span class="question-mark">?</span>;
+        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+        state_overrides: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+    ) -&gt; RpcResult&lt;U256&gt; {
+        <span class="kw">let </span>(<span class="kw">_</span>, estimated_gas) = <span class="self">self</span>.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            <span class="prelude-val">None</span>,
+        )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(estimated_gas)
     }

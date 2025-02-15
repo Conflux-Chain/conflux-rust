@@ -435,6 +435,16 @@
 <a href="#433" id="433">433</a>
 <a href="#434" id="434">434</a>
 <a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -446,8 +456,8 @@
     types::{
         eth::{
             AccountPendingTransactions, Block <span class="kw">as </span>RpcBlock, BlockNumber,
-            EthRpcLogFilter, Log, Receipt, SyncStatus, Transaction,
-            TransactionRequest,
+            BlockOverrides, EthRpcLogFilter, Log, Receipt, RpcStateOverride,
+            SyncStatus, Transaction, TransactionRequest,
         },
         Bytes, FeeHistory, Index, U64 <span class="kw">as </span>HexU64,
     },
@@ -700,14 +710,19 @@
     <span class="kw">fn </span>call(
         <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest,
         block_number_or_hash: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+        state_overrides: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+        block_overrides: <span class="prelude-ty">Option</span>&lt;Box&lt;BlockOverrides&gt;&gt;,
     ) -&gt; RpcResult&lt;Bytes&gt; {
         <span class="macro">debug!</span>(
             <span class="string">"RPC Request: eth_call(request={:?}, block_num={:?})"</span>,
             request, block_number_or_hash
         );
-
-        <span class="kw">let </span>(execution, _estimation) =
-            <span class="self">self</span>.inner.exec_transaction(request, block_number_or_hash)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(execution, _estimation) = <span class="self">self</span>.inner.exec_transaction(
+            request,
+            block_number_or_hash,
+            state_overrides,
+            block_overrides,
+        )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(execution.output.into())
     }
@@ -715,13 +730,18 @@
     <span class="kw">fn </span>estimate_gas(
         <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest,
         block_number_or_hash: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+        state_overrides: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
     ) -&gt; RpcResult&lt;U256&gt; {
         <span class="macro">debug!</span>(
             <span class="string">"RPC Request: eth_estimateGas(request={:?}, block_num={:?})"</span>,
             request, block_number_or_hash
         );
-        <span class="kw">let </span>(<span class="kw">_</span>, estimated_gas) =
-            <span class="self">self</span>.inner.exec_transaction(request, block_number_or_hash)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(<span class="kw">_</span>, estimated_gas) = <span class="self">self</span>.inner.exec_transaction(
+            request,
+            block_number_or_hash,
+            state_overrides,
+            <span class="prelude-val">None</span>,
+        )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(estimated_gas)
     }

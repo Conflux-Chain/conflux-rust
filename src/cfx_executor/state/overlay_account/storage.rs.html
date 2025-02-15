@@ -476,8 +476,8 @@
     </span><span class="kw">pub fn </span>storage_entry_at(
         <span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>StateDbGeneric, key: <span class="kw-2">&amp;</span>[u8],
     ) -&gt; DbResult&lt;StorageValue&gt; {
-        <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(owner) = <span class="self">self</span>.cached_entry_at(key) {
-            owner
+        <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="self">self</span>.cached_entry_at(key) {
+            value
         } <span class="kw">else if </span><span class="self">self</span>.fresh_storage() {
             StorageValue::default()
         } <span class="kw">else </span>{

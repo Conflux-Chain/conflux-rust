@@ -275,6 +275,43 @@
 <a href="#273" id="273">273</a>
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
@@ -310,12 +347,12 @@
 <span class="kw">use </span>std::collections::HashMap;
 
 <span class="doccomment">/// A set of account overrides
-</span><span class="kw">pub type </span>StateOverride = HashMap&lt;Address, AccountOverride&gt;;
+</span><span class="kw">pub type </span>RpcStateOverride = HashMap&lt;Address, RpcAccountOverride&gt;;
 
-<span class="doccomment">/// Custom account override used in call
+<span class="doccomment">/// Custom account override used in rpc call
 </span><span class="attr">#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = <span class="string">"camelCase"</span>, deny_unknown_fields)]
-</span><span class="kw">pub struct </span>AccountOverride {
+</span><span class="kw">pub struct </span>RpcAccountOverride {
     <span class="doccomment">/// Fake balance to set for the account before executing the call.
     </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
     </span><span class="kw">pub </span>balance: <span class="prelude-ty">Option</span>&lt;U256&gt;,
@@ -349,6 +386,43 @@
     </span>)]
     </span><span class="kw">pub </span>move_precompile_to: <span class="prelude-ty">Option</span>&lt;Address&gt;,
 }
+
+<span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
+</span><span class="kw">pub enum </span>AccountStateOverrideMode {
+    State(HashMap&lt;H256, H256&gt;),
+    Diff(HashMap&lt;H256, H256&gt;),
+    <span class="prelude-val">None</span>,
+}
+
+<span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
+</span><span class="kw">pub struct </span>AccountOverride {
+    <span class="kw">pub </span>balance: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+    <span class="kw">pub </span>nonce: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="kw">pub </span>code: <span class="prelude-ty">Option</span>&lt;Bytes&gt;,
+    <span class="kw">pub </span>state: AccountStateOverrideMode,
+    <span class="kw">pub </span>move_precompile_to: <span class="prelude-ty">Option</span>&lt;Address&gt;,
+}
+
+<span class="kw">impl </span>TryFrom&lt;RpcAccountOverride&gt; <span class="kw">for </span>AccountOverride {
+    <span class="kw">type </span>Error = <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
+
+    <span class="kw">fn </span>try_from(value: RpcAccountOverride) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            balance: value.balance,
+            nonce: value.nonce,
+            code: value.code,
+            state: <span class="kw">match </span>(value.state, value.state_diff) {
+                (<span class="prelude-val">Some</span>(state), <span class="prelude-val">None</span>) =&gt; AccountStateOverrideMode::State(state),
+                (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(diff)) =&gt; AccountStateOverrideMode::Diff(diff),
+                (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>) =&gt; AccountStateOverrideMode::None,
+                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"state and stateDiff are mutually exclusive"</span>),
+            },
+            move_precompile_to: value.move_precompile_to,
+        })
+    }
+}
+
+<span class="kw">pub type </span>StateOverride = HashMap&lt;Address, AccountOverride&gt;;
 
 <span class="doccomment">/// Helper type that bundles various overrides for EVM Execution.
 ///
@@ -414,7 +488,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_default_account_override() {
-        <span class="kw">let </span>acc_override = AccountOverride::default();
+        <span class="kw">let </span>acc_override = RpcAccountOverride::default();
         <span class="macro">assert!</span>(acc_override.balance.is_none());
         <span class="macro">assert!</span>(acc_override.nonce.is_none());
         <span class="macro">assert!</span>(acc_override.code.is_none());
@@ -432,7 +506,7 @@
             }
         }"#</span>;
 
-        <span class="kw">let _</span>: StateOverride = serde_json::from_str(invalid_json).unwrap();
+        <span class="kw">let _</span>: RpcStateOverride = serde_json::from_str(invalid_json).unwrap();
     }
 
     <span class="attr">#[test]
@@ -445,7 +519,7 @@
             }
         }"#</span>;
 
-        <span class="kw">let </span>state_override: StateOverride =
+        <span class="kw">let </span>state_override: RpcStateOverride =
             serde_json::from_str(large_values_json).unwrap();
         <span class="kw">let </span>acc = state_override
             .get(<span class="kw-2">&amp;</span>address(<span class="string">"1234567890123456789012345678901234567890"</span>).unwrap())
@@ -462,7 +536,7 @@
                 "code": "0x6080604052348015600e575f80fd5b50600436106026575f3560e01c80632096525514602a575b5f80fd5b60306044565b604051901515815260200160405180910390f35b5f604e600242605e565b5f0360595750600190565b505f90565b5f82607757634e487b7160e01b5f52601260045260245ffd5b50069056fea2646970667358221220287f77a4262e88659e3fb402138d2ee6a7ff9ba86bae487a95aa28156367d09c64736f6c63430008140033"
             }
         }"#</span>;
-        <span class="kw">let </span>state_override: StateOverride = serde_json::from_str(s).unwrap();
+        <span class="kw">let </span>state_override: RpcStateOverride = serde_json::from_str(s).unwrap();
         <span class="kw">let </span>acc = state_override
             .get(<span class="kw-2">&amp;</span>address(<span class="string">"0000000000000000000000000000000000000124"</span>).unwrap())
             .unwrap();
@@ -483,7 +557,7 @@
                     }
                 }
             }"#</span>;
-        <span class="kw">let </span>state_override: StateOverride = serde_json::from_str(s).unwrap();
+        <span class="kw">let </span>state_override: RpcStateOverride = serde_json::from_str(s).unwrap();
         <span class="kw">let </span>acc = state_override
             .get(<span class="kw-2">&amp;</span>address(<span class="string">"1b5212AF6b76113afD94cD2B5a78a73B7d7A8222"</span>).unwrap())
             .unwrap();

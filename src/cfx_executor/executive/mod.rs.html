@@ -140,6 +140,37 @@
 <a href="#138" id="138">138</a>
 <a href="#139" id="139">139</a>
 <a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -151,10 +182,11 @@
 </span><span class="kw">mod </span>tests;
 <span class="kw">pub mod </span>transact_options;
 
+<span class="kw">use </span>cfx_rpc_eth_types::BlockOverrides;
 <span class="kw">use </span>cfx_statedb::Result <span class="kw">as </span>DbResult;
 <span class="kw">use </span>cfx_types::{
-    address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space, H256,
-    U256,
+    address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space,
+    SpaceMap, H256, U256,
 };
 <span class="kw">use </span>cfx_vm_types::{CreateContractAddress, Env, Spec};
 <span class="kw">use </span>primitives::{AccessList, SignedTransaction};
@@ -202,6 +234,36 @@
             <span class="prelude-val">Ok</span>(executive) =&gt; executive.execute_transaction()<span class="question-mark">?</span>,
             <span class="prelude-val">Err</span>(execution_outcome) =&gt; execution_outcome,
         })
+    }
+
+    <span class="kw">pub fn </span>apply_env_overrides(
+        env: <span class="kw-2">&amp;mut </span>Env, block_override: Box&lt;BlockOverrides&gt;,
+    ) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(number) = block_override.number {
+            env.number = number.as_u64();
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(difficulty) = block_override.difficulty {
+            env.difficulty = difficulty;
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(timestamp) = block_override.time {
+            env.timestamp = timestamp;
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gas_limit) = block_override.gas_limit {
+            env.gas_limit = U256::from(gas_limit);
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(author) = block_override.coinbase {
+            env.author = author;
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(_random) = block_override.random {
+            <span class="comment">// conflux doesn't have random(prevRandao)
+        </span>}
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(base_fee) = block_override.base_fee {
+            env.base_gas_price = SpaceMap::new(base_fee, base_fee); <span class="comment">// use same base_fee for both spaces
+        </span>}
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(_block_hash) = <span class="kw-2">&amp;</span>block_override.block_hash {
+            <span class="comment">// TODO impl
+        </span>}
     }
 }
 

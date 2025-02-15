@@ -11,14 +11,16 @@
 <a href="#9" id="9">9</a>
 <a href="#10" id="10">10</a>
 <a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">pub use </span>cfx_rpc_eth_types::{
-    eth_pubsub, trace_filter::TraceFilter, AccountPendingTransactions, Block,
-    BlockNumber, EthRpcLogFilter, FilterChanges, Header, Log, Receipt,
-    SyncInfo, SyncStatus, Transaction, TransactionRequest,
+    eth_pubsub, trace_filter::TraceFilter, AccountOverride,
+    AccountPendingTransactions, Block, BlockNumber, BlockOverrides,
+    EthRpcLogFilter, EvmOverrides, FilterChanges, Header, Log, Receipt,
+    RpcStateOverride, SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 
 <span class="kw">pub use </span>cfx_rpc_cfx_types::trace_eth::{LocalizedTrace, Res};

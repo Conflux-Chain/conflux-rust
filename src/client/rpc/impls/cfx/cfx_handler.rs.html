@@ -2488,6 +2488,11 @@
 <a href="#2486" id="2486">2486</a>
 <a href="#2487" id="2487">2487</a>
 <a href="#2488" id="2488">2488</a>
+<a href="#2489" id="2489">2489</a>
+<a href="#2490" id="2490">2490</a>
+<a href="#2491" id="2491">2491</a>
+<a href="#2492" id="2492">2492</a>
+<a href="#2493" id="2493">2493</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -3994,7 +3999,12 @@
         )<span class="question-mark">?</span>;
         <span class="macro">trace!</span>(<span class="string">"call tx {:?}"</span>, signed_tx);
 
-        consensus_graph.call_virtual(<span class="kw-2">&amp;</span>signed_tx, epoch.into(), estimate_request)
+        consensus_graph.call_virtual(
+            <span class="kw-2">&amp;</span>signed_tx,
+            epoch.into(),
+            estimate_request,
+            Default::default(),
+        )
     }
 
     <span class="kw">fn </span>current_sync_phase(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CoreResult&lt;String&gt; {

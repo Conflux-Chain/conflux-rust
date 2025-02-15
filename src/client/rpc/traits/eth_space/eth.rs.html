@@ -231,6 +231,10 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -259,8 +263,9 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::rpc::types::{
     eth::{
-        AccountPendingTransactions, Block, BlockNumber, EthRpcLogFilter, Log,
-        Receipt, SyncStatus, Transaction, TransactionRequest,
+        AccountPendingTransactions, Block, BlockNumber, BlockOverrides,
+        EthRpcLogFilter, Log, Receipt, RpcStateOverride, SyncStatus,
+        Transaction, TransactionRequest,
     },
     Bytes, FeeHistory, Index,
 };
@@ -396,12 +401,15 @@
     </span><span class="attr">#[rpc(name = <span class="string">"eth_call"</span>)]
     </span><span class="kw">fn </span>call(
         <span class="kw-2">&amp;</span><span class="self">self</span>, transaction: TransactionRequest, block: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+        state_overrides: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+        block_overrides: <span class="prelude-ty">Option</span>&lt;Box&lt;BlockOverrides&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Bytes&gt;;
 
     <span class="doccomment">/// Estimate gas needed for execution of given contract.
     </span><span class="attr">#[rpc(name = <span class="string">"eth_estimateGas"</span>)]
     </span><span class="kw">fn </span>estimate_gas(
         <span class="kw-2">&amp;</span><span class="self">self</span>, transaction: TransactionRequest, block: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+        state_override: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;U256&gt;;
 
     <span class="doccomment">/// Get transaction by its hash.

@@ -370,14 +370,10 @@
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_rpc_eth_types::{
-    AccountPendingTransactions, Block, BlockNumber <span class="kw">as </span>BlockId,
-    EthRpcLogFilter <span class="kw">as </span>Filter, FeeHistory, Header, Log, Receipt, SyncStatus,
-    Transaction, TransactionRequest,
+    AccountPendingTransactions, Block, BlockNumber <span class="kw">as </span>BlockId, BlockOverrides,
+    EthRpcLogFilter <span class="kw">as </span>Filter, FeeHistory, Header, Log, Receipt,
+    RpcStateOverride, SyncStatus, Transaction, TransactionRequest,
 };
 <span class="kw">use </span>cfx_rpc_primitives::{Bytes, Index};
 <span class="kw">use </span>cfx_types::{Address, H256, H64, U256, U64};
@@ -576,12 +572,10 @@
     /// on the block chain.
     </span><span class="attr">#[method(name = <span class="string">"call"</span>)]
     </span><span class="kw">async fn </span>call(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: TransactionRequest,
-        block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
-        <span class="comment">// state_overrides: Option&lt;StateOverride&gt;,
-        // block_overrides: Option&lt;Box&lt;BlockOverrides&gt;&gt;,
-    </span>) -&gt; RpcResult&lt;Bytes&gt;;
+        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+        state_overrides: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+        block_overrides: <span class="prelude-ty">Option</span>&lt;Box&lt;BlockOverrides&gt;&gt;,
+    ) -&gt; RpcResult&lt;Bytes&gt;;
 
     <span class="doccomment">/// Simulate arbitrary number of transactions at an arbitrary blockchain
     /// index, with the optionality of state overrides
@@ -620,11 +614,9 @@
     /// the transaction to complete.
     </span><span class="attr">#[method(name = <span class="string">"estimateGas"</span>)]
     </span><span class="kw">async fn </span>estimate_gas(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: TransactionRequest,
-        block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
-        <span class="comment">// state_override: Option&lt;StateOverride&gt;,
-    </span>) -&gt; RpcResult&lt;U256&gt;;
+        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+        state_override: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+    ) -&gt; RpcResult&lt;U256&gt;;
 
     <span class="doccomment">/// Returns the current price per gas in wei.
     </span><span class="attr">#[method(name = <span class="string">"gasPrice"</span>)]
