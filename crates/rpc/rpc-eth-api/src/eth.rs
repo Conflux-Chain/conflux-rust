@@ -1,7 +1,7 @@
 use cfx_rpc_eth_types::{
-    AccountPendingTransactions, Block, BlockNumber as BlockId,
-    EthRpcLogFilter as Filter, FeeHistory, Header, Log, Receipt, SyncStatus,
-    Transaction, TransactionRequest,
+    AccountPendingTransactions, Block, BlockNumber as BlockId, BlockOverrides,
+    EthRpcLogFilter as Filter, FeeHistory, Header, Log, Receipt,
+    RpcStateOverride, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index};
 use cfx_types::{Address, H256, H64, U256, U64};
@@ -200,11 +200,9 @@ pub trait EthApi {
     /// on the block chain.
     #[method(name = "call")]
     async fn call(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_overrides: Option<StateOverride>,
-        // block_overrides: Option<Box<BlockOverrides>>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes>;
 
     /// Simulate arbitrary number of transactions at an arbitrary blockchain
@@ -244,10 +242,8 @@ pub trait EthApi {
     /// the transaction to complete.
     #[method(name = "estimateGas")]
     async fn estimate_gas(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_override: Option<StateOverride>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_override: Option<RpcStateOverride>,
     ) -> RpcResult<U256>;
 
     /// Returns the current price per gas in wei.

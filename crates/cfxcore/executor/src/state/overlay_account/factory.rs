@@ -30,6 +30,7 @@ impl Default for OverlayAccount {
             code: None,
             is_newly_created_contract: false,
             pending_db_clear: false,
+            storage_overrided: false,
         }
     }
 }
@@ -157,6 +158,7 @@ impl OverlayAccount {
                 WriteCheckpointLayer::new_empty(checkpoint_id),
             ),
             storage_layout_change: self.storage_layout_change.clone(),
+            storage_overrided: self.storage_overrided,
         }
     }
 
@@ -188,6 +190,7 @@ impl OverlayAccount {
             )),
             transient_storage_checkpoint: None,
             storage_layout_change: self.storage_layout_change.clone(),
+            storage_overrided: self.storage_overrided,
         }
     }
 }

@@ -10,9 +10,10 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    AccountPendingTransactions, Block, BlockNumber as BlockId, EthRpcLogFilter,
-    EthRpcLogFilter as Filter, FeeHistory, Header, Log, Receipt, SyncInfo,
-    SyncStatus, Transaction, TransactionRequest,
+    AccountOverride, AccountPendingTransactions, Block, BlockNumber as BlockId,
+    BlockOverrides, EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides,
+    FeeHistory, Header, Log, Receipt, RpcStateOverride, SyncInfo, SyncStatus,
+    Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::error::{
@@ -39,6 +40,7 @@ use primitives::{
 };
 use rustc_hex::ToHex;
 use solidity_abi::string_revert_reason_decode;
+use std::collections::HashMap;
 
 type BlockNumber = BlockId;
 type BlockNumberOrTag = BlockId;
@@ -100,6 +102,8 @@ impl EthApi {
     pub fn exec_transaction(
         &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> CoreResult<(Executed, U256)> {
         let consensus_graph = self.consensus_graph();
 
@@ -124,6 +128,26 @@ impl EthApi {
                 .into());
             }
         }
+
+        let state_overrides = match state_overrides {
+            Some(states) => {
+                let mut state_overrides = HashMap::new();
+                for (address, rpc_account_override) in states {
+                    let account_override =
+                        AccountOverride::try_from(rpc_account_override)
+                            .map_err(|err| {
+                                CoreError::InvalidParam(
+                                    err.into(),
+                                    Default::default(),
+                                )
+                            })?;
+                    state_overrides.insert(address, account_override);
+                }
+                Some(state_overrides)
+            }
+            None => None,
+        };
+        let evm_overrides = EvmOverrides::new(state_overrides, block_overrides);
 
         let epoch = match block_number_or_hash.unwrap_or_default() {
             BlockNumber::Hash { hash, .. } => {
@@ -167,6 +191,7 @@ impl EthApi {
             &signed_tx,
             epoch,
             estimate_request,
+            evm_overrides,
         )?;
 
         let executed = match execution_outcome {
@@ -1265,14 +1290,16 @@ impl EthApiServer for EthApi {
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     async fn call(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_overrides: Option<StateOverride>,
-        // block_overrides: Option<Box<BlockOverrides>>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
-        let (execution, _estimation) =
-            self.exec_transaction(request, block_number)?;
+        let (execution, _estimation) = self.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            block_overrides,
+        )?;
 
         Ok(execution.output.into())
     }
@@ -1311,13 +1338,15 @@ impl EthApiServer for EthApi {
     /// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
     async fn estimate_gas(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_override: Option<StateOverride>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
     ) -> RpcResult<U256> {
-        let (_, estimated_gas) =
-            self.exec_transaction(request, block_number)?;
+        let (_, estimated_gas) = self.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            None,
+        )?;
 
         Ok(estimated_gas)
     }
