@@ -65,6 +65,10 @@ pytest integration_tests/tests/test_file.py
 
 # Run tests in a specific class
 pytest integration_tests/tests/test_file.py::test_name
+
+# Arguments for ConfluxTestFramework also supported
+# argument explanations can be found in integration_tests/tests/conftest.py::pytest_addoption
+pytest integration_tests/tests/example_test.py -s --conflux-nocleanup
 ```
 
 #### VSCode
