@@ -82,6 +82,9 @@ pub struct Block {
     pub gas_used: U256,
     /// Gas Limit
     pub gas_limit: U256,
+    /// Conflux espace gas limit, this is the real gas limit of the block
+    /// This is a conflux espace custom field
+    pub espace_gas_limit: U256,
     /// Extra data
     pub extra_data: Bytes,
     /// Logs bloom
@@ -219,7 +222,8 @@ impl Block {
                 .last()
                 .map(|r| r.accumulated_gas_used)
                 .unwrap_or_default(),
-            gas_limit: pb.total_gas_limit,
+            gas_limit: pb.pivot_header.gas_limit().into(),
+            espace_gas_limit: pb.total_gas_limit,
             extra_data: Default::default(),
             logs_bloom: pb.bloom,
             timestamp: pb.pivot_header.timestamp().into(),
