@@ -241,6 +241,9 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             self.tx.space() == Space::Native
                 && !self.check_create_address(&params)?
         } else {
+            if params.create_type == CreateType::None {
+                return Ok(false);
+            }
             let address = params.address.with_space(params.space);
             !self.context.state.is_eip684_empty(&address)?
         })
