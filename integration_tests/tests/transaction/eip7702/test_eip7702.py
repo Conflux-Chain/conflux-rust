@@ -7,6 +7,14 @@ from integration_tests.test_framework.util.eip7702.eip7702 import (
     sign_authorization,
     send_eip7702_transaction,
 )
+from ethereum_test_tools import (
+    Initcode,
+    Conditional,
+    Opcodes as Op,
+    Storage,
+    Bytecode,
+    Macros as Om
+)
 
 
 @pytest.fixture(scope="module")
@@ -50,13 +58,23 @@ def get_new_fund_account(ew3: Web3, admin_account):
     ew3.eth.wait_for_transaction_receipt(tx_hash)
     return new_account
 
+def deploy_contract_using_deploy_code(ew3: Web3, deploy_code: Bytecode) -> str:
+    initcode = Initcode(deploy_code=deploy_code)
+    tx_hash = ew3.eth.send_transaction(
+        {
+            "data": bytes(initcode),
+        }
+    )
+    receipt = ew3.eth.wait_for_transaction_receipt(tx_hash)
+    return cast(str, receipt["contractAddress"])
+    
+
 
 def assert_account_code_set_to_contract(
     ew3: Web3, account_address: str, contract_address: str
 ):
     code = ew3.eth.get_code(account_address)
     assert code.to_0x_hex() == "0xef0100" + contract_address[2:].lower()
-
 
 # use self as erc20 contract
 # self nonce should increase by 2
@@ -190,3 +208,65 @@ def test_tx_into_chain_delegating_set_code(ew3: Web3, admin_account):
     # Verify nonce is increased
     assert ew3.eth.get_transaction_count(auth_signer_1.address) == 1
     assert ew3.eth.get_transaction_count(auth_signer_2.address) == 1
+
+# corresponds to ethereum-spec-tests::test_set_code_to_sstore
+@pytest.mark.parametrize(
+    "tx_value",
+    [0, 1],
+)
+@pytest.mark.parametrize(
+    "suffix,succeeds",
+    [
+        pytest.param(Op.STOP, True, id="stop"),
+        pytest.param(Op.RETURN(0, 0), True, id="return"),
+        pytest.param(Op.REVERT(0, 0), False, id="revert"),
+        pytest.param(Op.INVALID, False, id="invalid"),
+        pytest.param(Om.OOG + Op.STOP, False, id="out-of-gas"),
+    ],
+)
+def test_set_code_to_sstore(
+    ew3: Web3, 
+    admin_account, 
+    tx_value,
+    suffix,
+    succeeds
+):
+    storage = Storage()
+    sender = get_new_fund_account(ew3, admin_account)
+    
+    set_code = (
+        Op.SSTORE(storage.store_next(sender.address), Op.ORIGIN)
+        + Op.SSTORE(storage.store_next(sender.address), Op.CALLER)
+        + Op.SSTORE(storage.store_next(tx_value), Op.CALLVALUE)
+        + suffix
+    )
+    
+    contract_address = deploy_contract_using_deploy_code(ew3, set_code)
+    
+    tx_hash = send_eip7702_transaction(
+        ew3,
+        sender=sender,
+        # send contract to self to execute the code
+        transaction={
+            "authorizationList": [
+                sign_authorization(contract_address=contract_address, chain_id=ew3.eth.chain_id, nonce=1, private_key=sender.key.to_0x_hex())
+            ],
+            "to": sender.address,
+            "value": tx_value,
+            "gas": 200000,
+        }
+    )
+    
+    receipt = ew3.eth.wait_for_transaction_receipt(tx_hash)
+    
+    for key in storage:
+        assert int(ew3.eth.get_storage_at(contract_address, key).hex(), 16) == 0
+    
+    if succeeds:
+        assert receipt["status"] == 1
+        for key in storage:
+            assert int(ew3.eth.get_storage_at(sender.address, key).hex(), 16) == storage[key]
+    else:
+        assert receipt["status"] == 0
+    
+    assert ew3.eth.get_transaction_count(sender.address) == 2
