@@ -105,6 +105,13 @@ impl State {
         Ok(acc.code_hash() != KECCAK_EMPTY)
     }
 
+    pub fn is_eip684_empty(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<bool> {
+        let acc = try_loaded!(self.read_account_lock(address));
+        Ok(acc.code_hash() == KECCAK_EMPTY && acc.nonce().is_zero())
+    }
+
     pub fn code_hash(&self, address: &AddressWithSpace) -> DbResult<H256> {
         let acc = try_loaded!(self.read_account_lock(address));
         Ok(acc.code_hash())

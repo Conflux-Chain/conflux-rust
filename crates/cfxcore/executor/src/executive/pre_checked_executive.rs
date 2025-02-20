@@ -51,9 +51,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         }
 
         let params = self.make_action_params()?;
-        if self.tx.space() == Space::Native
-            && !self.check_create_address(&params)?
-        {
+
+        if self.check_conflict_create_address(&params)? {
             return self.finalize_on_conflict_address(params.address);
         }
 
@@ -233,6 +232,18 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             .state
             .is_contract_with_code(&new_address)
             .map(|x| !x)
+    }
+
+    fn check_conflict_create_address(
+        &self, params: &ActionParams,
+    ) -> DbResult<bool> {
+        Ok(if !self.context.spec.cip_c2_fix {
+            self.tx.space() == Space::Native
+                && !self.check_create_address(&params)?
+        } else {
+            let address = params.address.with_space(params.space);
+            !self.context.state.is_eip684_empty(&address)?
+        })
     }
 }
 
