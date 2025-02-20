@@ -19,7 +19,8 @@ pip3 install \
     pyyaml \
     numpy \
     pytest \
-    pytest-xdist
+    pytest-xdist \
+    git+https://github.com/ethereum/execution-spec-tests.git@65d64c328955aef518a9f6701c64f553cabd52a2
 
 ################################################################################
 # temporary solution to use eip7702 signing from viem implementation
