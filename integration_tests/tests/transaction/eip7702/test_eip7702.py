@@ -78,7 +78,7 @@ def test_eip7702_sponsor_self(
 
     tx_hash = send_eip7702_transaction(
         ew3,
-        sender.address,
+        sender,
         {
             "authorizationList": [authorization],
         },
