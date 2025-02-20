@@ -176,7 +176,7 @@ impl State {
     pub fn set_authorization(
         &mut self, authority: &AddressWithSpace, address: &Address,
     ) -> DbResult<()> {
-        self.write_account_lock(authority)?
+        self.write_account_or_new_lock(authority)?
             .set_authorization(address);
         Ok(())
     }
