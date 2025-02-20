@@ -5,7 +5,7 @@ sys.path.append("..")
 
 from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak, parse_as_int
-from jsonrpcclient.exceptions import ReceivedErrorResponseError
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
 from test_framework.blocktools import encode_hex_0x
 from test_framework.util import assert_equal, test_rpc_call_with_block_object, assert_raises_rpc_error
 

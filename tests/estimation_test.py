@@ -44,7 +44,7 @@ class EstimationTest(ConfluxTestFramework):
         def estimate_error(**data):
             try:
                 rpc.cfx_estimateGasAndCollateral(data)
-            except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+            except ReceivedErrorResponseError as e:
                 error = e.response
                 return error
             except Exception as e:

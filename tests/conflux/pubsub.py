@@ -5,9 +5,8 @@ import asyncio
 import json
 import websockets
 
-from jsonrpcclient.clients.websockets_client import WebSocketsClient
-from jsonrpcclient.requests import Request
-
+from jsonrpcclient import request_json, parse_json, Ok
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
 from test_framework.util import pubsub_url
 
 class PubSubClient:
@@ -25,16 +24,18 @@ class PubSubClient:
 
         # subscribe
         method = "eth_subscribe" if self.evm else "cfx_subscribe"
-        req = Request(method, topic, *args)
-        resp = await WebSocketsClient(self.ws).send(req)
-
-        # initialize buffer
-        id = resp.data.result
-        self.buffer[id] = []
-        return Subscription(self, id, self.evm)
+        req = request_json(method, params=(topic, *args))
+        await self.ws.send(req)
+        resp = parse_json(await self.ws.recv())
+        if isinstance(resp, Ok):
+            id = resp.result
+            self.buffer[id] = []
+            return Subscription(self, id, self.evm)
+        else:
+            raise ReceivedErrorResponseError(resp)
 
 class Subscription:
-    def __init__(self, pubsub, id, evm):
+    def __init__(self, pubsub: PubSubClient, id: int, evm: bool):
         self.pubsub = pubsub
         self.id = id
         self.evm = evm
@@ -44,9 +45,13 @@ class Subscription:
 
         # unsubscribe
         method = "eth_unsubscribe" if self.evm else "cfx_unsubscribe"
-        req = Request(method, self.id)
-        resp = await WebSocketsClient(self.pubsub.ws).send(req)
-        assert(resp.data.result == True)
+        req = request_json(method, params=(self.id,))
+        await self.pubsub.ws.send(req)
+        resp = parse_json(await self.pubsub.ws.recv())
+        if isinstance(resp, Ok):
+            assert(resp.result == True)
+        else:
+            raise ReceivedErrorResponseError(resp)
 
         # clear buffer
         del self.pubsub.buffer[self.id]
