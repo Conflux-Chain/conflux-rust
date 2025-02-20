@@ -13,7 +13,6 @@ import time
 from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union, Literal
 import socket
 import threading
-import jsonrpcclient.exceptions
 import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
@@ -26,7 +25,7 @@ from os.path import dirname, join
 from pathlib import Path
 from web3.exceptions import Web3RPCError, ContractLogicError
 
-from integration_tests.test_framework.simple_rpc_proxy import SimpleRpcProxy
+from integration_tests.test_framework.simple_rpc_proxy import SimpleRpcProxy, ReceivedErrorResponseError
 from .. import coverage
 from ..authproxy import AuthServiceProxy, JSONRPCException
 if TYPE_CHECKING:
@@ -158,7 +157,7 @@ def try_rpc(code: Optional[int], message: Optional[str], fun: Callable, err_data
     Returns whether a JSONRPCException was raised."""
     try:
         fun(*args, **kwds)
-    except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+    except ReceivedErrorResponseError as e:
         error = e.response
         # JSONRPCException was thrown as expected. Check the code and message values are correct.
         if (code is not None) and (code != error.code):
