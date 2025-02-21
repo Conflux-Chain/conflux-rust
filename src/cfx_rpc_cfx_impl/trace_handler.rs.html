@@ -229,30 +229,6 @@
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
-<a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
-<a href="#248" id="248">248</a>
-<a href="#249" id="249">249</a>
-<a href="#250" id="250">250</a>
-<a href="#251" id="251">251</a>
-<a href="#252" id="252">252</a>
-<a href="#253" id="253">253</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -266,18 +242,17 @@
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph,
 };
-<span class="kw">use </span>jsonrpc_core::{Error <span class="kw">as </span>JsonRpcError, <span class="prelude-ty">Result </span><span class="kw">as </span>JsonRpcResult};
-<span class="kw">use </span>log::error;
+<span class="kw">use </span>jsonrpc_core::Error <span class="kw">as </span>JsonRpcError;
+<span class="kw">use </span>log::warn;
 <span class="kw">use </span>primitives::EpochNumber;
-<span class="kw">use </span>std::{convert::TryInto, sync::Arc};
+<span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>cfx_rpc_cfx_types::{
-    trace::{
-        Action <span class="kw">as </span>RpcAction, EpochTrace, LocalizedBlockTrace, LocalizedTrace,
-        LocalizedTrace <span class="kw">as </span>RpcLocalizedTrace,
-    },
-    trace_eth::LocalizedTrace <span class="kw">as </span>EthLocalizedTrace,
+<span class="kw">use </span>cfx_parity_trace_types::LocalizedTrace <span class="kw">as </span>PrimitiveLocalizedTrace;
+<span class="kw">use </span>cfx_rpc_cfx_types::trace::{
+    Action <span class="kw">as </span>RpcAction, EpochTrace, LocalizedBlockTrace,
+    LocalizedTrace <span class="kw">as </span>RpcLocalizedTrace,
 };
+<span class="kw">use </span>cfx_rpc_common_impl::trace::primitive_traces_to_eth_localized_traces;
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>TraceHandler {
@@ -359,6 +334,18 @@
         }
     }
 
+    <span class="kw">pub fn </span>filter_primitives_traces_impl(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, filter: PrimitiveTraceFilter,
+    ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;PrimitiveLocalizedTrace&gt;&gt;&gt; {
+        <span class="kw">let </span>consensus_graph = <span class="self">self</span>.consensus_graph();
+        <span class="kw">let </span>traces: Vec&lt;<span class="kw">_</span>&gt; = consensus_graph.filter_traces(filter)<span class="question-mark">?</span>;
+        <span class="kw">if </span>traces.is_empty() {
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(traces))
+        }
+    }
+
     <span class="kw">pub fn </span>transaction_trace_impl(
         <span class="kw-2">&amp;</span><span class="self">self</span>, tx_hash: <span class="kw-2">&amp;</span>H256,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;RpcLocalizedTrace&gt;&gt; {
@@ -428,17 +415,32 @@
             </span>.consensus
             .get_hash_from_epoch_number(epoch_number.clone())<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(EpochTrace::new(
-            <span class="self">self</span>.space_epoch_traces(Space::Native, epoch_hash)<span class="question-mark">?</span>,
-            <span class="self">Self</span>::to_eth_traces(
-                <span class="self">self</span>.space_epoch_traces(Space::Ethereum, epoch_hash)<span class="question-mark">?</span>,
-            )<span class="question-mark">?</span>,
-        ))
+        <span class="kw">let </span>cfx_traces = <span class="self">self
+            </span>.space_epoch_traces(Space::Native, epoch_hash)<span class="question-mark">?
+            </span>.into_iter()
+            .map(|trace| {
+                RpcLocalizedTrace::from(trace, <span class="self">self</span>.network)
+                    .expect(<span class="string">"Local address conversion should succeed"</span>)
+            })
+            .collect();
+
+        <span class="kw">let </span>primitive_eth_traces =
+            <span class="self">self</span>.space_epoch_traces(Space::Ethereum, epoch_hash)<span class="question-mark">?</span>;
+        <span class="kw">let </span>eth_traces = primitive_traces_to_eth_localized_traces(
+            <span class="kw-2">&amp;</span>primitive_eth_traces,
+            <span class="self">self</span>.network,
+        )
+        .map_err(|e| {
+            <span class="macro">warn!</span>(<span class="string">"Internal error on trace reconstruction: {}"</span>, e);
+            JsonRpcError::internal_error()
+        })<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(EpochTrace::new(cfx_traces, eth_traces))
     }
 
     <span class="kw">fn </span>space_epoch_traces(
         <span class="kw-2">&amp;</span><span class="self">self</span>, space: Space, epoch_hash: H256,
-    ) -&gt; CoreResult&lt;Vec&lt;LocalizedTrace&gt;&gt; {
+    ) -&gt; CoreResult&lt;Vec&lt;PrimitiveLocalizedTrace&gt;&gt; {
         <span class="kw">let </span>consensus = <span class="self">self</span>.consensus_graph();
         <span class="kw">let </span>epoch = consensus
             .get_block_epoch_number(<span class="kw-2">&amp;</span>epoch_hash)
@@ -451,59 +453,9 @@
             epoch,
             epoch_hash,
         )<span class="question-mark">?</span>;
-        <span class="kw">let </span>traces = consensus
-            .filter_block_traces(<span class="kw-2">&amp;</span>trace_filter, block_traces)<span class="question-mark">?
-            </span>.into_iter()
-            .map(|trace| {
-                RpcLocalizedTrace::from(trace, <span class="self">self</span>.network)
-                    .expect(<span class="string">"Local address conversion should succeed"</span>)
-            })
-            .collect();
+        <span class="kw">let </span>traces =
+            consensus.filter_block_traces(<span class="kw-2">&amp;</span>trace_filter, block_traces)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(traces)
-    }
-
-    <span class="kw">pub fn </span>to_eth_traces(
-        traces: Vec&lt;LocalizedTrace&gt;,
-    ) -&gt; JsonRpcResult&lt;Vec&lt;EthLocalizedTrace&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>eth_traces: Vec&lt;EthLocalizedTrace&gt; = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>stack_index = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>sublen_stack = Vec::new();
-
-        <span class="kw">for </span>trace <span class="kw">in </span>traces {
-            <span class="kw">match </span><span class="kw-2">&amp;</span>trace.action {
-                RpcAction::Call(<span class="kw">_</span>) | RpcAction::Create(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(parent_subtraces) = sublen_stack.last_mut() {
-                        <span class="kw-2">*</span>parent_subtraces += <span class="number">1</span>;
-                    }
-
-                    sublen_stack.push(<span class="number">0</span>);
-                    stack_index.push(eth_traces.len());
-
-                    eth_traces.push(trace.try_into().map_err(|e| {
-                        <span class="macro">error!</span>(<span class="string">"eth trace conversion error: {:?}"</span>, e);
-                        JsonRpcError::internal_error()
-                    })<span class="question-mark">?</span>);
-                }
-                RpcAction::CallResult(<span class="kw">_</span>) | RpcAction::CreateResult(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">let </span>index = stack_index
-                        .pop()
-                        .ok_or(JsonRpcError::internal_error())<span class="question-mark">?</span>;
-
-                    eth_traces[index].set_result(trace.action)<span class="question-mark">?</span>;
-
-                    eth_traces[index].subtraces =
-                        sublen_stack.pop().expect(<span class="string">"stack_index matches"</span>);
-                }
-                RpcAction::InternalTransferAction(<span class="kw">_</span>) =&gt; {}
-            }
-        }
-
-        <span class="kw">if </span>!stack_index.is_empty() {
-            <span class="macro">error!</span>(<span class="string">"eth::filter_traces: actions left unmatched"</span>);
-            <span class="macro">bail!</span>(JsonRpcError::internal_error());
-        }
-
-        <span class="prelude-val">Ok</span>(eth_traces)
     }
 }
 </code></pre></div></section></main></body></html>

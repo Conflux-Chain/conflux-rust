@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["build_call_hierarchy","construct_parity_trace"],"struct":["ResolvedTraceNode","TraceWithPosition"]};

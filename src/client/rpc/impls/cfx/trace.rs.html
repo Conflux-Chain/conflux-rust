@@ -72,13 +72,6 @@
 <a href="#70" id="70">70</a>
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -88,9 +81,7 @@
     rpc::{
         traits::trace::Trace,
         types::{
-            eth::LocalizedTrace <span class="kw">as </span>EthLocalizedTrace,
-            EpochNumber <span class="kw">as </span>RpcEpochNumber, LocalizedBlockTrace,
-            LocalizedTrace <span class="kw">as </span>RpcLocalizedTrace, LocalizedTrace,
+            EpochNumber <span class="kw">as </span>RpcEpochNumber, LocalizedBlockTrace, LocalizedTrace,
             TraceFilter <span class="kw">as </span>RpcTraceFilter,
         },
         CoreResult,
@@ -98,6 +89,7 @@
 };
 <span class="kw">use </span>cfx_addr::Network;
 <span class="kw">use </span>cfx_execute_helper::exec_tracer::TraceFilter <span class="kw">as </span>PrimitiveTraceFilter;
+<span class="kw">use </span>cfx_parity_trace_types::LocalizedTrace <span class="kw">as </span>PrimitiveLocalizedTrace;
 <span class="kw">use </span>cfx_rpc_cfx_impl::TraceHandler <span class="kw">as </span>CfxTraceHandler;
 <span class="kw">use </span>cfx_rpc_cfx_types::trace::EpochTrace;
 <span class="kw">use </span>cfx_types::H256;
@@ -121,16 +113,10 @@
         <span class="self">self</span>.inner.consensus_graph()
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>filter_traces_impl(
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>filter_primitives_traces_impl(
         <span class="kw-2">&amp;</span><span class="self">self</span>, filter: PrimitiveTraceFilter,
-    ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;RpcLocalizedTrace&gt;&gt;&gt; {
-        <span class="self">self</span>.inner.filter_traces_impl(filter)
-    }
-
-    <span class="kw">pub fn </span>to_eth_traces(
-        traces: Vec&lt;LocalizedTrace&gt;,
-    ) -&gt; JsonRpcResult&lt;Vec&lt;EthLocalizedTrace&gt;&gt; {
-        CfxTraceHandler::to_eth_traces(traces)
+    ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;PrimitiveLocalizedTrace&gt;&gt;&gt; {
+        <span class="self">self</span>.inner.filter_primitives_traces_impl(filter)
     }
 }
 
