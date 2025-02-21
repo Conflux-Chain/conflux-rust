@@ -1,16 +1,13 @@
 use crate::rpc::{
     impls::cfx::TraceHandler,
     traits::eth_space::trace::Trace as EthTrace,
-    types::{
-        eth::{
-            BlockNumber, LocalizedTrace as EthLocalizedTrace, Res as EthRes,
-            TraceFilter as EthTraceFilter,
-        },
-        Action as RpcAction,
+    types::eth::{
+        BlockNumber, LocalizedTrace as EthLocalizedTrace,
+        TraceFilter as EthTraceFilter,
     },
 };
-use cfx_execute_helper::exec_tracer::{
-    construct_parity_trace, TraceWithPosition,
+use cfx_rpc_common_impl::trace::{
+    into_eth_localized_traces, primitive_traces_to_eth_localized_traces,
 };
 use cfx_types::H256;
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
@@ -51,47 +48,23 @@ impl EthTrace for EthTraceHandler {
         let block_number = phantom_block.pivot_header.height();
         let block_hash = phantom_block.pivot_header.hash();
 
+        let network = self.trace_handler.inner.network;
+
         for (idx, tx_traces) in phantom_block.traces.into_iter().enumerate() {
             let tx_hash = phantom_block.transactions[idx].hash();
-
-            for TraceWithPosition {
-                action,
-                result,
-                child_count,
-                trace_path,
-            } in construct_parity_trace(&tx_traces).map_err(|e| {
+            let tx_eth_traces = into_eth_localized_traces(
+                &tx_traces.0,
+                block_number,
+                block_hash,
+                tx_hash,
+                idx,
+                network,
+            )
+            .map_err(|e| {
                 warn!("Internal error on trace reconstruction: {}", e);
                 JsonRpcError::internal_error()
-            })? {
-                let mut eth_trace = EthLocalizedTrace {
-                    action: RpcAction::try_from(
-                        action.action.clone(),
-                        self.trace_handler.inner.network,
-                    )
-                    .map_err(|_| JsonRpcError::internal_error())?
-                    .try_into()
-                    .map_err(|_| JsonRpcError::internal_error())?,
-                    result: EthRes::None,
-                    trace_address: trace_path,
-                    subtraces: child_count,
-                    transaction_position: Some(idx),
-                    transaction_hash: Some(tx_hash),
-                    block_number,
-                    block_hash,
-                    // action and its result should have the same `valid`.
-                    valid: action.valid,
-                };
-
-                eth_trace.set_result(
-                    RpcAction::try_from(
-                        result.action.clone(),
-                        self.trace_handler.inner.network,
-                    )
-                    .map_err(|_| JsonRpcError::internal_error())?,
-                )?;
-
-                eth_traces.push(eth_trace);
-            }
+            })?;
+            eth_traces.extend(tx_eth_traces);
         }
 
         Ok(Some(eth_traces))
@@ -100,17 +73,24 @@ impl EthTrace for EthTraceHandler {
     fn filter_traces(
         &self, filter: EthTraceFilter,
     ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
-        // TODO(lpl): Use `TransactionExecTraces::filter_trace_pairs` to avoid
-        // pairing twice.
         let primitive_filter = filter.into_primitive()?;
 
-        let traces =
-            match self.trace_handler.filter_traces_impl(primitive_filter)? {
-                None => return Ok(None),
-                Some(traces) => traces,
-            };
+        let Some(primitive_traces) = self
+            .trace_handler
+            .filter_primitives_traces_impl(primitive_filter)?
+        else {
+            return Ok(None);
+        };
 
-        Ok(Some(TraceHandler::to_eth_traces(traces)?))
+        let traces = primitive_traces_to_eth_localized_traces(
+            &primitive_traces,
+            self.trace_handler.inner.network,
+        )
+        .map_err(|e| {
+            warn!("Internal error on trace reconstruction: {}", e);
+            JsonRpcError::internal_error()
+        })?;
+        Ok(Some(traces))
     }
 
     fn transaction_traces(
@@ -154,50 +134,20 @@ impl EthTrace for EthTraceHandler {
         let tx = &phantom_block.transactions[id];
         let tx_traces = phantom_block.traces[id].clone();
 
-        // convert traces
-        let trace_pairs = construct_parity_trace(&tx_traces).map_err(|e| {
+        let network = self.trace_handler.inner.network;
+
+        let eth_traces = into_eth_localized_traces(
+            &tx_traces.0,
+            epoch_num,
+            phantom_block.pivot_header.hash(),
+            tx.hash,
+            id,
+            network,
+        )
+        .map_err(|e| {
             warn!("Internal error on trace reconstruction: {}", e);
             JsonRpcError::internal_error()
         })?;
-
-        let mut eth_traces = Vec::new();
-
-        for TraceWithPosition {
-            action,
-            result,
-            child_count,
-            trace_path,
-        } in trace_pairs
-        {
-            let mut eth_trace = EthLocalizedTrace {
-                action: RpcAction::try_from(
-                    action.action.clone(),
-                    self.trace_handler.inner.network,
-                )
-                .map_err(|_| JsonRpcError::internal_error())?
-                .try_into()
-                .map_err(|_| JsonRpcError::internal_error())?,
-                result: EthRes::None,
-                trace_address: trace_path,
-                subtraces: child_count,
-                transaction_position: Some(id),
-                transaction_hash: Some(tx.hash()),
-                block_number: epoch_num,
-                block_hash: phantom_block.pivot_header.hash(),
-                // action and its result should have the same `valid`.
-                valid: action.valid,
-            };
-
-            eth_trace.set_result(
-                RpcAction::try_from(
-                    result.action.clone(),
-                    self.trace_handler.inner.network,
-                )
-                .map_err(|_| JsonRpcError::internal_error())?,
-            )?;
-
-            eth_traces.push(eth_trace);
-        }
 
         Ok(Some(eth_traces))
     }

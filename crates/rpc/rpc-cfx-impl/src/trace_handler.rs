@@ -11,18 +11,17 @@ use cfxcore::{
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph,
 };
-use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
-use log::error;
+use jsonrpc_core::Error as JsonRpcError;
+use log::warn;
 use primitives::EpochNumber;
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 
-use cfx_rpc_cfx_types::{
-    trace::{
-        Action as RpcAction, EpochTrace, LocalizedBlockTrace, LocalizedTrace,
-        LocalizedTrace as RpcLocalizedTrace,
-    },
-    trace_eth::LocalizedTrace as EthLocalizedTrace,
+use cfx_parity_trace_types::LocalizedTrace as PrimitiveLocalizedTrace;
+use cfx_rpc_cfx_types::trace::{
+    Action as RpcAction, EpochTrace, LocalizedBlockTrace,
+    LocalizedTrace as RpcLocalizedTrace,
 };
+use cfx_rpc_common_impl::trace::primitive_traces_to_eth_localized_traces;
 
 #[derive(Clone)]
 pub struct TraceHandler {
@@ -104,6 +103,18 @@ impl TraceHandler {
         }
     }
 
+    pub fn filter_primitives_traces_impl(
+        &self, filter: PrimitiveTraceFilter,
+    ) -> CoreResult<Option<Vec<PrimitiveLocalizedTrace>>> {
+        let consensus_graph = self.consensus_graph();
+        let traces: Vec<_> = consensus_graph.filter_traces(filter)?;
+        if traces.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(traces))
+        }
+    }
+
     pub fn transaction_trace_impl(
         &self, tx_hash: &H256,
     ) -> Option<Vec<RpcLocalizedTrace>> {
@@ -173,17 +184,32 @@ impl TraceHandler {
             .consensus
             .get_hash_from_epoch_number(epoch_number.clone())?;
 
-        Ok(EpochTrace::new(
-            self.space_epoch_traces(Space::Native, epoch_hash)?,
-            Self::to_eth_traces(
-                self.space_epoch_traces(Space::Ethereum, epoch_hash)?,
-            )?,
-        ))
+        let cfx_traces = self
+            .space_epoch_traces(Space::Native, epoch_hash)?
+            .into_iter()
+            .map(|trace| {
+                RpcLocalizedTrace::from(trace, self.network)
+                    .expect("Local address conversion should succeed")
+            })
+            .collect();
+
+        let primitive_eth_traces =
+            self.space_epoch_traces(Space::Ethereum, epoch_hash)?;
+        let eth_traces = primitive_traces_to_eth_localized_traces(
+            &primitive_eth_traces,
+            self.network,
+        )
+        .map_err(|e| {
+            warn!("Internal error on trace reconstruction: {}", e);
+            JsonRpcError::internal_error()
+        })?;
+
+        Ok(EpochTrace::new(cfx_traces, eth_traces))
     }
 
     fn space_epoch_traces(
         &self, space: Space, epoch_hash: H256,
-    ) -> CoreResult<Vec<LocalizedTrace>> {
+    ) -> CoreResult<Vec<PrimitiveLocalizedTrace>> {
         let consensus = self.consensus_graph();
         let epoch = consensus
             .get_block_epoch_number(&epoch_hash)
@@ -196,58 +222,8 @@ impl TraceHandler {
             epoch,
             epoch_hash,
         )?;
-        let traces = consensus
-            .filter_block_traces(&trace_filter, block_traces)?
-            .into_iter()
-            .map(|trace| {
-                RpcLocalizedTrace::from(trace, self.network)
-                    .expect("Local address conversion should succeed")
-            })
-            .collect();
+        let traces =
+            consensus.filter_block_traces(&trace_filter, block_traces)?;
         Ok(traces)
-    }
-
-    pub fn to_eth_traces(
-        traces: Vec<LocalizedTrace>,
-    ) -> JsonRpcResult<Vec<EthLocalizedTrace>> {
-        let mut eth_traces: Vec<EthLocalizedTrace> = Vec::new();
-        let mut stack_index = Vec::new();
-        let mut sublen_stack = Vec::new();
-
-        for trace in traces {
-            match &trace.action {
-                RpcAction::Call(_) | RpcAction::Create(_) => {
-                    if let Some(parent_subtraces) = sublen_stack.last_mut() {
-                        *parent_subtraces += 1;
-                    }
-
-                    sublen_stack.push(0);
-                    stack_index.push(eth_traces.len());
-
-                    eth_traces.push(trace.try_into().map_err(|e| {
-                        error!("eth trace conversion error: {:?}", e);
-                        JsonRpcError::internal_error()
-                    })?);
-                }
-                RpcAction::CallResult(_) | RpcAction::CreateResult(_) => {
-                    let index = stack_index
-                        .pop()
-                        .ok_or(JsonRpcError::internal_error())?;
-
-                    eth_traces[index].set_result(trace.action)?;
-
-                    eth_traces[index].subtraces =
-                        sublen_stack.pop().expect("stack_index matches");
-                }
-                RpcAction::InternalTransferAction(_) => {}
-            }
-        }
-
-        if !stack_index.is_empty() {
-            error!("eth::filter_traces: actions left unmatched");
-            bail!(JsonRpcError::internal_error());
-        }
-
-        Ok(eth_traces)
     }
 }
