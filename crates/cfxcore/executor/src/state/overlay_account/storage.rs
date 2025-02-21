@@ -196,8 +196,8 @@ impl OverlayAccount {
     pub fn storage_entry_at(
         &self, db: &StateDbGeneric, key: &[u8],
     ) -> DbResult<StorageValue> {
-        Ok(if let Some(owner) = self.cached_entry_at(key) {
-            owner
+        Ok(if let Some(value) = self.cached_entry_at(key) {
+            value
         } else if self.fresh_storage() {
             StorageValue::default()
         } else {

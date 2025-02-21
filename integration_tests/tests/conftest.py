@@ -1,11 +1,11 @@
 from conflux_web3 import Web3
 import pytest
-import argparse
 import os
 from typing import Type
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
 from integration_tests.conflux.rpc import RpcClient
+from integration_tests.test_framework.test_framework import FrameworkOptions
 from web3.tracing import Tracing
 
 TMP_DIR = None
@@ -14,93 +14,111 @@ PORT_MIN = 11000
 PORT_MAX = 65535
 PORT_RANGE = 100
 
-@pytest.fixture(scope="session")
-def arg_parser():
-    parser = argparse.ArgumentParser(usage="%(prog)s [options]")
-    parser.add_argument(
-        "--nocleanup",
+# pytest hook to add options
+def pytest_addoption(parser):
+    parser.addoption(
+        "--conflux-nocleanup",
         dest="nocleanup",
         default=False,
         action="store_true",
         help="Leave bitcoinds and test.* datadir on exit or error")
-    parser.add_argument(
-        "--noshutdown",
+    parser.addoption(
+        "--conflux-noshutdown",
         dest="noshutdown",
         default=False,
         action="store_true",
         help="Don't stop bitcoinds after the test execution")
-    parser.add_argument(
-        "--cachedir",
+    parser.addoption(
+        "--conflux-cachedir",
         dest="cachedir",
         default=os.path.abspath(
             os.path.dirname(os.path.realpath(__file__)) + "/../../cache"),
         help=
         "Directory for caching pregenerated datadirs (default: %(default)s)"
     )
-    parser.add_argument(
-        "--tmpdir", dest="tmpdir", help="Root directory for datadirs")
-    parser.add_argument(
-        "-l",
-        "--loglevel",
+    parser.addoption(
+        "--conflux-tmpdir", dest="tmpdir", help="Root directory for datadirs")
+    parser.addoption(
+        "--conflux-loglevel",
         dest="loglevel",
         default="INFO",
         help=
         "log events at this level and higher to the console. Can be set to DEBUG, INFO, WARNING, ERROR or CRITICAL. Passing --loglevel DEBUG will output all logs to console. Note that logs at all levels are always written to the test_framework.log file in the temporary test directory."
     )
-    parser.add_argument(
-        "--tracerpc",
+    parser.addoption(
+        "--conflux-tracerpc",
         dest="trace_rpc",
         default=False,
         action="store_true",
         help="Print out all RPC calls as they are made")
-    parser.add_argument(
-        "--portseed",
+    parser.addoption(
+        "--conflux-portseed",
         dest="port_seed",
         default=os.getpid(),
         type=int,
         help=
         "The seed to use for assigning port numbers (default: current process id)"
     )
-    parser.add_argument(
-        "--coveragedir",
+    parser.addoption(
+        "--conflux-coveragedir",
         dest="coveragedir",
         help="Write tested RPC commands into this directory")
-    parser.add_argument(
-        "--pdbonfailure",
+    parser.addoption(
+        "--conflux-pdbonfailure",
         dest="pdbonfailure",
         default=False,
         action="store_true",
         help="Attach a python debugger if test fails")
-    parser.add_argument(
-        "--usecli",
+    parser.addoption(
+        "--conflux-usecli",
         dest="usecli",
         default=False,
         action="store_true",
         help="use bitcoin-cli instead of RPC for all commands")
-    parser.add_argument(
-        "--randomseed",
+    parser.addoption(
+        "--conflux-randomseed",
         dest="random_seed",
         type=int,
         help="Set a random seed")
-    parser.add_argument(
-        "--metrics-report-interval-ms",
+    parser.addoption(
+        "--conflux-metrics-report-interval-ms",
         dest="metrics_report_interval_ms",
         default=0,
         type=int)
 
-    parser.add_argument(
+    parser.addoption(
         "--conflux-binary",
         dest="conflux",
         default=os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
             "../../target/release/conflux"),
         type=str)
-    parser.add_argument(
-        "--port-min",
+    parser.addoption(
+        "--conflux-port-min",
         dest="port_min",
-        default=11000,
-        type=int)
-    return parser
+        default=0,
+        type=int)  # only used if set to bigger than 0
+
+def get_args_from_request(request: pytest.FixtureRequest) -> FrameworkOptions:
+    return FrameworkOptions(
+        nocleanup=request.config.getoption("nocleanup"),  # type: ignore
+        noshutdown=request.config.getoption("noshutdown"),  # type: ignore
+        cachedir=request.config.getoption("cachedir"),  # type: ignore
+        tmpdir=request.config.getoption("tmpdir"),  # type: ignore
+        loglevel=request.config.getoption("loglevel"),  # type: ignore
+        trace_rpc=request.config.getoption("trace_rpc"),  # type: ignore
+        coveragedir=request.config.getoption("coveragedir"),  # type: ignore
+        pdbonfailure=request.config.getoption("pdbonfailure"),  # type: ignore
+        usecli=request.config.getoption("usecli"),  # type: ignore
+        random_seed=request.config.getoption("random_seed"),  # type: ignore
+        metrics_report_interval_ms=request.config.getoption("metrics_report_interval_ms"),  # type: ignore
+        conflux=request.config.getoption("conflux"), # type: ignore
+        port_min=request.config.getoption("port_min"),  # type: ignore
+    )
+    
+@pytest.fixture(scope="session")
+def args(request: pytest.FixtureRequest) -> FrameworkOptions:
+    return get_args_from_request(request)
 
 @pytest.fixture(scope="module")
 def framework_class() -> Type[ConfluxTestFramework]:
@@ -117,9 +135,9 @@ def framework_class() -> Type[ConfluxTestFramework]:
     return DefaultFramework
 
 @pytest.fixture(scope="module")
-def network(framework_class: Type[ConfluxTestFramework], port_min: int, additional_secrets: int, request: pytest.FixtureRequest):
+def network(framework_class: Type[ConfluxTestFramework], port_min: int, additional_secrets: int, args: FrameworkOptions, request: pytest.FixtureRequest):
     try:
-        framework = framework_class(port_min, additional_secrets)
+        framework = framework_class(port_min, additional_secrets, options=args)
     except Exception as e:
         pytest.fail(f"Failed to setup framework: {e}")
     yield framework
@@ -155,3 +173,16 @@ def core_accounts(network: ConfluxTestFramework):
 @pytest.fixture(scope="module")
 def evm_accounts(network: ConfluxTestFramework):
     return network.evm_accounts
+
+@pytest.fixture(scope="module")
+def internal_contracts(network: ConfluxTestFramework):
+    return {
+        "AdminControl": network.internal_contract("AdminControl"),
+        "SponsorWhitelistControl": network.internal_contract("SponsorWhitelistControl"),
+        "Staking": network.internal_contract("Staking"),
+        "ConfluxContext": network.internal_contract("ConfluxContext"),
+        "PoSRegister": network.internal_contract("PoSRegister"),
+        "CrossSpaceCall": network.internal_contract("CrossSpaceCall"),
+        "ParamsControl": network.internal_contract("ParamsControl"),
+    }
+

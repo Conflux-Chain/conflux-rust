@@ -9,10 +9,11 @@ mod pre_checked_executive;
 mod tests;
 pub mod transact_options;
 
+use cfx_rpc_eth_types::BlockOverrides;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space, H256,
-    U256,
+    address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space,
+    SpaceMap, H256, U256,
 };
 use cfx_vm_types::{CreateContractAddress, Env, Spec};
 use primitives::{AccessList, SignedTransaction};
@@ -60,6 +61,36 @@ impl<'a> ExecutiveContext<'a> {
             Ok(executive) => executive.execute_transaction()?,
             Err(execution_outcome) => execution_outcome,
         })
+    }
+
+    pub fn apply_env_overrides(
+        env: &mut Env, block_override: Box<BlockOverrides>,
+    ) {
+        if let Some(number) = block_override.number {
+            env.number = number.as_u64();
+        }
+        if let Some(difficulty) = block_override.difficulty {
+            env.difficulty = difficulty;
+        }
+        if let Some(timestamp) = block_override.time {
+            env.timestamp = timestamp;
+        }
+        if let Some(gas_limit) = block_override.gas_limit {
+            env.gas_limit = U256::from(gas_limit);
+        }
+        if let Some(author) = block_override.coinbase {
+            env.author = author;
+        }
+        if let Some(_random) = block_override.random {
+            // conflux doesn't have random(prevRandao)
+        }
+        if let Some(base_fee) = block_override.base_fee {
+            env.base_gas_price = SpaceMap::new(base_fee, base_fee); // use same base_fee for both spaces
+        }
+
+        if let Some(_block_hash) = &block_override.block_hash {
+            // TODO impl
+        }
     }
 }
 

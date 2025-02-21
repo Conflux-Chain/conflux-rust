@@ -1483,7 +1483,12 @@ impl RpcImpl {
         )?;
         trace!("call tx {:?}", signed_tx);
 
-        consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
+        consensus_graph.call_virtual(
+            &signed_tx,
+            epoch.into(),
+            estimate_request,
+            Default::default(),
+        )
     }
 
     fn current_sync_phase(&self) -> CoreResult<String> {

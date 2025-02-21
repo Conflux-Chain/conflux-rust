@@ -10,9 +10,10 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter, EthRpcLogFilter as Filter,
-    FeeHistory, Header, Log, Receipt, SyncInfo, SyncStatus, Transaction,
-    TransactionRequest,
+    AccountOverride, AccountPendingTransactions, Block, BlockNumber as BlockId,
+    BlockOverrides, EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides,
+    FeeHistory, Header, Log, Receipt, RpcStateOverride, SyncInfo, SyncStatus,
+    Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::error::{
@@ -39,6 +40,7 @@ use primitives::{
 };
 use rustc_hex::ToHex;
 use solidity_abi::string_revert_reason_decode;
+use std::collections::HashMap;
 
 type BlockNumber = BlockId;
 type BlockNumberOrTag = BlockId;
@@ -100,6 +102,8 @@ impl EthApi {
     pub fn exec_transaction(
         &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> CoreResult<(Executed, U256)> {
         let consensus_graph = self.consensus_graph();
 
@@ -124,6 +128,26 @@ impl EthApi {
                 .into());
             }
         }
+
+        let state_overrides = match state_overrides {
+            Some(states) => {
+                let mut state_overrides = HashMap::new();
+                for (address, rpc_account_override) in states {
+                    let account_override =
+                        AccountOverride::try_from(rpc_account_override)
+                            .map_err(|err| {
+                                CoreError::InvalidParam(
+                                    err.into(),
+                                    Default::default(),
+                                )
+                            })?;
+                    state_overrides.insert(address, account_override);
+                }
+                Some(state_overrides)
+            }
+            None => None,
+        };
+        let evm_overrides = EvmOverrides::new(state_overrides, block_overrides);
 
         let epoch = match block_number_or_hash.unwrap_or_default() {
             BlockNumber::Hash { hash, .. } => {
@@ -167,6 +191,7 @@ impl EthApi {
             &signed_tx,
             epoch,
             estimate_request,
+            evm_overrides,
         )?;
 
         let executed = match execution_outcome {
@@ -996,6 +1021,35 @@ impl EthApi {
 
         Ok(total_reward * evm_ratio / 300)
     }
+
+    pub fn account_pending_transactions(
+        &self, address: Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> CoreResult<AccountPendingTransactions> {
+        let (pending_txs, tx_status, pending_count) = self
+            .tx_pool()
+            .get_account_pending_transactions(
+                &Address::from(address).with_evm_space(),
+                maybe_start_nonce,
+                maybe_limit.map(|limit| limit.as_usize()),
+                self.best_epoch_number(),
+            )
+            .map_err(|e| CoreError::from(e))?;
+        Ok(AccountPendingTransactions {
+            pending_transactions: pending_txs
+                .into_iter()
+                .map(|tx| {
+                    Transaction::from_signed(
+                        &tx,
+                        (None, None, None),
+                        (None, None),
+                    )
+                })
+                .collect(),
+            first_tx_status: tx_status,
+            pending_count: pending_count.into(),
+        })
+    }
 }
 
 impl BlockProvider for &EthApi {
@@ -1241,14 +1295,16 @@ impl EthApiServer for EthApi {
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     async fn call(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_overrides: Option<StateOverride>,
-        // block_overrides: Option<Box<BlockOverrides>>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
-        let (execution, _estimation) =
-            self.exec_transaction(request, block_number)?;
+        let (execution, _estimation) = self.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            block_overrides,
+        )?;
 
         Ok(execution.output.into())
     }
@@ -1287,13 +1343,15 @@ impl EthApiServer for EthApi {
     /// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
     async fn estimate_gas(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_override: Option<StateOverride>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
     ) -> RpcResult<U256> {
-        let (_, estimated_gas) =
-            self.exec_transaction(request, block_number)?;
+        let (_, estimated_gas) = self.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            None,
+        )?;
 
         Ok(estimated_gas)
     }
@@ -1403,6 +1461,10 @@ impl EthApiServer for EthApi {
         Ok(r)
     }
 
+    async fn submit_transaction(&self, raw: Bytes) -> RpcResult<H256> {
+        self.send_raw_transaction(raw).await
+    }
+
     /// Returns an Ethereum specific signature with:
     /// sign(keccak256("\x19Ethereum Signed Message:\n"
     /// + len(message) + message))).
@@ -1422,5 +1484,17 @@ impl EthApiServer for EthApi {
 
     async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>> {
         self.logs(filter).map_err(|err| err.into())
+    }
+
+    async fn account_pending_transactions(
+        &self, address: Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> RpcResult<AccountPendingTransactions> {
+        self.account_pending_transactions(
+            address,
+            maybe_start_nonce,
+            maybe_limit,
+        )
+        .map_err(|err| err.into())
     }
 }

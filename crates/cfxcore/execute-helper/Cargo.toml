@@ -18,8 +18,6 @@ primitives = { workspace = true }
 solidity-abi = { workspace = true }
 pow-types = { workspace = true }
 typemap = { workspace = true }
-
-
 alloy-rpc-types-trace = { workspace = true }
 geth-tracer = { workspace = true }
 cfx-parity-trace-types = { workspace = true }

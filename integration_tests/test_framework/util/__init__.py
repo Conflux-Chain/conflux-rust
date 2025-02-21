@@ -13,8 +13,6 @@ import time
 from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union, Literal
 import socket
 import threading
-import jsonrpcclient.exceptions
-import solcx
 import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
@@ -25,14 +23,13 @@ import shutil
 import math
 from os.path import dirname, join
 from pathlib import Path
+from web3.exceptions import Web3RPCError, ContractLogicError
 
-from integration_tests.test_framework.simple_rpc_proxy import SimpleRpcProxy
+from integration_tests.test_framework.simple_rpc_proxy import SimpleRpcProxy, ReceivedErrorResponseError
 from .. import coverage
 from ..authproxy import AuthServiceProxy, JSONRPCException
 if TYPE_CHECKING:
     from conflux.rpc import RpcClient
-
-solcx.set_solc_version('v0.5.17')
 
 CONFLUX_RPC_WAIT_TIMEOUT = 60
 CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
@@ -160,7 +157,7 @@ def try_rpc(code: Optional[int], message: Optional[str], fun: Callable, err_data
     Returns whether a JSONRPCException was raised."""
     try:
         fun(*args, **kwds)
-    except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+    except ReceivedErrorResponseError as e:
         error = e.response
         # JSONRPCException was thrown as expected. Check the code and message values are correct.
         if (code is not None) and (code != error.code):
@@ -175,6 +172,32 @@ def try_rpc(code: Optional[int], message: Optional[str], fun: Callable, err_data
     except Exception as e:
         raise AssertionError("Unexpected exception raised: " +
                              type(e).__name__)
+    else:
+        return False
+    
+def assert_raises_web3_rpc_error(code: Optional[int], message: Optional[str], fun: Callable, *args, err_data_: Optional[str]=None, **kwds):
+    try:
+        fun(*args, **kwds)
+    except Web3RPCError as e:
+        error = e.rpc_response['error']
+        # JSONRPCException was thrown as expected. Check the code and message values are correct.
+        if (code is not None) and (code != error["code"]):
+            raise AssertionError(
+                "Unexpected JSONRPC error code %i" % error["code"])
+        if (message is not None) and (message not in cast(str, error['message'])):
+            raise AssertionError(f"Expected substring not found: {error['message']}")
+        if (err_data_ is not None):
+            if not getattr(error, "data", None) or (err_data_ not in cast(str, error['data'])):
+                raise AssertionError(f"Expected substring not found: {error['data']}")
+        return True
+    except ContractLogicError as e:
+        if (message is not None) and (message not in e.message):
+            raise AssertionError(f"Expected substring not found: {e.message}")
+        if (err_data_ is not None):
+            if not getattr(e, "data", None) or (err_data_ not in cast(str, e.data)):
+                raise AssertionError(f"Expected substring not found: {e.data}")
+    except Exception as e:
+        raise AssertionError("Unexpected exception raised: " + type(e).__name__)
     else:
         return False
 
@@ -753,14 +776,15 @@ def get_contract_instance(contract_dict=None,
     w3 = web3.Web3()
     contract = None
     if source and contract_name:
-        output = solcx.compile_files([source])
-        if platform == "win32":
-            source = os.path.abspath(source).replace("\\","/")
-        contract_dict = output[f"{source}:{contract_name}"]
-        if "bin" in contract_dict:
-            contract_dict["bytecode"] = contract_dict.pop("bin")
-        elif "code" in contract_dict:
-            contract_dict["bytecode"] = contract_dict.pop("code")
+        raise Exception("deprecated")
+        # output = solcx.compile_files([source])
+        # if platform == "win32":
+        #     source = os.path.abspath(source).replace("\\","/")
+        # contract_dict = output[f"{source}:{contract_name}"]
+        # if "bin" in contract_dict:
+        #     contract_dict["bytecode"] = contract_dict.pop("bin")
+        # elif "code" in contract_dict:
+        #     contract_dict["bytecode"] = contract_dict.pop("code")
     if contract_dict:
         contract = w3.eth.contract(
             abi=contract_dict['abi'], bytecode=contract_dict['bytecode'], address=address)

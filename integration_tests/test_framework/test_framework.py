@@ -5,13 +5,13 @@
 """Base class for RPC testing."""
 import pytest
 from typing import List, Literal, Union, Any, cast, Type
+from dataclasses import dataclass
 from integration_tests.conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from integration_tests.conflux.messages import Transactions
 from integration_tests.conflux.rpc import RpcClient, default_config
 from enum import Enum
 from http.client import CannotSendRequest
 import logging
-import argparse
 import os
 import pdb
 import shutil
@@ -73,6 +73,24 @@ TEST_EXIT_SKIPPED = 77
 
 Web3NotSetupError = ValueError("w3 is not initialized, please call self.setup_w3() first")
 
+@dataclass
+class FrameworkOptions:
+    nocleanup: bool  # leave bitcoinds and test.* datadir on exit or error
+    noshutdown: bool  # don't stop bitcoinds after the test execution
+    cachedir: str  # directory for caching pregenerated datadirs
+    tmpdir: str  # root directory for datadirs
+    loglevel: str  # log events at this level and higher to the console
+    trace_rpc: bool  # print out all RPC calls as they are made
+    # never used
+    port_min: int  # port range for the test nodes, if set to 0, use the port_min fixture
+    # port_seed: int  # the seed to use for assigning port numbers
+    coveragedir: str  # write tested RPC commands into this directory
+    pdbonfailure: bool  # attach a python debugger if test fails
+    usecli: bool  # use bitcoin-cli instead of RPC for all commands
+    random_seed: int  # set a random seed
+    metrics_report_interval_ms: int  # report metrics interval in milliseconds
+    conflux: str  # path to conflux binary
+    
 
 class ConfluxTestFramework:
     """Base class for a bitcoin test script.
@@ -81,7 +99,6 @@ class ConfluxTestFramework:
 
     Individual tests can also override the following methods to customize the test setup:
 
-    - add_options()
     - setup_chain()
     - setup_network()
     - setup_nodes()
@@ -93,97 +110,14 @@ class ConfluxTestFramework:
     _cw3: Union[CWeb3, None] = None
     _ew3: Union[Web3, None] = None
     num_nodes: int
-    rpc: RpcClient
-    
-    def _get_parser(self) -> argparse.ArgumentParser:
-        parser = argparse.ArgumentParser(usage="%(prog)s [options]")
-        parser.add_argument(
-            "--nocleanup",
-            dest="nocleanup",
-            default=False,
-            action="store_true",
-            help="Leave bitcoinds and test.* datadir on exit or error")
-        parser.add_argument(
-            "--noshutdown",
-            dest="noshutdown",
-            default=False,
-            action="store_true",
-            help="Don't stop bitcoinds after the test execution")
-        parser.add_argument(
-            "--cachedir",
-            dest="cachedir",
-            default=os.path.abspath(
-                os.path.dirname(os.path.realpath(__file__)) + "/../../cache"),
-            help=
-            "Directory for caching pregenerated datadirs (default: %(default)s)"
-        )
-        parser.add_argument(
-            "--tmpdir", dest="tmpdir", help="Root directory for datadirs")
-        parser.add_argument(
-            "-l",
-            "--loglevel",
-            dest="loglevel",
-            default="INFO",
-            help=
-            "log events at this level and higher to the console. Can be set to DEBUG, INFO, WARNING, ERROR or CRITICAL. Passing --loglevel DEBUG will output all logs to console. Note that logs at all levels are always written to the test_framework.log file in the temporary test directory."
-        )
-        parser.add_argument(
-            "--tracerpc",
-            dest="trace_rpc",
-            default=False,
-            action="store_true",
-            help="Print out all RPC calls as they are made")
-        parser.add_argument(
-            "--portseed",
-            dest="port_seed",
-            default=os.getpid(),
-            type=int,
-            help=
-            "The seed to use for assigning port numbers (default: current process id)"
-        )
-        parser.add_argument(
-            "--coveragedir",
-            dest="coveragedir",
-            help="Write tested RPC commands into this directory")
-        parser.add_argument(
-            "--pdbonfailure",
-            dest="pdbonfailure",
-            default=False,
-            action="store_true",
-            help="Attach a python debugger if test fails")
-        parser.add_argument(
-            "--usecli",
-            dest="usecli",
-            default=False,
-            action="store_true",
-            help="use bitcoin-cli instead of RPC for all commands")
-        parser.add_argument(
-            "--randomseed",
-            dest="random_seed",
-            type=int,
-            help="Set a random seed")
-        parser.add_argument(
-            "--metrics-report-interval-ms",
-            dest="metrics_report_interval_ms",
-            default=0,
-            type=int)
 
-        parser.add_argument(
-            "--conflux-binary",
-            dest="conflux",
-            default=os.path.join(
-                os.path.dirname(os.path.realpath(__file__)),
-                "../../target/release/conflux"),
-            type=str)
-        return parser
-
-    def __init__(self, port_min: int, additional_secrets: int=0):
+    def __init__(self, port_min: int, additional_secrets: int=0, *, options: FrameworkOptions):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
-        arg_parser = self._get_parser()
         self.core_secrets: list[str] = [default_config["GENESIS_PRI_KEY"].hex()]  # type: ignore
         self.evm_secrets: list[str] = [default_config["GENESIS_PRI_KEY_2"].hex()]  # type: ignore
         self._add_genesis_secrets(additional_secrets)
-        self.port_min = port_min
+        self.options = options
+        self.port_min = self.options.port_min or port_min # if port_min is set to 0, use the port_min fixture
         self.setup_clean_chain = True
         self.nodes: list[TestNode] = []
         self.mocktime = 0
@@ -202,10 +136,9 @@ class ConfluxTestFramework:
             self,
             "num_nodes"), "Test must set self.num_nodes in set_test_params()"
 
-        self.add_options(arg_parser)
-        self.options, _ = arg_parser.parse_known_args()
+
         
-        PortMin.n = port_min # This line sets the port range for the test nodes
+        PortMin.n = self.port_min # This line sets the port range for the test nodes
 
         check_json_precision()
 
@@ -379,8 +312,7 @@ class ConfluxTestFramework:
         raise NotImplementedError
 
     def add_options(self, parser):
-        """Override this method to add command-line options to the test"""
-        pass
+        raise DeprecationWarning("add_options is deprecated in new test framework")
 
     def after_options_parsed(self):
         if self.options.metrics_report_interval_ms > 0:
@@ -635,6 +567,11 @@ class ConfluxTestFramework:
         metadata = load_contract_metadata(name)
         return self.cfx.contract(
             abi=metadata["abi"], bytecode=metadata["bytecode"])
+    
+    def evm_contract(self, name):
+        metadata = load_contract_metadata(name)
+        return self.eth.contract(
+            abi=metadata["abi"], bytecode=metadata["bytecode"])
 
     def internal_contract(self, name: InternalContractName):
         return self.cfx.contract(name=name, with_deployment_info=True)
@@ -643,6 +580,11 @@ class ConfluxTestFramework:
         tx_hash = self.cfx_contract(name).constructor().transact(transact_args)
         receipt = tx_hash.executed(timeout=30)
         return self.cfx_contract(name)(cast(str, receipt["contractCreated"]))
+    
+    def deploy_evm_contract(self,name,transact_args = {}):
+        tx_hash = self.evm_contract(name).constructor().transact(transact_args)
+        receipt = self.eth.wait_for_transaction_receipt(tx_hash)
+        return self.evm_contract(name)(receipt["contractAddress"])
 
 class SkipTest(Exception):
     """This exception is raised to skip a test"""
@@ -664,70 +606,3 @@ class DefaultConfluxTestFramework(ConfluxTestFramework):
         sync_blocks(self.nodes)
         self.log.info("start P2P connection ...")
         start_p2p_connection(self.nodes)
-
-
-class OptionHelper:
-    def to_argument_str(arg_name):
-        return "--" + str(arg_name).replace("_", "-")
-
-    def parsed_options_to_args(parsed_arg: dict):
-        args = []
-        for arg_name, value in parsed_arg.items():
-            if type(value) is not bool:
-                args.append(OptionHelper.to_argument_str(arg_name))
-                args.append(str(value))
-            elif value:
-                # FIXME: This only allows setting boolean to True.
-                args.append(OptionHelper.to_argument_str(arg_name))
-        return args
-
-    """
-    arg_definition is a key-value pair of arg_name and its default value.
-    When the default value is set to None, argparse.SUPPRESS is passed to
-    argument parser, which means that in the absence of this argument,
-    the value is unset, and in this case we assign the type to str.
-    
-    arg_filter is either None or a set of arg_names to add. By setting 
-    arg_filter, A class may use a subset of arg_definition of another 
-    class, without changing default value.
-    """
-
-    def add_options(
-            parser: argparse.ArgumentParser,
-            arg_definition: dict,
-            arg_filter: Union[None, set, dict] = None):
-        for arg_name, default_value in arg_definition.items():
-            if arg_filter is None or arg_name in arg_filter:
-                try:
-                    if default_value is None:
-                        parser.add_argument(
-                            OptionHelper.to_argument_str(arg_name),
-                            dest=arg_name,
-                            default=SUPPRESS,
-                            type=str
-                        )
-                    elif type(default_value) is bool:
-                        parser.add_argument(
-                            OptionHelper.to_argument_str(arg_name),
-                            dest=arg_name,
-                            action='store_false' if default_value else 'store_true',
-                        )
-                    else:
-                        parser.add_argument(
-                            OptionHelper.to_argument_str(arg_name),
-                            dest=arg_name,
-                            default=default_value,
-                            type=type(default_value)
-                        )
-                except argparse.ArgumentError as e:
-                    print(f"Ignored argparse error: {e}")
-
-    def conflux_options_to_config(parsed_args: dict, arg_filter: Union[None, set, dict] = None) -> dict:
-        conflux_config = {}
-        for arg_name, value in parsed_args.items():
-            if arg_filter is None or arg_name in arg_filter:
-                if type(value) is bool:
-                    conflux_config[arg_name] = "true" if value else "false"
-                else:
-                    conflux_config[arg_name] = repr(value)
-        return conflux_config

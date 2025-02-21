@@ -1,10 +1,10 @@
+import pytest
+from integration_tests.test_framework.test_framework import ConfluxTestFramework
+from integration_tests.test_framework.util import load_contract_metadata
+from integration_tests.conflux.rpc import RpcClient
 from hexbytes import HexBytes
 from web3 import Web3
-from integration_tests.test_framework.util import load_contract_metadata
-from integration_tests.test_framework.test_framework import ConfluxTestFramework
-from integration_tests.conflux.rpc import RpcClient
-from typing import Dict, Type, TypedDict
-import pytest
+from typing import Type, TypedDict
 from web3.types import TxReceipt
 
 
@@ -16,9 +16,9 @@ def framework_class() -> Type[ConfluxTestFramework]:
             self.conf_parameters["min_native_base_price"] = 10000
             self.conf_parameters["next_hardfork_transition_height"] = 1
             self.conf_parameters["next_hardfork_transition_number"] = 1
-            self.conf_parameters["public_evm_rpc_async_apis"] = (
-                '"all"'  # open all async apis
-            )
+            self.conf_parameters["public_evm_rpc_async_apis"] = "\"all\"" # open all async apis
+            # self.conf_parameters["evm_chain_id"] = str(10)
+            self.conf_parameters["evm_transaction_block_ratio"] = str(1)
             self.conf_parameters["executive_trace"] = "true"
 
         def setup_network(self):
@@ -43,6 +43,7 @@ def erc20_contract(ew3, evm_accounts):
     deploy_receipt = ew3.eth.get_transaction_receipt(tx_hash)
     assert deploy_receipt["status"] == 1
     erc20_address = deploy_receipt["contractAddress"]
+
     token_contract = ew3.eth.contract(address=erc20_address, abi=contract_meta["abi"])
 
     # mint 100 tokens to creator
@@ -72,3 +73,7 @@ def erc20_token_transfer(erc20_contract, ew3: Web3) -> ERC20TransferResult:
         "tx_hash": transfer_hash,
         "receipt": receipt,
     }
+
+@pytest.fixture(scope="module")
+def receiver_account(ew3):
+    return ew3.eth.account.create()

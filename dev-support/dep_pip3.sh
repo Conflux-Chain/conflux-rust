@@ -2,7 +2,24 @@
 
 set -e
 
-pip3 install cfx-account eth-utils py-ecc rlp trie coincurve safe-pysha3 conflux-web3==1.4.0b5 web3 jsonrpcclient==3.3.6 asyncio websockets pyyaml numpy
+pip3 install \
+    cfx-account \
+    eth-utils \
+    py-ecc \
+    rlp \
+    trie \
+    coincurve \
+    safe-pysha3 \
+    conflux-web3==1.4.0b5 \
+    web3 \
+    jsonrpcclient==4.0.3 \
+    requests \
+    asyncio \
+    websockets \
+    pyyaml \
+    numpy \
+    pytest \
+    pytest-xdist
 
 ################################################################################
 # temporary solution to use eip7702 signing from viem implementation
