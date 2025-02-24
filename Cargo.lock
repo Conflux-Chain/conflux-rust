@@ -1362,7 +1362,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc"
-version = "2.4.0"
+version = "2.4.1-net8888"
 dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "2.4.0"
+version = "2.4.1-net8888"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc",
@@ -1441,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "2.4.0"
+version = "2.4.1-net8888"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
@@ -1488,7 +1488,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.4.0"
+version = "2.4.1-net8888"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1593,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "2.4.0"
+version = "2.4.1-net8888"
 
 [[package]]
 name = "cfx-vm-interpreter"
