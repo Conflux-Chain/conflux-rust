@@ -2,17 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate cfx_bytes as bytes;
-extern crate cfxkey as keylib;
-extern crate core;
-#[macro_use]
-extern crate log;
-extern crate network;
-extern crate parking_lot;
-extern crate primitives;
-extern crate rand;
-extern crate rustc_hex;
-extern crate secret_store;
+use cfx_bytes as bytes;
+use cfxkey as keylib;
+use log::{debug, info, trace};
 
 use crate::bytes::Bytes;
 use cfx_types::{

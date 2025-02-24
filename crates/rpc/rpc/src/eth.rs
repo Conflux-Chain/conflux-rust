@@ -11,8 +11,9 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter, FeeHistory, Header, Log,
-    Receipt, SyncInfo, SyncStatus, Transaction, TransactionRequest,
+    Block, BlockNumber as BlockId, EthRpcLogFilter, EthRpcLogFilter as Filter,
+    FeeHistory, Header, Log, Receipt, SyncInfo, SyncStatus, Transaction,
+    TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::error::{
@@ -23,13 +24,13 @@ use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, H64, U256, U64,
 };
+use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     errors::{Error as CoreError, Result as CoreResult},
     ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
-use error_chain::bail;
 use jsonrpc_core::Error as RpcError;
 use jsonrpsee::core::RpcResult;
 use primitives::{
@@ -237,7 +238,7 @@ impl EthApi {
         } else if signed_trans.len() + failed_trans.len() == 0 {
             // For tx in transactions_pubkey_cache, we simply ignore them
             bail!(RpcError::from(EthApiError::PoolError(
-                RpcPoolError::ReplaceUnderpriced
+                RpcPoolError::AlreadyKnown
             )));
         } else if signed_trans.is_empty() {
             let tx_err = failed_trans.into_iter().next().expect("Not empty").1;
@@ -1411,5 +1412,9 @@ impl EthApiServer for EthApi {
     ) -> RpcResult<Bytes> {
         let _ = transaction;
         Err(jsonrpsee_internal_error("Not implemented"))
+    }
+
+    async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>> {
+        self.logs(filter).map_err(|err| err.into())
     }
 }

@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-log = "0.4"
+log = { workspace = true }
 kvdb-rocksdb = { workspace = true }
 kvdb = "0.4"

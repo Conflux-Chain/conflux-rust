@@ -2,6 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_rpc_builder::{
+    RpcModuleBuilder, RpcModuleSelection, RpcServerConfig, RpcServerHandle,
+    TransportRpcModuleConfig,
+};
+use cfxcore::{
+    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+};
 use jsonrpc_core::{MetaIoHandler, RemoteProcedure, Value};
 use jsonrpc_http_server::{
     Server as HttpServer, ServerBuilder as HttpServerBuilder,
@@ -14,7 +21,9 @@ use jsonrpc_ws_server::{
     MetaExtractor as WsMetaExtractor, Server as WsServer,
     ServerBuilder as WsServerBuilder,
 };
-use std::sync::Arc;
+pub use jsonrpsee::server::ServerBuilder;
+use log::{info, warn};
+use std::{net::SocketAddr, sync::Arc};
 
 mod authcodes;
 pub mod errors;
@@ -71,7 +80,7 @@ use crate::{
     rpc::{
         impls::{
             eth::{EthHandler, EthTraceHandler, GethDebugHandler},
-            eth_filter::EthFilterClient,
+            eth_filter::EthFilterHelper as EthFilterClient,
             RpcImplConfiguration,
         },
         interceptor::{RpcInterceptor, RpcProxy},
@@ -503,4 +512,37 @@ where
             Err(format!("WS error: {} (addr = {})", io_error, conf.address))
         }
     }
+}
+
+// start espace rpc server v2(async)
+pub async fn launch_async_rpc_servers(
+    config: RpcImplConfiguration, consensus: SharedConsensusGraph,
+    sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+    addr: Option<SocketAddr>,
+) -> Result<Option<RpcServerHandle>, String> {
+    if addr.is_none() {
+        return Ok(None);
+    }
+
+    let rpc_module_builder =
+        RpcModuleBuilder::new(config, consensus, sync, tx_pool);
+
+    // TODO: set transport rpc module according to config
+    let transport_rpc_module_config =
+        TransportRpcModuleConfig::set_http(RpcModuleSelection::Standard);
+
+    let transport_rpc_modules =
+        rpc_module_builder.build(transport_rpc_module_config);
+
+    // TODO: set server config according to config
+    let http_server_builder = ServerBuilder::default();
+    let server_config = RpcServerConfig::http(http_server_builder)
+        .with_http_address(addr.unwrap());
+
+    let server_handle = server_config
+        .start(&transport_rpc_modules)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(Some(server_handle))
 }

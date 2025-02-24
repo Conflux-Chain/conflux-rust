@@ -1,4 +1,5 @@
 pub mod address;
+mod chain_meta;
 pub mod epoch_number;
 mod fee_history;
 mod fee_history_cache_entry;
@@ -10,6 +11,7 @@ pub mod traits;
 mod transaction_status;
 
 pub use address::RpcAddress;
+pub use chain_meta::ChainStaticMeta;
 pub use epoch_number::EpochNumber;
 pub use fee_history::CfxFeeHistory;
 pub use fee_history_cache_entry::FeeHistoryCacheEntry;

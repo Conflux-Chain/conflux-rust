@@ -6,6 +6,7 @@ use super::super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{H256, U256};
 use cfxcore::block_data_manager::block_data_types::PosRewardInfo;
+use serde::Serialize;
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
