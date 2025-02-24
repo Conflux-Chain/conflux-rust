@@ -172,7 +172,7 @@ build_config! {
         (next_hardfork_transition_number, (Option<u64>), Some(226570000))
         (next_hardfork_transition_height, (Option<u64>), Some(175600000))
         (cip1559_transition_height, (Option<u64>), None)
-        (c2_fix_transition_height, (Option<u64>), None)
+        (c2_fix_transition_height, (Option<u64>), Some(208160000))
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
