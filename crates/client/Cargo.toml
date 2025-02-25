@@ -81,6 +81,7 @@ cfx-rpc-builder = { workspace = true }
 jsonrpsee = { workspace = true }
 cfx-rpc-common-impl = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
+cfx-tasks = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
