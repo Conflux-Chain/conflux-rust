@@ -48,3 +48,4 @@ serde = { workspace = true }
 cfx-addr = { workspace = true }
 solidity-abi = { workspace = true }
 cfx-rpc-common-impl = { workspace = true }
+cfx-tasks = { workspace = true}

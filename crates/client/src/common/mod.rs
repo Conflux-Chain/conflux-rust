@@ -676,6 +676,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            tokio_runtime.clone(),
         ),
     )?;
 
@@ -687,6 +688,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            tokio_runtime.clone(),
         ),
         RpcExtractor,
     )?;
@@ -699,6 +701,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            tokio_runtime.clone(),
         ),
         RpcExtractor,
     )?;
@@ -711,6 +714,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            tokio_runtime.clone(),
         ),
         RpcExtractor,
     )?;
@@ -723,6 +727,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            tokio_runtime.clone(),
         ),
         RpcExtractor,
     )?;
@@ -735,6 +740,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            tokio_runtime.clone(),
         ),
     )?;
 
@@ -746,6 +752,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            tokio_runtime.clone(),
         ),
         RpcExtractor,
     )?;
@@ -758,6 +765,7 @@ pub fn initialize_not_light_node_modules(
             pubsub,
             eth_pubsub.clone(),
             &conf,
+            tokio_runtime.clone(),
         ),
     )?;
 
@@ -778,6 +786,7 @@ pub fn initialize_not_light_node_modules(
             sync.clone(),
             txpool.clone(),
             eth_rpc_http_server_addr,
+            tokio_runtime.clone(),
         ))?;
 
     Ok((

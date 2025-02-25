@@ -58,10 +58,12 @@ use jsonrpsee::{
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    sync::Arc,
     /* time::{Duration, SystemTime, UNIX_EPOCH}, */
 };
 pub use tower::layer::util::{Identity, Stack};
 // use tower::Layer;
+use tokio::runtime::Runtime;
 
 /// A builder type to configure the RPC module: See [`RpcModule`]
 ///
@@ -72,18 +74,21 @@ pub struct RpcModuleBuilder {
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
+    executor: Arc<Runtime>,
 }
 
 impl RpcModuleBuilder {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: Arc<Runtime>,
     ) -> Self {
         Self {
             config,
             consensus,
             sync,
             tx_pool,
+            executor,
         }
     }
 
@@ -103,10 +108,12 @@ impl RpcModuleBuilder {
                 consensus,
                 sync,
                 tx_pool,
+                executor,
             } = self;
 
-            let mut registry =
-                RpcRegistryInner::new(config, consensus, sync, tx_pool);
+            let mut registry = RpcRegistryInner::new(
+                config, consensus, sync, tx_pool, executor,
+            );
 
             modules.config = module_config;
             modules.http = registry.maybe_module(http.as_ref());
@@ -125,12 +132,14 @@ pub struct RpcRegistryInner {
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     modules: HashMap<EthRpcModule, Methods>,
+    executor: Arc<Runtime>,
 }
 
 impl RpcRegistryInner {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: Arc<Runtime>,
     ) -> Self {
         Self {
             consensus,
@@ -138,6 +147,7 @@ impl RpcRegistryInner {
             sync,
             tx_pool,
             modules: Default::default(),
+            executor,
         }
     }
 
@@ -226,6 +236,7 @@ impl RpcRegistryInner {
                         self.consensus.clone(),
                         self.sync.clone(),
                         self.tx_pool.clone(),
+                        self.executor.clone(),
                     )
                     .into_rpc()
                     .into(),
@@ -250,6 +261,7 @@ impl RpcRegistryInner {
                             self.consensus.clone(),
                             self.sync.clone(),
                             self.tx_pool.clone(),
+                            self.executor.clone(),
                         );
                         ParityApi::new(eth_api).into_rpc().into()
                     }

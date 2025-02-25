@@ -24,6 +24,8 @@ use cfxcore::{
 use jsonrpc_core::Result as RpcResult;
 use log::debug;
 use primitives::TransactionWithSignature;
+use std::sync::Arc;
+use tokio::runtime::Runtime;
 
 pub struct EthHandler {
     inner: EthApi,
@@ -33,9 +35,10 @@ impl EthHandler {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: Arc<Runtime>,
     ) -> Self {
         EthHandler {
-            inner: EthApi::new(config, consensus, sync, tx_pool),
+            inner: EthApi::new(config, consensus, sync, tx_pool, executor),
         }
     }
 }

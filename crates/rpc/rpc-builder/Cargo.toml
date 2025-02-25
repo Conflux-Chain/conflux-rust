@@ -29,5 +29,6 @@ cfxcore = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 log = { workspace = true }
 cfx-rpc-middlewares = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]

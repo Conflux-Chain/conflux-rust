@@ -1341,6 +1341,7 @@ dependencies = [
  "cfx-rpc-primitives",
  "cfx-rpc-utils",
  "cfx-statedb",
+ "cfx-tasks",
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
@@ -1381,6 +1382,7 @@ dependencies = [
  "serde",
  "strum",
  "thiserror 2.0.11",
+ "tokio 1.40.0",
  "tower",
 ]
 
@@ -1504,13 +1506,16 @@ dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
  "alloy-sol-types",
+ "cfx-tasks",
  "cfx-types",
+ "futures 0.3.30",
  "jsonrpc-core 18.0.0",
  "jsonrpsee",
  "jsonrpsee-core",
  "revm",
  "serde_json",
  "thiserror 2.0.11",
+ "tokio 1.40.0",
 ]
 
 [[package]]
@@ -1583,6 +1588,19 @@ dependencies = [
  "log",
  "parking_lot 0.11.2",
  "tokio 0.2.25",
+]
+
+[[package]]
+name = "cfx-tasks"
+version = "2.4.0"
+dependencies = [
+ "auto_impl",
+ "dyn-clone",
+ "futures-util",
+ "pin-project",
+ "rayon",
+ "thiserror 2.0.11",
+ "tokio 1.40.0",
 ]
 
 [[package]]

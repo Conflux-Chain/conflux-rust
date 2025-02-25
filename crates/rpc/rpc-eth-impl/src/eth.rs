@@ -16,11 +16,15 @@ use cfx_rpc_eth_types::{
     Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
-use cfx_rpc_utils::error::{
-    errors::*, jsonrpc_error_helpers::*,
-    jsonrpsee_error_helpers::internal_error as jsonrpsee_internal_error,
+use cfx_rpc_utils::{
+    error::{
+        errors::*, jsonrpc_error_helpers::*,
+        jsonrpsee_error_helpers::internal_error as jsonrpsee_internal_error,
+    },
+    helpers::SpawnBlocking,
 };
 use cfx_statedb::StateDbExt;
+use cfx_tasks::TaskSpawner;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, H64, U256, U64,
 };
@@ -32,7 +36,7 @@ use cfxcore::{
     SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::Error as RpcError;
-use jsonrpsee::core::RpcResult;
+use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
     BlockHashOrEpochNumber, EpochNumber, StorageKey, StorageValue,
@@ -40,7 +44,8 @@ use primitives::{
 };
 use rustc_hex::ToHex;
 use solidity_abi::string_revert_reason_decode;
-use std::collections::HashMap;
+use std::{collections::HashMap, future::Future, sync::Arc};
+use tokio::runtime::Runtime;
 
 type BlockNumber = BlockId;
 type BlockNumberOrTag = BlockId;
@@ -48,18 +53,21 @@ type BlockNumberOrTag = BlockId;
 type JsonStorageKey = U256;
 type RpcBlock = Block;
 
+#[derive(Clone)]
 pub struct EthApi {
     config: RpcImplConfiguration,
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     fee_history_cache: FeeHistoryCache,
+    executor: Arc<Runtime>,
 }
 
 impl EthApi {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: Arc<Runtime>,
     ) -> Self {
         EthApi {
             config,
@@ -67,6 +75,7 @@ impl EthApi {
             sync,
             tx_pool,
             fee_history_cache: FeeHistoryCache::new(),
+            executor,
         }
     }
 
@@ -1047,6 +1056,27 @@ impl EthApi {
     }
 }
 
+impl SpawnBlocking for EthApi {
+    fn io_task_spawner(&self) -> impl TaskSpawner { self.executor.clone() }
+}
+
+impl EthApi {
+    pub fn async_transaction_by_hash(
+        &self, hash: H256,
+    ) -> impl Future<Output = Result<Option<Transaction>, ErrorObjectOwned>> + Send
+    {
+        let self_clone = self.clone();
+        async move {
+            let resp = self_clone
+                .spawn_blocking_io(move |this| {
+                    this.transaction_by_hash(hash).map_err(|err| err.into())
+                })
+                .await;
+            resp
+        }
+    }
+}
+
 impl BlockProvider for &EthApi {
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
         self.consensus_graph().get_block_epoch_number(hash)
@@ -1174,7 +1204,7 @@ impl EthApiServer for EthApi {
     async fn transaction_by_hash(
         &self, hash: H256,
     ) -> RpcResult<Option<Transaction>> {
-        self.transaction_by_hash(hash).map_err(|err| err.into())
+        self.async_transaction_by_hash(hash).await
     }
 
     /// Returns information about a raw transaction by block hash and
