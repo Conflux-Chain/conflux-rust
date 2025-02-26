@@ -467,7 +467,10 @@ impl<'a> ContextTrait for Context<'a> {
             Address::zero()
         };
 
-        self.state.init_code(&caller, data.to_vec(), owner)?;
+        let tx_hash = self.env.transaction_hash;
+        assert_ne!(tx_hash, H256::zero());
+        self.state
+            .init_code(&caller, data.to_vec(), owner, tx_hash)?;
         Ok(*gas - return_cost)
     }
 
@@ -485,6 +488,7 @@ impl<'a> ContextTrait for Context<'a> {
             self.state,
             &self.spec,
             &mut self.substate,
+            self.env,
             self.callstack
                 .creating_contract(&contract_address_with_space),
             self.tracer,
@@ -587,6 +591,7 @@ mod tests {
         stack::{CallStackInfo, OwnedRuntimeRes},
         state::{get_state_for_genesis_write, State},
         substate::Substate,
+        tests::MOCK_TX_HASH,
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
     use cfx_types::{
@@ -626,6 +631,7 @@ mod tests {
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
             base_gas_price: Default::default(),
             burnt_gas_price: Default::default(),
+            transaction_hash: MOCK_TX_HASH,
         }
     }
 
@@ -658,7 +664,7 @@ mod tests {
                 machine,
                 spec,
                 substate: Substate::new(),
-                env,
+                env: env.clone(),
                 callstack,
             };
             setup
@@ -667,6 +673,7 @@ mod tests {
                     &Address::zero().with_native_space(),
                     vec![],
                     Address::zero(),
+                    env.transaction_hash,
                 )
                 .ok();
 
@@ -874,6 +881,7 @@ mod tests {
                 // collateral balance.
                 "".into(),
                 contract_address,
+                setup.env.transaction_hash,
             )
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
 

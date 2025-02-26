@@ -63,6 +63,8 @@ pub struct Env {
     pub base_gas_price: SpaceMap<U256>,
     /// Base gas price to miner according to in CIP-137
     pub burnt_gas_price: SpaceMap<U256>,
+    /// Transaction hash for the executing transaction, required by CIP-152
+    pub transaction_hash: H256,
 }
 
 #[cfg(test)]

@@ -204,6 +204,9 @@ impl ConsensusExecutionHandler {
                 .transaction_epoch_bound,
             base_gas_price,
             burnt_gas_price,
+            // Temporarily set `transaction_hash` to zero; it will be updated
+            // with the actual transaction hash for each transaction.
+            transaction_hash: H256::zero(),
         }
     }
 
@@ -278,6 +281,7 @@ impl ConsensusExecutionHandler {
             settings: TransactSettings::all_checks(),
         };
 
+        env.transaction_hash = transaction.hash();
         let execution_outcome =
             ExecutiveContext::new(state, env, machine, &spec)
                 .transact(transaction, options)?;
