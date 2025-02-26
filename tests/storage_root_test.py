@@ -23,6 +23,8 @@ class StorageRootTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         self.conf_parameters["dev_snapshot_epoch_count"] = str(SNAPSHOT_EPOCH_COUNT)
+        self.conf_parameters["cip151_transition_height"] = str(99999999)
+
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)

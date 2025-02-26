@@ -31,6 +31,7 @@ impl Default for OverlayAccount {
             is_newly_created_contract: false,
             pending_db_clear: false,
             storage_overrided: false,
+            create_transaction_hash: None,
         }
     }
 }
@@ -159,6 +160,7 @@ impl OverlayAccount {
             ),
             storage_layout_change: self.storage_layout_change.clone(),
             storage_overrided: self.storage_overrided,
+            create_transaction_hash: self.create_transaction_hash.clone(),
         }
     }
 
@@ -191,6 +193,7 @@ impl OverlayAccount {
             transient_storage_checkpoint: None,
             storage_layout_change: self.storage_layout_change.clone(),
             storage_overrided: self.storage_overrided,
+            create_transaction_hash: self.create_transaction_hash.clone(),
         }
     }
 }

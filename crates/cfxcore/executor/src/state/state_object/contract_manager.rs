@@ -57,7 +57,12 @@ impl State {
         &mut self, contract: &AddressWithSpace, balance: U256,
     ) -> DbResult<()> {
         self.new_contract(contract, balance)?;
-        self.init_code(&contract, vec![0x12, 0x34], Address::zero())?;
+        self.init_code(
+            &contract,
+            vec![0x12, 0x34],
+            Address::zero(),
+            crate::tests::MOCK_TX_HASH,
+        )?;
         Ok(())
     }
 

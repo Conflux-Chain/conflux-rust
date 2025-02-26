@@ -814,7 +814,9 @@ fn check_result_of_simple_payment_to_killed_account() {
     state_0.checkpoint();
     let mut substate = Substate::new();
     state_0.new_contract(&a_s, U256::zero()).unwrap();
-    state_0.init_code(&a_s, code, sender_addr).unwrap();
+    state_0
+        .init_code(&a_s, code, sender_addr, crate::tests::MOCK_TX_HASH)
+        .unwrap();
     state_0
         .set_storage(&a_s, k.clone(), U256::one(), a, &mut substate)
         .unwrap();

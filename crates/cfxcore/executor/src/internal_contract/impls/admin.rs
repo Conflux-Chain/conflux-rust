@@ -14,6 +14,7 @@ use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space,
 };
+use vm::Env;
 
 use super::super::components::InternalRefContext;
 
@@ -30,13 +31,14 @@ fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
 ///   4. kill the contract
 pub fn suicide(
     contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
-    state: &mut State, spec: &Spec, substate: &mut Substate,
+    state: &mut State, spec: &Spec, substate: &mut Substate, env: &Env,
     creating_contract: bool, tracer: &mut dyn TracerTrait,
 ) -> vm::Result<()> {
     // After CIP-151, contract can only be killed in the same transaction as
     // its creation.
-    let contract_create_in_same_tx = substate
-        .contains_contract_create(contract_address)
+    let transaction_hash = env.transaction_hash;
+    let contract_create_in_same_tx = state
+        .created_at_transaction(contract_address, transaction_hash)?
         || creating_contract;
     let soft_suicide = spec.cip151 && !contract_create_in_same_tx;
 
@@ -131,8 +133,8 @@ pub fn set_admin(
 /// The input should consist of 20 bytes `contract_address`
 pub fn destroy(
     contract_address: Address, params: &ActionParams, state: &mut State,
-    spec: &Spec, substate: &mut Substate, tracer: &mut dyn TracerTrait,
-    callstack: &CallStackInfo,
+    spec: &Spec, substate: &mut Substate, env: &Env,
+    tracer: &mut dyn TracerTrait, callstack: &CallStackInfo,
 ) -> vm::Result<()> {
     debug!("contract_address={:?}", contract_address);
 
@@ -145,6 +147,7 @@ pub fn destroy(
             state,
             spec,
             substate,
+            env,
             callstack.creating_contract(&contract_address.with_native_space()),
             tracer,
         )

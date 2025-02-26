@@ -1670,6 +1670,7 @@ impl ConsensusExecutionHandler {
                 .transaction_epoch_bound,
             base_gas_price,
             burnt_gas_price,
+            transaction_hash: tx.hash(),
         };
         if evm_overrides.has_block() {
             ExecutiveContext::apply_env_overrides(

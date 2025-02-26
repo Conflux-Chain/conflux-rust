@@ -37,7 +37,18 @@ impl OverlayAccount {
         self.admin = admin.clone();
     }
 
-    pub fn init_code(&mut self, code: Bytes, owner: Address) {
+    pub fn init_code(
+        &mut self, code: Bytes, owner: Address, transaction_hash: H256,
+    ) {
+        self.code_hash = keccak(&code);
+        self.code = Some(CodeInfo {
+            code: Arc::new(code),
+            owner,
+        });
+        self.create_transaction_hash = Some(transaction_hash);
+    }
+
+    pub fn override_code(&mut self, code: Bytes, owner: Address) {
         self.code_hash = keccak(&code);
         self.code = Some(CodeInfo {
             code: Arc::new(code),
@@ -70,6 +81,10 @@ impl OverlayAccount {
     }
 
     pub fn code_hash(&self) -> H256 { self.code_hash.clone() }
+
+    pub fn create_transaction_hash(&self) -> Option<H256> {
+        self.create_transaction_hash
+    }
 
     pub fn is_null(&self) -> bool {
         self.balance.is_zero()

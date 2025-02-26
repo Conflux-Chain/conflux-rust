@@ -164,6 +164,15 @@ pub struct OverlayAccount {
     /// When this flag is set, the storage entries will only be read from the
     /// cache
     storage_overrided: bool,
+
+    /* ---------------
+    -  Helper fields -
+    --------------- */
+    /// For CIP-151, `None` indicates that this is either a non-contract, a
+    /// contract in the process of being created, or a contract not created
+    /// in the current epoch. A `Some(_)` value indicates that this is a
+    /// contract created by a specific transaction.
+    create_transaction_hash: Option<H256>,
 }
 
 impl OverlayAccount {

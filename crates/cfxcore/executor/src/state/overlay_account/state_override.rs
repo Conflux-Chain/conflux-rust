@@ -41,7 +41,7 @@ impl OverlayAccount {
         }
 
         if let Some(code) = acc_overrides.code.as_ref() {
-            acc.init_code(code.clone(), address.address);
+            acc.override_code(code.clone(), address.address);
         }
 
         match &acc_overrides.state {

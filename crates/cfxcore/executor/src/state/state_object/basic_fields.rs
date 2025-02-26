@@ -168,9 +168,28 @@ impl State {
 
     pub fn init_code(
         &mut self, address: &AddressWithSpace, code: Bytes, owner: Address,
+        transaction_hash: H256,
     ) -> DbResult<()> {
-        self.write_account_lock(address)?.init_code(code, owner);
+        self.write_account_lock(address)?.init_code(
+            code,
+            owner,
+            transaction_hash,
+        );
         Ok(())
+    }
+
+    pub fn created_at_transaction(
+        &self, address: &AddressWithSpace, transaction_hash: H256,
+    ) -> DbResult<bool> {
+        Ok(
+            if let Some(acc) =
+                self.read_account_ext_lock(&address, RequireFields::None)?
+            {
+                acc.create_transaction_hash() == Some(transaction_hash)
+            } else {
+                false
+            },
+        )
     }
 
     pub fn set_authorization(

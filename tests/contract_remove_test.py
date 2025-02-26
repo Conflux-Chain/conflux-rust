@@ -17,6 +17,7 @@ class ContractRemoveTest(ConfluxTestFramework):
         super().__init__()
         self.has_range_delete_bug = False
         self.has_collateral_bug = True
+        self.conf_parameters["cip151_transition_height"] = str(99999999)
 
     @property
     def correct_wl_value(self):

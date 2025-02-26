@@ -350,7 +350,8 @@ fn test_call_to_create() {
         * code_collateral_units(code_len)
         + *COLLATERAL_DRIPS_PER_STORAGE_KEY;
 
-    let env = Env::default();
+    let mut env = Env::default();
+    env.transaction_hash = crate::tests::MOCK_TX_HASH;
     let machine = make_byzantium_machine(5);
     let spec = machine.spec_for_test(env.number);
 
@@ -940,6 +941,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     let machine = make_byzantium_machine(0);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
+    env.transaction_hash = crate::tests::MOCK_TX_HASH;
     let spec = machine.spec_for_test(env.number);
 
     let sender = Random.generate().unwrap().address();
@@ -964,7 +966,9 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
-    state.init_code(&address, code.clone(), sender).unwrap();
+    state
+        .init_code(&address, code.clone(), sender, env.transaction_hash)
+        .unwrap();
     state
         .add_balance(
             &sender_with_space,
@@ -1044,7 +1048,9 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             false,
         )
         .unwrap();
-    state.init_code(&address, code, sender).unwrap();
+    state
+        .init_code(&address, code, sender, env.transaction_hash)
+        .unwrap();
     state
         .add_balance(
             &sender_with_space,
@@ -1147,7 +1153,9 @@ fn test_commission_privilege() {
             false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
-    state.init_code(&address, code, sender).unwrap();
+    state
+        .init_code(&address, code, sender, env.transaction_hash)
+        .unwrap();
     state
         .add_balance(
             &sender_with_space,
@@ -1540,7 +1548,9 @@ fn test_storage_commission_privilege() {
             false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
-    state.init_code(&address, code, sender.address()).unwrap();
+    state
+        .init_code(&address, code, sender.address(), env.transaction_hash)
+        .unwrap();
 
     state
         .add_balance(

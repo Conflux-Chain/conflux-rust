@@ -265,6 +265,7 @@ impl SimpleExecutionTrait for DeployEip1820 {
             &address,
             eip_1820::BYTE_CODE.clone(),
             Address::zero(),
+            context.env.transaction_hash,
         )?;
         context.substate.record_contract_create(address);
         Ok(())
