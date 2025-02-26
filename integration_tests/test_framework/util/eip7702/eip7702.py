@@ -108,7 +108,7 @@ def sign_eip7702_transaction(transaction: EIP7702Transaction, private_key: str) 
             'yParity': auth.yParity
         }
         for auth in transaction['authorizationList']
-    ]
+    ] if transaction['authorizationList'] is not None else None
     
     args = {
         'transaction': tx_dict,
@@ -123,7 +123,7 @@ def sign_eip7702_transaction(transaction: EIP7702Transaction, private_key: str) 
 def construrct_eip7702_transaction(ew3: Web3, sender: str, transaction: EIP7702TransactionParams) -> EIP7702Transaction:
     assert "authorizationList" in transaction, "authorizationList is required"
     if "to" not in transaction:
-        transaction["to"] = "0x0000000000000000000000000000000000000000"
+        transaction["to"] = None
     if "data" not in transaction:
         transaction["data"] = "0x"
     if "value" not in transaction:

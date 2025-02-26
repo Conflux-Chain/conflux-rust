@@ -73,7 +73,7 @@ def deploy_contract_using_deploy_code(ew3: Web3, deploy_code: Bytecode) -> str:
 def assert_account_code_set_to_contract(
     ew3: Web3, account_address: str, contract_address: str
 ):
-    code = ew3.eth.get_code(account_address)
+    code = ew3.eth.get_code(account_address)  # type: ignore
     assert code.to_0x_hex() == "0xef0100" + contract_address[2:].lower()
 
 # use self as erc20 contract
@@ -99,6 +99,7 @@ def test_eip7702_sponsor_self(
         sender,
         {
             "authorizationList": [authorization],
+            "to": "0x0000000000000000000000000000000000000000",  # set to a random address
         },
     )
     receipt = ew3.eth.wait_for_transaction_receipt(tx_hash)
@@ -136,6 +137,7 @@ def test_eip7702_sponsor_new_account(
         sender,
         {
             "authorizationList": [authorization],
+            "to": "0x0000000000000000000000000000000000000000",  # set to a random address
         },
     )
     ew3.eth.wait_for_transaction_receipt(tx_hash)
@@ -164,7 +166,8 @@ def test_tx_into_self_delegating_set_code(ew3: Web3, admin_account):
                         nonce=ew3.eth.get_transaction_count(auth_signer.address),
                         private_key=auth_signer.key.to_0x_hex(),
                     )
-                ]
+                ],
+                "to": "0x0000000000000000000000000000000000000000",  # set to a random address
             },
         )
     )
@@ -197,7 +200,8 @@ def test_tx_into_chain_delegating_set_code(ew3: Web3, admin_account):
                         nonce=0,
                         private_key=auth_signer_1.key.to_0x_hex(),
                     ),
-                ]
+                ],
+                "to": "0x0000000000000000000000000000000000000000",  # set to a random address
             },
         )
     )
@@ -260,12 +264,12 @@ def test_set_code_to_sstore(
     receipt = ew3.eth.wait_for_transaction_receipt(tx_hash)
     
     for key in storage:
-        assert int(ew3.eth.get_storage_at(contract_address, key).hex(), 16) == 0
+        assert int(ew3.eth.get_storage_at(contract_address, key).hex(), 16) == 0  # type: ignore
     
     if succeeds:
         assert receipt["status"] == 1
         for key in storage:
-            assert int(ew3.eth.get_storage_at(sender.address, key).hex(), 16) == storage[key]
+            assert int(ew3.eth.get_storage_at(sender.address, key).hex(), 16) == storage[key]  # type: ignore
     else:
         assert receipt["status"] == 0
     
