@@ -188,7 +188,7 @@ impl State {
                 acc.create_transaction_hash() == Some(transaction_hash)
             } else {
                 false
-            }
+            },
         )
     }
 

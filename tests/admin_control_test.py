@@ -7,6 +7,7 @@ from test_framework.util import assert_equal
 class AdminControlTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
+        self.conf_parameters["cip151_transition_height"] = str(99999999)
 
     def run_test(self):
         self.w3 = self.cw3

@@ -488,7 +488,8 @@ pub fn register_transaction(
 fn execute_genesis_transaction(
     transaction: &SignedTransaction, state: &mut State, machine: Arc<Machine>,
 ) {
-    let env = Env::default();
+    let mut env = Env::default();
+    env.transaction_hash = transaction.hash();
 
     let options = TransactOptions::default();
     let r = {

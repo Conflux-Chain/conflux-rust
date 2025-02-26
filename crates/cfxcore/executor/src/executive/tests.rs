@@ -350,7 +350,8 @@ fn test_call_to_create() {
         * code_collateral_units(code_len)
         + *COLLATERAL_DRIPS_PER_STORAGE_KEY;
 
-    let env = Env::default();
+    let mut env = Env::default();
+    env.transaction_hash = crate::tests::MOCK_TX_HASH;
     let machine = make_byzantium_machine(5);
     let spec = machine.spec_for_test(env.number);
 
