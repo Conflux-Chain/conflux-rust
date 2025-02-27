@@ -1,6 +1,7 @@
 import pytest
 
 from web3 import Web3
+from web3.middleware.signing import SignAndSendRawMiddlewareBuilder
 from ethereum_test_tools import (
     Account,
     Address,
@@ -26,7 +27,6 @@ def framework_class():
         def set_test_params(self):
             self.num_nodes = 1
             self.conf_parameters["evm_chain_id"] = str(EVM_CHAIN_ID)
-            self.conf_parameters["min_native_base_price"] = MIN_NATIVE_BASE_PRICE
             self.conf_parameters["eoa_code_transition_height"] = 1
             self.conf_parameters["evm_transaction_block_ratio"] = str(1)
 
@@ -37,7 +37,7 @@ def framework_class():
     return EIP7702TestEnv
 
 @pytest.fixture(scope="module")
-def state_test(ew3: Web3):
+def state_test(ew3: Web3, network: ConfluxTestFramework):
     def conflux_state_test(
         env: Environment,
         pre: AllocMock,
@@ -47,35 +47,60 @@ def state_test(ew3: Web3):
     ):
         # assert tx.authorization_list is not None
         
-        # Send transaction
-        tx_hash = send_eip7702_transaction(
-            ew3, 
-            ew3.eth.account.from_key(tx.sender.key),  # type: ignore
-            {
+        if tx.authorization_list is not None:
+            # Send transaction
+            tx_hash = send_eip7702_transaction(
+                ew3, 
+                ew3.eth.account.from_key(tx.sender.key),  # type: ignore
+                {
+                    "nonce": tx.nonce,
+                    "value": tx.value,
+                    "to": tx.to.hex() if tx.to is not None else None,
+                    "gas": tx.gas_limit,
+                    "data": tx.data.hex() if tx.data is not None else None,
+                    "authorizationList": [
+                        sign_authorization(
+                            str(auth.address),
+                            auth.chain_id,
+                            int(auth.nonce),  # Convert to int to fix type error
+                            auth.signer.key.hex(),  # type: ignore
+                        # if auth.signer.key is not None else 
+                        # Authorization(
+                        #     contract_address=str(auth.address),
+                        #     chain_id=auth.chain_id,
+                        #     nonce=int(auth.nonce),
+                        #     r=hex(auth.r),
+                        #     s=hex(auth.s),
+                        #     v=auth.v,
+                        #     yParity=0
+                        ) for auth in tx.authorization_list 
+                    ] if tx.authorization_list is not None else None
+                }
+            )
+        else:
+            tx_to_send = {
+                "from": tx.sender,
                 "nonce": tx.nonce,
                 "value": tx.value,
-                "to": tx.to.hex() if tx.to is not None else None,
+                "to": tx.to,
                 "gas": tx.gas_limit,
-                "data": tx.data.hex() if tx.data is not None else None,
-                "authorizationList": [
-                    sign_authorization(
-                        str(auth.address),
-                        auth.chain_id,
-                        int(auth.nonce),  # Convert to int to fix type error
-                        auth.signer.key.hex(),  # type: ignore
-                    ) if auth.signer.key is not None else Authorization(
-                        contract_address=str(auth.address),
-                        chain_id=auth.chain_id,
-                        nonce=int(auth.nonce),
-                        r=hex(auth.r),
-                        s=hex(auth.s),
-                        v=auth.v,
-                        yParity=0
-                    ) for auth in tx.authorization_list 
-                ] if tx.authorization_list is not None else None
+                "data": tx.data,
             }
-        )
-        receipt = ew3.eth.wait_for_transaction_receipt(tx_hash)
+            ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(tx.sender.key))
+            tx_hash = ew3.eth.send_transaction(tx_to_send)
+
+        # output tx_hash, sender nonce, sender balance, tx data
+        print(f"tx_hash: {tx_hash.hex()}")
+        print(f"sender nonce: {ew3.eth.get_transaction_count(tx.sender)}")
+        print(f"tx data: {ew3.eth.get_transaction(tx_hash)}")
+        print(f"pending txs: {ew3.manager.request_blocking('eth_getAccountPendingTransactions', [tx.sender.hex()])}")
+        network.client.generate_blocks(5, num_txs=1)
+        print("--------generate blocks-----------------")
+        print(f"tx_hash: {tx_hash.hex()}")
+        print(f"sender nonce: {ew3.eth.get_transaction_count(tx.sender)}")
+        print(f"tx data: {ew3.eth.get_transaction(tx_hash)}")
+        print(f"pending txs: {ew3.manager.request_blocking('eth_getAccountPendingTransactions', [tx.sender.hex()])}")
+        receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=10, poll_latency=0.2)
         
         # Check post-conditions
         # Collect all state differences instead of breaking on first failure
