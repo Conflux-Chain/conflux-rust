@@ -149,42 +149,46 @@ def test_eip7702_sponsor_new_account(
     assert ew3.eth.get_transaction_count(sender.address) == sender_nonce + 1
     assert ew3.eth.get_transaction_count(signer.address) == 1
 
-
+@pytest.mark.parametrize(
+    "no_code_before_reset",
+    [
+        pytest.param(True, id="no-code-before-reset"),
+        pytest.param(False, id="has-code-before-reset"),
+    ],
+)
 @pytest.mark.parametrize(
     "sponsor_self_when_reset",
     [
         pytest.param(True, id="sponsor-self"),
-        pytest.param(False, id="sponsor-random"),
+        pytest.param(False, id="not-sponsor-self"),
     ],
 )
 def test_reset_eip7702_sponsor_self(
-    ew3: Web3, erc20_factory: Type[Contract], contract_address: str, admin_account, sponsor_self_when_reset
+    ew3: Web3, erc20_factory: Type[Contract], contract_address: str, admin_account, no_code_before_reset, sponsor_self_when_reset
 ):
 
     sender = get_new_fund_account(ew3, admin_account)
+    if not no_code_before_reset:
+        authorization = sign_authorization(
+            contract_address=contract_address,
+            chain_id=ew3.eth.chain_id,
+            nonce=ew3.eth.get_transaction_count(sender.address)+1,
+            private_key=sender.key.to_0x_hex(),
+        )
 
-    authorization = sign_authorization(
-        contract_address=contract_address,
-        chain_id=ew3.eth.chain_id,
-        nonce=1,
-        private_key=sender.key.to_0x_hex(),
-    )
+        tx_hash = send_eip7702_transaction(
+            ew3,
+            sender,
+            {
+                "authorizationList": [authorization],
+                "to": ew3.eth.account.create().address,  # set to a random address
+            },
+        )
+        ew3.eth.wait_for_transaction_receipt(tx_hash)
 
-    tx_hash = send_eip7702_transaction(
-        ew3,
-        sender,
-        {
-            "authorizationList": [authorization],
-            "to": ew3.eth.account.create().address,  # set to a random address
-        },
-    )
-    ew3.eth.wait_for_transaction_receipt(tx_hash)
-
-    # verify code is set
-    code = ew3.eth.get_code(sender.address)
-    assert code.to_0x_hex() == "0xef0100" + contract_address[2:].lower()
-    # verify nonce is increased
-    assert ew3.eth.get_transaction_count(sender.address) == 2
+        # verify code is set
+        code = ew3.eth.get_code(sender.address)
+        assert code.to_0x_hex() == "0xef0100" + contract_address[2:].lower()
     
     # reset the code
     tx_hash = send_eip7702_transaction(
@@ -195,7 +199,7 @@ def test_reset_eip7702_sponsor_self(
                 sign_authorization(
                     contract_address="0x0000000000000000000000000000000000000000",
                     chain_id=ew3.eth.chain_id,
-                    nonce=3 if sponsor_self_when_reset else 2,
+                    nonce=ew3.eth.get_transaction_count(sender.address)+ (1 if sponsor_self_when_reset else 0),
                     private_key=sender.key.to_0x_hex(),
                 )
             ],
