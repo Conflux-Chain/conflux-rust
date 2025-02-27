@@ -27,6 +27,7 @@ use blockgen::BlockGenerator;
 use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
 use cfx_storage::StorageManager;
+use cfx_tasks::TaskManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
 pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
@@ -517,6 +518,7 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Arc<TokioRuntime>,
         Option<RpcServerHandle>,
+        TaskManager,
     ),
     String,
 > {
@@ -668,6 +670,9 @@ pub fn initialize_not_light_node_modules(
         accounts,
     ));
 
+    let task_manager = TaskManager::new(tokio_runtime.handle().clone());
+    let task_executor = task_manager.executor();
+
     let debug_rpc_http_server = super::rpc::start_http(
         conf.local_http_config(),
         setup_debug_rpc_apis(
@@ -676,6 +681,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
     )?;
 
@@ -687,6 +693,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -699,6 +706,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -711,6 +719,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -723,6 +732,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -735,6 +745,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
     )?;
 
@@ -746,6 +757,7 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -758,6 +770,7 @@ pub fn initialize_not_light_node_modules(
             pubsub,
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
     )?;
 
@@ -778,6 +791,7 @@ pub fn initialize_not_light_node_modules(
             sync.clone(),
             txpool.clone(),
             eth_rpc_http_server_addr,
+            task_executor.clone(),
         ))?;
 
     Ok((
@@ -798,6 +812,7 @@ pub fn initialize_not_light_node_modules(
         eth_rpc_ws_server,
         tokio_runtime,
         async_eth_rpc_http_server,
+        task_manager,
     ))
 }
 

@@ -16,6 +16,7 @@ use crate::rpc::{
     },
 };
 use cfx_rpc::EthApi;
+use cfx_tasks::TaskExecutor;
 use cfx_types::{Address, AddressSpaceUtil, Space, H160, H256, U256, U64};
 use cfx_util_macros::bail;
 use cfxcore::{
@@ -33,9 +34,10 @@ impl EthHandler {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor,
     ) -> Self {
         EthHandler {
-            inner: EthApi::new(config, consensus, sync, tx_pool),
+            inner: EthApi::new(config, consensus, sync, tx_pool, executor),
         }
     }
 }
