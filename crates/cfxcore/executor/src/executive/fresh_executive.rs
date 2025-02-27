@@ -9,6 +9,7 @@ use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
+use cfx_vm_types::extract_7702_payload;
 use primitives::{transaction::Action, SignedTransaction, Transaction};
 
 macro_rules! early_return_on_err {
@@ -142,15 +143,27 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         &self,
     ) -> DbResult<Result<(), ExecutionOutcome>> {
         let sender = self.tx.sender();
-        let code = self.context.state.code(&sender)?;
-        let no_code = code.map_or(true, |x| x.is_empty());
-        Ok(if !no_code {
-            Err(ExecutionOutcome::NotExecutedDrop(
-                TxDropError::SenderWithCode(sender.address),
-            ))
-        } else {
-            Ok(())
-        })
+        let Some(code) = self.context.state.code(&sender)? else {
+            // EOA with no code
+            return Ok(Ok(()));
+        };
+
+        if code.is_empty() {
+            // Empty code
+            return Ok(Ok(()));
+        }
+
+        if self.tx.space() == Space::Ethereum
+            && extract_7702_payload(&code).is_some()
+        {
+            // 7702 code in eSpace is allowed
+            return Ok(Ok(()));
+        }
+
+        // extract_7702_payload
+        Ok(Err(ExecutionOutcome::NotExecutedDrop(
+            TxDropError::SenderWithCode(sender.address),
+        )))
     }
 
     fn check_base_price(&self) -> Result<(), ExecutionOutcome> {
