@@ -536,6 +536,7 @@ impl TransactionSet {
 #[derive(DeriveMallocSizeOf)]
 pub struct TransactionPoolInner {
     capacity: usize,
+    // deprecated, this value is never updated
     total_received_count: usize,
     unpacked_transaction_count: usize,
     /// Tracks all transactions in the transaction pool by account and nonce.
@@ -1367,7 +1368,7 @@ impl TransactionPoolInner {
         // check balance
         if !packed && !force {
             let mut need_balance = U256::from(0);
-            let estimate_gas_fee = Self::estimated_gas_fee(
+            let estimate_gas_fee = Self::cal_gas_fee(
                 transaction.gas().clone(),
                 transaction.gas_price().clone(),
             );
@@ -1423,7 +1424,7 @@ impl TransactionPoolInner {
         Ok(())
     }
 
-    fn estimated_gas_fee(gas: U256, gas_price: U256) -> U256 {
+    fn cal_gas_fee(gas: U256, gas_price: U256) -> U256 {
         let estimated_gas_u512 = gas.full_mul(gas_price);
         // Normally, it is less than 2^128
         let estimated_gas =
@@ -1472,7 +1473,7 @@ impl TransactionPoolInner {
         }
 
         // Detailed logics
-        let estimated_gas = Self::estimated_gas_fee(
+        let estimated_gas = Self::cal_gas_fee(
             transaction.gas().clone(),
             transaction.gas_price().clone(),
         );
