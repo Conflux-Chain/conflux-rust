@@ -48,15 +48,15 @@ class AllocMock:
                 }
             )
             self.ew3.eth.wait_for_transaction_receipt(tx_hash)
-        return EOA(key=new_account.key)
+        return EOA(key=new_account.key, nonce=self.ew3.eth.get_transaction_count(new_account.address))
     
-    def deploy_contract(self, code: Bytecode) -> Address:
-        # 创建初始化代码并部署合约
+    def deploy_contract(self, code: Bytecode, *, balance: int = 0) -> Address:
         initcode = Initcode(deploy_code=code)
         tx_hash = self.ew3.eth.send_transaction(
             {
                 "from": self.genesis_account.address,
                 "data": bytes(initcode),
+                "value": balance,
             }
         )
         receipt = self.ew3.eth.wait_for_transaction_receipt(tx_hash)

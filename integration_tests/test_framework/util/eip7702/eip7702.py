@@ -154,7 +154,6 @@ def estimate_gas(ew3: Web3, from_address: str, transaction: EIP7702Transaction) 
                 "address": authorization.contractAddress,
                 "r": authorization.r,
                 "s": authorization.s,
-                "v": hex(authorization.v),
                 "yParity": hex(authorization.yParity)
             } for authorization in transaction["authorizationList"]
         ]

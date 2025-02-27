@@ -2511,57 +2511,56 @@ def test_valid_tx_invalid_chain_id(
 #     )
 
 
-# @pytest.mark.parametrize(
-#     "log_opcode",
-#     [
-#         Op.LOG0,
-#         Op.LOG1,
-#         Op.LOG2,
-#         Op.LOG3,
-#         Op.LOG4,
-#     ],
-# )
-# @pytest.mark.with_all_evm_code_types
-# def test_set_code_to_log(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-#     log_opcode: Op,
-# ):
-#     """Test setting the code of an account to a contract that performs the log operation."""
-#     sender = pre.fund_eoa()
+@pytest.mark.parametrize(
+    "log_opcode",
+    [
+        Op.LOG0,
+        Op.LOG1,
+        Op.LOG2,
+        Op.LOG3,
+        Op.LOG4,
+    ],
+) # @pytest.mark.with_all_evm_code_types
+def test_set_code_to_log(
+    state_test: StateTestFiller,
+    pre: Alloc,
+    log_opcode: Op,
+):
+    """Test setting the code of an account to a contract that performs the log operation."""
+    sender = pre.fund_eoa()
 
-#     set_to_code = (
-#         Op.MSTORE(0, 0x1234)
-#         + log_opcode(size=32, topic_1=1, topic_2=2, topic_3=3, topic_4=4)
-#         + Op.STOP
-#     )
-#     set_to_address = pre.deploy_contract(set_to_code)
+    set_to_code = (
+        Op.MSTORE(0, 0x1234)
+        + log_opcode(size=32, topic_1=1, topic_2=2, topic_3=3, topic_4=4)
+        + Op.STOP
+    )
+    set_to_address = pre.deploy_contract(set_to_code)
 
-#     tx = Transaction(
-#         gas_limit=10_000_000,
-#         to=sender,
-#         value=0,
-#         authorization_list=[
-#             AuthorizationTuple(
-#                 address=set_to_address,
-#                 nonce=1,
-#                 signer=sender,
-#             ),
-#         ],
-#         sender=sender,
-#     )
+    tx = Transaction(
+        gas_limit=10_000_000,
+        to=sender,
+        value=0,
+        authorization_list=[
+            AuthorizationTuple(
+                address=set_to_address,
+                nonce=1,
+                signer=sender,
+            ),
+        ],
+        sender=sender,
+    )
 
-#     state_test(
-#         env=Environment(),
-#         pre=pre,
-#         tx=tx,
-#         post={
-#             sender: Account(
-#                 nonce=2,
-#                 code=Spec.delegation_designation(set_to_address),
-#             ),
-#         },
-#     )
+    state_test(
+        env=Environment(),
+        pre=pre,
+        tx=tx,
+        post={
+            sender: Account(
+                nonce=2,
+                code=Spec.delegation_designation(set_to_address),
+            ),
+        },
+    )
 
 
 # @pytest.mark.with_all_call_opcodes(
@@ -2959,380 +2958,382 @@ def test_valid_tx_invalid_chain_id(
 #     )
 
 
-# def test_contract_create(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-# ):
-#     """Test sending type-4 tx as a create transaction."""
-#     tx = Transaction(
-#         gas_limit=100_000,
-#         to=None,
-#         value=0,
-#         authorization_list=[],
-#         error=TransactionException.TYPE_4_TX_CONTRACT_CREATION,
-#         sender=pre.fund_eoa(),
-#     )
+def test_contract_create(
+    state_test: StateTestFiller,
+    pre: Alloc,
+):
+    # TODO: This test is commented as error param is now not supported
+    return
+    """Test sending type-4 tx as a create transaction."""
+    tx = Transaction(
+        gas_limit=100_000,
+        to=None,
+        value=0,
+        authorization_list=[],
+        error=TransactionException.TYPE_4_TX_CONTRACT_CREATION,
+        sender=pre.fund_eoa(),
+    )
 
-#     state_test(
-#         env=Environment(),
-#         pre=pre,
-#         tx=tx,
-#         post={},
-#     )
-
-
-# @pytest.mark.parametrize(
-#     "self_sponsored",
-#     [
-#         pytest.param(False, id="not_self_sponsored"),
-#         pytest.param(True, id="self_sponsored"),
-#     ],
-# )
-# @pytest.mark.parametrize(
-#     "pre_set_delegation_code",
-#     [
-#         pytest.param(Op.RETURN(0, 1), id="delegated_account"),
-#         pytest.param(None, id="undelegated_account"),
-#     ],
-# )
-# def test_delegation_clearing(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-#     pre_set_delegation_code: Bytecode | None,
-#     self_sponsored: bool,
-# ):
-#     """
-#     Test clearing the delegation of an account under a variety of circumstances.
-
-#     - pre_set_delegation_code: The code to set on the account before clearing delegation, or None
-#         if the account should not have any code set.
-#     - self_sponsored: Whether the delegation clearing transaction is self-sponsored.
-
-#     """  # noqa: D417
-#     pre_set_delegation_address: Address | None = None
-#     if pre_set_delegation_code is not None:
-#         pre_set_delegation_address = pre.deploy_contract(pre_set_delegation_code)
-
-#     if self_sponsored:
-#         auth_signer = pre.fund_eoa(delegation=pre_set_delegation_address)
-#     else:
-#         auth_signer = pre.fund_eoa(0, delegation=pre_set_delegation_address)
-
-#     success_slot = 1
-#     return_slot = 2
-#     ext_code_size_slot = 3
-#     ext_code_hash_slot = 4
-#     ext_code_copy_slot = 5
-#     entry_code = (
-#         Op.SSTORE(success_slot, 1)
-#         + Op.CALL(address=auth_signer)
-#         + Op.SSTORE(return_slot, Op.RETURNDATASIZE)
-#         + Op.SSTORE(ext_code_size_slot, Op.EXTCODESIZE(address=auth_signer))
-#         + Op.SSTORE(ext_code_hash_slot, Op.EXTCODEHASH(address=auth_signer))
-#         + Op.EXTCODECOPY(address=auth_signer, size=32)
-#         + Op.SSTORE(ext_code_copy_slot, Op.MLOAD(0))
-#         + Op.STOP
-#     )
-#     entry_address = pre.deploy_contract(entry_code)
-
-#     authorization = AuthorizationTuple(
-#         address=Spec.RESET_DELEGATION_ADDRESS,  # Reset
-#         nonce=auth_signer.nonce + (1 if self_sponsored else 0),
-#         signer=auth_signer,
-#     )
-
-#     tx = Transaction(
-#         gas_limit=200_000,
-#         to=entry_address,
-#         value=0,
-#         authorization_list=[authorization],
-#         sender=pre.fund_eoa() if not self_sponsored else auth_signer,
-#     )
-
-#     state_test(
-#         env=Environment(),
-#         pre=pre,
-#         tx=tx,
-#         post={
-#             auth_signer: Account(
-#                 nonce=auth_signer.nonce + 1,
-#                 code=b"",
-#                 storage={},
-#             ),
-#             entry_address: Account(
-#                 storage={
-#                     success_slot: 1,
-#                     return_slot: 0,
-#                     ext_code_size_slot: 0,
-#                     ext_code_hash_slot: Bytes().keccak256(),
-#                     ext_code_copy_slot: 0,
-#                 },
-#             ),
-#         },
-#     )
+    state_test(
+        env=Environment(),
+        pre=pre,
+        tx=tx,
+        post={},
+    )
 
 
-# @pytest.mark.parametrize(
-#     "self_sponsored",
-#     [
-#         pytest.param(False, id="not_self_sponsored"),
-#         pytest.param(True, id="self_sponsored"),
-#     ],
-# )
-# @pytest.mark.parametrize(
-#     "pre_set_delegation_code",
-#     [
-#         pytest.param(Op.RETURN(0, 1), id="delegated_account"),
-#         pytest.param(None, id="undelegated_account"),
-#     ],
-# )
-# def test_delegation_clearing_tx_to(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-#     pre_set_delegation_code: Bytecode | None,
-#     self_sponsored: bool,
-# ):
-#     """
-#     Tests directly calling the account which delegation is being cleared.
+@pytest.mark.parametrize(
+    "self_sponsored",
+    [
+        pytest.param(False, id="not_self_sponsored"),
+        pytest.param(True, id="self_sponsored"),
+    ],
+)
+@pytest.mark.parametrize(
+    "pre_set_delegation_code",
+    [
+        pytest.param(Op.RETURN(0, 1), id="delegated_account"),
+        pytest.param(None, id="undelegated_account"),
+    ],
+)
+def test_delegation_clearing(
+    state_test: StateTestFiller,
+    pre: Alloc,
+    pre_set_delegation_code: Bytecode | None,
+    self_sponsored: bool,
+):
+    """
+    Test clearing the delegation of an account under a variety of circumstances.
 
-#     - pre_set_delegation_code: The code to set on the account before clearing delegation, or None
-#         if the account should not have any code set.
-#     - self_sponsored: Whether the delegation clearing transaction is self-sponsored.
+    - pre_set_delegation_code: The code to set on the account before clearing delegation, or None
+        if the account should not have any code set.
+    - self_sponsored: Whether the delegation clearing transaction is self-sponsored.
 
-#     """  # noqa: D417
-#     pre_set_delegation_address: Address | None = None
-#     if pre_set_delegation_code is not None:
-#         pre_set_delegation_address = pre.deploy_contract(pre_set_delegation_code)
+    """  # noqa: D417
+    pre_set_delegation_address: Address | None = None
+    if pre_set_delegation_code is not None:
+        pre_set_delegation_address = pre.deploy_contract(pre_set_delegation_code)
 
-#     if self_sponsored:
-#         auth_signer = pre.fund_eoa(delegation=pre_set_delegation_address)
-#     else:
-#         auth_signer = pre.fund_eoa(0, delegation=pre_set_delegation_address)
+    if self_sponsored:
+        auth_signer = pre.fund_eoa(delegation=pre_set_delegation_address)
+    else:
+        auth_signer = pre.fund_eoa(0, delegation=pre_set_delegation_address)
 
-#     sender = pre.fund_eoa() if not self_sponsored else auth_signer
+    success_slot = 1
+    return_slot = 2
+    ext_code_size_slot = 3
+    ext_code_hash_slot = 4
+    ext_code_copy_slot = 5
+    entry_code = (
+        Op.SSTORE(success_slot, 1)
+        + Op.CALL(address=auth_signer)
+        + Op.SSTORE(return_slot, Op.RETURNDATASIZE)
+        + Op.SSTORE(ext_code_size_slot, Op.EXTCODESIZE(address=auth_signer))
+        + Op.SSTORE(ext_code_hash_slot, Op.EXTCODEHASH(address=auth_signer))
+        + Op.EXTCODECOPY(address=auth_signer, size=32)
+        + Op.SSTORE(ext_code_copy_slot, Op.MLOAD(0))
+        + Op.STOP
+    )
+    entry_address = pre.deploy_contract(entry_code)
 
-#     tx = Transaction(
-#         gas_limit=200_000,
-#         to=auth_signer,
-#         value=0,
-#         authorization_list=[
-#             AuthorizationTuple(
-#                 address=Spec.RESET_DELEGATION_ADDRESS,  # Reset
-#                 nonce=auth_signer.nonce + (1 if self_sponsored else 0),
-#                 signer=auth_signer,
-#             ),
-#         ],
-#         sender=sender,
-#     )
+    authorization = AuthorizationTuple(
+        address=Spec.RESET_DELEGATION_ADDRESS,  # Reset
+        nonce=auth_signer.nonce + (1 if self_sponsored else 0),
+        signer=auth_signer,
+    )
 
-#     state_test(
-#         env=Environment(),
-#         pre=pre,
-#         tx=tx,
-#         post={
-#             auth_signer: Account(
-#                 nonce=auth_signer.nonce + 1,
-#                 code=b"",
-#                 storage={},
-#             ),
-#         },
-#     )
+    tx = Transaction(
+        gas_limit=200_000,
+        to=entry_address,
+        value=0,
+        authorization_list=[authorization],
+        sender=pre.fund_eoa() if not self_sponsored else auth_signer,
+    )
 
-
-# @pytest.mark.parametrize(
-#     "pre_set_delegation_code",
-#     [
-#         pytest.param(Op.RETURN(0, 1), id="delegated_account"),
-#         pytest.param(None, id="undelegated_account"),
-#     ],
-# )
-# def test_delegation_clearing_and_set(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-#     pre_set_delegation_code: Bytecode | None,
-# ):
-#     """
-#     Tests clearing and setting the delegation again in the same authorization list.
-
-#     - pre_set_delegation_code: The code to set on the account before clearing delegation, or None
-#         if the account should not have any code set.
-
-#     """  # noqa: D417
-#     pre_set_delegation_address: Address | None = None
-#     if pre_set_delegation_code is not None:
-#         pre_set_delegation_address = pre.deploy_contract(pre_set_delegation_code)
-
-#     auth_signer = pre.fund_eoa(0, delegation=pre_set_delegation_address)
-
-#     reset_code_address = pre.deploy_contract(
-#         Op.CALL(address=Spec.RESET_DELEGATION_ADDRESS) + Op.SSTORE(0, 1) + Op.STOP
-#     )
-
-#     sender = pre.fund_eoa()
-
-#     tx = Transaction(
-#         gas_limit=200_000,
-#         to=auth_signer,
-#         value=0,
-#         authorization_list=[
-#             AuthorizationTuple(
-#                 address=Spec.RESET_DELEGATION_ADDRESS,  # Reset
-#                 nonce=auth_signer.nonce,
-#                 signer=auth_signer,
-#             ),
-#             AuthorizationTuple(
-#                 address=reset_code_address,
-#                 nonce=auth_signer.nonce + 1,
-#                 signer=auth_signer,
-#             ),
-#         ],
-#         sender=sender,
-#     )
-
-#     state_test(
-#         env=Environment(),
-#         pre=pre,
-#         tx=tx,
-#         post={
-#             auth_signer: Account(
-#                 nonce=auth_signer.nonce + 2,
-#                 code=Spec.delegation_designation(reset_code_address),
-#                 storage={
-#                     0: 1,
-#                 },
-#             ),
-#         },
-#     )
+    state_test(
+        env=Environment(),
+        pre=pre,
+        tx=tx,
+        post={
+            auth_signer: Account(
+                nonce=auth_signer.nonce + 1,
+                code=b"",
+                storage={},
+            ),
+            entry_address: Account(
+                storage={
+                    success_slot: 1,
+                    return_slot: 0,
+                    ext_code_size_slot: 0,
+                    ext_code_hash_slot: Bytes().keccak256(),
+                    ext_code_copy_slot: 0,
+                },
+            ),
+        },
+    )
 
 
-# @pytest.mark.parametrize(
-#     "entry_code",
-#     [
-#         pytest.param(Om.OOG + Op.STOP, id="out_of_gas"),
-#         pytest.param(Op.INVALID, id="invalid_opcode"),
-#         pytest.param(Op.REVERT(0, 0), id="revert"),
-#     ],
-# )
-# def test_delegation_clearing_failing_tx(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-#     entry_code: Bytecode,
-# ):
-#     """Test clearing the delegation of an account in a transaction that fails, OOGs or reverts."""  # noqa: D417
-#     pre_set_delegation_code = Op.RETURN(0, 1)
-#     pre_set_delegation_address = pre.deploy_contract(pre_set_delegation_code)
+@pytest.mark.parametrize(
+    "self_sponsored",
+    [
+        pytest.param(False, id="not_self_sponsored"),
+        pytest.param(True, id="self_sponsored"),
+    ],
+)
+@pytest.mark.parametrize(
+    "pre_set_delegation_code",
+    [
+        pytest.param(Op.RETURN(0, 1), id="delegated_account"),
+        pytest.param(None, id="undelegated_account"),
+    ],
+)
+def test_delegation_clearing_tx_to(
+    state_test: StateTestFiller,
+    pre: Alloc,
+    pre_set_delegation_code: Bytecode | None,
+    self_sponsored: bool,
+):
+    """
+    Tests directly calling the account which delegation is being cleared.
 
-#     auth_signer = pre.fund_eoa(0, delegation=pre_set_delegation_address)
+    - pre_set_delegation_code: The code to set on the account before clearing delegation, or None
+        if the account should not have any code set.
+    - self_sponsored: Whether the delegation clearing transaction is self-sponsored.
 
-#     entry_address = pre.deploy_contract(entry_code)
+    """  # noqa: D417
+    pre_set_delegation_address: Address | None = None
+    if pre_set_delegation_code is not None:
+        pre_set_delegation_address = pre.deploy_contract(pre_set_delegation_code)
 
-#     authorization = AuthorizationTuple(
-#         address=Spec.RESET_DELEGATION_ADDRESS,  # Reset
-#         nonce=auth_signer.nonce,
-#         signer=auth_signer,
-#     )
+    if self_sponsored:
+        auth_signer = pre.fund_eoa(delegation=pre_set_delegation_address)
+    else:
+        auth_signer = pre.fund_eoa(0, delegation=pre_set_delegation_address)
 
-#     tx = Transaction(
-#         gas_limit=100_000,
-#         to=entry_address,
-#         value=0,
-#         authorization_list=[authorization],
-#         sender=pre.fund_eoa(),
-#     )
+    sender = pre.fund_eoa() if not self_sponsored else auth_signer
 
-#     state_test(
-#         env=Environment(),
-#         pre=pre,
-#         tx=tx,
-#         post={
-#             auth_signer: Account(
-#                 nonce=auth_signer.nonce + 1,
-#                 code=b"",
-#                 storage={},
-#             ),
-#         },
-#     )
+    tx = Transaction(
+        gas_limit=200_000,
+        to=auth_signer,
+        value=0,
+        authorization_list=[
+            AuthorizationTuple(
+                address=Spec.RESET_DELEGATION_ADDRESS,  # Reset
+                nonce=auth_signer.nonce + (1 if self_sponsored else 0),
+                signer=auth_signer,
+            ),
+        ],
+        sender=sender,
+    )
 
-
-# def test_deploying_delegation_designation_contract(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-# ):
-#     """
-#     Test attempting to deploy a contract that has the same format as a
-#     delegation designation.
-#     """
-#     sender = pre.fund_eoa()
-
-#     set_to_code = Op.RETURN(0, 1)
-#     set_to_address = pre.deploy_contract(set_to_code)
-
-#     initcode = Initcode(deploy_code=Spec.delegation_designation(set_to_address))
-
-#     tx = Transaction(
-#         sender=sender,
-#         to=None,
-#         gas_limit=100_000,
-#         data=initcode,
-#     )
-
-#     state_test(
-#         env=Environment(),
-#         pre=pre,
-#         tx=tx,
-#         post={
-#             sender: Account(
-#                 nonce=1,
-#             ),
-#             tx.created_contract: Account.NONEXISTENT,
-#         },
-#     )
+    state_test(
+        env=Environment(),
+        pre=pre,
+        tx=tx,
+        post={
+            auth_signer: Account(
+                nonce=auth_signer.nonce + 1,
+                code=b"",
+                storage={},
+            ),
+        },
+    )
 
 
-# @pytest.mark.parametrize("create_opcode", [Op.CREATE, Op.CREATE2])
-# def test_creating_delegation_designation_contract(
-#     state_test: StateTestFiller, pre: Alloc, create_opcode: Op
-# ):
-#     """
-#     Tx -> create -> pointer bytecode
-#     Attempt to deploy contract with magic bytes result in no contract being created.
-#     """
-#     env = Environment()
+@pytest.mark.parametrize(
+    "pre_set_delegation_code",
+    [
+        pytest.param(Op.RETURN(0, 1), id="delegated_account"),
+        pytest.param(None, id="undelegated_account"),
+    ],
+)
+def test_delegation_clearing_and_set(
+    state_test: StateTestFiller,
+    pre: Alloc,
+    pre_set_delegation_code: Bytecode | None,
+):
+    """
+    Tests clearing and setting the delegation again in the same authorization list.
 
-#     storage: Storage = Storage()
+    - pre_set_delegation_code: The code to set on the account before clearing delegation, or None
+        if the account should not have any code set.
 
-#     sender = pre.fund_eoa()
+    """  # noqa: D417
+    pre_set_delegation_address: Address | None = None
+    if pre_set_delegation_code is not None:
+        pre_set_delegation_address = pre.deploy_contract(pre_set_delegation_code)
 
-#     # An attempt to deploy code starting with ef01 result in no
-#     # contract being created as it is prohibited
+    auth_signer = pre.fund_eoa(0, delegation=pre_set_delegation_address)
 
-#     create_init = Initcode(deploy_code=Spec.delegation_designation(sender))
-#     contract_a = pre.deploy_contract(
-#         balance=100,
-#         code=Op.MSTORE(0, Op.CALLDATALOAD(0))
-#         + Op.SSTORE(
-#             storage.store_next(0, "contract_a_create_result"),
-#             create_opcode(value=1, offset=0, size=Op.CALLDATASIZE(), salt=0),
-#         )
-#         + Op.STOP,
-#     )
+    reset_code_address = pre.deploy_contract(
+        Op.CALL(address=Spec.RESET_DELEGATION_ADDRESS) + Op.SSTORE(0, 1) + Op.STOP
+    )
 
-#     tx = Transaction(
-#         to=contract_a,
-#         gas_limit=1_000_000,
-#         data=create_init,
-#         value=0,
-#         sender=sender,
-#     )
+    sender = pre.fund_eoa()
 
-#     create_address = compute_create_address(
-#         address=contract_a, nonce=1, initcode=create_init, salt=0, opcode=create_opcode
-#     )
-#     post = {
-#         contract_a: Account(balance=100, storage=storage),
-#         create_address: Account.NONEXISTENT,
-#     }
-#     state_test(env=env, pre=pre, post=post, tx=tx)
+    tx = Transaction(
+        gas_limit=200_000,
+        to=auth_signer,
+        value=0,
+        authorization_list=[
+            AuthorizationTuple(
+                address=Spec.RESET_DELEGATION_ADDRESS,  # Reset
+                nonce=auth_signer.nonce,
+                signer=auth_signer,
+            ),
+            AuthorizationTuple(
+                address=reset_code_address,
+                nonce=auth_signer.nonce + 1,
+                signer=auth_signer,
+            ),
+        ],
+        sender=sender,
+    )
+
+    state_test(
+        env=Environment(),
+        pre=pre,
+        tx=tx,
+        post={
+            auth_signer: Account(
+                nonce=auth_signer.nonce + 2,
+                code=Spec.delegation_designation(reset_code_address),
+                storage={
+                    0: 1,
+                },
+            ),
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "entry_code",
+    [
+        pytest.param(Om.OOG + Op.STOP, id="out_of_gas"),
+        pytest.param(Op.INVALID, id="invalid_opcode"),
+        pytest.param(Op.REVERT(0, 0), id="revert"),
+    ],
+)
+def test_delegation_clearing_failing_tx(
+    state_test: StateTestFiller,
+    pre: Alloc,
+    entry_code: Bytecode,
+):
+    """Test clearing the delegation of an account in a transaction that fails, OOGs or reverts."""  # noqa: D417
+    pre_set_delegation_code = Op.RETURN(0, 1)
+    pre_set_delegation_address = pre.deploy_contract(pre_set_delegation_code)
+
+    auth_signer = pre.fund_eoa(0, delegation=pre_set_delegation_address)
+
+    entry_address = pre.deploy_contract(entry_code)
+
+    authorization = AuthorizationTuple(
+        address=Spec.RESET_DELEGATION_ADDRESS,  # Reset
+        nonce=auth_signer.nonce,
+        signer=auth_signer,
+    )
+
+    tx = Transaction(
+        gas_limit=100_000,
+        to=entry_address,
+        value=0,
+        authorization_list=[authorization],
+        sender=pre.fund_eoa(),
+    )
+
+    state_test(
+        env=Environment(),
+        pre=pre,
+        tx=tx,
+        post={
+            auth_signer: Account(
+                nonce=auth_signer.nonce + 1,
+                code=b"",
+                storage={},
+            ),
+        },
+    )
+
+
+def test_deploying_delegation_designation_contract(
+    state_test: StateTestFiller,
+    pre: Alloc,
+):
+    """
+    Test attempting to deploy a contract that has the same format as a
+    delegation designation.
+    """
+    sender = pre.fund_eoa()
+
+    set_to_code = Op.RETURN(0, 1)
+    set_to_address = pre.deploy_contract(set_to_code)
+
+    initcode = Initcode(deploy_code=Spec.delegation_designation(set_to_address))
+
+    tx = Transaction(
+        sender=sender,
+        to=None,
+        gas_limit=100_000,
+        data=initcode,
+    )
+
+    state_test(
+        env=Environment(),
+        pre=pre,
+        tx=tx,
+        post={
+            sender: Account(
+                nonce=1,
+            ),
+            tx.created_contract: Account.NONEXISTENT,
+        },
+    )
+
+
+@pytest.mark.parametrize("create_opcode", [Op.CREATE, Op.CREATE2])
+def test_creating_delegation_designation_contract(
+    state_test: StateTestFiller, pre: Alloc, create_opcode: Op
+):
+    """
+    Tx -> create -> pointer bytecode
+    Attempt to deploy contract with magic bytes result in no contract being created.
+    """
+    env = Environment()
+
+    storage: Storage = Storage()
+
+    sender = pre.fund_eoa()
+
+    # An attempt to deploy code starting with ef01 result in no
+    # contract being created as it is prohibited
+
+    create_init = Initcode(deploy_code=Spec.delegation_designation(sender))
+    contract_a = pre.deploy_contract(
+        balance=100,
+        code=Op.MSTORE(0, Op.CALLDATALOAD(0))
+        + Op.SSTORE(
+            storage.store_next(0, "contract_a_create_result"),
+            create_opcode(value=1, offset=0, size=Op.CALLDATASIZE(), salt=0),
+        )
+        + Op.STOP,
+    )
+
+    tx = Transaction(
+        to=contract_a,
+        gas_limit=1_000_000,
+        data=create_init,
+        value=0,
+        sender=sender,
+    )
+
+    create_address = compute_create_address(
+        address=contract_a, nonce=1, initcode=create_init, salt=0, opcode=create_opcode
+    )
+    post = {
+        contract_a: Account(balance=100, storage=storage),
+        create_address: Account.NONEXISTENT,
+    }
+    state_test(env=env, pre=pre, post=post, tx=tx)
 
 
 # @pytest.mark.parametrize(
