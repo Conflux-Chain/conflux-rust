@@ -150,6 +150,67 @@ def test_eip7702_sponsor_new_account(
     assert ew3.eth.get_transaction_count(signer.address) == 1
 
 
+@pytest.mark.parametrize(
+    "sponsor_self_when_reset",
+    [
+        pytest.param(True, id="sponsor-self"),
+        pytest.param(False, id="sponsor-random"),
+    ],
+)
+def test_reset_eip7702_sponsor_self(
+    ew3: Web3, erc20_factory: Type[Contract], contract_address: str, admin_account, sponsor_self_when_reset
+):
+
+    sender = get_new_fund_account(ew3, admin_account)
+
+    authorization = sign_authorization(
+        contract_address=contract_address,
+        chain_id=ew3.eth.chain_id,
+        nonce=1,
+        private_key=sender.key.to_0x_hex(),
+    )
+
+    tx_hash = send_eip7702_transaction(
+        ew3,
+        sender,
+        {
+            "authorizationList": [authorization],
+            "to": ew3.eth.account.create().address,  # set to a random address
+        },
+    )
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
+
+    # verify code is set
+    code = ew3.eth.get_code(sender.address)
+    assert code.to_0x_hex() == "0xef0100" + contract_address[2:].lower()
+    # verify nonce is increased
+    assert ew3.eth.get_transaction_count(sender.address) == 2
+    
+    # reset the code
+    tx_hash = send_eip7702_transaction(
+        ew3,
+        sender if sponsor_self_when_reset else get_new_fund_account(ew3, admin_account),
+        {
+            "authorizationList": [
+                sign_authorization(
+                    contract_address="0x0000000000000000000000000000000000000000",
+                    chain_id=ew3.eth.chain_id,
+                    nonce=3 if sponsor_self_when_reset else 2,
+                    private_key=sender.key.to_0x_hex(),
+                )
+            ],
+            # "to": sender.address,  # send to self
+            "to": ew3.eth.account.create().address,  # send to self
+            "gas": 1000000,
+        },
+    )
+    # 
+    ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=10, poll_latency=0.2)
+
+    # verify code is reset
+    code = ew3.eth.get_code(sender.address)
+    assert code.to_0x_hex() == "0x"
+
 # Corresponds to ethereum-spec-tests::test_tx_into_self_delegating_set_code
 def test_tx_into_self_delegating_set_code(ew3: Web3, admin_account):
     auth_signer = get_new_fund_account(ew3, admin_account)
