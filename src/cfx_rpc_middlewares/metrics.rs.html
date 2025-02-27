@@ -112,7 +112,7 @@
         // interceptors for the same RPC API.
         </span><span class="kw">let </span><span class="kw-2">mut </span>timers = METRICS_INTERCEPTOR_TIMERS.lock();
         <span class="kw">if </span>!timers.contains_key(name) {
-            <span class="kw">let </span>timer = register_timer_with_group(<span class="string">"rpc"</span>, name.as_str());
+            <span class="kw">let </span>timer = register_timer_with_group(<span class="string">"async_rpc"</span>, name.as_str());
             timers.insert(name.clone(), timer);
         }
         <span class="prelude-val">Ok</span>(())
