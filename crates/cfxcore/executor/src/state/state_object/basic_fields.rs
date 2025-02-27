@@ -6,7 +6,7 @@ use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space, H256, U256,
 };
-use cfx_vm_types::CODE_PREFIX_7702;
+use cfx_vm_types::extract_7702_payload;
 use keccak_hash::KECCAK_EMPTY;
 #[cfg(test)]
 use primitives::StorageLayout;
@@ -219,18 +219,5 @@ impl State {
     ) -> DbResult<()> {
         self.write_account_lock(address)?.set_storage_layout(layout);
         Ok(())
-    }
-}
-
-fn extract_7702_payload(code: &[u8]) -> Option<Address> {
-    if code.starts_with(CODE_PREFIX_7702) {
-        let (_prefix, payload) = code.split_at(CODE_PREFIX_7702.len());
-        if payload.len() == Address::len_bytes() {
-            Some(Address::from_slice(payload))
-        } else {
-            None
-        }
-    } else {
-        None
     }
 }
