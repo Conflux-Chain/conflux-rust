@@ -3,6 +3,7 @@ from typing import Type, cast
 from integration_tests.test_framework.util import load_contract_metadata
 from web3 import Web3
 from web3.contract import Contract
+from web3.middleware.signing import SignAndSendRawMiddlewareBuilder
 from integration_tests.test_framework.util.eip7702.eip7702 import (
     sign_authorization,
     send_eip7702_transaction,
@@ -113,6 +114,21 @@ def test_eip7702_sponsor_self(
     assert self_contract.functions.balanceOf(sender.address).call() == 0
 
     assert ew3.eth.get_transaction_count(sender.address) == initial_nonce + 2
+    
+    ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(sender.key))
+    # sender send random tx
+    tx_hash = ew3.eth.send_transaction(
+        {
+            "from": sender.address,
+            "to": "0x0000000000000000000000000000000000000000",
+            "value": ew3.to_wei(0.5, "ether"),
+        }
+    )
+    ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=1, poll_latency=0.5)
+    
+    # verify nonce is increased
+    assert ew3.eth.get_transaction_count(sender.address) == initial_nonce + 3
+    
 
 
 # test set code for a new account which is not in state
@@ -209,7 +225,7 @@ def test_reset_eip7702_sponsor_self(
         },
     )
     # 
-    ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=10, poll_latency=0.2)
+    ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=2, poll_latency=0.5)
 
     # verify code is reset
     code = ew3.eth.get_code(sender.address)
