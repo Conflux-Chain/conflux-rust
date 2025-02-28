@@ -136,8 +136,8 @@ impl GetBlocks {
 
     fn is_oversize_packet_err(e: &Error) -> bool {
         match e {
-            Error::Network(kind) => match kind.0 {
-                network::ErrorKind::OversizedPacket => true,
+            Error::Network(kind) => match kind {
+                network::Error::OversizedPacket => true,
                 _ => false,
             },
             _ => false,

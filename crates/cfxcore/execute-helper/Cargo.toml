@@ -16,7 +16,6 @@ cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
-error-chain = { version = "0.12", default-features = false }
 log = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
@@ -24,8 +23,8 @@ primitives = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
-serde_derive = { workspace = true}
-serde_json = { version = "1.0", default-features = false, features = [
+serde_derive = { workspace = true }
+serde_json = { workspace = true, default-features = false, features = [
     "alloc",
 ]}
 solidity-abi = { workspace = true }

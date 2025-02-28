@@ -2,9 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate cfxkey as keylib;
-extern crate parking_lot;
-
+use cfxkey as keylib;
 use keylib::KeyPair;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;

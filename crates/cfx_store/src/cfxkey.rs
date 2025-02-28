@@ -19,8 +19,8 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! cfxkey reexport to make documentation look pretty.
-pub use _cfxkey::*;
-use json;
+use crate::json;
+pub use cfxkey::*;
 
 impl Into<json::H160> for Address {
     fn into(self) -> json::H160 {

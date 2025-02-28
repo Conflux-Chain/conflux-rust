@@ -21,7 +21,7 @@ network = { workspace = true }
 primitives = { workspace = true }
 parking_lot = { workspace = true }
 rlp = { workspace = true }
-rand = "0.7"
+rand = { workspace = true }
 secret-store = { workspace = true }
-toml = "0.5.8"
+toml = { workspace = true }
 txgen = { workspace = true }

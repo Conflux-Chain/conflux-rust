@@ -1,8 +1,8 @@
 use crate::{
-    transaction::AccessList, Action, SignedTransaction, Transaction,
-    TransactionWithSignature, TransactionWithSignatureSerializePart,
+    bytes::Bytes, transaction::AccessList, Action, SignedTransaction,
+    Transaction, TransactionWithSignature,
+    TransactionWithSignatureSerializePart,
 };
-use bytes::Bytes;
 use cfx_types::{AddressWithSpace, H256, U256};
 use rlp::{Encodable, RlpStream};
 use serde_derive::{Deserialize, Serialize};

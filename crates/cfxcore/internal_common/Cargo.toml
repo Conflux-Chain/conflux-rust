@@ -22,4 +22,4 @@ rlp = { workspace = true }
 rlp_derive = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }
-toml = "0.5.8"
+toml = { workspace = true }

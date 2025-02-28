@@ -19,15 +19,13 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::crypto::Crypto;
-use account::Version;
+use crate::{account::Version, crypto, json, Error};
 use cfx_types::address_util::AddressUtil;
 use cfxkey::{
     self, crypto::ecdh::agree, sign, Address, KeyPair, Message, Password,
     Public, Secret, Signature,
 };
-use crypto;
-use json;
-use Error;
+use log::warn;
 
 /// Account representation.
 #[derive(Debug, PartialEq, Clone)]

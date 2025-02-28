@@ -11,6 +11,7 @@ use crate::{
     configuration::Configuration,
 };
 use blockgen::BlockGenerator;
+use cfx_rpc_builder::RpcServerHandle;
 use cfxcore::{
     pow::PowComputer, ConsensusGraph, NodeType, SynchronizationService,
     TransactionPool,
@@ -19,6 +20,7 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use std::sync::Arc;
+use tokio::runtime::Runtime as TokioRuntime;
 
 pub struct FullClientExtraComponents {
     pub consensus: Arc<ConsensusGraph>,
@@ -34,6 +36,10 @@ pub struct FullClientExtraComponents {
     pub pow: Arc<PowComputer>,
     pub eth_rpc_http_server: Option<HttpServer>,
     pub eth_rpc_ws_server: Option<WsServer>,
+    /// Handle to the started ETH RPC server. This is version 2 of the ETH RPC.
+    /// Which use Rust async I/O
+    pub eth_rpc_server_handle: Option<RpcServerHandle>,
+    pub tokio_runtime: TokioRuntime,
 }
 
 impl MallocSizeOf for FullClientExtraComponents {
@@ -67,6 +73,8 @@ impl FullClient {
             runtime,
             eth_rpc_http_server,
             eth_rpc_ws_server,
+            tokio_runtime,
+            eth_rpc_server_handle,
         ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
@@ -86,6 +94,8 @@ impl FullClient {
                 pow,
                 eth_rpc_http_server,
                 eth_rpc_ws_server,
+                eth_rpc_server_handle,
+                tokio_runtime,
             },
         }))
     }

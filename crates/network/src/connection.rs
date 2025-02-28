@@ -3,17 +3,19 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    io::{IoContext, StreamToken},
+    iolib::{IoContext, StreamToken},
     throttling::THROTTLING_SERVICE,
-    Error, ErrorKind,
+    Error,
 };
 use bytes::{Bytes, BytesMut};
 use lazy_static::lazy_static;
+use log::{debug, trace};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Histogram, Meter, Sample,
 };
 use mio::{tcp::*, *};
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
+use serde::Deserialize;
 use serde_derive::Serialize;
 use std::{
     io::{self, Read, Write},
@@ -337,7 +339,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
         if !data.is_empty() {
             let size = data.len();
             if self.assembler.is_oversized(size) {
-                return Err(ErrorKind::OversizedPacket.into());
+                return Err(Error::OversizedPacket.into());
             }
 
             trace!("Sending packet, token = {}, size = {}", self.token, size);
@@ -530,7 +532,7 @@ impl PacketAssembler for PacketWithLenAssembler {
 
     fn assemble(&self, data: &mut Vec<u8>) -> Result<(), Error> {
         if self.is_oversized(data.len()) {
-            return Err(ErrorKind::OversizedPacket.into());
+            return Err(Error::OversizedPacket.into());
         }
 
         // first n-bytes swapped to the end
@@ -578,7 +580,7 @@ impl PacketAssembler for PacketWithLenAssembler {
             packet[..self.data_len_bytes].copy_from_slice(&swapped);
         } else {
             // just ignore the first n-bytes of msg length
-            packet.split_to(self.data_len_bytes);
+            let _ = packet.split_to(self.data_len_bytes);
         };
 
         Some(packet)
@@ -588,7 +590,7 @@ impl PacketAssembler for PacketWithLenAssembler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io::*;
+    use crate::iolib::*;
     use mio::Ready;
     use std::{
         cmp,
@@ -770,22 +772,28 @@ mod tests {
         let assembler = PacketWithLenAssembler::default();
 
         // packet not ready
-        assert_eq!(assembler.load(&mut vec![5].into()), None);
-        assert_eq!(assembler.load(&mut vec![5, 0, 0].into()), None);
-        assert_eq!(assembler.load(&mut vec![5, 0, 0, 4, 5, 1, 2].into()), None);
+        assert_eq!(assembler.load(&mut BytesMut::from(&vec![5][..])), None);
+        assert_eq!(
+            assembler.load(&mut BytesMut::from(&vec![5, 0, 0][..])),
+            None
+        );
+        assert_eq!(
+            assembler.load(&mut BytesMut::from(&vec![5, 0, 0, 4, 5, 1, 2][..])),
+            None
+        );
 
         // packet ready and length > 3
-        let mut buf = vec![5, 0, 0, 4, 5, 1, 2, 3].into();
+        let mut buf = BytesMut::from(&vec![5, 0, 0, 4, 5, 1, 2, 3][..]);
         assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2, 3, 4, 5]);
         assert_eq!(buf.is_empty(), true);
 
         // packet ready and length < 3
-        let mut buf = vec![2, 0, 0, 1, 2].into();
+        let mut buf = BytesMut::from(&vec![2, 0, 0, 1, 2][..]);
         assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2]);
         assert_eq!(buf.is_empty(), true);
 
         // packet ready with some data of the next packet
-        let mut buf = vec![5, 0, 0, 4, 5, 1, 2, 3, 6, 7].into();
+        let mut buf = BytesMut::from(&vec![5, 0, 0, 4, 5, 1, 2, 3, 6, 7][..]);
         assert_eq!(&assembler.load(&mut buf).unwrap()[..], &[1, 2, 3, 4, 5]);
         assert_eq!(&buf[..], &[6, 7]);
     }

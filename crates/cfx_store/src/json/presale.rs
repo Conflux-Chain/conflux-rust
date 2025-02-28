@@ -15,6 +15,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{Bytes, H160};
+use serde_derive::Deserialize;
 use serde_json;
 use std::io::Read;
 
@@ -36,7 +37,7 @@ impl PresaleWallet {
 
 #[cfg(test)]
 mod tests {
-    use json::{PresaleWallet, H160};
+    use crate::json::{PresaleWallet, H160};
     use serde_json;
     use std::str::FromStr;
 

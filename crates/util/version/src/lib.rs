@@ -20,8 +20,6 @@
 
 //! Parity version specific information.
 
-extern crate target_info;
-
 use target_info::Target;
 
 /// Get the platform identifier.
@@ -47,4 +45,11 @@ pub fn version(crate_version: &str) -> String {
         platform(),
         env!("VERGEN_RUSTC_SEMVER"),
     )
+}
+
+#[macro_export]
+macro_rules! conflux_client_version {
+    () => {
+        parity_version::version(env!("CARGO_PKG_VERSION"))
+    };
 }

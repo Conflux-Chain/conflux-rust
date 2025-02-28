@@ -4,7 +4,7 @@
 
 use crate::rpc::types::pos::NodeLockStatus;
 use cfx_types::{H256, U64};
-use serde_derive::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]

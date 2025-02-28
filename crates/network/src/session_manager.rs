@@ -11,6 +11,7 @@ use crate::{
 };
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::IoContext;
+use log::debug;
 use mio::net::TcpStream;
 use parking_lot::RwLock;
 use slab::Slab;

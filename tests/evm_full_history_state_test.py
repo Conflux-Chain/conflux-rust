@@ -47,13 +47,13 @@ class EvmFullHistoryStateTest(ConfluxTestFramework):
         self.nodes[0].eth_call({"to": "0x0000000000000000000000000000000000000000", "data": "0x00"}, "0x33")
         assert_raises_rpc_error(None, None, self.nodes[0].eth_call, {"to": "0x0000000000000000000000000000000000000000", "data": "0x00"}, "0x31")
 
-        evm_genesis_account = Web3().eth.account.from_key(default_config["GENESIS_PRI_KEY"]).address
+        evm_random_account = Web3().eth.account.create().address
         # value = default_config["TOTAL_COIN"]
         value = 10 ** 18
-        self.cross_space_transfer(evm_genesis_account, value)
+        self.cross_space_transfer(evm_random_account, value)
         client.generate_empty_blocks(500)
-        assert_equal(int(self.nodes[0].eth_getBalance(evm_genesis_account, int_to_hex(505)), 0), value)
-        assert_raises_rpc_error(None, None, client.get_balance, evm_genesis_account, int_to_hex(505))
+        assert_equal(int(self.nodes[0].eth_getBalance(evm_random_account, int_to_hex(505)), 0), value)
+        assert_raises_rpc_error(None, None, client.get_balance, evm_random_account, int_to_hex(505))
 
     def cross_space_transfer(self, to, value):
         if to.startswith("0x"):

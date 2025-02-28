@@ -17,11 +17,12 @@ use crate::rpc::{
 };
 use cfx_rpc::EthApi;
 use cfx_types::{Address, AddressSpaceUtil, Space, H160, H256, U256, U64};
+use cfx_util_macros::bail;
 use cfxcore::{
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
-use clap::crate_version;
 use jsonrpc_core::Result as RpcResult;
+use log::debug;
 use primitives::TransactionWithSignature;
 
 pub struct EthHandler {
@@ -42,7 +43,7 @@ impl EthHandler {
 impl Eth for EthHandler {
     fn client_version(&self) -> RpcResult<String> {
         debug!("RPC Request: web3_clientVersion()");
-        Ok(parity_version::version(crate_version!()))
+        Ok(parity_version::conflux_client_version!())
     }
 
     fn net_version(&self) -> RpcResult<String> {

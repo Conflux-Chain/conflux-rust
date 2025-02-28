@@ -276,9 +276,14 @@ impl<'a> ContextTrait for Context<'a> {
         // address. This should generally not happen. Unless we enable
         // account dust in future. We add this check just in case it
         // helps in future.
-        if self.space == Space::Native
-            && self.state.is_contract_with_code(&address_with_space)?
-        {
+        let conflict_address = if !self.spec.cip_c2_fix {
+            self.space == Space::Native
+                && self.state.is_contract_with_code(&address_with_space)?
+        } else {
+            !self.state.is_eip684_empty(&address_with_space)?
+        };
+
+        if conflict_address {
             debug!("Contract address conflict!");
             let err = Error::ConflictAddress(address.clone());
             return Ok(Ok(ContractCreateResult::Failed(err)));

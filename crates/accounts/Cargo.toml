@@ -11,11 +11,11 @@ edition = "2021"
 cfxkey = { workspace = true }
 cfxstore = { workspace = true }
 cfx-types = { workspace = true }
-log = "0.4"
+log = { workspace = true }
 parking_lot = { workspace = true }
-serde = "1.0"
-serde_derive = "1.0"
-serde_json = "1.0"
+serde = { workspace = true }
+serde_derive = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
-tempdir = "0.3"
+tempdir = { workspace = true }

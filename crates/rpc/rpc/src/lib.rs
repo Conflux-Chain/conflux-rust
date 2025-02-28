@@ -6,6 +6,7 @@ mod net;
 mod pubsub;
 mod rpc;
 mod trace;
+pub mod traits;
 mod web3;
 
 pub use debug::DebugApi;

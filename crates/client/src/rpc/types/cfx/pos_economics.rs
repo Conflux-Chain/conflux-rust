@@ -1,4 +1,5 @@
 use cfx_types::{U256, U64};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

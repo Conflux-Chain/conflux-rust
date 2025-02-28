@@ -8,15 +8,15 @@ edition = "2018"
 
 [dependencies]
 fnv = "1.0"
-mio = { version = "0.6.19" }
+mio = { workspace = true }
 crossbeam-deque = "0.7"
 crossbeam-channel = "0.4"
 parking_lot = { workspace = true }
-log = "0.4"
-slab = "0.4"
+log = { workspace = true }
+slab = { workspace = true }
 num_cpus = "1.8"
 timer = "0.2"
 time = "0.1"
 metrics = { workspace = true }
-lazy_static = "1.4"
+lazy_static = { workspace = true }
 

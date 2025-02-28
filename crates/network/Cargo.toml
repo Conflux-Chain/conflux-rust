@@ -8,34 +8,35 @@ cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
 cfxkey = { workspace = true }
-mio = "0.6.8"
+mio = { workspace = true }
 parking_lot = { workspace = true }
-log = "0.4"
-slab = "0.4"
+log = { workspace = true }
+slab = { workspace = true }
 io = { workspace = true }
-error-chain = { version = "0.12", default-features = false }
-bytes = "0.4"
+bytes = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
 ipnetwork = "0.12.6"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_derive = "1.0"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+serde_derive = { workspace = true }
 igd = "0.10"
-libc = "0.2.66"
-rand = "0.7"
+libc = { workspace = true }
+rand = { workspace = true }
 parity-path = { workspace = true }
 keccak-hash = { workspace = true }
 enum-map = "0.4.0"
 enum-map-derive = "0.4.0"
-strum = "0.11.0"
-strum_macros = "0.11.0"
-lazy_static = "1.4"
+strum = { workspace = true }
+strum_macros = { workspace = true }
+lazy_static = { workspace = true }
 byte-unit = "1.1.0"
 priority-send-queue = { workspace = true }
 metrics = { workspace = true }
 throttling = { workspace = true }
 natpmp = "0.2"
 malloc_size_of = { workspace = true }
-diem-crypto = { path= "../cfxcore/core/src/pos/crypto/crypto" }
-diem-types = { path= "../cfxcore/core/src/pos/types" }
+diem-crypto = { path = "../cfxcore/core/src/pos/crypto/crypto" }
+diem-types = { path = "../cfxcore/core/src/pos/types" }
+cfx-util-macros = { workspace = true }
+thiserror = { workspace = true }

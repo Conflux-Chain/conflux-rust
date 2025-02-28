@@ -5,6 +5,6 @@ edition = "2018"
 
 [dependencies]
 parking_lot = { workspace = true }
-toml = "0.5.8"
+toml = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }

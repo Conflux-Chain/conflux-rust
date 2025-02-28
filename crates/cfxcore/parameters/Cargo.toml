@@ -11,6 +11,6 @@ cfx-types = { workspace = true }
 cfxkey = { workspace = true }
 cfx-bytes = { workspace = true }
 
-lazy_static = "1.4"
-hex-literal = "0.4.1"
-rustc-hex = "2.1"
+lazy_static ={ workspace = true }
+hex-literal = { workspace = true }
+rustc-hex = { workspace = true }

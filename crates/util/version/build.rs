@@ -1,6 +1,3 @@
-extern crate anyhow;
-extern crate vergen;
-
 use anyhow::Result;
 use vergen::{vergen, Config, ShaKind, TimestampKind};
 

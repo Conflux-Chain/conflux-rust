@@ -2173,7 +2173,7 @@ use cfx_storage::{
 use cfx_types::hexstr_to_h256;
 use clap::{App, Arg, ArgMatches};
 use env_logger;
-use error_chain::*;
+use cfx_util_macros::bail;
 use ethcore::{
     ethereum::ethash::EthashParams, spec::CommonParams as EthCommonParams,
 };

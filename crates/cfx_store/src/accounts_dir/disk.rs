@@ -18,8 +18,12 @@ use super::{
     vault::{VaultDiskDirectory, VAULT_FILE_NAME},
     KeyDirectory, VaultKey, VaultKeyDirectory, VaultKeyDirectoryProvider,
 };
+use crate::{
+    json::{self, Uuid},
+    Error, SafeAccount,
+};
 use cfxkey::Password;
-use json::{self, Uuid};
+use log::warn;
 use std::{
     collections::HashMap,
     fs,
@@ -27,8 +31,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use time;
-use Error;
-use SafeAccount;
 
 const IGNORED_FILES: &[&str] = &[
     "thumbs.db",
@@ -58,7 +60,7 @@ pub fn find_unique_filename_using_random_suffix(
                 ));
             }
 
-            let suffix = ::random::random_string(4);
+            let suffix = crate::random::random_string(4);
             deduped_filename = format!("{}-{}", original_filename, suffix);
             path.set_file_name(&deduped_filename);
             retries += 1;
@@ -419,13 +421,11 @@ fn account_filename(account: &SafeAccount) -> String {
 
 #[cfg(test)]
 mod test {
-    extern crate tempdir;
-
-    use self::tempdir::TempDir;
     use super::{KeyDirectory, RootDiskDirectory, VaultKey};
-    use account::SafeAccount;
+    use crate::account::SafeAccount;
     use cfxkey::{Generator, Random};
     use std::{env, fs};
+    use tempdir::TempDir;
 
     #[test]
     fn should_create_new_account() {

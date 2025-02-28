@@ -16,8 +16,8 @@ use network::{
     service::ProtocolVersion, ProtocolId,
 };
 pub use network::{
-    throttling::THROTTLING_SERVICE, Error as NetworkError,
-    ErrorKind as NetworkErrorKind, NetworkContext, PeerId,
+    throttling::THROTTLING_SERVICE, Error as NetworkError, NetworkContext,
+    PeerId,
 };
 
 macro_rules! build_msgid {
@@ -132,7 +132,7 @@ pub fn decode_rlp_and_check_deprecation<T: Message + Decodable>(
     let msg: T = rlp.as_val()?;
 
     if min_supported_version > msg.version_valid_till() {
-        bail!(NetworkErrorKind::MessageDeprecated {
+        bail!(NetworkError::MessageDeprecated {
             protocol,
             msg_id: msg.msg_id(),
             min_supported_version,

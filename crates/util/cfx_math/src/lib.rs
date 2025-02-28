@@ -1,10 +1,3 @@
-extern crate cfx_types;
-extern crate num;
-#[cfg(test)]
-extern crate static_assertions;
-extern crate typenum;
-extern crate unroll;
-
 pub mod nth_root;
 
 pub use nth_root::{nth_inv_root, nth_root};

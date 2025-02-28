@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.38"
 itertools = { workspace = true }
-serde = { version = "1.0.124", default-features = false }
+serde = { workspace = true, default-features = false }
 thiserror = "1.0.24"
 parking_lot = "0.11.1"
 

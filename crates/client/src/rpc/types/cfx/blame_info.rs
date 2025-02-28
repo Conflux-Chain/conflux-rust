@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::{H256, U64};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -18,11 +18,13 @@ use crate::{
 use cfx_addr::Network;
 use cfx_execute_helper::exec_tracer::TraceFilter as PrimitiveTraceFilter;
 use cfx_types::{Space, H256};
+use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::DataVersionTuple, BlockDataManager, ConsensusGraph,
     ConsensusGraphTrait, SharedConsensusGraph,
 };
 use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
+use log::error;
 use primitives::EpochNumber;
 use std::{convert::TryInto, sync::Arc};
 

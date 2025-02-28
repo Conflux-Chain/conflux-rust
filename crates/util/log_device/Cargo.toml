@@ -10,4 +10,4 @@ db = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
 kvdb = "0.4"
-rand = "0.7"
+rand = { workspace = true }

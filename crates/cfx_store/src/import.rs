@@ -16,12 +16,14 @@
 
 use std::{collections::HashSet, fs, path::Path};
 
-use accounts_dir::{
-    DiskKeyFileManager, KeyDirectory, KeyFileManager, RootDiskDirectory,
+use crate::{
+    accounts_dir::{
+        DiskKeyFileManager, KeyDirectory, KeyFileManager, RootDiskDirectory,
+    },
+    Error,
 };
 use cfxkey::Address;
 use dir;
-use Error;
 
 /// Import an account from a file.
 pub fn import_account(

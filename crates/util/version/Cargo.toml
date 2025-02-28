@@ -4,12 +4,13 @@ name = "parity-version"
 version = "3.3.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
+edition = "2021"
 
 [package.metadata]
 
 [dependencies]
-target_info = "0.1"
+target_info = { workspace = true }
 
 [build-dependencies]
-anyhow = "1.0"
-vergen = "7.0.0"
+anyhow = { workspace = true }
+vergen = { workspace = true }

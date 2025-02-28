@@ -35,7 +35,7 @@ macro_rules! build_config{
         use db;
         use kvdb_rocksdb::DatabaseConfig;
         use log::LevelFilter;
-        use network::{node_table::validate_node_url, ErrorKind, NetworkConfiguration};
+        use network::{node_table::validate_node_url, NetworkConfiguration};
         use std::{
             fs::{self, File},
             io::prelude::*,

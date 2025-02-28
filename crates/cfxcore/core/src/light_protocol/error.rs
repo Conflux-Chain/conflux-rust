@@ -236,12 +236,12 @@ pub fn handle(
         }
 
         // network errors
-        Error::Network(kind) => match kind.kind() {
-            network::ErrorKind::SendUnsupportedMessage{..} => {
+        Error::Network(kind) => match kind {
+            network::Error::SendUnsupportedMessage{..} => {
                 unreachable!("This is a bug in protocol version maintenance. {:?}", kind);
             }
 
-            network::ErrorKind::MessageDeprecated{..} => {
+            network::Error::MessageDeprecated{..} => {
                 op = Some(UpdateNodeOperation::Failure);
                 error!(
                     "Peer sent us a deprecated message {:?}. Either it's a bug \
@@ -250,24 +250,22 @@ pub fn handle(
                 );
             }
 
-            network::ErrorKind::AddressParse
-            | network::ErrorKind::AddressResolve(_)
-            | network::ErrorKind::Auth
-            | network::ErrorKind::BadAddr
-            | network::ErrorKind::Disconnect(_)
-            | network::ErrorKind::Expired
-            | network::ErrorKind::InvalidNodeId
-            | network::ErrorKind::Io(_)
-            | network::ErrorKind::OversizedPacket
-            | network::ErrorKind::Throttling(_) => disconnect = false,
+            network::Error::AddressParse
+            | network::Error::AddressResolve(_)
+            | network::Error::Auth
+            | network::Error::BadAddr
+            | network::Error::Disconnect(_)
+            | network::Error::Expired
+            | network::Error::InvalidNodeId
+            | network::Error::Io(_)
+            | network::Error::OversizedPacket
+            | network::Error::Throttling(_) => disconnect = false,
 
-            network::ErrorKind::BadProtocol | network::ErrorKind::Decoder(_) => {
+            network::Error::BadProtocol | network::Error::Decoder(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
 
-            network::ErrorKind::SocketIo(_)
-            | network::ErrorKind::Msg(_)
-            | network::ErrorKind::__Nonexhaustive {} => {
+            network::Error::SocketIo(_) | network::Error::Msg(_) => {
                 op = Some(UpdateNodeOperation::Failure)
             }
         },

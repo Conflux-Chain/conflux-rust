@@ -8,6 +8,6 @@ edition = "2018"
 
 [dependencies]
 cfx-types = { workspace = true }
-async-trait = "0.1"
-anyhow = "1.0.38"
-serde = "1.0"
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }

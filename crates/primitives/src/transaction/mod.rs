@@ -14,15 +14,19 @@ pub use native_transaction::{
     TypedNativeTransaction,
 };
 
-use crate::{bytes::Bytes, hash::keccak};
+use crate::{
+    bytes::Bytes,
+    hash::keccak,
+    keylib::{
+        self, public_to_address, recover, verify_public, Public, Secret,
+        Signature,
+    },
+};
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
     H256, U256,
 };
 use eth_transaction::eip155_signature;
-use keylib::{
-    self, public_to_address, recover, verify_public, Public, Secret, Signature,
-};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::{Deserialize, Serialize};
@@ -440,7 +444,7 @@ impl Transaction {
     }
 
     pub fn sign(self, secret: &Secret) -> SignedTransaction {
-        let sig = ::keylib::sign(secret, &self.signature_hash())
+        let sig = crate::keylib::sign(secret, &self.signature_hash())
             .expect("data is valid and context has signing capabilities; qed");
         let tx_with_sig = self.with_signature(sig);
         let public = tx_with_sig

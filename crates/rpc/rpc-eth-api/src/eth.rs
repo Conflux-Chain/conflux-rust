@@ -1,6 +1,6 @@
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, FeeHistory, Header, Receipt, SyncStatus,
-    Transaction, TransactionRequest,
+    Block, BlockNumber as BlockId, EthRpcLogFilter as Filter, FeeHistory,
+    Header, Log, Receipt, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index};
 use cfx_types::{Address, H256, H64, U256, U64};
@@ -356,4 +356,8 @@ pub trait EthApi {
     //     keys: Vec<JsonStorageKey>,
     //     block_number: Option<BlockId>,
     // ) -> RpcResult<EIP1186AccountProofResponse>;
+
+    /// Returns logs matching given filter object.
+    #[method(name = "getLogs")]
+    async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>>;
 }

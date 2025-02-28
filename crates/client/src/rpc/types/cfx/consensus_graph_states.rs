@@ -4,6 +4,7 @@
 
 use cfx_types::{H256, U64};
 use cfxcore::state_exposer::ConsensusGraphStates as PrimitiveConsensusGraphStates;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

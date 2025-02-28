@@ -16,7 +16,7 @@ use cfx_parameters::sync::FAILED_REQUEST_RESEND_WAIT;
 use malloc_size_of::MallocSizeOf;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
-    node_table::NodeId, ErrorKind as NetworkErrorKind, NetworkContext,
+    node_table::NodeId, Error as NetworkError, NetworkContext,
     UpdateNodeOperation,
 };
 use parking_lot::Mutex;
@@ -316,8 +316,8 @@ impl RequestContainer {
         request_message.request.set_request_id(request_id);
         let res = request_message.request.send(io, &self.peer_id);
         let is_send_error = if let Err(e) = res {
-            match e.kind() {
-                NetworkErrorKind::OversizedPacket => {
+            match e {
+                NetworkError::OversizedPacket => {
                     panic!("Request packet should not be oversized!")
                 }
                 _ => {}

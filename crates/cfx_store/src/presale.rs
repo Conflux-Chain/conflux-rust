@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use cfxkey::Password;
-use crypto::{
-    self, pbkdf2,
-    publickey::{Address, KeyPair, Secret},
-    Keccak256,
+use crate::{
+    crypto::{
+        self, pbkdf2,
+        publickey::{Address, KeyPair, Secret},
+        Keccak256,
+    },
+    json, Error,
 };
-// use cfxkey::Secret;
-use json;
+use cfxkey::Password;
 use std::{fs, num::NonZeroU32, path::Path};
-use Error;
 
 /// Pre-sale wallet.
 pub struct PresaleWallet {
@@ -91,7 +91,7 @@ impl PresaleWallet {
 #[cfg(test)]
 mod tests {
     use super::PresaleWallet;
-    use json;
+    use crate::json;
 
     #[test]
     fn test() {

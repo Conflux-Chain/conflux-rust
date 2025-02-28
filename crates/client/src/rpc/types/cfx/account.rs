@@ -6,6 +6,7 @@ use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{H256, U256};
 use primitives::Account as PrimitiveAccount;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
