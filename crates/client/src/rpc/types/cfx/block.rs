@@ -5,6 +5,7 @@
 use super::RpcAddress;
 use cfx_addr::Network;
 use cfx_types::{Space, H160, H256, U256, U64};
+use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
     consensus::{ConsensusConfig, ConsensusGraphInner},
@@ -16,8 +17,8 @@ use primitives::{
     BlockHeaderBuilder, TransactionIndex, TransactionStatus,
 };
 use serde::{
-    de::{Deserialize, Deserializer, Error, Unexpected},
-    Serialize, Serializer,
+    de::{Deserializer, Error, Unexpected},
+    Deserialize, Serialize, Serializer,
 };
 use serde_json::Value;
 use std::{convert::TryInto, sync::Arc};

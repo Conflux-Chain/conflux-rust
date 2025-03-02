@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use log::error;
 use std::collections::VecDeque;
 
 /// The goal of EpochQueue is to keep a distance from the tip of the ledger.

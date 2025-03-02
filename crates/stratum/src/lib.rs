@@ -20,21 +20,8 @@
 
 //! Stratum protocol implementation for Conflux clients
 
-extern crate cfx_types;
-extern crate jsonrpc_core;
-extern crate jsonrpc_tcp_server;
-extern crate keccak_hash as hash;
-extern crate parking_lot;
-
-#[macro_use]
-extern crate log;
-
-#[cfg(test)]
-extern crate env_logger;
-#[cfg(test)]
-extern crate tokio;
-#[cfg(test)]
-extern crate tokio_io;
+use keccak_hash as hash;
+use log::{debug, trace, warn};
 
 mod traits;
 

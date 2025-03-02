@@ -16,10 +16,9 @@
 
 //! Accounts Directory
 
+use crate::{Error, SafeAccount};
 use cfxkey::Password;
 use std::path::PathBuf;
-use Error;
-use SafeAccount;
 
 mod disk;
 mod memory;

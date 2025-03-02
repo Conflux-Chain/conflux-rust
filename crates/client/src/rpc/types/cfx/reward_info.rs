@@ -1,6 +1,7 @@
 use super::RpcAddress;
 use cfx_types::{H256, U256};
 use cfxcore::block_data_manager::BlockRewardResult;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -3,9 +3,10 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Base class for RPC testing."""
+from typing import List, Literal, Union
 from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.messages import Transactions
-from conflux.rpc import RpcClient
+from conflux.rpc import RpcClient, default_config
 from enum import Enum
 from http.client import CannotSendRequest
 import logging
@@ -18,6 +19,8 @@ import tempfile
 import time
 from typing import Union
 import random
+
+from eth_account import Account
 
 from .authproxy import JSONRPCException
 from . import coverage
@@ -72,6 +75,8 @@ class ConfluxTestFramework:
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
+        self.core_secrets: list[str] = [default_config["GENESIS_PRI_KEY"].hex()]  # type: ignore
+        self.evm_secrets: list[str] = [default_config["GENESIS_PRI_KEY_2"].hex()]  # type: ignore
         self.setup_clean_chain = True
         self.nodes: list[TestNode] = []
         self.network_thread = None
@@ -91,6 +96,21 @@ class ConfluxTestFramework:
             self,
             "num_nodes"), "Test must set self.num_nodes in set_test_params()"
 
+    # add random secrets to self.secrets
+    # when node starts, self.secrets will be used
+    # to generate genesis account for both EVM and Core
+    # each with 10000 CFX (10^21 drip)
+    def _add_genesis_secrets(
+        self,
+        additional_secrets: int,
+        space: Union[List[Literal["evm", "core"]], Literal["evm", "core"]]=["evm", "core"]
+    ):
+        for _ in range(additional_secrets):
+            if "evm" in space or "evm" == space:
+                self.evm_secrets.append(Account.create().key.hex())
+            if "core" in space or "core" == space:
+                self.core_secrets.append(Account.create().key.hex())
+            
     def main(self):
         """Main function. This should not be overridden by the subclass test scripts."""
 
@@ -463,7 +483,7 @@ class ConfluxTestFramework:
 
         for i in range(self.num_nodes):
             initialize_datadir(self.options.tmpdir, i, self.options.port_min, self.conf_parameters,
-                               self.extra_conf_files)
+                               self.extra_conf_files, self.core_secrets, self.evm_secrets)
             
     def before_test(self):
         pass

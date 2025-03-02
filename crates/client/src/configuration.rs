@@ -5,6 +5,7 @@
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 
 use lazy_static::*;
+use log::{error, warn};
 use parking_lot::RwLock;
 use rand::Rng;
 
@@ -148,6 +149,7 @@ build_config! {
         (era_epoch_count, (u64), ERA_DEFAULT_EPOCH_COUNT)
         (heavy_block_difficulty_ratio, (u64), HEAVY_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         (genesis_accounts, (Option<String>), None)
+        (genesis_evm_secrets, (Option<String>), None)
         (genesis_secrets, (Option<String>), None)
         (pivot_hint_path, (Option<String>), None)
         (pivot_hint_checksum, (Option<String>), None)
@@ -170,6 +172,7 @@ build_config! {
         (next_hardfork_transition_number, (Option<u64>), Some(247480000))
         (next_hardfork_transition_height, (Option<u64>), Some(101900000))
         (cip1559_transition_height, (Option<u64>), None)
+        (c2_fix_transition_height, (Option<u64>), Some(118580000))
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
@@ -202,6 +205,7 @@ build_config! {
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
         (jsonrpc_http_eth_port, (Option<u16>), None)
         (jsonrpc_ws_eth_port, (Option<u16>), None)
+        (jsonrpc_http_eth_port_v2, (Option<u16>), None)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -1437,6 +1441,10 @@ impl Configuration {
             self.raw_conf.next_hardfork_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip130, cip133e }
         );
+        params.transition_heights.cip_c2_fix = self
+            .raw_conf
+            .c2_fix_transition_height
+            .unwrap_or(default_transition_time);
         // TODO: disable 1559 test during dev
         params.transition_heights.cip1559 = self
             .raw_conf
@@ -1491,7 +1499,7 @@ pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
             .filter(|s| !s.is_empty())
             .map(|s| match validate_node_url(s).map(Into::into) {
                 None => Ok(s.to_owned()),
-                Some(ErrorKind::AddressResolve(_)) => Err(format!(
+                Some(network::Error::AddressResolve(_)) => Err(format!(
                     "Failed to resolve hostname of a boot node: {}",
                     s
                 )),

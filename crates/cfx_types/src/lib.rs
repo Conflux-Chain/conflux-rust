@@ -2,13 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate ethereum_types;
-extern crate keccak_hash;
-extern crate rlp;
-extern crate rlp_derive;
-extern crate serde;
-extern crate serde_derive;
-
 pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
