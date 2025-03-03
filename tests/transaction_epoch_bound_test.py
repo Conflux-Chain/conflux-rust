@@ -6,7 +6,6 @@ from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
 from conflux.rpc import RpcClient
-from jsonrpcclient.exceptions import ReceivedErrorResponseError
 
 class TransactionTest(DefaultConfluxTestFramework):
     def set_test_params(self):
@@ -43,7 +42,7 @@ class TransactionTest(DefaultConfluxTestFramework):
             assert(False)
         except ReceivedErrorResponseError:
             self.log.info("Bad transaction rejected.")
-        except:
+        except Exception as e:
             self.log.info("Unexpected error!")
             assert(False)
         assert(client.get_balance(eth_utils.encode_hex(receiver_addr)) == value)

@@ -2,7 +2,7 @@
 
 import os
 import time
-from jsonrpcclient.exceptions import ReceivedErrorResponseError
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
 
 from test_framework.test_framework import ConfluxTestFramework
 from conflux.rpc import RpcClient

@@ -19,7 +19,7 @@ class NotEnoughGasPrice(ConfluxTestFramework):
 
         try:
             rpc.send_tx(tx)
-        except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+        except ReceivedErrorResponseError as e:
             r = e.response
             assert_equal(r.code, -32602)
             assert_equal(r.message, "Invalid parameters: tx \"transaction gas price 1 less than the minimum value 1000000000\"")

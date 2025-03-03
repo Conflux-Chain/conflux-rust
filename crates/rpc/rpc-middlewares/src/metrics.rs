@@ -31,7 +31,7 @@ impl<S> Metrics<S> {
         // interceptors for the same RPC API.
         let mut timers = METRICS_INTERCEPTOR_TIMERS.lock();
         if !timers.contains_key(name) {
-            let timer = register_timer_with_group("rpc", name.as_str());
+            let timer = register_timer_with_group("async_rpc", name.as_str());
             timers.insert(name.clone(), timer);
         }
         Ok(())
