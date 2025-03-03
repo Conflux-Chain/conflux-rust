@@ -1,4 +1,4 @@
-use crate::transaction_pool::transaction_pool_inner::TX_POOL_GET_STATE_TIMER;
+use crate::transaction_pool::pool_metrics::pool_inner_metrics::TX_POOL_GET_STATE_TIMER;
 use cfx_executor::state::State;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressWithSpace, U256};
@@ -6,13 +6,12 @@ use metrics::MeterTimer;
 use primitives::SponsorInfo;
 use std::sync::Arc;
 
-// TODO: perhaps rename to StateWrapper.
-pub struct AccountCache {
+pub struct StateProvider {
     state: Arc<State>,
 }
 
-impl AccountCache {
-    pub fn new(state: Arc<State>) -> Self { AccountCache { state } }
+impl StateProvider {
+    pub fn new(state: Arc<State>) -> Self { StateProvider { state } }
 
     pub fn get_nonce_and_balance(
         &self, address: &AddressWithSpace,

@@ -4,7 +4,7 @@ mod nonce_pool_map;
 mod weight;
 
 use crate::transaction_pool::{
-    nonce_pool::weight::NoncePoolWeight, transaction_pool_inner::PendingReason,
+    transaction_pool_inner::PendingReason, TransactionPoolError,
 };
 use cfx_packing_pool::{PackingBatch, PackingPoolConfig};
 use cfx_parameters::{
@@ -17,9 +17,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{SignedTransaction, Transaction};
 use std::{ops::Deref, sync::Arc};
 
-use self::nonce_pool_map::NoncePoolMap;
-
-use super::TransactionPoolError;
+use self::{nonce_pool_map::NoncePoolMap, weight::NoncePoolWeight};
 
 #[derive(Clone, Debug, DeriveMallocSizeOf)]
 pub struct TxWithReadyInfo {
