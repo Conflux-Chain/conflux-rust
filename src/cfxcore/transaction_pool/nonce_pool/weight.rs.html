@@ -93,9 +93,9 @@
 </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>NoncePoolWeight {
     <span class="doccomment">/// number of unpacked transactions
     </span><span class="kw">pub </span>unpacked_size: u32,
-    <span class="doccomment">/// sum of cost of transaction
+    <span class="doccomment">/// sum of cost of transactions
     </span><span class="kw">pub </span>cost: U256,
-    <span class="doccomment">/// number of transaction
+    <span class="doccomment">/// number of transactions
     </span><span class="kw">pub </span>size: u32,
     <span class="doccomment">/// max unpacked nonce
     </span><span class="kw">pub </span>max_unpackd_nonce: <span class="prelude-ty">Option</span>&lt;U256&gt;,
@@ -138,14 +138,14 @@
         <span class="kw">if </span>tx_info.packed {
             <span class="self">Self </span>{
                 unpacked_size: <span class="number">0</span>,
-                cost: tx_info.calc_tx_cost(),
+                cost: tx_info.get_tx_cost(),
                 size: <span class="number">1</span>,
                 max_unpackd_nonce: <span class="prelude-val">None</span>,
             }
         } <span class="kw">else </span>{
             <span class="self">Self </span>{
                 unpacked_size: <span class="number">1</span>,
-                cost: tx_info.calc_tx_cost(),
+                cost: tx_info.get_tx_cost(),
                 size: <span class="number">1</span>,
                 max_unpackd_nonce: <span class="prelude-val">Some</span>(<span class="kw-2">*</span>tx_info.transaction.nonce()),
             }

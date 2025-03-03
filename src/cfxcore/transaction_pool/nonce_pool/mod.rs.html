@@ -940,6 +940,12 @@
 <a href="#938" id="938">938</a>
 <a href="#939" id="939">939</a>
 <a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(dead_code)]
 
 </span><span class="kw">mod </span>nonce_pool_map;
@@ -978,7 +984,7 @@
         sponsored_storage: u64,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>tx_cost =
-            <span class="self">Self</span>::make_tx_cost(<span class="kw-2">&amp;*</span>transaction, sponsored_gas, sponsored_storage);
+            <span class="self">Self</span>::cal_tx_cost(<span class="kw-2">&amp;*</span>transaction, sponsored_gas, sponsored_storage);
         <span class="self">Self </span>{
             transaction,
             packed,
@@ -1005,7 +1011,7 @@
 
     <span class="kw">pub fn </span>get_arc_tx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;SignedTransaction&gt; { <span class="kw-2">&amp;</span><span class="self">self</span>.transaction }
 
-    <span class="kw">pub fn </span>calc_tx_cost(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; U256 { <span class="self">self</span>.tx_cost }
+    <span class="kw">pub fn </span>get_tx_cost(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; U256 { <span class="self">self</span>.tx_cost }
 
     <span class="kw">pub fn </span>should_replace(
         <span class="kw-2">&amp;</span><span class="self">self</span>, x: <span class="kw-2">&amp;</span><span class="self">Self</span>, force: bool,
@@ -1049,7 +1055,7 @@
     }
 
     <span class="attr">#[inline]
-    </span><span class="kw">pub fn </span>compute_next_price(price: U256) -&gt; U256 {
+    </span><span class="kw">fn </span>compute_next_price(price: U256) -&gt; U256 {
         <span class="kw">if </span>price &lt; <span class="number">100</span>.into() {
             price + <span class="number">1
         </span>} <span class="kw">else </span>{
@@ -1057,7 +1063,7 @@
         </span>}
     }
 
-    <span class="kw">pub fn </span>make_tx_cost(
+    <span class="kw">pub fn </span>cal_tx_cost(
         transaction: <span class="kw-2">&amp;</span>SignedTransaction, sponsored_gas: U256,
         sponsored_storage: u64,
     ) -&gt; U256 {
@@ -1168,7 +1174,9 @@
         <span class="self">self</span>.remove(<span class="kw-2">&amp;</span>nonce)
     }
 
-    <span class="kw">pub fn </span>get_pending_info(
+    <span class="comment">// return the number of transactions whose nonce &gt;= `nonce`
+    // and the first transaction with nonce &gt;= `nonce`
+    </span><span class="kw">pub fn </span>get_pending_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>, nonce: <span class="kw-2">&amp;</span>U256,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(usize, Arc&lt;SignedTransaction&gt;)&gt; {
         <span class="kw">let </span>tx = <span class="self">self</span>.map.succ(nonce).cloned();
@@ -1204,7 +1212,10 @@
     ///   2. the balance is enough.
     ///
     /// The first return value is the transaction in the first step.
-    /// The second return value is the last nonce in the transaction series.
+    /// i.e., the first unpacked transaction from a sequential of transactions
+    /// starting from `nonce`, may be `nonce` itself.
+    /// The second return value is the last nonce in the transaction series
+    /// from the tx.nonce()
     </span><span class="kw">pub fn </span>recalculate_readiness_with_local_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>, nonce: U256, balance: U256,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span>TxWithReadyInfo, U256)&gt; {
@@ -1219,7 +1230,8 @@
         <span class="comment">// 1. b.cost - a.cost means the sum of cost of
         // transactions in `[nonce, tx.nonce()]`
         // 2. b.size - a.size means number of transactions in
-        // `[nonce, tx.nonce()]` 3. x.nonce() - nonce + 1 means expected
+        // `[nonce, tx.nonce()]`
+        // 3. tx.nonce() - nonce + 1 means expected
         // number of transactions in `[nonce, tx.nonce()]`
         </span><span class="kw">let </span>size_elapsed = b.size - a.size;
         <span class="kw">let </span>cost_elapsed = b.cost - a.cost;
@@ -1393,7 +1405,7 @@
             <span class="number">0</span>,
             <span class="bool-val">false</span>,
         );
-        <span class="macro">assert_eq!</span>(tx.calc_tx_cost(), U256::from(<span class="number">10 </span>* <span class="number">50000 </span>/ <span class="number">2 </span>+ <span class="number">10000</span>));
+        <span class="macro">assert_eq!</span>(tx.get_tx_cost(), U256::from(<span class="number">10 </span>* <span class="number">50000 </span>/ <span class="number">2 </span>+ <span class="number">10000</span>));
         <span class="comment">// normal case with storage limit
         </span><span class="kw">let </span>tx = new_test_tx_with_ready_info(
             <span class="kw-2">&amp;</span>me,
@@ -1405,7 +1417,7 @@
             <span class="bool-val">false</span>,
         );
         <span class="macro">assert_eq!</span>(
-            tx.calc_tx_cost(),
+            tx.get_tx_cost(),
             U256::from(<span class="number">10 </span>* <span class="number">50000 </span>/ <span class="number">2 </span>+ <span class="number">10000</span>)
                 + U256::from(<span class="number">5000 </span>/ <span class="number">2</span>) * <span class="kw-2">*</span>DRIPS_PER_STORAGE_COLLATERAL_UNIT
         );
@@ -1419,7 +1431,7 @@
             <span class="number">0</span>,
             <span class="bool-val">false</span>,
         );
-        <span class="macro">assert_eq!</span>(tx.calc_tx_cost(), U256::from(<span class="number">10 </span>* <span class="number">50000 </span>/ <span class="number">2</span>) + value_max);
+        <span class="macro">assert_eq!</span>(tx.get_tx_cost(), U256::from(<span class="number">10 </span>* <span class="number">50000 </span>/ <span class="number">2</span>) + value_max);
         <span class="comment">// very large tx value, fit the range, #1
         </span><span class="kw">let </span>tx = new_test_tx_with_ready_info(
             <span class="kw-2">&amp;</span>me,
@@ -1430,7 +1442,7 @@
             <span class="number">0</span>,
             <span class="bool-val">false</span>,
         );
-        <span class="macro">assert_eq!</span>(tx.calc_tx_cost(), U256::from(<span class="number">10 </span>* <span class="number">50000 </span>/ <span class="number">2</span>) + value_max);
+        <span class="macro">assert_eq!</span>(tx.get_tx_cost(), U256::from(<span class="number">10 </span>* <span class="number">50000 </span>/ <span class="number">2</span>) + value_max);
         <span class="comment">// very large tx value, fit the range, #1
         </span><span class="kw">let </span>tx = new_test_tx_with_ready_info(
             <span class="kw-2">&amp;</span>me,
@@ -1442,7 +1454,7 @@
             <span class="bool-val">false</span>,
         );
         <span class="macro">assert_eq!</span>(
-            tx.calc_tx_cost(),
+            tx.get_tx_cost(),
             U256::from(<span class="number">10 </span>* <span class="number">50000 </span>/ <span class="number">2</span>) + value_max - U256::from(<span class="number">1</span>)
         );
         <span class="comment">// very large gas fee, not fit the range, #1
@@ -1456,7 +1468,7 @@
             <span class="bool-val">false</span>,
         );
         <span class="macro">assert_eq!</span>(
-            tx.calc_tx_cost(),
+            tx.get_tx_cost(),
             gas_fee_max
                 + U256::from(<span class="number">10000</span>)
                 + U256::from(<span class="number">5000 </span>/ <span class="number">2</span>) * <span class="kw-2">*</span>DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -1472,7 +1484,7 @@
             <span class="bool-val">false</span>,
         );
         <span class="macro">assert_eq!</span>(
-            tx.calc_tx_cost(),
+            tx.get_tx_cost(),
             gas_fee_max
                 + U256::from(<span class="number">10000</span>)
                 + U256::from(<span class="number">5000 </span>/ <span class="number">2</span>) * <span class="kw-2">*</span>DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -1488,7 +1500,7 @@
             <span class="bool-val">false</span>,
         );
         <span class="macro">assert_eq!</span>(
-            tx.calc_tx_cost(),
+            tx.get_tx_cost(),
             gas_fee_max
                 + U256::from(<span class="number">10000</span>)
                 + U256::from(<span class="number">5000 </span>/ <span class="number">2</span>) * <span class="kw-2">*</span>DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -1504,7 +1516,7 @@
             <span class="bool-val">false</span>,
         );
         <span class="macro">assert_eq!</span>(
-            tx.calc_tx_cost(),
+            tx.get_tx_cost(),
             gas_fee_max - U256::from(<span class="number">1</span>)
                 + U256::from(<span class="number">10000</span>)
                 + U256::from(<span class="number">5000 </span>/ <span class="number">2</span>) * <span class="kw-2">*</span>DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -1714,7 +1726,7 @@
 
         <span class="kw">let </span>first_tx = <span class="kw">loop </span>{
             <span class="kw">let </span>tx = nonce_pool.get(<span class="kw-2">&amp;</span>next_nonce)<span class="question-mark">?</span>;
-            <span class="kw">let </span>cost = tx.calc_tx_cost();
+            <span class="kw">let </span>cost = tx.get_tx_cost();
             <span class="kw">if </span>balance_left &lt; cost {
                 <span class="kw">return </span><span class="prelude-val">None</span>;
             }
@@ -1735,7 +1747,7 @@
             } <span class="kw">else </span>{
                 <span class="kw">return </span><span class="prelude-val">Some</span>((first_tx, next_nonce - <span class="number">1</span>));
             };
-            <span class="kw">let </span>cost = tx.calc_tx_cost();
+            <span class="kw">let </span>cost = tx.get_tx_cost();
 
             <span class="kw">if </span>balance_left &lt; cost || tx.is_already_packed() {
                 <span class="kw">return </span><span class="prelude-val">Some</span>((first_tx, next_nonce - <span class="number">1</span>));

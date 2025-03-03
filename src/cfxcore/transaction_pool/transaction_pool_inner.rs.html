@@ -1912,6 +1912,7 @@
 <a href="#1910" id="1910">1910</a>
 <a href="#1911" id="1911">1911</a>
 <a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     account_cache::AccountCache,
     garbage_collector::GarbageCollector,
@@ -2450,7 +2451,8 @@
 <span class="attr">#[derive(DeriveMallocSizeOf)]
 </span><span class="kw">pub struct </span>TransactionPoolInner {
     capacity: usize,
-    total_received_count: usize,
+    <span class="comment">// deprecated, this value is never updated
+    </span>total_received_count: usize,
     unpacked_transaction_count: usize,
     <span class="doccomment">/// Tracks all transactions in the transaction pool by account and nonce.
     /// Packed and executed transactions will eventually be garbage collected.
@@ -3281,7 +3283,7 @@
         <span class="comment">// check balance
         </span><span class="kw">if </span>!packed &amp;&amp; !force {
             <span class="kw">let </span><span class="kw-2">mut </span>need_balance = U256::from(<span class="number">0</span>);
-            <span class="kw">let </span>estimate_gas_fee = <span class="self">Self</span>::estimated_gas_fee(
+            <span class="kw">let </span>estimate_gas_fee = <span class="self">Self</span>::cal_gas_fee(
                 transaction.gas().clone(),
                 transaction.gas_price().clone(),
             );
@@ -3337,7 +3339,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">fn </span>estimated_gas_fee(gas: U256, gas_price: U256) -&gt; U256 {
+    <span class="kw">fn </span>cal_gas_fee(gas: U256, gas_price: U256) -&gt; U256 {
         <span class="kw">let </span>estimated_gas_u512 = gas.full_mul(gas_price);
         <span class="comment">// Normally, it is less than 2^128
         </span><span class="kw">let </span>estimated_gas =
@@ -3386,7 +3388,7 @@
         }
 
         <span class="comment">// Detailed logics
-        </span><span class="kw">let </span>estimated_gas = <span class="self">Self</span>::estimated_gas_fee(
+        </span><span class="kw">let </span>estimated_gas = <span class="self">Self</span>::cal_gas_fee(
             transaction.gas().clone(),
             transaction.gas_price().clone(),
         );

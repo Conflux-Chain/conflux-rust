@@ -1780,7 +1780,6 @@
 <a href="#1778" id="1778">1778</a>
 <a href="#1779" id="1779">1779</a>
 <a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2925,10 +2924,9 @@
                 .check_availability(pivot_block_header.height(), epoch_hash)
             {
                 <span class="self">self</span>.tx_pool
-                    .set_best_executed_epoch(StateIndex::new_for_readonly(
-                        epoch_hash,
-                        <span class="kw-2">&amp;</span>state_root,
-                    ))
+                    .set_best_executed_state_by_epoch(
+                        StateIndex::new_for_readonly(epoch_hash, <span class="kw-2">&amp;</span>state_root),
+                    )
                     <span class="comment">// FIXME: propogate error.
                     </span>.expect(<span class="kw-2">&amp;</span><span class="macro">concat!</span>(<span class="macro">file!</span>(), <span class="string">":"</span>, <span class="macro">line!</span>(), <span class="string">":"</span>, <span class="macro">column!</span>()));
             }
@@ -3014,7 +3012,7 @@
         }
 
         <span class="self">self</span>.tx_pool
-            .set_best_executed_epoch(StateIndex::new_for_readonly(
+            .set_best_executed_state_by_epoch(StateIndex::new_for_readonly(
                 epoch_hash,
                 <span class="kw-2">&amp;</span>commit_result.state_root,
             ))

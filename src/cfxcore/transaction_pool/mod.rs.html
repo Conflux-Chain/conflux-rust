@@ -1214,6 +1214,9 @@
 <a href="#1212" id="1212">1212</a>
 <a href="#1213" id="1213">1213</a>
 <a href="#1214" id="1214">1214</a>
+<a href="#1215" id="1215">1215</a>
+<a href="#1216" id="1216">1216</a>
+<a href="#1217" id="1217">1217</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1471,7 +1474,7 @@
             config.packing_pool_degree,
         );
         <span class="kw">let </span>best_executed_state = Mutex::new(
-            <span class="self">Self</span>::best_executed_state(
+            <span class="self">Self</span>::get_best_executed_state_by_epoch(
                 <span class="kw-2">&amp;</span>data_man,
                 StateIndex::new_for_readonly(
                     <span class="kw-2">&amp;</span>genesis_hash,
@@ -1593,7 +1596,7 @@
             sponsored_gas,
             sponsored_storage,
         )
-        .calc_tx_cost();
+        .get_tx_cost();
 
         <span class="kw">let </span>outdated = <span class="kw">match </span>(tx_cost &lt;= balance, <span class="kw-2">&amp;</span>first_tx_status) {
             (<span class="bool-val">true</span>, <span class="prelude-val">Some</span>(Pending(PendingReason::NotEnoughCash)))
@@ -2389,7 +2392,7 @@
         )
     }
 
-    <span class="kw">fn </span>best_executed_state(
+    <span class="kw">fn </span>get_best_executed_state_by_epoch(
         data_man: <span class="kw-2">&amp;</span>BlockDataManager, best_executed_epoch: StateIndex,
     ) -&gt; StateDbResult&lt;Arc&lt;State&gt;&gt; {
         <span class="kw">let </span>storage = data_man
@@ -2406,11 +2409,14 @@
         <span class="prelude-val">Ok</span>(Arc::new(state))
     }
 
-    <span class="kw">pub fn </span>set_best_executed_epoch(
+    <span class="kw">pub fn </span>set_best_executed_state_by_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>, best_executed_epoch: StateIndex,
     ) -&gt; StateDbResult&lt;()&gt; {
         <span class="kw-2">*</span><span class="self">self</span>.best_executed_state.lock() =
-            <span class="self">Self</span>::best_executed_state(<span class="kw-2">&amp;</span><span class="self">self</span>.data_man, best_executed_epoch)<span class="question-mark">?</span>;
+            <span class="self">Self</span>::get_best_executed_state_by_epoch(
+                <span class="kw-2">&amp;</span><span class="self">self</span>.data_man,
+                best_executed_epoch,
+            )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -2424,7 +2430,7 @@
         <span class="self">self</span>.ready_for_mining.load(Ordering::SeqCst)
     }
 
-    <span class="kw">pub fn </span>set_ready(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+    <span class="kw">pub fn </span>set_ready_for_mining(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="self">self</span>.ready_for_mining.store(<span class="bool-val">true</span>, Ordering::SeqCst);
     }
 }

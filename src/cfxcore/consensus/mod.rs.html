@@ -5031,7 +5031,7 @@
     <span class="kw">fn </span>enter_normal_phase(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="self">self</span>.ready_for_mining.store(<span class="bool-val">true</span>, Ordering::SeqCst);
         <span class="self">self</span>.update_best_info(<span class="bool-val">true</span>);
-        <span class="self">self</span>.txpool.set_ready();
+        <span class="self">self</span>.txpool.set_ready_for_mining();
         <span class="self">self</span>.txpool
             .notify_new_best_info(<span class="self">self</span>.best_info.read_recursive().clone())
             .expect(<span class="string">"No DB error"</span>)
