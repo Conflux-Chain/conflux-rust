@@ -1,4 +1,4 @@
-use crate::transaction_pool::pool_metrics::pool_inner_metrics::TX_POOL_GET_STATE_TIMER;
+use super::pool_metrics::pool_inner_metrics::TX_POOL_GET_STATE_TIMER;
 use cfx_executor::state::State;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressWithSpace, U256};

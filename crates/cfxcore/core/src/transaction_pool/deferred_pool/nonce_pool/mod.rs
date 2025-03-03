@@ -3,14 +3,13 @@
 mod nonce_pool_map;
 mod weight;
 
-use crate::transaction_pool::{
-    transaction_pool_inner::PendingReason, TransactionPoolError,
-};
+use crate::transaction_pool::TransactionPoolError;
 use cfx_packing_pool::{PackingBatch, PackingPoolConfig};
 use cfx_parameters::{
     consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
+use cfx_rpc_cfx_types::PendingReason;
 use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;

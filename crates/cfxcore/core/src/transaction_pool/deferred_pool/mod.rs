@@ -7,7 +7,7 @@ use super::pool_metrics::pool_inner_metrics::*;
 use crate::verification::PackingCheckResult;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 
-pub use cfx_rpc_cfx_types::PendingReason;
+use cfx_rpc_cfx_types::PendingReason;
 use cfx_types::{AddressWithSpace, Space, SpaceMap, H256, U256};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{block_header::compute_next_price, SignedTransaction};

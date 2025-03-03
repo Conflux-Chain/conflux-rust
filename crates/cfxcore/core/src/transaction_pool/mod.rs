@@ -10,15 +10,11 @@ mod state_provider;
 mod transaction_pool_inner;
 
 pub use error::TransactionPoolError;
-pub use transaction_pool_inner::TransactionStatus;
 
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
-    transaction_pool::{
-        deferred_pool::TxWithReadyInfo, pool_metrics::*,
-        transaction_pool_inner::PendingReason,
-    },
+    transaction_pool::{deferred_pool::TxWithReadyInfo, pool_metrics::*},
     verification::{VerificationConfig, VerifyTxLocalMode, VerifyTxMode},
 };
 use cfx_executor::{
@@ -32,6 +28,7 @@ use cfx_parameters::{
     },
     consensus_internal::ELASTICITY_MULTIPLIER,
 };
+use cfx_rpc_cfx_types::{PendingReason, TransactionStatus};
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::{
