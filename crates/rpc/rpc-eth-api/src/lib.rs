@@ -6,6 +6,7 @@ mod parity;
 mod pubsub;
 mod rpc;
 mod trace;
+mod txpool;
 mod web3;
 
 pub use debug::DebugApiServer;
@@ -16,4 +17,5 @@ pub use parity::ParityApiServer;
 pub use pubsub::EthPubSubApiServer;
 pub use rpc::RpcApiServer;
 pub use trace::TraceApiServer;
+pub use txpool::TxPoolApiServer;
 pub use web3::Web3ApiServer;
