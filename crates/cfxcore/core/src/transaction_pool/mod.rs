@@ -47,7 +47,7 @@ use primitives::{
 use state_provider::StateProvider;
 use std::{
     cmp::{max, min},
-    collections::{hash_map::HashMap, BTreeSet},
+    collections::{hash_map::HashMap, BTreeMap, BTreeSet},
     mem,
     ops::DerefMut,
     sync::{
@@ -330,12 +330,11 @@ impl TransactionPool {
         // The sponsor status may have changed, check again.
         // This is not applied to the tx pool state because this check is
         // only triggered on the RPC server.
-        let account_cache = self.get_best_state_account_cache();
+        let state = self.get_best_state_provider();
 
         let (sponsored_gas, sponsored_storage) =
-            inner.get_sponsored_gas_and_storage(&account_cache, &first_tx)?;
-        let (_, balance) =
-            account_cache.get_nonce_and_balance(&first_tx.sender())?;
+            inner.get_sponsored_gas_and_storage(&state, &first_tx)?;
+        let (_, balance) = state.get_nonce_and_balance(&first_tx.sender())?;
         let tx_cost = TxWithReadyInfo::new(
             first_tx.clone(),
             false,
@@ -369,8 +368,8 @@ impl TransactionPool {
     pub fn get_state_account_info(
         &self, address: &Address,
     ) -> StateDbResult<(U256, U256)> {
-        let account_cache = self.get_best_state_account_cache();
-        account_cache.get_nonce_and_balance(address)
+        let state = self.get_best_state_provider();
+        state.get_nonce_and_balance(address)
     }
 
     pub fn calc_half_block_gas_limit(&self) -> Option<U256> {
@@ -445,7 +444,7 @@ impl TransactionPool {
         // key after basic verification.
         match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {
-                let account_cache = self.get_best_state_account_cache();
+                let state = self.get_best_state_provider();
                 let mut inner =
                     self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
                 let mut to_prop = self.to_propagate_trans.write();
@@ -457,7 +456,7 @@ impl TransactionPool {
 
                     if let Err(e) = self.add_transaction_with_readiness_check(
                         &mut *inner,
-                        &account_cache,
+                        &state,
                         tx.clone(),
                         false,
                         false,
@@ -575,7 +574,7 @@ impl TransactionPool {
         // already signed.
 
         {
-            let account_cache = self.get_best_state_account_cache();
+            let state = self.get_best_state_provider();
             let mut inner =
                 self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
             let mut to_prop = self.to_propagate_trans.write();
@@ -583,7 +582,7 @@ impl TransactionPool {
             for tx in signed_transactions {
                 if let Err(e) = self.add_transaction_with_readiness_check(
                     &mut *inner,
-                    &account_cache,
+                    &state,
                     tx.clone(),
                     false,
                     false,
@@ -654,11 +653,11 @@ impl TransactionPool {
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
     pub fn add_transaction_with_readiness_check(
-        &self, inner: &mut TransactionPoolInner, account_cache: &StateProvider,
+        &self, inner: &mut TransactionPoolInner, state: &StateProvider,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), TransactionPoolError> {
         inner.insert_transaction_with_readiness_check(
-            account_cache,
+            state,
             transaction,
             packed,
             force,
@@ -896,7 +895,28 @@ impl TransactionPool {
         )
     }
 
-    /// content retrieves the ready and deferred transactions.
+    pub fn eth_content(
+        &self, space: Option<Space>,
+    ) -> (
+        BTreeMap<Address, BTreeMap<U256, Arc<SignedTransaction>>>,
+        BTreeMap<Address, BTreeMap<U256, Arc<SignedTransaction>>>,
+    ) {
+        let inner = self.inner.read();
+        inner.eth_content(space)
+    }
+
+    pub fn eth_content_from(
+        &self, from: Address,
+    ) -> (
+        BTreeMap<U256, Arc<SignedTransaction>>,
+        BTreeMap<U256, Arc<SignedTransaction>>,
+    ) {
+        let inner = self.inner.read();
+        inner.eth_content_from(from)
+    }
+
+    /// content retrieves the ready and deferred transactions(all pool
+    /// transactions). deprecated: use eth_content instead
     pub fn content(
         &self, address: Option<Address>,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
@@ -917,18 +937,14 @@ impl TransactionPool {
             *self.config.half_block_gas_limit.write() = half_block_gas_limit;
         }
 
-        let account_cache = self.get_best_state_account_cache();
+        let state = self.get_best_state_provider();
         let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
         let inner = inner.deref_mut();
 
         while let Some(tx) = set_tx_buffer.pop() {
             let tx_hash = tx.hash();
             if let Err(e) = self.add_transaction_with_readiness_check(
-                inner,
-                &account_cache,
-                tx,
-                true,
-                false,
+                inner, &state, tx, true, false,
             ) {
                 // TODO: A transaction that is packed multiple times would also
                 // throw an error here, but it should be normal.
@@ -953,7 +969,7 @@ impl TransactionPool {
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
                 &tx.nonce(), &tx.sender(),
-                account_cache.get_nonce(&tx.sender())?, tx.hash);
+                state.get_nonce(&tx.sender())?, tx.hash);
 
             if let Err(e) = self.verify_transaction_tx_pool(
                 &tx,
@@ -969,11 +985,7 @@ impl TransactionPool {
                 );
             }
             if let Err(e) = self.add_transaction_with_readiness_check(
-                inner,
-                &account_cache,
-                tx,
-                false,
-                true,
+                inner, &state, tx, false, true,
             ) {
                 warn!("recycle tx err: e={:?}", e);
             }
@@ -1182,7 +1194,7 @@ impl TransactionPool {
         Ok(())
     }
 
-    fn get_best_state_account_cache(&self) -> StateProvider {
+    fn get_best_state_provider(&self) -> StateProvider {
         let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
         StateProvider::new((self.best_executed_state.lock()).clone())
     }

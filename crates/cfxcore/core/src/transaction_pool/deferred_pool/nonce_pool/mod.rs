@@ -14,7 +14,7 @@ use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{SignedTransaction, Transaction};
-use std::{ops::Deref, sync::Arc};
+use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
 use self::{nonce_pool_map::NoncePoolMap, weight::NoncePoolWeight};
 
@@ -238,9 +238,9 @@ impl NoncePool {
     }
 
     /// Return unpacked transactions from `nonce`.
-    pub fn get_pending_transactions<'a>(
-        &'a self, nonce: &U256,
-    ) -> Vec<&'a TxWithReadyInfo> {
+    pub fn get_pending_transactions(
+        &self, nonce: &U256,
+    ) -> Vec<&TxWithReadyInfo> {
         let mut pending_txs = Vec::new();
         for tx_info in self.map.iter_range(&nonce) {
             if !tx_info.packed {
@@ -250,6 +250,32 @@ impl NoncePool {
             }
         }
         pending_txs
+    }
+
+    pub fn eth_content(
+        &self, local_nonce: U256, local_balance: U256,
+    ) -> (
+        BTreeMap<U256, Arc<SignedTransaction>>,
+        BTreeMap<U256, Arc<SignedTransaction>>,
+    ) {
+        let mut pending_txs = BTreeMap::new();
+        let mut queued_txs = BTreeMap::new();
+        let mut used_balance = U256::zero();
+        for (i, tx_info) in self.iter_tx_by_nonce(&local_nonce).enumerate() {
+            let tx = tx_info.transaction.clone();
+            let nonce = *tx.nonce();
+            let cost = tx_info.get_tx_cost();
+
+            if local_nonce + U256::from(i) == nonce
+                && used_balance + cost <= local_balance
+            {
+                pending_txs.insert(*tx.nonce(), tx);
+            } else {
+                queued_txs.insert(*tx.nonce(), tx);
+            }
+            used_balance += cost;
+        }
+        (pending_txs, queued_txs)
     }
 
     /// First, find a transaction `tx` such that
