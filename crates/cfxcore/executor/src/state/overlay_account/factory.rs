@@ -107,11 +107,11 @@ impl OverlayAccount {
     /// exist before.
     #[cfg(test)]
     pub fn new_contract(
-        address: &Address, balance: U256, pending_db_clear: bool,
+        address: &AddressWithSpace, balance: U256, pending_db_clear: bool,
         storage_layout: Option<StorageLayout>,
     ) -> Self {
         Self::new_contract_with_admin(
-            &address.with_native_space(),
+            &address,
             balance,
             &Address::zero(),
             pending_db_clear,

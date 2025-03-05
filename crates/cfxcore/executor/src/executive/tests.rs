@@ -2251,3 +2251,86 @@ fn test_push0() {
         assert!(matches!(error, vm::Error::BadInstruction { .. }));
     }
 }
+
+#[test]
+fn test_tload() {
+    let contract_address =
+        Address::from_str("8d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+    let contract_address_with_space = contract_address.with_evm_space();
+    let sender =
+        Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
+    let sender_with_space = sender.with_evm_space();
+
+    // ```
+    // let value := tload(1)
+    // if iszero(value) {
+    //     tstore(1, 0x1234)
+    //
+    //     // Call this contract statically (recursive call)
+    //     let success := staticcall(
+    //         gas(),       // remaining gas
+    //         address(),   // this contract's address
+    //         0, 0,        // empty memory input offset
+    //         0, 0,        // don't copy output
+    //     )
+    //
+    //     // Store returned value to permanent storage slot 2
+    //     returndatacopy(0, 0, 0x20)
+    //     sstore(2, mload(0))
+    // } else {
+    //     mstore(0, value)
+    //     return(0, 0x20)
+    // }
+    // ```
+    let code: Vec<u8> = "60015c15601358015760015c60005260206000f360225801565b61123460015d6000600060006000305afa6020600060003e6000516002555b".from_hex().unwrap();
+
+    let env = Env::default();
+    let machine = make_byzantium_machine(64);
+    let spec = machine.spec_for_test(env.number);
+    let mut substate = Substate::new();
+
+    let mut state = get_state_for_genesis_write();
+    state
+        .add_balance(
+            &sender_with_space,
+            &U256::from_str("152d02c7e14af68000000").unwrap(),
+            CleanupMode::NoEmpty,
+        )
+        .unwrap();
+    state
+        .new_contract_with_code(&contract_address_with_space, U256::zero())
+        .unwrap();
+    state
+        .init_code(&contract_address_with_space, code.clone(), Address::zero())
+        .unwrap();
+
+    let mut params = ActionParams::default();
+    params.space = Space::Ethereum;
+    params.address = contract_address;
+    params.sender = sender;
+    params.original_sender = sender;
+    params.storage_owner = contract_address;
+    params.gas = U256::from(2000000);
+    params.code = Some(Arc::new(code));
+    params.value = ActionValue::Transfer(U256::zero());
+    params.call_type = CallType::Call;
+
+    let FinalizationResult { apply_state, .. } = {
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
+        let mut tracer = ();
+        ex.call_for_test(params, &mut substate, &mut tracer)
+            .expect("no db error")
+            .expect("no vm error")
+    };
+
+    assert!(apply_state);
+
+    let mut key = [0u8; 32];
+    U256::from(2).to_big_endian(&mut key);
+    assert_eq!(
+        state
+            .storage_at(&contract_address_with_space, &key)
+            .unwrap(),
+        U256::from(0x1234)
+    );
+}
