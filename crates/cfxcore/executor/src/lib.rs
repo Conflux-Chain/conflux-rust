@@ -61,3 +61,14 @@ pub mod state;
 
 pub use internal_contract::{InternalContractMap, InternalContractTrait};
 pub use observer as executive_observer;
+
+/// Common tools for test
+#[cfg(test)]
+mod tests {
+    use cfx_types::H256;
+    use hex_literal::hex;
+    // Mock transaction hash for tests not contruct an actual transaction.
+    pub const MOCK_TX_HASH: H256 = H256(hex!(
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ));
+}

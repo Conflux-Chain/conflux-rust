@@ -147,6 +147,7 @@ class CIP107Test(ConfluxTestFramework):
         self.conf_parameters["params_dao_vote_period"] = CIP104_PERIOD
         self.conf_parameters["dao_vote_transition_number"] = 1
         self.conf_parameters["dao_vote_transition_height"] = 1
+        self.conf_parameters["cip151_transition_height"] = str(99999999)
 
     def run_test(self):
         self.w3 = self.cw3

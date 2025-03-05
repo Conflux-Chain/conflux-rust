@@ -193,6 +193,7 @@ build_config! {
         (min_eth_base_price, (Option<u64>), None)
         // V2.5
         (eoa_code_transition_height, (Option<u64>), None)
+        (cip151_transition_height, (Option<u64>), None)
 
 
         // Mining section.
@@ -1497,7 +1498,10 @@ impl Configuration {
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip150, cip151, cip152, cip7702 }
-        )
+        );
+        if let Some(x) = self.raw_conf.cip151_transition_height {
+            params.transition_heights.cip151 = x;
+        }
     }
 }
 

@@ -29,7 +29,6 @@ pub struct Substate {
     pub logs: Vec<LogEntry>,
     /// Created contracts.
     contracts_created: Vec<AddressWithSpace>,
-    contracts_created_set: HashSet<AddressWithSpace>,
 }
 
 impl Substate {
@@ -38,7 +37,6 @@ impl Substate {
         self.touched.extend(s.touched);
         self.logs.extend(s.logs);
         self.contracts_created.extend(s.contracts_created);
-        self.contracts_created_set.extend(s.contracts_created_set);
         for (address, amount) in s.storage_collateralized {
             *self.storage_collateralized.entry(address).or_insert(0) += amount;
         }
@@ -96,13 +94,8 @@ impl Substate {
         &self.contracts_created
     }
 
-    pub fn contains_contract_create(&self, address: &AddressWithSpace) -> bool {
-        self.contracts_created_set.contains(address)
-    }
-
     pub fn record_contract_create(&mut self, address: AddressWithSpace) {
         self.contracts_created.push(address);
-        self.contracts_created_set.insert(address);
     }
 
     pub fn record_storage_occupy(
