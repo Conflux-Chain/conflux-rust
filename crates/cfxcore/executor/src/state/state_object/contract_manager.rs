@@ -71,7 +71,7 @@ impl State {
             .read_account_lock(contract)?
             .map_or(false, |acc| acc.pending_db_clear());
         let account = OverlayAccount::new_contract(
-            &contract.address,
+            &contract,
             balance,
             pending_db_clear,
             Some(STORAGE_LAYOUT_REGULAR_V0),
