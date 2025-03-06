@@ -7,6 +7,7 @@ use crate::{
     machine::{Machine, VmFactory},
     state::{get_state_by_epoch_id, get_state_for_genesis_write, CleanupMode},
     substate::Substate,
+    tests::MOCK_TX_HASH,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -2301,7 +2302,12 @@ fn test_tload() {
         .new_contract_with_code(&contract_address_with_space, U256::zero())
         .unwrap();
     state
-        .init_code(&contract_address_with_space, code.clone(), Address::zero())
+        .init_code(
+            &contract_address_with_space,
+            code.clone(),
+            Address::zero(),
+            MOCK_TX_HASH,
+        )
         .unwrap();
 
     let mut params = ActionParams::default();
