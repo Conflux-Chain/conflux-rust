@@ -700,7 +700,11 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     // TLOAD
                     let mut key = vec![0; 32];
                     self.stack.pop_back().to_big_endian(key.as_mut());
-                    let word = context.storage_at(&key)?;
+                    let word = if context.spec().cip154 {
+                        context.transient_storage_at(&key)?
+                    } else {
+                        context.storage_at(&key)?
+                    };
                     self.stack.push(word);
                 }
             }

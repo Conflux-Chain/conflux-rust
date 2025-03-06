@@ -140,7 +140,7 @@ fn test_overlay_account_create() {
 
     // test new contract
     let mut overlay_account = OverlayAccount::new_contract(
-        &contract_addr,
+        &contract_addr.with_native_space(),
         5678.into(),
         false,
         Some(STORAGE_LAYOUT_REGULAR_V0),

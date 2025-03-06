@@ -196,6 +196,8 @@ pub struct Spec {
     pub cip151: bool,
     /// CIP-152: Reject Transactions from Senders with Deployed Code
     pub cip152: bool,
+    /// CIP-154: Fix Inconsistent Implementation of TLOAD
+    pub cip154: bool,
     /// CIP-7702: Set Code for EOA
     pub cip7702: bool,
 }
@@ -357,6 +359,7 @@ impl Spec {
             cip150: false,
             cip151: false,
             cip152: false,
+            cip154: false,
             cip7702: false,
         }
     }

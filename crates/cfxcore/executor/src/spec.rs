@@ -143,6 +143,8 @@ pub struct TransitionsEpochHeight {
     pub cip151: BlockHeight,
     /// CIP-152: Reject Transactions from Senders with Deployed Code
     pub cip152: BlockHeight,
+    /// CIP-154: Fix Inconsistent Implementation of TLOAD
+    pub cip154: BlockHeight,
     /// CIP-7702: Set Code for EOA
     pub cip7702: BlockHeight,
 }
@@ -206,6 +208,7 @@ impl CommonParams {
         spec.cip150 = height >= self.transition_heights.cip150;
         spec.cip151 = height >= self.transition_heights.cip151;
         spec.cip152 = height >= self.transition_heights.cip152;
+        spec.cip154 = height >= self.transition_heights.cip154;
         spec.cip7702 = height >= self.transition_heights.cip7702;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         if spec.cancun_opcodes {
