@@ -165,6 +165,52 @@ def test_eip7702_sponsor_new_account(
     assert ew3.eth.get_transaction_count(sender.address) == sender_nonce + 1
     assert ew3.eth.get_transaction_count(signer.address) == 1
 
+
+# test set code for a new account which is not in state
+def test_eip7702_many_delegations(
+    ew3: Web3, admin_account
+):
+    signer_count = 38
+    contract_addresses = [f"0x{(i+1):040x}" for i in range(signer_count)]
+    success_slot = 1
+    entry_code = Op.SSTORE(success_slot, 1) + Op.STOP
+    entry_address = deploy_contract_using_deploy_code(ew3, entry_code)
+
+    sender = get_new_fund_account(ew3, admin_account)
+
+    signers = [ew3.eth.account.create() for _ in range(signer_count)]
+
+
+    sender_nonce = ew3.eth.get_transaction_count(sender.address)
+    tx_hash = send_eip7702_transaction(
+        ew3,
+        sender,
+        {
+            "authorizationList": [sign_authorization(
+                contract_address=contract_addresses[i],
+                chain_id=ew3.eth.chain_id,
+                nonce=0,
+                private_key=signer.key.to_0x_hex(),
+            ) for (i, signer) in enumerate(signers)],
+            "to": entry_address,
+        },
+    )
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
+    
+    storage_value = ew3.eth.get_storage_at(entry_address, success_slot)
+    assert int(storage_value.hex(), 16) == 1
+
+    # verify code is set
+    for (i, signer) in enumerate(signers):
+        code = ew3.eth.get_code(signer.address)
+        assert code.to_0x_hex() == "0xef0100" + contract_addresses[i][2:].lower()
+        # verify nonce is increased
+        assert ew3.eth.get_transaction_count(sender.address) == sender_nonce + 1
+        assert ew3.eth.get_transaction_count(signer.address) == 1
+
+    
+
+
 @pytest.mark.parametrize(
     "no_code_before_reset",
     [
