@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TypedDict
 from typing_extensions import NotRequired
 from web3 import Web3
+from hexbytes import HexBytes
 from eth_account.signers.local import LocalAccount
 
 class Authorization(BaseModel):
@@ -118,7 +119,7 @@ def sign_eip7702_transaction(transaction: EIP7702Transaction, private_key: str) 
     result = _run_node_script('signTransaction', args)
     if isinstance(result, dict):
         return result['signedTransaction']
-    return result
+    return HexBytes(result)
 
 def construrct_eip7702_transaction(ew3: Web3, sender: str, transaction: EIP7702TransactionParams) -> EIP7702Transaction:
     assert "authorizationList" in transaction, "authorizationList is required"
@@ -159,8 +160,11 @@ def estimate_gas(ew3: Web3, from_address: str, transaction: EIP7702Transaction) 
         ]
     }
     return int(ew3.manager.request_blocking("eth_estimateGas", [estimate_params]), 16)
-    
+
+def sign_eip7702_transaction_with_default_fields(ew3: Web3, sender: LocalAccount, transaction: EIP7702TransactionParams) -> HexBytes:
+    return sign_eip7702_transaction(construrct_eip7702_transaction(ew3, sender.address, transaction), sender.key.to_0x_hex())
+
 # returns tx hash
 def send_eip7702_transaction(ew3: Web3, sender: LocalAccount, transaction: EIP7702TransactionParams):
-    tx_raw = sign_eip7702_transaction(construrct_eip7702_transaction(ew3, sender.address, transaction), sender.key.to_0x_hex())
+    tx_raw = sign_eip7702_transaction_with_default_fields(ew3, sender, transaction)
     return ew3.eth.send_raw_transaction(tx_raw)
