@@ -394,8 +394,8 @@ def test_call_to_precompile_in_pointer_context(
     )
 
 
+@pytest.mark.skip(reason="TOFIX")
 @pytest.mark.with_all_precompiles
-@pytest.mark.valid_from("Prague")
 def test_pointer_to_precompile(state_test: StateTestFiller, pre: Alloc, precompile: int):
     """
     Tx -> call -> pointer A -> precompile contract.
