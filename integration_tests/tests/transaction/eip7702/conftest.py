@@ -13,6 +13,8 @@ def framework_class():
             self.conf_parameters["min_native_base_price"] = MIN_NATIVE_BASE_PRICE
             self.conf_parameters["eoa_code_transition_height"] = 1
             self.conf_parameters["evm_transaction_block_ratio"] = str(1)
+            self.conf_parameters["public_evm_rpc_async_apis"] = '"all"'
+            self.conf_parameters["executive_trace"] = "true"
 
         def setup_network(self):
             self.add_nodes(self.num_nodes)
