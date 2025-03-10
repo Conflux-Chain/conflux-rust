@@ -2,6 +2,9 @@
 
 set -e
 
+# echo python version
+python3 --version
+
 pip3 install \
     cfx-account \
     eth-utils \
