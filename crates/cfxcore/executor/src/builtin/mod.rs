@@ -24,8 +24,10 @@ mod blake2f;
 mod ethereum_trusted_setup_points;
 mod executable;
 mod kzg_point_evaluations;
+mod price_plan;
 
 pub use executable::BuiltinExec;
+pub use price_plan::{IfPricer, StaticPlan};
 
 use std::{
     cmp::{max, min},
@@ -37,11 +39,14 @@ use std::{
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use cfx_bytes::BytesRef;
 use cfx_types::{Space, H256, U256};
+use cfx_vm_types::Spec;
 use cfxkey::{public_to_address, recover as ec_recover, Address, Signature};
 use num::{BigUint, One, Zero};
 use parity_crypto::digest;
 
 use blake2f::compress;
+
+use self::price_plan::PricePlan;
 
 /// Execution error.
 #[derive(Debug)]
@@ -85,14 +90,18 @@ impl Linear {
 }
 
 /// A special pricing model for modular exponentiation.
-pub(crate) struct ModexpPricer {
-    divisor: usize,
+pub(crate) enum ModexpPricer {
+    Byzantium { divisor: usize },
+    // CIP-645e: EIP-2565
+    Berlin,
 }
 
 impl ModexpPricer {
-    pub(crate) fn new(divisor: usize) -> ModexpPricer {
-        ModexpPricer { divisor }
+    pub(crate) fn new_byzantium(divisor: usize) -> ModexpPricer {
+        ModexpPricer::Byzantium { divisor }
     }
+
+    pub(crate) fn new_berlin() -> ModexpPricer { ModexpPricer::Berlin }
 }
 
 impl Pricer for Linear {
@@ -150,7 +159,6 @@ impl Pricer for ModexpPricer {
         let (base_len, exp_len, mod_len) =
             (base_len.low_u64(), exp_len.low_u64(), mod_len.low_u64());
 
-        let m = max(mod_len, base_len);
         // read fist 32-byte word of the exponent.
         let exp_low = if base_len + 96 >= input.len() as u64 {
             U256::zero()
@@ -164,19 +172,32 @@ impl Pricer for ModexpPricer {
                 .expect("reading from zero-extended memory cannot fail; qed");
             U256::from_big_endian(&buf[..])
         };
+        let iter_count = max(Self::adjusted_exp_len(exp_len, exp_low), 1);
 
-        let adjusted_exp_len = Self::adjusted_exp_len(exp_len, exp_low);
-
-        let (gas, overflow) =
-            Self::mult_complexity(m).overflowing_mul(max(adjusted_exp_len, 1));
-        if overflow {
-            return U256::max_value();
+        match self {
+            ModexpPricer::Byzantium { divisor } => Self::byzantium_gas_calc(
+                base_len, mod_len, iter_count, *divisor,
+            ),
+            ModexpPricer::Berlin => {
+                Self::berlin_gas_calc(base_len, mod_len, iter_count)
+            }
         }
-        (gas / self.divisor as u64).into()
     }
 }
 
 impl ModexpPricer {
+    pub fn byzantium_gas_calc(
+        base_len: u64, mod_len: u64, iter_count: u64, divisor: usize,
+    ) -> U256 {
+        let m = max(mod_len, base_len);
+        let (gas, overflow) =
+            Self::mult_complexity(m).overflowing_mul(iter_count);
+        if overflow {
+            return U256::max_value();
+        }
+        (gas / divisor as u64).into()
+    }
+
     fn adjusted_exp_len(len: u64, exp_low: U256) -> u64 {
         let bit_index = if exp_low.is_zero() {
             0
@@ -196,6 +217,33 @@ impl ModexpPricer {
             x if x <= 1024 => (x * x) / 4 + 96 * x - 3072,
             x => (x * x) / 16 + 480 * x - 199680,
         }
+    }
+
+    pub fn berlin_gas_calc(
+        base_len: u64, mod_len: u64, iter_count: u64,
+    ) -> U256 {
+        fn calculate_multiplication_complexity(
+            base_len: u64, mod_len: u64,
+        ) -> U256 {
+            let max_len = max(base_len, mod_len);
+            let mut words = max_len / 8;
+            if max_len % 8 > 0 {
+                words += 1;
+            }
+            let words = U256::from(words);
+            words * words
+        }
+
+        let multiplication_complexity =
+            calculate_multiplication_complexity(base_len, mod_len);
+        let gas = (multiplication_complexity * U256::from(iter_count))
+            / U256::from(3);
+        let gas_u64 = if gas >= U256::from(u64::MAX) {
+            u64::MAX
+        } else {
+            gas.as_u64()
+        };
+        max(200, gas_u64).into()
     }
 }
 
@@ -234,14 +282,22 @@ impl Pricer for Blake2FPricer {
 ///
 /// Unless `is_active` is true,
 pub struct Builtin {
-    pricer: Box<dyn Pricer>,
+    price_plan: Box<dyn PricePlan>,
     native: Box<dyn Impl>,
     activate_at: u64,
 }
 
 impl Builtin {
     /// Simple forwarder for cost.
-    pub fn cost(&self, input: &[u8]) -> U256 { self.pricer.cost(input) }
+    pub fn cost(&self, input: &[u8], spec: &Spec) -> U256 {
+        self.price_plan.pricer(&spec).cost(input)
+    }
+
+    #[cfg(test)]
+    pub fn cost_on_genesis(&self, input: &[u8]) -> U256 {
+        let spec = Spec::genesis_spec();
+        self.cost(input, &spec)
+    }
 
     /// Simple forwarder for execute.
     pub fn execute(
@@ -254,10 +310,10 @@ impl Builtin {
     pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
 
     pub fn new(
-        pricer: Box<dyn Pricer>, native: Box<dyn Impl>, activate_at: u64,
+        price_plan: Box<dyn PricePlan>, native: Box<dyn Impl>, activate_at: u64,
     ) -> Builtin {
         Builtin {
-            pricer,
+            price_plan,
             native,
             activate_at,
         }
@@ -792,8 +848,8 @@ impl Impl for KzgPointEval {
 #[cfg(test)]
 mod tests {
     use super::{
-        builtin_factory, modexp as me, Blake2FPricer, Builtin, Linear,
-        ModexpPricer, Pricer,
+        builtin_factory, modexp as me, price_plan::StaticPlan, Blake2FPricer,
+        Builtin, Linear, ModexpPricer,
     };
     use cfx_bytes::BytesRef;
     use cfx_types::U256;
@@ -986,7 +1042,7 @@ mod tests {
     #[test]
     fn modexp() {
         let f = Builtin {
-            pricer: Box::new(ModexpPricer { divisor: 20 }),
+            price_plan: Box::new(StaticPlan(ModexpPricer::new_byzantium(20))),
             native: builtin_factory("modexp"),
             activate_at: 0,
         };
@@ -995,7 +1051,7 @@ mod tests {
         {
             let input: Vec<u8> = FromHex::from_hex("0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000003b27bafd00000000000000000000000000000000000000000000000000000000503c8ac3").unwrap();
             let expected_cost = U256::max_value();
-            assert_eq!(f.cost(&input[..]), expected_cost.into());
+            assert_eq!(f.cost_on_genesis(&input[..]), expected_cost.into());
         }
 
         // test for potential exp len overflow
@@ -1015,7 +1071,7 @@ mod tests {
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
                 .expect("Builtin should fail");
             assert_eq!(output, expected);
-            assert_eq!(f.cost(&input[..]), expected_cost.into());
+            assert_eq!(f.cost_on_genesis(&input[..]), expected_cost.into());
         }
 
         // fermat's little theorem example.
@@ -1038,7 +1094,7 @@ mod tests {
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
                 .expect("Builtin should not fail");
             assert_eq!(output, expected);
-            assert_eq!(f.cost(&input[..]), expected_cost.into());
+            assert_eq!(f.cost_on_genesis(&input[..]), expected_cost.into());
         }
 
         // zero base.
@@ -1060,7 +1116,7 @@ mod tests {
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
                 .expect("Builtin should not fail");
             assert_eq!(output, expected);
-            assert_eq!(f.cost(&input[..]), expected_cost.into());
+            assert_eq!(f.cost_on_genesis(&input[..]), expected_cost.into());
         }
 
         // zero-padding
@@ -1083,7 +1139,7 @@ mod tests {
             f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
                 .expect("Builtin should not fail");
             assert_eq!(output, expected);
-            assert_eq!(f.cost(&input[..]), expected_cost.into());
+            assert_eq!(f.cost_on_genesis(&input[..]), expected_cost.into());
         }
 
         // zero-length modulus.
@@ -1104,14 +1160,14 @@ mod tests {
             f.execute(&input[..], &mut BytesRef::Flexible(&mut output))
                 .expect("Builtin should not fail");
             assert_eq!(output.len(), 0); // shouldn't have written any output.
-            assert_eq!(f.cost(&input[..]), expected_cost.into());
+            assert_eq!(f.cost_on_genesis(&input[..]), expected_cost.into());
         }
     }
 
     #[test]
     fn bn128_add() {
         let f = Builtin {
-            pricer: Box::new(Linear { base: 0, word: 0 }),
+            price_plan: Box::new(StaticPlan(Linear { base: 0, word: 0 })),
             native: builtin_factory("alt_bn128_add"),
             activate_at: 0,
         };
@@ -1180,7 +1236,7 @@ mod tests {
     #[test]
     fn bn128_mul() {
         let f = Builtin {
-            pricer: Box::new(Linear { base: 0, word: 0 }),
+            price_plan: Box::new(StaticPlan(Linear { base: 0, word: 0 })),
             native: builtin_factory("alt_bn128_mul"),
             activate_at: 0,
         };
@@ -1228,7 +1284,7 @@ mod tests {
 
     fn builtin_pairing() -> Builtin {
         Builtin {
-            pricer: Box::new(Linear { base: 0, word: 0 }),
+            price_plan: Box::new(StaticPlan(Linear { base: 0, word: 0 })),
             native: builtin_factory("alt_bn128_pairing"),
             activate_at: 0,
         }
@@ -1311,9 +1367,9 @@ mod tests {
 
     #[test]
     fn is_active() {
-        let pricer = Box::new(Linear { base: 10, word: 20 });
+        let price_plan = Box::new(StaticPlan(Linear { base: 10, word: 20 }));
         let b = Builtin {
-            pricer: pricer as Box<dyn Pricer>,
+            price_plan,
             native: builtin_factory("identity"),
             activate_at: 100_000,
         };
@@ -1325,17 +1381,17 @@ mod tests {
 
     #[test]
     fn from_named_linear() {
-        let pricer = Box::new(Linear { base: 10, word: 20 });
+        let price_plan = Box::new(StaticPlan(Linear { base: 10, word: 20 }));
         let b = Builtin {
-            pricer: pricer as Box<dyn Pricer>,
+            price_plan,
             native: builtin_factory("identity"),
             activate_at: 1,
         };
 
-        assert_eq!(b.cost(&[0; 0]), U256::from(10));
-        assert_eq!(b.cost(&[0; 1]), U256::from(30));
-        assert_eq!(b.cost(&[0; 32]), U256::from(30));
-        assert_eq!(b.cost(&[0; 33]), U256::from(50));
+        assert_eq!(b.cost_on_genesis(&[0; 0]), U256::from(10));
+        assert_eq!(b.cost_on_genesis(&[0; 1]), U256::from(30));
+        assert_eq!(b.cost_on_genesis(&[0; 32]), U256::from(30));
+        assert_eq!(b.cost_on_genesis(&[0; 33]), U256::from(50));
 
         let i = [0u8, 1, 2, 3];
         let mut o = [255u8; 4];
@@ -1346,7 +1402,7 @@ mod tests {
 
     fn blake2f_builtin() -> Builtin {
         Builtin {
-            pricer: Box::new(Blake2FPricer::new(123)) as Box<dyn Pricer>,
+            price_plan: Box::new(StaticPlan(Blake2FPricer::new(123))),
             native: builtin_factory("blake2_f"),
             activate_at: 0,
         }
@@ -1361,7 +1417,7 @@ mod tests {
         f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
             .unwrap();
 
-        assert_eq!(f.cost(&input[..]), U256::from(123 * 5));
+        assert_eq!(f.cost_on_genesis(&input[..]), U256::from(123 * 5));
     }
 
     #[test]
@@ -1370,7 +1426,7 @@ mod tests {
         // invalid input (too short)
         let input: Vec<u8> = FromHex::from_hex("00").unwrap();
 
-        assert_eq!(f.cost(&input[..]), U256::from(0));
+        assert_eq!(f.cost_on_genesis(&input[..]), U256::from(0));
     }
 
     #[test]

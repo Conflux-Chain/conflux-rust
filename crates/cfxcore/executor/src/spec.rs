@@ -211,9 +211,7 @@ impl CommonParams {
         spec.cip154 = height >= self.transition_heights.cip154;
         spec.cip7702 = height >= self.transition_heights.cip7702;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
-        if spec.cancun_opcodes {
-            spec.sload_gas = 800;
-        }
+
         spec
     }
 

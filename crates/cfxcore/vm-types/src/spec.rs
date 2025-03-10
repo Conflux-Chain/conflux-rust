@@ -200,6 +200,8 @@ pub struct Spec {
     pub cip154: bool,
     /// CIP-7702: Set Code for EOA
     pub cip7702: bool,
+    /// CIP-645(GAS)
+    pub cip645: bool,
 }
 
 /// Wasm cost table
@@ -360,7 +362,23 @@ impl Spec {
             cip151: false,
             cip152: false,
             cip154: false,
+            cip645: false,
             cip7702: false,
+        }
+    }
+
+    pub fn overwrite_gas_plan_by_cip(&mut self) {
+        if self.cancun_opcodes {
+            self.sload_gas = 800;
+        }
+        if self.cip645 {
+            // CIP-645b: EIP-1884
+            self.sload_gas = 800;
+            self.balance_gas = 700;
+            self.extcodehash_gas = 700;
+
+            // CIP-645c: EIP-2028
+            self.tx_data_non_zero_gas = 16;
         }
     }
 

@@ -7,8 +7,8 @@ mod vm_factory;
 use super::builtin::Builtin;
 use crate::{
     builtin::{
-        builtin_factory, AltBn128PairingPricer, Blake2FPricer, Linear,
-        ModexpPricer,
+        builtin_factory, AltBn128PairingPricer, Blake2FPricer, IfPricer,
+        Linear, ModexpPricer, StaticPlan,
     },
     internal_contract::InternalContractMap,
     spec::CommonParams,
@@ -122,7 +122,7 @@ fn new_builtin_map(
     btree.insert(
         Address::from(H256::from_low_u64_be(1)),
         Builtin::new(
-            Box::new(Linear::new(3000, 0)),
+            Box::new(StaticPlan(Linear::new(3000, 0))),
             match space {
                 Space::Native => builtin_factory("ecrecover"),
                 Space::Ethereum => builtin_factory("ecrecover_evm"),
@@ -133,7 +133,7 @@ fn new_builtin_map(
     btree.insert(
         Address::from(H256::from_low_u64_be(2)),
         Builtin::new(
-            Box::new(Linear::new(60, 12)),
+            Box::new(StaticPlan(Linear::new(60, 12))),
             builtin_factory("sha256"),
             0,
         ),
@@ -141,7 +141,7 @@ fn new_builtin_map(
     btree.insert(
         Address::from(H256::from_low_u64_be(3)),
         Builtin::new(
-            Box::new(Linear::new(600, 120)),
+            Box::new(StaticPlan(Linear::new(600, 120))),
             builtin_factory("ripemd160"),
             0,
         ),
@@ -149,39 +149,67 @@ fn new_builtin_map(
     btree.insert(
         Address::from(H256::from_low_u64_be(4)),
         Builtin::new(
-            Box::new(Linear::new(15, 3)),
+            Box::new(StaticPlan(Linear::new(15, 3))),
             builtin_factory("identity"),
             0,
         ),
     );
+
+    // CIP-645e: EIP-2565
+    let mod_exp_pricer = IfPricer::new(
+        |spec| spec.cip645,
+        ModexpPricer::new_berlin(),
+        ModexpPricer::new_byzantium(20),
+    );
     btree.insert(
         Address::from(H256::from_low_u64_be(5)),
         Builtin::new(
-            Box::new(ModexpPricer::new(20)),
+            Box::new(mod_exp_pricer),
             builtin_factory("modexp"),
             params.transition_numbers.cip62,
         ),
     );
+
+    // CIP-645a: EIP-1108
+    let bn_add_pricer = IfPricer::new(
+        |spec| spec.cip645,
+        Linear::new(150, 0),
+        Linear::new(500, 0),
+    );
     btree.insert(
         Address::from(H256::from_low_u64_be(6)),
         Builtin::new(
-            Box::new(Linear::new(500, 0)),
+            Box::new(bn_add_pricer),
             builtin_factory("alt_bn128_add"),
             params.transition_numbers.cip62,
         ),
     );
+
+    // CIP-645a: EIP-1108
+    let bn_mul_pricer = IfPricer::new(
+        |spec| spec.cip645,
+        Linear::new(6_000, 0),
+        Linear::new(40_000, 0),
+    );
     btree.insert(
         Address::from(H256::from_low_u64_be(7)),
         Builtin::new(
-            Box::new(Linear::new(40_000, 0)),
+            Box::new(bn_mul_pricer),
             builtin_factory("alt_bn128_mul"),
             params.transition_numbers.cip62,
         ),
     );
+
+    // CIP-645a: EIP-1108
+    let bn_pair_pricer = IfPricer::new(
+        |spec| spec.cip645,
+        AltBn128PairingPricer::new(45_000, 34_000),
+        AltBn128PairingPricer::new(100_000, 80_000),
+    );
     btree.insert(
         Address::from(H256::from_low_u64_be(8)),
         Builtin::new(
-            Box::new(AltBn128PairingPricer::new(100_000, 80_000)),
+            Box::new(bn_pair_pricer),
             builtin_factory("alt_bn128_pairing"),
             params.transition_numbers.cip62,
         ),
@@ -189,7 +217,7 @@ fn new_builtin_map(
     btree.insert(
         Address::from(H256::from_low_u64_be(9)),
         Builtin::new(
-            Box::new(Blake2FPricer::new(1)),
+            Box::new(StaticPlan(Blake2FPricer::new(1))),
             builtin_factory("blake2_f"),
             params.transition_numbers.cip92,
         ),
@@ -197,7 +225,7 @@ fn new_builtin_map(
     btree.insert(
         Address::from(H256::from_low_u64_be(10)),
         Builtin::new(
-            Box::new(Linear::new(50000, 0)),
+            Box::new(StaticPlan(Linear::new(50000, 0))),
             builtin_factory("kzg_point_eval"),
             params.transition_numbers.cip144,
         ),
