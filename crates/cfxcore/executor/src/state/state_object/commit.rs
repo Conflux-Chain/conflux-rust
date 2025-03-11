@@ -126,7 +126,7 @@ impl State {
     pub fn commit_cache(&mut self, retain_transient_storage: bool) {
         for (addr, mut account) in self.cache.get_mut().drain() {
             if let AccountEntry::Cached(ref mut acc, true) = account {
-                acc.commit_for_tx(retain_transient_storage);
+                acc.commit_cache(retain_transient_storage);
             }
             self.committed_cache.insert(addr, account);
         }

@@ -372,6 +372,10 @@ impl Spec {
         }
     }
 
+    // `cold_sload_gas` replaces `sload_gas` in certain contexts, primarily for
+    // core space internal contracts. However, some `sload_gas` usages retain
+    // their original semantics. This function is introduced to distinguish
+    // these cases.
     pub fn sload_gas(&self) -> usize {
         assert!(!self.cip645);
         self.cold_sload_gas
