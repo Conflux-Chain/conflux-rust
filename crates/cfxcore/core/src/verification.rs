@@ -672,6 +672,7 @@ impl VerificationConfig {
         let cip90a = height >= transitions.cip90a;
         let cip1559 = height >= transitions.cip1559;
         let cip7702 = height >= transitions.cip7702;
+        let cip645 = height >= transitions.cip645;
 
         let (can_pack, later_pack) =
             Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
@@ -680,6 +681,10 @@ impl VerificationConfig {
                 }
 
                 if !Self::check_eip7702_transaction(tx, cip7702, mode) {
+                    return false;
+                }
+
+                if !Self::check_eip3860(tx, cip645) {
                     return false;
                 }
 
@@ -763,6 +768,7 @@ impl VerificationConfig {
         let cip130 = height >= transitions.cip130;
         let cip1559 = height >= transitions.cip1559;
         let cip7702 = height >= transitions.cip7702;
+        let cip645 = height >= transitions.cip645;
 
         if let Transaction::Native(ref tx) = tx.unsigned {
             Self::verify_transaction_epoch_height(
@@ -783,6 +789,10 @@ impl VerificationConfig {
 
         if !Self::check_eip7702_transaction(tx, cip7702, &mode) {
             bail!(TransactionError::FutureTransactionType)
+        }
+
+        if !Self::check_eip3860(tx, cip645) {
+            bail!(TransactionError::CreateInitCodeSizeLimit)
         }
 
         Self::check_gas_limit(tx, cip76, &mode)?;
@@ -834,6 +844,19 @@ impl VerificationConfig {
             VerifyTxMode::Local(MaybeLater, _spec) => true,
             VerifyTxMode::Remote => cip7702,
         }
+    }
+
+    fn check_eip3860(tx: &TransactionWithSignature, cip645: bool) -> bool {
+        // TODO: better way to get the specification
+        const SPEC: Spec = Spec::genesis_spec();
+        if !cip645 {
+            return true;
+        }
+        if tx.action() != Action::Create {
+            return true;
+        }
+
+        tx.data().len() <= SPEC.init_code_data_limit
     }
 
     /// Check transaction intrinsic gas. Influenced by CIP-76.

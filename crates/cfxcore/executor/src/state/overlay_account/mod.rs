@@ -133,9 +133,13 @@ pub struct OverlayAccount {
     /// Storage layout change of the account
     storage_layout_change: Option<StorageLayout>,
 
-    /// Read cache for the storage entries of this account for recording
-    /// unchanged values.
+    /// Read cache of database for the storage entries of this account for
+    /// recording unchanged values.
     storage_read_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
+
+    /// Committed storage after a transaction for the storage entries of this
+    /// account for recording unchanged values.
+    storage_committed_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
 
     /// Write cache for the storage entries of this account for recording
     /// changed values.

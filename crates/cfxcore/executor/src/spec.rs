@@ -147,6 +147,7 @@ pub struct TransitionsEpochHeight {
     pub cip154: BlockHeight,
     /// CIP-7702: Set Code for EOA
     pub cip7702: BlockHeight,
+    pub cip645: BlockHeight,
 }
 
 impl Default for CommonParams {

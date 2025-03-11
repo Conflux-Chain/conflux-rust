@@ -38,13 +38,18 @@ impl State {
     /// Requests an immutable reference of an account through the cache by the
     /// address and required, returning a reference with a read lock guard.
     /// It returns `None` if the account doesn't exist.
-    // FIXME: the current implementation may affect prefetch performance.
     pub(super) fn read_account_ext_lock(
         &self, address: &AddressWithSpace, require: RequireFields,
     ) -> DbResult<Option<AccountReadGuard>> {
         let mut cache = self.cache.write();
-        let account_entry =
-            Self::fetch_account_mut(&mut cache, &self.db, address, require)?;
+
+        let account_entry = Self::fetch_account_mut(
+            &mut cache,
+            &self.committed_cache,
+            &self.db,
+            address,
+            require,
+        )?;
 
         Ok(if !account_entry.is_db_absent() {
             Some(RwLockReadGuard::map(
@@ -61,6 +66,8 @@ impl State {
     pub(super) fn prefetch(
         &self, address: &AddressWithSpace, require: RequireFields,
     ) -> DbResult<()> {
+        // TODO: this logic seems useless, since the prefetch is always called
+        // on a newly inited state.
         if let Some(account_entry) = self.cache.read().get(address) {
             if let Some(account) = account_entry.account() {
                 if !account.should_load_ext_fields(require) {
@@ -155,8 +162,14 @@ impl State {
     ) -> DbResult<AccountWriteGuard>
     where F: Fn(&AddressWithSpace) -> DbResult<OverlayAccount> {
         let mut cache = self.cache.write();
-        let account_entry =
-            Self::fetch_account_mut(&mut cache, &self.db, address, require)?;
+
+        let account_entry = Self::fetch_account_mut(
+            &mut cache,
+            &self.committed_cache,
+            &self.db,
+            address,
+            require,
+        )?;
 
         // Save the value before modification into the checkpoint.
         self.copy_cache_entry_to_checkpoint(*address, account_entry);
@@ -181,15 +194,23 @@ impl State {
     /// Retrieves data using a read-through caching strategy and automatically
     /// loads extension fields as required.
     fn fetch_account_mut<'a>(
-        cache: &'a mut HashMap<AddressWithSpace, AccountEntry>, db: &StateDb,
-        address: &AddressWithSpace, require: RequireFields,
+        cache: &'a mut HashMap<AddressWithSpace, AccountEntry>,
+        committed_cache: &'a HashMap<AddressWithSpace, AccountEntry>,
+        db: &StateDb, address: &AddressWithSpace, require: RequireFields,
     ) -> DbResult<&'a mut AccountEntry> {
         let account_entry = match cache.entry(*address) {
             Occupied(e) => e.into_mut(),
-            Vacant(e) => {
-                let address = *e.key();
-                e.insert(AccountEntry::new_loaded(db.get_account(&address)?))
-            }
+            Vacant(e) => match committed_cache.get(address) {
+                Some(committed) => {
+                    e.insert(committed.clone_from_committed_cache())
+                }
+                None => {
+                    let address = *e.key();
+                    e.insert(AccountEntry::new_loaded(
+                        db.get_account(&address)?,
+                    ))
+                }
+            },
         };
         Self::load_account_ext_fields(require, account_entry, db)?;
         Ok(account_entry)

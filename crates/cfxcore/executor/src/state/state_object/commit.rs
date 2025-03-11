@@ -1,9 +1,12 @@
+use crate::state::overlay_account::AccountEntry;
+
 use super::State;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
 use cfx_statedb::{access_mode, Result as DbResult};
 use cfx_types::AddressWithSpace;
+use cfx_vm_types::Spec;
 use primitives::{Account, EpochId, StorageKey};
 
 pub struct StateCommitResult {
@@ -116,6 +119,17 @@ impl State {
             )?;
         }
         Ok(())
+    }
+}
+
+impl State {
+    pub fn commit_for_tx(&mut self, spec: &Spec) {
+        for (addr, mut account) in self.cache.get_mut().drain() {
+            if let AccountEntry::Cached(ref mut acc, true) = account {
+                acc.commit_for_tx(spec);
+            }
+            self.committed_cache.insert(addr, account);
+        }
     }
 }
 

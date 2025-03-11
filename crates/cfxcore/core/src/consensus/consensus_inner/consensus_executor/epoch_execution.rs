@@ -9,8 +9,8 @@ use pow_types::StakingEvent;
 use cfx_statedb::{Error as DbErrorKind, Result as DbResult};
 use cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 use primitives::{
-    receipt::BlockReceipts, Action, Block, BlockNumber, Receipt,
-    SignedTransaction, TransactionIndex,
+    receipt::BlockReceipts, AccessListItem, Action, Block, BlockNumber,
+    Receipt, SignedTransaction, TransactionIndex,
 };
 
 use crate::{
@@ -50,7 +50,7 @@ impl ConsensusExecutionHandler {
         start_block_number: u64, on_local_pivot: bool,
         virtual_call: Option<VirtualCall<'a>>,
     ) -> DbResult<Vec<Arc<BlockReceipts>>> {
-        self.prefetch_storage_for_execution(&*state, epoch_blocks);
+        self.prefetch_storage_for_execution(state, epoch_blocks);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
@@ -127,7 +127,7 @@ impl ConsensusExecutionHandler {
     }
 
     fn prefetch_storage_for_execution(
-        &self, state: &State, epoch_blocks: &Vec<Arc<Block>>,
+        &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
     ) {
         // Prefetch accounts for transactions.
         // The return value _prefetch_join_handles is used to join all threads
@@ -147,6 +147,11 @@ impl ConsensusExecutionHandler {
                 accounts.insert(transaction.sender.with_space(space));
                 if let Action::Call(ref address) = transaction.action() {
                     accounts.insert(address.with_space(space));
+                }
+                if let Some(access_list) = transaction.access_list() {
+                    for AccessListItem { address, .. } in access_list.iter() {
+                        accounts.insert(address.with_space(space));
+                    }
                 }
             }
         }

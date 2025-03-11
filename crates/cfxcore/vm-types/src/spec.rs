@@ -49,6 +49,7 @@ pub struct Spec {
     pub sstore_set_gas: usize,
     /// Gas price for altering value in storage
     pub sstore_reset_gas: usize,
+    pub sstore_warm_reset_gas: usize,
     /// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`)
     pub sstore_refund_gas: usize,
     /// Gas price for `TLOAD`
@@ -83,6 +84,10 @@ pub struct Spec {
     pub create_data_gas: usize,
     /// Maximum code size when creating a contract.
     pub create_data_limit: usize,
+    /// Maximum init code size (CIP-645i: EIP-3860)
+    pub init_code_data_limit: usize,
+    /// Init code word size (CIP-645i: EIP-3860)
+    pub init_code_word_gas: usize,
     /// Transaction cost
     pub tx_gas: usize,
     /// `CREATE` transaction cost
@@ -109,6 +114,9 @@ pub struct Spec {
     pub eip1820_gas: usize,
     pub access_list_storage_key_gas: usize,
     pub access_list_address_gas: usize,
+    pub cold_account_access_cost: usize,
+    pub cold_sload_cost: usize,
+    pub warm_storage_read_cost: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -289,6 +297,7 @@ impl Spec {
             sload_gas: 200,
             sstore_set_gas: 20000,
             sstore_reset_gas: 5000,
+            sstore_warm_reset_gas: 2900,
             sstore_refund_gas: 15000,
             tload_gas: 100,
             tstore_gas: 100,
@@ -306,6 +315,8 @@ impl Spec {
             quad_coeff_div: 512,
             create_data_gas: 200,
             create_data_limit: 49152,
+            init_code_data_limit: 49152,
+            init_code_word_gas: 2,
             tx_gas: 21000,
             tx_create_gas: 53000,
             tx_data_zero_gas: 4,
@@ -320,6 +331,9 @@ impl Spec {
             eip1820_gas: 1_500_000,
             access_list_storage_key_gas: 1900,
             access_list_address_gas: 2400,
+            cold_account_access_cost: 2600,
+            cold_sload_cost: 2100,
+            warm_storage_read_cost: 100,
             suicide_to_new_account_cost: 25000,
             per_empty_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),

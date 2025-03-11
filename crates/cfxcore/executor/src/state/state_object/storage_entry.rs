@@ -45,6 +45,14 @@ impl State {
     }
 
     #[inline]
+    pub fn origin_storage_at(
+        &self, address: &AddressWithSpace, key: &[u8],
+    ) -> DbResult<Option<U256>> {
+        let acc = try_loaded!(self.read_account_lock(address));
+        Ok(acc.origin_storage_at(key))
+    }
+
+    #[inline]
     pub fn transient_storage_at(
         &self, address: &AddressWithSpace, key: &[u8],
     ) -> DbResult<U256> {

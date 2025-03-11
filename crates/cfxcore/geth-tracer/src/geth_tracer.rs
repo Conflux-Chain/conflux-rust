@@ -455,6 +455,9 @@ pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
             Error::CreateContractStartingWithEF => {
                 InstructionResult::CreateContractStartingWithEF
             }
+            Error::CreateInitCodeSizeLimit => {
+                InstructionResult::CreateInitCodeSizeLimit
+            }
         },
     };
     result

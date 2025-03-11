@@ -111,6 +111,13 @@ pub fn gas_required_for(
         }) as u64
     };
     let data_gas: u64 = data.iter().map(byte_gas).sum();
+    let data_word = (data.len() as u64 + 31) / 32;
+
+    let initcode_gas = if spec.cip645 {
+        data_word * spec.init_code_word_gas as u64
+    } else {
+        0
+    };
 
     let access_gas: u64 = if let Some(acc) = access_list {
         let address_gas =
@@ -129,7 +136,7 @@ pub fn gas_required_for(
     let authorization_gas =
         spec.per_empty_account_cost as u64 * authorization_len as u64;
 
-    init_gas + data_gas + access_gas + authorization_gas
+    init_gas + data_gas + access_gas + authorization_gas + initcode_gas
 }
 
 pub fn contract_address(

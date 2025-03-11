@@ -18,7 +18,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Space, U256};
+use cfx_types::{Space, H256, U256};
 use cfx_vm_types::{self as vm, Spec};
 use std::cmp;
 use vm::BlockHashSource;
@@ -127,40 +127,68 @@ impl<Gas: CostType> Gasometer<Gas> {
         let tier = info.tier.idx();
         let default_gas = Gas::from(spec.tier_step_gas[tier]);
 
+        let account_access_gas = |idx: usize| {
+            let address = u256_to_address(stack.peek(idx));
+            if context.is_warm_account(address) {
+                spec.warm_storage_read_cost
+            } else {
+                spec.cold_account_access_cost
+            }
+        };
+
         let cost = match instruction {
             instructions::JUMPDEST => Request::Gas(Gas::from(1)),
             instructions::SSTORE => {
-                let gas = if context.space() == Space::Native {
-                    spec.sstore_reset_gas
-                } else {
-                    let mut key = vec![0; 32];
-                    stack.peek(0).to_big_endian(key.as_mut());
-
-                    let newval = stack.peek(1);
-                    let val = context.storage_at(&key.to_vec())?;
-
-                    if val.is_zero() && !newval.is_zero() {
-                        spec.sstore_set_gas * spec.evm_gas_ratio
+                let (charge_gas, _refund_gas) =
+                    calc_sstore_gas(context, stack, self.current_gas)?;
+                Request::Gas(Gas::from(charge_gas))
+            }
+            instructions::SLOAD => {
+                let gas = if spec.cip645 {
+                    let mut key = H256::zero();
+                    stack.peek(0).to_big_endian(&mut key.0);
+                    if context.is_warm_storage_entry(&key)? {
+                        spec.warm_storage_read_cost
                     } else {
-                        spec.sstore_reset_gas
+                        spec.cold_sload_cost
                     }
+                } else {
+                    spec.sload_gas
                 };
-
                 Request::Gas(Gas::from(gas))
             }
-            instructions::SLOAD => Request::Gas(Gas::from(spec.sload_gas)),
-            instructions::BALANCE => Request::Gas(Gas::from(spec.balance_gas)),
+            instructions::BALANCE => {
+                let gas = if spec.cip645 {
+                    account_access_gas(0)
+                } else {
+                    spec.balance_gas
+                };
+                Request::Gas(Gas::from(gas))
+            }
             instructions::EXTCODESIZE => {
-                Request::Gas(Gas::from(spec.extcodesize_gas))
+                let gas = if spec.cip645 {
+                    account_access_gas(0)
+                } else {
+                    spec.extcodesize_gas
+                };
+                Request::Gas(Gas::from(gas))
             }
             instructions::EXTCODEHASH => {
-                Request::Gas(Gas::from(spec.extcodehash_gas))
+                let gas = if spec.cip645 {
+                    account_access_gas(0)
+                } else {
+                    spec.extcodehash_gas
+                };
+                Request::Gas(Gas::from(gas))
             }
             instructions::SUICIDE => {
                 let mut gas = Gas::from(spec.suicide_gas);
 
                 let is_value_transfer = !context.origin_balance()?.is_zero();
                 let address = u256_to_address(stack.peek(0));
+                if spec.cip645 && !context.is_warm_account(address) {
+                    gas += Gas::from(spec.cold_account_access_cost);
+                }
                 if (!spec.no_empty && !context.exists(&address)?)
                     || (spec.no_empty
                         && is_value_transfer
@@ -220,11 +248,18 @@ impl<Gas: CostType> Gasometer<Gas> {
             instructions::RETURNSUB_TSTORE if spec.cancun_opcodes => {
                 Request::Gas(Gas::from(spec.tstore_gas))
             }
-            instructions::EXTCODECOPY => Request::GasMemCopy(
-                spec.extcodecopy_base_gas.into(),
-                mem_needed(stack.peek(1), stack.peek(3))?,
-                Gas::from_u256(*stack.peek(3))?,
-            ),
+            instructions::EXTCODECOPY => {
+                let base_gas = if spec.cip645 {
+                    account_access_gas(0)
+                } else {
+                    spec.extcodecopy_base_gas
+                };
+                Request::GasMemCopy(
+                    base_gas.into(),
+                    mem_needed(stack.peek(1), stack.peek(3))?,
+                    Gas::from_u256(*stack.peek(3))?,
+                )
+            }
             instructions::LOG0
             | instructions::LOG1
             | instructions::LOG2
@@ -242,7 +277,14 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::GasMem(gas, mem_needed(stack.peek(0), stack.peek(1))?)
             }
             instructions::CALL | instructions::CALLCODE => {
-                let mut gas = Gas::from(spec.call_gas);
+                // warmup gas for 7702 will be charged during execution
+                let mut gas = Gas::from(
+                    if spec.cip645 {
+                        spec.call_gas
+                    } else {
+                        account_access_gas(1)
+                    },
+                );
                 let mem = cmp::max(
                     mem_needed(stack.peek(5), stack.peek(6))?,
                     mem_needed(stack.peek(3), stack.peek(4))?,
@@ -278,7 +320,13 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::GasMemProvide(gas, mem, Some(requested))
             }
             instructions::DELEGATECALL | instructions::STATICCALL => {
-                let gas = Gas::from(spec.call_gas);
+                let gas = Gas::from(
+                    if spec.cip645 {
+                        spec.call_gas
+                    } else {
+                        account_access_gas(1)
+                    },
+                );
                 let mem = cmp::max(
                     mem_needed(stack.peek(4), stack.peek(5))?,
                     mem_needed(stack.peek(2), stack.peek(3))?,
@@ -292,14 +340,25 @@ impl<Gas: CostType> Gasometer<Gas> {
                 let len = stack.peek(2);
                 let base = Gas::from(spec.create_gas);
                 let word = overflowing!(to_word_size(Gas::from_u256(*len)?));
-                let mut word_gas = overflowing!(
-                    Gas::from(spec.sha3_word_gas).overflow_mul(word)
-                );
-                if instruction == instructions::CREATE
+
+                let sha3_word_price = if instruction == instructions::CREATE
                     && context.space() == Space::Ethereum
                 {
-                    word_gas = Gas::from(0);
-                }
+                    // CREATE operation in espace doesn't compute code_hash
+                    0
+                } else {
+                    spec.sha3_word_gas
+                };
+                let init_code_word_price = if spec.cip645 {
+                    // CIP-645i: EIP-3860
+                    spec.init_code_word_gas
+                } else {
+                    0
+                };
+                let word_price = sha3_word_price + init_code_word_price;
+                let word_gas =
+                    overflowing!(Gas::from(word_price).overflow_mul(word));
+
                 let gas = overflowing!(base.overflow_add(word_gas));
                 let mem = mem_needed(start, len)?;
 
@@ -428,6 +487,97 @@ fn to_word_size<Gas: CostType>(value: Gas) -> (Gas, bool) {
     }
 
     (gas >> 5, false)
+}
+
+fn calc_sstore_gas<Gas: CostType>(
+    context: &dyn vm::Context, stack: &dyn Stack<U256>, current_gas: Gas,
+) -> vm::Result<(usize, i64)> {
+    let spec = context.spec();
+    let space = context.space();
+
+    if space == Space::Native && !spec.cip645 {
+        // The only simple case without checking values
+        return Ok((spec.sstore_reset_gas, 0));
+    }
+
+    if current_gas <= spec.call_stipend.into() {
+        // Enough to trigger the OutOfGas, no need for further checks
+        return Ok((spec.call_stipend + 1, 0));
+    }
+
+    let mut key = H256::zero();
+    stack.peek(0).to_big_endian(&mut key.0);
+
+    let new_val = *stack.peek(1);
+    let warm_val = context.is_warm_storage_entry(&key)?;
+    let cur_val = context.storage_at(&key[..])?;
+
+    if !spec.cip645 {
+        // For eSpace only, the core space before cip645 has been filtted out.
+        return Ok(if cur_val.is_zero() && !new_val.is_zero() {
+            (spec.sstore_set_gas * spec.evm_gas_ratio, 0)
+        } else {
+            (spec.sstore_reset_gas, 0)
+        });
+    }
+
+    let ori_val = context.origin_storage_at(&key[..])?.unwrap_or(cur_val);
+
+    let is_noop = new_val == cur_val;
+    let is_clean = ori_val == cur_val;
+
+    // CIP-645(d, f): EIP-2200 + EIP-2929
+    let charge_gas = if is_noop {
+        // no storage op, just load cost for checking
+        spec.warm_storage_read_cost
+    } else if is_clean && ori_val.is_zero() && space == Space::Ethereum {
+        // charge storage write gas + storage occupation gas
+        spec.sstore_set_gas * spec.evm_gas_ratio
+    } else if is_clean {
+        spec.sstore_warm_reset_gas
+    } else {
+        // other operations has paid for storage write cost
+        spec.warm_storage_read_cost
+    };
+
+    // CIP-645f: EIP-2929
+    let cold_warm_gas = if warm_val { 0 } else { spec.cold_sload_cost };
+
+    let sstore_clear_refund_gas = if space == Space::Ethereum && !is_noop {
+        // CIP-645g (EIP-3529) updates the value defined in CIP-645d (EIP-2200)
+        let sstore_clears_schedule = (spec.sstore_warm_reset_gas
+            + spec.access_list_storage_key_gas)
+            as i64;
+        match (ori_val.is_zero(), cur_val.is_zero(), new_val.is_zero()) {
+            (false, false, true) => {
+                // First time release this entry
+                sstore_clears_schedule
+            }
+            (false, true, false) => {
+                // Used to release but occupy again, undo refund
+                -sstore_clears_schedule
+            }
+            _ => 0,
+        }
+    } else {
+        0
+    };
+
+    let not_write_db_refund_gas = if ori_val == new_val {
+        if ori_val.is_zero() && space == Space::Ethereum {
+            // charge storage write gas + storage occupation gas
+            spec.sstore_set_gas * spec.evm_gas_ratio
+        } else {
+            spec.sstore_warm_reset_gas
+        }
+    } else {
+        0
+    };
+
+    Ok((
+        charge_gas + cold_warm_gas,
+        sstore_clear_refund_gas + not_write_db_refund_gas as i64,
+    ))
 }
 
 #[test]

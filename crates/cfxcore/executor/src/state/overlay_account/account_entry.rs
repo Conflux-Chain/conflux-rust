@@ -37,6 +37,7 @@ impl AccountEntry {
         }
     }
 
+    #[allow(unused)]
     pub fn is_dirty(&self) -> bool { matches!(self, Cached(_, true)) }
 
     pub fn is_db_absent(&self) -> bool { matches!(self, DbAbsent) }
@@ -86,6 +87,15 @@ impl AccountEntry {
                 acc.clone_account_for_checkpoint(checkpoint_id),
                 *dirty_bit,
             ),
+        }
+    }
+
+    pub fn clone_from_committed_cache(&self) -> AccountEntry {
+        match self {
+            DbAbsent => DbAbsent,
+            Cached(acc, dirty_bit) => {
+                Cached(acc.clone_from_committed_cache(), *dirty_bit)
+            }
         }
     }
 

@@ -58,6 +58,12 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             return self.finalize_on_insufficient_balance(actual_gas_cost);
         }
 
+        if let Some(access_list) = self.tx.access_list() {
+            self.context
+                .state
+                .set_tx_access_list(self.tx.space(), &access_list);
+        }
+
         self.process_cip7702_authorization()?;
 
         let params = self.make_action_params()?;
@@ -554,8 +560,9 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn finalize_on_insufficient_balance(
-        self, actual_gas_cost: U256,
+        mut self, actual_gas_cost: U256,
     ) -> DbResult<ExecutionOutcome> {
+        self.update_state_on_finalize();
         return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
             ExecutionError::NotEnoughCash {
                 required: self.cost.total_cost,
@@ -574,8 +581,9 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     }
 
     fn finalize_on_conflict_address(
-        self, address: Address,
+        mut self, address: Address,
     ) -> DbResult<ExecutionOutcome> {
+        self.update_state_on_finalize();
         return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
             ExecutionError::VmError(vm::Error::ConflictAddress(address)),
             Executed::execution_error_fully_charged(
@@ -588,8 +596,10 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     }
 
     fn finalize_on_executed(
-        self, result: ExecutiveResult, refund_info: RefundInfo,
+        mut self, result: ExecutiveResult, refund_info: RefundInfo,
     ) -> DbResult<ExecutionOutcome> {
+        self.update_state_on_finalize();
+
         let tx = self.tx;
         let cost = self.cost;
         let ext_result = make_ext_result(self.observer);
@@ -627,6 +637,11 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         };
 
         Ok(outcome)
+    }
+
+    fn update_state_on_finalize(&mut self) {
+        self.context.state.clear_tx_access_list();
+        self.context.state.commit_for_tx(&self.context.spec);
     }
 }
 

@@ -8,6 +8,7 @@ use super::State;
 
 pub struct SavedState {
     cache: HashMap<AddressWithSpace, AccountEntry>,
+    committed_cache: HashMap<AddressWithSpace, AccountEntry>,
     global_stat: GlobalStat,
 }
 
@@ -20,8 +21,14 @@ impl State {
             .iter()
             .map(|(k, v)| (*k, v.clone_account()))
             .collect();
+        let committed_cache = self
+            .committed_cache
+            .iter()
+            .map(|(k, v)| (*k, v.clone_account()))
+            .collect();
         SavedState {
             cache,
+            committed_cache,
             global_stat: self.global_stat.clone(),
         }
     }
@@ -29,6 +36,7 @@ impl State {
     pub fn restore(&mut self, saved: SavedState) {
         assert!(self.no_checkpoint());
         self.cache = RwLock::new(saved.cache);
+        self.committed_cache = saved.committed_cache;
         self.global_stat = saved.global_stat;
     }
 }

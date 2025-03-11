@@ -1,6 +1,7 @@
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::{Result as DbResult, StateDb, StateDbExt};
 use cfx_types::AddressWithSpace;
+use cfx_vm_types::Spec;
 use primitives::{
     Account, CodeInfo, DepositList, StorageKey, StorageValue, VoteStakeList,
 };
@@ -100,5 +101,30 @@ impl OverlayAccount {
         )?;
 
         Ok(())
+    }
+
+    pub fn commit_for_tx(&mut self, spec: &Spec) {
+        assert!(self.storage_write_checkpoint.is_none());
+        assert!(self.transient_storage_checkpoint.is_none());
+
+        let mut storage_write_cache = self.storage_write_cache.write();
+        let mut storage_commit_cache = self.storage_committed_cache.write();
+
+        if storage_commit_cache.is_empty() {
+            std::mem::swap(
+                &mut *storage_commit_cache,
+                &mut *storage_write_cache,
+            );
+        } else if storage_write_cache.is_empty() {
+        } else {
+            for (key, value) in storage_write_cache.drain() {
+                storage_commit_cache.insert(key, value);
+            }
+            storage_write_cache.clear();
+        }
+
+        if spec.cip645 {
+            self.transient_storage_cache.write().clear();
+        }
     }
 }

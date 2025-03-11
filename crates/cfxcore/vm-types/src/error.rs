@@ -108,6 +108,8 @@ pub enum Error {
     InternalContract(String),
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
+    /// Too large init code size (CIP-645i: EIP-3860)
+    CreateInitCodeSizeLimit,
     /// Error from storage.
     StateDbError(PartialEqWrapper<DbError>),
     /// Wasm runtime error
@@ -190,6 +192,9 @@ impl fmt::Display for Error {
             }
             MutableCallInStaticContext => {
                 write!(f, "Mutable call in static context")
+            }
+            CreateInitCodeSizeLimit => {
+                write!(f, "Exceed create initcode size limit")
             }
             Wasm(ref msg) => write!(f, "Internal error: {}", msg),
             OutOfBounds => write!(f, "Out of bounds"),

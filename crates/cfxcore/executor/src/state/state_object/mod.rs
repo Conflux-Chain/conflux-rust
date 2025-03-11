@@ -27,6 +27,8 @@ mod commit;
 /// Implements access functions global statistic variables of `State`.
 mod global_statistics;
 
+mod warm;
+
 /// Implements functions for the PoS rewarding of `State`.
 mod pos;
 
@@ -67,9 +69,9 @@ use super::{
 };
 use crate::substate::Substate;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
-use cfx_types::AddressWithSpace;
+use cfx_types::{AddressWithSpace, H256};
 use parking_lot::RwLock;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// A caching and checkpoint layer built upon semantically meaningful database
 /// interfaces, providing interfaces and logics for managing accounts and global
@@ -84,11 +86,16 @@ pub struct State {
     /// you are familiar with checkpoint maintenance.
     cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
 
+    committed_cache: HashMap<AddressWithSpace, AccountEntry>,
+    tx_access_list: Option<HashMap<AddressWithSpace, HashSet<H256>>>,
+
     /// In-memory global statistic variables.
     // TODO: try not to make it special?
     global_stat: GlobalStat,
 
     /// Checkpoint layers for the account entries
+    // TODO: it seems `RwLock` is not necessary here. But we need to change the
+    // signature of `write_account` from `&self` to `&mut self` first
     checkpoints: RwLock<LazyDiscardedVec<CheckpointLayer>>,
 }
 
@@ -106,13 +113,16 @@ impl State {
         Ok(State {
             db,
             cache: Default::default(),
+            committed_cache: Default::default(),
             checkpoints: Default::default(),
+            tx_access_list: None,
             global_stat: world_stat,
         })
     }
 
     pub fn prefetch_accounts(
-        &self, addresses: BTreeSet<AddressWithSpace>, pool: &rayon::ThreadPool,
+        &mut self, addresses: BTreeSet<AddressWithSpace>,
+        pool: &rayon::ThreadPool,
     ) -> DbResult<()> {
         use rayon::prelude::*;
         pool.install(|| {
@@ -120,6 +130,9 @@ impl State {
                 .into_par_iter()
                 .map(|addr| self.prefetch(&addr, RequireFields::Code))
         })
-        .collect::<DbResult<()>>()
+        .collect::<DbResult<()>>()?;
+
+        self.committed_cache = std::mem::take(self.cache.get_mut());
+        Ok(())
     }
 }
