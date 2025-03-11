@@ -139,6 +139,8 @@ pub trait Context {
     /// Creates log entry with given topics and data
     fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> Result<()>;
 
+    fn refund(&mut self, refund_gas: i64);
+
     /// Should be called when transaction calls `RETURN` opcode.
     /// Returns gas_left if cost of returning the data is not too high.
     fn ret(

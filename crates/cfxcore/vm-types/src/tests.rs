@@ -223,6 +223,8 @@ impl Context for MockContext {
         Ok(())
     }
 
+    fn refund(&mut self, _refund_gas: i64) {}
+
     fn ret(
         self, _gas: &U256, _data: &ReturnData, _apply_state: bool,
     ) -> Result<U256> {

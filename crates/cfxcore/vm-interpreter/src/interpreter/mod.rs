@@ -627,6 +627,7 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
         self.mem.expand(requirements.memory_required_size);
         gasometer.current_mem_gas = requirements.memory_total_gas;
         gasometer.current_gas -= requirements.gas_cost;
+        context.refund(requirements.gas_refund);
 
         evm_debug!({
             self.informant.before_instruction(

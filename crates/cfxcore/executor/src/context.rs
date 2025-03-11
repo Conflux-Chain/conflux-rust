@@ -431,6 +431,10 @@ impl<'a> ContextTrait for Context<'a> {
         Ok(())
     }
 
+    fn refund(&mut self, refund_gas: i64) {
+        self.substate.refund_gas += refund_gas as i128;
+    }
+
     fn ret(
         mut self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>

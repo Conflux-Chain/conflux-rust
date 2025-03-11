@@ -43,19 +43,15 @@ pub struct Spec {
     pub sha3_gas: usize,
     /// Additional gas for `SHA3` opcode for each word of hashed memory
     pub sha3_word_gas: usize,
-    /// Gas price for loading from storage
-    pub sload_gas: usize,
+    /// Gas price for loading from storage. Code sload gas after CIP-645f:
+    /// EIP-2929
+    pub cold_sload_gas: usize,
     /// Gas price for setting new value to storage (`storage==0`, `new!=0`)
     pub sstore_set_gas: usize,
     /// Gas price for altering value in storage
     pub sstore_reset_gas: usize,
-    pub sstore_warm_reset_gas: usize,
     /// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`)
     pub sstore_refund_gas: usize,
-    /// Gas price for `TLOAD`
-    pub tload_gas: usize,
-    /// Gas price for `TSTORE`
-    pub tstore_gas: usize,
     /// Gas price for `JUMPDEST` opcode
     pub jumpdest_gas: usize,
     /// Gas price for `LOG*`
@@ -115,8 +111,7 @@ pub struct Spec {
     pub access_list_storage_key_gas: usize,
     pub access_list_address_gas: usize,
     pub cold_account_access_cost: usize,
-    pub cold_sload_cost: usize,
-    pub warm_storage_read_cost: usize,
+    pub warm_access_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -294,13 +289,10 @@ impl Spec {
             sha3_gas: 30,
             sha3_word_gas: 6,
             // Become 800 after CIP-142
-            sload_gas: 200,
+            cold_sload_gas: 200,
             sstore_set_gas: 20000,
             sstore_reset_gas: 5000,
-            sstore_warm_reset_gas: 2900,
             sstore_refund_gas: 15000,
-            tload_gas: 100,
-            tstore_gas: 100,
             jumpdest_gas: 1,
             log_gas: 375,
             log_data_gas: 8,
@@ -332,8 +324,7 @@ impl Spec {
             access_list_storage_key_gas: 1900,
             access_list_address_gas: 2400,
             cold_account_access_cost: 2600,
-            cold_sload_cost: 2100,
-            warm_storage_read_cost: 100,
+            warm_access_gas: 100,
             suicide_to_new_account_cost: 25000,
             per_empty_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
@@ -381,18 +372,26 @@ impl Spec {
         }
     }
 
+    pub fn sload_gas(&self) -> usize {
+        assert!(!self.cip645);
+        self.cold_sload_gas
+    }
+
     pub fn overwrite_gas_plan_by_cip(&mut self) {
         if self.cancun_opcodes {
-            self.sload_gas = 800;
+            self.cold_sload_gas = 800;
         }
         if self.cip645 {
             // CIP-645b: EIP-1884
-            self.sload_gas = 800;
             self.balance_gas = 700;
             self.extcodehash_gas = 700;
 
             // CIP-645c: EIP-2028
             self.tx_data_non_zero_gas = 16;
+
+            // CIP-645f: EIP-2929
+            self.cold_sload_gas = 800;
+            self.sstore_reset_gas = 2900;
         }
     }
 

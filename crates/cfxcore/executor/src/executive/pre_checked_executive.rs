@@ -495,7 +495,14 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             _ => 0.into(),
         };
         // gas_used is only used to estimate gas needed
-        let gas_used = tx.gas() - gas_left;
+        let mut gas_used = tx.gas() - gas_left;
+
+        // CIP-645g: EIP-3529
+        if spec.cip645 && self.substate.refund_gas > 0 {
+            let substate_refund = U256::from(self.substate.refund_gas as u128);
+            gas_used -= std::cmp::min(gas_used / 5, substate_refund);
+        }
+
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
         let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
