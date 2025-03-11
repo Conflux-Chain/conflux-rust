@@ -5,9 +5,9 @@
 Authorization List Related
 
 - [ ] Test empty authorization list (blocked by web3 api)
-- [ ] Nonce
-    - [ ] Duplicate nonce
-    - [ ] Skip nonce
+- [x] Nonce
+    - [x] Duplicate nonce
+    - [x] Skip nonce
 - [x] ChainID
     - [x] Incorrect ChainID (fail)
     - [x] ChainID is 0 (success)
@@ -16,9 +16,9 @@ Authorization List Related
 
 Multiple Authorization Related
 
-- [ ] Consider four steps: Set → Set to Another → Set to zero → Set
-- [ ] Intersperse storage modification operations between different sets (Note: Authorization changes and setting to 0 do not affect storage)
-- [ ] Adjacent steps may/may not be in the same epoch
+- [x] Consider four steps: Set → Set to Another → Set to zero → Set
+- [x] Intersperse storage modification operations between different sets (Note: Authorization changes and setting to 0 do not affect storage)
+- [x] Adjacent steps may/may not be in the same epoch
 
 (Based on code implementation, there may be corner case bugs here. Consider designing fuzzy tests or traversing all possible permutations.)
 
@@ -42,6 +42,8 @@ Suicide Related
 
 Trace Related
 
+> compatible with anvil, which trace shows B -> C 
+> need to check if compatible with geth
 - [ ] If EOA address A authorizes contract B, and contract B calls address C, trace should show A → C, without B (or check geth behavior)
 
 ## Per Test Case Check
@@ -55,5 +57,5 @@ Opcode Related
 Call Related
 
 - [x] Calling EOA account with code behaves as expected
-    - [ ] Check through balance to verify using EOA address balance not code address balance
+    - [ ] Check through balance to verify using EOA address balance not code address balance (tested using other methods)
 - [ ] EOA can normally initiate private key signed transactions

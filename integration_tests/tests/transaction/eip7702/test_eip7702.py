@@ -342,3 +342,66 @@ def test_eip7702_trace_rpc(ew3: Web3):
     inner_call = call_trace["calls"][0]
     assert inner_call["from"].lower() == contract_b_address.lower()
     assert inner_call["to"].lower() == contract_c_address.lower()
+
+
+def test_eip7702_nonce_skip(ew3: Web3):
+    sender = get_new_fund_account(ew3)
+    auth = get_new_fund_account(ew3)
+
+    # invalid nonce
+    tx_hash = send_eip7702_transaction(
+        ew3,
+        sender,
+        {
+            "authorizationList": [
+                sign_authorization(
+                    contract_address=ew3.eth.account.create().address,
+                    chain_id=ew3.eth.chain_id,
+                    nonce=1,
+                    private_key=auth.key.to_0x_hex(),
+                )
+            ],
+            "to": ew3.eth.account.create().address,
+            "value": 0,
+            "gas": 100000,
+        },
+    )
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
+    
+    assert ew3.eth.get_transaction_count(auth.address) == 0, "authorization should not take effect"
+    assert ew3.eth.get_code(auth.address).to_0x_hex() == "0x", "code should not be set"
+
+def test_eip7702_nonce_duplicate(ew3: Web3):
+    sender = get_new_fund_account(ew3)
+    auth = get_new_fund_account(ew3)
+    
+    random_acct_list = [ew3.eth.account.create() for _ in range(10)]
+
+    # invalid nonce
+    tx_hash = send_eip7702_transaction(
+        ew3,
+        sender,
+        {
+            "authorizationList": [
+                sign_authorization(
+                    contract_address=random_acct_list[0].address,
+                    chain_id=ew3.eth.chain_id,
+                    nonce=0,
+                    private_key=auth.key.to_0x_hex(),
+                ),
+                sign_authorization(
+                    contract_address=random_acct_list[1].address,
+                    chain_id=ew3.eth.chain_id,
+                    nonce=0,
+                    private_key=auth.key.to_0x_hex(),
+                )
+            ],
+            "to": ew3.eth.account.create().address,
+            "value": 0,
+            "gas": 100000,
+        },
+    )
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
+    
+    assert ew3.eth.get_transaction_count(auth.address) == 1
+    assert_account_code_set_to_contract(ew3, auth.address, random_acct_list[0].address)
