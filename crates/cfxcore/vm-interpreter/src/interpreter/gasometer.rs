@@ -365,7 +365,11 @@ impl<Gas: CostType> Gasometer<Gas> {
             }
             instructions::BLOCKHASH => {
                 let block_number = stack.peek(0);
-                let gas = if !spec.cip645 {
+                let gas = if context.space() == Space::Ethereum
+                    && spec.align_evm
+                {
+                    spec.blockhash_gas
+                } else if !spec.cip645 {
                     match context.blockhash_source() {
                         BlockHashSource::Env => spec.blockhash_gas,
                         BlockHashSource::State => spec.sload_gas(),

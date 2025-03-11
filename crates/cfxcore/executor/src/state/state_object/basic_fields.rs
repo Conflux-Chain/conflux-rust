@@ -17,6 +17,12 @@ impl State {
         Ok(self.read_account_lock(address)?.is_some())
     }
 
+    /// Touch an account to mark it as warm
+    pub fn touch(&self, address: &AddressWithSpace) -> DbResult<()> {
+        self.exists(address)?;
+        Ok(())
+    }
+
     pub fn exists_and_not_null(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {

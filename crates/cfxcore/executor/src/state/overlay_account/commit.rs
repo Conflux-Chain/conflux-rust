@@ -106,7 +106,7 @@ impl OverlayAccount {
         Ok(())
     }
 
-    pub fn commit_for_tx(&mut self, retain_transient_storage: bool) {
+    pub fn commit_cache(&mut self, retain_transient_storage: bool) {
         assert!(self.storage_write_checkpoint.is_none());
         assert!(self.transient_storage_checkpoint.is_none());
 
@@ -119,6 +119,7 @@ impl OverlayAccount {
                 &mut *storage_write_cache,
             );
         } else if storage_write_cache.is_empty() {
+            // No-op on strorage_write_cache
         } else {
             for (key, value) in storage_write_cache.drain() {
                 storage_commit_cache.insert(key, value);

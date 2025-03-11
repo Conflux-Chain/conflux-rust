@@ -133,8 +133,9 @@ pub fn gas_required_for(
         0
     };
 
-    let authorization_gas =
-        spec.per_empty_account_cost as u64 * authorization_len as u64;
+    let authorization_gas = spec.per_empty_account_cost as u64
+        * spec.evm_gas_ratio as u64
+        * authorization_len as u64;
 
     init_gas + data_gas + access_gas + authorization_gas + initcode_gas
 }
