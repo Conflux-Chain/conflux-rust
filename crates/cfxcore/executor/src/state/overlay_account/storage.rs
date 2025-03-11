@@ -138,6 +138,9 @@ impl OverlayAccount {
         if let Some(entry) = self.storage_write_cache.read().get(key) {
             return Some(*entry);
         }
+        if let Some(entry) = self.storage_committed_cache.read().get(key) {
+            return Some(*entry);
+        }
         if let Some(entry) = self.storage_read_cache.read().get(key) {
             return Some(*entry);
         }

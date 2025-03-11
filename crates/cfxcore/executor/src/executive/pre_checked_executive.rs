@@ -648,7 +648,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
     fn update_state_on_finalize(&mut self) {
         self.context.state.clear_tx_access_list();
-        self.context.state.commit_for_tx(&self.context.spec);
+        self.context.state.commit_cache(!self.context.spec.cip645);
     }
 }
 

@@ -84,9 +84,9 @@ pub struct State {
     ///
     /// WARNING: Don't delete cache entries outside of `State::commit`, unless
     /// you are familiar with checkpoint maintenance.
-    cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
+    pub cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
 
-    committed_cache: HashMap<AddressWithSpace, AccountEntry>,
+    pub committed_cache: HashMap<AddressWithSpace, AccountEntry>,
     tx_access_list: Option<HashMap<AddressWithSpace, HashSet<H256>>>,
 
     /// In-memory global statistic variables.

@@ -6,7 +6,6 @@ use cfx_internal_common::{
 };
 use cfx_statedb::{access_mode, Result as DbResult};
 use cfx_types::AddressWithSpace;
-use cfx_vm_types::Spec;
 use primitives::{Account, EpochId, StorageKey};
 
 pub struct StateCommitResult {
@@ -56,7 +55,8 @@ impl State {
     ) -> DbResult<Vec<Account>> {
         assert!(self.no_checkpoint());
 
-        let cache_items = self.cache.get_mut().drain();
+        self.commit_cache(false);
+        let cache_items = self.committed_cache.drain();
         let mut to_commit_accounts = cache_items
             .filter_map(|(_, acc)| acc.into_to_commit_account())
             .collect::<Vec<_>>();
@@ -123,10 +123,10 @@ impl State {
 }
 
 impl State {
-    pub fn commit_for_tx(&mut self, spec: &Spec) {
+    pub fn commit_cache(&mut self, retain_transient_storage: bool) {
         for (addr, mut account) in self.cache.get_mut().drain() {
             if let AccountEntry::Cached(ref mut acc, true) = account {
-                acc.commit_for_tx(spec);
+                acc.commit_for_tx(retain_transient_storage);
             }
             self.committed_cache.insert(addr, account);
         }
