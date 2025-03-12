@@ -31,6 +31,8 @@ jobs:
       
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       
       - name: Build
         run: CC=clang CXX=clang++ cargo build --release
