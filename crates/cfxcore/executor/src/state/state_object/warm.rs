@@ -64,4 +64,11 @@ impl State {
     }
 
     pub fn clear_tx_access_list(&mut self) { self.tx_access_list = None; }
+
+    pub fn update_state_post_tx_execution(
+        &mut self, retain_transient_storage: bool,
+    ) {
+        self.clear_tx_access_list();
+        self.commit_cache(retain_transient_storage);
+    }
 }

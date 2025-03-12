@@ -222,6 +222,7 @@ impl<'a> EstimationContext<'a> {
             "Transaction estimate first pass outcome {:?}",
             sender_pay_executed
         );
+        self.state.update_state_post_tx_execution(false);
         self.state.restore(saved);
 
         // Second pass

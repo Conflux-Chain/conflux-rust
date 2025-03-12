@@ -22,6 +22,7 @@ class RpcTest(ConfluxTestFramework):
             # Disable 1559 for RPC tests temporarily
             "cip1559_transition_height": str(99999999),
             "cip151_transition_height": str(99999999),
+            "cip645_transition_height": str(99999999),
         }
 
     def setup_network(self):

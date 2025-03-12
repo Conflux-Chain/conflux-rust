@@ -2,32 +2,23 @@ use std::collections::HashMap;
 
 use crate::state::{global_stat::GlobalStat, overlay_account::AccountEntry};
 use cfx_types::AddressWithSpace;
-use parking_lot::RwLock;
 
 use super::State;
 
 pub struct SavedState {
-    cache: HashMap<AddressWithSpace, AccountEntry>,
     committed_cache: HashMap<AddressWithSpace, AccountEntry>,
     global_stat: GlobalStat,
 }
 
 impl State {
-    pub fn save(&self) -> SavedState {
-        assert!(self.no_checkpoint());
-        let cache = self
-            .cache
-            .read()
-            .iter()
-            .map(|(k, v)| (*k, v.clone_account()))
-            .collect();
+    pub fn save(&mut self) -> SavedState {
+        self.commit_cache(false);
         let committed_cache = self
             .committed_cache
             .iter()
             .map(|(k, v)| (*k, v.clone_account()))
             .collect();
         SavedState {
-            cache,
             committed_cache,
             global_stat: self.global_stat.clone(),
         }
@@ -35,7 +26,7 @@ impl State {
 
     pub fn restore(&mut self, saved: SavedState) {
         assert!(self.no_checkpoint());
-        self.cache = RwLock::new(saved.cache);
+        self.cache = Default::default();
         self.committed_cache = saved.committed_cache;
         self.global_stat = saved.global_stat;
     }

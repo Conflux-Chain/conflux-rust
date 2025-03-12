@@ -131,6 +131,7 @@ impl State {
     pub fn clear(&mut self) {
         assert!(self.no_checkpoint());
         self.cache.get_mut().clear();
+        self.committed_cache.clear();
         self.global_stat = GlobalStat::loaded(&self.db).expect("no db error");
     }
 }

@@ -217,6 +217,8 @@ impl CommonParams {
         spec.align_evm =
             height >= self.transition_heights.align_evm && spec.cip645;
 
+        spec.overwrite_gas_plan_by_cip();
+
         spec
     }
 

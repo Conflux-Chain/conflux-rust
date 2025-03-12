@@ -46,9 +46,6 @@ pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     pub(super) fn execute_transaction(mut self) -> DbResult<ExecutionOutcome> {
-        // Transaction should execute on an empty cache
-        assert!(self.context.state.cache.get_mut().is_empty());
-
         self.inc_sender_nonce()?;
 
         let (actual_gas_cost, insufficient_sender_balance) =
@@ -511,9 +508,14 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             } else {
                 0
             };
+            let eip7702_refund = if spec.align_evm {
+                eip7702_refund as u128
+            } else {
+                0
+            };
             gas_used -= std::cmp::min(
                 gas_used / 5,
-                U256::from(substate_refund + eip7702_refund as u128),
+                U256::from(substate_refund + eip7702_refund),
             );
         }
 
@@ -582,9 +584,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     fn finalize_on_insufficient_balance(
-        mut self, actual_gas_cost: U256,
+        self, actual_gas_cost: U256,
     ) -> DbResult<ExecutionOutcome> {
-        self.update_state_on_finalize();
         return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
             ExecutionError::NotEnoughCash {
                 required: self.cost.total_cost,
@@ -603,9 +604,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     }
 
     fn finalize_on_conflict_address(
-        mut self, address: Address,
+        self, address: Address,
     ) -> DbResult<ExecutionOutcome> {
-        self.update_state_on_finalize();
         return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
             ExecutionError::VmError(vm::Error::ConflictAddress(address)),
             Executed::execution_error_fully_charged(
@@ -618,10 +618,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     }
 
     fn finalize_on_executed(
-        mut self, result: ExecutiveResult, refund_info: RefundInfo,
+        self, result: ExecutiveResult, refund_info: RefundInfo,
     ) -> DbResult<ExecutionOutcome> {
-        self.update_state_on_finalize();
-
         let tx = self.tx;
         let cost = self.cost;
         let ext_result = make_ext_result(self.observer);
@@ -659,11 +657,6 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         };
 
         Ok(outcome)
-    }
-
-    fn update_state_on_finalize(&mut self) {
-        self.context.state.clear_tx_access_list();
-        self.context.state.commit_cache(!self.context.spec.cip645);
     }
 }
 
