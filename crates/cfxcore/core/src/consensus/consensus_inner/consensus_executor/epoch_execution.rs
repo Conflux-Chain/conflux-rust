@@ -290,6 +290,7 @@ impl ConsensusExecutionHandler {
         let execution_outcome =
             ExecutiveContext::new(state, env, machine, &spec)
                 .transact(transaction, options)?;
+        state.update_state_post_tx_execution(!spec.cip645);
         execution_outcome.log(transaction, &block_context.block.hash());
 
         if let Some(burnt_fee) = execution_outcome
@@ -471,6 +472,8 @@ impl ConsensusExecutionHandler {
                 .internal_contracts()
                 .initialized_at(block_number),
         )?;
+
+        state.commit_cache(false);
 
         Ok(secondary_reward)
     }

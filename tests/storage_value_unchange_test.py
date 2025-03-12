@@ -6,6 +6,7 @@ from test_framework.test_framework import ConfluxTestFramework
 class StorageValueUnchangeTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
+        self.conf_parameters["cip645_transition_height"] = str(99999999)
         
     def run_test(self):
         self.w3 = self.cw3

@@ -52,9 +52,13 @@ impl<'a> ExecutiveContext<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn transact<O: ExecutiveObserver>(
         self, tx: &SignedTransaction, options: TransactOptions<O>,
     ) -> DbResult<ExecutionOutcome> {
+        // Transaction should execute on an empty cache
+        assert!(self.state.cache.get_mut().is_empty());
+
         let fresh_exec = FreshExecutive::new(self, tx, options);
 
         Ok(match fresh_exec.check_all()? {
