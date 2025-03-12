@@ -1,0 +1,42 @@
+name: cargo nextest
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: 1.77.2
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          profile: minimal
+          override: true
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libsqlite3-dev pkg-config libssl-dev cmake
+      
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Build
+        run: cargo build --release
+      
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+      
+      - name: Run tests
+        run: cargo nextest run 
