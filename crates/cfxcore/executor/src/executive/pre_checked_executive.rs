@@ -505,7 +505,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
-        let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
+        let charge_all = !spec.align_evm && (gas_left + gas_left + gas_left) >= gas_used;
         let (gas_charged, gas_refunded) = if charge_all {
             let gas_refunded = tx.gas() >> 2;
             let gas_charged = tx.gas() - gas_refunded;

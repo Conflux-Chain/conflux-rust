@@ -151,6 +151,10 @@ impl<'a> Context<'a> {
                 return_if!(number
                     .checked_add(65536)
                     .map_or(false, |n| n <= self.env.epoch_height));
+                if self.spec.align_evm {
+                    return_if!(number >= self.env.epoch_height);
+                    return_if!(number + 256 < self.env.epoch_height);
+                }
                 self.state.get_system_storage(&epoch_hash_slot(number))?
             }
         };
