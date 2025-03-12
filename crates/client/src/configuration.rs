@@ -195,6 +195,8 @@ build_config! {
         (eoa_code_transition_height, (Option<u64>), None)
         (cip151_transition_height, (Option<u64>), None)
 
+        (align_evm_transition_height, (u64), u64::MAX)
+
 
         // Mining section.
         (mining_author, (Option<String>), None)
@@ -1502,6 +1504,8 @@ impl Configuration {
         if let Some(x) = self.raw_conf.cip151_transition_height {
             params.transition_heights.cip151 = x;
         }
+        params.transition_heights.align_evm =
+            self.raw_conf.align_evm_transition_height;
     }
 }
 

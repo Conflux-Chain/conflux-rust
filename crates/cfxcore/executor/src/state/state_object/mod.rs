@@ -125,6 +125,7 @@ impl State {
         pool: &rayon::ThreadPool,
     ) -> DbResult<()> {
         use rayon::prelude::*;
+
         pool.install(|| {
             addresses
                 .into_par_iter()
@@ -132,6 +133,7 @@ impl State {
         })
         .collect::<DbResult<()>>()?;
 
+        assert!(self.committed_cache.is_empty());
         self.committed_cache = std::mem::take(self.cache.get_mut());
         Ok(())
     }

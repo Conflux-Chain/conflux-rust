@@ -139,6 +139,8 @@ pub struct Spec {
     pub wasm: Option<WasmCosts>,
     /// The magnification of gas storage occupying related operaions.
     pub evm_gas_ratio: usize,
+    /// `PER_AUTH_BASE_COST` in CIP-7702
+    pub per_auth_base_cost: usize,
     /// `PER_EMPTY_ACCOUNT_COST` in CIP-7702
     pub per_empty_account_cost: usize,
     /// CIP-43: Introduce Finality via Voting Among Staked
@@ -327,6 +329,7 @@ impl Spec {
             cold_account_access_cost: 2600,
             warm_access_gas: 100,
             suicide_to_new_account_cost: 25000,
+            per_auth_base_cost: 17000,
             per_empty_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
@@ -396,8 +399,14 @@ impl Spec {
             self.tx_data_non_zero_gas = 16;
 
             // CIP-645f: EIP-2929
-            self.cold_sload_gas = 800;
+            self.cold_sload_gas = 2100;
             self.sstore_reset_gas = 2900;
+        }
+
+        if self.align_evm {
+            self.per_auth_base_cost = 12500;
+            self.create_data_limit = 24576;
+            self.evm_gas_ratio = 1;
         }
     }
 

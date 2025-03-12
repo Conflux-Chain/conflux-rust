@@ -765,7 +765,8 @@ impl VerificationConfig {
         // ******************************************
         let cip76 = height >= transitions.cip76;
         let cip90a = height >= transitions.cip90a;
-        let cip130 = height >= transitions.cip130 && height < transitions.align_evm;
+        let cip130 =
+            height >= transitions.cip130 && height < transitions.align_evm;
         let cip1559 = height >= transitions.cip1559;
         let cip7702 = height >= transitions.cip7702;
         let cip645 = height >= transitions.cip645;

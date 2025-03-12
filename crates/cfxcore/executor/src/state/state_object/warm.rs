@@ -1,6 +1,7 @@
 use crate::try_loaded;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{AddressSpaceUtil, AddressWithSpace, Space, H256};
+use cfx_vm_types::ActionParams;
 use primitives::AccessListItem;
 
 use super::State;
@@ -54,6 +55,12 @@ impl State {
             .collect();
 
         self.tx_access_list = Some(access_list);
+    }
+
+    pub fn touch_tx_addresses(&self, params: &ActionParams) -> DbResult<()> {
+        self.touch(&params.address.with_space(params.space))?;
+        self.touch(&params.sender.with_space(params.space))?;
+        Ok(())
     }
 
     pub fn clear_tx_access_list(&mut self) { self.tx_access_list = None; }

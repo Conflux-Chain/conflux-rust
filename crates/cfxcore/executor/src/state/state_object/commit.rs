@@ -124,6 +124,7 @@ impl State {
 
 impl State {
     pub fn commit_cache(&mut self, retain_transient_storage: bool) {
+        assert!(self.no_checkpoint());
         for (addr, mut account) in self.cache.get_mut().drain() {
             if let AccountEntry::Cached(ref mut acc, true) = account {
                 acc.commit_cache(retain_transient_storage);
