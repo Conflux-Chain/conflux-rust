@@ -170,7 +170,8 @@ def run_single_round(options):
             script = TEST_SCRIPTS[test_idx]
             test_idx += 1
         else:
-            break  # No more tasks to submit
+            time.sleep(0.5)
+            continue  # Wait for pending tasks to complete
 
         # Wait until number of pending tasks drops below threshold
         while len(pending_tasks) >= options.max_workers * 2:
