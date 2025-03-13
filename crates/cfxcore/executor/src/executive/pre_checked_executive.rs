@@ -697,7 +697,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 let r: H256 = BigEndianHash::from_uint(r);
                 let s: H256 = BigEndianHash::from_uint(s);
                 let signature = Signature::from_rsv(&r, &s, *y_parity);
-                if !signature.is_valid() || signature.is_low_s() {
+                if !signature.is_low_s() || !signature.is_valid() {
                     continue;
                 }
                 signature
