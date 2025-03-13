@@ -108,7 +108,8 @@ def run():
 
 def run_single_round(options):
     # Add slow tests to the front of the queue
-    TEST_SCRIPTS = ["pos/retire_param_hard_fork_test.py"]
+    slow_tests = ["pos/retire_param_hard_fork_test.py"]
+    TEST_SCRIPTS = slow_tests.copy()
 
     test_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -136,7 +137,7 @@ def run_single_round(options):
         for file in os.listdir(subdir_path):
             if file.endswith("_test.py"):
                 rel_path = os.path.join(subdir, file)
-                if rel_path not in resource_heavy_tests:
+                if rel_path not in resource_heavy_tests and rel_path not in slow_tests:
                     TEST_SCRIPTS.append(rel_path)
 
     executor = ProcessPoolExecutor(max_workers=options.max_workers)
@@ -148,7 +149,6 @@ def run_single_round(options):
         py = "python"
 
     i = 0
-    # Add slow tests to the front of the queue
     slow_idx = 0
     test_idx = 0
     while slow_idx < len(resource_heavy_tests) or test_idx < len(TEST_SCRIPTS):
