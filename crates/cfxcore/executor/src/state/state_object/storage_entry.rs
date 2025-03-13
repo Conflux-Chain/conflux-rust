@@ -4,7 +4,10 @@ use cfx_parameters::internal_contract_addresses::{
     SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, SYSTEM_STORAGE_ADDRESS,
 };
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
+use cfx_types::{
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H256,
+    U256,
+};
 use primitives::StorageValue;
 
 impl State {
@@ -31,6 +34,35 @@ impl State {
             &SYSTEM_STORAGE_ADDRESS.with_native_space(),
             key,
             value,
+            Address::zero(),
+            &mut Substate::new(),
+        )
+    }
+
+    pub fn set_eip2935_storage(
+        &mut self, block_height: u64, block_hash: H256,
+    ) -> DbResult<()> {
+        use cfx_types::H160;
+        use hex_literal::hex;
+
+        pub const EIP2935_ADDRESS: AddressWithSpace = AddressWithSpace {
+            address: H160(hex!("0000F90827F1C53a10cb7A02335B175320002935")),
+            space: Space::Ethereum,
+        };
+        pub const HISTORY_SERVE_WINDOW: usize = 8191;
+
+        if self.has_no_code(&EIP2935_ADDRESS)? {
+            return Ok(());
+        }
+
+        let slot_index = U256::from(block_height % HISTORY_SERVE_WINDOW as u64);
+        let key: H256 = BigEndianHash::from_uint(&slot_index);
+
+        // The espace does not have owner.
+        self.set_storage(
+            &EIP2935_ADDRESS,
+            key.0.to_vec(),
+            block_hash.into_uint(),
             Address::zero(),
             &mut Substate::new(),
         )

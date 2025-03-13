@@ -412,12 +412,17 @@ impl ConsensusExecutionHandler {
 
         let epoch_number = pivot_block.block_header.height();
         let hash = pivot_block.hash();
+        let parent_hash = pivot_block.block_header.parent_hash();
 
         if epoch_number >= params.transition_heights.cip133e {
             state.set_system_storage(
                 epoch_hash_slot(epoch_number).into(),
                 U256::from_big_endian(&hash.0),
             )?;
+        }
+
+        if epoch_number >= params.transition_heights.eip2935 {
+            state.set_eip2935_storage(epoch_number - 1, *parent_hash)?;
         }
         Ok(())
     }

@@ -118,6 +118,13 @@ impl State {
         Ok(acc.code_hash())
     }
 
+    pub fn has_no_code(&self, address: &AddressWithSpace) -> DbResult<bool> {
+        let Some(acc) = self.read_account_lock(address)? else {
+            return Ok(true);
+        };
+        Ok(acc.code_hash() == KECCAK_EMPTY)
+    }
+
     pub fn code_size(&self, address: &AddressWithSpace) -> DbResult<usize> {
         let acc = try_loaded!(
             self.read_account_ext_lock(address, RequireFields::Code)

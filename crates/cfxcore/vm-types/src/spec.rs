@@ -207,6 +207,7 @@ pub struct Spec {
     pub cip7702: bool,
     /// CIP-645(GAS)
     pub cip645: bool,
+    pub eip2935: bool,
     pub align_evm: bool,
 }
 
@@ -373,6 +374,7 @@ impl Spec {
             cip154: false,
             cip645: false,
             cip7702: false,
+            eip2935: false,
             align_evm: false,
         }
     }

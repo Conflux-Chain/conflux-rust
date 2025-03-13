@@ -149,6 +149,7 @@ pub struct TransitionsEpochHeight {
     pub cip7702: BlockHeight,
     pub cip645: BlockHeight,
     pub align_evm: BlockHeight,
+    pub eip2935: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -213,6 +214,7 @@ impl CommonParams {
         spec.cip154 = height >= self.transition_heights.cip154;
         spec.cip7702 = height >= self.transition_heights.cip7702;
         spec.cip645 = height >= self.transition_heights.cip645;
+        spec.eip2935 = height >= self.transition_heights.eip2935;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         spec.align_evm =
             height >= self.transition_heights.align_evm && spec.cip645;
