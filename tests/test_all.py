@@ -110,8 +110,10 @@ def run_single_round(options):
     # Add slow tests to the front of the queue
     slow_tests = [
         "pos/retire_param_hard_fork_test.py",
-        "pubsub/eth_logs_test.py",
-        "pubsub/epochs_test.py"
+        # These tests are also slow but also has a relative high resource usage
+        # running these tests together with heavy tests will cause node to behave abnormally
+        # "pubsub/eth_logs_test.py",
+        # "pubsub/epochs_test.py"
     ]
     TEST_SCRIPTS = slow_tests.copy()
 
