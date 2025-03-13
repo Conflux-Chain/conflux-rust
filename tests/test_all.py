@@ -108,7 +108,11 @@ def run():
 
 def run_single_round(options):
     # Add slow tests to the front of the queue
-    slow_tests = ["pos/retire_param_hard_fork_test.py"]
+    slow_tests = [
+        "pos/retire_param_hard_fork_test.py",
+        "pubsub/eth_logs_test.py",
+        "pubsub/epochs_test.py"
+    ]
     TEST_SCRIPTS = slow_tests.copy()
 
     test_dir = os.path.dirname(os.path.realpath(__file__))
@@ -149,19 +153,19 @@ def run_single_round(options):
         py = "python"
 
     i = 0
-    slow_idx = 0
+    heavy_idx = 0
     test_idx = 0
-    while slow_idx < len(resource_heavy_tests) or test_idx < len(TEST_SCRIPTS):
-        # Check if there are any slow tests currently running
-        has_pending_slow = any(
+    while heavy_idx < len(resource_heavy_tests) or test_idx < len(TEST_SCRIPTS):
+        # Check if there are any heavy tests currently running
+        has_pending_heavy = any(
             (s in resource_heavy_tests) and not f.done()
             for s, f in test_results
         )
 
-        # Prioritize submitting slow tests (when no slow test is running)
-        if slow_idx < len(resource_heavy_tests) and not has_pending_slow:
-            script = resource_heavy_tests[slow_idx]
-            slow_idx += 1
+        # Prioritize submitting heavy tests (when no heavy test is running)
+        if heavy_idx < len(resource_heavy_tests) and not has_pending_heavy:
+            script = resource_heavy_tests[heavy_idx]
+            heavy_idx += 1
         elif test_idx < len(TEST_SCRIPTS):
             script = TEST_SCRIPTS[test_idx]
             test_idx += 1
