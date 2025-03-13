@@ -107,7 +107,8 @@ def run():
     sys.exit(TEST_FAILURE_ERROR_CODE)
 
 def run_single_round(options):
-    TEST_SCRIPTS = []
+    # Add slow tests to the front of the queue
+    TEST_SCRIPTS = ["pos/retire_param_hard_fork_test.py"]
 
     test_dir = os.path.dirname(os.path.realpath(__file__))
 
@@ -128,8 +129,6 @@ def run_single_round(options):
         "pos/hard_fork_test.py",
         "erc20_test.py",
     ]
-    slow_tests = ["pos/retire_param_hard_fork_test.py"]
-    
 
     # By default, run all *_test.py files in the specified subfolders.
     for subdir in test_subdirs:
@@ -137,7 +136,7 @@ def run_single_round(options):
         for file in os.listdir(subdir_path):
             if file.endswith("_test.py"):
                 rel_path = os.path.join(subdir, file)
-                if rel_path not in resource_heavy_tests and rel_path not in slow_tests:
+                if rel_path not in resource_heavy_tests:
                     TEST_SCRIPTS.append(rel_path)
 
     executor = ProcessPoolExecutor(max_workers=options.max_workers)
@@ -149,12 +148,10 @@ def run_single_round(options):
         py = "python"
 
     i = 0
-    heavy_scripts = resource_heavy_tests.copy()
     # Add slow tests to the front of the queue
-    test_scripts = slow_tests.copy() + TEST_SCRIPTS.copy()
     slow_idx = 0
     test_idx = 0
-    while slow_idx < len(heavy_scripts) or test_idx < len(test_scripts):
+    while slow_idx < len(resource_heavy_tests) or test_idx < len(TEST_SCRIPTS):
         # Check if there are any slow tests currently running
         has_pending_slow = any(
             (s in resource_heavy_tests) and not f.done()
@@ -162,11 +159,11 @@ def run_single_round(options):
         )
 
         # Prioritize submitting slow tests (when no slow test is running)
-        if slow_idx < len(heavy_scripts) and not has_pending_slow:
-            script = heavy_scripts[slow_idx]
+        if slow_idx < len(resource_heavy_tests) and not has_pending_slow:
+            script = resource_heavy_tests[slow_idx]
             slow_idx += 1
-        elif test_idx < len(test_scripts):
-            script = test_scripts[test_idx]
+        elif test_idx < len(TEST_SCRIPTS):
+            script = TEST_SCRIPTS[test_idx]
             test_idx += 1
         else:
             break  # No more tasks to submit
