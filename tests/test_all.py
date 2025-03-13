@@ -3,6 +3,7 @@ import argparse
 import subprocess
 import os
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor
 
 PORT_MIN = 11000
@@ -119,7 +120,16 @@ def run_single_round(options):
             "pubsub",
             "evm_space",
             ]
-    slow_tests = {"full_node_tests/p2p_era_test.py", "pos/retire_param_hard_fork_test.py"}
+    resource_heavy_tests = [
+        "full_node_tests/p2p_era_test.py",
+        "crash_test.py",
+        "reorg_test.py",
+        "crash_archive_era150_test.py",
+        "pos/hard_fork_test.py",
+        "erc20_test.py",
+    ]
+    slow_tests = ["pos/retire_param_hard_fork_test.py"]
+    
 
     # By default, run all *_test.py files in the specified subfolders.
     for subdir in test_subdirs:
@@ -127,24 +137,48 @@ def run_single_round(options):
         for file in os.listdir(subdir_path):
             if file.endswith("_test.py"):
                 rel_path = os.path.join(subdir, file)
-                if rel_path not in slow_tests:
+                if rel_path not in resource_heavy_tests:
                     TEST_SCRIPTS.append(rel_path)
 
     executor = ProcessPoolExecutor(max_workers=options.max_workers)
     test_results = []
+    pending_tasks = []
 
     py = "python3"
     if hasattr(sys, "getwindowsversion"):
         py = "python"
 
     i = 0
-    # Start slow tests first to avoid waiting for long-tail jobs
-    for script in slow_tests:
+    heavy_scripts = resource_heavy_tests.copy()
+    test_scripts = slow_tests.copy() + TEST_SCRIPTS.copy()
+    slow_idx = 0
+    test_idx = 0
+    while slow_idx < len(heavy_scripts) or test_idx < len(test_scripts):
+        # Check if there are any slow tests currently running
+        has_pending_slow = any(
+            (s in resource_heavy_tests) and not f.done()
+            for s, f in test_results
+        )
+
+        # Prioritize submitting slow tests (when no slow test is running)
+        if slow_idx < len(heavy_scripts) and not has_pending_slow:
+            script = heavy_scripts[slow_idx]
+            slow_idx += 1
+        elif test_idx < len(test_scripts):
+            script = test_scripts[test_idx]
+            test_idx += 1
+        else:
+            break  # No more tasks to submit
+
+        # Wait until number of pending tasks drops below threshold
+        while len(pending_tasks) >= options.max_workers * 2:
+            # Remove completed tasks
+            pending_tasks = [task for task in pending_tasks if not task.done()]
+            if len(pending_tasks) >= options.max_workers * 2:
+                time.sleep(0.1)  # Brief sleep to avoid CPU spinning
+
         f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
-        test_results.append((script, f))
-        i += 1
-    for script in TEST_SCRIPTS:
-        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
+        pending_tasks.append(f)
         test_results.append((script, f))
         i += 1
 
