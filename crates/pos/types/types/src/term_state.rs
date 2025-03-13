@@ -1101,7 +1101,7 @@ impl PosState {
     pub fn forfeit_node(&mut self, addr: &AccountAddress) -> Result<()> {
         diem_trace!("forfeit_node: {:?}", addr);
         match self.node_map.get_mut(&addr) {
-            Some(node) => node.lock_status.forfeit(),
+            Some(node) => node.lock_status.forfeit(self.current_view),
             None => bail!("Forfeiting node does not exist"),
         }
         Ok(())
