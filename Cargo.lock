@@ -1201,6 +1201,7 @@ name = "cfx-executor"
 version = "2.0.2"
 dependencies = [
  "bls-signatures",
+ "blst",
  "byteorder",
  "c-kzg",
  "cfx-bytes",

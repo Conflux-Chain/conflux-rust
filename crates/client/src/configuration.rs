@@ -1500,7 +1500,7 @@ impl Configuration {
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip150, cip151, cip152, cip154, cip7702, cip645 }
+            params.transition_heights => { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935 }
         );
         if let Some(x) = self.raw_conf.cip151_transition_height {
             params.transition_heights.cip151 = x;

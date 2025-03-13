@@ -21,11 +21,13 @@
 //! Standard built-in contracts.
 
 mod blake2f;
+mod bls12_381;
 mod ethereum_trusted_setup_points;
 mod executable;
 mod kzg_point_evaluations;
 mod price_plan;
 
+pub use bls12_381::build_bls12_builtin_map;
 pub use executable::BuiltinExec;
 pub use price_plan::{IfPricer, StaticPlan};
 
@@ -46,14 +48,18 @@ use parity_crypto::digest;
 
 use blake2f::compress;
 
-use self::price_plan::PricePlan;
+use self::{bls12_381::bls12_builtin_factory, price_plan::PricePlan};
 
 /// Execution error.
 #[derive(Debug)]
-pub struct Error(pub &'static str);
+pub struct Error(pub String);
 
 impl From<&'static str> for Error {
-    fn from(val: &'static str) -> Self { Error(val) }
+    fn from(val: &'static str) -> Self { Error(val.into()) }
+}
+
+impl From<String> for Error {
+    fn from(val: String) -> Self { Error(val) }
 }
 
 impl Into<cfx_vm_types::Error> for Error {
@@ -77,7 +83,6 @@ pub trait Pricer: Send + Sync {
 
 /// A linear pricing model. This computes a price using a base cost and a cost
 /// per-word.
-#[allow(dead_code)]
 pub(crate) struct Linear {
     base: usize,
     word: usize,
@@ -87,6 +92,14 @@ impl Linear {
     pub(crate) fn new(base: usize, word: usize) -> Linear {
         Linear { base, word }
     }
+}
+
+pub(crate) struct ConstPricer {
+    price: u64,
+}
+
+impl ConstPricer {
+    pub(crate) const fn new(price: u64) -> ConstPricer { ConstPricer { price } }
 }
 
 /// A special pricing model for modular exponentiation.
@@ -109,6 +122,10 @@ impl Pricer for Linear {
         U256::from(self.base)
             + U256::from(self.word) * U256::from((input.len() + 31) / 32)
     }
+}
+
+impl Pricer for ConstPricer {
+    fn cost(&self, _input: &[u8]) -> U256 { U256::from(self.price) }
 }
 
 /// A alt_bn128_parinig pricing model. This computes a price using a base cost
@@ -336,6 +353,13 @@ pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
         "alt_bn128_pairing" => Box::new(Bn128PairingImpl) as Box<dyn Impl>,
         "blake2_f" => Box::new(Blake2FImpl) as Box<dyn Impl>,
         "kzg_point_eval" => Box::new(KzgPointEval) as Box<dyn Impl>,
+        "bls12_g1add"
+        | "bls12_g1msm"
+        | "bls12_g2add"
+        | "bls12_g2msm"
+        | "bls12_pairing_check"
+        | "bls12_map_fp_to_g1"
+        | "bls12_map_fp2_to_g2" => bls12_builtin_factory(name),
         _ => panic!("invalid builtin name: {}", name),
     }
 }

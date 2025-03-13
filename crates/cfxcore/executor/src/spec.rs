@@ -150,6 +150,7 @@ pub struct TransitionsEpochHeight {
     pub cip645: BlockHeight,
     pub align_evm: BlockHeight,
     pub eip2935: BlockHeight,
+    pub eip2537: BlockHeight,
 }
 
 impl Default for CommonParams {

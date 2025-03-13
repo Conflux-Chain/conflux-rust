@@ -103,7 +103,7 @@ pub enum Error {
     /// exceed the `storage_limit`.
     ExceedStorageLimit,
     /// Built-in contract failed on given input
-    BuiltIn(&'static str),
+    BuiltIn(String),
     /// Internal contract failed
     InternalContract(String),
     /// When execution tries to modify the state in static context
@@ -183,7 +183,7 @@ impl fmt::Display for Error {
                 write!(f, "Not enough balance for storage {}/{}", required, got,)
             }
             ExceedStorageLimit => write!(f, "Exceed storage limit"),
-            BuiltIn(name) => write!(f, "Built-in failed: {}", name),
+            BuiltIn(ref name) => write!(f, "Built-in failed: {}", name),
             InternalContract(ref name) => {
                 write!(f, "InternalContract failed: {}", name)
             }

@@ -7,8 +7,8 @@ mod vm_factory;
 use super::builtin::Builtin;
 use crate::{
     builtin::{
-        builtin_factory, AltBn128PairingPricer, Blake2FPricer, IfPricer,
-        Linear, ModexpPricer, StaticPlan,
+        build_bls12_builtin_map, builtin_factory, AltBn128PairingPricer,
+        Blake2FPricer, IfPricer, Linear, ModexpPricer, StaticPlan,
     },
     internal_contract::InternalContractMap,
     spec::CommonParams,
@@ -230,5 +230,15 @@ fn new_builtin_map(
             params.transition_numbers.cip144,
         ),
     );
+    for (address, price_plan, bls12_impl) in build_bls12_builtin_map() {
+        btree.insert(
+            Address::from(H256::from_low_u64_be(address)),
+            Builtin::new(
+                price_plan,
+                bls12_impl,
+                params.transition_heights.eip2537,
+            ),
+        );
+    }
     btree
 }
