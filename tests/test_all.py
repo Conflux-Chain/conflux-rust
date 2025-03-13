@@ -176,10 +176,10 @@ def run_single_round(options):
             continue  # Wait for pending tasks to complete
 
         # Wait until number of pending tasks drops below threshold
-        while len(pending_tasks) >= options.max_workers * 2:
+        while len(pending_tasks) >= options.max_workers:
             # Remove completed tasks
             pending_tasks = [task for task in pending_tasks if not task.done()]
-            if len(pending_tasks) >= options.max_workers * 2:
+            if len(pending_tasks) >= options.max_workers:
                 time.sleep(0.1)  # Brief sleep to avoid CPU spinning
 
         f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
