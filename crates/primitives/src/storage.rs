@@ -183,6 +183,12 @@ pub struct StorageValue {
     pub owner: Option<Address>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum WriteCacheItem {
+    Read,
+    Write(StorageValue),
+}
+
 impl Decodable for StorageValue {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         if rlp.is_list() {

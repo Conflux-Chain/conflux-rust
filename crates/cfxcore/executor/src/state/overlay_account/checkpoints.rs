@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 use cfx_types::U256;
-use primitives::StorageValue;
+use primitives::{storage::WriteCacheItem, StorageValue};
 
 use crate::{
     state::checkpoints::CheckpointEntry::{self, Recorded, Unchanged},
@@ -68,8 +68,10 @@ impl OverlayAccount {
     pub(super) fn insert_storage_write_cache(
         &mut self, key: Vec<u8>, value: StorageValue,
     ) {
-        let old_value =
-            self.storage_write_cache.write().insert(key.clone(), value);
+        let old_value = self
+            .storage_write_cache
+            .write()
+            .insert(key.clone(), WriteCacheItem::Write(value));
         unwrap_or_return!(self.storage_write_checkpoint.as_mut())
             .notify_cache_change(key, old_value);
     }

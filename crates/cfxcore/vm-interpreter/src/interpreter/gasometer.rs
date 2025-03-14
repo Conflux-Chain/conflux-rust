@@ -543,7 +543,7 @@ fn calc_sstore_gas<Gas: CostType>(
         });
     }
 
-    let ori_val = context.origin_storage_at(&key[..])?.unwrap_or(cur_val);
+    let ori_val = context.origin_storage_at(&key[..])?.unwrap();
 
     let is_noop = new_val == cur_val;
     let is_clean = ori_val == cur_val;

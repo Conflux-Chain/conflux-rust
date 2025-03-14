@@ -165,10 +165,6 @@ impl Pricer for ModexpPricer {
         let exp_len = read_len();
         let mod_len = read_len();
 
-        if mod_len.is_zero() && base_len.is_zero() {
-            return U256::zero();
-        }
-
         let max_len = U256::from(u32::max_value() / 2);
         if base_len > max_len || mod_len > max_len || exp_len > max_len {
             return U256::max_value();
@@ -207,6 +203,9 @@ impl ModexpPricer {
         base_len: u64, mod_len: u64, iter_count: u64, divisor: usize,
     ) -> U256 {
         let m = max(mod_len, base_len);
+        if m == 0 {
+            return U256::zero();
+        }
         let (gas, overflow) =
             Self::mult_complexity(m).overflowing_mul(iter_count);
         if overflow {

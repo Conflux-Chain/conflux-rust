@@ -60,8 +60,8 @@ use cfx_types::{
 use keccak_hash::KECCAK_EMPTY;
 use parking_lot::RwLock;
 use primitives::{
-    is_default::IsDefault, CodeInfo, DepositList, SponsorInfo, StorageLayout,
-    StorageValue, VoteStakeList,
+    is_default::IsDefault, storage::WriteCacheItem, CodeInfo, DepositList,
+    SponsorInfo, StorageLayout, StorageValue, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -143,9 +143,9 @@ pub struct OverlayAccount {
 
     /// Write cache for the storage entries of this account for recording
     /// changed values.
-    storage_write_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
+    storage_write_cache: Arc<RwLock<HashMap<Vec<u8>, WriteCacheItem>>>,
     storage_write_checkpoint:
-        Option<WriteCheckpointLayer<Vec<u8>, StorageValue>>,
+        Option<WriteCheckpointLayer<Vec<u8>, WriteCacheItem>>,
 
     /// Transient storage from CIP-142
     transient_storage_cache: Arc<RwLock<HashMap<Vec<u8>, U256>>>,
