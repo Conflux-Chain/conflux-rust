@@ -1,7 +1,8 @@
-from typing import Optional, Union
+from typing import Optional, Union, Literal
 
 from web3 import Web3
 from web3._utils.transactions import fill_nonce, fill_transaction_defaults
+from web3.exceptions import Web3RPCError
 from eth_account.signers.local import LocalAccount
 from ethereum_test_types import EOA
 from ethereum_test_tools import (
@@ -31,7 +32,7 @@ class AllocMock:
         self.ew3 = ew3
         self.genesis_account = genesis_account
     
-    def fund_eoa(self, amount: Optional[int] = None, delegation: Optional[Address] = None) -> EOA:
+    def fund_eoa(self, amount: Optional[int] = None, delegation: Union[Address, Literal["Self"], None] = None) -> EOA:
         if amount is None:
             amount = self.ew3.to_wei(1, "ether")
         new_account = self.ew3.eth.account.create()
@@ -46,6 +47,8 @@ class AllocMock:
             self.ew3.eth.wait_for_transaction_receipt(tx_hash)
         if delegation is None:
             return EOA(key=new_account.key)
+        if isinstance(delegation, str) and delegation == "Self":
+            delegation = new_account.address
         tx_hash = send_eip7702_transaction(
             self.ew3,
             self.genesis_account,
@@ -100,28 +103,29 @@ def conflux_state_test(
     def get_raw_tx_from_transaction(tx: Transaction) -> bytes:
         if tx.authorization_list is not None:
         # Send transaction
-            raw_tx = sign_eip7702_transaction_with_default_fields(
-                ew3, 
-                ew3.eth.account.from_key(tx.sender.key),  # type: ignore
-                {
-                    "nonce": tx.nonce,
-                    "value": tx.value,
-                    "to": tx.to.hex() if tx.to is not None else None,
-                    "gas": tx.gas_limit,
-                    "data": tx.data.hex() if tx.data is not None else None,
-                    "authorizationList": [
-                        Authorization(
-                            contract_address=str(auth.address),
-                            chain_id=auth.chain_id,
-                            nonce=int(auth.nonce),
-                            r=hex(auth.r),
-                            s=hex(auth.s),
-                            v=auth.v,
-                            yParity=auth.v
-                        ) for auth in tx.authorization_list 
-                    ] if tx.authorization_list is not None else None
-                }  # type: ignore
-            )
+            # raw_tx = sign_eip7702_transaction_with_default_fields(
+            #     ew3, 
+            #     ew3.eth.account.from_key(tx.sender.key),  # type: ignore
+            #     {
+            #         "nonce": tx.nonce,
+            #         "value": tx.value,
+            #         "to": tx.to.hex() if tx.to is not None else None,
+            #         # "gas": tx.gas_limit,
+            #         "data": tx.data.hex() if tx.data is not None else None,
+            #         "authorizationList": [
+            #             Authorization(
+            #                 contract_address=str(auth.address),
+            #                 chain_id=auth.chain_id,
+            #                 nonce=int(auth.nonce),
+            #                 r=hex(auth.r),
+            #                 s=hex(auth.s),
+            #                 v=auth.v,
+            #                 yParity=auth.v
+            #             ) for auth in tx.authorization_list 
+            #         ] if tx.authorization_list is not None else None
+            #     }  # type: ignore
+            # )
+            raw_tx = tx.with_signature_and_sender().rlp
             return raw_tx
         tx_to_send = {
             "from": tx.sender,
@@ -134,9 +138,6 @@ def conflux_state_test(
         tx_to_sign = fill_transaction_defaults(ew3, fill_nonce(ew3, tx_to_send))
         raw_tx = ew3.eth.account.sign_transaction(tx_to_sign, tx.sender.key).raw_transaction
         return raw_tx
-        
-    if not tx and not blocks:
-        raise ValueError("tx or block must be provided")
     
     if tx and blocks:
         raise ValueError("tx and blocks cannot both be provided")
@@ -149,14 +150,23 @@ def conflux_state_test(
             current_block = block_hash
         network.client.generate_blocks(4, num_txs=1)
         block = ew3.eth.get_block(current_block, True)
-        txs = block["transactions"]
-    else:
+    elif tx:
         raw_tx = get_raw_tx_from_transaction(tx)
-        tx_hash = ew3.eth.send_raw_transaction(raw_tx)
-        receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=1, poll_latency=0.5)
-        if receipt["status"] == 0:
-            print(f"Transaction failed: {tx_hash.hex()}")
-            print(f"TxErrorMsg: {receipt.get('txErrorMsg', 'No error message')}")
+        if tx.error is not None:
+            try:
+                tx_hash = ew3.eth.send_raw_transaction(raw_tx)
+                assert False, f"Expected transaction to fail with {tx.error}"
+            except Web3RPCError as e:
+                if hasattr(e, "rpc_response") and hasattr(tx.error, "name"):
+                    assert tx.error.name.lower().replace("_", " ") in e.rpc_response["error"]["message"].lower()
+        else:
+            tx_hash = ew3.eth.send_raw_transaction(raw_tx)
+            receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=1, poll_latency=0.5)
+            if receipt["status"] == 0:
+                print(f"Transaction failed: {tx_hash.hex()}")
+                print(f"TxErrorMsg: {receipt.get('txErrorMsg', 'No error message')}")
+    else:
+        raise ValueError("tx or blocks must be provided")
 
     # Check post-conditions
     # Collect all state differences instead of breaking on first failure

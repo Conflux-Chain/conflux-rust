@@ -55,9 +55,7 @@ def test_pointer_contract_pointer_loop(state_test: StateTestFiller, pre: Alloc):
     )
 
     storage_loop: Storage = Storage()
-    # Modified by Conflux as Conflux has a different gas cost for opcodes
-    # contract_worked = storage_loop.store_next(112, "contract_loop_worked")
-    contract_worked = storage_loop.store_next(37, "contract_loop_worked")
+    contract_worked = storage_loop.store_next(112, "contract_loop_worked")
     contract_loop = pre.deploy_contract(
         code=Op.SSTORE(contract_worked, Op.ADD(1, Op.SLOAD(0)))
         + Op.CALL(gas=1_000_000, address=pointer_a)
@@ -394,7 +392,6 @@ def test_call_to_precompile_in_pointer_context(
     )
 
 
-@pytest.mark.skip(reason="TOFIX")
 @pytest.mark.with_all_precompiles
 def test_pointer_to_precompile(state_test: StateTestFiller, pre: Alloc, precompile: int):
     """
@@ -493,312 +490,312 @@ class AccessListTo(Enum):
     CONTRACT_ADDRESS = 2
 
 # access list is not supported in Conflux
-# @pytest.mark.parametrize(
-#     "access_list_rule",
-#     [
-#         AccessListCall.NONE,
-#         AccessListCall.IN_BOTH_TX,
-#         AccessListCall.IN_NORMAL_TX_ONLY,
-#         AccessListCall.IN_POINTER_TX_ONLY,
-#     ],
-# )
-# @pytest.mark.parametrize(
-#     "pointer_definition",
-#     [
-#         PointerDefinition.SEPARATE,
-#         PointerDefinition.IN_BOTH_TX,
-#         PointerDefinition.IN_NORMAL_TX_ONLY,
-#         PointerDefinition.IN_POINTER_TX_ONLY,
-#     ],
-# )
-# @pytest.mark.parametrize(
-#     "access_list_to",
-#     [AccessListTo.POINTER_ADDRESS, AccessListTo.CONTRACT_ADDRESS],
-# )
-# @pytest.mark.valid_from("Prague")
-# def test_gas_diff_pointer_vs_direct_call(
-#     blockchain_test: BlockchainTestFiller,
-#     pre: Alloc,
-#     fork: Fork,
-#     access_list_rule: AccessListCall,
-#     pointer_definition: PointerDefinition,
-#     access_list_to: AccessListTo,
-# ):
-#     """
-#     Check the gas difference when calling the contract directly vs as a pointer
-#     Combine with AccessList and AuthTuple gas reductions scenarios.
-#     """
-#     env = Environment()
+@pytest.mark.parametrize(
+    "access_list_rule",
+    [
+        AccessListCall.NONE,
+        AccessListCall.IN_BOTH_TX,
+        AccessListCall.IN_NORMAL_TX_ONLY,
+        AccessListCall.IN_POINTER_TX_ONLY,
+    ],
+)
+@pytest.mark.parametrize(
+    "pointer_definition",
+    [
+        PointerDefinition.SEPARATE,
+        PointerDefinition.IN_BOTH_TX,
+        PointerDefinition.IN_NORMAL_TX_ONLY,
+        PointerDefinition.IN_POINTER_TX_ONLY,
+    ],
+)
+@pytest.mark.parametrize(
+    "access_list_to",
+    [AccessListTo.POINTER_ADDRESS, AccessListTo.CONTRACT_ADDRESS],
+)
+@pytest.mark.valid_from("Prague")
+def test_gas_diff_pointer_vs_direct_call(
+    blockchain_test: BlockchainTestFiller,
+    pre: Alloc,
+    fork: Fork,
+    access_list_rule: AccessListCall,
+    pointer_definition: PointerDefinition,
+    access_list_to: AccessListTo,
+):
+    """
+    Check the gas difference when calling the contract directly vs as a pointer
+    Combine with AccessList and AuthTuple gas reductions scenarios.
+    """
+    env = Environment()
 
-#     sender = pre.fund_eoa()
-#     pointer_a = pre.fund_eoa()
-#     call_worked = 1
-#     gas_costs: GasCosts = fork.gas_costs()
+    sender = pre.fund_eoa()
+    pointer_a = pre.fund_eoa()
+    call_worked = 1
+    gas_costs: GasCosts = fork.gas_costs()
 
-#     opcodes_price = 37
-#     direct_call_gas: int = (
-#         # 20_000 + 2_600 + 2_100 + 37 = 24737
-#         gas_costs.G_STORAGE_SET
-#         + (
-#             # access account price
-#             # If storage and account is declared in access list then discount
-#             gas_costs.G_WARM_ACCOUNT_ACCESS + gas_costs.G_WARM_SLOAD
-#             if access_list_rule in [AccessListCall.IN_NORMAL_TX_ONLY, AccessListCall.IN_BOTH_TX]
-#             else gas_costs.G_COLD_ACCOUNT_ACCESS + gas_costs.G_COLD_SLOAD
-#         )
-#         + opcodes_price
-#     )
+    opcodes_price = 37
+    direct_call_gas: int = (
+        # 20_000 + 2_600 + 2_100 + 37 = 24737
+        gas_costs.G_STORAGE_SET
+        + (
+            # access account price
+            # If storage and account is declared in access list then discount
+            gas_costs.G_WARM_ACCOUNT_ACCESS + gas_costs.G_WARM_SLOAD
+            if access_list_rule in [AccessListCall.IN_NORMAL_TX_ONLY, AccessListCall.IN_BOTH_TX]
+            else gas_costs.G_COLD_ACCOUNT_ACCESS + gas_costs.G_COLD_SLOAD
+        )
+        + opcodes_price
+    )
 
-#     pointer_call_gas: int = (
-#         # sstore + addr + addr + sload + op
-#         # no access list, no pointer, all accesses are hot
-#         # 20_000 + 2_600 * 2 + 2_100 + 37 = 27_337
-#         #
-#         # access list for pointer, pointer is set
-#         # additional 2_600 charged for access of contract
-#         # 20_000 + 100 + 2_600 + 100 + 37 = 22_837
-#         #
-#         # no access list, pointer is set
-#         # pointer access is hot, sload and contract are hot
-#         # 20_000 + 100 + 2_600 + 2_100 + 37 = 24_837
-#         #
-#         # access list for contract, pointer is set
-#         # contract call is hot, pointer call is call because pointer is set
-#         # only sload is hot because access list is for contract
-#         # 20_000 + 100 + 100 + 2100  + 37 = 22_337
-#         gas_costs.G_STORAGE_SET
-#         # pointer address access
-#         + (
-#             gas_costs.G_WARM_ACCOUNT_ACCESS
-#             if (
-#                 pointer_definition
-#                 in [PointerDefinition.IN_BOTH_TX, PointerDefinition.IN_POINTER_TX_ONLY]
-#                 or access_list_rule
-#                 in [AccessListCall.IN_BOTH_TX, AccessListCall.IN_POINTER_TX_ONLY]
-#                 and access_list_to == AccessListTo.POINTER_ADDRESS
-#             )
-#             else gas_costs.G_COLD_ACCOUNT_ACCESS
-#         )
-#         # storage access
-#         + (
-#             gas_costs.G_WARM_SLOAD
-#             if (
-#                 access_list_rule in [AccessListCall.IN_BOTH_TX, AccessListCall.IN_POINTER_TX_ONLY]
-#                 and access_list_to == AccessListTo.POINTER_ADDRESS
-#             )
-#             else gas_costs.G_COLD_SLOAD
-#         )
-#         # contract address access
-#         + (
-#             gas_costs.G_WARM_ACCOUNT_ACCESS
-#             if (
-#                 access_list_rule in [AccessListCall.IN_BOTH_TX, AccessListCall.IN_POINTER_TX_ONLY]
-#                 and access_list_to == AccessListTo.CONTRACT_ADDRESS
-#             )
-#             else gas_costs.G_COLD_ACCOUNT_ACCESS
-#         )
-#         + opcodes_price
-#     )
+    pointer_call_gas: int = (
+        # sstore + addr + addr + sload + op
+        # no access list, no pointer, all accesses are hot
+        # 20_000 + 2_600 * 2 + 2_100 + 37 = 27_337
+        #
+        # access list for pointer, pointer is set
+        # additional 2_600 charged for access of contract
+        # 20_000 + 100 + 2_600 + 100 + 37 = 22_837
+        #
+        # no access list, pointer is set
+        # pointer access is hot, sload and contract are hot
+        # 20_000 + 100 + 2_600 + 2_100 + 37 = 24_837
+        #
+        # access list for contract, pointer is set
+        # contract call is hot, pointer call is call because pointer is set
+        # only sload is hot because access list is for contract
+        # 20_000 + 100 + 100 + 2100  + 37 = 22_337
+        gas_costs.G_STORAGE_SET
+        # pointer address access
+        + (
+            gas_costs.G_WARM_ACCOUNT_ACCESS
+            if (
+                pointer_definition
+                in [PointerDefinition.IN_BOTH_TX, PointerDefinition.IN_POINTER_TX_ONLY]
+                or access_list_rule
+                in [AccessListCall.IN_BOTH_TX, AccessListCall.IN_POINTER_TX_ONLY]
+                and access_list_to == AccessListTo.POINTER_ADDRESS
+            )
+            else gas_costs.G_COLD_ACCOUNT_ACCESS
+        )
+        # storage access
+        + (
+            gas_costs.G_WARM_SLOAD
+            if (
+                access_list_rule in [AccessListCall.IN_BOTH_TX, AccessListCall.IN_POINTER_TX_ONLY]
+                and access_list_to == AccessListTo.POINTER_ADDRESS
+            )
+            else gas_costs.G_COLD_SLOAD
+        )
+        # contract address access
+        + (
+            gas_costs.G_WARM_ACCOUNT_ACCESS
+            if (
+                access_list_rule in [AccessListCall.IN_BOTH_TX, AccessListCall.IN_POINTER_TX_ONLY]
+                and access_list_to == AccessListTo.CONTRACT_ADDRESS
+            )
+            else gas_costs.G_COLD_ACCOUNT_ACCESS
+        )
+        + opcodes_price
+    )
 
-#     contract = pre.deploy_contract(code=Op.SSTORE(call_worked, Op.ADD(Op.SLOAD(call_worked), 1)))
+    contract = pre.deploy_contract(code=Op.SSTORE(call_worked, Op.ADD(Op.SLOAD(call_worked), 1)))
 
-#     # Op.CALLDATASIZE() does not work with kwargs
-#     storage_normal: Storage = Storage()
-#     contract_test_normal = pre.deploy_contract(
-#         code=Op.GAS()
-#         + Op.POP(Op.CALL(gas=100_000, address=contract))
-#         + Op.SSTORE(
-#             storage_normal.store_next(direct_call_gas, "normal_call_price"),
-#             Op.SUB(Op.SWAP1(), Op.GAS()),
-#         )
-#     )
+    # Op.CALLDATASIZE() does not work with kwargs
+    storage_normal: Storage = Storage()
+    contract_test_normal = pre.deploy_contract(
+        code=Op.GAS()
+        + Op.POP(Op.CALL(gas=100_000, address=contract))
+        + Op.SSTORE(
+            storage_normal.store_next(direct_call_gas, "normal_call_price"),
+            Op.SUB(Op.SWAP1(), Op.GAS()),
+        )
+    )
 
-#     storage_pointer: Storage = Storage()
-#     contract_test_pointer = pre.deploy_contract(
-#         code=Op.GAS()
-#         + Op.POP(Op.CALL(gas=100_000, address=pointer_a))
-#         + Op.SSTORE(
-#             storage_pointer.store_next(pointer_call_gas, "pointer_call_price"),
-#             Op.SUB(Op.SWAP1(), Op.GAS()),
-#         )
-#     )
+    storage_pointer: Storage = Storage()
+    contract_test_pointer = pre.deploy_contract(
+        code=Op.GAS()
+        + Op.POP(Op.CALL(gas=100_000, address=pointer_a))
+        + Op.SSTORE(
+            storage_pointer.store_next(pointer_call_gas, "pointer_call_price"),
+            Op.SUB(Op.SWAP1(), Op.GAS()),
+        )
+    )
 
-#     tx_0 = Transaction(
-#         to=1,
-#         gas_limit=3_000_000,
-#         data=b"",
-#         value=0,
-#         sender=sender,
-#         authorization_list=(
-#             [
-#                 AuthorizationTuple(
-#                     address=contract,
-#                     nonce=0,
-#                     signer=pointer_a,
-#                 )
-#             ]
-#             if pointer_definition == PointerDefinition.SEPARATE
-#             else None
-#         ),
-#     )
+    tx_0 = Transaction(
+        to=1,
+        gas_limit=3_000_000,
+        data=b"",
+        value=0,
+        sender=sender,
+        authorization_list=(
+            [
+                AuthorizationTuple(
+                    address=contract,
+                    nonce=0,
+                    signer=pointer_a,
+                )
+            ]
+            if pointer_definition == PointerDefinition.SEPARATE
+            else None
+        ),
+    )
 
-#     tx = Transaction(
-#         to=contract_test_normal,
-#         gas_limit=3_000_000,
-#         data=b"",
-#         value=0,
-#         sender=sender,
-#         authorization_list=(
-#             [
-#                 AuthorizationTuple(
-#                     address=contract,
-#                     nonce=0,
-#                     signer=pointer_a,
-#                 )
-#             ]
-#             if pointer_definition == PointerDefinition.IN_BOTH_TX
-#             or pointer_definition == PointerDefinition.IN_NORMAL_TX_ONLY
-#             else None
-#         ),
-#         access_list=(
-#             [
-#                 AccessList(
-#                     address=contract,
-#                     storage_keys=[call_worked],
-#                 )
-#             ]
-#             if access_list_rule == AccessListCall.IN_BOTH_TX
-#             or access_list_rule == AccessListCall.IN_NORMAL_TX_ONLY
-#             else None
-#         ),
-#     )
-#     tx2 = Transaction(
-#         to=contract_test_pointer,
-#         gas_limit=3_000_000,
-#         data=b"",
-#         value=0,
-#         sender=sender,
-#         authorization_list=(
-#             [
-#                 AuthorizationTuple(
-#                     address=contract,
-#                     nonce=0,
-#                     signer=pointer_a,
-#                 )
-#             ]
-#             if pointer_definition == PointerDefinition.IN_BOTH_TX
-#             or pointer_definition == PointerDefinition.IN_POINTER_TX_ONLY
-#             else None
-#         ),
-#         access_list=(
-#             [
-#                 AccessList(
-#                     address=(
-#                         pointer_a if access_list_to == AccessListTo.POINTER_ADDRESS else contract
-#                     ),
-#                     storage_keys=[call_worked],
-#                 )
-#             ]
-#             if access_list_rule == AccessListCall.IN_BOTH_TX
-#             or access_list_rule == AccessListCall.IN_POINTER_TX_ONLY
-#             else None
-#         ),
-#     )
+    tx = Transaction(
+        to=contract_test_normal,
+        gas_limit=3_000_000,
+        data=b"",
+        value=0,
+        sender=sender,
+        authorization_list=(
+            [
+                AuthorizationTuple(
+                    address=contract,
+                    nonce=0,
+                    signer=pointer_a,
+                )
+            ]
+            if pointer_definition == PointerDefinition.IN_BOTH_TX
+            or pointer_definition == PointerDefinition.IN_NORMAL_TX_ONLY
+            else None
+        ),
+        access_list=(
+            [
+                AccessList(
+                    address=contract,
+                    storage_keys=[call_worked],
+                )
+            ]
+            if access_list_rule == AccessListCall.IN_BOTH_TX
+            or access_list_rule == AccessListCall.IN_NORMAL_TX_ONLY
+            else None
+        ),
+    )
+    tx2 = Transaction(
+        to=contract_test_pointer,
+        gas_limit=3_000_000,
+        data=b"",
+        value=0,
+        sender=sender,
+        authorization_list=(
+            [
+                AuthorizationTuple(
+                    address=contract,
+                    nonce=0,
+                    signer=pointer_a,
+                )
+            ]
+            if pointer_definition == PointerDefinition.IN_BOTH_TX
+            or pointer_definition == PointerDefinition.IN_POINTER_TX_ONLY
+            else None
+        ),
+        access_list=(
+            [
+                AccessList(
+                    address=(
+                        pointer_a if access_list_to == AccessListTo.POINTER_ADDRESS else contract
+                    ),
+                    storage_keys=[call_worked],
+                )
+            ]
+            if access_list_rule == AccessListCall.IN_BOTH_TX
+            or access_list_rule == AccessListCall.IN_POINTER_TX_ONLY
+            else None
+        ),
+    )
 
-#     post = {
-#         contract: Account(storage={call_worked: 1}),
-#         pointer_a: Account(storage={call_worked: 1}),
-#         contract_test_normal: Account(storage=storage_normal),
-#         contract_test_pointer: Account(storage=storage_pointer),
-#     }
-#     blockchain_test(
-#         genesis_environment=env,
-#         pre=pre,
-#         post=post,
-#         blocks=[Block(txs=[tx_0]), Block(txs=[tx]), Block(txs=[tx2])],
-#     )
+    post = {
+        contract: Account(storage={call_worked: 1}),
+        pointer_a: Account(storage={call_worked: 1}),
+        contract_test_normal: Account(storage=storage_normal),
+        contract_test_pointer: Account(storage=storage_pointer),
+    }
+    blockchain_test(
+        genesis_environment=env,
+        pre=pre,
+        post=post,
+        blocks=[Block(txs=[tx_0]), Block(txs=[tx]), Block(txs=[tx2])],
+    )
 
 
 # NOT SUPPORTED on Conflux
-# @pytest.mark.valid_from("Prague")
-# def test_pointer_call_followed_by_direct_call(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-#     fork: Fork,
-# ):
-#     """
-#     If we first call by pointer then direct call, will the call/sload be hot
-#     The direct call will warm because pointer access marks it warm
-#     But the sload is still cold because
-#     storage marked hot from pointer's account in a pointer call.
-#     """
-#     env = Environment()
+@pytest.mark.valid_from("Prague")
+def test_pointer_call_followed_by_direct_call(
+    state_test: StateTestFiller,
+    pre: Alloc,
+    fork: Fork,
+):
+    """
+    If we first call by pointer then direct call, will the call/sload be hot
+    The direct call will warm because pointer access marks it warm
+    But the sload is still cold because
+    storage marked hot from pointer's account in a pointer call.
+    """
+    env = Environment()
 
-#     sender = pre.fund_eoa()
-#     pointer_a = pre.fund_eoa()
-#     gas_costs: GasCosts = fork.gas_costs()
-#     call_worked = 1
-#     opcodes_price: int = 37
-#     pointer_call_gas = (
-#         gas_costs.G_STORAGE_SET
-#         + gas_costs.G_WARM_ACCOUNT_ACCESS  # pointer is warm
-#         + gas_costs.G_COLD_ACCOUNT_ACCESS  # contract is cold
-#         + gas_costs.G_COLD_SLOAD  # storage access under pointer call is cold
-#         + opcodes_price
-#     )
-#     direct_call_gas = (
-#         gas_costs.G_STORAGE_SET
-#         + gas_costs.G_WARM_ACCOUNT_ACCESS  # since previous pointer call, contract is now warm
-#         + gas_costs.G_COLD_SLOAD  # but storage is cold, because it's contract's direct
-#         + opcodes_price
-#     )
+    sender = pre.fund_eoa()
+    pointer_a = pre.fund_eoa()
+    gas_costs: GasCosts = fork.gas_costs()
+    call_worked = 1
+    opcodes_price: int = 37
+    pointer_call_gas = (
+        gas_costs.G_STORAGE_SET
+        + gas_costs.G_WARM_ACCOUNT_ACCESS  # pointer is warm
+        + gas_costs.G_COLD_ACCOUNT_ACCESS  # contract is cold
+        + gas_costs.G_COLD_SLOAD  # storage access under pointer call is cold
+        + opcodes_price
+    )
+    direct_call_gas = (
+        gas_costs.G_STORAGE_SET
+        + gas_costs.G_WARM_ACCOUNT_ACCESS  # since previous pointer call, contract is now warm
+        + gas_costs.G_COLD_SLOAD  # but storage is cold, because it's contract's direct
+        + opcodes_price
+    )
 
-#     contract = pre.deploy_contract(code=Op.SSTORE(call_worked, Op.ADD(Op.SLOAD(call_worked), 1)))
+    contract = pre.deploy_contract(code=Op.SSTORE(call_worked, Op.ADD(Op.SLOAD(call_worked), 1)))
 
-#     storage_test_gas: Storage = Storage()
-#     contract_test_gas = pre.deploy_contract(
-#         code=Op.GAS()
-#         + Op.POP(Op.CALL(gas=100_000, address=pointer_a))
-#         + Op.SSTORE(
-#             storage_test_gas.store_next(pointer_call_gas, "pointer_call_price"),
-#             Op.SUB(Op.SWAP1(), Op.GAS()),
-#         )
-#         + Op.GAS()
-#         + Op.POP(Op.CALL(gas=100_000, address=contract))
-#         + Op.SSTORE(
-#             storage_test_gas.store_next(direct_call_gas, "direct_call_price"),
-#             Op.SUB(Op.SWAP1(), Op.GAS()),
-#         )
-#     )
+    storage_test_gas: Storage = Storage()
+    contract_test_gas = pre.deploy_contract(
+        code=Op.GAS()
+        + Op.POP(Op.CALL(gas=100_000, address=pointer_a))
+        + Op.SSTORE(
+            storage_test_gas.store_next(pointer_call_gas, "pointer_call_price"),
+            Op.SUB(Op.SWAP1(), Op.GAS()),
+        )
+        + Op.GAS()
+        + Op.POP(Op.CALL(gas=100_000, address=contract))
+        + Op.SSTORE(
+            storage_test_gas.store_next(direct_call_gas, "direct_call_price"),
+            Op.SUB(Op.SWAP1(), Op.GAS()),
+        )
+    )
 
-#     tx = Transaction(
-#         to=contract_test_gas,
-#         gas_limit=3_000_000,
-#         data=b"",
-#         value=0,
-#         sender=sender,
-#         authorization_list=(
-#             [
-#                 AuthorizationTuple(
-#                     address=contract,
-#                     nonce=0,
-#                     signer=pointer_a,
-#                 )
-#             ]
-#         ),
-#     )
+    tx = Transaction(
+        to=contract_test_gas,
+        gas_limit=3_000_000,
+        data=b"",
+        value=0,
+        sender=sender,
+        authorization_list=(
+            [
+                AuthorizationTuple(
+                    address=contract,
+                    nonce=0,
+                    signer=pointer_a,
+                )
+            ]
+        ),
+    )
 
-#     post = {
-#         contract: Account(storage={call_worked: 1}),
-#         pointer_a: Account(storage={call_worked: 1}),
-#         contract_test_gas: Account(storage=storage_test_gas),
-#     }
-#     state_test(
-#         env=env,
-#         pre=pre,
-#         post=post,
-#         tx=tx,
-#     )
+    post = {
+        contract: Account(storage={call_worked: 1}),
+        pointer_a: Account(storage={call_worked: 1}),
+        contract_test_gas: Account(storage=storage_test_gas),
+    }
+    state_test(
+        env=env,
+        pre=pre,
+        post=post,
+        tx=tx,
+    )
 
 
 @pytest.mark.valid_from("Prague")

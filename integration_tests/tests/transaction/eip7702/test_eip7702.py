@@ -398,7 +398,6 @@ def test_eip7702_nonce_duplicate(ew3: Web3):
             ],
             "to": ew3.eth.account.create().address,
             "value": 0,
-            "gas": 100000,
         },
     )
     ew3.eth.wait_for_transaction_receipt(tx_hash)

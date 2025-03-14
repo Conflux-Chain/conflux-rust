@@ -73,10 +73,7 @@ def framework_class():
 
 # The commented code is for testing if conflux's implementation 
 # is compatible with anvil's implementation
-# @pytest.fixture(scope="module", params=[
-#     "anvil",
-#     # "conflux"
-# ])
+# @pytest.fixture(scope="module", params=["anvil", "conflux"])
 # def web3_setting_pair(network, request):
 #     if request.param == "anvil":
 #         from eth_account import Account as EthAccount

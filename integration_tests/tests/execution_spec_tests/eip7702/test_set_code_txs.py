@@ -1169,92 +1169,92 @@ def test_ext_code_on_self_set_code(
 
 
 # NOT SUPPORTED on Conflux
-# @pytest.mark.with_all_evm_code_types()
-# @pytest.mark.parametrize(
-#     "set_code_address_first",
-#     [
-#         pytest.param(True, id="call_set_code_address_first_then_authority"),
-#         pytest.param(False, id="call_authority_first_then_set_code_address"),
-#     ],
-# )
-# def test_set_code_address_and_authority_warm_state(
-#     state_test: StateTestFiller,
-#     pre: Alloc,
-#     set_code_address_first: bool,
-# ):
-#     """
-#     Test set to code address and authority warm status after a call to
-#     authority address, or viceversa.
-#     """
-#     auth_signer = pre.fund_eoa(auth_account_start_balance)
+@pytest.mark.with_all_evm_code_types()
+@pytest.mark.parametrize(
+    "set_code_address_first",
+    [
+        pytest.param(True, id="call_set_code_address_first_then_authority"),
+        pytest.param(False, id="call_authority_first_then_set_code_address"),
+    ],
+)
+def test_set_code_address_and_authority_warm_state(
+    state_test: StateTestFiller,
+    pre: Alloc,
+    set_code_address_first: bool,
+):
+    """
+    Test set to code address and authority warm status after a call to
+    authority address, or viceversa.
+    """
+    auth_signer = pre.fund_eoa(auth_account_start_balance)
 
-#     slot = count(1)
-#     slot_call_success = next(slot)
-#     slot_set_code_to_warm_state = next(slot)
-#     slot_authority_warm_state = next(slot)
+    slot = count(1)
+    slot_call_success = next(slot)
+    slot_set_code_to_warm_state = next(slot)
+    slot_authority_warm_state = next(slot)
 
-#     set_code = Op.STOP
-#     set_code_to_address = pre.deploy_contract(set_code)
+    set_code = Op.STOP
+    set_code_to_address = pre.deploy_contract(set_code)
 
-#     call_opcode = Op.CALL
-#     overhead_cost = 3 * len(call_opcode.kwargs)  # type: ignore
-#     if call_opcode == Op.CALL:
-#         overhead_cost -= 1  # GAS opcode is less expensive than a PUSH
+    call_opcode = Op.CALL
+    overhead_cost = 3 * len(call_opcode.kwargs)  # type: ignore
+    if call_opcode == Op.CALL:
+        overhead_cost -= 1  # GAS opcode is less expensive than a PUSH
 
-#     code_gas_measure_set_code = CodeGasMeasure(
-#         code=call_opcode(address=set_code_to_address),
-#         overhead_cost=overhead_cost,
-#         extra_stack_items=1,
-#         sstore_key=slot_set_code_to_warm_state,
-#         stop=False,
-#     )
-#     code_gas_measure_authority = CodeGasMeasure(
-#         code=call_opcode(address=auth_signer),
-#         overhead_cost=overhead_cost,
-#         extra_stack_items=1,
-#         sstore_key=slot_authority_warm_state,
-#         stop=False,
-#     )
+    code_gas_measure_set_code = CodeGasMeasure(
+        code=call_opcode(address=set_code_to_address),
+        overhead_cost=overhead_cost,
+        extra_stack_items=1,
+        sstore_key=slot_set_code_to_warm_state,
+        stop=False,
+    )
+    code_gas_measure_authority = CodeGasMeasure(
+        code=call_opcode(address=auth_signer),
+        overhead_cost=overhead_cost,
+        extra_stack_items=1,
+        sstore_key=slot_authority_warm_state,
+        stop=False,
+    )
 
-#     callee_code = Bytecode()
-#     if set_code_address_first:
-#         callee_code += code_gas_measure_set_code + code_gas_measure_authority
-#     else:
-#         callee_code += code_gas_measure_authority + code_gas_measure_set_code
-#     callee_code += Op.SSTORE(slot_call_success, 1) + Op.STOP
+    callee_code = Bytecode()
+    if set_code_address_first:
+        callee_code += code_gas_measure_set_code + code_gas_measure_authority
+    else:
+        callee_code += code_gas_measure_authority + code_gas_measure_set_code
+    callee_code += Op.SSTORE(slot_call_success, 1) + Op.STOP
 
-#     callee_address = pre.deploy_contract(callee_code, evm_code_type=EVMCodeType.LEGACY)
-#     callee_storage = Storage()
-#     callee_storage[slot_call_success] = 1
-#     callee_storage[slot_set_code_to_warm_state] = 2_600 if set_code_address_first else 100
-#     callee_storage[slot_authority_warm_state] = 200 if set_code_address_first else 2_700
+    callee_address = pre.deploy_contract(callee_code, evm_code_type=EVMCodeType.LEGACY)
+    callee_storage = Storage()
+    callee_storage[slot_call_success] = 1
+    callee_storage[slot_set_code_to_warm_state] = 2_600 if set_code_address_first else 100
+    callee_storage[slot_authority_warm_state] = 200 if set_code_address_first else 2_700
 
-#     tx = Transaction(
-#         gas_limit=1_000_000,
-#         to=callee_address,
-#         authorization_list=[
-#             AuthorizationTuple(
-#                 address=set_code_to_address,
-#                 nonce=0,
-#                 signer=auth_signer,
-#             ),
-#         ],
-#         sender=pre.fund_eoa(),
-#     )
+    tx = Transaction(
+        gas_limit=1_000_000,
+        to=callee_address,
+        authorization_list=[
+            AuthorizationTuple(
+                address=set_code_to_address,
+                nonce=0,
+                signer=auth_signer,
+            ),
+        ],
+        sender=pre.fund_eoa(),
+    )
 
-#     state_test(
-#         env=Environment(),
-#         pre=pre,
-#         tx=tx,
-#         post={
-#             callee_address: Account(storage=callee_storage),
-#             auth_signer: Account(
-#                 nonce=1,
-#                 code=Spec.delegation_designation(set_code_to_address),
-#                 balance=auth_account_start_balance,
-#             ),
-#         },
-#     )
+    state_test(
+        env=Environment(),
+        pre=pre,
+        tx=tx,
+        post={
+            callee_address: Account(storage=callee_storage),
+            auth_signer: Account(
+                nonce=1,
+                code=Spec.delegation_designation(set_code_to_address),
+                balance=auth_account_start_balance,
+            ),
+        },
+    )
 
 
 @pytest.mark.with_all_call_opcodes()
@@ -2206,7 +2206,6 @@ def test_valid_tx_invalid_auth_signature(
     )
 
 
-@pytest.mark.skip(reason="TOFIX")
 def test_signature_s_out_of_range(
     state_test: StateTestFiller,
     pre: Alloc,

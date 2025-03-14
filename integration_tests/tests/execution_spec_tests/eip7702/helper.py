@@ -46,6 +46,14 @@ class AddressType(Enum):
     EOA = auto()
     EOA_WITH_SET_CODE = auto()
     CONTRACT = auto()
+    
+
+
+class ChainIDType(Enum):
+    """Different types of chain IDs used in the authorization list."""
+
+    GENERIC = auto()
+    CHAIN_SPECIFIC = auto()
 
 @dataclass(frozen=True)
 class Spec:
