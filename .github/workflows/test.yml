@@ -12,15 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Cargo dependencies
+      - name: Cache Cargo and build artifacts
         uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-deps-
+            ${{ runner.os }}-cargo-
 
       - name: Cache Docker layers
         uses: actions/cache@v3
@@ -45,8 +46,11 @@ jobs:
 
       - name: Run tests
         run: |
-          docker run --rm -v $(pwd):/app -w /app base-builder:latest \
-            bash -c "cargo test || { echo 'Tests failed'; exit 1; }"
+          docker run --rm \
+            -v $(pwd):/app \
+            -e RUST_BACKTRACE=1 \
+            -w /app base-builder:latest \
+            bash -c "cargo nextest run --no-fail-fast --test-threads=4 || { echo '::error::Tests failed with exit code $?'; exit 1; }"
 
       - name: Move cache to the correct location
         run: |

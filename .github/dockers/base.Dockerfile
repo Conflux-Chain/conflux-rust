@@ -26,7 +26,8 @@ COPY rust-toolchain.toml .
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-host x86_64-unknown-linux-gnu -y && \
     . ~/.cargo/env && \
-    git config --global --add safe.directory /app
+    git config --global --add safe.directory /app && \
+    cargo install cargo-nextest
 
 ENV PATH="/root/.cargo/bin:/home/builder/.cargo/bin:${PATH}"
 ENV CC=clang-18
