@@ -12,6 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android  "$AGENT_TOOLSDIRECTORY" /mnt/swapfile
       - name: Cache Cargo and build artifacts
         uses: actions/cache@v3
         with:
