@@ -1,17 +1,26 @@
-name: Deploy Docs
+name: Tests
 
 on:
   push:
-    branches:
-      - master
+    branches: [master]
+  pull_request:
+    branches: [master]
 
 jobs:
-  deploy:
-    permissions:
-      contents: write
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deps-
 
       - name: Cache Docker layers
         uses: actions/cache@v3
@@ -34,16 +43,10 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
-      - name: Generate documentation
+      - name: Run tests
         run: |
           docker run --rm -v $(pwd):/app -w /app base-builder:latest \
-            bash -c "rustup default nightly-2024-01-29 && RUSTDOCFLAGS='--enable-index-page -Z unstable-options' cargo +nightly-2024-01-29 doc --no-deps"
-
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/doc
+            bash -c "cargo test || { echo 'Tests failed'; exit 1; }"
 
       - name: Move cache to the correct location
         run: |
