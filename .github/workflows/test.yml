@@ -22,9 +22,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target/release/deps
-            target/release/build
-            target/release/.fingerprint
+            target/release
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
@@ -54,6 +52,7 @@ jobs:
         run: |
           docker run --rm \
             -v $(pwd):/app \
+            -v ~/.cargo:/root/.cargo \
             -e RUST_BACKTRACE=1 \
             -w /app base-builder:latest \
             cargo nextest run --no-fail-fast --release --workspace
@@ -62,6 +61,7 @@ jobs:
         run: |
           docker run --rm \
             -v $(pwd):/app \
+            -v ~/.cargo:/root/.cargo \
             -e RUST_BACKTRACE=1 \
             -w /app base-builder:latest \
             cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
@@ -69,6 +69,7 @@ jobs:
       - name: Ensure cache files are accessible
         run: |
           sudo chown -R $(id -u):$(id -g) target/release
+          sudo chown -R $(id -u):$(id -g) ~/.cargo
 
       - name: Move cache to the correct location
         run: |
