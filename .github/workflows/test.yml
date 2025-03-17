@@ -52,7 +52,8 @@ jobs:
         run: |
           docker run --rm \
             -v $(pwd):/app \
-            -v ~/.cargo:/root/.cargo \
+            -v ~/.cargo/registry:/root/.cargo/registry \
+            -v ~/.cargo/git:/root/.cargo/git \
             -e RUST_BACKTRACE=1 \
             -w /app base-builder:latest \
             cargo nextest run --no-fail-fast --release --workspace
@@ -61,7 +62,8 @@ jobs:
         run: |
           docker run --rm \
             -v $(pwd):/app \
-            -v ~/.cargo:/root/.cargo \
+            -v ~/.cargo/registry:/root/.cargo/registry \
+            -v ~/.cargo/git:/root/.cargo/git \
             -e RUST_BACKTRACE=1 \
             -w /app base-builder:latest \
             cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
