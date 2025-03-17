@@ -151,6 +151,10 @@ impl<'a> Context<'a> {
                 return_if!(number
                     .checked_add(65536)
                     .map_or(false, |n| n <= self.env.epoch_height));
+                if self.spec.align_evm {
+                    return_if!(number >= self.env.epoch_height);
+                    return_if!(number + 256 < self.env.epoch_height);
+                }
                 self.state.get_system_storage(&epoch_hash_slot(number))?
             }
         };
@@ -160,12 +164,22 @@ impl<'a> Context<'a> {
 }
 
 impl<'a> ContextTrait for Context<'a> {
-    fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
+    fn storage_at(&self, key: &[u8]) -> vm::Result<U256> {
         let receiver = AddressWithSpace {
             address: self.origin.address,
             space: self.space,
         };
         self.state.storage_at(&receiver, key).map_err(Into::into)
+    }
+
+    fn origin_storage_at(&self, key: &[u8]) -> vm::Result<Option<U256>> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        self.state
+            .origin_storage_at(&receiver, key)
+            .map_err(Into::into)
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
@@ -421,6 +435,10 @@ impl<'a> ContextTrait for Context<'a> {
         Ok(())
     }
 
+    fn refund(&mut self, refund_gas: i64) {
+        self.substate.refund_gas += refund_gas as i128;
+    }
+
     fn ret(
         mut self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
@@ -556,6 +574,46 @@ impl<'a> ContextTrait for Context<'a> {
         } else {
             BlockHashSource::Env
         }
+    }
+
+    fn is_warm_account(&self, account: Address) -> bool {
+        let address_with_space = account.with_space(self.space);
+        let maybe_builtin = &account[..19] == &[0u8; 19];
+        if maybe_builtin
+            && self
+                .machine
+                .builtin(&address_with_space, self.env.number)
+                .is_some()
+        {
+            return true;
+        }
+
+        let maybe_internal = self.space == Space::Native
+            && &account[..2] == b"\x08\x88"
+            && &account[2..19] == &[0u8; 17];
+        if maybe_internal
+            && self
+                .machine
+                .internal_contracts()
+                .contract(&address_with_space, &self.spec)
+                .is_some()
+        {
+            return true;
+        }
+
+        if address_with_space == self.env.author.with_native_space() {
+            return true;
+        }
+
+        self.state.is_warm_account(&address_with_space)
+    }
+
+    fn is_warm_storage_entry(&self, key: &H256) -> vm::Result<bool> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        Ok(self.state.is_warm_storage_entry(&receiver, key)?)
     }
 }
 

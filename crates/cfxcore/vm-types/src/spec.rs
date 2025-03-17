@@ -43,18 +43,15 @@ pub struct Spec {
     pub sha3_gas: usize,
     /// Additional gas for `SHA3` opcode for each word of hashed memory
     pub sha3_word_gas: usize,
-    /// Gas price for loading from storage
-    pub sload_gas: usize,
+    /// Gas price for loading from storage. Code sload gas after CIP-645f:
+    /// EIP-2929
+    pub cold_sload_gas: usize,
     /// Gas price for setting new value to storage (`storage==0`, `new!=0`)
     pub sstore_set_gas: usize,
     /// Gas price for altering value in storage
     pub sstore_reset_gas: usize,
     /// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`)
     pub sstore_refund_gas: usize,
-    /// Gas price for `TLOAD`
-    pub tload_gas: usize,
-    /// Gas price for `TSTORE`
-    pub tstore_gas: usize,
     /// Gas price for `JUMPDEST` opcode
     pub jumpdest_gas: usize,
     /// Gas price for `LOG*`
@@ -83,6 +80,10 @@ pub struct Spec {
     pub create_data_gas: usize,
     /// Maximum code size when creating a contract.
     pub create_data_limit: usize,
+    /// Maximum init code size (CIP-645i: EIP-3860)
+    pub init_code_data_limit: usize,
+    /// Init code word size (CIP-645i: EIP-3860)
+    pub init_code_word_gas: usize,
     /// Transaction cost
     pub tx_gas: usize,
     /// `CREATE` transaction cost
@@ -109,6 +110,8 @@ pub struct Spec {
     pub eip1820_gas: usize,
     pub access_list_storage_key_gas: usize,
     pub access_list_address_gas: usize,
+    pub cold_account_access_cost: usize,
+    pub warm_access_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -136,6 +139,8 @@ pub struct Spec {
     pub wasm: Option<WasmCosts>,
     /// The magnification of gas storage occupying related operaions.
     pub evm_gas_ratio: usize,
+    /// `PER_AUTH_BASE_COST` in CIP-7702
+    pub per_auth_base_cost: usize,
     /// `PER_EMPTY_ACCOUNT_COST` in CIP-7702
     pub per_empty_account_cost: usize,
     /// CIP-43: Introduce Finality via Voting Among Staked
@@ -200,6 +205,10 @@ pub struct Spec {
     pub cip154: bool,
     /// CIP-7702: Set Code for EOA
     pub cip7702: bool,
+    /// CIP-645(GAS)
+    pub cip645: bool,
+    pub eip2935: bool,
+    pub align_evm: bool,
 }
 
 /// Wasm cost table
@@ -284,12 +293,10 @@ impl Spec {
             sha3_gas: 30,
             sha3_word_gas: 6,
             // Become 800 after CIP-142
-            sload_gas: 200,
+            cold_sload_gas: 200,
             sstore_set_gas: 20000,
             sstore_reset_gas: 5000,
             sstore_refund_gas: 15000,
-            tload_gas: 100,
-            tstore_gas: 100,
             jumpdest_gas: 1,
             log_gas: 375,
             log_data_gas: 8,
@@ -304,6 +311,8 @@ impl Spec {
             quad_coeff_div: 512,
             create_data_gas: 200,
             create_data_limit: 49152,
+            init_code_data_limit: 49152,
+            init_code_word_gas: 2,
             tx_gas: 21000,
             tx_create_gas: 53000,
             tx_data_zero_gas: 4,
@@ -318,7 +327,10 @@ impl Spec {
             eip1820_gas: 1_500_000,
             access_list_storage_key_gas: 1900,
             access_list_address_gas: 2400,
+            cold_account_access_cost: 2600,
+            warm_access_gas: 100,
             suicide_to_new_account_cost: 25000,
+            per_auth_base_cost: 17000,
             per_empty_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
@@ -360,7 +372,43 @@ impl Spec {
             cip151: false,
             cip152: false,
             cip154: false,
+            cip645: false,
             cip7702: false,
+            eip2935: false,
+            align_evm: false,
+        }
+    }
+
+    // `cold_sload_gas` replaces `sload_gas` in certain contexts, primarily for
+    // core space internal contracts. However, some `sload_gas` usages retain
+    // their original semantics. This function is introduced to distinguish
+    // these cases.
+    pub fn sload_gas(&self) -> usize {
+        assert!(!self.cip645);
+        self.cold_sload_gas
+    }
+
+    pub fn overwrite_gas_plan_by_cip(&mut self) {
+        if self.cancun_opcodes {
+            self.cold_sload_gas = 800;
+        }
+        if self.cip645 {
+            // CIP-645b: EIP-1884
+            self.balance_gas = 700;
+            self.extcodehash_gas = 700;
+
+            // CIP-645c: EIP-2028
+            self.tx_data_non_zero_gas = 16;
+
+            // CIP-645f: EIP-2929
+            self.cold_sload_gas = 2100;
+            self.sstore_reset_gas = 2900;
+        }
+
+        if self.align_evm {
+            self.per_auth_base_cost = 12500;
+            self.create_data_limit = 24576;
+            self.evm_gas_ratio = 1;
         }
     }
 

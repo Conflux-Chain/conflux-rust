@@ -52,9 +52,13 @@ impl<'a> ExecutiveContext<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn transact<O: ExecutiveObserver>(
         self, tx: &SignedTransaction, options: TransactOptions<O>,
     ) -> DbResult<ExecutionOutcome> {
+        // Transaction should execute on an empty cache
+        assert!(self.state.cache.get_mut().is_empty());
+
         let fresh_exec = FreshExecutive::new(self, tx, options);
 
         Ok(match fresh_exec.check_all()? {
@@ -111,6 +115,14 @@ pub fn gas_required_for(
         }) as u64
     };
     let data_gas: u64 = data.iter().map(byte_gas).sum();
+    let data_word = (data.len() as u64 + 31) / 32;
+
+    // CIP-645i: EIP-3860: Limit and meter initcode
+    let initcode_gas = if spec.cip645 && is_create {
+        data_word * spec.init_code_word_gas as u64
+    } else {
+        0
+    };
 
     let access_gas: u64 = if let Some(acc) = access_list {
         let address_gas =
@@ -126,10 +138,11 @@ pub fn gas_required_for(
         0
     };
 
-    let authorization_gas =
-        spec.per_empty_account_cost as u64 * authorization_len as u64;
+    let authorization_gas = spec.per_empty_account_cost as u64
+        * spec.evm_gas_ratio as u64
+        * authorization_len as u64;
 
-    init_gas + data_gas + access_gas + authorization_gas
+    init_gas + data_gas + access_gas + authorization_gas + initcode_gas
 }
 
 pub fn contract_address(

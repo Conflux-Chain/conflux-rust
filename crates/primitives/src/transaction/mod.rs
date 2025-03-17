@@ -132,6 +132,8 @@ pub enum TransactionError {
     ZeroGasPrice,
     /// Transaction types have not been activated
     FutureTransactionType,
+    /// Create transaction with too large init code size,
+    CreateInitCodeSizeLimit,
     /// Receiver with invalid type bit.
     InvalidReceiver,
     /// Transaction nonce exceeds local limit.
@@ -200,6 +202,7 @@ impl fmt::Display for TransactionError {
             FutureTransactionType => "Ethereum like transaction should have u64::MAX storage limit".into(),
             InvalidReceiver => "Sending transaction to invalid address. The first four bits of address must be 0x0, 0x1, or 0x8.".into(),
             TooLargeNonce => "Transaction nonce is too large.".into(),
+            CreateInitCodeSizeLimit => "Transaction initcode is too large.".into(),
         };
 
         f.write_fmt(format_args!("Transaction error ({})", msg))

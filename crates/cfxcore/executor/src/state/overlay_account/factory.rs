@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
 use keccak_hash::KECCAK_EMPTY;
-use parking_lot::RwLock;
+use parking_lot::lock_api::RwLock;
 use primitives::{Account, SponsorInfo, StorageLayout};
 
 use super::{checkpoints::WriteCheckpointLayer, OverlayAccount};
@@ -16,6 +16,7 @@ impl Default for OverlayAccount {
             admin: Address::zero(),
             sponsor_info: Default::default(),
             storage_read_cache: Default::default(),
+            storage_committed_cache: Default::default(),
             storage_write_cache: Default::default(),
             storage_write_checkpoint: Default::default(),
             transient_storage_cache: Default::default(),
@@ -139,6 +140,7 @@ impl OverlayAccount {
             balance: self.balance,
             nonce: self.nonce,
             admin: self.admin,
+
             sponsor_info: self.sponsor_info.clone(),
             staking_balance: self.staking_balance,
             collateral_for_storage: self.collateral_for_storage,
@@ -153,11 +155,54 @@ impl OverlayAccount {
             storage_write_checkpoint: Some(WriteCheckpointLayer::new_empty(
                 checkpoint_id,
             )),
+            storage_committed_cache: self.storage_committed_cache.clone(),
             storage_read_cache: self.storage_read_cache.clone(),
             transient_storage_cache: self.transient_storage_cache.clone(),
             transient_storage_checkpoint: Some(
                 WriteCheckpointLayer::new_empty(checkpoint_id),
             ),
+            storage_layout_change: self.storage_layout_change.clone(),
+            storage_overrided: self.storage_overrided,
+            create_transaction_hash: self.create_transaction_hash.clone(),
+        }
+    }
+
+    pub fn clone_from_committed_cache(&self) -> Self {
+        assert!(self.storage_write_checkpoint.is_none());
+        assert!(self.transient_storage_checkpoint.is_none());
+        assert!(self.storage_write_cache.read().is_empty());
+        assert_eq!(Arc::strong_count(&self.storage_read_cache), 1);
+        assert_eq!(Arc::strong_count(&self.storage_committed_cache), 1);
+        assert_eq!(Arc::strong_count(&self.storage_write_cache), 1);
+        assert_eq!(Arc::strong_count(&self.transient_storage_cache), 1);
+
+        // This is a mistake from the early implementation of transient storage,
+        // in which the transient_storage_cache is not cleared.
+        let transient_storage_cache =
+            Arc::new(RwLock::new(self.transient_storage_cache.read().clone()));
+
+        OverlayAccount {
+            address: self.address,
+            balance: self.balance,
+            nonce: self.nonce,
+            admin: self.admin,
+
+            sponsor_info: self.sponsor_info.clone(),
+            staking_balance: self.staking_balance,
+            collateral_for_storage: self.collateral_for_storage,
+            accumulated_interest_return: self.accumulated_interest_return,
+            deposit_list: self.deposit_list.clone(),
+            vote_stake_list: self.vote_stake_list.clone(),
+            code_hash: self.code_hash,
+            code: self.code.clone(),
+            is_newly_created_contract: self.is_newly_created_contract,
+            pending_db_clear: self.pending_db_clear,
+            storage_write_cache: Default::default(),
+            storage_write_checkpoint: None,
+            storage_committed_cache: self.storage_committed_cache.clone(),
+            storage_read_cache: self.storage_read_cache.clone(),
+            transient_storage_cache,
+            transient_storage_checkpoint: None,
             storage_layout_change: self.storage_layout_change.clone(),
             storage_overrided: self.storage_overrided,
             create_transaction_hash: self.create_transaction_hash.clone(),
@@ -189,6 +234,9 @@ impl OverlayAccount {
             )),
             transient_storage_cache: Arc::new(RwLock::new(
                 self.transient_storage_cache.read().clone(),
+            )),
+            storage_committed_cache: Arc::new(RwLock::new(
+                self.storage_committed_cache.read().clone(),
             )),
             transient_storage_checkpoint: None,
             storage_layout_change: self.storage_layout_change.clone(),

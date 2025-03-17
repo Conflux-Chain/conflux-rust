@@ -38,8 +38,13 @@ use std::{
 
 #[cfg(test)]
 fn make_byzantium_machine(max_depth: usize) -> Machine {
+    use crate::spec::CommonParams;
+
+    let mut params: CommonParams = Default::default();
+    params.transition_heights.align_evm = u64::MAX;
+
     let mut machine = crate::machine::Machine::new_with_builtin(
-        Default::default(),
+        params,
         VmFactory::new(1024 * 32),
     );
     machine
@@ -138,7 +143,7 @@ fn test_sender_balance() {
         res
     };
 
-    assert_eq!(gas_left, U256::from(94_595));
+    assert_eq!(gas_left, U256::from(94_895));
     assert_eq!(
         state.storage_at(&address, &vec![0; 32]).unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(0xf9)
@@ -224,7 +229,7 @@ fn test_create_contract_out_of_depth() {
             .expect("no vm error")
     };
 
-    assert_eq!(gas_left, U256::from(62_970));
+    assert_eq!(gas_left, U256::from(65_768));
     // We create a contract successfully, the substate contracts_created length
     // should be 1?
     assert_eq!(substate.contracts_created().len(), 1);
@@ -403,7 +408,7 @@ fn test_call_to_create() {
     );
     assert_eq!(state.total_storage_tokens(), storage_limit_in_drip);
 
-    assert_eq!(gas_left, U256::from(59_746));
+    assert_eq!(gas_left, U256::from(59_744));
 }
 
 #[test]
@@ -551,6 +556,7 @@ fn test_not_enough_cash() {
     state
         .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
         .unwrap();
+    state.commit_cache(false);
     let correct_cost = min(t.gas_price() * t.gas(), 100_017.into());
 
     let res = {
@@ -1164,6 +1170,7 @@ fn test_commission_privilege() {
             CleanupMode::NoEmpty,
         )
         .unwrap();
+    state.commit_cache(false);
 
     let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
@@ -1186,7 +1193,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(52_332));
     assert_eq!(state.nonce(&sender_with_space).unwrap(), U256::from(1));
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
@@ -1278,6 +1285,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1286,7 +1294,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(52_332));
     assert_eq!(
         state.nonce(&caller3.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1295,13 +1303,14 @@ fn test_commission_privilege() {
         state
             .balance(&caller3.address().with_native_space())
             .unwrap(),
-        U256::from(41_970)
+        U256::from(44_768)
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address.address).unwrap(),
         U256::from(110_000)
     );
 
+    state.commit_cache(false);
     // call with commission privilege and enough commission balance
     let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
@@ -1322,6 +1331,8 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
+
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1330,7 +1341,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(52_332));
     assert_eq!(
         state.nonce(&caller1.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1366,6 +1377,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1374,7 +1386,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(52_332));
     assert_eq!(
         state.nonce(&caller2.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1424,6 +1436,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(25_000)
     );
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1432,7 +1445,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(52_332));
     assert_eq!(
         state.nonce(&caller2.address().with_native_space()).unwrap(),
         U256::from(2)
@@ -1478,8 +1491,9 @@ fn test_commission_privilege() {
         state
             .balance(&caller3.address().with_native_space())
             .unwrap(),
-        U256::from(41_970)
+        U256::from(44_768)
     );
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1488,7 +1502,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(52_332));
     assert_eq!(
         state.nonce(&caller3.address().with_native_space()).unwrap(),
         U256::from(2)
@@ -1497,7 +1511,7 @@ fn test_commission_privilege() {
         state
             .balance(&caller3.address().with_native_space())
             .unwrap(),
-        U256::from(41_970)
+        U256::from(44_768)
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address.address).unwrap(),
@@ -1560,6 +1574,7 @@ fn test_storage_commission_privilege() {
             CleanupMode::NoEmpty,
         )
         .unwrap();
+    state.commit_cache(false);
 
     // simple call to create a storage entry
     let tx = Transaction::from(NativeTransaction {
@@ -1734,6 +1749,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed {
         gas_used,
@@ -1818,6 +1834,8 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
+
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed {
         gas_used,
@@ -1923,6 +1941,8 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
+
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed {
         gas_used,
@@ -2062,6 +2082,8 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
+
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed {
         gas_used,

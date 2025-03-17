@@ -17,6 +17,7 @@ class Issue2483(ConfluxTestFramework):
         self.num_nodes = 1
         self.gasPrice = 1
         self.conf_parameters["executive_trace"] = "true"
+        self.conf_parameters["cip645_transition_height"] = str(99999999)
 
     def setup_network(self):
         self.setup_nodes()

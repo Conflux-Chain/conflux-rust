@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::{Result as DbResult, StateDb, StateDbExt};
 use cfx_types::AddressWithSpace;
 use primitives::{
-    Account, CodeInfo, DepositList, StorageKey, StorageValue, VoteStakeList,
+    storage::WriteCacheItem, Account, CodeInfo, DepositList, StorageKey,
+    StorageValue, VoteStakeList,
 };
 
 use super::OverlayAccount;
@@ -20,7 +23,9 @@ impl OverlayAccount {
         // Commit storage entries
 
         assert!(self.storage_write_checkpoint.is_none());
-        let write_cache = &mut self.storage_write_cache.write();
+        assert_eq!(Arc::strong_count(&self.storage_write_cache), 1);
+        assert!(self.storage_write_cache.read().is_empty());
+        let write_cache = &mut self.storage_committed_cache.write();
         for (k, mut v) in write_cache.drain() {
             let address_key =
                 StorageKey::new_storage_key(&self.address.address, k.as_ref())
@@ -100,5 +105,27 @@ impl OverlayAccount {
         )?;
 
         Ok(())
+    }
+
+    pub fn commit_cache(
+        &mut self, retain_transient_storage: bool, dirty: bool,
+    ) {
+        assert!(self.storage_write_checkpoint.is_none());
+        assert!(self.transient_storage_checkpoint.is_none());
+        assert_eq!(Arc::strong_count(&self.storage_write_cache), 1);
+
+        let mut storage_write_cache = self.storage_write_cache.write();
+        let mut storage_commit_cache = self.storage_committed_cache.write();
+
+        for (key, value) in storage_write_cache.drain() {
+            if let WriteCacheItem::Write(value) = value {
+                assert!(dirty);
+                storage_commit_cache.insert(key, value);
+            }
+        }
+
+        if retain_transient_storage {
+            self.transient_storage_cache.write().clear();
+        }
     }
 }

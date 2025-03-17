@@ -314,6 +314,7 @@ bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", 
     "multicore",
     "blst",
 ] }
+blst = "0.3"
 #secp256k1 = "0.30.0"
 #rustls = "0.21"
 hashbrown = "0.7.1"

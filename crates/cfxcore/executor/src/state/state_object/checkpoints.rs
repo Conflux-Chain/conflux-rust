@@ -131,6 +131,7 @@ impl State {
     pub fn clear(&mut self) {
         assert!(self.no_checkpoint());
         self.cache.get_mut().clear();
+        self.committed_cache.clear();
         self.global_stat = GlobalStat::loaded(&self.db).expect("no db error");
     }
 }
@@ -163,11 +164,8 @@ fn apply_checkpoint_layer_to_cache(
                 *entry_in_cache.get_mut() = entry_in_checkpoint;
             }
             Unchanged => {
-                // If the AccountEntry in cache does not have a dirty bit, we
-                // can keep it in cache to avoid an duplicate db load.
-                if entry_in_cache.get().is_dirty() {
-                    entry_in_cache.remove();
-                }
+                // The warm/cold storage relies on the existence of cache
+                entry_in_cache.remove();
             }
         }
     }

@@ -598,18 +598,16 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             return Err(InterpreterResult::Done(Err(e)));
         }
 
+        let gasometer = self.gasometer.as_mut().expect(GASOMETER_PROOF);
+
         // Calculate gas cost
-        let requirements = match self
-            .gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .requirements(
-                context,
-                instruction,
-                info,
-                &self.stack,
-                self.mem.size(),
-            ) {
+        let requirements = match gasometer.requirements(
+            context,
+            instruction,
+            info,
+            &self.stack,
+            self.mem.size(),
+        ) {
             Ok(t) => t,
             Err(e) => return Err(InterpreterResult::Done(Err(e))),
         };
@@ -623,36 +621,26 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
         //     );
         // }
 
-        if let Err(e) = self
-            .gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .verify_gas(&requirements.gas_cost)
-        {
+        if let Err(e) = gasometer.verify_gas(&requirements.gas_cost) {
             return Err(InterpreterResult::Done(Err(e)));
         }
         self.mem.expand(requirements.memory_required_size);
-        self.gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .current_mem_gas = requirements.memory_total_gas;
-        self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas =
-            self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas
-                - requirements.gas_cost;
+        gasometer.current_mem_gas = requirements.memory_total_gas;
+        gasometer.current_gas -= requirements.gas_cost;
+        context.refund(requirements.gas_refund);
 
         evm_debug!({
             self.informant.before_instruction(
                 self.reader.position,
                 instruction,
                 info,
-                &self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas,
+                &gasometer.current_gas,
                 &self.stack,
             )
         });
 
         // Execute instruction
-        let current_gas =
-            self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas;
+        let current_gas = gasometer.current_gas;
         let result = match self.exec_instruction_inner(
             current_gas,
             context,
@@ -752,6 +740,12 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                 let endowment = self.stack.pop_back();
                 let init_off = self.stack.pop_back();
                 let init_size = self.stack.pop_back();
+                let spec = context.spec();
+                if spec.cip645
+                    && init_size > U256::from(spec.init_code_data_limit)
+                {
+                    return Err(vm::Error::CreateInitCodeSizeLimit);
+                }
                 let address_scheme = match instruction {
 					instructions::CREATE if context.space() == Space::Native => CreateContractAddress::FromSenderNonceAndCodeHash,
                     instructions::CREATE if context.space() == Space::Ethereum => CreateContractAddress::FromSenderNonce,

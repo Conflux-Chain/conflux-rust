@@ -17,6 +17,12 @@ impl State {
         Ok(self.read_account_lock(address)?.is_some())
     }
 
+    /// Touch an account to mark it as warm
+    pub fn touch(&self, address: &AddressWithSpace) -> DbResult<()> {
+        self.exists(address)?;
+        Ok(())
+    }
+
     pub fn exists_and_not_null(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
@@ -110,6 +116,13 @@ impl State {
     pub fn code_hash(&self, address: &AddressWithSpace) -> DbResult<H256> {
         let acc = try_loaded!(self.read_account_lock(address));
         Ok(acc.code_hash())
+    }
+
+    pub fn has_no_code(&self, address: &AddressWithSpace) -> DbResult<bool> {
+        let Some(acc) = self.read_account_lock(address)? else {
+            return Ok(true);
+        };
+        Ok(acc.code_hash() == KECCAK_EMPTY)
     }
 
     pub fn code_size(&self, address: &AddressWithSpace) -> DbResult<usize> {

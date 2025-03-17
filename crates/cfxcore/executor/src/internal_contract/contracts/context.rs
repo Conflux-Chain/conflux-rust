@@ -79,7 +79,7 @@ make_solidity_function! {
     struct EpochHash(U256, "epochHash(uint256)", H256);
 }
 
-impl_function_type!(EpochHash, "query", gas: |spec: &Spec| spec.sload_gas);
+impl_function_type!(EpochHash, "query", gas: |spec: &Spec| spec.cold_sload_gas);
 
 impl SimpleExecutionTrait for EpochHash {
     fn execute_inner(
