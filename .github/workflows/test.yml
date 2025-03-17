@@ -14,9 +14,10 @@ jobs:
 
       - name: Free up space
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android  "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
       - name: Cache Cargo and build artifacts
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -27,7 +28,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-base-${{ hashFiles('.github/dockers/base.Dockerfile') }}
@@ -47,13 +48,21 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
-      - name: Run tests
+      - name: Run workspace tests
         run: |
           docker run --rm \
             -v $(pwd):/app \
             -e RUST_BACKTRACE=1 \
             -w /app base-builder:latest \
-            bash -c "cargo nextest run --no-fail-fast --test-threads=4 || { echo '::error::Tests failed with exit code $?'; exit 1; }"
+            cargo nextest run --no-fail-fast --release --workspace
+
+      - name: Run cfx-addr
+        run: |
+          docker run --rm \
+            -v $(pwd):/app \
+            -e RUST_BACKTRACE=1 \
+            -w /app base-builder:latest \
+            cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
 
       - name: Move cache to the correct location
         run: |
