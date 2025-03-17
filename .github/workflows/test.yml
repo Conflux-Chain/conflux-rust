@@ -22,7 +22,9 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            target/release/deps
+            target/release/build
+            target/release/.fingerprint
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
@@ -63,6 +65,10 @@ jobs:
             -e RUST_BACKTRACE=1 \
             -w /app base-builder:latest \
             cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
+
+      - name: Ensure cache files are accessible
+        run: |
+          sudo chown -R $(id -u):$(id -g) target/release
 
       - name: Move cache to the correct location
         run: |
