@@ -13,6 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-base-${{ hashFiles('.github/dockers/base.Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-base-
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -20,19 +28,24 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: .github/workflows/docs.Dockerfile
+          file: .github/dockers/base.Dockerfile
           load: true
-          tags: doc-builder:latest
+          tags: base-builder:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
       - name: Generate documentation
         run: |
-          mkdir -p target
-          chmod -R 777 target
-          docker run --rm -v $(pwd)/target:/app/target -w /app doc-builder:latest \
-            bash -c "RUSTDOCFLAGS='--enable-index-page -Z unstable-options' cargo +nightly-2024-01-29 doc --no-deps"
+          docker run --rm -v $(pwd):/app -w /app base-builder:latest \
+            bash -c "rustup default nightly-2024-01-29 && RUSTDOCFLAGS='--enable-index-page -Z unstable-options' cargo +nightly-2024-01-29 doc --no-deps"
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target/doc
+
+      - name: Move cache to the correct location
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache

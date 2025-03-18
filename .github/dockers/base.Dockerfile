@@ -20,10 +20,14 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     rm llvm.sh
 
+WORKDIR /app
+
+COPY rust-toolchain.toml .
+
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-host x86_64-unknown-linux-gnu -y && \
     . ~/.cargo/env && \
-    rustup default nightly-2024-01-29 && \
-    git config --global --add safe.directory '*'
+    git config --global --add safe.directory /app && \
+    cargo install cargo-nextest --version "0.9.85" --locked
 
 ENV PATH="/root/.cargo/bin:/home/builder/.cargo/bin:${PATH}"
 ENV CC=clang-18
@@ -31,6 +35,3 @@ ENV CXX=clang++-18
 ENV CXXFLAGS="-std=c++11 -stdlib=libc++"
 ENV LDFLAGS="-stdlib=libc++"
 
-WORKDIR /app
-
-COPY . .

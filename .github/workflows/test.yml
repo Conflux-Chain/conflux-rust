@@ -1,0 +1,79 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
+      - name: Cache Cargo and build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-base-${{ hashFiles('.github/dockers/base.Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-base-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: .github/dockers/base.Dockerfile
+          load: true
+          tags: base-builder:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Run workspace tests
+        run: |
+          docker run --rm \
+            -v $(pwd):/app \
+            -v ~/.cargo/registry:/root/.cargo/registry \
+            -v ~/.cargo/git:/root/.cargo/git \
+            -e RUST_BACKTRACE=1 \
+            -w /app base-builder:latest \
+            cargo nextest run --no-fail-fast --release --workspace
+
+      - name: Run cfx-addr
+        run: |
+          docker run --rm \
+            -v $(pwd):/app \
+            -v ~/.cargo/registry:/root/.cargo/registry \
+            -v ~/.cargo/git:/root/.cargo/git \
+            -e RUST_BACKTRACE=1 \
+            -w /app base-builder:latest \
+            cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
+
+      - name: Ensure cache files are accessible
+        run: |
+          sudo chown -R $(id -u):$(id -g) target/release
+          sudo chown -R $(id -u):$(id -g) ~/.cargo
+
+      - name: Move cache to the correct location
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
