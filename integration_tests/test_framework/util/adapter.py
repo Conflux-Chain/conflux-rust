@@ -121,13 +121,28 @@ def conflux_state_test(
         raise ValueError("tx and blocks cannot both be provided")
     
     if blocks:
-        current_block = network.client.best_block_hash()
-        for block in blocks:
-            tx_list = [get_raw_tx_from_transaction(tx) for tx in block.txs]
-            block_hash = network.client.generate_custom_block(current_block, [], txs=tx_list)
-            current_block = block_hash
-        network.client.generate_blocks(4, num_txs=1)
-        block = ew3.eth.get_block(current_block, True)
+        try:
+            version = ew3.client_version
+        except Exception as e:
+            print(f"Error getting client version: {e}")
+            version = "conflux"
+        if version == "conflux":
+            current_block = network.client.best_block_hash()
+            for block in blocks:
+                tx_list = [get_raw_tx_from_transaction(tx) for tx in block.txs]
+                block_hash = network.client.generate_custom_block(current_block, [], txs=tx_list)
+                current_block = block_hash
+            network.client.generate_blocks(4, num_txs=1)
+            block = ew3.eth.get_block(current_block, True)
+        else:
+            # as there is no generate_custom_block in anvil's api, we simulate the behavior by sending txs one by one
+            warnings.warn("Anvil is used, txs will be sent one by one, which may contradict the spec")
+            for block in blocks:
+                for tx in block.txs:
+                    raw_tx = get_raw_tx_from_transaction(tx)
+                    tx_hash = ew3.eth.send_raw_transaction(raw_tx)
+                    receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=1, poll_latency=0.5)
+                    
     elif tx:
         raw_tx = get_raw_tx_from_transaction(tx)
         if tx.error is not None:
