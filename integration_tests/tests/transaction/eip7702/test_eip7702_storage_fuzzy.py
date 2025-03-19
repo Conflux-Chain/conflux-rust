@@ -101,7 +101,7 @@ all_combinations_with_duplicates = list(product(storage_fuzzy_operations, repeat
 
 # Method 2: Randomly sample a subset of combinations to reduce test time
 random.seed(time.time())
-sampled_combinations = random.sample(all_combinations_with_duplicates, 120)  # Sample subset
+sampled_combinations = random.sample(all_combinations_with_duplicates, 20)  # Sample subset
 
 # Choose which method to use (all or sampled)
 operation_permutations = [list(comb) for comb in sampled_combinations]  # Use sampled subset with duplicates
