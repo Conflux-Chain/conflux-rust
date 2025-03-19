@@ -1,7 +1,6 @@
 from typing import Optional, Union, Literal
-
+import warnings
 from web3 import Web3
-from web3._utils.transactions import fill_nonce, fill_transaction_defaults
 from web3.exceptions import Web3RPCError
 from eth_account.signers.local import LocalAccount
 from ethereum_test_types import EOA
@@ -89,6 +88,17 @@ class AllocMock:
         return Address(receipt["contractAddress"])
 
 
+    def __getitem__(self, address: Address) -> Account | None:
+        """Return account associated with an address."""
+        nonce = self.ew3.eth.get_transaction_count(address)
+        code = self.ew3.eth.get_code(address)
+        balance = self.ew3.eth.get_balance(address)
+        if nonce == 0 and code == b'' and balance == 0:
+            return None
+        storage = {key: int(self.ew3.eth.get_storage_at(address, key).hex(), 16) for key in range(32)}
+        warnings.warn("can only get limited range of storage")
+        return Account(nonce=nonce, code=code, balance=balance, storage=storage)
+
 def conflux_state_test(
     ew3: Web3, 
     network: ConfluxTestFramework,
@@ -101,42 +111,10 @@ def conflux_state_test(
     t8n_dump_dir=None,  # Optional parameter
 ):
     def get_raw_tx_from_transaction(tx: Transaction) -> bytes:
-        if tx.authorization_list is not None:
-        # Send transaction
-            # raw_tx = sign_eip7702_transaction_with_default_fields(
-            #     ew3, 
-            #     ew3.eth.account.from_key(tx.sender.key),  # type: ignore
-            #     {
-            #         "nonce": tx.nonce,
-            #         "value": tx.value,
-            #         "to": tx.to.hex() if tx.to is not None else None,
-            #         # "gas": tx.gas_limit,
-            #         "data": tx.data.hex() if tx.data is not None else None,
-            #         "authorizationList": [
-            #             Authorization(
-            #                 contract_address=str(auth.address),
-            #                 chain_id=auth.chain_id,
-            #                 nonce=int(auth.nonce),
-            #                 r=hex(auth.r),
-            #                 s=hex(auth.s),
-            #                 v=auth.v,
-            #                 yParity=auth.v
-            #             ) for auth in tx.authorization_list 
-            #         ] if tx.authorization_list is not None else None
-            #     }  # type: ignore
-            # )
-            raw_tx = tx.with_signature_and_sender().rlp
-            return raw_tx
-        tx_to_send = {
-            "from": tx.sender,
-            "nonce": tx.nonce,
-            "value": tx.value,
-            "to": tx.to,
-            "gas": tx.gas_limit,
-            "data": tx.data,
-        }
-        tx_to_sign = fill_transaction_defaults(ew3, fill_nonce(ew3, tx_to_send))
-        raw_tx = ew3.eth.account.sign_transaction(tx_to_sign, tx.sender.key).raw_transaction
+        if tx.sender is not None and tx.secret_key is not None:
+            warnings.warn("tx.sender and tx.secret_key are both provided, tx.sender will be used")
+            tx.secret_key = tx.sender.key
+        raw_tx = tx.with_signature_and_sender().rlp
         return raw_tx
     
     if tx and blocks:
