@@ -2,6 +2,9 @@
 
 set -e
 
+# echo python version
+python3 --version
+
 pip3 install \
     cfx-account \
     eth-utils \
@@ -19,7 +22,9 @@ pip3 install \
     pyyaml \
     numpy \
     pytest \
-    pytest-xdist
+    pytest-xdist \
+    git+https://github.com/petertdavies/ethereum-spec-evm-resolver.git@623ac4565025e72b65f45b926da2a3552041b469 \
+    git+https://github.com/ethereum/execution-spec-tests.git@e04edbe1f9c0b932b628165d12af8d244e4da776
 
 ################################################################################
 # temporary solution to use eip7702 signing from viem implementation

@@ -44,5 +44,4 @@ def test_sign_eip7702_transaction(authorization: Authorization):
     
     result = sign_eip7702_transaction(transaction, TEST_PRIVATE_KEY)
     
-    assert isinstance(result, str)
-    assert result.startswith('0x')
+    assert isinstance(result, bytes)
