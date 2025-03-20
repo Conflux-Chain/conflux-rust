@@ -124,7 +124,7 @@ impl OverlayAccount {
             }
         }
 
-        if retain_transient_storage {
+        if !retain_transient_storage {
             self.transient_storage_cache.write().clear();
         }
     }
