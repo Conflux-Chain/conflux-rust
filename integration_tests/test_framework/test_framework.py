@@ -492,11 +492,11 @@ class ConfluxTestFramework:
             self.options.tmpdir + '/test_framework.log', encoding='utf-8')
         fh.setLevel(logging.DEBUG)
         # Create console handler to log messages to stderr. By default this logs only error messages, but can be configured with --loglevel.
-        ch = logging.StreamHandler(sys.stdout)
+        # ch = logging.StreamHandler(sys.stdout)
         # User can provide log level as a number or string (eg DEBUG). loglevel was caught as a string, so try to convert it to an int
         ll = int(self.options.loglevel) if self.options.loglevel.isdigit(
         ) else self.options.loglevel.upper()
-        ch.setLevel(ll)
+        # ch.setLevel(ll)
         # Format logs the same as bitcoind's debug.log with microprecision (so log files can be concatenated and sorted)
         formatter = logging.Formatter(
             fmt=
@@ -504,10 +504,10 @@ class ConfluxTestFramework:
             datefmt='%Y-%m-%dT%H:%M:%S')
         formatter.converter = time.gmtime
         fh.setFormatter(formatter)
-        ch.setFormatter(formatter)
+        # ch.setFormatter(formatter)
         # add the handlers to the logger
         self.log.addHandler(fh)
-        self.log.addHandler(ch)
+        # self.log.addHandler(ch)
 
         if self.options.trace_rpc:
             rpc_logger = logging.getLogger("ConfluxRPC")
