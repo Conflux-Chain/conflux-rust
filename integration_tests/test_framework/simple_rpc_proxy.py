@@ -30,8 +30,23 @@ class RpcCaller:
         self.method = method
         self.timeout = timeout
         self.node = node
-
+        
     def __call__(self, *args, **argsn) -> Any:
+        retry = 3
+        retry_message_list = [
+            "Specified block header does not exist",
+        ]
+        while retry > 0:
+            try:
+                return self._call(*args, **argsn)
+            except ReceivedErrorResponseError as e:
+                if e.response.message in retry_message_list:
+                    retry -= 1
+                    time.sleep(0.2)
+                    continue
+                raise e
+        
+    def _call(self, *args, **argsn) -> Any:
         if argsn:
             raise ValueError('json rpc 2 only supports array arguments')
         
