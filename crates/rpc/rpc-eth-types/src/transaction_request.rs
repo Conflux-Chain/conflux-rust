@@ -30,13 +30,13 @@ use primitives::{
     },
     AccessList,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_ETH_GAS_CALL_REQUEST: u64 =
     DEFAULT_TARGET_BLOCK_GAS_LIMIT * 5 / 10;
 
 /// Call request
-#[derive(Debug, Default, PartialEq, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionRequest {
     /// From
