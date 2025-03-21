@@ -52,6 +52,12 @@ def pytest_addoption(parser):
         action="store_true",
         help="Print out all RPC calls as they are made")
     parser.addoption(
+        "--conflux-tracetx",
+        dest="trace_tx",
+        default=False,
+        action="store_true",
+        help="Print out tx opcodes traces on getting tx receipt using web3 sdk")
+    parser.addoption(
         "--conflux-portseed",
         dest="port_seed",
         default=os.getpid(),
@@ -114,6 +120,7 @@ def get_args_from_request(request: pytest.FixtureRequest) -> FrameworkOptions:
         metrics_report_interval_ms=request.config.getoption("metrics_report_interval_ms"),  # type: ignore
         conflux=request.config.getoption("conflux"), # type: ignore
         port_min=request.config.getoption("port_min"),  # type: ignore
+        trace_tx=request.config.getoption("trace_tx"),  # type: ignore
     )
     
 @pytest.fixture(scope="session")
