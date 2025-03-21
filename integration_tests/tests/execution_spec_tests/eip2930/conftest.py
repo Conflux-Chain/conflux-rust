@@ -69,36 +69,3 @@ def framework_class():
             self.start_node(0, ["--archive"])
 
     return EIP7702TestEnv
-
-
-# The commented code is for testing if conflux's implementation 
-# is compatible with anvil's implementation
-# @pytest.fixture(scope="module", params=["anvil", "conflux"])
-# def web3_setting_pair(network, request):
-#     if request.param == "anvil":
-#         from eth_account import Account as EthAccount
-#         EthAccount.enable_unaudited_hdwallet_features()
-#         from web3 import Web3
-#         from web3.middleware import SignAndSendRawMiddlewareBuilder
-#         w3 = Web3(
-#             Web3.HTTPProvider("http://localhost:8545")
-#         )
-#         acct = EthAccount.from_mnemonic(
-#             "test test test test test test test test test test test junk",
-#             account_path="m/44'/60'/0'/0/0",
-#         )
-#         w3.eth.default_account = acct.address
-#         w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(acct.key))
-#         return w3, acct
-#     else:
-#         network.ew3.eth.default_account = network.evm_accounts[-1].address
-#         return network.ew3, network.evm_accounts[-1]
-
-
-# @pytest.fixture(scope="module")
-# def ew3(web3_setting_pair):
-#     return web3_setting_pair[0]
-
-# @pytest.fixture(scope="module")
-# def evm_accounts(web3_setting_pair):
-#     return [web3_setting_pair[1]]

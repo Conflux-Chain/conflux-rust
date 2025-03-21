@@ -91,7 +91,19 @@ class FrameworkOptions:
     metrics_report_interval_ms: int  # report metrics interval in milliseconds
     conflux: str  # path to conflux binary
     trace_tx: bool  # print out tx opcodes traces on getting tx receipt using web3 sdk
-    
+    use_anvil_for_spec_tests: bool  # use anvil for spec tests instead of Conflux to check if test cases can pass in Ethereum's implementation
+
+
+class AutoTraceMiddleware(ConfluxWeb3Middleware):
+    def response_processor(self, method: RPCEndpoint, response: Any):
+        if method == RPC.cfx_getTransactionReceipt or method == "eth_getTransactionReceipt":
+            if "result" in response and response["result"] is not None:
+                tx_hash = response["result"]["transactionHash"]
+                import pprint
+                trace = self._w3.manager.request_blocking("debug_traceTransaction", [tx_hash])
+                pprint.pprint(trace.__dict__)
+        return response
+
 
 class ConfluxTestFramework:
     """Base class for a bitcoin test script.
@@ -379,19 +391,7 @@ class ConfluxTestFramework:
             
         self.cw3.middleware_onion.add(TestNodeMiddleware)
         self.ew3.middleware_onion.add(TestNodeMiddleware)
-            
-        class AutoTraceMiddleware(ConfluxWeb3Middleware):
-            def response_processor(self, method: RPCEndpoint, response: Any):
-                if method == RPC.cfx_getTransactionReceipt or method == "eth_getTransactionReceipt":
-                    # success tx
-                    if "result" in response and response["result"] is not None:
-                        tx_hash = response["result"]["transactionHash"]
-                        import pprint
-                        trace = self._w3.manager.request_blocking("debug_traceTransaction", [tx_hash])
-                        print("tx_hash: ", tx_hash)
-                        pprint.pprint(trace.__dict__)
-                        
-                return response
+
         if self.options.trace_tx:
             self.cw3.middleware_onion.add(AutoTraceMiddleware)
             self.ew3.middleware_onion.add(AutoTraceMiddleware)

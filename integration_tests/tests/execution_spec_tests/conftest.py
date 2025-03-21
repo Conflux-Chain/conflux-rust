@@ -1,4 +1,5 @@
 import pytest
+import time
 
 from functools import partial
 from web3 import Web3
@@ -11,7 +12,7 @@ from ethereum_test_forks import Fork
 from ethereum_test_forks.forks.forks import Prague
 from ethereum_test_tools.code import Yul
 
-from integration_tests.test_framework.test_framework import ConfluxTestFramework
+from integration_tests.test_framework.test_framework import ConfluxTestFramework, AutoTraceMiddleware
 from integration_tests.test_framework.util.adapter import AllocMock, conflux_state_test
 
 def pytest_configure(config):
@@ -131,35 +132,45 @@ def framework_class():
 
 # The commented code is for testing if conflux's implementation 
 # is compatible with anvil's implementation
-# @pytest.fixture(scope="module", params=[
-#     "anvil",
-#     # "conflux"
-# ])
-# def web3_setting_pair(network, request):
-#     if request.param == "anvil":
-#         from eth_account import Account as EthAccount
-#         EthAccount.enable_unaudited_hdwallet_features()
-#         from web3 import Web3
-#         from web3.middleware import SignAndSendRawMiddlewareBuilder
-#         w3 = Web3(
-#             Web3.HTTPProvider("http://localhost:8545")
-#         )
-#         acct = EthAccount.from_mnemonic(
-#             "test test test test test test test test test test test junk",
-#             account_path="m/44'/60'/0'/0/0",
-#         )
-#         w3.eth.default_account = acct.address
-#         w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(acct.key))
-#         return w3, acct
-#     else:
-#         network.ew3.eth.default_account = network.evm_accounts[-1].address
-#         return network.ew3, network.evm_accounts[-1]
+@pytest.fixture(scope="module")
+def web3_setting_pair(network, request, args, port_min):
+    port = port_min + 99
+    if args.use_anvil_for_spec_tests:
+        from eth_account import Account as EthAccount
+        EthAccount.enable_unaudited_hdwallet_features()
+        from web3 import Web3
+        from web3.middleware import SignAndSendRawMiddlewareBuilder
+        # subprocess
+        import subprocess
+        p = subprocess.Popen(["anvil", "--port", str(port), "--hardfork", "Prague", "--chain-id", str(EVM_CHAIN_ID), "--steps-tracing", "--block-base-fee-per-gas", "1"], stdout=subprocess.DEVNULL)
+        
+        w3 = Web3(
+            Web3.HTTPProvider(f"http://localhost:{port}")
+        )
+        retry = 0
+        while not w3.is_connected() and retry < 5:
+            time.sleep(0.1)
+            retry += 1
+        acct = EthAccount.from_mnemonic(
+            "test test test test test test test test test test test junk",
+            account_path="m/44'/60'/0'/0/0",
+        )
+        w3.eth.default_account = acct.address
+        w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(acct.key))
+        if args.trace_tx:
+            w3.middleware_onion.add(AutoTraceMiddleware)
+        yield w3, acct
+        p.terminate()
+        p.wait()
+    else:
+        network.ew3.eth.default_account = network.evm_accounts[-1].address
+        yield network.ew3, network.evm_accounts[-1]
 
 
-# @pytest.fixture(scope="module")
-# def ew3(web3_setting_pair):
-#     return web3_setting_pair[0]
+@pytest.fixture(scope="module")
+def ew3(web3_setting_pair):
+    return web3_setting_pair[0]
 
-# @pytest.fixture(scope="module")
-# def evm_accounts(web3_setting_pair):
-#     return [web3_setting_pair[1]]
+@pytest.fixture(scope="module")
+def evm_accounts(web3_setting_pair):
+    return [web3_setting_pair[1]]
