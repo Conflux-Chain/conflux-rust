@@ -33,6 +33,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: "check-crates"
+          workspaces: ". -> target/debug"
+          shared-key: "debug-cache"
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
@@ -63,6 +65,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: "release-tests"
+          shared-key: "target-release-cache"
           workspaces: ". -> target/release"
           cache-on-failure: "true"
 
@@ -96,6 +99,7 @@ jobs:
         with:
           key: "cfx-addr-tests"
           workspaces: ". -> target/debug"
+          shared-key: "debug-cache"
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker

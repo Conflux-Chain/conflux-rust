@@ -35,7 +35,8 @@ jobs:
         with:
           prefix-key: "lint"
           cache-on-failure: true
-          shared-key: "lint-cache"
+          shared-key: "target-release-cache"
+          workspaces: ". -> target/release"
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
@@ -50,3 +51,8 @@ jobs:
           -e RUSTFLAGS="-g" \
           -w /app base-builder:latest \
           bash -c "./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings"
+
+      - name: Ensure cache files are accessible
+        run: |
+          sudo chown -R $(id -u):$(id -g) target/release
+          sudo chown -R $(id -u):$(id -g) ~/.cargo
