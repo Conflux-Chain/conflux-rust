@@ -1,0 +1,17 @@
+name: "Setup Docker Environment"
+description: "Sets up Docker with caching and builds the base image"
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: .github/dockers/base.Dockerfile
+        tags: base-builder:latest
+        cache-from: type=gha,scope=base-builder-${{ hashFiles('.github/dockers/base.Dockerfile') }}
+        cache-to: type=gha,mode=max,scope=base-builder-${{ hashFiles('.github/dockers/base.Dockerfile') }}
+        push: false
