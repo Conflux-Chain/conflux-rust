@@ -44,9 +44,9 @@ jobs:
             !target/debug/deps/librust_verify*
             !target/debug/incremental
             !target/debug/.cargo-lock
-          key: ${{ runner.os }}-build-debug-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-build-crates-debug-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-debug-
+            ${{ runner.os }}-build-crates-debug-
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
@@ -87,9 +87,9 @@ jobs:
             !target/release/build/**/out
             !target/release/incremental
             !target/release/.cargo-lock
-          key: ${{ runner.os }}-build-release-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-build-workspace-release-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-release-
+            ${{ runner.os }}-build-workspace-release-
 
 
       - name: Setup Docker
@@ -132,9 +132,9 @@ jobs:
             !target/debug/deps/librust_verify*
             !target/debug/incremental
             !target/debug/.cargo-lock
-          key: ${{ runner.os }}-build-debug-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-build-addr-debug-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-debug-
+            ${{ runner.os }}-build-addr-debug-
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker

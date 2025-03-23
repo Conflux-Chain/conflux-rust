@@ -43,9 +43,9 @@ jobs:
             !target/release/build/**/out
             !target/release/incremental
             !target/release/.cargo-lock
-          key: ${{ runner.os }}-build-release-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-build-lint-release-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-release-
+            ${{ runner.os }}-build-lint-release-
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
