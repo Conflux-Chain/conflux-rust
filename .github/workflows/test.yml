@@ -25,25 +25,10 @@ on:
       - "CODEOWNERS"
 
 jobs:
-  test:
+  build-image:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Free up space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
-
-      - name: Cache Cargo and build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target/release
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
 
       - name: Cache Docker layers
         uses: actions/cache@v4
@@ -66,6 +51,64 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
+      - name: Move cache to the correct location
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Save Docker image
+        run: docker save base-builder:latest -o /tmp/base-builder.tar
+
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/base-builder.tar
+          retention-days: 1
+
+  check-crates:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
+      - name: Cache Cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deps-
+
+      - name: Cache debug build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/debug/deps
+            target/debug/.fingerprint
+            target/debug/build
+            !target/debug/build/**/out
+            !target/debug/deps/librust_verify*
+            !target/debug/incremental
+            !target/debug/.cargo-lock
+          key: ${{ runner.os }}-build-debug-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-debug-
+
+      - name: Download Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load -i /tmp/base-builder.tar
+
       - name: Check individual crates
         run: |
           docker run --rm \
@@ -76,6 +119,53 @@ jobs:
             -w /app base-builder:latest \
             dev-support/check-crates.sh
 
+      - name: Ensure cache files are accessible
+        run: |
+          sudo chown -R $(id -u):$(id -g) target/debug 
+          sudo chown -R $(id -u):$(id -g) ~/.cargo
+
+  workspace-tests:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
+      - name: Cache Cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deps-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/release/deps
+            target/release/.fingerprint
+            target/release/build
+            !target/release/build/**/out
+            !target/release/incremental
+            !target/release/.cargo-lock
+          key: ${{ runner.os }}-build-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-release-
+
+      - name: Download Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load -i /tmp/base-builder.tar
+
       - name: Run workspace tests
         run: |
           docker run --rm \
@@ -85,6 +175,54 @@ jobs:
             -e RUST_BACKTRACE=1 \
             -w /app base-builder:latest \
             cargo nextest run --no-fail-fast --release --workspace
+
+      - name: Ensure cache files are accessible
+        run: |
+          sudo chown -R $(id -u):$(id -g) target/release 
+          sudo chown -R $(id -u):$(id -g) ~/.cargo
+
+  cfx-addr-tests:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
+      - name: Cache Cargo registry and git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deps-
+
+      - name: Cache debug build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/debug/deps
+            target/debug/.fingerprint
+            target/debug/build
+            !target/debug/build/**/out
+            !target/debug/deps/librust_verify*
+            !target/debug/incremental
+            !target/debug/.cargo-lock
+          key: ${{ runner.os }}-build-debug-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-debug-
+
+      - name: Download Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load -i /tmp/base-builder.tar
 
       - name: Run cfx-addr
         run: |
@@ -98,10 +236,5 @@ jobs:
 
       - name: Ensure cache files are accessible
         run: |
-          sudo chown -R $(id -u):$(id -g) target/release
+          sudo chown -R $(id -u):$(id -g) target/debug 
           sudo chown -R $(id -u):$(id -g) ~/.cargo
-
-      - name: Move cache to the correct location
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
