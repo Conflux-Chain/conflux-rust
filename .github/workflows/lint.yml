@@ -30,13 +30,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Rust Cache
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
         with:
-          prefix-key: "lint"
-          cache-on-failure: true
-          shared-key: "target-release-cache"
-          workspaces: ". -> target/release"
+          path: |
+            target/release/deps
+            target/release/.fingerprint
+            target/release/build
+            !target/release/build/**/out
+            !target/release/incremental
+            !target/release/.cargo-lock
+          key: ${{ runner.os }}-build-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-release-
 
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
