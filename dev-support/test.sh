@@ -14,10 +14,8 @@ export CARGO_TARGET_DIR=$ROOT_DIR/build
 export RUSTFLAGS="-g -D warnings"
 
 CHECK_BUILD=1
-CHECK_CLIPPY=2
-CHECK_UNIT_TEST=3
-CHECK_INT_TEST=4
-CHECK_PY_TEST=5
+CHECK_INT_TEST=2
+CHECK_PY_TEST=3
 
 function check_build {
     local -n inner_result=$1
@@ -28,7 +26,7 @@ function check_build {
     local result
 
     result=$(
-        cargo build --release && cargo doc --document-private-items && cargo test --release --all --no-run && cargo bench --all --no-run && ./dev-support/check-crates.sh | tee /dev/stderr
+        cargo build --release| tee /dev/stderr
     )
 
     local exit_code=$?

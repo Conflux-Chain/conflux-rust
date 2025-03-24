@@ -91,9 +91,38 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-build-workspace-release-
 
-
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
+
+      - name: Run build documentation
+        run: |
+          docker run --rm \
+            -v $(pwd):/app \
+            -v ~/.cargo/registry:/root/.cargo/registry \
+            -v ~/.cargo/git:/root/.cargo/git \
+            -e RUST_BACKTRACE=1 \
+            -w /app base-builder:latest \
+            bash -c "cargo doc --document-private-items"
+
+      - name: Run build test
+        run: |
+          docker run --rm \
+            -v $(pwd):/app \
+            -v ~/.cargo/registry:/root/.cargo/registry \
+            -v ~/.cargo/git:/root/.cargo/git \
+            -e RUST_BACKTRACE=1 \
+            -w /app base-builder:latest \
+            bash -c "cargo test --release --all --no-run"
+
+      - name: Run build bench
+        run: |
+          docker run --rm \
+            -v $(pwd):/app \
+            -v ~/.cargo/registry:/root/.cargo/registry \
+            -v ~/.cargo/git:/root/.cargo/git \
+            -e RUST_BACKTRACE=1 \
+            -w /app base-builder:latest \
+            bash -c "cargo bench --all --no-run"
 
       - name: Run workspace tests
         run: |
