@@ -37,43 +37,23 @@ Use `dev-support/dep_pip3.sh` to install python dependencies.
 
 ### Run Tests
 
-#### Command Line
+#### How to
 
-Run tests with `pytest`:
+You can run tests using command line or GUI tools provided by VS code (or other IDE).
+
+Using command line:
 
 ```bash
 pytest integration_tests/tests -vv -n logical --dist loadscope
 ```
 
 > `-vv` is to show more logs.
-> 
+>
 > `-n logical` is to run tests in parallel. You can replace `logical` with `2` or more to run tests in parallel with the specified number of processes.
-> 
+>
 > `--dist loadscope` controls how tests are distributed. The provided configuration groups tests by their scope—functions within the same module or methods within the same test class—and assigns each group to a single worker.
 
-Use pytest options to filter tests:
-
-```bash
-pytest integration_tests/tests -k test_name
-
-# or 
-
-pytest integration_tests/tests/test_file.py::test_name
-
-# Run tests in a specific file
-pytest integration_tests/tests/test_file.py
-
-# Run tests in a specific class
-pytest integration_tests/tests/test_file.py::test_name
-
-# Arguments for ConfluxTestFramework also supported
-# argument explanations can be found in integration_tests/tests/conftest.py::pytest_addoption
-pytest integration_tests/tests/example_test.py -s --conflux-nocleanup
-```
-
-#### VSCode
-
-Put the below configuration in `.vscode/settings.json`:
+Put the below configuration in `.vscode/settings.json` to use VS code GUI:
 
 ```json
 {
@@ -93,6 +73,46 @@ Then you can see the tests in VSCode test explorer. You can run tests by clickin
 
 > `-n` and `--dist` are commented out by default. You can uncomment them to run tests in parallel.
 > But it should note that if you run tests in parallel, the test logs will be hidden by default.
+
+#### Pytest Options
+
+Use pytest options to filter tests:
+
+```bash
+pytest integration_tests/tests -k test_name
+# or 
+pytest integration_tests/tests/test_file.py::test_name
+
+# Run all tests in a specific file
+pytest integration_tests/tests/test_file.py
+
+# Run specified test of a file
+pytest integration_tests/tests/test_file.py::test_name
+
+# Run specified case of a test
+pytest integration_tests/tests/execution_spec_tests/eip5656_mcopy/test_mcopy.py::test_mcopy_on_empty_memory -k "[empty_memory-1-32-0]"
+```
+
+Pytest options which would be useful:
+
+- `-vv`: show more logs
+- `-s`: always show the logs in the test, while by default logs are hidden if tests pass. Should note this option will not take effect if `-n` is used.
+- pytest-xdist options:
+  - `-n num_processes` or `-n logical`(use logical cores), run tests in parallel in multiple processes
+  - `--dist loadscope`(recommended if `-n` is used), group tests by their scope
+- test framework options(for full options check `./integration_tests/tests/conftest.py::pytest_addoption`):
+  - `--conflux-nocleanup`: don't clean up the log files after the test
+  - `--conflux-noshutdown`: don't stop the conflux nodes after the test
+  - `--conflux-use-anvil`: use anvil **for spec tests** instead of Conflux to check if test cases can pass in Ethereum's implementation
+  - `--conflux-tracetx`: Print out tx opcodes traces(`debug_traceTransaction` RPC) on getting tx receipt using web3 sdk
+
+For example,
+
+```bash
+pytest integration_tests/tests/execution_spec_tests/eip5656_mcopy/test_mcopy.py::test_mcopy_on_empty_memory -k "[empty_memory-1-32-0]" --conflux-tracetx --conflux-use-anvil -s
+```
+
+Print out anvil transaction traces to debug tests.
 
 ## Add New Tests
 
