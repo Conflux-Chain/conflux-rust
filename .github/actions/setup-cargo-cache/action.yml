@@ -1,0 +1,15 @@
+name: 'Setup Cargo Cache'
+description: 'Sets up Cargo registry and git cache'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Cache Cargo registry and git
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-deps-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-deps-
