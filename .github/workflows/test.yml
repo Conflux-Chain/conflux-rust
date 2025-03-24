@@ -94,16 +94,6 @@ jobs:
       - name: Setup Docker
         uses: ./.github/actions/setup-docker
 
-      - name: Run build documentation
-        run: |
-          docker run --rm \
-            -v $(pwd):/app \
-            -v ~/.cargo/registry:/root/.cargo/registry \
-            -v ~/.cargo/git:/root/.cargo/git \
-            -e RUST_BACKTRACE=1 \
-            -w /app base-builder:latest \
-            bash -c "cargo doc --document-private-items"
-
       - name: Run build test
         run: |
           docker run --rm \
@@ -177,6 +167,32 @@ jobs:
             -e RUST_BACKTRACE=1 \
             -w /app base-builder:latest \
             cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
+
+      - name: Ensure cache files are accessible
+        run: |
+          sudo chown -R $(id -u):$(id -g) target/debug 
+          sudo chown -R $(id -u):$(id -g) ~/.cargo
+
+  build-documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Setup Docker
+        uses: ./.github/actions/setup-docker
+
+      - name: Run build documentation
+        run: |
+          docker run --rm \
+            -v $(pwd):/app \
+            -v ~/.cargo/registry:/root/.cargo/registry \
+            -v ~/.cargo/git:/root/.cargo/git \
+            -e RUST_BACKTRACE=1 \
+            -w /app base-builder:latest \
+            bash -c "cargo doc --document-private-items"
 
       - name: Ensure cache files are accessible
         run: |
