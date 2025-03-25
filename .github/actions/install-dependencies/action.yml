@@ -1,0 +1,11 @@
+name: "Install Dependencies"
+description: "Installs dependencies for the Conflux project"
+runs:
+  using: "composite"
+  steps:
+    - name: install Linux dependencies
+      run: |
+        sudo wget https://apt.llvm.org/llvm.sh && \
+        sudo chmod u+x llvm.sh && \
+        sudo ./llvm.sh 18 && \
+        sudo apt-get install -y libsqlite3-dev pkg-config libssl-dev cmake libc++-18-dev git curl unzip
