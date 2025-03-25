@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: install Linux dependencies
+      shell: bash
       run: |
         sudo wget https://apt.llvm.org/llvm.sh && \
         sudo chmod u+x llvm.sh && \
