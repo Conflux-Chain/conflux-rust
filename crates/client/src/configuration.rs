@@ -394,6 +394,7 @@ build_config! {
         // Recover the latest MPT snapshot from the era checkpoint
         (recovery_latest_mpt_snapshot, (bool), false)
         (keep_era_genesis_snapshot, (bool), true)
+        (backup_mpt_snapshot, (bool), true)
     }
     {
         // Development related section.
@@ -839,6 +840,7 @@ impl Configuration {
                 .raw_conf
                 .use_isolated_db_for_mpt_table_height,
             keep_era_genesis_snapshot: self.raw_conf.keep_era_genesis_snapshot,
+            backup_mpt_snapshot: self.raw_conf.backup_mpt_snapshot,
         }
     }
 
