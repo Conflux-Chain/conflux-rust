@@ -10,3 +10,11 @@ runs:
         sudo chmod u+x llvm.sh && \
         sudo ./llvm.sh 18 && \
         sudo apt-get install -y libsqlite3-dev pkg-config libssl-dev cmake libc++-18-dev git curl unzip
+        
+    - name: Set common environment variables
+      shell: bash
+      run: |
+        echo "CC=clang-18" >> $GITHUB_ENV
+        echo "CXX=clang++-18" >> $GITHUB_ENV
+        echo "CXXFLAGS=-std=c++11 -stdlib=libc++" >> $GITHUB_ENV
+        echo "LDFLAGS=-stdlib=libc++" >> $GITHUB_ENV
