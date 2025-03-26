@@ -266,6 +266,8 @@
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -404,6 +406,7 @@
     <span class="doccomment">/// CIP-133: Enhanced Block Hash Query
     </span><span class="kw">pub </span>cip133e: BlockHeight,
     <span class="kw">pub </span>cip1559: BlockHeight,
+    <span class="kw">pub </span>cip_c2_fix: BlockHeight,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>CommonParams {
@@ -462,6 +465,7 @@
         spec.cip144 = number &gt;= <span class="self">self</span>.transition_numbers.cip144;
         spec.cip145 = number &gt;= <span class="self">self</span>.transition_numbers.cip145;
         spec.cip1559 = height &gt;= <span class="self">self</span>.transition_heights.cip1559;
+        spec.cip_c2_fix = number &gt;= <span class="self">self</span>.transition_heights.cip_c2_fix;
         spec.cancun_opcodes = number &gt;= <span class="self">self</span>.transition_numbers.cancun_opcodes;
         <span class="kw">if </span>spec.cancun_opcodes {
             spec.sload_gas = <span class="number">800</span>;

@@ -999,6 +999,11 @@
 <a href="#997" id="997">997</a>
 <a href="#998" id="998">998</a>
 <a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1277,9 +1282,14 @@
         // address. This should generally not happen. Unless we enable
         // account dust in future. We add this check just in case it
         // helps in future.
-        </span><span class="kw">if </span><span class="self">self</span>.space == Space::Native
-            &amp;&amp; <span class="self">self</span>.state.is_contract_with_code(<span class="kw-2">&amp;</span>address_with_space)<span class="question-mark">?
-        </span>{
+        </span><span class="kw">let </span>conflict_address = <span class="kw">if </span>!<span class="self">self</span>.spec.cip_c2_fix {
+            <span class="self">self</span>.space == Space::Native
+                &amp;&amp; <span class="self">self</span>.state.is_contract_with_code(<span class="kw-2">&amp;</span>address_with_space)<span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            !<span class="self">self</span>.state.is_eip684_empty(<span class="kw-2">&amp;</span>address_with_space)<span class="question-mark">?
+        </span>};
+
+        <span class="kw">if </span>conflict_address {
             <span class="macro">debug!</span>(<span class="string">"Contract address conflict!"</span>);
             <span class="kw">let </span>err = Error::ConflictAddress(address.clone());
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(ContractCreateResult::Failed(err)));

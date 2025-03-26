@@ -365,6 +365,8 @@
 <a href="#363" id="363">363</a>
 <a href="#364" id="364">364</a>
 <a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -552,6 +554,7 @@
     </span><span class="kw">pub </span>cip144: bool,
     <span class="doccomment">/// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
     </span><span class="kw">pub </span>cip145: bool,
+    <span class="kw">pub </span>cip_c2_fix: bool,
 }
 
 <span class="doccomment">/// Wasm cost table
@@ -707,6 +710,7 @@
             cip1559: <span class="bool-val">false</span>,
             cancun_opcodes: <span class="bool-val">false</span>,
             cip144: <span class="bool-val">false</span>,
+            cip_c2_fix: <span class="bool-val">false</span>,
         }
     }
 

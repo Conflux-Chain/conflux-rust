@@ -164,6 +164,15 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{RequireFields, State};
 <span class="kw">use crate</span>::{state::CleanupMode, try_loaded};
 <span class="kw">use </span>cfx_bytes::Bytes;
@@ -269,6 +278,15 @@
 
         <span class="kw">let </span>acc = <span class="macro">try_loaded!</span>(<span class="self">self</span>.read_account_lock(address));
         <span class="prelude-val">Ok</span>(acc.code_hash() != KECCAK_EMPTY)
+    }
+
+    <span class="kw">pub fn </span>is_eip684_empty(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace,
+    ) -&gt; DbResult&lt;bool&gt; {
+        <span class="kw">let </span><span class="prelude-val">Some</span>(acc) = <span class="self">self</span>.read_account_lock(address)<span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">true</span>);
+        };
+        <span class="prelude-val">Ok</span>(acc.code_hash() == KECCAK_EMPTY &amp;&amp; acc.nonce().is_zero())
     }
 
     <span class="kw">pub fn </span>code_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace) -&gt; DbResult&lt;H256&gt; {

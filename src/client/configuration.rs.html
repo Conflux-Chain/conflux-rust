@@ -1580,6 +1580,11 @@
 <a href="#1578" id="1578">1578</a>
 <a href="#1579" id="1579">1579</a>
 <a href="#1580" id="1580">1580</a>
+<a href="#1581" id="1581">1581</a>
+<a href="#1582" id="1582">1582</a>
+<a href="#1583" id="1583">1583</a>
+<a href="#1584" id="1584">1584</a>
+<a href="#1585" id="1585">1585</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1755,6 +1760,7 @@
         (next_hardfork_transition_number, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
         (next_hardfork_transition_height, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
         (cip1559_transition_height, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
+        (c2_fix_transition_height, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
         (cancun_opcodes_transition_number, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
@@ -3043,6 +3049,10 @@
             <span class="self">self</span>.raw_conf.next_hardfork_transition_height.unwrap_or(default_transition_time);
             params.transition_heights =&gt; { cip130, cip133e }
         );
+        params.transition_heights.cip_c2_fix = <span class="self">self
+            </span>.raw_conf
+            .c2_fix_transition_height
+            .unwrap_or(default_transition_time);
         <span class="comment">// TODO: disable 1559 test during dev
         </span>params.transition_heights.cip1559 = <span class="self">self
             </span>.raw_conf

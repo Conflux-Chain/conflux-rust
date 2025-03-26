@@ -638,6 +638,20 @@
 <a href="#636" id="636">636</a>
 <a href="#637" id="637">637</a>
 <a href="#638" id="638">638</a>
+<a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     contract_address,
     executed::make_ext_result,
@@ -691,9 +705,8 @@
         }
 
         <span class="kw">let </span>params = <span class="self">self</span>.make_action_params()<span class="question-mark">?</span>;
-        <span class="kw">if </span><span class="self">self</span>.tx.space() == Space::Native
-            &amp;&amp; !<span class="self">self</span>.check_create_address(<span class="kw-2">&amp;</span>params)<span class="question-mark">?
-        </span>{
+
+        <span class="kw">if </span><span class="self">self</span>.check_conflict_create_address(<span class="kw-2">&amp;</span>params)<span class="question-mark">? </span>{
             <span class="kw">return </span><span class="self">self</span>.finalize_on_conflict_address(params.address);
         }
 
@@ -873,6 +886,21 @@
             .state
             .is_contract_with_code(<span class="kw-2">&amp;</span>new_address)
             .map(|x| !x)
+    }
+
+    <span class="kw">fn </span>check_conflict_create_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, params: <span class="kw-2">&amp;</span>ActionParams,
+    ) -&gt; DbResult&lt;bool&gt; {
+        <span class="prelude-val">Ok</span>(<span class="kw">if </span>!<span class="self">self</span>.context.spec.cip_c2_fix {
+            <span class="self">self</span>.tx.space() == Space::Native
+                &amp;&amp; !<span class="self">self</span>.check_create_address(<span class="kw-2">&amp;</span>params)<span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            <span class="kw">if </span>params.create_type == CreateType::None {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">false</span>);
+            }
+            <span class="kw">let </span>address = params.address.with_space(params.space);
+            !<span class="self">self</span>.context.state.is_eip684_empty(<span class="kw-2">&amp;</span>address)<span class="question-mark">?
+        </span>})
     }
 }
 
