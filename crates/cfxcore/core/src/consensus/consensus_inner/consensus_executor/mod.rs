@@ -1142,10 +1142,9 @@ impl ConsensusExecutionHandler {
                 .check_availability(pivot_block_header.height(), epoch_hash)
             {
                 self.tx_pool
-                    .set_best_executed_epoch(StateIndex::new_for_readonly(
-                        epoch_hash,
-                        &state_root,
-                    ))
+                    .set_best_executed_state_by_epoch(
+                        StateIndex::new_for_readonly(epoch_hash, &state_root),
+                    )
                     // FIXME: propogate error.
                     .expect(&concat!(file!(), ":", line!(), ":", column!()));
             }
@@ -1231,7 +1230,7 @@ impl ConsensusExecutionHandler {
         }
 
         self.tx_pool
-            .set_best_executed_epoch(StateIndex::new_for_readonly(
+            .set_best_executed_state_by_epoch(StateIndex::new_for_readonly(
                 epoch_hash,
                 &commit_result.state_root,
             ))

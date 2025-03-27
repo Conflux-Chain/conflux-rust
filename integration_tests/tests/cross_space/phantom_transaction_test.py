@@ -260,8 +260,7 @@ def test_phantom_transaction(network):
 
         # TODO: check logs bloom, cumulative gas used
 
-        # FIXME: check eth_getTransactionReceipt, this will cause full node panic
-        # assert_equal(receipt, self.nodes[0].eth_getTransactionReceipt(receipt["transactionHash"]))
+        assert_equal(receipt, self.nodes[0].eth_getTransactionReceipt(receipt["transactionHash"]))
 
         for idx2, log in enumerate(receipt["logs"]):
             assert_equal(log["address"], evmContractAddr.lower())
@@ -342,8 +341,7 @@ def test_phantom_transaction(network):
 
         # TODO: check logs bloom, cumulative gas used
 
-        # FIXME: check eth_getTransactionReceipt, this will cause full node panic
-        # assert_equal(receipt, self.nodes[0].eth_getTransactionReceipt(receipt["transactionHash"]))
+        assert_equal(receipt, self.nodes[0].eth_getTransactionReceipt(receipt["transactionHash"]))
 
         for idx2, log in enumerate(receipt["logs"]):
             assert_equal(log["address"], evmContractAddr.lower())

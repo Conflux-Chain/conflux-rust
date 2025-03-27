@@ -10,9 +10,9 @@ use super::TxWithReadyInfo;
 pub(super) struct NoncePoolWeight {
     /// number of unpacked transactions
     pub unpacked_size: u32,
-    /// sum of cost of transaction
+    /// sum of cost of transactions
     pub cost: U256,
-    /// number of transaction
+    /// number of transactions
     pub size: u32,
     /// max unpacked nonce
     pub max_unpackd_nonce: Option<U256>,
@@ -55,14 +55,14 @@ impl NoncePoolWeight {
         if tx_info.packed {
             Self {
                 unpacked_size: 0,
-                cost: tx_info.calc_tx_cost(),
+                cost: tx_info.get_tx_cost(),
                 size: 1,
                 max_unpackd_nonce: None,
             }
         } else {
             Self {
                 unpacked_size: 1,
-                cost: tx_info.calc_tx_cost(),
+                cost: tx_info.get_tx_cost(),
                 size: 1,
                 max_unpackd_nonce: Some(*tx_info.transaction.nonce()),
             }

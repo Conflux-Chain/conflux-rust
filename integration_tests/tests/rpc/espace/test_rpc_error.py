@@ -93,11 +93,12 @@ def test_same_nonce_higher_gas_price_required(ew3, evm_accounts):
         "nonce": nonce,
         "chainId": 10,
     })
-
+    
+    tx_hash = ew3.eth.send_raw_transaction(signed["raw_transaction"])
     with pytest.raises(Exception, match="{'code': -32603, 'message': 'already known'}"):
-        ew3.eth.send_raw_transaction(signed["raw_transaction"])
         time.sleep(1)
         ew3.eth.send_raw_transaction(signed["raw_transaction"])
+    ew3.eth.wait_for_transaction_receipt(tx_hash)
 
 def test_gas_too_low(ew3, evm_accounts):
     account = evm_accounts[0]
