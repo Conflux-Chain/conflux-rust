@@ -312,6 +312,11 @@
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
 <a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
@@ -342,7 +347,8 @@
 // DEALINGS IN THE SOFTWARE.
 </span><span class="kw">use </span><span class="kw">crate</span>::BlockOverrides;
 <span class="kw">use </span>cfx_bytes::Bytes;
-<span class="kw">use </span>cfx_types::{Address, H256, U256};
+<span class="kw">use </span>cfx_rpc_primitives::Bytes <span class="kw">as </span>RpcBytes;
+<span class="kw">use </span>cfx_types::{Address, H256, U256, U64};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::HashMap;
 
@@ -357,16 +363,11 @@
     </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
     </span><span class="kw">pub </span>balance: <span class="prelude-ty">Option</span>&lt;U256&gt;,
     <span class="doccomment">/// Fake nonce to set for the account before executing the call.
-    </span><span class="attr">#[serde(
-            default,
-            skip_serializing_if = <span class="string">"Option::is_none"</span>,
-            <span class="comment">// with = "alloy_serde::quantity::opt"
-        </span>)
-    ]
-    </span><span class="kw">pub </span>nonce: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+    </span><span class="kw">pub </span>nonce: <span class="prelude-ty">Option</span>&lt;U64&gt;,
     <span class="doccomment">/// Fake EVM bytecode to inject into the account before executing the call.
     </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
-    </span><span class="kw">pub </span>code: <span class="prelude-ty">Option</span>&lt;Bytes&gt;,
+    </span><span class="kw">pub </span>code: <span class="prelude-ty">Option</span>&lt;RpcBytes&gt;,
     <span class="doccomment">/// Fake key-value mapping to override all slots in the account storage
     /// before executing the call.
     </span><span class="attr">#[serde(default, skip_serializing_if = <span class="string">"Option::is_none"</span>)]
@@ -397,7 +398,7 @@
 <span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>AccountOverride {
     <span class="kw">pub </span>balance: <span class="prelude-ty">Option</span>&lt;U256&gt;,
-    <span class="kw">pub </span>nonce: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    <span class="kw">pub </span>nonce: <span class="prelude-ty">Option</span>&lt;U64&gt;,
     <span class="kw">pub </span>code: <span class="prelude-ty">Option</span>&lt;Bytes&gt;,
     <span class="kw">pub </span>state: AccountStateOverrideMode,
     <span class="kw">pub </span>move_precompile_to: <span class="prelude-ty">Option</span>&lt;Address&gt;,
@@ -410,7 +411,7 @@
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             balance: value.balance,
             nonce: value.nonce,
-            code: value.code,
+            code: value.code.map(|v| v.into()),
             state: <span class="kw">match </span>(value.state, value.state_diff) {
                 (<span class="prelude-val">Some</span>(state), <span class="prelude-val">None</span>) =&gt; AccountStateOverrideMode::State(state),
                 (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(diff)) =&gt; AccountStateOverrideMode::Diff(diff),
@@ -483,7 +484,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
-    </span><span class="kw">use </span>cfx_types::address_util::address;
+    </span><span class="kw">use </span>cfx_types::address_util::hex_to_address;
     <span class="kw">use </span>similar_asserts::assert_eq;
 
     <span class="attr">#[test]
@@ -522,10 +523,13 @@
         <span class="kw">let </span>state_override: RpcStateOverride =
             serde_json::from_str(large_values_json).unwrap();
         <span class="kw">let </span>acc = state_override
-            .get(<span class="kw-2">&amp;</span>address(<span class="string">"1234567890123456789012345678901234567890"</span>).unwrap())
+            .get(
+                <span class="kw-2">&amp;</span>hex_to_address(<span class="string">"1234567890123456789012345678901234567890"</span>)
+                    .unwrap(),
+            )
             .unwrap();
         <span class="macro">assert_eq!</span>(acc.balance, <span class="prelude-val">Some</span>(U256::MAX));
-        <span class="macro">assert_eq!</span>(acc.nonce, <span class="prelude-val">Some</span>(u64::MAX));
+        <span class="macro">assert_eq!</span>(acc.nonce, <span class="prelude-val">Some</span>(U64::from(u64::MAX)));
     }
 
     <span class="attr">#[test]
@@ -538,7 +542,10 @@
         }"#</span>;
         <span class="kw">let </span>state_override: RpcStateOverride = serde_json::from_str(s).unwrap();
         <span class="kw">let </span>acc = state_override
-            .get(<span class="kw-2">&amp;</span>address(<span class="string">"0000000000000000000000000000000000000124"</span>).unwrap())
+            .get(
+                <span class="kw-2">&amp;</span>hex_to_address(<span class="string">"0000000000000000000000000000000000000124"</span>)
+                    .unwrap(),
+            )
             .unwrap();
         <span class="macro">assert!</span>(acc.code.is_some());
     }
@@ -559,7 +566,10 @@
             }"#</span>;
         <span class="kw">let </span>state_override: RpcStateOverride = serde_json::from_str(s).unwrap();
         <span class="kw">let </span>acc = state_override
-            .get(<span class="kw-2">&amp;</span>address(<span class="string">"1b5212AF6b76113afD94cD2B5a78a73B7d7A8222"</span>).unwrap())
+            .get(
+                <span class="kw-2">&amp;</span>hex_to_address(<span class="string">"1b5212AF6b76113afD94cD2B5a78a73B7d7A8222"</span>)
+                    .unwrap(),
+            )
             .unwrap();
         <span class="macro">assert!</span>(acc.state_diff.is_some());
     }

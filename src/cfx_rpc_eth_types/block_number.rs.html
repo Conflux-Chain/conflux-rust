@@ -306,7 +306,7 @@
 <span class="kw">use </span>std::{convert::TryFrom, fmt};
 
 <span class="doccomment">/// Represents rpc api block number param.
-</span><span class="attr">#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+</span><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 </span><span class="kw">pub enum </span>BlockNumber {
     <span class="doccomment">/// Hash
     </span>Hash {

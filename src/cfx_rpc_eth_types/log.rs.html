@@ -139,10 +139,10 @@
     log_entry::{LocalizedLogEntry, LogEntry},
     EpochNumber,
 };
-<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="doccomment">/// Log
-</span><span class="attr">#[derive(Debug, Serialize, PartialEq, Eq, Hash, Clone)]
+</span><span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>Log {
     <span class="doccomment">/// H160

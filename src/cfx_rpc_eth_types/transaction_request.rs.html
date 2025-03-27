@@ -214,13 +214,13 @@
     },
     AccessList,
 };
-<span class="kw">use </span>serde::Deserialize;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">pub const </span>DEFAULT_ETH_GAS_CALL_REQUEST: u64 =
     DEFAULT_TARGET_BLOCK_GAS_LIMIT * <span class="number">5 </span>/ <span class="number">10</span>;
 
 <span class="doccomment">/// Call request
-</span><span class="attr">#[derive(Debug, Default, PartialEq, Deserialize)]
+</span><span class="attr">#[derive(Debug, Default, PartialEq, Eq, Deserialize, Serialize, Clone)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>TransactionRequest {
     <span class="doccomment">/// From

@@ -126,7 +126,7 @@
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(nonce) = acc_overrides.nonce {
-            acc.set_nonce(<span class="kw-2">&amp;</span>U256::from(nonce));
+            acc.set_nonce(<span class="kw-2">&amp;</span>U256::from(nonce.as_u64()));
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(code) = acc_overrides.code.as_ref() {

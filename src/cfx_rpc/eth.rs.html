@@ -1524,6 +1524,14 @@
 <a href="#1522" id="1522">1522</a>
 <a href="#1523" id="1523">1523</a>
 <a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cfx_execute_helper::estimation::EstimateRequest;
@@ -1536,10 +1544,11 @@
 };
 <span class="kw">use </span>cfx_rpc_eth_api::EthApiServer;
 <span class="kw">use </span>cfx_rpc_eth_types::{
-    AccountOverride, AccountPendingTransactions, Block, BlockNumber <span class="kw">as </span>BlockId,
-    BlockOverrides, EthRpcLogFilter, EthRpcLogFilter <span class="kw">as </span>Filter, EvmOverrides,
-    FeeHistory, Header, Log, Receipt, RpcStateOverride, SyncInfo, SyncStatus,
-    Transaction, TransactionRequest,
+    AccessListResult, AccountOverride, AccountPendingTransactions, Block,
+    BlockNumber <span class="kw">as </span>BlockId, BlockOverrides, Bundle, EthCallResponse,
+    EthRpcLogFilter, EthRpcLogFilter <span class="kw">as </span>Filter, EvmOverrides, FeeHistory,
+    Header, Log, Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock,
+    StateContext, SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 <span class="kw">use </span>cfx_rpc_primitives::{Bytes, Index, U64 <span class="kw">as </span>HexU64};
 <span class="kw">use </span>cfx_rpc_utils::{
@@ -2836,13 +2845,15 @@
     <span class="doccomment">/// `eth_simulateV1` executes an arbitrary number of transactions on top of
     /// the requested state. The transactions are packed into individual
     /// blocks. Overrides can be provided.
-    </span><span class="comment">// async fn simulate_v1(
-    //     &amp;self,
-    //     opts: SimBlock,
-    //     block_number: Option&lt;BlockId&gt;,
-    // ) -&gt; RpcResult&lt;Vec&lt;SimulatedBlock&gt;&gt;;
+    </span><span class="kw">async fn </span>simulate_v1(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, opts: SimulatePayload, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+    ) -&gt; RpcResult&lt;Vec&lt;SimulatedBlock&gt;&gt; {
+        <span class="kw">let _ </span>= block_number;
+        <span class="kw">let _ </span>= opts;
+        <span class="prelude-val">Err</span>(jsonrpsee_internal_error(<span class="string">"Not implemented"</span>))
+    }
 
-    </span><span class="doccomment">/// Executes a new message call immediately without creating a transaction
+    <span class="doccomment">/// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     </span><span class="kw">async fn </span>call(
         <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
@@ -2861,14 +2872,17 @@
 
     <span class="doccomment">/// Simulate arbitrary number of transactions at an arbitrary blockchain
     /// index, with the optionality of state overrides
-    </span><span class="comment">// async fn call_many(
-    //     &amp;self,
-    //     bundle: Bundle,
-    //     state_context: Option&lt;StateContext&gt;,
-    //     state_override: Option&lt;StateOverride&gt;,
-    // ) -&gt; RpcResult&lt;Vec&lt;EthCallResponse&gt;&gt;;
+    </span><span class="kw">async fn </span>call_many(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, bundle: Bundle, state_context: <span class="prelude-ty">Option</span>&lt;StateContext&gt;,
+        state_override: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+    ) -&gt; RpcResult&lt;Vec&lt;EthCallResponse&gt;&gt; {
+        <span class="kw">let _ </span>= bundle;
+        <span class="kw">let _ </span>= state_context;
+        <span class="kw">let _ </span>= state_override;
+        <span class="prelude-val">Err</span>(jsonrpsee_internal_error(<span class="string">"Not implemented"</span>))
+    }
 
-    </span><span class="doccomment">/// Generates an access list for a transaction.
+    <span class="doccomment">/// Generates an access list for a transaction.
     ///
     /// This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type accessList based on a given Transaction.
     ///
@@ -2884,13 +2898,15 @@
     /// could change when the transaction is actually mined. Adding an
     /// accessList to your transaction does not necessary result in lower
     /// gas usage compared to a transaction without an access list.
-    </span><span class="comment">// async fn create_access_list(
-    //     &amp;self,
-    //     request: TransactionRequest,
-    //     block_number: Option&lt;BlockId&gt;,
-    // ) -&gt; RpcResult&lt;AccessListResult&gt;;
+    </span><span class="kw">async fn </span>create_access_list(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+    ) -&gt; RpcResult&lt;AccessListResult&gt; {
+        <span class="kw">let _ </span>= block_number;
+        <span class="kw">let _ </span>= request;
+        <span class="prelude-val">Err</span>(jsonrpsee_internal_error(<span class="string">"Not implemented"</span>))
+    }
 
-    </span><span class="doccomment">/// Generates and returns an estimate of how much gas is necessary to allow
+    <span class="doccomment">/// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
     </span><span class="kw">async fn </span>estimate_gas(
         <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,

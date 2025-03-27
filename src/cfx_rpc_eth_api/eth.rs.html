@@ -366,14 +366,12 @@
 <a href="#364" id="364">364</a>
 <a href="#365" id="365">365</a>
 <a href="#366" id="366">366</a>
-<a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_rpc_eth_types::{
-    AccountPendingTransactions, Block, BlockNumber <span class="kw">as </span>BlockId, BlockOverrides,
+    AccessListResult, AccountPendingTransactions, Block,
+    BlockNumber <span class="kw">as </span>BlockId, BlockOverrides, Bundle, EthCallResponse,
     EthRpcLogFilter <span class="kw">as </span>Filter, FeeHistory, Header, Log, Receipt,
-    RpcStateOverride, SyncStatus, Transaction, TransactionRequest,
+    RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext,
+    SyncStatus, Transaction, TransactionRequest,
 };
 <span class="kw">use </span>cfx_rpc_primitives::{Bytes, Index};
 <span class="kw">use </span>cfx_types::{Address, H256, H64, U256, U64};
@@ -561,14 +559,12 @@
     <span class="doccomment">/// `eth_simulateV1` executes an arbitrary number of transactions on top of
     /// the requested state. The transactions are packed into individual
     /// blocks. Overrides can be provided.
-    </span><span class="comment">// #[method(name = "simulateV1")]
-    // async fn simulate_v1(
-    //     &amp;self,
-    //     opts: SimBlock,
-    //     block_number: Option&lt;BlockId&gt;,
-    // ) -&gt; RpcResult&lt;Vec&lt;SimulatedBlock&gt;&gt;;
+    </span><span class="attr">#[method(name = <span class="string">"simulateV1"</span>)]
+    </span><span class="kw">async fn </span>simulate_v1(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, opts: SimulatePayload, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+    ) -&gt; RpcResult&lt;Vec&lt;SimulatedBlock&gt;&gt;;
 
-    </span><span class="doccomment">/// Executes a new message call immediately without creating a transaction
+    <span class="doccomment">/// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     </span><span class="attr">#[method(name = <span class="string">"call"</span>)]
     </span><span class="kw">async fn </span>call(
@@ -579,15 +575,13 @@
 
     <span class="doccomment">/// Simulate arbitrary number of transactions at an arbitrary blockchain
     /// index, with the optionality of state overrides
-    </span><span class="comment">// #[method(name = "callMany")]
-    // async fn call_many(
-    //     &amp;self,
-    //     bundle: Bundle,
-    //     state_context: Option&lt;StateContext&gt;,
-    //     state_override: Option&lt;StateOverride&gt;,
-    // ) -&gt; RpcResult&lt;Vec&lt;EthCallResponse&gt;&gt;;
+    </span><span class="attr">#[method(name = <span class="string">"callMany"</span>)]
+    </span><span class="kw">async fn </span>call_many(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, bundle: Bundle, state_context: <span class="prelude-ty">Option</span>&lt;StateContext&gt;,
+        state_override: <span class="prelude-ty">Option</span>&lt;RpcStateOverride&gt;,
+    ) -&gt; RpcResult&lt;Vec&lt;EthCallResponse&gt;&gt;;
 
-    </span><span class="doccomment">/// Generates an access list for a transaction.
+    <span class="doccomment">/// Generates an access list for a transaction.
     ///
     /// This method creates an [EIP2930](https://eips.ethereum.org/EIPS/eip-2930) type accessList based on a given Transaction.
     ///
@@ -603,14 +597,12 @@
     /// could change when the transaction is actually mined. Adding an
     /// accessList to your transaction does not necessary result in lower
     /// gas usage compared to a transaction without an access list.
-    </span><span class="comment">// #[method(name = "createAccessList")]
-    // async fn create_access_list(
-    //     &amp;self,
-    //     request: TransactionRequest,
-    //     block_number: Option&lt;BlockId&gt;,
-    // ) -&gt; RpcResult&lt;AccessListResult&gt;;
+    </span><span class="attr">#[method(name = <span class="string">"createAccessList"</span>)]
+    </span><span class="kw">async fn </span>create_access_list(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
+    ) -&gt; RpcResult&lt;AccessListResult&gt;;
 
-    </span><span class="doccomment">/// Generates and returns an estimate of how much gas is necessary to allow
+    <span class="doccomment">/// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
     </span><span class="attr">#[method(name = <span class="string">"estimateGas"</span>)]
     </span><span class="kw">async fn </span>estimate_gas(
