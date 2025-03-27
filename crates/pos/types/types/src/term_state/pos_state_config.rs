@@ -227,6 +227,8 @@ impl Default for PosStateConfig {
             cip136_out_queue_locked_views: IN_QUEUE_LOCKED_VIEWS,
             cip136_in_queue_locked_views: OUT_QUEUE_LOCKED_VIEWS,
             cip136_round_per_term: ROUND_PER_TERM,
+            cip156_transition_view: u64::MAX,
+            cip156_dispute_locked_views: u64::MAX,
             nonce_limit_transition_view: u64::MAX,
             max_nonce_per_account: u64::MAX,
         }

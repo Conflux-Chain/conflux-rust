@@ -297,7 +297,7 @@ impl NodeLockStatus {
                     self.force_retired = None;
 
                     self.out_queue.push(
-                        view + dispute_locked_views,
+                        view.saturating_add(dispute_locked_views),
                         to_lock_votes,
                         updated_views,
                     );
@@ -355,7 +355,9 @@ pub mod tests {
                     Operation::ForceRetire => {
                         lock_status.force_retire(view, &mut update_views);
                     }
-                    Operation::Forfeit => lock_status.forfeit(view),
+                    Operation::Forfeit => {
+                        lock_status.forfeit(view, &mut update_views)
+                    }
                     Operation::AssertAvailable(votes) => {
                         if lock_status.available_votes != votes {
                             panic!("View {}\n {:?}", view, lock_status);
