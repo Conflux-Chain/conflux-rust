@@ -2,7 +2,7 @@ use cfx_types::{Address, U256, U64};
 use primitives::transaction::AuthorizationListItem;
 
 #[derive(
-    Debug, Default, PartialEq, serde::Deserialize, serde::Serialize, Clone,
+    Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize, Clone,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct Authorization {
@@ -15,7 +15,7 @@ pub struct Authorization {
 }
 
 #[derive(
-    Debug, Default, PartialEq, serde::Deserialize, serde::Serialize, Clone,
+    Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize, Clone,
 )]
 #[serde(rename_all = "camelCase")]
 pub struct SignedAuthorization {

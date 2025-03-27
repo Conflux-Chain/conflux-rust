@@ -350,11 +350,16 @@ class ConfluxTestFramework:
         log = self.log
         self._cw3 = CWeb3(CWeb3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].rpcport}/'))
         self._ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcportv2}/'))
+        self._legacy_ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/'))
+
         self.cw3.wallet.add_accounts(self.core_accounts)
         self.cw3.cfx.default_account = self.core_accounts[0].address
         
         self.ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(self.evm_secrets)) # type: ignore
         self.eth.default_account = self.evm_accounts[0].address
+        
+        self._legacy_ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(self.evm_secrets)) # type: ignore
+        self._legacy_ew3.eth.default_account = self.evm_accounts[0].address
         
         class TestNodeMiddleware(ConfluxWeb3Middleware):
             def request_processor(self, method: RPCEndpoint, params: Any) -> Any:
@@ -377,6 +382,7 @@ class ConfluxTestFramework:
         
         self.cw3.middleware_onion.add(TestNodeMiddleware)
         self.ew3.middleware_onion.add(TestNodeMiddleware)
+        self._legacy_ew3.middleware_onion.add(TestNodeMiddleware)
 
     def add_nodes(self, num_nodes, genesis_nodes=None, rpchost=None, binary=None, auto_recovery=False,
                   recovery_timeout=30, is_consortium=True):

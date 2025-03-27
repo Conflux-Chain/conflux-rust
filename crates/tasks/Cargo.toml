@@ -1,0 +1,30 @@
+[package]
+name = "cfx-tasks"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+description = "Task management"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures-util = { workspace = true, features = ["std"] }
+tokio = { workspace = true, features = ["sync", "rt"]  }
+auto_impl = { workspace = true }
+dyn-clone = { workspace = true }
+thiserror = { workspace = true }
+
+# feature `rayon`
+rayon = { workspace = true, optional = true }
+pin-project = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["sync", "rt", "rt-multi-thread", "time", "macros"] }
+
+[features]
+rayon = ["dep:rayon", "pin-project"]

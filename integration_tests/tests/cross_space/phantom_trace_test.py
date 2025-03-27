@@ -160,25 +160,24 @@ def test_callEVM(cw3: CWeb3, ew3, ew3_tracing, conflux_side_contract, evm_side_c
     block_traces = ew3_tracing.trace_block({"blockHash": receipt["blockHash"]})
     assert block_traces == trace0 + trace1
 
-    # TODO: failed because of result of trace_filter does not contain trace_address fields
-    # filtered = ew3_tracing.trace_filter({"fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"]})
-    # assert reserialize_json(ew3.to_json(filtered)) == reserialize_json(ew3.to_json(block_traces))
+    filtered = ew3_tracing.trace_filter({"fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"]})
+    assert reserialize_json(ew3.to_json(filtered)) == reserialize_json(ew3.to_json(block_traces))
 
-    # filtered = ew3_tracing.trace_filter(
-    #     {
-    #         "fromBlock": receipt["epochNumber"],
-    #         "fromAddress": [
-    #             conflux_side_contract.address.mapped_evm_space_address,
-    #             evm_side_contract.address,
-    #             NULL_ADDRESS,
-    #         ],
-    #         "toAddress": [
-    #             conflux_side_contract.address.mapped_evm_space_address,
-    #             evm_side_contract.address,
-    #         ],
-    #     }
-    # )
-    # assert filtered == block_traces
+    filtered = ew3_tracing.trace_filter(
+        {
+            "fromBlock": receipt["epochNumber"],
+            "fromAddress": [
+                conflux_side_contract.address.mapped_evm_space_address,
+                evm_side_contract.address,
+                NULL_ADDRESS,
+            ],
+            "toAddress": [
+                conflux_side_contract.address.mapped_evm_space_address,
+                evm_side_contract.address,
+            ],
+        }
+    )
+    assert filtered == block_traces
 
 
 def test_staticCallEVM(cw3: CWeb3, ew3, ew3_tracing, conflux_side_contract, evm_side_contract):

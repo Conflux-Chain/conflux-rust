@@ -188,6 +188,7 @@ build_config! {
         (base_fee_burn_transition_number, (Option<u64>), None)
         (base_fee_burn_transition_height, (Option<u64>), None)
         (cip1559_transition_height, (Option<u64>), None)
+        (c2_fix_transition_height, (Option<u64>), None)
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
@@ -1477,6 +1478,10 @@ impl Configuration {
             self.raw_conf.base_fee_burn_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip130, cip133e }
         );
+        params.transition_heights.cip_c2_fix = self
+            .raw_conf
+            .c2_fix_transition_height
+            .unwrap_or(default_transition_time);
         // TODO: disable 1559 test during dev
         params.transition_heights.cip1559 = self
             .raw_conf

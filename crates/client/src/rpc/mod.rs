@@ -6,6 +6,7 @@ use cfx_rpc_builder::{
     RpcModuleBuilder, RpcModuleSelection, RpcServerConfig, RpcServerHandle,
     TransportRpcModuleConfig,
 };
+use cfx_tasks::TaskExecutor;
 use cfxcore::{
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
@@ -97,7 +98,7 @@ use std::collections::HashSet;
 
 pub fn setup_public_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: &Configuration,
+    eth_pubsub: EthPubSubClient, conf: &Configuration, executor: TaskExecutor,
 ) -> MetaIoHandler<Metadata> {
     setup_rpc_apis(
         common,
@@ -107,12 +108,13 @@ pub fn setup_public_rpc_apis(
         &conf.raw_conf.throttling_conf,
         "rpc",
         conf.raw_conf.public_rpc_apis.list_apis(),
+        executor,
     )
 }
 
 pub fn setup_public_eth_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: &Configuration,
+    eth_pubsub: EthPubSubClient, conf: &Configuration, executor: TaskExecutor,
 ) -> MetaIoHandler<Metadata> {
     setup_rpc_apis(
         common,
@@ -122,12 +124,13 @@ pub fn setup_public_eth_rpc_apis(
         &conf.raw_conf.throttling_conf,
         "rpc",
         conf.raw_conf.public_evm_rpc_apis.list_apis(),
+        executor,
     )
 }
 
 pub fn setup_debug_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: &Configuration,
+    eth_pubsub: EthPubSubClient, conf: &Configuration, executor: TaskExecutor,
 ) -> MetaIoHandler<Metadata> {
     setup_rpc_apis(
         common,
@@ -137,13 +140,14 @@ pub fn setup_debug_rpc_apis(
         &conf.raw_conf.throttling_conf,
         "rpc_local",
         ApiSet::All.list_apis(),
+        executor,
     )
 }
 
 fn setup_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, throttling_conf: &Option<String>,
-    throttling_section: &str, apis: HashSet<Api>,
+    throttling_section: &str, apis: HashSet<Api>, executor: TaskExecutor,
 ) -> MetaIoHandler<Metadata> {
     let mut handler = MetaIoHandler::default();
     for api in &apis {
@@ -190,6 +194,7 @@ fn setup_rpc_apis(
                     rpc.consensus.clone(),
                     rpc.sync.clone(),
                     rpc.tx_pool.clone(),
+                    executor.clone(),
                 )
                 .to_delegate();
                 let evm_trace_handler = EthTraceHandler {
@@ -521,7 +526,7 @@ pub async fn launch_async_rpc_servers(
     rpc_conf: RpcImplConfiguration, throttling_conf_file: Option<String>,
     apis: RpcModuleSelection, consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-    addr: Option<SocketAddr>,
+    addr: Option<SocketAddr>, executor: TaskExecutor,
 ) -> Result<Option<RpcServerHandle>, String> {
     if addr.is_none() {
         return Ok(None);
@@ -530,7 +535,7 @@ pub async fn launch_async_rpc_servers(
     let enable_metrics = rpc_conf.enable_metrics;
 
     let rpc_module_builder =
-        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool);
+        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool, executor);
 
     info!(
         "Enabled evm async rpc modules: {:?}",

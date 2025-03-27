@@ -17,6 +17,9 @@ def framework_class() -> Type[ConfluxTestFramework]:
             self.conf_parameters["next_hardfork_transition_height"] = 1
             self.conf_parameters["next_hardfork_transition_number"] = 1
             self.conf_parameters["public_evm_rpc_async_apis"] = "\"all\"" # open all async apis
+            self.conf_parameters["public_evm_rpc_apis"] = (
+                '"eth,ethdebug"'
+            )
             # self.conf_parameters["evm_chain_id"] = str(10)
             self.conf_parameters["evm_transaction_block_ratio"] = str(1)
             self.conf_parameters["executive_trace"] = "true"
@@ -27,6 +30,13 @@ def framework_class() -> Type[ConfluxTestFramework]:
 
     return DefaultFramework
 
+
+@pytest.fixture(scope="module", params=["ew3_port_v1", "ew3_port_v2"])
+def ew3(network: ConfluxTestFramework, request):
+    if request.param == "ew3_port_v2":
+        return network.ew3
+    else:
+        return network._legacy_ew3
 
 @pytest.fixture(scope="module")
 def erc20_contract(ew3, evm_accounts):

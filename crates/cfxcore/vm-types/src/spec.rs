@@ -209,6 +209,7 @@ pub struct Spec {
     pub cip645: bool,
     pub eip2935: bool,
     pub align_evm: bool,
+    pub cip_c2_fix: bool,
 }
 
 /// Wasm cost table
@@ -375,6 +376,7 @@ impl Spec {
             cip645: false,
             cip7702: false,
             eip2935: false,
+            cip_c2_fix: false,
             align_evm: false,
         }
     }
