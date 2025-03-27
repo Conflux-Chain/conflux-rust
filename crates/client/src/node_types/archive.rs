@@ -12,6 +12,7 @@ use crate::{
 };
 use blockgen::BlockGenerator;
 use cfx_rpc_builder::RpcServerHandle;
+use cfx_tasks::TaskManager;
 use cfxcore::{
     pow::PowComputer, ConsensusGraph, NodeType, SynchronizationService,
     TransactionPool,
@@ -38,6 +39,7 @@ pub struct ArchiveClientExtraComponents {
     /// Which use Rust async I/O
     pub eth_rpc_server_handle: Option<RpcServerHandle>,
     pub tokio_runtime: Arc<TokioRuntime>,
+    pub task_manager: TaskManager,
 }
 
 impl MallocSizeOf for ArchiveClientExtraComponents {
@@ -79,6 +81,7 @@ impl ArchiveClient {
             eth_rpc_ws_server,
             tokio_runtime,
             eth_rpc_server_handle,
+            task_manager,
         ) = initialize_not_light_node_modules(
             &mut conf,
             exit,
@@ -103,6 +106,7 @@ impl ArchiveClient {
                 eth_rpc_ws_server,
                 eth_rpc_server_handle,
                 tokio_runtime,
+                task_manager,
             },
         }))
     }
