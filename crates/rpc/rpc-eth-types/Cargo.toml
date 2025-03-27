@@ -28,3 +28,7 @@ cfx-rpc-cfx-types = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 similar-asserts = { workspace = true }
+
+[features]
+default = ["serde"]
+serde = []

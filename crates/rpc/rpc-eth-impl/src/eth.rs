@@ -10,10 +10,11 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    AccountOverride, AccountPendingTransactions, Block, BlockNumber as BlockId,
-    BlockOverrides, EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides,
-    FeeHistory, Header, Log, Receipt, RpcStateOverride, SyncInfo, SyncStatus,
-    Transaction, TransactionRequest,
+    AccessListResult, AccountOverride, AccountPendingTransactions, Block,
+    BlockNumber as BlockId, BlockOverrides, Bundle, EthCallResponse,
+    EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides, FeeHistory,
+    Header, Log, Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock,
+    StateContext, SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::{
@@ -1310,11 +1311,13 @@ impl EthApiServer for EthApi {
     /// `eth_simulateV1` executes an arbitrary number of transactions on top of
     /// the requested state. The transactions are packed into individual
     /// blocks. Overrides can be provided.
-    // async fn simulate_v1(
-    //     &self,
-    //     opts: SimBlock,
-    //     block_number: Option<BlockId>,
-    // ) -> RpcResult<Vec<SimulatedBlock>>;
+    async fn simulate_v1(
+        &self, opts: SimulatePayload, block_number: Option<BlockId>,
+    ) -> RpcResult<Vec<SimulatedBlock>> {
+        let _ = block_number;
+        let _ = opts;
+        Err(jsonrpsee_internal_error("Not implemented"))
+    }
 
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
@@ -1335,12 +1338,15 @@ impl EthApiServer for EthApi {
 
     /// Simulate arbitrary number of transactions at an arbitrary blockchain
     /// index, with the optionality of state overrides
-    // async fn call_many(
-    //     &self,
-    //     bundle: Bundle,
-    //     state_context: Option<StateContext>,
-    //     state_override: Option<StateOverride>,
-    // ) -> RpcResult<Vec<EthCallResponse>>;
+    async fn call_many(
+        &self, bundle: Bundle, state_context: Option<StateContext>,
+        state_override: Option<RpcStateOverride>,
+    ) -> RpcResult<Vec<EthCallResponse>> {
+        let _ = bundle;
+        let _ = state_context;
+        let _ = state_override;
+        Err(jsonrpsee_internal_error("Not implemented"))
+    }
 
     /// Generates an access list for a transaction.
     ///
@@ -1358,11 +1364,13 @@ impl EthApiServer for EthApi {
     /// could change when the transaction is actually mined. Adding an
     /// accessList to your transaction does not necessary result in lower
     /// gas usage compared to a transaction without an access list.
-    // async fn create_access_list(
-    //     &self,
-    //     request: TransactionRequest,
-    //     block_number: Option<BlockId>,
-    // ) -> RpcResult<AccessListResult>;
+    async fn create_access_list(
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+    ) -> RpcResult<AccessListResult> {
+        let _ = block_number;
+        let _ = request;
+        Err(jsonrpsee_internal_error("Not implemented"))
+    }
 
     /// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
