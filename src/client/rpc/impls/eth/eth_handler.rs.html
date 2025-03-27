@@ -445,6 +445,8 @@
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
 <a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -463,6 +465,7 @@
     },
 };
 <span class="kw">use </span>cfx_rpc::EthApi;
+<span class="kw">use </span>cfx_tasks::TaskExecutor;
 <span class="kw">use </span>cfx_types::{Address, AddressSpaceUtil, Space, H160, H256, U256, U64};
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>cfxcore::{
@@ -480,9 +483,10 @@
     <span class="kw">pub fn </span>new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor,
     ) -&gt; <span class="self">Self </span>{
         EthHandler {
-            inner: EthApi::new(config, consensus, sync, tx_pool),
+            inner: EthApi::new(config, consensus, sync, tx_pool, executor),
         }
     }
 }

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["error_codes","errors","jsonrpc_error_helpers","jsonrpsee_error_helpers"]};
+window.SIDEBAR_ITEMS = {"mod":["api","error_codes","errors","jsonrpc_error_helpers","jsonrpsee_error_helpers"]};

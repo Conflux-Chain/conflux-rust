@@ -98,6 +98,10 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -112,6 +116,7 @@
 };
 <span class="kw">use </span>blockgen::BlockGenerator;
 <span class="kw">use </span>cfx_rpc_builder::RpcServerHandle;
+<span class="kw">use </span>cfx_tasks::TaskManager;
 <span class="kw">use </span>cfxcore::{
     pow::PowComputer, ConsensusGraph, NodeType, SynchronizationService,
     TransactionPool,
@@ -138,6 +143,7 @@
     /// Which use Rust async I/O
     </span><span class="kw">pub </span>eth_rpc_server_handle: <span class="prelude-ty">Option</span>&lt;RpcServerHandle&gt;,
     <span class="kw">pub </span>tokio_runtime: Arc&lt;TokioRuntime&gt;,
+    <span class="kw">pub </span>task_manager: TaskManager,
 }
 
 <span class="kw">impl </span>MallocSizeOf <span class="kw">for </span>FullClientExtraComponents {
@@ -172,6 +178,7 @@
             eth_rpc_ws_server,
             tokio_runtime,
             eth_rpc_server_handle,
+            task_manager,
         ) = initialize_not_light_node_modules(<span class="kw-2">&amp;mut </span>conf, exit, NodeType::Full)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(<span class="kw-2">&amp;</span>data_man),
@@ -192,6 +199,7 @@
                 eth_rpc_ws_server,
                 eth_rpc_server_handle,
                 tokio_runtime,
+                task_manager,
             },
         }))
     }

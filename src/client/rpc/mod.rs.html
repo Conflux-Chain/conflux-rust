@@ -556,6 +556,11 @@
 <a href="#554" id="554">554</a>
 <a href="#555" id="555">555</a>
 <a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -564,6 +569,7 @@
     RpcModuleBuilder, RpcModuleSelection, RpcServerConfig, RpcServerHandle,
     TransportRpcModuleConfig,
 };
+<span class="kw">use </span>cfx_tasks::TaskExecutor;
 <span class="kw">use </span>cfxcore::{
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
 };
@@ -655,7 +661,7 @@
 
 <span class="kw">pub fn </span>setup_public_rpc_apis(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;RpcImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration,
+    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration, executor: TaskExecutor,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     setup_rpc_apis(
         common,
@@ -665,12 +671,13 @@
         <span class="kw-2">&amp;</span>conf.raw_conf.throttling_conf,
         <span class="string">"rpc"</span>,
         conf.raw_conf.public_rpc_apis.list_apis(),
+        executor,
     )
 }
 
 <span class="kw">pub fn </span>setup_public_eth_rpc_apis(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;RpcImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration,
+    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration, executor: TaskExecutor,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     setup_rpc_apis(
         common,
@@ -680,12 +687,13 @@
         <span class="kw-2">&amp;</span>conf.raw_conf.throttling_conf,
         <span class="string">"rpc"</span>,
         conf.raw_conf.public_evm_rpc_apis.list_apis(),
+        executor,
     )
 }
 
 <span class="kw">pub fn </span>setup_debug_rpc_apis(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;RpcImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration,
+    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration, executor: TaskExecutor,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     setup_rpc_apis(
         common,
@@ -695,13 +703,14 @@
         <span class="kw-2">&amp;</span>conf.raw_conf.throttling_conf,
         <span class="string">"rpc_local"</span>,
         ApiSet::All.list_apis(),
+        executor,
     )
 }
 
 <span class="kw">fn </span>setup_rpc_apis(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;RpcImpl&gt;, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, throttling_conf: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-    throttling_section: <span class="kw-2">&amp;</span>str, apis: HashSet&lt;Api&gt;,
+    throttling_section: <span class="kw-2">&amp;</span>str, apis: HashSet&lt;Api&gt;, executor: TaskExecutor,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>handler = MetaIoHandler::default();
     <span class="kw">for </span>api <span class="kw">in </span><span class="kw-2">&amp;</span>apis {
@@ -748,6 +757,7 @@
                     rpc.consensus.clone(),
                     rpc.sync.clone(),
                     rpc.tx_pool.clone(),
+                    executor.clone(),
                 )
                 .to_delegate();
                 <span class="kw">let </span>evm_trace_handler = EthTraceHandler {
@@ -1079,7 +1089,7 @@
     rpc_conf: RpcImplConfiguration, throttling_conf_file: <span class="prelude-ty">Option</span>&lt;String&gt;,
     apis: RpcModuleSelection, consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-    addr: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;,
+    addr: <span class="prelude-ty">Option</span>&lt;SocketAddr&gt;, executor: TaskExecutor,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RpcServerHandle&gt;, String&gt; {
     <span class="kw">if </span>addr.is_none() {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
@@ -1088,7 +1098,7 @@
     <span class="kw">let </span>enable_metrics = rpc_conf.enable_metrics;
 
     <span class="kw">let </span>rpc_module_builder =
-        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool);
+        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool, executor);
 
     <span class="macro">info!</span>(
         <span class="string">"Enabled evm async rpc modules: {:?}"</span>,
