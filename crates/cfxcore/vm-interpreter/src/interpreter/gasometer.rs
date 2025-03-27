@@ -240,9 +240,16 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Gas::from_u256(*stack.peek(2))?,
             ),
             instructions::JUMPSUB_MCOPY if spec.cancun_opcodes => {
+                let dst_mem_needed = mem_needed(stack.peek(0), stack.peek(2))?;
+                let src_mem_needed = mem_needed(stack.peek(1), stack.peek(2))?;
+                let copy_mem_needed = if spec.cip645 {
+                    std::cmp::max(dst_mem_needed, src_mem_needed)
+                } else {
+                    dst_mem_needed
+                };
                 Request::GasMemCopy(
                     default_gas,
-                    mem_needed(stack.peek(0), stack.peek(2))?,
+                    copy_mem_needed,
                     Gas::from_u256(*stack.peek(2))?,
                 )
             }
