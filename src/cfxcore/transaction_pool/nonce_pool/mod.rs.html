@@ -1214,8 +1214,8 @@
     /// The first return value is the transaction in the first step.
     /// i.e., the first unpacked transaction from a sequential of transactions
     /// starting from `nonce`, may be `nonce` itself.
-    /// The second return value is the last nonce in the transaction series
-    /// from the tx.nonce()
+    /// The second return value is the last nonce in the sequential transaction
+    /// series from the tx.nonce()
     </span><span class="kw">pub fn </span>recalculate_readiness_with_local_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>, nonce: U256, balance: U256,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span>TxWithReadyInfo, U256)&gt; {

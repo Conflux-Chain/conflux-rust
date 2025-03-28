@@ -213,10 +213,10 @@
     SignedTransaction,
 };
 <span class="kw">use </span>rlp::Encodable;
-<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="doccomment">/// Transaction
-</span><span class="attr">#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+</span><span class="attr">#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>Transaction {
     <span class="doccomment">/// transaction type
@@ -239,7 +239,7 @@
     <span class="doccomment">/// Transfered value
     </span><span class="kw">pub </span>value: U256,
     <span class="doccomment">/// Gas Price
-    </span><span class="kw">pub </span>gas_price: U256,
+    </span><span class="kw">pub </span>gas_price: <span class="prelude-ty">Option</span>&lt;U256&gt;,
     <span class="doccomment">/// Max fee per gas
     </span><span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
     </span><span class="kw">pub </span>max_fee_per_gas: <span class="prelude-ty">Option</span>&lt;U256&gt;,
@@ -250,7 +250,7 @@
     <span class="doccomment">/// Creates contract
     </span><span class="kw">pub </span>creates: <span class="prelude-ty">Option</span>&lt;H160&gt;,
     <span class="doccomment">/// Raw transaction data
-    </span><span class="kw">pub </span>raw: Bytes,
+    </span><span class="kw">pub </span>raw: <span class="prelude-ty">Option</span>&lt;Bytes&gt;,
     <span class="doccomment">/// Public key of the signer.
     </span><span class="kw">pub </span>public_key: <span class="prelude-ty">Option</span>&lt;H512&gt;,
     <span class="doccomment">/// The network id of the transaction, if any.
@@ -328,11 +328,11 @@
                 Action::Call(<span class="kw-2">ref </span>address) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>address),
             },
             value: <span class="kw-2">*</span>t.value(),
-            gas_price: <span class="kw-2">*</span>t.gas_price(),
+            gas_price: <span class="prelude-val">Some</span>(<span class="kw-2">*</span>t.gas_price()),
             gas: <span class="kw-2">*</span>t.gas(),
             input: Bytes::new(t.data().clone()),
             creates: exec_info.<span class="number">1</span>,
-            raw: Bytes::new(t.transaction.transaction.rlp_bytes()),
+            raw: <span class="prelude-val">Some</span>(Bytes::new(t.transaction.transaction.rlp_bytes())),
             public_key: t.public().map(Into::into),
             chain_id: t.chain_id().map(|x| U64::from(x <span class="kw">as </span>u64)),
             standard_v: <span class="prelude-val">Some</span>(signature.v().into()),

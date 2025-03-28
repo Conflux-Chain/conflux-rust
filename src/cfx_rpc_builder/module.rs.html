@@ -599,8 +599,8 @@
     <span class="doccomment">/// `trace_` module
     </span>Trace,
     <span class="doccomment">/// `txpool_` module
-    </span><span class="comment">// Txpool,
-    </span><span class="doccomment">/// `web3_` module
+    </span>Txpool,
+    <span class="doccomment">/// `web3_` module
     </span>Web3,
     <span class="doccomment">/// `rpc_` module
     </span>Rpc,
@@ -645,8 +645,8 @@
             <span class="string">"eth" </span>=&gt; <span class="self">Self</span>::Eth,
             <span class="string">"net" </span>=&gt; <span class="self">Self</span>::Net,
             <span class="string">"trace" </span>=&gt; <span class="self">Self</span>::Trace,
-            <span class="comment">// "txpool" =&gt; Self::Txpool,
-            </span><span class="string">"web3" </span>=&gt; <span class="self">Self</span>::Web3,
+            <span class="string">"txpool" </span>=&gt; <span class="self">Self</span>::Txpool,
+            <span class="string">"web3" </span>=&gt; <span class="self">Self</span>::Web3,
             <span class="string">"rpc" </span>=&gt; <span class="self">Self</span>::Rpc,
             <span class="string">"parity" </span>=&gt; <span class="self">Self</span>::Parity,
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ParseError::VariantNotFound),

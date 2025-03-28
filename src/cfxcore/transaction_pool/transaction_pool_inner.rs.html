@@ -1913,6 +1913,62 @@
 <a href="#1911" id="1911">1911</a>
 <a href="#1912" id="1912">1912</a>
 <a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
+<a href="#1928" id="1928">1928</a>
+<a href="#1929" id="1929">1929</a>
+<a href="#1930" id="1930">1930</a>
+<a href="#1931" id="1931">1931</a>
+<a href="#1932" id="1932">1932</a>
+<a href="#1933" id="1933">1933</a>
+<a href="#1934" id="1934">1934</a>
+<a href="#1935" id="1935">1935</a>
+<a href="#1936" id="1936">1936</a>
+<a href="#1937" id="1937">1937</a>
+<a href="#1938" id="1938">1938</a>
+<a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
+<a href="#1945" id="1945">1945</a>
+<a href="#1946" id="1946">1946</a>
+<a href="#1947" id="1947">1947</a>
+<a href="#1948" id="1948">1948</a>
+<a href="#1949" id="1949">1949</a>
+<a href="#1950" id="1950">1950</a>
+<a href="#1951" id="1951">1951</a>
+<a href="#1952" id="1952">1952</a>
+<a href="#1953" id="1953">1953</a>
+<a href="#1954" id="1954">1954</a>
+<a href="#1955" id="1955">1955</a>
+<a href="#1956" id="1956">1956</a>
+<a href="#1957" id="1957">1957</a>
+<a href="#1958" id="1958">1958</a>
+<a href="#1959" id="1959">1959</a>
+<a href="#1960" id="1960">1960</a>
+<a href="#1961" id="1961">1961</a>
+<a href="#1962" id="1962">1962</a>
+<a href="#1963" id="1963">1963</a>
+<a href="#1964" id="1964">1964</a>
+<a href="#1965" id="1965">1965</a>
+<a href="#1966" id="1966">1966</a>
+<a href="#1967" id="1967">1967</a>
+<a href="#1968" id="1968">1968</a>
+<a href="#1969" id="1969">1969</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     account_cache::AccountCache,
     garbage_collector::GarbageCollector,
@@ -2403,6 +2459,32 @@
         <span class="self">self</span>.ready_transactions_by_space(Space::Native)
             .chain(<span class="self">self</span>.ready_transactions_by_space(Space::Ethereum))
     }
+
+    <span class="kw">fn </span>pending_tx_number&lt;F&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;, get_nonce_and_balance: F,
+    ) -&gt; u64
+    <span class="kw">where </span>F: Fn(<span class="kw-2">&amp;</span>AddressWithSpace) -&gt; (U256, U256) {
+        <span class="self">self</span>.buckets
+            .iter()
+            .filter(|item| {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(space) = space {
+                    item.<span class="number">0</span>.space == space
+                } <span class="kw">else </span>{
+                    <span class="bool-val">true
+                </span>}
+            })
+            .map(|(addr, nonce_pool)| {
+                <span class="kw">let </span>(nonce, balance) = get_nonce_and_balance(addr);
+                <span class="kw">if let </span><span class="prelude-val">Some</span>((tx, nonce)) = nonce_pool
+                    .recalculate_readiness_with_local_info(nonce, balance)
+                {
+                    (nonce - tx.nonce() + <span class="number">1</span>).as_u64()
+                } <span class="kw">else </span>{
+                    <span class="number">0u64
+                </span>}
+            })
+            .sum()
+    }
 }
 
 <span class="attr">#[derive(Default, DeriveMallocSizeOf)]
@@ -2453,7 +2535,7 @@
     capacity: usize,
     <span class="comment">// deprecated, this value is never updated
     </span>total_received_count: usize,
-    unpacked_transaction_count: usize,
+    unpacked_transaction_count: SpaceMap&lt;usize&gt;,
     <span class="doccomment">/// Tracks all transactions in the transaction pool by account and nonce.
     /// Packed and executed transactions will eventually be garbage collected.
     </span>deferred_pool: DeferredPool,
@@ -2481,7 +2563,7 @@
         TransactionPoolInner {
             capacity,
             total_received_count: <span class="number">0</span>,
-            unpacked_transaction_count: <span class="number">0</span>,
+            unpacked_transaction_count: SpaceMap::default(),
             deferred_pool: DeferredPool::new(config),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: SpaceMap::default(),
@@ -2498,7 +2580,7 @@
         <span class="self">self</span>.garbage_collector.apply_all(|x| x.clear());
         <span class="self">self</span>.txs.clear();
         <span class="self">self</span>.total_received_count = <span class="number">0</span>;
-        <span class="self">self</span>.unpacked_transaction_count = <span class="number">0</span>;
+        <span class="self">self</span>.unpacked_transaction_count.apply_all(|x| <span class="kw-2">*</span>x = <span class="number">0</span>);
     }
 
     <span class="kw">pub fn </span>total_deferred(<span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;) -&gt; usize {
@@ -2527,7 +2609,27 @@
 
     <span class="kw">pub fn </span>total_received(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize { <span class="self">self</span>.total_received_count }
 
-    <span class="kw">pub fn </span>total_unpacked(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize { <span class="self">self</span>.unpacked_transaction_count }
+    <span class="kw">pub fn </span>total_unpacked(<span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;) -&gt; usize {
+        <span class="kw">match </span>space {
+            <span class="prelude-val">Some</span>(space) =&gt; <span class="kw-2">*</span><span class="self">self</span>.unpacked_transaction_count.in_space(space),
+            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.unpacked_transaction_count.map_sum(|x| <span class="kw-2">*</span>x),
+        }
+    }
+
+    <span class="kw">pub fn </span>total_pending(<span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;) -&gt; u64 {
+        <span class="kw">let </span>get_nonce_and_balance = |addr: <span class="kw-2">&amp;</span>AddressWithSpace| {
+            <span class="self">self</span>.ready_nonces_and_balances
+                .get(addr)
+                .map(|x| <span class="kw-2">*</span>x)
+                .unwrap_or_default()
+        };
+        <span class="self">self</span>.deferred_pool
+            .pending_tx_number(space, get_nonce_and_balance)
+    }
+
+    <span class="kw">pub fn </span>total_queued(<span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;) -&gt; u64 {
+        <span class="self">self</span>.total_unpacked(space) <span class="kw">as </span>u64 - <span class="self">self</span>.total_pending(space)
+    }
 
     <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, tx_hash: <span class="kw-2">&amp;</span>H256) -&gt; <span class="prelude-ty">Option</span>&lt;Arc&lt;SignedTransaction&gt;&gt; {
         <span class="self">self</span>.txs.get(tx_hash).map(|x| x.clone())
@@ -2629,8 +2731,10 @@
             }
 
             <span class="kw">if </span>!tx_with_ready_info.is_already_packed() {
-                <span class="self">self</span>.unpacked_transaction_count = <span class="self">self
+                <span class="kw">let </span>tx_space = tx_with_ready_info.space();
+                <span class="kw-2">*</span><span class="self">self</span>.unpacked_transaction_count.in_space_mut(tx_space) = <span class="self">self
                     </span>.unpacked_transaction_count
+                    .in_space(tx_space)
                     .checked_sub(<span class="number">1</span>)
                     .unwrap_or_else(|| {
                         <span class="macro">error!</span>(<span class="string">"unpacked_transaction_count under-flows."</span>);
@@ -2741,6 +2845,7 @@
             )
         };
 
+        <span class="kw">let </span>tx_space = transaction.space();
         <span class="kw">match </span><span class="kw-2">&amp;</span>result {
             InsertResult::NewAdded =&gt; {
                 <span class="kw">let </span>(state_nonce, state_balance) = state_nonce_and_balance;
@@ -2752,24 +2857,29 @@
                 <span class="comment">// GarbageCollector will be updated by the caller.
                 </span><span class="self">self</span>.txs.insert(transaction.hash(), transaction.clone());
                 <span class="kw">if </span>!packed {
-                    <span class="self">self</span>.unpacked_transaction_count += <span class="number">1</span>;
+                    <span class="kw-2">*</span><span class="self">self</span>.unpacked_transaction_count.in_space_mut(tx_space) +=
+                        <span class="number">1</span>;
                 }
             }
             InsertResult::Failed(<span class="kw">_</span>) =&gt; {}
             InsertResult::Updated(replaced_tx) =&gt; {
                 <span class="kw">if </span>!replaced_tx.is_already_packed() {
-                    <span class="self">self</span>.unpacked_transaction_count = <span class="self">self
-                        </span>.unpacked_transaction_count
-                        .checked_sub(<span class="number">1</span>)
-                        .unwrap_or_else(|| {
-                            <span class="macro">error!</span>(<span class="string">"unpacked_transaction_count under-flows."</span>);
-                            <span class="number">0
-                        </span>});
+                    <span class="kw-2">*</span><span class="self">self</span>.unpacked_transaction_count.in_space_mut(tx_space) =
+                        <span class="self">self</span>.unpacked_transaction_count
+                            .in_space(tx_space)
+                            .checked_sub(<span class="number">1</span>)
+                            .unwrap_or_else(|| {
+                                <span class="macro">error!</span>(
+                                    <span class="string">"unpacked_transaction_count under-flows."
+                                </span>);
+                                <span class="number">0
+                            </span>});
                 }
                 <span class="self">self</span>.txs.remove(<span class="kw-2">&amp;</span>replaced_tx.hash());
                 <span class="self">self</span>.txs.insert(transaction.hash(), transaction.clone());
                 <span class="kw">if </span>!packed {
-                    <span class="self">self</span>.unpacked_transaction_count += <span class="number">1</span>;
+                    <span class="kw-2">*</span><span class="self">self</span>.unpacked_transaction_count.in_space_mut(tx_space) +=
+                        <span class="number">1</span>;
                 }
             }
         }
@@ -2783,14 +2893,16 @@
             <span class="self">self</span>.deferred_pool
                 .mark_packed(tx.sender(), tx.nonce(), packed);
         <span class="kw">if </span>changed {
+            <span class="kw">let </span>tx_space = tx.space();
             <span class="kw">if </span>packed {
-                <span class="kw">if </span><span class="self">self</span>.unpacked_transaction_count == <span class="number">0 </span>{
+                <span class="kw">if </span><span class="kw-2">*</span><span class="self">self</span>.unpacked_transaction_count.in_space(tx_space) == <span class="number">0 </span>{
                     <span class="macro">error!</span>(<span class="string">"unpacked_transaction_count under-flows."</span>);
                 } <span class="kw">else </span>{
-                    <span class="self">self</span>.unpacked_transaction_count -= <span class="number">1</span>;
+                    <span class="kw-2">*</span><span class="self">self</span>.unpacked_transaction_count.in_space_mut(tx_space) -=
+                        <span class="number">1</span>;
                 }
             } <span class="kw">else </span>{
-                <span class="self">self</span>.unpacked_transaction_count += <span class="number">1</span>;
+                <span class="kw-2">*</span><span class="self">self</span>.unpacked_transaction_count.in_space_mut(tx_space) += <span class="number">1</span>;
             }
         }
     }

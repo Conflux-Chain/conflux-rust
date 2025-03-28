@@ -841,6 +841,9 @@
 <a href="#839" id="839">839</a>
 <a href="#840" id="840">840</a>
 <a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
@@ -1106,6 +1109,9 @@
                             <span class="self">self</span>.executor.clone(),
                         );
                         ParityApi::new(eth_api).into_rpc().into()
+                    }
+                    EthRpcModule::Txpool =&gt; {
+                        TxPoolApi::new(<span class="self">self</span>.tx_pool.clone()).into_rpc().into()
                     }
                 })
                 .clone()

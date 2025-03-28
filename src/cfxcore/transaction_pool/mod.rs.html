@@ -1217,6 +1217,21 @@
 <a href="#1215" id="1215">1215</a>
 <a href="#1216" id="1216">1216</a>
 <a href="#1217" id="1217">1217</a>
+<a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a>
+<a href="#1224" id="1224">1224</a>
+<a href="#1225" id="1225">1225</a>
+<a href="#1226" id="1226">1226</a>
+<a href="#1227" id="1227">1227</a>
+<a href="#1228" id="1228">1228</a>
+<a href="#1229" id="1229">1229</a>
+<a href="#1230" id="1230">1230</a>
+<a href="#1231" id="1231">1231</a>
+<a href="#1232" id="1232">1232</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2121,7 +2136,22 @@
 
     <span class="kw">pub fn </span>total_unpacked(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="kw">let </span>inner = <span class="self">self</span>.inner.read();
-        inner.total_unpacked()
+        inner.total_unpacked(<span class="prelude-val">None</span>)
+    }
+
+    <span class="comment">// The total pending transactions in the pool
+    // Pending transactions are transactions that are ready to be packed
+    </span><span class="kw">pub fn </span>total_pending(<span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;) -&gt; u64 {
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read();
+        inner.total_pending(space)
+    }
+
+    <span class="comment">// The total queued transactions in the pool
+    // Queued transactions are transactions that are not ready to be packed
+    // e.g. due to nonce gap or not enough balance
+    </span><span class="kw">pub fn </span>total_queued(<span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;) -&gt; u64 {
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read();
+        inner.total_queued(space)
     }
 
     <span class="doccomment">/// stats retrieves the length of ready and deferred pool.
@@ -2131,7 +2161,7 @@
             inner.total_ready_accounts(),
             inner.total_deferred(<span class="prelude-val">None</span>),
             inner.total_received(),
-            inner.total_unpacked(),
+            inner.total_unpacked(<span class="prelude-val">None</span>),
         )
     }
 
@@ -2423,7 +2453,7 @@
 
     <span class="kw">fn </span>get_best_state_account_cache(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AccountCache {
         <span class="kw">let </span>_timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
-        AccountCache::new((<span class="kw-2">&amp;*</span><span class="self">self</span>.best_executed_state.lock()).clone())
+        AccountCache::new((<span class="self">self</span>.best_executed_state.lock()).clone())
     }
 
     <span class="kw">pub fn </span>ready_for_mining(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {

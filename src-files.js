@@ -14,12 +14,12 @@ var srcIndex = new Map(JSON.parse('[\
 ["cfx_packing_pool",["",[],["key_mng.rs","lib.rs","mock_tx.rs","packing_batch.rs","pool.rs","pool_config.rs","sample.rs","transaction.rs","treapmap_config.rs","weight.rs"]]],\
 ["cfx_parameters",["",[],["genesis.rs","internal_contract_addresses.rs","lib.rs"]]],\
 ["cfx_parity_trace_types",["",[],["action_types.rs","address_pocket.rs","filter.rs","lib.rs","trace_types.rs"]]],\
-["cfx_rpc",["",[["helpers",[],["chain_info.rs","epoch_queue.rs","eth_filter.rs","fee_history_cache.rs","mod.rs","poll_filter.rs","poll_manager.rs"]],["traits",[],["filterable.rs","mod.rs"]]],["debug.rs","eth.rs","filter.rs","lib.rs","net.rs","parity.rs","pubsub.rs","rpc.rs","trace.rs","web3.rs"]]],\
+["cfx_rpc",["",[["helpers",[],["chain_info.rs","epoch_queue.rs","eth_filter.rs","fee_history_cache.rs","mod.rs","poll_filter.rs","poll_manager.rs"]],["traits",[],["filterable.rs","mod.rs"]]],["debug.rs","eth.rs","filter.rs","lib.rs","net.rs","parity.rs","pubsub.rs","rpc.rs","trace.rs","txpool.rs","web3.rs"]]],\
 ["cfx_rpc_builder",["",[],["constants.rs","error.rs","id_provider.rs","lib.rs","module.rs"]]],\
 ["cfx_rpc_cfx_impl",["",[],["lib.rs","trace_handler.rs"]]],\
 ["cfx_rpc_cfx_types",["",[["traits",[],["block_provider.rs","chain_meta.rs","mod.rs"]]],["address.rs","chain_meta.rs","epoch_number.rs","fee_history.rs","fee_history_cache_entry.rs","lib.rs","phantom_block.rs","rpc_impl_configuration.rs","subscriber_id.rs","trace.rs","trace_eth.rs","trace_filter.rs","transaction_status.rs"]]],\
 ["cfx_rpc_common_impl",["",[["trace",[],["conversion.rs","matcher.rs","mod.rs"]]],["lib.rs"]]],\
-["cfx_rpc_eth_api",["",[],["debug.rs","eth.rs","filter.rs","lib.rs","net.rs","parity.rs","pubsub.rs","rpc.rs","trace.rs","web3.rs"]]],\
+["cfx_rpc_eth_api",["",[],["debug.rs","eth.rs","filter.rs","lib.rs","net.rs","parity.rs","pubsub.rs","rpc.rs","trace.rs","txpool.rs","web3.rs"]]],\
 ["cfx_rpc_eth_types",["",[],["access_list.rs","block.rs","block_number.rs","call.rs","errors.rs","eth_pubsub.rs","fee_history.rs","filter.rs","lib.rs","log.rs","receipt.rs","simulate.rs","state.rs","sync.rs","trace_filter.rs","transaction.rs","transaction_request.rs","tx_pool.rs"]]],\
 ["cfx_rpc_middlewares",["",[],["lib.rs","metrics.rs","throttle.rs"]]],\
 ["cfx_rpc_primitives",["",[],["bytes.rs","index.rs","lib.rs","rpc_module.rs","variadic_u64.rs","variadic_value.rs"]]],\
