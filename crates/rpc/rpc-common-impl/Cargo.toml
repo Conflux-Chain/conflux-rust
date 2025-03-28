@@ -1,0 +1,24 @@
+[package]
+name = "cfx-rpc-common-impl"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+[dependencies]
+cfx-addr = { workspace = true }
+cfx-types = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }
+cfx-parity-trace-types = { workspace = true }
+cfx-execute-helper = { workspace = true }
+# cfx-util-macros = { workspace = true }
+# primitives = { workspace = true }
+
+# log = { workspace = true }
+slice-group-by = { workspace = true }

@@ -4,18 +4,12 @@ import asyncio
 import websockets
 
 from conflux.rpc import RpcClient
-from jsonrpcclient.clients.websockets_client import WebSocketsClient
-from jsonrpcclient.exceptions import ReceivedErrorResponseError
-from jsonrpcclient.requests import Request
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
+from jsonrpcclient import request_json, parse_json, Ok
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import pubsub_url
 
 FULLNODE = 0
-
-def block_on(op):
-    # will raise DeprecationWarning in python higher version (e.g. 3.13)
-    # ignore it so far
-    return asyncio.get_event_loop().run_until_complete(op)
 
 class Issue2159Test(ConfluxTestFramework):
     def set_test_params(self):
@@ -37,14 +31,18 @@ class Issue2159Test(ConfluxTestFramework):
         node = self.nodes[FULLNODE]
         self.rpc = RpcClient(node)
 
-        # set up RPC over WS
-        url = pubsub_url(node.index, False, node.rpchost, node.pubsubport)
-        self.ws = WebSocketsClient(block_on(websockets.connect(url)))
-
         # wait for phase changes to complete
         self.nodes[FULLNODE].wait_for_phase(["NormalSyncPhase"])
-
+        
+    async def setup_ws(self):
+        url = pubsub_url(self.nodes[FULLNODE].index, False, self.nodes[FULLNODE].rpchost, self.nodes[FULLNODE].pubsubport)
+        self.ws = await websockets.connect(url)
+        
     def run_test(self):
+        asyncio.get_event_loop().run_until_complete(self.run_async_test())
+
+    async def run_async_test(self):
+        await self.setup_ws()
         # generate block with many transactions
         parent_hash = self.rpc.block_by_epoch("latest_mined")['hash']
         start_nonce = self.rpc.get_nonce(self.rpc.GENESIS_ADDR)
@@ -57,11 +55,13 @@ class Issue2159Test(ConfluxTestFramework):
 
         # getting epoch receipts should result in error
         try:
-            resp = block_on(self.ws.send(Request("cfx_getEpochReceipts", epoch)))
-            assert False, "cfx_getEpochReceipts request should have failed"
-        except ReceivedErrorResponseError as e:
-            self.log.info(e.response)
-            assert e.response.data.startswith("\"Oversized payload")
+            await self.ws.send(request_json("cfx_getEpochReceipts", params=(epoch,)))
+            resp = parse_json(await self.ws.recv())
+            if isinstance(resp, Ok):
+                assert False, "cfx_getEpochReceipts request should have failed"
+            else:
+                self.log.info(resp)
+                assert resp.data.startswith("\"Oversized payload")
         except Exception as e:
             assert False, f"unexpected error: {e}"
 

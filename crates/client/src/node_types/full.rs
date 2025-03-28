@@ -12,6 +12,7 @@ use crate::{
 };
 use blockgen::BlockGenerator;
 use cfx_rpc_builder::RpcServerHandle;
+use cfx_tasks::TaskManager;
 use cfxcore::{
     pow::PowComputer, ConsensusGraph, NodeType, SynchronizationService,
     TransactionPool,
@@ -38,6 +39,7 @@ pub struct FullClientExtraComponents {
     /// Which use Rust async I/O
     pub eth_rpc_server_handle: Option<RpcServerHandle>,
     pub tokio_runtime: Arc<TokioRuntime>,
+    pub task_manager: TaskManager,
 }
 
 impl MallocSizeOf for FullClientExtraComponents {
@@ -72,6 +74,7 @@ impl FullClient {
             eth_rpc_ws_server,
             tokio_runtime,
             eth_rpc_server_handle,
+            task_manager,
         ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
@@ -92,6 +95,7 @@ impl FullClient {
                 eth_rpc_ws_server,
                 eth_rpc_server_handle,
                 tokio_runtime,
+                task_manager,
             },
         }))
     }

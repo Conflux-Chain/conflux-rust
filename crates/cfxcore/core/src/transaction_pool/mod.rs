@@ -871,7 +871,7 @@ impl TransactionPool {
     }
 
     // The total pending transactions in the pool
-    // Pending transactions are transactions that are not ready to be packed
+    // Pending transactions are transactions that are ready to be packed
     pub fn total_pending(&self, space: Option<Space>) -> u64 {
         let inner = self.inner.read();
         inner.total_pending(space)

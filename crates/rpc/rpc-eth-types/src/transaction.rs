@@ -54,7 +54,6 @@ pub struct Transaction {
     /// Transfered value
     pub value: U256,
     /// Gas Price
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub gas_price: Option<U256>,
     /// Max fee per gas
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -64,13 +63,10 @@ pub struct Transaction {
     /// Data
     pub input: Bytes,
     /// Creates contract
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub creates: Option<H160>,
     /// Raw transaction data
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub raw: Option<Bytes>,
     /// Public key of the signer.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub public_key: Option<H512>,
     /// The network id of the transaction, if any.
     pub chain_id: Option<U64>,
@@ -85,7 +81,6 @@ pub struct Transaction {
     /// The S field of the signature.
     pub s: U256,
     // Whether tx is success
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<U64>,
     /// Optional access list
     #[serde(skip_serializing_if = "Option::is_none")]

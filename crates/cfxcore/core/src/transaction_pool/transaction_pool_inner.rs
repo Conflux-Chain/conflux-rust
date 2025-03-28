@@ -547,16 +547,6 @@ impl TransactionPoolInner {
         Ok(nonce_and_balance)
     }
 
-    #[allow(dead_code)]
-    fn get_nonce_and_balance_from_cache_and_storage(
-        &self, address: &AddressWithSpace, state: &StateProvider,
-    ) -> (U256, U256) {
-        self.ready_nonces_and_balances
-            .get(address)
-            .map(|x| *x)
-            .unwrap_or(state.get_nonce_and_balance(address).unwrap_or_default())
-    }
-
     pub fn get_lowest_nonce(&self, addr: &AddressWithSpace) -> U256 {
         let mut ret = 0.into();
         if let Some((nonce, _)) = self.get_local_nonce_and_balance(addr) {
