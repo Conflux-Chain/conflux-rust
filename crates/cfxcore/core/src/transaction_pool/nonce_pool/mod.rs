@@ -266,8 +266,8 @@ impl NoncePool {
     /// The first return value is the transaction in the first step.
     /// i.e., the first unpacked transaction from a sequential of transactions
     /// starting from `nonce`, may be `nonce` itself.
-    /// The second return value is the last nonce in the transaction series
-    /// from the tx.nonce()
+    /// The second return value is the last nonce in the sequential transaction
+    /// series from the tx.nonce()
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
     ) -> Option<(&TxWithReadyInfo, U256)> {

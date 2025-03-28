@@ -902,7 +902,22 @@ impl TransactionPool {
 
     pub fn total_unpacked(&self) -> usize {
         let inner = self.inner.read();
-        inner.total_unpacked()
+        inner.total_unpacked(None)
+    }
+
+    // The total pending transactions in the pool
+    // Pending transactions are transactions that are ready to be packed
+    pub fn total_pending(&self, space: Option<Space>) -> u64 {
+        let inner = self.inner.read();
+        inner.total_pending(space)
+    }
+
+    // The total queued transactions in the pool
+    // Queued transactions are transactions that are not ready to be packed
+    // e.g. due to nonce gap or not enough balance
+    pub fn total_queued(&self, space: Option<Space>) -> u64 {
+        let inner = self.inner.read();
+        inner.total_queued(space)
     }
 
     /// stats retrieves the length of ready and deferred pool.
@@ -912,7 +927,7 @@ impl TransactionPool {
             inner.total_ready_accounts(),
             inner.total_deferred(None),
             inner.total_received(),
-            inner.total_unpacked(),
+            inner.total_unpacked(None),
         )
     }
 
@@ -1204,7 +1219,7 @@ impl TransactionPool {
 
     fn get_best_state_account_cache(&self) -> AccountCache {
         let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
-        AccountCache::new((&*self.best_executed_state.lock()).clone())
+        AccountCache::new((self.best_executed_state.lock()).clone())
     }
 
     pub fn ready_for_mining(&self) -> bool {
