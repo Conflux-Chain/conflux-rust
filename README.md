@@ -42,7 +42,7 @@ Then, you can run all integration tests using:
 ## Resources
 
 - [Conflux Website](https://www.confluxnetwork.org/)
-- [Conflux Scan](https://www.confluxscan.io/)
+- [Conflux Scan](https://www.confluxscan.org/)
 - [Conflux Paper](https://arxiv.org/abs/1805.03870)
 - [Medium](https://medium.com/@ConfluxNetwork)
 
