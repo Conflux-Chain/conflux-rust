@@ -395,6 +395,8 @@ build_config! {
         // Recover the latest MPT snapshot from the era checkpoint
         (recovery_latest_mpt_snapshot, (bool), false)
         (keep_era_genesis_snapshot, (bool), true)
+
+        // This is designed for fast node catch-up but has not been thoroughly tested. Do not use it in production environments.
         (backup_mpt_snapshot, (bool), true)
     }
     {
