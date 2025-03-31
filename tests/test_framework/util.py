@@ -703,7 +703,7 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
             t.start()
             threads.append(t)
 
-        for t in threads[-len(batch):]:
+        for t in threads:
             t.join(timeout)
             if t.is_alive():
                 msg = "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
