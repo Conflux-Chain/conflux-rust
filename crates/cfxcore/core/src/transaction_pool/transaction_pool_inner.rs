@@ -1,6 +1,7 @@
 use super::{
-    deferred_pool::{DeferredPool, InsertResult, TxWithReadyInfo},
+    deferred_pool::DeferredPool,
     garbage_collector::GarbageCollector,
+    nonce_pool::{InsertResult, TxWithReadyInfo},
     pool_metrics::pool_inner_metrics::*,
     state_provider::StateProvider,
     TransactionPoolError,
