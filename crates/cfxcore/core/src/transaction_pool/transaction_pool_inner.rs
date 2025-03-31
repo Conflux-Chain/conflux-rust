@@ -488,6 +488,32 @@ impl DeferredPool {
         self.ready_transactions_by_space(Space::Native)
             .chain(self.ready_transactions_by_space(Space::Ethereum))
     }
+
+    fn pending_tx_number<F>(
+        &self, space: Option<Space>, get_nonce_and_balance: F,
+    ) -> u64
+    where F: Fn(&AddressWithSpace) -> (U256, U256) {
+        self.buckets
+            .iter()
+            .filter(|item| {
+                if let Some(space) = space {
+                    item.0.space == space
+                } else {
+                    true
+                }
+            })
+            .map(|(addr, nonce_pool)| {
+                let (nonce, balance) = get_nonce_and_balance(addr);
+                if let Some((tx, nonce)) = nonce_pool
+                    .recalculate_readiness_with_local_info(nonce, balance)
+                {
+                    (nonce - tx.nonce() + 1).as_u64()
+                } else {
+                    0u64
+                }
+            })
+            .sum()
+    }
 }
 
 #[derive(Default, DeriveMallocSizeOf)]
@@ -536,8 +562,9 @@ impl TransactionSet {
 #[derive(DeriveMallocSizeOf)]
 pub struct TransactionPoolInner {
     capacity: usize,
+    // deprecated, this value is never updated
     total_received_count: usize,
-    unpacked_transaction_count: usize,
+    unpacked_transaction_count: SpaceMap<usize>,
     /// Tracks all transactions in the transaction pool by account and nonce.
     /// Packed and executed transactions will eventually be garbage collected.
     deferred_pool: DeferredPool,
@@ -565,7 +592,7 @@ impl TransactionPoolInner {
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
-            unpacked_transaction_count: 0,
+            unpacked_transaction_count: SpaceMap::default(),
             deferred_pool: DeferredPool::new(config),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: SpaceMap::default(),
@@ -582,7 +609,7 @@ impl TransactionPoolInner {
         self.garbage_collector.apply_all(|x| x.clear());
         self.txs.clear();
         self.total_received_count = 0;
-        self.unpacked_transaction_count = 0;
+        self.unpacked_transaction_count.apply_all(|x| *x = 0);
     }
 
     pub fn total_deferred(&self, space: Option<Space>) -> usize {
@@ -611,7 +638,27 @@ impl TransactionPoolInner {
 
     pub fn total_received(&self) -> usize { self.total_received_count }
 
-    pub fn total_unpacked(&self) -> usize { self.unpacked_transaction_count }
+    pub fn total_unpacked(&self, space: Option<Space>) -> usize {
+        match space {
+            Some(space) => *self.unpacked_transaction_count.in_space(space),
+            None => self.unpacked_transaction_count.map_sum(|x| *x),
+        }
+    }
+
+    pub fn total_pending(&self, space: Option<Space>) -> u64 {
+        let get_nonce_and_balance = |addr: &AddressWithSpace| {
+            self.ready_nonces_and_balances
+                .get(addr)
+                .map(|x| *x)
+                .unwrap_or_default()
+        };
+        self.deferred_pool
+            .pending_tx_number(space, get_nonce_and_balance)
+    }
+
+    pub fn total_queued(&self, space: Option<Space>) -> u64 {
+        self.total_unpacked(space) as u64 - self.total_pending(space)
+    }
 
     pub fn get(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
         self.txs.get(tx_hash).map(|x| x.clone())
@@ -713,8 +760,10 @@ impl TransactionPoolInner {
             }
 
             if !tx_with_ready_info.is_already_packed() {
-                self.unpacked_transaction_count = self
+                let tx_space = tx_with_ready_info.space();
+                *self.unpacked_transaction_count.in_space_mut(tx_space) = self
                     .unpacked_transaction_count
+                    .in_space(tx_space)
                     .checked_sub(1)
                     .unwrap_or_else(|| {
                         error!("unpacked_transaction_count under-flows.");
@@ -825,6 +874,7 @@ impl TransactionPoolInner {
             )
         };
 
+        let tx_space = transaction.space();
         match &result {
             InsertResult::NewAdded => {
                 let (state_nonce, state_balance) = state_nonce_and_balance;
@@ -836,24 +886,29 @@ impl TransactionPoolInner {
                 // GarbageCollector will be updated by the caller.
                 self.txs.insert(transaction.hash(), transaction.clone());
                 if !packed {
-                    self.unpacked_transaction_count += 1;
+                    *self.unpacked_transaction_count.in_space_mut(tx_space) +=
+                        1;
                 }
             }
             InsertResult::Failed(_) => {}
             InsertResult::Updated(replaced_tx) => {
                 if !replaced_tx.is_already_packed() {
-                    self.unpacked_transaction_count = self
-                        .unpacked_transaction_count
-                        .checked_sub(1)
-                        .unwrap_or_else(|| {
-                            error!("unpacked_transaction_count under-flows.");
-                            0
-                        });
+                    *self.unpacked_transaction_count.in_space_mut(tx_space) =
+                        self.unpacked_transaction_count
+                            .in_space(tx_space)
+                            .checked_sub(1)
+                            .unwrap_or_else(|| {
+                                error!(
+                                    "unpacked_transaction_count under-flows."
+                                );
+                                0
+                            });
                 }
                 self.txs.remove(&replaced_tx.hash());
                 self.txs.insert(transaction.hash(), transaction.clone());
                 if !packed {
-                    self.unpacked_transaction_count += 1;
+                    *self.unpacked_transaction_count.in_space_mut(tx_space) +=
+                        1;
                 }
             }
         }
@@ -867,14 +922,16 @@ impl TransactionPoolInner {
             self.deferred_pool
                 .mark_packed(tx.sender(), tx.nonce(), packed);
         if changed {
+            let tx_space = tx.space();
             if packed {
-                if self.unpacked_transaction_count == 0 {
+                if *self.unpacked_transaction_count.in_space(tx_space) == 0 {
                     error!("unpacked_transaction_count under-flows.");
                 } else {
-                    self.unpacked_transaction_count -= 1;
+                    *self.unpacked_transaction_count.in_space_mut(tx_space) -=
+                        1;
                 }
             } else {
-                self.unpacked_transaction_count += 1;
+                *self.unpacked_transaction_count.in_space_mut(tx_space) += 1;
             }
         }
     }
@@ -1367,7 +1424,7 @@ impl TransactionPoolInner {
         // check balance
         if !packed && !force {
             let mut need_balance = U256::from(0);
-            let estimate_gas_fee = Self::estimated_gas_fee(
+            let estimate_gas_fee = Self::cal_gas_fee(
                 transaction.gas().clone(),
                 transaction.gas_price().clone(),
             );
@@ -1423,7 +1480,7 @@ impl TransactionPoolInner {
         Ok(())
     }
 
-    fn estimated_gas_fee(gas: U256, gas_price: U256) -> U256 {
+    fn cal_gas_fee(gas: U256, gas_price: U256) -> U256 {
         let estimated_gas_u512 = gas.full_mul(gas_price);
         // Normally, it is less than 2^128
         let estimated_gas =
@@ -1472,7 +1529,7 @@ impl TransactionPoolInner {
         }
 
         // Detailed logics
-        let estimated_gas = Self::estimated_gas_fee(
+        let estimated_gas = Self::cal_gas_fee(
             transaction.gas().clone(),
             transaction.gas_price().clone(),
         );

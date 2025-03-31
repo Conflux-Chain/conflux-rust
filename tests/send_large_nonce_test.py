@@ -1,6 +1,6 @@
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, wait_until
-import jsonrpcclient
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
 from conflux.config import default_config
 from conflux.utils import priv_to_addr
 from conflux.rpc import RpcClient
@@ -25,7 +25,7 @@ class TxPoolLargeNonceTest(ConfluxTestFramework):
     def test_rpc_send(self, tx):
         try:
             self.client.send_tx(tx, False)
-        except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+        except ReceivedErrorResponseError as e:
             error = e.response
             assert_equal(error.code, -32602)
             assert_equal(error.message, "Invalid parameters: tx \"TooLargeNonce\"")

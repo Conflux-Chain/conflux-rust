@@ -1,0 +1,56 @@
+name: Lint
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "*.json"
+      - "*.sol"
+      - "docs/**"
+      - ".gitignore"
+      - ".travis.yml"
+      - "cargo_fmt.sh"
+      - "CODEOWNERS"
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "*.json"
+      - "*.sol"
+      - "docs/**"
+      - ".gitignore"
+      - ".travis.yml"
+      - "cargo_fmt.sh"
+      - "CODEOWNERS"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/release/deps
+            target/release/.fingerprint
+            target/release/build
+            !target/release/build/**/out
+            !target/release/incremental
+            !target/release/.cargo-lock
+          key: ${{ runner.os }}-build-lint-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-lint-release-
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+
+      - name: Check format and run clippy
+        run: |
+           ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings

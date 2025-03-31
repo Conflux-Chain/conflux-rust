@@ -1,7 +1,9 @@
 # JSON-RPC CHANGELOG
 
 ## vNext
+
 1. Support gasFee in transaction receipt for espace RPC
+2. eSpace block.gasLimit change to half of the consensus gas limit, add block.espaceGasLimit to return the real gas limit for eSpace transactions.
 
 ## v2.4.1
 

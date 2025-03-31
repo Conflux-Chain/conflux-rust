@@ -62,6 +62,7 @@ use std::{
 };
 pub use tower::layer::util::{Identity, Stack};
 // use tower::Layer;
+use cfx_tasks::TaskExecutor;
 
 /// A builder type to configure the RPC module: See [`RpcModule`]
 ///
@@ -72,18 +73,21 @@ pub struct RpcModuleBuilder {
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
+    executor: TaskExecutor,
 }
 
 impl RpcModuleBuilder {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor,
     ) -> Self {
         Self {
             config,
             consensus,
             sync,
             tx_pool,
+            executor,
         }
     }
 
@@ -103,10 +107,12 @@ impl RpcModuleBuilder {
                 consensus,
                 sync,
                 tx_pool,
+                executor,
             } = self;
 
-            let mut registry =
-                RpcRegistryInner::new(config, consensus, sync, tx_pool);
+            let mut registry = RpcRegistryInner::new(
+                config, consensus, sync, tx_pool, executor,
+            );
 
             modules.config = module_config;
             modules.http = registry.maybe_module(http.as_ref());
@@ -125,12 +131,14 @@ pub struct RpcRegistryInner {
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     modules: HashMap<EthRpcModule, Methods>,
+    executor: TaskExecutor,
 }
 
 impl RpcRegistryInner {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor,
     ) -> Self {
         Self {
             consensus,
@@ -138,6 +146,7 @@ impl RpcRegistryInner {
             sync,
             tx_pool,
             modules: Default::default(),
+            executor,
         }
     }
 
@@ -226,6 +235,7 @@ impl RpcRegistryInner {
                         self.consensus.clone(),
                         self.sync.clone(),
                         self.tx_pool.clone(),
+                        self.executor.clone(),
                     )
                     .into_rpc()
                     .into(),
@@ -243,6 +253,19 @@ impl RpcRegistryInner {
                     EthRpcModule::Web3 => Web3Api.into_rpc().into(),
                     EthRpcModule::Rpc => {
                         RPCApi::new(module_version.clone()).into_rpc().into()
+                    }
+                    EthRpcModule::Parity => {
+                        let eth_api = EthApi::new(
+                            self.config.clone(),
+                            self.consensus.clone(),
+                            self.sync.clone(),
+                            self.tx_pool.clone(),
+                            self.executor.clone(),
+                        );
+                        ParityApi::new(eth_api).into_rpc().into()
+                    }
+                    EthRpcModule::Txpool => {
+                        TxPoolApi::new(self.tx_pool.clone()).into_rpc().into()
                     }
                 })
                 .clone()

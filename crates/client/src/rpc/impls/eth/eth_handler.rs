@@ -9,13 +9,14 @@ use crate::rpc::{
     types::{
         eth::{
             AccountPendingTransactions, Block as RpcBlock, BlockNumber,
-            EthRpcLogFilter, Log, Receipt, SyncStatus, Transaction,
-            TransactionRequest,
+            BlockOverrides, EthRpcLogFilter, Log, Receipt, RpcStateOverride,
+            SyncStatus, Transaction, TransactionRequest,
         },
         Bytes, FeeHistory, Index, U64 as HexU64,
     },
 };
 use cfx_rpc::EthApi;
+use cfx_tasks::TaskExecutor;
 use cfx_types::{Address, AddressSpaceUtil, Space, H160, H256, U256, U64};
 use cfx_util_macros::bail;
 use cfxcore::{
@@ -33,9 +34,10 @@ impl EthHandler {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor,
     ) -> Self {
         EthHandler {
-            inner: EthApi::new(config, consensus, sync, tx_pool),
+            inner: EthApi::new(config, consensus, sync, tx_pool, executor),
         }
     }
 }
@@ -263,14 +265,19 @@ impl Eth for EthHandler {
     fn call(
         &self, request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
         debug!(
             "RPC Request: eth_call(request={:?}, block_num={:?})",
             request, block_number_or_hash
         );
-
-        let (execution, _estimation) =
-            self.inner.exec_transaction(request, block_number_or_hash)?;
+        let (execution, _estimation) = self.inner.exec_transaction(
+            request,
+            block_number_or_hash,
+            state_overrides,
+            block_overrides,
+        )?;
 
         Ok(execution.output.into())
     }
@@ -278,13 +285,18 @@ impl Eth for EthHandler {
     fn estimate_gas(
         &self, request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
+        state_overrides: Option<RpcStateOverride>,
     ) -> RpcResult<U256> {
         debug!(
             "RPC Request: eth_estimateGas(request={:?}, block_num={:?})",
             request, block_number_or_hash
         );
-        let (_, estimated_gas) =
-            self.inner.exec_transaction(request, block_number_or_hash)?;
+        let (_, estimated_gas) = self.inner.exec_transaction(
+            request,
+            block_number_or_hash,
+            state_overrides,
+            None,
+        )?;
 
         Ok(estimated_gas)
     }

@@ -9,26 +9,24 @@ jobs:
   deploy:
     permissions:
       contents: write
-
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+  
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          # rustc 1.77.0-nightly
-          # build doc index.html needs nightly
-          toolchain: nightly-2024-01-29
+          prefix-key: "nightly-2024-02-04"
+          
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
 
-      - name: Build Docs
-        env:
-          RUSTDOCFLAGS: "--enable-index-page -Z unstable-options"
+      - name: Generate documentation
         run: |
-          cargo +nightly-2024-01-29  doc --no-deps
+          rustup default nightly-2024-02-04 && RUSTDOCFLAGS='--enable-index-page -Z unstable-options' cargo +nightly-2024-02-04 doc --no-deps
+
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
-
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target/doc

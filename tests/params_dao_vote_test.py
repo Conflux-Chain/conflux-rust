@@ -4,7 +4,7 @@ import os
 
 import eth_utils
 from eth_utils import decode_hex
-from jsonrpcclient.exceptions import ReceivedErrorResponseError
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
 from web3 import Web3
 
 from conflux.config import default_config

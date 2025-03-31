@@ -255,7 +255,7 @@ impl TransactionPool {
             config.packing_pool_degree,
         );
         let best_executed_state = Mutex::new(
-            Self::best_executed_state(
+            Self::get_best_executed_state_by_epoch(
                 &data_man,
                 StateIndex::new_for_readonly(
                     &genesis_hash,
@@ -377,7 +377,7 @@ impl TransactionPool {
             sponsored_gas,
             sponsored_storage,
         )
-        .calc_tx_cost();
+        .get_tx_cost();
 
         let outdated = match (tx_cost <= balance, &first_tx_status) {
             (true, Some(Pending(PendingReason::NotEnoughCash)))
@@ -902,7 +902,22 @@ impl TransactionPool {
 
     pub fn total_unpacked(&self) -> usize {
         let inner = self.inner.read();
-        inner.total_unpacked()
+        inner.total_unpacked(None)
+    }
+
+    // The total pending transactions in the pool
+    // Pending transactions are transactions that are ready to be packed
+    pub fn total_pending(&self, space: Option<Space>) -> u64 {
+        let inner = self.inner.read();
+        inner.total_pending(space)
+    }
+
+    // The total queued transactions in the pool
+    // Queued transactions are transactions that are not ready to be packed
+    // e.g. due to nonce gap or not enough balance
+    pub fn total_queued(&self, space: Option<Space>) -> u64 {
+        let inner = self.inner.read();
+        inner.total_queued(space)
     }
 
     /// stats retrieves the length of ready and deferred pool.
@@ -912,7 +927,7 @@ impl TransactionPool {
             inner.total_ready_accounts(),
             inner.total_deferred(None),
             inner.total_received(),
-            inner.total_unpacked(),
+            inner.total_unpacked(None),
         )
     }
 
@@ -1173,7 +1188,7 @@ impl TransactionPool {
         )
     }
 
-    fn best_executed_state(
+    fn get_best_executed_state_by_epoch(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
     ) -> StateDbResult<Arc<State>> {
         let storage = data_man
@@ -1190,25 +1205,28 @@ impl TransactionPool {
         Ok(Arc::new(state))
     }
 
-    pub fn set_best_executed_epoch(
+    pub fn set_best_executed_state_by_epoch(
         &self, best_executed_epoch: StateIndex,
     ) -> StateDbResult<()> {
         *self.best_executed_state.lock() =
-            Self::best_executed_state(&self.data_man, best_executed_epoch)?;
+            Self::get_best_executed_state_by_epoch(
+                &self.data_man,
+                best_executed_epoch,
+            )?;
 
         Ok(())
     }
 
     fn get_best_state_account_cache(&self) -> AccountCache {
         let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
-        AccountCache::new((&*self.best_executed_state.lock()).clone())
+        AccountCache::new((self.best_executed_state.lock()).clone())
     }
 
     pub fn ready_for_mining(&self) -> bool {
         self.ready_for_mining.load(Ordering::SeqCst)
     }
 
-    pub fn set_ready(&self) {
+    pub fn set_ready_for_mining(&self) {
         self.ready_for_mining.store(true, Ordering::SeqCst);
     }
 }

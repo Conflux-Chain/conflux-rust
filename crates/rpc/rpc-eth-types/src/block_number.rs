@@ -28,7 +28,7 @@ use serde::{
 use std::{convert::TryFrom, fmt};
 
 /// Represents rpc api block number param.
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum BlockNumber {
     /// Hash
     Hash {

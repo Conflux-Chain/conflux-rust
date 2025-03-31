@@ -10,16 +10,22 @@ use cfx_rpc_cfx_types::{
 };
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter, EthRpcLogFilter as Filter,
-    FeeHistory, Header, Log, Receipt, SyncInfo, SyncStatus, Transaction,
-    TransactionRequest,
+    AccessListResult, AccountOverride, AccountPendingTransactions, Block,
+    BlockNumber as BlockId, BlockOverrides, Bundle, EthCallResponse,
+    EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides, FeeHistory,
+    Header, Log, Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock,
+    StateContext, SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
-use cfx_rpc_utils::error::{
-    errors::*, jsonrpc_error_helpers::*,
-    jsonrpsee_error_helpers::internal_error as jsonrpsee_internal_error,
+use cfx_rpc_utils::{
+    error::{
+        errors::*, jsonrpc_error_helpers::*,
+        jsonrpsee_error_helpers::internal_error as jsonrpsee_internal_error,
+    },
+    helpers::SpawnBlocking,
 };
 use cfx_statedb::StateDbExt;
+use cfx_tasks::{TaskExecutor, TaskSpawner};
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, H64, U256, U64,
 };
@@ -31,7 +37,7 @@ use cfxcore::{
     SharedSynchronizationService, SharedTransactionPool,
 };
 use jsonrpc_core::Error as RpcError;
-use jsonrpsee::core::RpcResult;
+use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
     BlockHashOrEpochNumber, EpochNumber, StorageKey, StorageValue,
@@ -39,6 +45,7 @@ use primitives::{
 };
 use rustc_hex::ToHex;
 use solidity_abi::string_revert_reason_decode;
+use std::{collections::HashMap, future::Future};
 
 type BlockNumber = BlockId;
 type BlockNumberOrTag = BlockId;
@@ -46,18 +53,21 @@ type BlockNumberOrTag = BlockId;
 type JsonStorageKey = U256;
 type RpcBlock = Block;
 
+#[derive(Clone)]
 pub struct EthApi {
     config: RpcImplConfiguration,
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     fee_history_cache: FeeHistoryCache,
+    executor: TaskExecutor,
 }
 
 impl EthApi {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor,
     ) -> Self {
         EthApi {
             config,
@@ -65,6 +75,7 @@ impl EthApi {
             sync,
             tx_pool,
             fee_history_cache: FeeHistoryCache::new(),
+            executor,
         }
     }
 
@@ -100,6 +111,8 @@ impl EthApi {
     pub fn exec_transaction(
         &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> CoreResult<(Executed, U256)> {
         let consensus_graph = self.consensus_graph();
 
@@ -124,6 +137,26 @@ impl EthApi {
                 .into());
             }
         }
+
+        let state_overrides = match state_overrides {
+            Some(states) => {
+                let mut state_overrides = HashMap::new();
+                for (address, rpc_account_override) in states {
+                    let account_override =
+                        AccountOverride::try_from(rpc_account_override)
+                            .map_err(|err| {
+                                CoreError::InvalidParam(
+                                    err.into(),
+                                    Default::default(),
+                                )
+                            })?;
+                    state_overrides.insert(address, account_override);
+                }
+                Some(state_overrides)
+            }
+            None => None,
+        };
+        let evm_overrides = EvmOverrides::new(state_overrides, block_overrides);
 
         let epoch = match block_number_or_hash.unwrap_or_default() {
             BlockNumber::Hash { hash, .. } => {
@@ -167,6 +200,7 @@ impl EthApi {
             &signed_tx,
             epoch,
             estimate_request,
+            evm_overrides,
         )?;
 
         let executed = match execution_outcome {
@@ -190,15 +224,11 @@ impl EthApi {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                e @ ExecutionError::NotEnoughCash { .. },
+                ExecutionError::NotEnoughCash { .. },
                 _executed,
             ) => {
-                bail!(geth_call_execution_error(
-                    format!(
-                        "insufficient funds for gas * price + value: {:?})",
-                        e
-                    ),
-                    "".into()
+                bail!(RpcError::from(
+                    RpcInvalidTransactionError::InsufficientFunds
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -991,6 +1021,56 @@ impl EthApi {
 
         Ok(total_reward * evm_ratio / 300)
     }
+
+    pub fn account_pending_transactions(
+        &self, address: Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> CoreResult<AccountPendingTransactions> {
+        let (pending_txs, tx_status, pending_count) = self
+            .tx_pool()
+            .get_account_pending_transactions(
+                &Address::from(address).with_evm_space(),
+                maybe_start_nonce,
+                maybe_limit.map(|limit| limit.as_usize()),
+                self.best_epoch_number(),
+            )
+            .map_err(|e| CoreError::from(e))?;
+        Ok(AccountPendingTransactions {
+            pending_transactions: pending_txs
+                .into_iter()
+                .map(|tx| {
+                    Transaction::from_signed(
+                        &tx,
+                        (None, None, None),
+                        (None, None),
+                    )
+                })
+                .collect(),
+            first_tx_status: tx_status,
+            pending_count: pending_count.into(),
+        })
+    }
+}
+
+impl SpawnBlocking for EthApi {
+    fn io_task_spawner(&self) -> impl TaskSpawner { self.executor.clone() }
+}
+
+impl EthApi {
+    pub fn async_transaction_by_hash(
+        &self, hash: H256,
+    ) -> impl Future<Output = Result<Option<Transaction>, ErrorObjectOwned>> + Send
+    {
+        let self_clone = self.clone();
+        async move {
+            let resp = self_clone
+                .spawn_blocking_io(move |this| {
+                    this.transaction_by_hash(hash).map_err(|err| err.into())
+                })
+                .await;
+            resp
+        }
+    }
 }
 
 impl BlockProvider for &EthApi {
@@ -1120,7 +1200,7 @@ impl EthApiServer for EthApi {
     async fn transaction_by_hash(
         &self, hash: H256,
     ) -> RpcResult<Option<Transaction>> {
-        self.transaction_by_hash(hash).map_err(|err| err.into())
+        self.async_transaction_by_hash(hash).await
     }
 
     /// Returns information about a raw transaction by block hash and
@@ -1227,35 +1307,42 @@ impl EthApiServer for EthApi {
     /// `eth_simulateV1` executes an arbitrary number of transactions on top of
     /// the requested state. The transactions are packed into individual
     /// blocks. Overrides can be provided.
-    // async fn simulate_v1(
-    //     &self,
-    //     opts: SimBlock,
-    //     block_number: Option<BlockId>,
-    // ) -> RpcResult<Vec<SimulatedBlock>>;
+    async fn simulate_v1(
+        &self, opts: SimulatePayload, block_number: Option<BlockId>,
+    ) -> RpcResult<Vec<SimulatedBlock>> {
+        let _ = block_number;
+        let _ = opts;
+        Err(jsonrpsee_internal_error("Not implemented"))
+    }
 
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     async fn call(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_overrides: Option<StateOverride>,
-        // block_overrides: Option<Box<BlockOverrides>>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes> {
-        let (execution, _estimation) =
-            self.exec_transaction(request, block_number)?;
+        let (execution, _estimation) = self.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            block_overrides,
+        )?;
 
         Ok(execution.output.into())
     }
 
     /// Simulate arbitrary number of transactions at an arbitrary blockchain
     /// index, with the optionality of state overrides
-    // async fn call_many(
-    //     &self,
-    //     bundle: Bundle,
-    //     state_context: Option<StateContext>,
-    //     state_override: Option<StateOverride>,
-    // ) -> RpcResult<Vec<EthCallResponse>>;
+    async fn call_many(
+        &self, bundle: Bundle, state_context: Option<StateContext>,
+        state_override: Option<RpcStateOverride>,
+    ) -> RpcResult<Vec<EthCallResponse>> {
+        let _ = bundle;
+        let _ = state_context;
+        let _ = state_override;
+        Err(jsonrpsee_internal_error("Not implemented"))
+    }
 
     /// Generates an access list for a transaction.
     ///
@@ -1273,22 +1360,26 @@ impl EthApiServer for EthApi {
     /// could change when the transaction is actually mined. Adding an
     /// accessList to your transaction does not necessary result in lower
     /// gas usage compared to a transaction without an access list.
-    // async fn create_access_list(
-    //     &self,
-    //     request: TransactionRequest,
-    //     block_number: Option<BlockId>,
-    // ) -> RpcResult<AccessListResult>;
+    async fn create_access_list(
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+    ) -> RpcResult<AccessListResult> {
+        let _ = block_number;
+        let _ = request;
+        Err(jsonrpsee_internal_error("Not implemented"))
+    }
 
     /// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
     async fn estimate_gas(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_override: Option<StateOverride>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
     ) -> RpcResult<U256> {
-        let (_, estimated_gas) =
-            self.exec_transaction(request, block_number)?;
+        let (_, estimated_gas) = self.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            None,
+        )?;
 
         Ok(estimated_gas)
     }
@@ -1398,6 +1489,10 @@ impl EthApiServer for EthApi {
         Ok(r)
     }
 
+    async fn submit_transaction(&self, raw: Bytes) -> RpcResult<H256> {
+        self.send_raw_transaction(raw).await
+    }
+
     /// Returns an Ethereum specific signature with:
     /// sign(keccak256("\x19Ethereum Signed Message:\n"
     /// + len(message) + message))).
@@ -1417,5 +1512,17 @@ impl EthApiServer for EthApi {
 
     async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>> {
         self.logs(filter).map_err(|err| err.into())
+    }
+
+    async fn account_pending_transactions(
+        &self, address: Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> RpcResult<AccountPendingTransactions> {
+        self.account_pending_transactions(
+            address,
+            maybe_start_nonce,
+            maybe_limit,
+        )
+        .map_err(|err| err.into())
     }
 }
