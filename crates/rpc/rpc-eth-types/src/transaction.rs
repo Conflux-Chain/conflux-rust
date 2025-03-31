@@ -28,10 +28,10 @@ use primitives::{
     SignedTransaction,
 };
 use rlp::Encodable;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Transaction
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     /// transaction type
@@ -54,7 +54,7 @@ pub struct Transaction {
     /// Transfered value
     pub value: U256,
     /// Gas Price
-    pub gas_price: U256,
+    pub gas_price: Option<U256>,
     /// Max fee per gas
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_fee_per_gas: Option<U256>,
@@ -65,7 +65,7 @@ pub struct Transaction {
     /// Creates contract
     pub creates: Option<H160>,
     /// Raw transaction data
-    pub raw: Bytes,
+    pub raw: Option<Bytes>,
     /// Public key of the signer.
     pub public_key: Option<H512>,
     /// The network id of the transaction, if any.
@@ -143,11 +143,11 @@ impl Transaction {
                 Action::Call(ref address) => Some(*address),
             },
             value: *t.value(),
-            gas_price: *t.gas_price(),
+            gas_price: Some(*t.gas_price()),
             gas: *t.gas(),
             input: Bytes::new(t.data().clone()),
             creates: exec_info.1,
-            raw: Bytes::new(t.transaction.transaction.rlp_bytes()),
+            raw: Some(Bytes::new(t.transaction.transaction.rlp_bytes())),
             public_key: t.public().map(Into::into),
             chain_id: t.chain_id().map(|x| U64::from(x as u64)),
             standard_v: Some(signature.v().into()),

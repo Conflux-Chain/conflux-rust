@@ -23,3 +23,6 @@ alloy-sol-types = { workspace = true }
 revm = { workspace = true }
 thiserror = { workspace = true }
 jsonrpsee-core = { workspace = true }
+futures.workspace = true
+tokio.workspace = true
+cfx-tasks = { workspace = true }
