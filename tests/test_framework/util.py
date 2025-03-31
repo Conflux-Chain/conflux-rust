@@ -666,7 +666,7 @@ def checktx(node, tx_hash):
     return node.cfx_getTransactionReceipt(tx_hash) is not None
 
 
-def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
+def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30, max_parallel=500, assert_failure=True):
     """
     Establish connections among nodes with each node having 'sample' outgoing peers.
     It first lets all the nodes link as a loop, then randomly pick 'sample-1'
@@ -674,7 +674,6 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
     """
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
-    threads = []
     num_nodes = len(nodes)
     sample = min(num_nodes - 1, sample)
 
@@ -696,15 +695,29 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
                     latencies[p][i] = lat
                     break
 
-    for i in range(num_nodes):
-        t = ConnectThread(nodes, i, peer[i], latencies, log, min_peers=sample)
-        t.start()
-        threads.append(t)
+    for i in range(0, num_nodes, max_parallel):
+        batch = range(i, min(i + max_parallel, num_nodes))
+        threads = []
+        for j in batch:
+            t = ConnectThread(nodes, j, peer[j], latencies, log, min_peers=sample)
+            t.start()
+            threads.append(t)
 
-    for t in threads:
-        t.join(timeout)
-        assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
-        assert not t.failed, "connect_sample_nodes failed."
+        for t in threads:
+            t.join(timeout)
+            if t.is_alive():
+                msg = "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
+                if assert_failure:
+                    assert False, msg
+                else:
+                    log.info(msg)
+                    
+            if t.failed:
+                msg = "connect_sample_nodes failed."
+                if assert_failure:
+                    assert False, msg
+                else:
+                    log.info(msg)
 
 
 def assert_blocks_valid(nodes, blocks):
