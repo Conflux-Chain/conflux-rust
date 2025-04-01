@@ -11,7 +11,7 @@ use cfx_rpc_cfx_types::{
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
     AccessListResult, AccountOverride, AccountPendingTransactions, Block,
-    BlockNumber as BlockId, BlockOverrides, Bundle, EthCallResponse,
+    BlockNumber as BlockId, BlockOverrides, Bundle, Error, EthCallResponse,
     EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides, FeeHistory,
     Header, Log, Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock,
     StateContext, SyncInfo, SyncStatus, Transaction, TransactionRequest,
@@ -39,9 +39,8 @@ use cfxcore::{
 use jsonrpc_core::Error as RpcError;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
-    BlockHashOrEpochNumber, EpochNumber, StorageKey, StorageValue,
-    TransactionStatus, TransactionWithSignature,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, EpochNumber,
+    StorageKey, StorageValue, TransactionStatus, TransactionWithSignature,
 };
 use rustc_hex::ToHex;
 use solidity_abi::string_revert_reason_decode;
@@ -108,6 +107,32 @@ impl EthApi {
             .ok_or("Specified block header does not exist".into())
     }
 
+    fn convert_block_number_to_epoch_number(
+        &self, block_number: BlockNumber,
+    ) -> Result<EpochNumber, String> {
+        if let BlockNumber::Hash { hash, .. } = block_number {
+            let consensus_graph = self.consensus_graph();
+            match consensus_graph.get_block_epoch_number(&hash) {
+                Some(num) => {
+                    // do not expose non-pivot blocks in eth RPC
+                    let pivot = consensus_graph
+                        .get_block_hashes_by_epoch(EpochNumber::Number(num))?
+                        .last()
+                        .cloned();
+
+                    if Some(hash) != pivot {
+                        return Err(format!("Block {} not found", hash));
+                    }
+
+                    Ok(EpochNumber::Number(num))
+                }
+                None => return Err(format!("Block {} not found", hash)),
+            }
+        } else {
+            block_number.try_into().map_err(|e: Error| e.to_string())
+        }
+    }
+
     pub fn exec_transaction(
         &self, mut request: TransactionRequest,
         block_number_or_hash: Option<BlockNumber>,
@@ -158,27 +183,9 @@ impl EthApi {
         };
         let evm_overrides = EvmOverrides::new(state_overrides, block_overrides);
 
-        let epoch = match block_number_or_hash.unwrap_or_default() {
-            BlockNumber::Hash { hash, .. } => {
-                match consensus_graph.get_block_epoch_number(&hash) {
-                    Some(e) => {
-                        // do not expose non-pivot blocks in eth RPC
-                        let pivot = consensus_graph
-                            .get_block_hashes_by_epoch(EpochNumber::Number(e))?
-                            .last()
-                            .cloned();
-
-                        if Some(hash) != pivot {
-                            bail!("Block {:?} not found", hash);
-                        }
-
-                        EpochNumber::Number(e)
-                    }
-                    None => bail!("Block {:?} not found", hash),
-                }
-            }
-            epoch => epoch.try_into()?,
-        };
+        let epoch = self.convert_block_number_to_epoch_number(
+            block_number_or_hash.unwrap_or_default(),
+        )?;
 
         // if gas_price and gas is zero, it is considered as not set
         request.unset_zero_gas_and_price();
@@ -421,25 +428,7 @@ impl EthApi {
         &self, block_num: BlockNumber,
     ) -> CoreResult<Vec<Receipt>> {
         let b = {
-            // keep read lock to ensure consistent view
-            let _inner = self.consensus_graph().inner.read();
-
-            let phantom_block = match block_num {
-                BlockNumber::Hash { hash, .. } => self
-                    .consensus_graph()
-                    .get_phantom_block_by_hash(
-                        &hash, false, /* include_traces */
-                    )
-                    .map_err(RpcError::invalid_params)?,
-                _ => self
-                    .consensus_graph()
-                    .get_phantom_block_by_number(
-                        block_num.try_into()?,
-                        None,
-                        false, /* include_traces */
-                    )
-                    .map_err(RpcError::invalid_params)?,
-            };
+            let phantom_block = self.phantom_block_by_number(block_num)?;
 
             match phantom_block {
                 None => return Err(unknown_block().into()),
@@ -544,7 +533,8 @@ impl EthApi {
     pub fn user_balance(
         &self, address: H160, num: Option<BlockNumber>,
     ) -> CoreResult<U256> {
-        let epoch_num = num.unwrap_or_default().try_into()?;
+        let epoch_num =
+            self.convert_block_number_to_epoch_number(num.unwrap_or_default())?;
         let state_db = self
             .consensus
             .get_eth_state_db_by_epoch_number(epoch_num, "num")?;
@@ -558,7 +548,9 @@ impl EthApi {
     pub fn storage_at(
         &self, address: H160, position: U256, block_num: Option<BlockNumber>,
     ) -> CoreResult<H256> {
-        let epoch_num = block_num.unwrap_or_default().try_into()?;
+        let epoch_num = self.convert_block_number_to_epoch_number(
+            block_num.unwrap_or_default(),
+        )?;
 
         let state_db = self
             .consensus
@@ -583,18 +575,10 @@ impl EthApi {
     pub fn phantom_block_by_hash(
         &self, hash: H256,
     ) -> CoreResult<Option<PhantomBlock>> {
-        let phantom_block = {
-            // keep read lock to ensure consistent view
-            let _inner = self.consensus_graph().inner.read();
-
-            self.consensus_graph()
-                .get_phantom_block_by_hash(
-                    &hash, false, /* include_traces */
-                )
-                .map_err(RpcError::invalid_params)?
-        };
-
-        Ok(phantom_block)
+        self.phantom_block_by_number(BlockNumber::Hash {
+            hash,
+            require_canonical: None,
+        })
     }
 
     pub fn phantom_block_by_number(
@@ -604,13 +588,24 @@ impl EthApi {
             // keep read lock to ensure consistent view
             let _inner = self.consensus_graph().inner.read();
 
-            self.consensus_graph()
-                .get_phantom_block_by_number(
-                    block_num.try_into()?,
-                    None,
-                    false, /* include_traces */
-                )
-                .map_err(RpcError::invalid_params)?
+            match block_num {
+                BlockNumber::Hash { hash, .. } => {
+                    self.consensus_graph()
+                        .get_phantom_block_by_hash(
+                            &hash, false, /* include_traces */
+                        )
+                        .map_err(RpcError::invalid_params)?
+                }
+                _ => {
+                    self.consensus_graph()
+                        .get_phantom_block_by_number(
+                            block_num.try_into()?,
+                            None,
+                            false, /* include_traces */
+                        )
+                        .map_err(RpcError::invalid_params)?
+                }
+            }
         };
 
         Ok(phantom_block)
@@ -645,15 +640,11 @@ impl EthApi {
             Some(BlockNumber::Pending) => {
                 self.tx_pool.get_next_nonce(&address.with_evm_space())
             }
-            _ => {
-                let num = num.unwrap_or_default().try_into()?;
-
-                self.consensus_graph().next_nonce(
-                    address.with_evm_space(),
-                    BlockHashOrEpochNumber::EpochNumber(num),
-                    "num",
-                )?
-            }
+            _ => self.consensus_graph().next_nonce(
+                address.with_evm_space(),
+                num.unwrap_or_default().into(),
+                "num",
+            )?,
         };
 
         Ok(nonce)
@@ -662,16 +653,7 @@ impl EthApi {
     pub fn block_transaction_count_by_hash(
         &self, hash: H256,
     ) -> CoreResult<Option<U256>> {
-        let phantom_block = {
-            // keep read lock to ensure consistent view
-            let _inner = self.consensus_graph().inner.read();
-
-            self.consensus_graph()
-                .get_phantom_block_by_hash(
-                    &hash, false, /* include_traces */
-                )
-                .map_err(RpcError::invalid_params)?
-        };
+        let phantom_block = self.phantom_block_by_hash(hash)?;
 
         match phantom_block {
             None => Ok(None),
@@ -682,18 +664,7 @@ impl EthApi {
     pub fn block_transaction_count_by_number(
         &self, block_num: BlockNumber,
     ) -> CoreResult<Option<U256>> {
-        let phantom_block = {
-            // keep read lock to ensure consistent view
-            let _inner = self.consensus_graph().inner.read();
-
-            self.consensus_graph()
-                .get_phantom_block_by_number(
-                    block_num.try_into()?,
-                    None,
-                    false, /* include_traces */
-                )
-                .map_err(RpcError::invalid_params)?
-        };
+        let phantom_block = self.phantom_block_by_number(block_num)?;
 
         match phantom_block {
             None => Ok(None),
@@ -724,18 +695,19 @@ impl EthApi {
     pub fn block_uncles_count_by_number(
         &self, block_num: BlockNumber,
     ) -> CoreResult<Option<U256>> {
-        let maybe_epoch = self
-            .consensus
-            .get_block_hashes_by_epoch(block_num.try_into()?)
-            .ok();
+        let epoch_num = self.convert_block_number_to_epoch_number(block_num)?;
+        let maybe_epoch =
+            self.consensus.get_block_hashes_by_epoch(epoch_num).ok();
 
         Ok(maybe_epoch.map(|_| 0.into()))
     }
 
     pub fn code_at(
-        &self, address: H160, epoch_num: Option<BlockNumber>,
+        &self, address: H160, block_num: Option<BlockNumber>,
     ) -> CoreResult<Bytes> {
-        let epoch_num = epoch_num.unwrap_or_default().try_into()?;
+        let epoch_num = self.convert_block_number_to_epoch_number(
+            block_num.unwrap_or_default(),
+        )?;
 
         let state_db = self
             .consensus
@@ -785,9 +757,11 @@ impl EthApi {
         // keep read lock to ensure consistent view
         let _consensus = self.consensus_graph().inner.read();
 
+        let epoch_num =
+            self.convert_block_number_to_epoch_number(newest_block)?;
         let newest_height: u64 = self
             .consensus_graph()
-            .get_height_from_epoch_number(newest_block.clone().try_into()?)
+            .get_height_from_epoch_number(epoch_num)
             .map_err(RpcError::invalid_params)?;
 
         if newest_block == BlockNumber::Latest {
