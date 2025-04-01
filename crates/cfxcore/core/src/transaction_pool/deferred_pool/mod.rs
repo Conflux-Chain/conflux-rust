@@ -14,6 +14,10 @@ use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use std::{collections::HashMap, sync::Arc};
 
+#[cfg(test)]
+mod tests;
+
+
 /// The `DeferredPool` is designed to organize transactions for each address
 /// based on their nonce. It efficiently maintains and queries transactions even
 /// when received nonces are non-sequential. In addition, it calculates
@@ -471,6 +475,3 @@ impl DeferredPool {
             .sum()
     }
 }
-
-#[cfg(test)]
-mod tests;
