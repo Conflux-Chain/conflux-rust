@@ -13,7 +13,7 @@ PORT_RANGE = 100
 # 64 to 77 has been reserved in /usr/include/sysexits.h (https://stackoverflow.com/questions/1101957/are-there-any-standard-exit-status-codes-in-linux)
 TEST_FAILURE_ERROR_CODE = 80
 
-def run_single_test(py, script, test_dir, index, port_min, port_max):
+def run_single_test(py, script, test_dir, index, port_min, port_max, conflux_binary):
     try:
         # Make sure python thinks it can write unicode to its stdout
         "\u2713".encode("utf_8").decode(sys.stdout.encoding)
@@ -38,7 +38,7 @@ def run_single_test(py, script, test_dir, index, port_min, port_max):
     color = BLUE
     glyph = TICK
     try:
-        subprocess.check_output(args=[py, script, "--randomseed=1", f"--port-min={port_min}"],
+        subprocess.check_output(args=[py, script, "--randomseed=1", f"--port-min={port_min}", f"--conflux-binary={conflux_binary}"],
                                 stdin=None, cwd=test_dir)
     except subprocess.CalledProcessError as err:
         color = RED
@@ -75,6 +75,13 @@ def run():
         default=1,
         type=int,
     )
+    parser.add_argument(
+        "--conflux-binary",
+        dest="conflux",
+        default=os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            "../../target/release/conflux"),
+        type=str)
     options = parser.parse_args()
 
     all_failed = set()
@@ -140,11 +147,11 @@ def run_single_round(options):
     i = 0
     # Start slow tests first to avoid waiting for long-tail jobs
     for script in slow_tests:
-        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
+        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max, options.conflux)
         test_results.append((script, f))
         i += 1
     for script in TEST_SCRIPTS:
-        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
+        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max, options.conflux)
         test_results.append((script, f))
         i += 1
 
