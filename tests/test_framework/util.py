@@ -296,7 +296,7 @@ def wait_until(predicate,
 
 def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000, conflux_binary_path=None):
     if conflux_binary_path is None:
-        tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../../target/release/pos-genesis-tool")
+        tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
     else:
         tg_config_gen = os.path.join(os.path.dirname(conflux_binary_path), "pos-genesis-tool")
     try:

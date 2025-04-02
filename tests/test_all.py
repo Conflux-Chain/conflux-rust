@@ -93,7 +93,7 @@ def run():
         dest="conflux",
         default=os.path.join(
             os.path.dirname(os.path.realpath(__file__)),
-            "../../target/release/conflux"),
+            "../target/release/conflux"),
         type=str)
     options = parser.parse_args()
 
