@@ -37,7 +37,7 @@ impl OverlayAccount {
         }
 
         if let Some(nonce) = acc_overrides.nonce {
-            acc.set_nonce(&U256::from(nonce));
+            acc.set_nonce(&U256::from(nonce.as_u64()));
         }
 
         if let Some(code) = acc_overrides.code.as_ref() {
