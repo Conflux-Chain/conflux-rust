@@ -5,6 +5,7 @@
 mod deferred_pool;
 mod error;
 mod garbage_collector;
+mod nonce_pool;
 mod pool_metrics;
 mod state_provider;
 mod transaction_pool_inner;
@@ -14,7 +15,7 @@ pub use error::TransactionPoolError;
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
-    transaction_pool::{deferred_pool::TxWithReadyInfo, pool_metrics::*},
+    transaction_pool::{nonce_pool::TxWithReadyInfo, pool_metrics::*},
     verification::{VerificationConfig, VerifyTxLocalMode, VerifyTxMode},
 };
 use cfx_executor::{
@@ -870,7 +871,7 @@ impl TransactionPool {
     }
 
     // The total pending transactions in the pool
-    // Pending transactions are transactions that are not ready to be packed
+    // Pending transactions are transactions that are ready to be packed
     pub fn total_pending(&self, space: Option<Space>) -> u64 {
         let inner = self.inner.read();
         inner.total_pending(space)

@@ -1,0 +1,146 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "*.json"
+      - "*.sol"
+      - "docs/**"
+      - ".gitignore"
+      - ".travis.yml"
+      - "cargo_fmt.sh"
+      - "CODEOWNERS"
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "*.json"
+      - "*.sol"
+      - "docs/**"
+      - ".gitignore"
+      - ".travis.yml"
+      - "cargo_fmt.sh"
+      - "CODEOWNERS"
+
+jobs:
+  check-crates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Cache debug build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/debug/deps
+            target/debug/.fingerprint
+            target/debug/build
+            !target/debug/build/**/out
+            !target/debug/deps/librust_verify*
+            !target/debug/incremental
+            !target/debug/.cargo-lock
+          key: ${{ runner.os }}-build-crates-debug-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-crates-debug-
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Check individual crates
+        run: |
+          ./dev-support/check-crates.sh
+
+  workspace-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/release/deps
+            target/release/.fingerprint
+            target/release/build
+            !target/release/build/**/out
+            !target/release/incremental
+            !target/release/.cargo-lock
+          key: ${{ runner.os }}-build-workspace-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-workspace-release-
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run build test
+        run: |
+          cargo test --release --all --no-run
+
+      - name: Run build bench
+        run: |
+          cargo bench --all --no-run
+
+      - name: Run workspace tests
+        run: |
+          cargo install cargo-nextest --version "0.9.85" --locked
+          cargo nextest run --no-fail-fast --release --workspace
+
+  cfx-addr-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Cache debug build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/debug/deps
+            target/debug/.fingerprint
+            target/debug/build
+            !target/debug/build/**/out
+            !target/debug/deps/librust_verify*
+            !target/debug/incremental
+            !target/debug/.cargo-lock
+          key: ${{ runner.os }}-build-addr-debug-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-addr-debug-
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run cfx-addr
+        run: |
+          cargo install cargo-nextest --version "0.9.85" --locked
+          cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
+
+  build-documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run build documentation
+        run: |
+          cargo doc --document-private-items

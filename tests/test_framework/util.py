@@ -14,7 +14,6 @@ import time
 from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union, Literal
 import socket
 import threading
-import jsonrpcclient.exceptions
 import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
@@ -26,7 +25,7 @@ import math
 from os.path import dirname, join
 from pathlib import Path
 
-from test_framework.simple_rpc_proxy import SimpleRpcProxy
+from test_framework.simple_rpc_proxy import SimpleRpcProxy, ReceivedErrorResponseError
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
 from conflux.config import default_config
@@ -167,7 +166,7 @@ def try_rpc(code: Optional[int], message: Optional[str], fun: Callable, err_data
     Returns whether a JSONRPCException was raised."""
     try:
         fun(*args, **kwds)
-    except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+    except ReceivedErrorResponseError as e:
         error = e.response
         # JSONRPCException was thrown as expected. Check the code and message values are correct.
         if (code is not None) and (code != error.code):
@@ -667,7 +666,7 @@ def checktx(node, tx_hash):
     return node.cfx_getTransactionReceipt(tx_hash) is not None
 
 
-def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
+def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30, max_parallel=500, assert_failure=True):
     """
     Establish connections among nodes with each node having 'sample' outgoing peers.
     It first lets all the nodes link as a loop, then randomly pick 'sample-1'
@@ -675,7 +674,6 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
     """
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
-    threads = []
     num_nodes = len(nodes)
     sample = min(num_nodes - 1, sample)
 
@@ -697,15 +695,29 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
                     latencies[p][i] = lat
                     break
 
-    for i in range(num_nodes):
-        t = ConnectThread(nodes, i, peer[i], latencies, log, min_peers=sample)
-        t.start()
-        threads.append(t)
+    for i in range(0, num_nodes, max_parallel):
+        batch = range(i, min(i + max_parallel, num_nodes))
+        threads = []
+        for j in batch:
+            t = ConnectThread(nodes, j, peer[j], latencies, log, min_peers=sample)
+            t.start()
+            threads.append(t)
 
-    for t in threads:
-        t.join(timeout)
-        assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
-        assert not t.failed, "connect_sample_nodes failed."
+        for t in threads:
+            t.join(timeout)
+            if t.is_alive():
+                msg = "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
+                if assert_failure:
+                    assert False, msg
+                else:
+                    log.info(msg)
+                    
+            if t.failed:
+                msg = "connect_sample_nodes failed."
+                if assert_failure:
+                    assert False, msg
+                else:
+                    log.info(msg)
 
 
 def assert_blocks_valid(nodes, blocks):

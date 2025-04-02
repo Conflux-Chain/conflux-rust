@@ -1,6 +1,7 @@
 use super::{
-    deferred_pool::{DeferredPool, InsertResult, TxWithReadyInfo},
+    deferred_pool::DeferredPool,
     garbage_collector::GarbageCollector,
+    nonce_pool::{InsertResult, TxWithReadyInfo},
     pool_metrics::pool_inner_metrics::*,
     state_provider::StateProvider,
     TransactionPoolError,
@@ -545,16 +546,6 @@ impl TransactionPoolInner {
             .insert((*address).clone(), nonce_and_balance);
 
         Ok(nonce_and_balance)
-    }
-
-    #[allow(dead_code)]
-    fn get_nonce_and_balance_from_cache_and_storage(
-        &self, address: &AddressWithSpace, state: &StateProvider,
-    ) -> (U256, U256) {
-        self.ready_nonces_and_balances
-            .get(address)
-            .map(|x| *x)
-            .unwrap_or(state.get_nonce_and_balance(address).unwrap_or_default())
     }
 
     pub fn get_lowest_nonce(&self, addr: &AddressWithSpace) -> U256 {

@@ -12,24 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build docker image
-        uses: docker/build-push-action@v5
+  
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
         with:
-          context: .
-          file: .github/workflows/docs.Dockerfile
-          load: true
-          tags: doc-builder:latest
+          prefix-key: "nightly-2024-02-04"
+          
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
 
       - name: Generate documentation
         run: |
-          mkdir -p target
-          chmod -R 777 target
-          docker run --rm -v $(pwd)/target:/app/target -w /app doc-builder:latest \
-            bash -c "RUSTDOCFLAGS='--enable-index-page -Z unstable-options' cargo +nightly-2024-01-29 doc --no-deps"
+          rustup default nightly-2024-02-04 && RUSTDOCFLAGS='--enable-index-page -Z unstable-options' cargo +nightly-2024-02-04 doc --no-deps
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3

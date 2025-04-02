@@ -1,7 +1,9 @@
 use cfx_rpc_eth_types::{
-    AccountPendingTransactions, Block, BlockNumber as BlockId, BlockOverrides,
+    AccessListResult, AccountPendingTransactions, Block,
+    BlockNumber as BlockId, BlockOverrides, Bundle, EthCallResponse,
     EthRpcLogFilter as Filter, FeeHistory, Header, Log, Receipt,
-    RpcStateOverride, SyncStatus, Transaction, TransactionRequest,
+    RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext,
+    SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index};
 use cfx_types::{Address, H256, H64, U256, U64};
@@ -189,12 +191,10 @@ pub trait EthApi {
     /// `eth_simulateV1` executes an arbitrary number of transactions on top of
     /// the requested state. The transactions are packed into individual
     /// blocks. Overrides can be provided.
-    // #[method(name = "simulateV1")]
-    // async fn simulate_v1(
-    //     &self,
-    //     opts: SimBlock,
-    //     block_number: Option<BlockId>,
-    // ) -> RpcResult<Vec<SimulatedBlock>>;
+    #[method(name = "simulateV1")]
+    async fn simulate_v1(
+        &self, opts: SimulatePayload, block_number: Option<BlockId>,
+    ) -> RpcResult<Vec<SimulatedBlock>>;
 
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
@@ -207,13 +207,11 @@ pub trait EthApi {
 
     /// Simulate arbitrary number of transactions at an arbitrary blockchain
     /// index, with the optionality of state overrides
-    // #[method(name = "callMany")]
-    // async fn call_many(
-    //     &self,
-    //     bundle: Bundle,
-    //     state_context: Option<StateContext>,
-    //     state_override: Option<StateOverride>,
-    // ) -> RpcResult<Vec<EthCallResponse>>;
+    #[method(name = "callMany")]
+    async fn call_many(
+        &self, bundle: Bundle, state_context: Option<StateContext>,
+        state_override: Option<RpcStateOverride>,
+    ) -> RpcResult<Vec<EthCallResponse>>;
 
     /// Generates an access list for a transaction.
     ///
@@ -231,12 +229,10 @@ pub trait EthApi {
     /// could change when the transaction is actually mined. Adding an
     /// accessList to your transaction does not necessary result in lower
     /// gas usage compared to a transaction without an access list.
-    // #[method(name = "createAccessList")]
-    // async fn create_access_list(
-    //     &self,
-    //     request: TransactionRequest,
-    //     block_number: Option<BlockId>,
-    // ) -> RpcResult<AccessListResult>;
+    #[method(name = "createAccessList")]
+    async fn create_access_list(
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+    ) -> RpcResult<AccessListResult>;
 
     /// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
