@@ -5,7 +5,7 @@
         self: &amp;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Self&gt;,
         epoch_id: <a class="struct" href="struct.StateIndex.html" title="struct cfx_storage::state_manager::StateIndex">StateIndex</a>,
         try_open: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
-        space: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Space&gt;
+        space: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../../cfx_types/space/enum.Space.html" title="enum cfx_types::space::Space">Space</a>&gt;
     ) -&gt; <a class="type" href="../type.Result.html" title="type cfx_storage::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="../state/trait.StateTrait.html" title="trait cfx_storage::state::StateTrait">StateTrait</a>&gt;&gt;&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.get_state_for_next_epoch" class="fn">get_state_for_next_epoch</a>(
         self: &amp;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Self&gt;,
@@ -17,7 +17,7 @@
     self: &amp;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Self&gt;,
     epoch_id: <a class="struct" href="struct.StateIndex.html" title="struct cfx_storage::state_manager::StateIndex">StateIndex</a>,
     try_open: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
-    space: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Space&gt;
+    space: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../../cfx_types/space/enum.Space.html" title="enum cfx_types::space::Space">Space</a>&gt;
 ) -&gt; <a class="type" href="../type.Result.html" title="type cfx_storage::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="../state/trait.StateTrait.html" title="trait cfx_storage::state::StateTrait">StateTrait</a>&gt;&gt;&gt;</h4></section></summary><div class="docblock"><p>At the boundary of snapshot, getting a state for new epoch will switch
 to new Delta MPT, but it’s unnecessary getting a no-commit state.</p>
 <p>With try_open == true, the call fails immediately when the max number of
