@@ -30,20 +30,23 @@ class AllocMock:
     def __init__(self, ew3: Web3, genesis_account: LocalAccount):
         self.ew3 = ew3
         self.genesis_account = genesis_account
+        
+    def fund_address(self, address: Address, amount: int):
+        tx_hash = self.ew3.eth.send_transaction(
+            {
+                "from": self.genesis_account.address,
+                "to": address,
+                "value": amount,
+            }
+        )
+        self.ew3.eth.wait_for_transaction_receipt(tx_hash)
     
     def fund_eoa(self, amount: Optional[int] = None, delegation: Union[Address, Literal["Self"], None] = None) -> EOA:
         if amount is None:
             amount = self.ew3.to_wei(1, "ether")
         new_account = self.ew3.eth.account.create()
         if amount > 0:
-            tx_hash = self.ew3.eth.send_transaction(
-                {
-                    "from": self.genesis_account.address,
-                    "to": new_account.address,
-                    "value": amount,
-                }
-            )
-            self.ew3.eth.wait_for_transaction_receipt(tx_hash)
+            self.fund_address(new_account.address, amount)
         if delegation is None:
             return EOA(key=new_account.key)
         if isinstance(delegation, str) and delegation == "Self":
