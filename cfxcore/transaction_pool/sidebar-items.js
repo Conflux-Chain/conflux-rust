@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["TransactionPoolError","TransactionStatus"],"struct":["TransactionPool","TxPoolConfig"],"type":["SharedTransactionPool"]};
+window.SIDEBAR_ITEMS = {"enum":["TransactionPoolError"],"struct":["TransactionPool","TxPoolConfig"],"type":["SharedTransactionPool"]};

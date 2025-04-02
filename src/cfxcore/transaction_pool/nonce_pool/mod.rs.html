@@ -943,31 +943,25 @@
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(dead_code)]
 
 </span><span class="kw">mod </span>nonce_pool_map;
 <span class="kw">mod </span>weight;
 
-<span class="kw">use </span><span class="kw">crate</span>::transaction_pool::{
-    nonce_pool::weight::NoncePoolWeight, transaction_pool_inner::PendingReason,
-};
+<span class="kw">use </span><span class="kw">crate</span>::transaction_pool::TransactionPoolError;
 <span class="kw">use </span>cfx_packing_pool::{PackingBatch, PackingPoolConfig};
 <span class="kw">use </span>cfx_parameters::{
     consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
+<span class="kw">use </span>cfx_rpc_cfx_types::PendingReason;
 <span class="kw">use </span>cfx_types::{U128, U256, U512};
 <span class="kw">use </span>malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 <span class="kw">use </span>malloc_size_of_derive::MallocSizeOf <span class="kw">as </span>DeriveMallocSizeOf;
 <span class="kw">use </span>primitives::{SignedTransaction, Transaction};
 <span class="kw">use </span>std::{ops::Deref, sync::Arc};
 
-<span class="kw">use </span><span class="self">self</span>::nonce_pool_map::NoncePoolMap;
-
-<span class="kw">use </span><span class="kw">super</span>::TransactionPoolError;
+<span class="kw">use </span><span class="self">self</span>::{nonce_pool_map::NoncePoolMap, weight::NoncePoolWeight};
 
 <span class="attr">#[derive(Clone, Debug, DeriveMallocSizeOf)]
 </span><span class="kw">pub struct </span>TxWithReadyInfo {
