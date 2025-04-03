@@ -39,6 +39,65 @@ Then, you can run all integration tests using:
 - `tests/test_all.py` for tests in the `tests` directory
 - `pytest ./integration_tests/tests -vv -n 6 --dist loadscope` for tests in the `integration_tests` directory
 
+### Integration Tests With Coverage
+
+#### Install Dependencies
+
+```bash
+rustup component add llvm-tools-preview
+cargo install grcov
+```
+
+#### Build Instrumented Binary
+
+Ensure previous builds are clean:
+
+```bash
+cargo clean
+```
+
+Build with coverage:
+
+```bash
+mkdir -p target/cov/profraw
+export LLVM_PROFILE_FILE=$(pwd)/target/cov/profraw/%p-%m.profraw
+
+export RUSTFLAGS="-C instrument-coverage"
+cargo build
+```
+
+The built binary will be in `target/debug` (`target/debug/conflux`).
+
+#### Run Integration Tests
+
+It is recommended to specify a folder for the profraw files:
+
+```bash
+mkdir -p target/cov/profraw
+export LLVM_PROFILE_FILE=$(pwd)/target/cov/profraw/%p-%m.profraw
+```
+
+It is also ok to specify the path yourself, but under current directory.
+
+Run integration tests specifying binary path:
+
+```bash
+pytest integration_tests/tests -vv -n 6 --dist loadscope --conflux-binary $(pwd)/target/debug/conflux
+export CONFLUX_BENCH=$(pwd)/target/debug/consensus_bench
+python tests/test_all.py --conflux-binary $(pwd)/target/debug/conflux
+```
+
+You would find the profile data in `target/cov/profraw`.
+
+#### Generate Coverage Report
+
+```bash
+grcov . --binary-path ./target/debug/ -s . --ignore-not-existing --ignore '/rustc/*' --ignore 'target/*' -t html -o target/cov/html 
+```
+
+The coverage report will be in `target/cov/index.html`.
+
+
 ## Resources
 
 - [Conflux Website](https://www.confluxnetwork.org/)
