@@ -1585,6 +1585,10 @@
 <a href="#1583" id="1583">1583</a>
 <a href="#1584" id="1584">1584</a>
 <a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1982,6 +1986,9 @@
         <span class="comment">// Recover the latest MPT snapshot from the era checkpoint
         </span>(recovery_latest_mpt_snapshot, (bool), <span class="bool-val">false</span>)
         (keep_era_genesis_snapshot, (bool), <span class="bool-val">true</span>)
+
+        <span class="comment">// This is designed for fast node catch-up but has not been thoroughly tested. Do not use it in production environments.
+        </span>(backup_mpt_snapshot, (bool), <span class="bool-val">true</span>)
     }
     {
         <span class="comment">// Development related section.
@@ -2427,6 +2434,7 @@
                 </span>.raw_conf
                 .use_isolated_db_for_mpt_table_height,
             keep_era_genesis_snapshot: <span class="self">self</span>.raw_conf.keep_era_genesis_snapshot,
+            backup_mpt_snapshot: <span class="self">self</span>.raw_conf.backup_mpt_snapshot,
         }
     }
 

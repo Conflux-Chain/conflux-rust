@@ -1585,6 +1585,9 @@
 <a href="#1583" id="1583">1583</a>
 <a href="#1584" id="1584">1584</a>
 <a href="#1585" id="1585">1585</a>
+<a href="#1586" id="1586">1586</a>
+<a href="#1587" id="1587">1587</a>
+<a href="#1588" id="1588">1588</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1612,6 +1615,7 @@
     copying_mpt_snapshot: Arc&lt;Mutex&lt;()&gt;&gt;,
     snapshot_epoch_id_before_recovered: RwLock&lt;<span class="prelude-ty">Option</span>&lt;EpochId&gt;&gt;,
     reconstruct_snapshot_id_for_reboot: RwLock&lt;<span class="prelude-ty">Option</span>&lt;EpochId&gt;&gt;,
+    backup_mpt_snapshot: bool,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -1694,7 +1698,7 @@
         snapshot_path: PathBuf, max_open_snapshots: u16,
         use_isolated_db_for_mpt_table: bool,
         use_isolated_db_for_mpt_table_height: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-        era_epoch_count: u64,
+        era_epoch_count: u64, backup_mpt_snapshot: bool,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">if </span>!snapshot_path.exists() {
             fs::create_dir_all(snapshot_path.clone())<span class="question-mark">?</span>;
@@ -1739,6 +1743,7 @@
             copying_mpt_snapshot: Arc::new(Default::default()),
             snapshot_epoch_id_before_recovered: RwLock::new(<span class="prelude-val">None</span>),
             reconstruct_snapshot_id_for_reboot: RwLock::new(<span class="prelude-val">None</span>),
+            backup_mpt_snapshot,
         })
     }
 
@@ -2783,7 +2788,8 @@
         };
 
         <span class="comment">// Create a specific MPT database for EAR checkpoint
-        </span><span class="kw">let </span>temp_mpt_path = <span class="kw">if </span>!mpt_table_in_current_db
+        </span><span class="kw">let </span>temp_mpt_path = <span class="kw">if </span><span class="self">self</span>.backup_mpt_snapshot
+            &amp;&amp; !mpt_table_in_current_db
             &amp;&amp; new_epoch_height % <span class="self">self</span>.era_epoch_count == <span class="number">0
         </span>{
             <span class="kw">let </span>temp_mpt_path =

@@ -235,6 +235,8 @@
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -363,6 +365,7 @@
     <span class="kw">pub </span>use_isolated_db_for_mpt_table: bool,
     <span class="kw">pub </span>use_isolated_db_for_mpt_table_height: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="kw">pub </span>keep_era_genesis_snapshot: bool,
+    <span class="kw">pub </span>backup_mpt_snapshot: bool,
 }
 
 <span class="kw">impl </span>StorageConfiguration {
@@ -411,6 +414,7 @@
             use_isolated_db_for_mpt_table: <span class="bool-val">false</span>,
             use_isolated_db_for_mpt_table_height: <span class="prelude-val">None</span>,
             keep_era_genesis_snapshot: <span class="bool-val">false</span>,
+            backup_mpt_snapshot: <span class="bool-val">true</span>,
         }
     }
 

@@ -1627,6 +1627,7 @@
 <a href="#1625" id="1625">1625</a>
 <a href="#1626" id="1626">1626</a>
 <a href="#1627" id="1627">1627</a>
+<a href="#1628" id="1628">1628</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1872,6 +1873,7 @@
                     storage_conf.use_isolated_db_for_mpt_table,
                     storage_conf.use_isolated_db_for_mpt_table_height,
                     storage_conf.consensus_param.era_epoch_count,
+                    storage_conf.backup_mpt_snapshot,
                 )<span class="question-mark">?</span>,
             }),
             delta_mpts_id_gen: Default::default(),
