@@ -30,7 +30,7 @@ use primitives::{
 };
 use rlp::*;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -587,14 +587,11 @@ impl TransactionPoolInner {
     }
 
     fn recalculate_readiness_with_state(
-        &mut self, addr: &AddressWithSpace, account_cache: &StateProvider,
+        &mut self, addr: &AddressWithSpace, state: &StateProvider,
     ) -> StateDbResult<()> {
         let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
-        let (nonce, balance) = self
-            .get_and_update_nonce_and_balance_from_storage(
-                addr,
-                account_cache,
-            )?;
+        let (nonce, balance) =
+            self.get_and_update_nonce_and_balance_from_storage(addr, state)?;
         self.recalculate_readiness(addr, nonce, balance);
         Ok(())
     }
@@ -901,19 +898,47 @@ impl TransactionPoolInner {
         (ready_txs, deferred_txs)
     }
 
+    pub fn eth_content(
+        &self, space: Option<Space>,
+    ) -> (
+        BTreeMap<AddressWithSpace, BTreeMap<U256, Arc<SignedTransaction>>>,
+        BTreeMap<AddressWithSpace, BTreeMap<U256, Arc<SignedTransaction>>>,
+    ) {
+        let get_local_nonce_and_balance = |addr: &AddressWithSpace| {
+            self.ready_nonces_and_balances
+                .get(addr)
+                .map(|x| *x)
+                .unwrap_or_default()
+        };
+        self.deferred_pool
+            .eth_content(space, get_local_nonce_and_balance)
+    }
+
+    pub fn eth_content_from(
+        &self, from: AddressWithSpace,
+    ) -> (
+        BTreeMap<U256, Arc<SignedTransaction>>,
+        BTreeMap<U256, Arc<SignedTransaction>>,
+    ) {
+        let (local_nonce, local_balance) =
+            self.get_local_nonce_and_balance(&from).unwrap_or_default();
+        self.deferred_pool
+            .eth_content_from(from, local_nonce, local_balance)
+    }
+
     // Add transaction into deferred pool and maintain its readiness
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
     pub fn insert_transaction_with_readiness_check(
-        &mut self, account_cache: &StateProvider,
-        transaction: Arc<SignedTransaction>, packed: bool, force: bool,
+        &mut self, state: &StateProvider, transaction: Arc<SignedTransaction>,
+        packed: bool, force: bool,
     ) -> Result<(), TransactionPoolError> {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let (sponsored_gas, sponsored_storage) =
-            self.get_sponsored_gas_and_storage(account_cache, &transaction)?;
+            self.get_sponsored_gas_and_storage(state, &transaction)?;
 
         let (state_nonce, state_balance) =
-            account_cache.get_nonce_and_balance(&transaction.sender())?;
+            state.get_nonce_and_balance(&transaction.sender())?;
 
         if transaction.hash[0] & 254 == 0 {
             trace!(
@@ -997,10 +1022,7 @@ impl TransactionPoolInner {
             return Err(err);
         }
 
-        self.recalculate_readiness_with_state(
-            &transaction.sender(),
-            account_cache,
-        )?;
+        self.recalculate_readiness_with_state(&transaction.sender(), state)?;
 
         Ok(())
     }
@@ -1018,7 +1040,7 @@ impl TransactionPoolInner {
     }
 
     pub fn get_sponsored_gas_and_storage(
-        &self, account_cache: &StateProvider, transaction: &SignedTransaction,
+        &self, state: &StateProvider, transaction: &SignedTransaction,
     ) -> StateDbResult<(U256, u64)> {
         let sender = transaction.sender();
 
@@ -1039,7 +1061,7 @@ impl TransactionPoolInner {
 
         // Get sponsor info
         let sponsor_info = if let Some(sponsor_info) =
-            account_cache.get_sponsor_info(&contract_address)?
+            state.get_sponsor_info(&contract_address)?
         {
             sponsor_info
         } else {
@@ -1047,7 +1069,7 @@ impl TransactionPoolInner {
         };
 
         // Check if sender is eligible for sponsor
-        if !account_cache
+        if !state
             .check_commission_privilege(&contract_address, &sender.address)?
         {
             return Ok(Default::default());
