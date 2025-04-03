@@ -3,7 +3,8 @@ import argparse
 import subprocess
 import os
 import sys
-from concurrent.futures import ProcessPoolExecutor
+from test_utils.test_scheduler import TestScheduler
+from test_framework.test_framework import TEST_EXIT_INTERRUPT
 
 PORT_MIN = 11000
 PORT_MAX = 65535
@@ -33,14 +34,20 @@ def run_single_test(py, script, test_dir, index, port_min, port_max):
         BLUE = ('\033[0m', '\033[0;34m')
         RED = ('\033[0m', '\033[0;31m')
         GREY = ('\033[0m', '\033[1;30m')
+        YELLOW = ('\033[0m', '\033[0;33m') 
     print("Running " + script)
     port_min = port_min + (index * PORT_RANGE) % (port_max - port_min)
     color = BLUE
     glyph = TICK
     try:
-        subprocess.check_output(args=[py, script, "--randomseed=1", f"--port-min={port_min}"],
+        subprocess.check_output(args=[py, script, "--randomseed=1", f"--port-min={port_min}", "--cleanup-on-interrupt"],
                                 stdin=None, cwd=test_dir)
     except subprocess.CalledProcessError as err:
+        if err.returncode == TEST_EXIT_INTERRUPT:
+            color = YELLOW
+            print(color[1] + CIRCLE + " Testcase interrupted " + script + color[0])
+            return
+
         color = RED
         glyph = CROSS
         print(color[1] + glyph + " Testcase " + script + color[0])
@@ -55,6 +62,12 @@ def run():
         "--max-workers",
         dest="max_workers",
         default=8,
+        type=int,
+    )
+    parser.add_argument(
+        "--max-nodes",
+        dest="max_nodes",
+        default=24,
         type=int,
     )
     parser.add_argument(
@@ -130,31 +143,23 @@ def run_single_round(options):
                 if rel_path not in slow_tests:
                     TEST_SCRIPTS.append(rel_path)
 
-    executor = ProcessPoolExecutor(max_workers=options.max_workers)
-    test_results = []
-
     py = "python3"
     if hasattr(sys, "getwindowsversion"):
         py = "python"
-
-    i = 0
-    # Start slow tests first to avoid waiting for long-tail jobs
-    for script in slow_tests:
-        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
-        test_results.append((script, f))
-        i += 1
-    for script in TEST_SCRIPTS:
-        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
-        test_results.append((script, f))
-        i += 1
-
-    failed = set()
-    for script, f in test_results:
-        try:
-            f.result()
-        except subprocess.CalledProcessError as err:
-            failed.add(script)
-    return failed
+        
+    # 创建并运行调度器
+    scheduler = TestScheduler(
+        task_executable=run_single_test,
+        py=py,
+        test_dir=test_dir,
+        max_workers=options.max_workers,
+        available_nodes=options.max_nodes,
+        port_min=options.port_min,
+        port_max=options.port_max
+    )
+    
+    failed_tests = scheduler.schedule(list(slow_tests) + TEST_SCRIPTS)
+    return failed_tests
 
 
 if __name__ == '__main__':
