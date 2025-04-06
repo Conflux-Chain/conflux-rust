@@ -228,3 +228,264 @@ impl<T: Histogram> PrometheusReportable for T {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::*;
+    use crate::{metrics, CounterUsize, GaugeUsize, Histogram, Meter};
+    use tokio::{net::TcpStream, time::timeout};
+
+    async fn find_available_port() -> std::io::Result<u16> {
+        TcpListener::bind("127.0.0.1:0")
+            .await?
+            .local_addr()
+            .map(|addr| addr.port())
+    }
+    fn reset_registries() {
+        DEFAULT_REGISTRY.write().clear();
+        DEFAULT_GROUPING_REGISTRY.write().clear();
+        metrics::enable()
+    }
+
+    async fn wait_for_server(
+        addr: SocketAddr, wait_timeout: Duration,
+    ) -> Result<(), String> {
+        timeout(wait_timeout, async {
+            loop {
+                match TcpStream::connect(addr).await {
+                    Ok(_) => return Ok(()),
+                    Err(_) => {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| format!("Timeout while waiting for server to start"))?
+    }
+    #[tokio::test]
+    async fn test_prometheus_endpoint() {
+        reset_registries();
+
+        let test_counter = CounterUsize::register("test_counter");
+
+        test_counter.inc(1029);
+
+        let test_gauge = GaugeUsize::register_with_group("api", "test_gauge");
+
+        test_gauge.update(1029);
+
+        let port = find_available_port()
+            .await
+            .expect("Failed to find free port");
+        let listen_addr_str = format!("127.0.0.1:{}", port);
+
+        let server_addr: SocketAddr = listen_addr_str.parse().unwrap();
+        let reporter = PrometheusReporter::new(&listen_addr_str)
+            .expect("Failed to create Prometheus reporter");
+
+        reporter.start_http_server();
+
+        wait_for_server(server_addr, Duration::from_secs(5))
+            .await
+            .expect("Failed to connect to server");
+
+        let client = reqwest::Client::new();
+        let response = match timeout(
+            Duration::from_secs(2),
+            client
+                .get(format!("http://{}/metrics", listen_addr_str))
+                .send(),
+        )
+        .await
+        {
+            Ok(Ok(resp)) => resp,
+            Ok(Err(e)) => panic!("Failed to send request: {}", e),
+            Err(_) => panic!("Timeout while waiting for response"),
+        };
+
+        assert!(response.status().is_success());
+        assert_eq!(
+            response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .unwrap(),
+            "text/plain; version=0.0.4"
+        );
+
+        let body = response.text().await.unwrap();
+
+        assert!(body.contains("# HELP test_counter test_counter"));
+        assert!(body.contains("# TYPE test_counter counter"));
+        assert!(body.contains("test_counter 1029"));
+
+        assert!(body.contains("# HELP api_test_gauge api_test_gauge"));
+        assert!(body.contains("# TYPE api_test_gauge gauge"));
+        assert!(body.contains("api_test_gauge 1029"));
+    }
+
+    #[test]
+    fn test_counter_prometheus() {
+        let counter = CounterUsize::default();
+
+        counter.inc(8);
+
+        let mut buffer = String::new();
+
+        counter.write_prometheus("test_counter", None, &mut buffer);
+        assert!(buffer.contains("# HELP test_counter test_counter"));
+        assert!(buffer.contains("# TYPE test_counter counter"));
+        assert!(buffer.contains("test_counter 8"));
+
+        buffer.clear();
+
+        counter.write_prometheus(
+            "test_request_counter",
+            Some("api"),
+            &mut buffer,
+        );
+        assert!(buffer.contains(
+            "# HELP api_test_request_counter api_test_request_counter"
+        ));
+        assert!(buffer.contains("# TYPE api_test_request_counter counter"));
+        assert!(buffer.contains("api_test_request_counter 8"));
+    }
+
+    #[test]
+    fn test_gauge_prometheus() {
+        let gauge = GaugeUsize::default();
+
+        gauge.update(199);
+
+        let mut buffer = String::new();
+        gauge.write_prometheus("test_gauge", None, &mut buffer);
+        assert!(buffer.contains("# HELP test_gauge test_gauge"));
+        assert!(buffer.contains("# TYPE test_gauge gauge"));
+        assert!(buffer.contains("test_gauge 199"));
+
+        buffer.clear();
+
+        gauge.write_prometheus("test_request_gauge", Some("node"), &mut buffer);
+        assert!(buffer.contains(
+            "# HELP node_test_request_gauge node_test_request_gauge"
+        ));
+        assert!(buffer.contains("# TYPE node_test_request_gauge gauge"));
+        assert!(buffer.contains("node_test_request_gauge 199"));
+    }
+
+    #[test]
+    fn test_meter_prometheus() {
+        let meter = StandardMeter::new("test_meter".into());
+        meter.mark(11);
+
+        let mut buffer = String::new();
+
+        // if use the meter.write_prometheus("test_meter", None, &mut buffer);
+        meter.write_prometheus("test_meter", None, &mut buffer);
+        // PrometheusReportable::write_prometheus(&meter, "test_meter", None,
+        // &mut buffer);
+        assert!(
+            buffer.contains("# HELP test_meter_total Total number of events.")
+        );
+        assert!(buffer.contains("# TYPE test_meter_total counter"));
+        assert!(buffer.contains("test_meter_total 11"));
+
+        assert!(buffer.contains("# HELP test_meter_m1_rate One-minute exponentially-weighted moving average rate."));
+        assert!(buffer.contains("# TYPE test_meter_m1_rate gauge"));
+        assert!(buffer.contains("test_meter_m1_rate 0"));
+
+        assert!(buffer.contains("# HELP test_meter_m5_rate Five-minute exponentially-weighted moving average rate."));
+        assert!(buffer.contains("# TYPE test_meter_m5_rate gauge"));
+        assert!(buffer.contains("test_meter_m5_rate 0"));
+
+        assert!(buffer.contains("# HELP test_meter_m15_rate Fifteen-minute exponentially-weighted moving average rate."));
+        assert!(buffer.contains("# TYPE test_meter_m15_rate gauge"));
+        assert!(buffer.contains("test_meter_m15_rate 0"));
+
+        assert!(buffer.contains("# HELP test_meter_mean_rate Mean rate since the meter was created."));
+        assert!(buffer.contains("# TYPE test_meter_mean_rate gauge"));
+        assert!(buffer.contains("test_meter_mean_rate"));
+
+        buffer.clear();
+
+        meter.write_prometheus("test_request_meter", Some("node"), &mut buffer);
+        assert!(buffer.contains(
+            "# HELP node_test_request_meter_total Total number of events."
+        ));
+        assert!(buffer.contains("# TYPE node_test_request_meter_total counter"));
+        assert!(buffer.contains("node_test_request_meter_total 11"));
+
+        assert!(buffer.contains("# HELP node_test_request_meter_m1_rate One-minute exponentially-weighted moving average rate."));
+        assert!(buffer.contains("# TYPE node_test_request_meter_m1_rate gauge"));
+        assert!(buffer.contains("node_test_request_meter_m1_rate 0"));
+        assert!(buffer.contains("# HELP node_test_request_meter_m5_rate Five-minute exponentially-weighted moving average rate."));
+        assert!(buffer.contains("# TYPE node_test_request_meter_m5_rate gauge"));
+        assert!(buffer.contains("node_test_request_meter_m5_rate 0"));
+        assert!(buffer.contains("# HELP node_test_request_meter_m15_rate Fifteen-minute exponentially-weighted moving average rate."));
+        assert!(
+            buffer.contains("# TYPE node_test_request_meter_m15_rate gauge")
+        );
+        assert!(buffer.contains("node_test_request_meter_m15_rate 0"));
+        assert!(buffer.contains("# HELP node_test_request_meter_mean_rate Mean rate since the meter was created."));
+        assert!(
+            buffer.contains("# TYPE node_test_request_meter_mean_rate gauge")
+        );
+        assert!(buffer.contains("node_test_request_meter_mean_rate"));
+    }
+
+    #[test]
+    fn test_histogram_prometheus() {
+        let histogram = crate::histogram::UniformSample::new(99);
+        histogram.update(1);
+        histogram.update(2);
+        histogram.update(10);
+        histogram.update(100);
+        histogram.update(1000);
+
+        let mut buffer = String::new();
+
+        histogram.write_prometheus("test_histogram", None, &mut buffer);
+
+        assert!(buffer.contains("# HELP test_histogram test_histogram"));
+        assert!(buffer.contains("# TYPE test_histogram summary"));
+        assert!(buffer.contains("test_histogram_count 5"));
+        assert!(buffer.contains("test_histogram_sum 1113"));
+        assert!(buffer.contains("test_histogram{quantile=\"0.5\"}"));
+        assert!(buffer.contains("test_histogram{quantile=\"0.75\"}"));
+        assert!(buffer.contains("test_histogram{quantile=\"0.9\"}"));
+        assert!(buffer.contains("test_histogram{quantile=\"0.99\"}"));
+        assert!(buffer.contains("test_histogram{quantile=\"0.999\"}"));
+
+        buffer.clear();
+
+        histogram.write_prometheus(
+            "test_request_histogram",
+            Some("node"),
+            &mut buffer,
+        );
+
+        assert!(buffer.contains(
+            "# HELP node_test_request_histogram node_test_request_histogram"
+        ));
+        assert!(buffer.contains("# TYPE node_test_request_histogram summary"));
+        assert!(buffer.contains("node_test_request_histogram_count 5"));
+        assert!(buffer.contains("node_test_request_histogram_sum 1113"));
+        assert!(
+            buffer.contains("node_test_request_histogram{quantile=\"0.5\"}")
+        );
+        assert!(
+            buffer.contains("node_test_request_histogram{quantile=\"0.75\"}")
+        );
+        assert!(
+            buffer.contains("node_test_request_histogram{quantile=\"0.9\"}")
+        );
+        assert!(
+            buffer.contains("node_test_request_histogram{quantile=\"0.99\"}")
+        );
+        assert!(
+            buffer.contains("node_test_request_histogram{quantile=\"0.999\"}")
+        );
+    }
+}
