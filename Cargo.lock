@@ -4157,9 +4157,9 @@ dependencies = [
 
 [[package]]
 name = "httparse"
-version = "1.10.1"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
+checksum = "d897f394bad6a705d5f4104762e116a75639e470d80901eed05a860a95cb1904"
 
 [[package]]
 name = "httpdate"
@@ -4199,9 +4199,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.6.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc2b571658e38e0c01b1fdca3bbbe93c00d3d71693ff2770043f8c29bc7d6f80"
+checksum = "50dfd22e0e76d0f662d429a5f80fcaf3855009297eab6a0a9f8543834744ba05"
 dependencies = [
  "bytes 1.9.0",
  "futures-channel",
@@ -4226,7 +4226,7 @@ checksum = "2d191583f3da1305256f22463b9bb0471acad48a4e534a5218b9963e9c1f59b2"
 dependencies = [
  "futures-util",
  "http 1.1.0",
- "hyper 1.6.0",
+ "hyper 1.4.1",
  "hyper-util",
  "rustls",
  "rustls-pki-types",
@@ -4256,7 +4256,7 @@ checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
 dependencies = [
  "bytes 1.9.0",
  "http-body-util",
- "hyper 1.6.0",
+ "hyper 1.4.1",
  "hyper-util",
  "native-tls",
  "tokio 1.40.0",
@@ -4266,20 +4266,20 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.11"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "497bbc33a26fdd4af9ed9c70d63f61cf56a938375fbb32df34db9b1cd6d643f2"
+checksum = "da62f120a8a37763efb0cf8fdf264b884c7b8b9ac8660b900c8661030c00e6ba"
 dependencies = [
  "bytes 1.9.0",
  "futures-channel",
  "futures-util",
  "http 1.1.0",
  "http-body 1.0.1",
- "hyper 1.6.0",
- "libc",
+ "hyper 1.4.1",
  "pin-project-lite 0.2.14",
- "socket2 0.5.9",
+ "socket2 0.5.7",
  "tokio 1.40.0",
+ "tower",
  "tower-service",
  "tracing",
 ]
@@ -5017,7 +5017,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.6.0",
+ "hyper 1.4.1",
  "hyper-util",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -5157,9 +5157,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.171"
+version = "0.2.169"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c19937216e9d3aa9956d9bb8dfc0b0c8beb6058fc4f7a4dc4d850edf86a237d6"
+checksum = "b5aba8db14291edd000dfcc4d620c7ebfb122c613afb886ca8803fa4e128a20a"
 
 [[package]]
 name = "libflate"
@@ -5487,7 +5487,7 @@ dependencies = [
  "chrono",
  "criterion",
  "duration-str",
- "hyper 1.6.0",
+ "hyper 1.4.1",
  "hyper-util",
  "influx_db_client",
  "lazy_static",
@@ -7293,7 +7293,7 @@ dependencies = [
  "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.6.0",
+ "hyper 1.4.1",
  "hyper-rustls",
  "hyper-tls 0.6.0",
  "hyper-util",
@@ -8290,9 +8290,9 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.9"
+version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f5fd57c80058a56cf5c777ab8a126398ece8e442983605d280a44ce79d0edef"
+checksum = "ce305eb0b4296696835b71df73eb912e0f1ffd2556a501fcede6e0c50349191c"
 dependencies = [
  "libc",
  "windows-sys 0.52.0",
@@ -8911,7 +8911,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite 0.2.14",
  "signal-hook-registry",
- "socket2 0.5.9",
+ "socket2 0.5.7",
  "tokio-macros 2.4.0",
  "windows-sys 0.52.0",
 ]

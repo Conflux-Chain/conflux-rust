@@ -15,7 +15,7 @@ chrono = { workspace = true }
 serde = { workspace = true }
 duration-str = { workspace = true }
 hyper = { workspace = true, features = ["http1", "server"] }
-hyper-util = { version = "0.1.11", features = ['tokio', 'client'] }
+hyper-util = { version = "0.1.8", features = ['tokio', 'client'] }
 
 [dev-dependencies]
 criterion = { workspace = true }
