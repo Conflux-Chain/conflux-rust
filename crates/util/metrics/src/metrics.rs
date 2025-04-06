@@ -5,8 +5,10 @@
 use crate::{
     report::{report_async, FileReporter, Reportable},
     report_influxdb::{InfluxdbReportable, InfluxdbReporter},
+    report_prometheus::{PrometheusReportable, PrometheusReporter},
 };
 use duration_str::deserialize_duration;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -19,9 +21,11 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub fn is_enabled() -> bool { ENABLED.load(ORDER) }
 
-fn enable() { ENABLED.store(true, ORDER); }
+pub fn enable() { ENABLED.store(true, ORDER); }
 
-pub trait Metric: Send + Sync + Reportable + InfluxdbReportable {
+pub trait Metric:
+    Send + Sync + Reportable + InfluxdbReportable + PrometheusReportable
+{
     fn get_type(&self) -> &str;
 }
 
@@ -40,6 +44,7 @@ pub struct MetricsConfiguration {
     pub influxdb_report_username: Option<String>,
     pub influxdb_report_password: Option<String>,
     pub influxdb_report_node: Option<String>,
+    pub prometheus_listen_addr: Option<String>,
 }
 
 impl Default for MetricsConfiguration {
@@ -53,11 +58,13 @@ impl Default for MetricsConfiguration {
             influxdb_report_username: None,
             influxdb_report_password: None,
             influxdb_report_node: None,
+            prometheus_listen_addr: None,
         }
     }
 }
 
 pub fn initialize(config: MetricsConfiguration) {
+    info!("Initializing metrics with config: {:?}", config);
     if !config.enabled {
         return;
     }
@@ -95,5 +102,19 @@ pub fn initialize(config: MetricsConfiguration) {
         }
 
         report_async(reporter, config.report_interval);
+    }
+
+    // prometheus reporter
+
+    if let Some(addr) = config.prometheus_listen_addr {
+        match PrometheusReporter::new(&addr) {
+            Ok(reporter) => {
+                info!("Initializing PrometheusReporter to listen on {}", addr);
+                reporter.start_http_server();
+            }
+            Err(e) => {
+                error!("Failed to initialize PrometheusReporter: {}", e);
+            }
+        }
     }
 }

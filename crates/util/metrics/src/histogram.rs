@@ -163,13 +163,13 @@ fn sample_variance(values: &Vec<u64>) -> f64 {
 }
 
 /// A uniform sample using Vitter's Algorithm R. (http://www.cs.umd.edu/~samir/498/vitter.pdf)
-struct UniformSample {
+pub struct UniformSample {
     reservoir_size: usize,
     data: RwLock<Snapshot>,
 }
 
 impl UniformSample {
-    fn new(reservoir_size: usize) -> Self {
+    pub fn new(reservoir_size: usize) -> Self {
         UniformSample {
             reservoir_size,
             data: RwLock::new(Snapshot {

@@ -134,6 +134,7 @@ build_config! {
         (metrics_influxdb_node, (Option<String>), None)
         (metrics_output_file, (Option<String>), None)
         (metrics_report_interval_ms, (u64), 3_000)
+        (metrics_prometheus_listen_addr, (Option<String>), None)
         (rocksdb_disable_wal, (bool), false)
         (txgen_account_count, (usize), 10)
 
@@ -1065,6 +1066,10 @@ impl Configuration {
                 .metrics_influxdb_password
                 .clone(),
             influxdb_report_node: self.raw_conf.metrics_influxdb_node.clone(),
+            prometheus_listen_addr: self
+                .raw_conf
+                .metrics_prometheus_listen_addr
+                .clone(),
         }
     }
 
