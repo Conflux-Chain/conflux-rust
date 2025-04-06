@@ -28,8 +28,17 @@ We provide a Grafana template that can be directly imported into Grafana to disp
 
 Please refer to the documentation for setting up InfluxDB and Grafana services.
 
+## Prometheus
+
+Set the following configuration items in the node's configuration file (hydra.toml or testnet.toml):
+
+```toml
+metrics_enabled=true
+metrics_prometheus_listen_addr="127.0.0.1:9777" # change to your port
+```
+
 ## FAQs
 
-1. Does it support InfluxDB 2.0 or Prometheus?
+1. Does it support InfluxDB 2.0?
 
-    Currently, only InfluxDB 1.8 is supported. There are plans to consider supporting InfluxDB 2.0 or Prometheus in the future.
+    Currently, only InfluxDB 1.8 is supported. There are plans to consider supporting InfluxDB 2.0.
