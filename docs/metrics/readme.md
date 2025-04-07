@@ -1,16 +1,19 @@
-# Observability with Influxdb(v1.8) & Grafana
+# Observability with Conflux-rust: InfluxDB (v1.8) / Prometheus & Grafana
 
-Conflux-rust supports running metrics data collection on nodes. The data currently collected includes transaction pool, RPC requests, network status, etc.
+Conflux-rust supports running metrics data collection on nodes. The data currently collected includes transaction pool, RPC requests, network status, etc. This data can be exported using two primary methods: pushing to an **InfluxDB (v1.8)** instance or exposing metrics via a **Prometheus** endpoint. The collected data can then be visualized using Grafana by configuring dashboards connected to your chosen data source.
 
-The collected data needs to be stored using InfluxDB (v1.8) and can then be displayed through Grafana by configuring dashboards.
 
-## Enabling Node Metrics Configuration
+## Configuring Metrics for InfluxDB (v1.8)
 
 Set the following configuration items in the node's configuration file (hydra.toml or testnet.toml):
 
 ```toml
-rpc_enable_metrics=true
+# Enable metrics collection
 metrics_enabled=true
+# Enable metrics for RPC
+rpc_enable_metrics=true
+
+# INfluxDb settings:
 metrics_influxdb_host=x.x.x.x # change to your influxdb host
 metrics_influxdb_db=db_name
 metrics_influxdb_username=user_name
@@ -33,7 +36,11 @@ Please refer to the documentation for setting up InfluxDB and Grafana services.
 Set the following configuration items in the node's configuration file (hydra.toml or testnet.toml):
 
 ```toml
+# Enable metrics collection
 metrics_enabled=true
+# Enable metrics for RPC
+rpc_enable_metrics=true
+# Prometheus
 metrics_prometheus_listen_addr="127.0.0.1:9777" # change to your port
 ```
 
