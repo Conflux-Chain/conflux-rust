@@ -297,7 +297,7 @@ jsonrpsee-core = "0.24"
 jsonrpsee-types = "0.24"
 
 # async
-tokio = "1.40"
+tokio = "1.44.2"
 tokio-stream = "0.1.11"
 tokio-test = "0.4.1"
 futures = "0.3.30"
