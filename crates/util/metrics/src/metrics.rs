@@ -11,9 +11,13 @@ use duration_str::deserialize_duration;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::{
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
+use tokio::runtime::Runtime;
 
 pub static ORDER: Ordering = Ordering::Relaxed;
 
@@ -63,7 +67,7 @@ impl Default for MetricsConfiguration {
     }
 }
 
-pub fn initialize(config: MetricsConfiguration) {
+pub fn initialize(config: MetricsConfiguration, executor: Arc<Runtime>) {
     info!("Initializing metrics with config: {:?}", config);
     if !config.enabled {
         return;
@@ -107,10 +111,17 @@ pub fn initialize(config: MetricsConfiguration) {
     // prometheus reporter
 
     if let Some(addr) = config.prometheus_listen_addr {
-        match PrometheusReporter::new(&addr) {
+        match PrometheusReporter::new(&addr, executor) {
             Ok(reporter) => {
                 info!("Initializing PrometheusReporter to listen on {}", addr);
-                reporter.start_http_server();
+                match reporter.start_http_server() {
+                    Ok(_) => {
+                        info!("PrometheusReporter started successfully");
+                    }
+                    Err(e) => {
+                        error!("Failed to start PrometheusReporter: {}", e);
+                    }
+                }
             }
             Err(e) => {
                 error!("Failed to initialize PrometheusReporter: {}", e);

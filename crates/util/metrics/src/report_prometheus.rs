@@ -11,43 +11,67 @@ use crate::{
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use hyper_util::rt::TokioIo;
+use lazy_static::lazy_static;
 use log::{error, info};
-use std::{convert::Infallible, net::SocketAddr, thread};
-use tokio::{net::TcpListener, runtime};
+use std::{
+    convert::Infallible,
+    fmt::{self, Write},
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+    thread,
+};
+use tokio::{
+    net::TcpListener,
+    runtime::{self, Runtime},
+};
 
 use hyper::{server::conn::http1, service::service_fn, Response, StatusCode};
 pub struct PrometheusReporter {
     listen_addr: SocketAddr,
+    executor: Arc<Runtime>,
+}
+
+lazy_static! {
+    static ref PREVIOUS_METRICS_SIZE: AtomicUsize = AtomicUsize::new(24576); // default size 24KB
 }
 
 impl PrometheusReporter {
-    pub fn new(listen_addr: &str) -> Result<Self, String> {
+    pub fn new(
+        listen_addr: &str, executor: Arc<Runtime>,
+    ) -> Result<Self, String> {
         let addr = listen_addr
             .parse()
             .map_err(|_| "Invalid prometheus listen address".to_string())?;
-        Ok(PrometheusReporter { listen_addr: addr })
+        Ok(PrometheusReporter {
+            listen_addr: addr,
+            executor,
+        })
     }
 
-    pub fn start_http_server(&self) {
+    pub fn create_error_response(message: &str) -> Response<String> {
+        Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(message.to_string())
+            .unwrap_or_else(|_| {
+                Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body("Internal Server Error".to_string())
+                    .unwrap()
+            })
+    }
+
+    pub fn start_http_server(&self) -> Result<(), String> {
         if !is_enabled() {
-            return;
+            return Err("Prometheus reporter is not enabled".to_string());
         }
 
         let listen_addr = self.listen_addr;
-
+        let executor = self.executor.clone();
         let _ = thread::spawn(move || {
-            let rt = match runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-            {
-                Ok(rt) => rt,
-                Err(e) => {
-                    error!("Failed to create Tokio runtime for Prometheus server: {}", e);
-                    return;
-                }
-            };
-
-            rt.block_on(async move {
+            executor.block_on(async move {
                 let listener = match TcpListener::bind(listen_addr).await {
                     Ok(listener) => {
                         info!("Prometheus server listening on {}", listen_addr);
@@ -68,8 +92,15 @@ impl PrometheusReporter {
                             let io = TokioIo::new(stream);
 
                             let service = service_fn(|_req| async {
-                                let metrics_data = collect_metrics();
-
+                                let metrics_data = match PrometheusReporter::collect_metrics() {
+                                    Ok(data) => data,
+                                    Err(e) => {
+                                        error!("Failed to collect metrics: {}", e);
+                                        return Ok::<_, Infallible>(
+                                            PrometheusReporter::create_error_response("Failed to collect metrics")
+                                        );
+                                    }
+                                };
                                 let response = Response::builder()
                                     .status(StatusCode::OK)
                                     .header(
@@ -79,15 +110,10 @@ impl PrometheusReporter {
                                     .body(metrics_data)
                                     .unwrap_or_else(|e| {
                                         error!("Failed to create response: {}", e);
-                                        Response::builder()
-                                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                            .body("Internal Server Error".into())
-                                            .unwrap()
+                                        PrometheusReporter::create_error_response("Failed to create response")
                                     });
-
                                 Ok::<_, Infallible>(response)
                             });
-
 
                             tokio::spawn(async move {
                                 if let Err(err) = http1::Builder::new()
@@ -107,125 +133,128 @@ impl PrometheusReporter {
                 }
             });
         });
-    }
-}
 
-fn collect_metrics() -> String {
-    let mut buffer = String::new();
-
-    let registry = DEFAULT_REGISTRY.read();
-
-    for (name, metric) in registry.get_all() {
-        metric.write_prometheus(name, None, &mut buffer);
+        Ok(())
     }
 
-    let grouping_registry = DEFAULT_GROUPING_REGISTRY.read();
-    for (group_name, metrics) in grouping_registry.get_all() {
-        for (metric_name, metric) in metrics {
-            metric.write_prometheus(metric_name, Some(group_name), &mut buffer);
+    pub fn collect_metrics() -> Result<String, fmt::Error> {
+        let capacity = PREVIOUS_METRICS_SIZE.load(Ordering::Relaxed);
+        // Increase the buffer size by 25%
+        let mut buffer = String::with_capacity(capacity + capacity / 4);
+
+        let registry = DEFAULT_REGISTRY.read();
+
+        for (name, metric) in registry.get_all() {
+            let _ = metric.write_prometheus(name, None, &mut buffer)?;
         }
+
+        let grouping_registry = DEFAULT_GROUPING_REGISTRY.read();
+        for (group_name, metrics) in grouping_registry.get_all() {
+            for (metric_name, metric) in metrics {
+                let _ = metric.write_prometheus(
+                    metric_name,
+                    Some(group_name),
+                    &mut buffer,
+                )?;
+            }
+        }
+
+        PREVIOUS_METRICS_SIZE.store(buffer.len(), Ordering::Relaxed);
+        Ok(buffer)
     }
-
-    buffer
 }
-
 pub trait PrometheusReportable {
     fn write_prometheus(
-        &self, name: &str, group: Option<&str>, buffer: &mut String,
-    );
+        &self, name: &str, group: Option<&str>, buffer: &mut dyn Write,
+    ) -> std::fmt::Result;
 }
-
 impl PrometheusReportable for CounterUsize {
     fn write_prometheus(
-        &self, name: &str, group: Option<&str>, buffer: &mut String,
-    ) {
+        &self, name: &str, group: Option<&str>, buffer: &mut dyn Write,
+    ) -> std::fmt::Result {
         let full_name = group
             .map_or_else(|| name.to_string(), |g| format!("{}_{}", g, name));
-        buffer.push_str(&format!("# HELP {} {}\n", full_name, full_name));
-        buffer.push_str(&format!("# TYPE {} counter\n", full_name));
-        buffer.push_str(&format!("{} {}\n", full_name, self.count()));
+        writeln!(buffer, "# HELP {} {}", full_name, full_name)?;
+        writeln!(buffer, "# TYPE {} counter", full_name)?;
+        writeln!(buffer, "{} {}", full_name, self.count())?;
+        Ok(())
     }
 }
-
 impl PrometheusReportable for GaugeUsize {
     fn write_prometheus(
-        &self, name: &str, group: Option<&str>, buffer: &mut String,
-    ) {
+        &self, name: &str, group: Option<&str>, buffer: &mut dyn Write,
+    ) -> std::fmt::Result {
         let full_name = group
             .map_or_else(|| name.to_string(), |g| format!("{}_{}", g, name));
 
-        buffer.push_str(&format!("# HELP {} {}\n", full_name, full_name));
-        buffer.push_str(&format!("# TYPE {} gauge\n", full_name));
-        buffer.push_str(&format!("{} {}\n", full_name, self.value()));
+        writeln!(buffer, "# HELP {} {}", full_name, full_name)?;
+        writeln!(buffer, "# TYPE {} gauge", full_name)?;
+        writeln!(buffer, "{} {}", full_name, self.value())?;
+        Ok(())
     }
 }
-
 impl PrometheusReportable for StandardMeter {
     fn write_prometheus(
-        &self, name: &str, group: Option<&str>, buffer: &mut String,
-    ) {
+        &self, name: &str, group: Option<&str>, buffer: &mut dyn Write,
+    ) -> std::fmt::Result {
         let base_name = group
             .map_or_else(|| name.to_string(), |g| format!("{}_{}", g, name));
-
         let snapshot = self.snapshot();
-
         // count (counter)
         let count_name = format!("{}_total", base_name);
-        buffer.push_str(&format!(
-            "# HELP {} Total number of events.\n",
-            count_name
-        ));
-        buffer.push_str(&format!("# TYPE {} counter\n", count_name));
-        buffer.push_str(&format!("{} {}\n", count_name, snapshot.count()));
-
+        writeln!(buffer, "# HELP {} Total number of events.", count_name)?;
+        writeln!(buffer, "# TYPE {} counter", count_name)?;
+        writeln!(buffer, "{} {}", count_name, snapshot.count())?;
         // rates (gauge)
         let m1_name = format!("{}_m1_rate", base_name);
-        buffer.push_str(&format!("# HELP {} One-minute exponentially-weighted moving average rate.\n", m1_name));
-        buffer.push_str(&format!("# TYPE {} gauge\n", m1_name));
-        buffer.push_str(&format!("{} {}\n", m1_name, snapshot.rate1()));
 
+        writeln!(
+            buffer,
+            "# HELP {} One-minute exponentially-weighted moving average rate.",
+            m1_name
+        )?;
+        writeln!(buffer, "# TYPE {} gauge", m1_name)?;
+        writeln!(buffer, "{} {}", m1_name, snapshot.rate1())?;
         let m5_name = format!("{}_m5_rate", base_name);
-        buffer.push_str(&format!("# HELP {} Five-minute exponentially-weighted moving average rate.\n", m5_name));
-        buffer.push_str(&format!("# TYPE {} gauge\n", m5_name));
-        buffer.push_str(&format!("{} {}\n", m5_name, snapshot.rate5()));
-
+        writeln!(
+            buffer,
+            "# HELP {} Five-minute exponentially-weighted moving average rate.",
+            m5_name
+        )?;
+        writeln!(buffer, "# TYPE {} gauge", m5_name)?;
+        writeln!(buffer, "{} {}", m5_name, snapshot.rate5())?;
         let m15_name = format!("{}_m15_rate", base_name);
-        buffer.push_str(&format!("# HELP {} Fifteen-minute exponentially-weighted moving average rate.\n", m15_name));
-        buffer.push_str(&format!("# TYPE {} gauge\n", m15_name));
-        buffer.push_str(&format!("{} {}\n", m15_name, snapshot.rate15()));
-
+        writeln!(buffer, "# HELP {} Fifteen-minute exponentially-weighted moving average rate.", m15_name)?;
+        writeln!(buffer, "# TYPE {} gauge", m15_name)?;
+        writeln!(buffer, "{} {}", m15_name, snapshot.rate15())?;
         let mean_name = format!("{}_mean_rate", base_name);
-        buffer.push_str(&format!(
-            "# HELP {} Mean rate since the meter was created.\n",
+        writeln!(
+            buffer,
+            "# HELP {} Mean rate since the meter was created.",
             mean_name
-        ));
-        buffer.push_str(&format!("# TYPE {} gauge\n", mean_name));
-        buffer.push_str(&format!("{} {}\n", mean_name, snapshot.rate_mean()));
+        )?;
+        writeln!(buffer, "# TYPE {} gauge", mean_name)?;
+        writeln!(buffer, "{} {}", mean_name, snapshot.rate_mean())?;
+        Ok(())
     }
 }
-
 impl<T: Histogram> PrometheusReportable for T {
     fn write_prometheus(
-        &self, name: &str, group: Option<&str>, buffer: &mut String,
-    ) {
+        &self, name: &str, group: Option<&str>, buffer: &mut dyn Write,
+    ) -> std::fmt::Result {
         let base_name = group
             .map_or_else(|| name.to_string(), |g| format!("{}_{}", g, name));
         let snapshot = self.snapshot();
-
-        buffer.push_str(&format!("# HELP {} {}\n", base_name, base_name));
-        buffer.push_str(&format!("# TYPE {} summary\n", base_name));
-
-        buffer.push_str(&format!("{}_count {}\n", base_name, snapshot.count()));
-        buffer.push_str(&format!("{}_sum {}\n", base_name, snapshot.sum()));
-
+        writeln!(buffer, "# HELP {} {}", base_name, base_name)?;
+        writeln!(buffer, "# TYPE {} summary", base_name)?;
+        writeln!(buffer, "{}_count {}", base_name, snapshot.count())?;
+        writeln!(buffer, "{}_sum {}", base_name, snapshot.sum())?;
         let quantiles = [0.5, 0.75, 0.9, 0.95, 0.99, 0.999];
         for q in quantiles.iter() {
             let value = snapshot.percentile(*q);
-            buffer.push_str(&format!(
-                "{}{{quantile=\"{}\"}} {}\n",
-                base_name, q, value
-            ));
+            writeln!(buffer, "{}{{quantile=\"{}\"}} {}", base_name, q, value)?;
         }
+        Ok(())
     }
 }
 
@@ -283,10 +312,18 @@ mod tests {
         let listen_addr_str = format!("127.0.0.1:{}", port);
 
         let server_addr: SocketAddr = listen_addr_str.parse().unwrap();
-        let reporter = PrometheusReporter::new(&listen_addr_str)
+
+        let rt = Arc::new(
+            runtime::Builder::new_multi_thread()
+                .worker_threads(1)
+                .enable_all()
+                .build()
+                .unwrap(),
+        );
+        let reporter = PrometheusReporter::new(&listen_addr_str, rt)
             .expect("Failed to create Prometheus reporter");
 
-        reporter.start_http_server();
+        let _ = reporter.start_http_server().unwrap();
 
         wait_for_server(server_addr, Duration::from_secs(5))
             .await
@@ -334,18 +371,18 @@ mod tests {
 
         let mut buffer = String::new();
 
-        counter.write_prometheus("test_counter", None, &mut buffer);
+        let _ = counter
+            .write_prometheus("test_counter", None, &mut buffer)
+            .unwrap();
         assert!(buffer.contains("# HELP test_counter test_counter"));
         assert!(buffer.contains("# TYPE test_counter counter"));
         assert!(buffer.contains("test_counter 8"));
 
         buffer.clear();
 
-        counter.write_prometheus(
-            "test_request_counter",
-            Some("api"),
-            &mut buffer,
-        );
+        let _ = counter
+            .write_prometheus("test_request_counter", Some("api"), &mut buffer)
+            .unwrap();
         assert!(buffer.contains(
             "# HELP api_test_request_counter api_test_request_counter"
         ));
@@ -360,14 +397,18 @@ mod tests {
         gauge.update(199);
 
         let mut buffer = String::new();
-        gauge.write_prometheus("test_gauge", None, &mut buffer);
+        let _ = gauge
+            .write_prometheus("test_gauge", None, &mut buffer)
+            .unwrap();
         assert!(buffer.contains("# HELP test_gauge test_gauge"));
         assert!(buffer.contains("# TYPE test_gauge gauge"));
         assert!(buffer.contains("test_gauge 199"));
 
         buffer.clear();
 
-        gauge.write_prometheus("test_request_gauge", Some("node"), &mut buffer);
+        let _ = gauge
+            .write_prometheus("test_request_gauge", Some("node"), &mut buffer)
+            .unwrap();
         assert!(buffer.contains(
             "# HELP node_test_request_gauge node_test_request_gauge"
         ));
@@ -383,7 +424,9 @@ mod tests {
         let mut buffer = String::new();
 
         // if use the meter.write_prometheus("test_meter", None, &mut buffer);
-        meter.write_prometheus("test_meter", None, &mut buffer);
+        let _ = meter
+            .write_prometheus("test_meter", None, &mut buffer)
+            .unwrap();
         // PrometheusReportable::write_prometheus(&meter, "test_meter", None,
         // &mut buffer);
         assert!(
@@ -410,7 +453,9 @@ mod tests {
 
         buffer.clear();
 
-        meter.write_prometheus("test_request_meter", Some("node"), &mut buffer);
+        let _ = meter
+            .write_prometheus("test_request_meter", Some("node"), &mut buffer)
+            .unwrap();
         assert!(buffer.contains(
             "# HELP node_test_request_meter_total Total number of events."
         ));
@@ -446,7 +491,9 @@ mod tests {
 
         let mut buffer = String::new();
 
-        histogram.write_prometheus("test_histogram", None, &mut buffer);
+        let _ = histogram
+            .write_prometheus("test_histogram", None, &mut buffer)
+            .unwrap();
 
         assert!(buffer.contains("# HELP test_histogram test_histogram"));
         assert!(buffer.contains("# TYPE test_histogram summary"));
@@ -460,11 +507,13 @@ mod tests {
 
         buffer.clear();
 
-        histogram.write_prometheus(
-            "test_request_histogram",
-            Some("node"),
-            &mut buffer,
-        );
+        let _ = histogram
+            .write_prometheus(
+                "test_request_histogram",
+                Some("node"),
+                &mut buffer,
+            )
+            .unwrap();
 
         assert!(buffer.contains(
             "# HELP node_test_request_histogram node_test_request_histogram"

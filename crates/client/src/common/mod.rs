@@ -215,7 +215,10 @@ pub fn initialize_common_modules(
         }
     };
 
-    metrics::initialize(conf.metrics_config());
+    let tokio_runtime =
+        Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
+
+    metrics::initialize(conf.metrics_config(), tokio_runtime.clone());
 
     let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
         "Tx Recover".into(),
@@ -459,9 +462,6 @@ pub fn initialize_common_modules(
         accounts.clone(),
         pos_verifier.clone(),
     ));
-
-    let tokio_runtime =
-        Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
 
     let pubsub = PubSubClient::new(
         tokio_runtime.clone(),
