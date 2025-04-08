@@ -44,59 +44,41 @@ Then, you can run all integration tests using:
 #### Install Dependencies
 
 ```bash
-rustup component add llvm-tools-preview
-cargo install grcov
+cargo +stable install cargo-llvm-cov --locked
 ```
 
 #### Build Instrumented Binary
 
-Ensure previous builds are clean:
-
 ```bash
-cargo clean
+# Set the environment variables needed to get coverage.
+# This command sets the RUST_FLAGS and other environment variables
+source <(cargo llvm-cov show-env --export-prefix)
+# Remove artifacts that may affect the coverage results.
+# This command should be called after show-env.
+cargo llvm-cov clean --workspace
+# Above two commands should be called before build binaries.
+
+cargo build # Build rust binaries, binaries would be in target/debug/*
 ```
-
-Build with coverage:
-
-```bash
-mkdir -p target/cov/profraw
-export LLVM_PROFILE_FILE=$(pwd)/target/cov/profraw/%p-%m.profraw
-
-export RUSTFLAGS="-C instrument-coverage"
-cargo build
-```
-
-The built binary will be in `target/debug` (`target/debug/conflux`).
 
 #### Run Integration Tests
-
-It is recommended to specify a folder for the profraw files:
-
 ```bash
-mkdir -p target/cov/profraw
-export LLVM_PROFILE_FILE=$(pwd)/target/cov/profraw/%p-%m.profraw
-```
-
-It is also ok to specify the path yourself, but under current directory.
-
-Run integration tests specifying binary path:
-
-```bash
+# Run integration tests
 pytest integration_tests/tests -vv -n 6 --dist loadscope --conflux-binary $(pwd)/target/debug/conflux
+
+# Set up benchmark binary path
 export CONFLUX_BENCH=$(pwd)/target/debug/consensus_bench
+
+# Run additional tests
 python tests/test_all.py --conflux-binary $(pwd)/target/debug/conflux
 ```
 
-You would find the profile data in `target/cov/profraw`.
+`*.profraw` files will be generated in `./target/`
 
 #### Generate Coverage Report
-
 ```bash
-grcov . --binary-path ./target/debug/ -s . --ignore-not-existing --ignore '/rustc/*' --ignore 'target/*' -t html -o target/cov/html 
+cargo llvm-cov report --html --failure-mode=all # Generated report will be in `./target/llvm-cov/html/index.html`
 ```
-
-The coverage report will be in `target/cov/index.html`.
-
 
 ## Resources
 
