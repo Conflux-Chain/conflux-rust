@@ -1,6 +1,12 @@
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
 members = [
+    # bins
+    "bins/cfx_store",
+    "bins/cfx_key",
+    "bins/conflux",
+    "bins/cfx-evm",
+    # libs
     "crates/cfx_bytes",
     "crates/cfx_types",
     "crates/cfx_addr",
@@ -16,9 +22,6 @@ members = [
     "crates/primitives",
     "crates/secret_store",
     "crates/transactiongen",
-    "bins/cfx_store",
-    "bins/cfx_key",
-    "bins/conflux",
     "crates/cfxcore/core",
     "crates/cfxcore/execute-helper",
     "crates/cfxcore/executor",
