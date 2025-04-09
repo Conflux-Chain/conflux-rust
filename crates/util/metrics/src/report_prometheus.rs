@@ -21,12 +21,8 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-    thread,
 };
-use tokio::{
-    net::TcpListener,
-    runtime::{self, Runtime},
-};
+use tokio::{net::TcpListener, runtime::Runtime};
 
 use hyper::{server::conn::http1, service::service_fn, Response, StatusCode};
 pub struct PrometheusReporter {
@@ -69,71 +65,70 @@ impl PrometheusReporter {
         }
 
         let listen_addr = self.listen_addr;
-        let executor = self.executor.clone();
-        let _ = thread::spawn(move || {
-            executor.block_on(async move {
-                let listener = match TcpListener::bind(listen_addr).await {
-                    Ok(listener) => {
-                        info!("Prometheus server listening on {}", listen_addr);
-                        listener
+        let executor_clone = self.executor.clone();
+        self.executor.spawn(async move {
+
+            let listener = match TcpListener::bind(listen_addr).await {
+                Ok(listener) => {
+                    info!("Prometheus server listening on {}", listen_addr);
+                    listener
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to bind Prometheus server to address {}: {}",
+                        listen_addr, e
+                    );
+                    return;
+                }
+            };
+
+            loop {
+                match listener.accept().await {
+                    Ok((stream, _addr)) => {
+                        let executor_clone_inner = executor_clone.clone();
+                        let io = TokioIo::new(stream);
+
+                        let service = service_fn(|_req| async {
+                            let metrics_data = match PrometheusReporter::collect_metrics() {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    error!("Failed to collect metrics: {}", e);
+                                    return Ok::<_, Infallible>(
+                                        PrometheusReporter::create_error_response("Failed to collect metrics")
+                                    );
+                                }
+                            };
+                            let response = Response::builder()
+                                .status(StatusCode::OK)
+                                .header(
+                                    "content-type",
+                                    "text/plain; version=0.0.4",
+                                )
+                                .body(metrics_data)
+                                .unwrap_or_else(|e| {
+                                    error!("Failed to create response: {}", e);
+                                    PrometheusReporter::create_error_response("Failed to create response")
+                                });
+                            Ok::<_, Infallible>(response)
+                        });
+
+                        executor_clone_inner.spawn(async move {
+                            if let Err(err) = http1::Builder::new()
+                                .serve_connection(io, service)
+                                .await
+                            {
+                                error!("Error serving Prometheus connection: {}", err);
+                            }
+                        });
+
                     }
                     Err(e) => {
-                        error!(
-                            "Failed to bind Prometheus server to address {}: {}",
-                            listen_addr, e
-                        );
-                        return;
-                    }
-                };
-
-                loop {
-                    match listener.accept().await {
-                        Ok((stream, _addr)) => {
-                            let io = TokioIo::new(stream);
-
-                            let service = service_fn(|_req| async {
-                                let metrics_data = match PrometheusReporter::collect_metrics() {
-                                    Ok(data) => data,
-                                    Err(e) => {
-                                        error!("Failed to collect metrics: {}", e);
-                                        return Ok::<_, Infallible>(
-                                            PrometheusReporter::create_error_response("Failed to collect metrics")
-                                        );
-                                    }
-                                };
-                                let response = Response::builder()
-                                    .status(StatusCode::OK)
-                                    .header(
-                                        "content-type",
-                                        "text/plain; version=0.0.4",
-                                    )
-                                    .body(metrics_data)
-                                    .unwrap_or_else(|e| {
-                                        error!("Failed to create response: {}", e);
-                                        PrometheusReporter::create_error_response("Failed to create response")
-                                    });
-                                Ok::<_, Infallible>(response)
-                            });
-
-                            tokio::spawn(async move {
-                                if let Err(err) = http1::Builder::new()
-                                    .serve_connection(io, service)
-                                    .await
-                                {
-                                    error!("Error serving Prometheus connection: {}", err);
-                                }
-                            });
-
-                        }
-                        Err(e) => {
-                            error!("Failed to accept connection for Prometheus server: {}", e);
-                            continue;
-                        }
+                        error!("Failed to accept connection for Prometheus server: {}", e);
+                        continue;
                     }
                 }
-            });
+            }
         });
-
         Ok(())
     }
 
@@ -314,7 +309,7 @@ mod tests {
         let server_addr: SocketAddr = listen_addr_str.parse().unwrap();
 
         let rt = Arc::new(
-            runtime::Builder::new_multi_thread()
+            tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(1)
                 .enable_all()
                 .build()
