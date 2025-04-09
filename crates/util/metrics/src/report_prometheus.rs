@@ -240,15 +240,25 @@ impl<T: Histogram> PrometheusReportable for T {
         let base_name = group
             .map_or_else(|| name.to_string(), |g| format!("{}_{}", g, name));
         let snapshot = self.snapshot();
+
         writeln!(buffer, "# HELP {} {}", base_name, base_name)?;
         writeln!(buffer, "# TYPE {} summary", base_name)?;
+
         writeln!(buffer, "{}_count {}", base_name, snapshot.count())?;
         writeln!(buffer, "{}_sum {}", base_name, snapshot.sum())?;
+
+        writeln!(buffer, "{}_min {}", base_name, snapshot.min())?;
+        writeln!(buffer, "{}_max {}", base_name, snapshot.max())?;
+        writeln!(buffer, "{}_mean {}", base_name, snapshot.mean())?;
+        writeln!(buffer, "{}_stddev {}", base_name, snapshot.stddev())?;
+        writeln!(buffer, "{}_variance {}", base_name, snapshot.variance())?;
+
         let quantiles = [0.5, 0.75, 0.9, 0.95, 0.99, 0.999];
         for q in quantiles.iter() {
             let value = snapshot.percentile(*q);
             writeln!(buffer, "{}{{quantile=\"{}\"}} {}", base_name, q, value)?;
         }
+
         Ok(())
     }
 }
