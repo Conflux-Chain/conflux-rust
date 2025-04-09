@@ -39,46 +39,7 @@ Then, you can run all integration tests using:
 - `tests/test_all.py` for tests in the `tests` directory
 - `pytest ./integration_tests/tests -vv -n 6 --dist loadscope` for tests in the `integration_tests` directory
 
-### Integration Tests With Coverage
-
-#### Install Dependencies
-
-```bash
-cargo +stable install cargo-llvm-cov --locked
-```
-
-#### Build Instrumented Binary
-
-```bash
-# Set the environment variables needed to get coverage.
-# This command sets the RUST_FLAGS and other environment variables
-source <(cargo llvm-cov show-env --export-prefix)
-# Remove artifacts that may affect the coverage results.
-# This command should be called after show-env.
-cargo llvm-cov clean --workspace
-# Above two commands should be called before build binaries.
-
-cargo build # Build rust binaries, binaries would be in target/debug/*
-```
-
-#### Run Integration Tests
-```bash
-# Run integration tests
-pytest integration_tests/tests -vv -n 6 --dist loadscope --conflux-binary $(pwd)/target/debug/conflux
-
-# Set up benchmark binary path
-export CONFLUX_BENCH=$(pwd)/target/debug/consensus_bench
-
-# Run additional tests
-python tests/test_all.py --conflux-binary $(pwd)/target/debug/conflux
-```
-
-`*.profraw` files will be generated in `./target/`
-
-#### Generate Coverage Report
-```bash
-cargo llvm-cov report --html --failure-mode=all # Generated report will be in `./target/llvm-cov/html/index.html`
-```
+> As for running tests with coverage, please refer to [Coverage](./docs/coverage.md).
 
 ## Resources
 
