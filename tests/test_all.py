@@ -162,7 +162,8 @@ def run_single_round(options):
         max_workers=options.max_workers,
         available_nodes=options.max_nodes,
         port_min=options.port_min,
-        port_max=options.port_max
+        port_max=options.port_max,
+        conflux_binary=options.conflux,
     )
     
     failed_tests = scheduler.schedule(list(slow_tests) + TEST_SCRIPTS)
