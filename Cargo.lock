@@ -1831,7 +1831,7 @@ dependencies = [
  "serde_json",
  "smallvec 1.13.2",
  "tempdir",
- "time 0.1.45",
+ "time",
 ]
 
 [[package]]
@@ -3027,7 +3027,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "thiserror 1.0.63",
- "time 0.3.20",
+ "time",
 ]
 
 [[package]]
@@ -8639,17 +8639,6 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.1.45"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
-dependencies = [
- "libc",
- "wasi 0.10.0+wasi-snapshot-preview1",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "time"
 version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd0cbfecb4d19b5ea75bb31ad904eb5b9fa13f21079c3b92017ebdf4999a5890"
@@ -9506,7 +9495,7 @@ dependencies = [
  "rustversion",
  "sysinfo",
  "thiserror 1.0.63",
- "time 0.3.20",
+ "time",
 ]
 
 [[package]]
@@ -9560,12 +9549,6 @@ name = "wasi"
 version = "0.9.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
-
-[[package]]
-name = "wasi"
-version = "0.10.0+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
 
 [[package]]
 name = "wasi"
