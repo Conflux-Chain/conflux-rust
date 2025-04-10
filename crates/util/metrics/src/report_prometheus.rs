@@ -128,7 +128,6 @@ impl PrometheusReporter {
                         error!("Error serving Prometheus connection: {}", err);
                     }
                 });
-            
             }
         });
         Ok(())
@@ -271,8 +270,8 @@ mod tests {
 
     use super::*;
     use crate::{metrics, CounterUsize, GaugeUsize, Histogram, Meter};
-    use tokio::{net::TcpStream, time::timeout};
     use cfx_tasks::TaskManager;
+    use tokio::{net::TcpStream, time::timeout};
 
     async fn find_available_port() -> std::io::Result<u16> {
         TcpListener::bind("127.0.0.1:0")
@@ -320,7 +319,6 @@ mod tests {
         let listen_addr_str = format!("127.0.0.1:{}", port);
 
         let server_addr: SocketAddr = listen_addr_str.parse().unwrap();
-
 
         let tasks = TaskManager::current();
         let executor = tasks.executor();

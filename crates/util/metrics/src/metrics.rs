@@ -20,13 +20,9 @@ pub static ORDER: Ordering = Ordering::Relaxed;
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
-pub fn is_enabled() -> bool {
-    ENABLED.load(ORDER)
-}
+pub fn is_enabled() -> bool { ENABLED.load(ORDER) }
 
-pub fn enable() {
-    ENABLED.store(true, ORDER);
-}
+pub fn enable() { ENABLED.store(true, ORDER); }
 
 pub trait Metric:
     Send + Sync + Reportable + InfluxdbReportable + PrometheusReportable
