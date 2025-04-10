@@ -268,7 +268,7 @@ thiserror = "2.0.11"
 anyhow = "1.0"
 
 # parallelism
-parking_lot = "0.11"
+parking_lot = "0.12"
 rayon = "1.10"
 threadpool = "1.7"
 crossbeam-deque = "0.7"
