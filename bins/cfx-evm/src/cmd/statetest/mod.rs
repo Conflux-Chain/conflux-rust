@@ -1,4 +1,5 @@
 mod runner;
+mod utils;
 
 pub use runner::TestError as Error;
 

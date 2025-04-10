@@ -19,8 +19,17 @@ cfx-types = { workspace = true }
 cfx-bytes = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
+enumn = { workspace = true }
+primitives = { workspace = true }
+alloy-primitives = { workspace = true }
+cfx-rpc-primitives = { workspace = true }
+walkdir = { workspace = true }
 
 [[bin]]
 name = "evm"
 path = "src/main.rs"
 doc = false
+
+[features]
+default = ["serde"]
+serde = []
