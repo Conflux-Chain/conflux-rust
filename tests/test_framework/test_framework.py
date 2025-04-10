@@ -514,7 +514,7 @@ class ConfluxTestFramework:
             genesis_nodes = num_nodes
         if is_consortium:
             initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID,
-                                 start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"])
+                                 start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"], conflux_binary_path=self.options.conflux)
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(

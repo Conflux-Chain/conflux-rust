@@ -39,6 +39,8 @@ Then, you can run all integration tests using:
 - `tests/test_all.py` for tests in the `tests` directory
 - `pytest ./integration_tests/tests -vv -n 6 --dist loadscope` for tests in the `integration_tests` directory
 
+> As for running tests with coverage, please refer to [Coverage](./docs/coverage.md).
+
 ## Resources
 
 - [Conflux Website](https://www.confluxnetwork.org/)
