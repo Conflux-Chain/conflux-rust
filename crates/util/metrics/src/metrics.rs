@@ -7,25 +7,26 @@ use crate::{
     report_influxdb::{InfluxdbReportable, InfluxdbReporter},
     report_prometheus::{PrometheusReportable, PrometheusReporter},
 };
+use cfx_tasks::TaskExecutor;
 use duration_str::deserialize_duration;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
-use tokio::runtime::Runtime;
 
 pub static ORDER: Ordering = Ordering::Relaxed;
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
-pub fn is_enabled() -> bool { ENABLED.load(ORDER) }
+pub fn is_enabled() -> bool {
+    ENABLED.load(ORDER)
+}
 
-pub fn enable() { ENABLED.store(true, ORDER); }
+pub fn enable() {
+    ENABLED.store(true, ORDER);
+}
 
 pub trait Metric:
     Send + Sync + Reportable + InfluxdbReportable + PrometheusReportable
@@ -67,7 +68,7 @@ impl Default for MetricsConfiguration {
     }
 }
 
-pub fn initialize(config: MetricsConfiguration, executor: Arc<Runtime>) {
+pub fn initialize(config: MetricsConfiguration, executor: TaskExecutor) {
     info!("Initializing metrics with config: {:?}", config);
     if !config.enabled {
         return;

@@ -5484,6 +5484,7 @@ dependencies = [
 name = "metrics"
 version = "0.1.0"
 dependencies = [
+ "cfx-tasks",
  "chrono",
  "criterion",
  "duration-str",

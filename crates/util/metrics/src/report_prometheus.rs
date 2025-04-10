@@ -17,17 +17,15 @@ use std::{
     convert::Infallible,
     fmt::{self, Write},
     net::SocketAddr,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
-use tokio::{net::TcpListener, runtime::Runtime};
+use tokio::net::TcpListener;
 
+use cfx_tasks::TaskExecutor;
 use hyper::{server::conn::http1, service::service_fn, Response, StatusCode};
 pub struct PrometheusReporter {
     listen_addr: SocketAddr,
-    executor: Arc<Runtime>,
+    executor: TaskExecutor,
 }
 
 lazy_static! {
@@ -36,7 +34,7 @@ lazy_static! {
 
 impl PrometheusReporter {
     pub fn new(
-        listen_addr: &str, executor: Arc<Runtime>,
+        listen_addr: &str, executor: TaskExecutor,
     ) -> Result<Self, String> {
         let addr = listen_addr
             .parse()
@@ -65,8 +63,8 @@ impl PrometheusReporter {
         }
 
         let listen_addr = self.listen_addr;
-        let executor_clone = self.executor.clone();
-        self.executor.spawn(async move {
+
+        self.executor.spawn_with_graceful_shutdown_signal(|mut signal| async move{
 
             let listener = match TcpListener::bind(listen_addr).await {
                 Ok(listener) => {
@@ -83,50 +81,54 @@ impl PrometheusReporter {
             };
 
             loop {
-                match listener.accept().await {
-                    Ok((stream, _addr)) => {
-                        let executor_clone_inner = executor_clone.clone();
-                        let io = TokioIo::new(stream);
-
-                        let service = service_fn(|_req| async {
-                            let metrics_data = match PrometheusReporter::collect_metrics() {
-                                Ok(data) => data,
-                                Err(e) => {
-                                    error!("Failed to collect metrics: {}", e);
-                                    return Ok::<_, Infallible>(
-                                        PrometheusReporter::create_error_response("Failed to collect metrics")
-                                    );
-                                }
-                            };
-                            let response = Response::builder()
-                                .status(StatusCode::OK)
-                                .header(
-                                    "content-type",
-                                    "text/plain; version=0.0.4",
-                                )
-                                .body(metrics_data)
-                                .unwrap_or_else(|e| {
-                                    error!("Failed to create response: {}", e);
-                                    PrometheusReporter::create_error_response("Failed to create response")
-                                });
-                            Ok::<_, Infallible>(response)
-                        });
-
-                        executor_clone_inner.spawn(async move {
-                            if let Err(err) = http1::Builder::new()
-                                .serve_connection(io, service)
-                                .await
-                            {
-                                error!("Error serving Prometheus connection: {}", err);
+                let stream = tokio::select! {
+                    _ = &mut signal => break,
+                    io = listener.accept() => {
+                        match io {
+                            Ok((stream, _addr)) => stream,
+                            Err(e) => {
+                                error!("Failed to accept connection: {}", e);
+                                continue;
                             }
-                        });
+                        }
+                    }
+                };
 
+                let io = TokioIo::new(stream);
+
+                let service = service_fn(|_req| async {
+                    let metrics_data = match PrometheusReporter::collect_metrics() {
+                        Ok(data) => data,
+                        Err(e) => {
+                            error!("Failed to collect metrics: {}", e);
+                            return Ok::<_, Infallible>(
+                                PrometheusReporter::create_error_response("Failed to collect metrics")
+                            );
+                        }
+                    };
+                    let response = Response::builder()
+                        .status(StatusCode::OK)
+                        .header(
+                            "content-type",
+                            "text/plain; version=0.0.4",
+                        )
+                        .body(metrics_data)
+                        .unwrap_or_else(|e| {
+                            error!("Failed to create response: {}", e);
+                            PrometheusReporter::create_error_response("Failed to create response")
+                        });
+                    Ok::<_, Infallible>(response)
+                });
+
+                tokio::task::spawn(async move {
+                    if let Err(err) = http1::Builder::new()
+                        .serve_connection(io, service)
+                        .await
+                    {
+                        error!("Error serving Prometheus connection: {}", err);
                     }
-                    Err(e) => {
-                        error!("Failed to accept connection for Prometheus server: {}", e);
-                        continue;
-                    }
-                }
+                });
+            
             }
         });
         Ok(())
@@ -270,6 +272,7 @@ mod tests {
     use super::*;
     use crate::{metrics, CounterUsize, GaugeUsize, Histogram, Meter};
     use tokio::{net::TcpStream, time::timeout};
+    use cfx_tasks::TaskManager;
 
     async fn find_available_port() -> std::io::Result<u16> {
         TcpListener::bind("127.0.0.1:0")
@@ -318,14 +321,10 @@ mod tests {
 
         let server_addr: SocketAddr = listen_addr_str.parse().unwrap();
 
-        let rt = Arc::new(
-            tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(1)
-                .enable_all()
-                .build()
-                .unwrap(),
-        );
-        let reporter = PrometheusReporter::new(&listen_addr_str, rt)
+
+        let tasks = TaskManager::current();
+        let executor = tasks.executor();
+        let reporter = PrometheusReporter::new(&listen_addr_str, executor)
             .expect("Failed to create Prometheus reporter");
 
         let _ = reporter.start_http_server().unwrap();
