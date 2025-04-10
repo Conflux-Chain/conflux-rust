@@ -1407,6 +1407,7 @@ dependencies = [
 name = "cfx-rpc-cfx-types"
 version = "2.4.0"
 dependencies = [
+ "bls-signatures",
  "cfx-addr",
  "cfx-parameters",
  "cfx-parity-trace-types",
@@ -1414,12 +1415,16 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "diem-crypto",
+ "diem-types",
  "jsonrpc-core 18.0.0",
  "log",
  "parity-version",
  "primitives",
  "rand 0.7.3",
+ "rustc-hex",
  "serde",
+ "serde_derive",
  "serde_json",
  "strum_macros",
 ]

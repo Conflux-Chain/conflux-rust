@@ -5,8 +5,8 @@
 pub mod cfx;
 mod constants;
 pub mod eth;
-pub mod pos;
 mod provenance;
+pub use cfx_rpc_cfx_types::pos;
 
 pub use cfx_rpc_primitives::{Bytes, Index, U64};
 
