@@ -22,13 +22,14 @@ def get_num_test_nodes(py, test_dir, script):
 class TestScheduler:
     """Scheduler for managing test execution and controlling concurrency based on resource requirements"""
 
-    def __init__(self, task_executable, py, test_dir, max_workers, available_nodes, port_min, port_max):
+    def __init__(self, task_executable, py, test_dir, max_workers, available_nodes, port_min, port_max, conflux_binary):
         self.task_executable = task_executable
         self.py = py
         self.test_dir = test_dir
         self.port_min = port_min
         self.port_max = port_max
         self.max_workers = max_workers
+        self.conflux_binary = conflux_binary
         
         # Resource management
         self.available_nodes = available_nodes
@@ -128,7 +129,8 @@ class TestScheduler:
                 self.test_dir,
                 index,
                 self.port_min,
-                self.port_max
+                self.port_max,
+                self.conflux_binary,
             )
         finally:
             self._release_resources(nodes_count)
