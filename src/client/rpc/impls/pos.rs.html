@@ -705,6 +705,38 @@
 <a href="#703" id="703">703</a>
 <a href="#704" id="704">704</a>
 <a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -719,9 +751,9 @@
                 tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
                 EpochState <span class="kw">as </span>RpcEpochState,
                 LedgerInfoWithSignatures <span class="kw">as </span>RpcLedgerInfoWithSignatures,
-                NodeLockStatus, PoSEpochReward, RpcCommittee, RpcTermData,
-                RpcTransactionStatus, RpcTransactionType, Signature, Status,
-                Transaction, VotePowerState,
+                NodeLockStatus, PoSEpochReward, Reward, RpcCommittee,
+                RpcTermData, RpcTransactionStatus, RpcTransactionType,
+                Signature, Status, Transaction, VotePowerState,
             },
             EpochNumber, RpcAddress,
         },
@@ -732,10 +764,12 @@
 <span class="kw">use </span>cfx_executor::internal_contract;
 <span class="kw">use </span>cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 <span class="kw">use </span>cfx_statedb::StateDbExt;
-<span class="kw">use </span>cfx_types::{hexstr_to_h256, BigEndianHash, H256, U64};
+<span class="kw">use </span>cfx_types::{hexstr_to_h256, BigEndianHash, H256, U256, U64};
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>cfxcore::{
-    consensus::pos_handler::PosVerifier, BlockDataManager, SharedConsensusGraph,
+    block_data_manager::block_data_types::PosRewardInfo,
+    consensus::pos_handler::PosVerifier, BlockDataManager,
+    SharedConsensusGraph,
 };
 <span class="kw">use </span>consensus_types::block::Block <span class="kw">as </span>ConsensusBlock;
 <span class="kw">use </span>diem_crypto::hash::HashValue;
@@ -750,7 +784,7 @@
 <span class="kw">use </span>jsonrpc_core::Result <span class="kw">as </span>JsonRpcResult;
 <span class="kw">use </span>log::{debug, info};
 <span class="kw">use </span>primitives::{StorageKey, StorageValue};
-<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::{collections::HashMap, sync::Arc};
 <span class="kw">use </span>storage_interface::{DBReaderForPoW, DbReader};
 
 <span class="kw">pub struct </span>PoSInterceptor {
@@ -1404,10 +1438,40 @@
             </span>.pow_data_manager
             .pos_reward_by_pos_epoch(epoch.as_u64())
             .map(|reward_info| {
-                PoSEpochReward::try_from(reward_info, <span class="self">self</span>.network_type).ok()
+                convert_to_pos_epoch_reward(reward_info, <span class="self">self</span>.network_type).ok()
             })
             .unwrap_or(<span class="prelude-val">None</span>);
         <span class="prelude-val">Ok</span>(reward)
     }
+}
+
+<span class="kw">pub fn </span>convert_to_pos_epoch_reward(
+    reward: PosRewardInfo, network_type: Network,
+) -&gt; <span class="prelude-ty">Result</span>&lt;PoSEpochReward, String&gt; {
+    <span class="kw">let </span>default_value = U256::from(<span class="number">0</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>account_reward_map = HashMap::new();
+    <span class="kw">let </span><span class="kw-2">mut </span>account_address_map = HashMap::new();
+    <span class="kw">for </span>r <span class="kw">in </span>reward.account_rewards.iter() {
+        <span class="kw">let </span>key = r.pos_identifier;
+        <span class="kw">let </span>r1 = account_reward_map.get(<span class="kw-2">&amp;</span>key).unwrap_or(<span class="kw-2">&amp;</span>default_value);
+        <span class="kw">let </span>merged_reward = r.reward + r1;
+        account_reward_map.insert(key, merged_reward);
+
+        <span class="kw">let </span>rpc_address = RpcAddress::try_from_h160(r.address, network_type)<span class="question-mark">?</span>;
+        account_address_map.insert(key, rpc_address);
+    }
+    <span class="kw">let </span>account_rewards = account_reward_map
+        .iter()
+        .map(|(k, v)| Reward {
+            pos_address: <span class="kw-2">*</span>k,
+            pow_address: account_address_map.get(k).unwrap().clone(),
+            reward: <span class="kw-2">*</span>v,
+        })
+        .filter(|r| r.reward &gt; U256::from(<span class="number">0</span>))
+        .collect();
+    <span class="prelude-val">Ok</span>(PoSEpochReward {
+        pow_epoch_hash: reward.execution_epoch_hash,
+        account_rewards,
+    })
 }
 </code></pre></div></section></main></body></html>

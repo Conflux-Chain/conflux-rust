@@ -1489,7 +1489,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
     errors::invalid_params_check,
     helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
-    impls::pos::hash_value_to_h256,
+    impls::pos::{convert_to_pos_epoch_reward, hash_value_to_h256},
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block <span class="kw">as </span>RpcBlock,
@@ -1804,7 +1804,7 @@
                 {
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
                 }
-                <span class="kw">let </span>reward_info: PoSEpochReward = PoSEpochReward::try_from(
+                <span class="kw">let </span>reward_info: PoSEpochReward = convert_to_pos_epoch_reward(
                     epoch_rewards,
                     <span class="kw-2">*</span><span class="self">self</span>.network.get_network_type(),
                 )

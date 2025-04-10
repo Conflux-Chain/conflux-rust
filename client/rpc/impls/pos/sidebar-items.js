@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["hash_value_to_h256"],"struct":["PoSInterceptor","PosHandler"]};
+window.SIDEBAR_ITEMS = {"fn":["convert_to_pos_epoch_reward","hash_value_to_h256"],"struct":["PoSInterceptor","PosHandler"]};
