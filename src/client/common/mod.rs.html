@@ -872,7 +872,6 @@
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
 <a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1089,8 +1088,6 @@
             (ConfigKey::new(private_key), ConfigKey::new(vrf_private_key))
         }
     };
-
-    metrics::initialize(conf.metrics_config());
 
     <span class="kw">let </span>worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
         <span class="string">"Tx Recover"</span>.into(),
@@ -1334,7 +1331,6 @@
         accounts.clone(),
         pos_verifier.clone(),
     ));
-
     <span class="kw">let </span>tokio_runtime =
         Arc::new(TokioRuntime::new().map_err(|e| e.to_string())<span class="question-mark">?</span>);
 
@@ -1668,6 +1664,8 @@
             eth_rpc_http_server_addr,
             task_executor.clone(),
         ))<span class="question-mark">?</span>;
+
+    metrics::initialize(conf.metrics_config(), task_executor.clone());
 
     <span class="prelude-val">Ok</span>((
         data_man,

@@ -550,13 +550,13 @@
 }
 
 <span class="doccomment">/// A uniform sample using Vitter's Algorithm R. (http://www.cs.umd.edu/~samir/498/vitter.pdf)
-</span><span class="kw">struct </span>UniformSample {
+</span><span class="kw">pub struct </span>UniformSample {
     reservoir_size: usize,
     data: RwLock&lt;Snapshot&gt;,
 }
 
 <span class="kw">impl </span>UniformSample {
-    <span class="kw">fn </span>new(reservoir_size: usize) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(reservoir_size: usize) -&gt; <span class="self">Self </span>{
         UniformSample {
             reservoir_size,
             data: RwLock::new(Snapshot {

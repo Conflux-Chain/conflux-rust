@@ -334,7 +334,7 @@
 }
 
 <span class="kw">impl </span>StandardMeter {
-    <span class="kw">fn </span>new(name: String) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(name: String) -&gt; <span class="self">Self </span>{
         StandardMeter {
             name,
             snapshot: RwLock::new(MeterSnapshot::default()),

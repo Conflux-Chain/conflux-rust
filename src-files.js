@@ -83,7 +83,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["malloc_size_of",["",[],["lib.rs"]]],\
 ["malloc_size_of_derive",["",[],["lib.rs"]]],\
 ["memory_cache",["",[],["lib.rs"]]],\
-["metrics",["",[],["counter.rs","ewma.rs","gauge.rs","histogram.rs","lib.rs","lock.rs","meter.rs","metrics.rs","queue.rs","registry.rs","report.rs","report_influxdb.rs","timer.rs"]]],\
+["metrics",["",[],["counter.rs","ewma.rs","gauge.rs","histogram.rs","lib.rs","lock.rs","meter.rs","metrics.rs","queue.rs","registry.rs","report.rs","report_influxdb.rs","report_prometheus.rs","timer.rs"]]],\
 ["move_core_types",["",[],["account_address.rs","effects.rs","gas_schedule.rs","identifier.rs","language_storage.rs","lib.rs","move_resource.rs","parser.rs","transaction_argument.rs","value.rs","vm_status.rs"]]],\
 ["network",["",[["ip",[],["bucket.rs","mod.rs","node_limit.rs","node_tag_index.rs","sample.rs","sessions_limit.rs","util.rs"]]],["connection.rs","discovery.rs","error.rs","handshake.rs","ip_utils.rs","lib.rs","node_database.rs","node_table.rs","service.rs","session.rs","session_manager.rs","throttling.rs"]]],\
 ["num_variants",["",[],["lib.rs"]]],\

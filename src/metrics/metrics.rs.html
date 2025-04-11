@@ -99,6 +99,35 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -106,8 +135,11 @@
 </span><span class="kw">use crate</span>::{
     report::{report_async, FileReporter, Reportable},
     report_influxdb::{InfluxdbReportable, InfluxdbReporter},
+    report_prometheus::{PrometheusReportable, PrometheusReporter},
 };
+<span class="kw">use </span>cfx_tasks::TaskExecutor;
 <span class="kw">use </span>duration_str::deserialize_duration;
+<span class="kw">use </span>log::{error, info};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -120,9 +152,11 @@
 
 <span class="kw">pub fn </span>is_enabled() -&gt; bool { ENABLED.load(ORDER) }
 
-<span class="kw">fn </span>enable() { ENABLED.store(<span class="bool-val">true</span>, ORDER); }
+<span class="kw">pub fn </span>enable() { ENABLED.store(<span class="bool-val">true</span>, ORDER); }
 
-<span class="kw">pub trait </span>Metric: Send + Sync + Reportable + InfluxdbReportable {
+<span class="kw">pub trait </span>Metric:
+    Send + Sync + Reportable + InfluxdbReportable + PrometheusReportable
+{
     <span class="kw">fn </span>get_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str;
 }
 
@@ -141,6 +175,7 @@
     <span class="kw">pub </span>influxdb_report_username: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>influxdb_report_password: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>influxdb_report_node: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>prometheus_listen_addr: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>MetricsConfiguration {
@@ -154,11 +189,13 @@
             influxdb_report_username: <span class="prelude-val">None</span>,
             influxdb_report_password: <span class="prelude-val">None</span>,
             influxdb_report_node: <span class="prelude-val">None</span>,
+            prometheus_listen_addr: <span class="prelude-val">None</span>,
         }
     }
 }
 
-<span class="kw">pub fn </span>initialize(config: MetricsConfiguration) {
+<span class="kw">pub fn </span>initialize(config: MetricsConfiguration, executor: TaskExecutor) {
+    <span class="macro">info!</span>(<span class="string">"Initializing metrics with config: {:?}"</span>, config);
     <span class="kw">if </span>!config.enabled {
         <span class="kw">return</span>;
     }
@@ -196,6 +233,27 @@
         }
 
         report_async(reporter, config.report_interval);
+    }
+
+    <span class="comment">// prometheus reporter
+
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(addr) = config.prometheus_listen_addr {
+        <span class="kw">match </span>PrometheusReporter::new(<span class="kw-2">&amp;</span>addr, executor) {
+            <span class="prelude-val">Ok</span>(reporter) =&gt; {
+                <span class="macro">info!</span>(<span class="string">"Initializing PrometheusReporter to listen on {}"</span>, addr);
+                <span class="kw">match </span>reporter.start_http_server() {
+                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                        <span class="macro">info!</span>(<span class="string">"PrometheusReporter started successfully"</span>);
+                    }
+                    <span class="prelude-val">Err</span>(e) =&gt; {
+                        <span class="macro">error!</span>(<span class="string">"Failed to start PrometheusReporter: {}"</span>, e);
+                    }
+                }
+            }
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">error!</span>(<span class="string">"Failed to initialize PrometheusReporter: {}"</span>, e);
+            }
+        }
     }
 }
 </code></pre></div></section></main></body></html>

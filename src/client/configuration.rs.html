@@ -1589,6 +1589,11 @@
 <a href="#1587" id="1587">1587</a>
 <a href="#1588" id="1588">1588</a>
 <a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1725,6 +1730,7 @@
         (metrics_influxdb_node, (<span class="prelude-ty">Option</span>&lt;String&gt;), <span class="prelude-val">None</span>)
         (metrics_output_file, (<span class="prelude-ty">Option</span>&lt;String&gt;), <span class="prelude-val">None</span>)
         (metrics_report_interval_ms, (u64), <span class="number">3_000</span>)
+        (metrics_prometheus_listen_addr, (<span class="prelude-ty">Option</span>&lt;String&gt;), <span class="prelude-val">None</span>)
         (rocksdb_disable_wal, (bool), <span class="bool-val">false</span>)
         (txgen_account_count, (usize), <span class="number">10</span>)
 
@@ -2656,6 +2662,10 @@
                 .metrics_influxdb_password
                 .clone(),
             influxdb_report_node: <span class="self">self</span>.raw_conf.metrics_influxdb_node.clone(),
+            prometheus_listen_addr: <span class="self">self
+                </span>.raw_conf
+                .metrics_prometheus_listen_addr
+                .clone(),
         }
     }
 

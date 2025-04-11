@@ -56,6 +56,10 @@
 <a href="#54" id="54">54</a>
 <a href="#55" id="55">55</a>
 <a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -84,6 +88,8 @@
     }
 
     <span class="kw">pub fn </span>get_all(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>HashMap&lt;String, Arc&lt;<span class="kw">dyn </span>Metric&gt;&gt; { <span class="kw-2">&amp;</span><span class="self">self</span>.metrics }
+
+    <span class="kw">pub fn </span>clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>) { <span class="self">self</span>.metrics.clear(); }
 }
 
 <span class="attr">#[derive(Default)]
@@ -111,5 +117,7 @@
     ) -&gt; <span class="kw-2">&amp;</span>HashMap&lt;String, HashMap&lt;String, Arc&lt;<span class="kw">dyn </span>Metric&gt;&gt;&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.groups
     }
+
+    <span class="kw">pub fn </span>clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>) { <span class="self">self</span>.groups.clear(); }
 }
 </code></pre></div></section></main></body></html>
