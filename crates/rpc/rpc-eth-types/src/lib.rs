@@ -41,4 +41,4 @@ pub use transaction::Transaction;
 pub use transaction_request::{
     TransactionRequest, DEFAULT_ETH_GAS_CALL_REQUEST,
 };
-pub use tx_pool::AccountPendingTransactions;
+pub use tx_pool::*;

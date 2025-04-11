@@ -9,7 +9,7 @@ jobs:
   deploy:
     permissions:
       contents: write
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
   
@@ -22,8 +22,11 @@ jobs:
         uses: ./.github/actions/install-dependencies
 
       - name: Generate documentation
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: 3.5
+          RUSTDOCFLAGS: '--enable-index-page -Z unstable-options'
         run: |
-          rustup default nightly-2024-02-04 && RUSTDOCFLAGS='--enable-index-page -Z unstable-options' cargo +nightly-2024-02-04 doc --no-deps
+          rustup default nightly-2024-02-04 && cargo +nightly-2024-02-04 doc --no-deps
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3

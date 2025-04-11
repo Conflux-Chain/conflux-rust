@@ -105,7 +105,7 @@ class HardforkTest(ConfluxTestFramework):
                 f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:],
                                   str(voting_power_map[pos_identifier])]) + "\n")
         initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID,
-                             pkfile="public_keys")
+                             pkfile="public_keys", conflux_binary_path=self.options.conflux)
 
         # generate blocks until pos start
         self.nodes[0].test_generateEmptyBlocks(500)

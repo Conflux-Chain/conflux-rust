@@ -64,11 +64,13 @@ class TestStatus(Enum):
     PASSED = 1
     FAILED = 2
     SKIPPED = 3
+    INTERRUPT = 4
 
 
 TEST_EXIT_PASSED = 0
 TEST_EXIT_FAILED = 1
 TEST_EXIT_SKIPPED = 77
+TEST_EXIT_INTERRUPT = 78
 
 Web3NotSetupError = ValueError("w3 is not initialized, please call self.setup_w3() first")
 
@@ -216,11 +218,23 @@ class ConfluxTestFramework:
             action="store_true",
             help="Leave bitcoinds and test.* datadir on exit or error")
         parser.add_argument(
+            "--cleanup-on-interrupt",
+            dest="cleanup_on_interrupt",
+            default=False,
+            action="store_true",
+            help="Cleanup on interrupt")
+        parser.add_argument(
             "--noshutdown",
             dest="noshutdown",
             default=False,
             action="store_true",
             help="Don't stop bitcoinds after the test execution")
+        parser.add_argument(
+            "--print-test-params",
+            dest="print_test_params",
+            default=False,
+            action="store_true",
+            help="Show test params only")
         parser.add_argument(
             "--cachedir",
             dest="cachedir",
@@ -294,6 +308,10 @@ class ConfluxTestFramework:
             type=int)
         self.add_options(parser)
         self.options = parser.parse_args()
+        
+        if self.options.print_test_params:
+            self.print_test_params()
+            return
 
         PortMin.n = self.options.port_min
 
@@ -345,6 +363,7 @@ class ConfluxTestFramework:
             self.log.exception("Unexpected exception caught during testing")
         except KeyboardInterrupt as e:
             self.log.warning("Exiting after keyboard interrupt")
+            success = TestStatus.INTERRUPT
 
         if success == TestStatus.FAILED and self.options.pdbonfailure:
             print(
@@ -365,12 +384,21 @@ class ConfluxTestFramework:
             self.log.info(
                 "Note: bitcoinds were not stopped and may still be running")
 
-        if not self.options.nocleanup and not self.options.noshutdown and success != TestStatus.FAILED:
+
+        cleanup_tree_on_exit = True
+        if self.options.nocleanup:
+            cleanup_tree_on_exit = False
+        if self.options.noshutdown:
+            cleanup_tree_on_exit = False
+        if success == TestStatus.FAILED:
+            cleanup_tree_on_exit = False
+        if success == TestStatus.INTERRUPT and not self.options.cleanup_on_interrupt:
+            cleanup_tree_on_exit = False
+            
+        if cleanup_tree_on_exit:
             self.log.info("Cleaning up {} on exit".format(self.options.tmpdir))
-            cleanup_tree_on_exit = True
         else:
             self.log.warning("Not cleaning up dir %s" % self.options.tmpdir)
-            cleanup_tree_on_exit = False
 
         if success == TestStatus.PASSED:
             self.log.info("Tests successful")
@@ -378,6 +406,8 @@ class ConfluxTestFramework:
         elif success == TestStatus.SKIPPED:
             self.log.info("Test skipped")
             exit_code = TEST_EXIT_SKIPPED
+        elif success == TestStatus.INTERRUPT:
+            exit_code = TEST_EXIT_INTERRUPT
         else:
             self.log.error(
                 "Test failed. Test logging available at %s/test_framework.log",
@@ -400,6 +430,13 @@ class ConfluxTestFramework:
     def set_test_params(self):
         """Tests must this method to change default values for number of nodes, topology, etc"""
         raise NotImplementedError
+    
+    def print_test_params(self):
+        print(f"num_nodes={self.num_nodes}")
+            
+        print("\n[conf_parameters]")
+        for key, value in self.conf_parameters.items():
+            print(f"{key}={value}")
 
     def add_options(self, parser):
         """Override this method to add command-line options to the test"""
@@ -477,7 +514,7 @@ class ConfluxTestFramework:
             genesis_nodes = num_nodes
         if is_consortium:
             initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID,
-                                 start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"])
+                                 start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"], conflux_binary_path=self.options.conflux)
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(

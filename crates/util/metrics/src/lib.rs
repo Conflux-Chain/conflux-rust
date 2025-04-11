@@ -13,6 +13,7 @@ mod queue;
 mod registry;
 mod report;
 mod report_influxdb;
+mod report_prometheus;
 mod timer;
 
 pub use self::{

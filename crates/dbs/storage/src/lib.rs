@@ -126,6 +126,7 @@ pub struct StorageConfiguration {
     pub use_isolated_db_for_mpt_table: bool,
     pub use_isolated_db_for_mpt_table_height: Option<u64>,
     pub keep_era_genesis_snapshot: bool,
+    pub backup_mpt_snapshot: bool,
 }
 
 impl StorageConfiguration {
@@ -174,6 +175,7 @@ impl StorageConfiguration {
             use_isolated_db_for_mpt_table: false,
             use_isolated_db_for_mpt_table_height: None,
             keep_era_genesis_snapshot: false,
+            backup_mpt_snapshot: true,
         }
     }
 

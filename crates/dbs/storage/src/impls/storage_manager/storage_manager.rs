@@ -243,6 +243,7 @@ impl StorageManager {
                     storage_conf.use_isolated_db_for_mpt_table,
                     storage_conf.use_isolated_db_for_mpt_table_height,
                     storage_conf.consensus_param.era_epoch_count,
+                    storage_conf.backup_mpt_snapshot,
                 )?,
             }),
             delta_mpts_id_gen: Default::default(),

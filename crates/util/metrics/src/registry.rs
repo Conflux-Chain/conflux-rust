@@ -26,6 +26,8 @@ impl Registry {
     }
 
     pub fn get_all(&self) -> &HashMap<String, Arc<dyn Metric>> { &self.metrics }
+
+    pub fn clear(&mut self) { self.metrics.clear(); }
 }
 
 #[derive(Default)]
@@ -53,4 +55,6 @@ impl GroupingRegistry {
     ) -> &HashMap<String, HashMap<String, Arc<dyn Metric>>> {
         &self.groups
     }
+
+    pub fn clear(&mut self) { self.groups.clear(); }
 }

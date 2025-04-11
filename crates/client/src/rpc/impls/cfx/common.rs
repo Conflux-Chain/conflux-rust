@@ -13,7 +13,7 @@ use std::{
 use crate::rpc::{
     errors::invalid_params_check,
     helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
-    impls::pos::hash_value_to_h256,
+    impls::pos::{convert_to_pos_epoch_reward, hash_value_to_h256},
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
@@ -328,7 +328,7 @@ impl RpcImpl {
                 {
                     return Ok(None);
                 }
-                let reward_info: PoSEpochReward = PoSEpochReward::try_from(
+                let reward_info: PoSEpochReward = convert_to_pos_epoch_reward(
                     epoch_rewards,
                     *self.network.get_network_type(),
                 )

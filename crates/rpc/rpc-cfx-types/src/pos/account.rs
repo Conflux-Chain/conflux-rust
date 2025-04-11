@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::pos::NodeLockStatus;
+use crate::pos::NodeLockStatus;
 use cfx_types::{H256, U64};
 use serde::{Deserialize, Serialize};
 

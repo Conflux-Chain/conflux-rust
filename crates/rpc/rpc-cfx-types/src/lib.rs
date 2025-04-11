@@ -4,6 +4,7 @@ pub mod epoch_number;
 mod fee_history;
 mod fee_history_cache_entry;
 mod phantom_block;
+pub mod pos;
 mod rpc_impl_configuration;
 mod subscriber_id;
 pub mod trace;

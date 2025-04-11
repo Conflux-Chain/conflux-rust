@@ -1,4 +1,4 @@
-use crate::rpc::types::Bytes;
+use cfx_rpc_primitives::Bytes;
 use cfx_types::{H256, U64};
 use diem_crypto::ValidCryptoMaterial;
 use diem_types::{
