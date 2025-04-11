@@ -99,7 +99,7 @@ pub struct StandardMeter {
 }
 
 impl StandardMeter {
-    fn new(name: String) -> Self {
+    pub fn new(name: String) -> Self {
         StandardMeter {
             name,
             snapshot: RwLock::new(MeterSnapshot::default()),
