@@ -20,7 +20,7 @@
 
 use crate::Error;
 use cfx_types::H256;
-use primitives::EpochNumber;
+use primitives::{BlockHashOrEpochNumber, EpochNumber};
 use serde::{
     de::{Error as SerdeError, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -36,7 +36,7 @@ pub enum BlockNumber {
         hash: H256,
         /// only return blocks part of the canon chain
         // note: we only keep this for compatibility
-        require_canonical: bool,
+        require_canonical: Option<bool>,
     },
     /// Number
     Num(u64),
@@ -77,14 +77,20 @@ impl BlockNumber {
 impl Serialize for BlockNumber {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
+        use serde::ser::SerializeStruct;
+
         match *self {
             BlockNumber::Hash {
                 hash,
                 require_canonical,
-            } => serializer.serialize_str(&format!(
-                "{{ 'hash': '{}', 'requireCanonical': '{}'  }}",
-                hash, require_canonical
-            )),
+            } => {
+                let mut s = serializer.serialize_struct("BlockIdEip1898", 1)?;
+                s.serialize_field("blockHash", &hash)?;
+                if let Some(require_canonical) = require_canonical {
+                    s.serialize_field("requireCanonical", &require_canonical)?;
+                }
+                s.end()
+            }
             BlockNumber::Num(ref x) => {
                 serializer.serialize_str(&format!("0x{:x}", x))
             }
@@ -112,7 +118,7 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
     fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
     where V: MapAccess<'a> {
         let (mut require_canonical, mut block_number, mut block_hash) =
-            (false, None::<u64>, None::<H256>);
+            (None::<bool>, None::<u64>, None::<H256>);
 
         loop {
             let key_str: Option<String> = visitor.next_key()?;
@@ -143,7 +149,7 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
                         block_hash = Some(visitor.next_value()?);
                     }
                     "requireCanonical" => {
-                        require_canonical = visitor.next_value()?;
+                        require_canonical = Some(visitor.next_value()?);
                     }
                     key => {
                         return Err(SerdeError::custom(format!(
@@ -208,7 +214,7 @@ impl TryFrom<BlockNumber> for EpochNumber {
             BlockNumber::Num(num) => Ok(EpochNumber::Number(num)),
             BlockNumber::Latest => Ok(EpochNumber::LatestState),
             BlockNumber::Earliest => Ok(EpochNumber::Earliest),
-            BlockNumber::Pending => Ok(EpochNumber::LatestState),
+            BlockNumber::Pending => Ok(EpochNumber::LatestState), /* TODO: LatestMined maybe is better or add a new Pending variant for EpochNumber */
             BlockNumber::Safe => Ok(EpochNumber::LatestConfirmed),
             BlockNumber::Finalized => Ok(EpochNumber::LatestFinalized),
             BlockNumber::Hash { .. } => Err(Error::InvalidParams(
@@ -219,11 +225,81 @@ impl TryFrom<BlockNumber> for EpochNumber {
     }
 }
 
+impl From<BlockNumber> for BlockHashOrEpochNumber {
+    fn from(x: BlockNumber) -> BlockHashOrEpochNumber {
+        match x {
+            BlockNumber::Num(num) => {
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(num))
+            }
+            BlockNumber::Latest => {
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
+            }
+            BlockNumber::Earliest => {
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::Earliest)
+            }
+            BlockNumber::Pending => {
+                BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
+            }
+            BlockNumber::Safe => BlockHashOrEpochNumber::EpochNumber(
+                EpochNumber::LatestConfirmed,
+            ),
+            BlockNumber::Finalized => BlockHashOrEpochNumber::EpochNumber(
+                EpochNumber::LatestFinalized,
+            ),
+            BlockNumber::Hash {
+                hash,
+                require_canonical,
+            } => BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot: require_canonical,
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json;
     use std::str::FromStr;
+
+    #[test]
+    fn block_number_serialization() {
+        let hash = H256::from_str(
+            "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+        )
+        .unwrap();
+
+        let block_number = BlockNumber::Hash {
+            hash,
+            require_canonical: None,
+        };
+        let serialized = serde_json::to_string(&block_number).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"blockHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}"#
+        );
+
+        let block_number = BlockNumber::Hash {
+            hash,
+            require_canonical: Some(false),
+        };
+        let serialized = serde_json::to_string(&block_number).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"blockHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","requireCanonical":false}"#
+        );
+
+        let block_number = BlockNumber::Hash {
+            hash,
+            require_canonical: Some(true),
+        };
+        let serialized = serde_json::to_string(&block_number).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"blockHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","requireCanonical":true}"#
+        );
+    }
 
     #[test]
     fn block_number_deserialization() {
@@ -236,6 +312,7 @@ mod tests {
             "finalized",
 			{"blockNumber": "0xa"},
 			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"},
+            {"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": false},
 			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": true}
 		]"#;
         let deserialized: Vec<BlockNumber> = serde_json::from_str(s).unwrap();
@@ -255,14 +332,21 @@ mod tests {
                         "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     )
                     .unwrap(),
-                    require_canonical: false
+                    require_canonical: None,
                 },
                 BlockNumber::Hash {
                     hash: H256::from_str(
                         "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     )
                     .unwrap(),
-                    require_canonical: true
+                    require_canonical: Some(false),
+                },
+                BlockNumber::Hash {
+                    hash: H256::from_str(
+                        "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                    )
+                    .unwrap(),
+                    require_canonical: Some(true),
                 }
             ]
         )
