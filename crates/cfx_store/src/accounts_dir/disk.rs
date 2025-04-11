@@ -413,7 +413,11 @@ impl KeyFileManager for DiskKeyFileManager {
 fn account_filename(account: &SafeAccount) -> String {
     // build file path
     account.filename.clone().unwrap_or_else(|| {
-        let timestamp = time::strftime("%Y-%m-%dT%H-%M-%S", &time::now_utc())
+        let time_format = time::macros::format_description!(
+            "[year]-[month]-[day]T[hour]-[minute]-[second]"
+        );
+        let timestamp = time::OffsetDateTime::now_utc()
+            .format(&time_format)
             .expect("Time-format string is valid.");
         format!("UTC--{}Z--{}", timestamp, Uuid::from(account.id))
     })
