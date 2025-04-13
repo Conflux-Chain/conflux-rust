@@ -50,7 +50,12 @@ jobs:
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
-
       - name: Check format and run clippy
         run: |
-           ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings
+          ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings
+          
+  cargo-deny:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
