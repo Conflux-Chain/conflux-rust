@@ -2965,7 +2965,7 @@ dependencies = [
 [[package]]
 name = "dir"
 version = "0.1.2"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=09da4dfeecd754df2034d4e71a260277aaaf9783#09da4dfeecd754df2034d4e71a260277aaaf9783"
 dependencies = [
  "app_dirs",
  "ethereum-types 0.8.0",
@@ -5227,7 +5227,7 @@ checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=3773afe5b953997188f37c39308105b5deb0faac#3773afe5b953997188f37c39308105b5deb0faac"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=a2ebf4e00f89c70359d9f3996a1390d9c6b55940#a2ebf4e00f89c70359d9f3996a1390d9c6b55940"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -5244,7 +5244,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=3773afe5b953997188f37c39308105b5deb0faac#3773afe5b953997188f37c39308105b5deb0faac"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=a2ebf4e00f89c70359d9f3996a1390d9c6b55940#a2ebf4e00f89c70359d9f3996a1390d9c6b55940"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -6005,7 +6005,7 @@ dependencies = [
 [[package]]
 name = "panic_hook"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=09da4dfeecd754df2034d4e71a260277aaaf9783#09da4dfeecd754df2034d4e71a260277aaaf9783"
 dependencies = [
  "backtrace",
 ]
@@ -7460,7 +7460,7 @@ dependencies = [
 [[package]]
 name = "rlp_derive"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=09da4dfeecd754df2034d4e71a260277aaaf9783#09da4dfeecd754df2034d4e71a260277aaaf9783"
 dependencies = [
  "proc-macro2 0.4.30",
  "quote 0.6.13",
@@ -7470,7 +7470,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=3773afe5b953997188f37c39308105b5deb0faac#3773afe5b953997188f37c39308105b5deb0faac"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=a2ebf4e00f89c70359d9f3996a1390d9c6b55940#a2ebf4e00f89c70359d9f3996a1390d9c6b55940"
 dependencies = [
  "libc",
  "librocksdb_sys",
@@ -9444,7 +9444,7 @@ checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 [[package]]
 name = "unexpected"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1#1597a9cab02343eb2322ca0ac58d39b64e3f42d1"
+source = "git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=09da4dfeecd754df2034d4e71a260277aaaf9783#09da4dfeecd754df2034d4e71a260277aaaf9783"
 
 [[package]]
 name = "unicase"
