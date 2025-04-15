@@ -154,7 +154,6 @@ def run_single_round(options):
     if hasattr(sys, "getwindowsversion"):
         py = "python"
         
-    # 创建并运行调度器
     scheduler = TestScheduler(
         task_executable=run_single_test,
         py=py,
