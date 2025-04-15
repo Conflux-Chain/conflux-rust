@@ -697,7 +697,9 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         } in authorization_list.iter()
         {
             // 1. Verify the chain id is either 0 or the chain's current ID.
-            if *chain_id != 0 && *chain_id != current_chain_id {
+            if *chain_id != U256::zero()
+                && *chain_id != U256::from(current_chain_id)
+            {
                 continue;
             }
 

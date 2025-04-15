@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 
-use super::{AccountInfo, Env, SpecName, Test, TransactionParts};
+use super::{AccountInfo, Config, Env, SpecName, Test, TransactionParts};
 use cfx_bytes::Bytes;
 use cfx_types::Address;
 
@@ -20,7 +20,7 @@ pub struct TestUnit {
     pub transaction: TransactionParts,
     #[serde(default)]
     pub out: Option<Bytes>,
-    //pub config
+    pub config: Config,
 }
 
 #[cfg(test)]

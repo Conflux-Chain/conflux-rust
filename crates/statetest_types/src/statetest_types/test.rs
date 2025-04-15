@@ -26,7 +26,7 @@ pub struct Test {
     ///
     /// Note: Not used.
     #[serde(default)]
-    state: HashMap<Address, AccountInfo>,
+    pub state: HashMap<Address, AccountInfo>,
 
     /// Tx bytes
     pub txbytes: Option<Bytes>,

@@ -1,9 +1,9 @@
 [package]
-name = "cfx-evm"
-description = "A independent binary that can be used to run EVM statetests"
+name = "statetest_types"
 edition = "2021"
 version.workspace = true
 authors.workspace = true
+description.workspace = true
 documentation.workspace = true
 homepage.workspace = true
 keywords.workspace = true
@@ -13,22 +13,13 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
-thiserror = { workspace = true }
-cfx-types = { workspace = true }
-cfx-bytes = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
-enumn = { workspace = true }
-primitives = { workspace = true }
-alloy-primitives = { workspace = true }
+cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
-walkdir = { workspace = true }
-
-[[bin]]
-name = "evm"
-path = "src/main.rs"
-doc = false
+enumn = { workspace = true }
+cfx-bytes = { workspace = true }
+primitives = { workspace = true }
 
 [features]
 default = ["serde"]

@@ -112,6 +112,7 @@ impl Encodable for Eip155Transaction {
 }
 
 #[derive(
+    Default,
     Debug,
     Clone,
     PartialEq,
@@ -133,6 +134,7 @@ pub struct Eip2930Transaction {
 }
 
 #[derive(
+    Default,
     Debug,
     Clone,
     PartialEq,
@@ -155,6 +157,7 @@ pub struct Eip1559Transaction {
 }
 
 #[derive(
+    Default,
     Debug,
     Clone,
     PartialEq,

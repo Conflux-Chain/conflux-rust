@@ -1177,23 +1177,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cfx-evm"
-version = "2.4.0"
-dependencies = [
- "alloy-primitives",
- "cfx-bytes",
- "cfx-rpc-primitives",
- "cfx-types",
- "clap 4.5.35",
- "enumn",
- "primitives",
- "serde",
- "serde_json",
- "thiserror 2.0.11",
- "walkdir",
-]
-
-[[package]]
 name = "cfx-execute-helper"
 version = "2.0.2"
 dependencies = [
@@ -1706,7 +1689,7 @@ dependencies = [
  "cfx-vm-types",
  "cfxkey",
  "channel",
- "clap 2.34.0",
+ "clap",
  "consensus-types",
  "crash-handler",
  "dag",
@@ -1945,46 +1928,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap"
-version = "4.5.35"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8aa86934b44c19c50f87cc2790e19f54f7a67aedb64101c2e1a2e5ecfb73944"
-dependencies = [
- "clap_builder",
- "clap_derive",
-]
-
-[[package]]
-name = "clap_builder"
-version = "4.5.35"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2414dbb2dd0695280da6ea9261e327479e9d37b0630f6b53ba2a11c60c679fd9"
-dependencies = [
- "anstream",
- "anstyle",
- "clap_lex",
- "strsim 0.11.1",
-]
-
-[[package]]
-name = "clap_derive"
-version = "4.5.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09176aae279615badda0765c0c0b3f6ed53f4709118af73cf4655d85d1530cd7"
-dependencies = [
- "heck",
- "proc-macro2 1.0.93",
- "quote 1.0.36",
- "syn 2.0.96",
-]
-
-[[package]]
-name = "clap_lex"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
-
-[[package]]
 name = "client"
 version = "2.4.0"
 dependencies = [
@@ -2019,7 +1962,7 @@ dependencies = [
  "cfxcore-accounts",
  "cfxkey",
  "cfxstore",
- "clap 2.34.0",
+ "clap",
  "consensus-types",
  "criterion",
  "ctrlc",
@@ -2120,11 +2063,16 @@ version = "2.4.0"
 dependencies = [
  "bcs",
  "bls-signatures",
+ "cfx-bytes",
+ "cfx-executor",
+ "cfx-rpc-eth-types",
+ "cfx-statedb",
  "cfx-types",
+ "cfx-vm-types",
  "cfxcore",
  "cfxkey",
  "cfxstore",
- "clap 2.34.0",
+ "clap",
  "client",
  "db",
  "diem-crypto",
@@ -2132,9 +2080,11 @@ dependencies = [
  "docopt",
  "env_logger",
  "executor",
+ "hex",
  "jemallocator",
  "jsonrpc-core 18.0.0",
  "jsonrpc-core-client",
+ "keccak-hash",
  "log",
  "log4rs",
  "malloc_size_of",
@@ -2149,9 +2099,12 @@ dependencies = [
  "rustc-hex",
  "serde",
  "serde_json",
+ "statetest_types",
  "storage-interface",
  "tempdir",
+ "thiserror 2.0.11",
  "tokio 1.40.0",
+ "walkdir",
 ]
 
 [[package]]
@@ -2273,7 +2226,7 @@ checksum = "b01d6de93b2b6c65e17c634a26653a29d107b3c98c607c765bf38d041531cd8f"
 dependencies = [
  "atty",
  "cast",
- "clap 2.34.0",
+ "clap",
  "criterion-plot",
  "csv",
  "itertools 0.10.5",
@@ -8440,6 +8393,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "statetest_types"
+version = "2.4.0"
+dependencies = [
+ "cfx-bytes",
+ "cfx-rpc-primitives",
+ "cfx-types",
+ "enumn",
+ "primitives",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8479,12 +8445,6 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "strsim"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "strum"

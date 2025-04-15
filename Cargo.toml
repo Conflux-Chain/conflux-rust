@@ -5,7 +5,6 @@ members = [
     "bins/cfx_store",
     "bins/cfx_key",
     "bins/conflux",
-    "bins/cfx-evm",
     # libs
     "crates/cfx_bytes",
     "crates/cfx_types",
@@ -107,6 +106,7 @@ members = [
     "crates/pos/config/management/network-address-encryption",
     "crates/rpc/rpc-middlewares",
     "crates/tasks",
+    "crates/statetest_types",
 ]
 
 resolver = "2"
@@ -241,6 +241,7 @@ pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
+statetest_types = { path = "./crates/statetest_types" }
 
 # basics
 bytes = "1.9"
@@ -411,7 +412,7 @@ chrono = "=0.4.38"
 duration-str = "0.5.1"
 
 # parity crates
-rlp = "0.4.0"
+rlp = "0.4"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }

@@ -64,7 +64,7 @@ impl From<AuthorizationListItem> for SignedAuthorization {
 impl Into<AuthorizationListItem> for SignedAuthorization {
     fn into(self) -> AuthorizationListItem {
         AuthorizationListItem {
-            chain_id: self.inner.chain_id.as_u64(),
+            chain_id: self.inner.chain_id,
             address: self.inner.address,
             nonce: self.inner.nonce.as_u64(),
             y_parity: self.y_parity(),

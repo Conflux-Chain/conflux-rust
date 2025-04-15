@@ -35,6 +35,23 @@ pub struct SignedAuthorization {
     s: U256,
 }
 
+impl SignedAuthorization {
+    /// Returns the inner [`Authorization`].
+    pub const fn strip_signature(self) -> Authorization { self.inner }
+
+    /// Returns the inner [`Authorization`].
+    pub const fn inner(&self) -> &Authorization { &self.inner }
+
+    /// Returns the signature parity value.
+    pub fn y_parity(&self) -> u8 { self.y_parity as u8 }
+
+    /// Returns the signature `r` value.
+    pub const fn r(&self) -> U256 { self.r }
+
+    /// Returns the signature `s` value.
+    pub const fn s(&self) -> U256 { self.s }
+}
+
 #[cfg(feature = "serde")]
 mod quantity {
     use cfx_types::U64;

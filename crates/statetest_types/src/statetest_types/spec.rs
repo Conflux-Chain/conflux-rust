@@ -2,7 +2,7 @@ use super::spec_id::SpecId;
 use serde::Deserialize;
 
 /// Ethereum specification names
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Deserialize, Hash)]
 pub enum SpecName {
     Frontier,
     FrontierToHomesteadAt5,
