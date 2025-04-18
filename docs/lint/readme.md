@@ -14,9 +14,8 @@ This document explains how to run these checks manually on your local machine. T
 ## Lint Job (Formatting & Clipy Checks)
 
 This job checks if the code follows the project's formatting rules and uses Clippy for static analysis to find potential errors and improvements.
-### 本地执行步骤:
 
-#### Local Execution Steps:
+#### Run Locally:
 
 1. Install required toolchain and components:
 
@@ -50,7 +49,7 @@ cargo clippy --release --all -- -A warnings
 
 This job uses the `cargo-deny` tool to check project dependencies. It ensures they meet predefined rules for things like license compatibility. security vulnerabilities, and avoiding specific or duplicate dependencies.
 
-### Local Execution Steps:
+### Run Locally:
 
 1. Install cargo deny:
 
