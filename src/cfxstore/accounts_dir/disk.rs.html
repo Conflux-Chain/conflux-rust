@@ -604,6 +604,10 @@
 <a href="#602" id="602">602</a>
 <a href="#603" id="603">603</a>
 <a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -1019,7 +1023,11 @@
 <span class="kw">fn </span>account_filename(account: <span class="kw-2">&amp;</span>SafeAccount) -&gt; String {
     <span class="comment">// build file path
     </span>account.filename.clone().unwrap_or_else(|| {
-        <span class="kw">let </span>timestamp = time::strftime(<span class="string">"%Y-%m-%dT%H-%M-%S"</span>, <span class="kw-2">&amp;</span>time::now_utc())
+        <span class="kw">let </span>time_format = <span class="macro">time::macros::format_description!</span>(
+            <span class="string">"[year]-[month]-[day]T[hour]-[minute]-[second]"
+        </span>);
+        <span class="kw">let </span>timestamp = time::OffsetDateTime::now_utc()
+            .format(<span class="kw-2">&amp;</span>time_format)
             .expect(<span class="string">"Time-format string is valid."</span>);
         <span class="macro">format!</span>(<span class="string">"UTC--{}Z--{}"</span>, timestamp, Uuid::from(account.id))
     })
