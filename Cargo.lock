@@ -923,7 +923,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "primitives",
  "rand 0.7.3",
  "txgen",
@@ -1228,7 +1228,7 @@ dependencies = [
  "num 0.2.1",
  "once_cell",
  "parity-crypto",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pow-types",
  "primitives",
  "rayon",
@@ -1253,7 +1253,7 @@ dependencies = [
  "log",
  "malloc_size_of",
  "malloc_size_of_derive",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "primitives",
  "rlp 0.4.6",
  "rlp_derive",
@@ -1353,7 +1353,7 @@ dependencies = [
  "jsonrpsee",
  "keccak-hash",
  "log",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "primitives",
  "rustc-hex",
  "serde",
@@ -1489,7 +1489,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "throttling",
  "tokio 1.44.2",
  "tracing-subscriber",
@@ -1536,7 +1536,7 @@ dependencies = [
  "cfx-util-macros",
  "hashbrown 0.7.2",
  "log",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "primitives",
  "rlp 0.4.6",
  "tiny-keccak 2.0.2",
@@ -1567,7 +1567,7 @@ dependencies = [
  "malloc_size_of_derive",
  "memoffset 0.5.6",
  "parity-util-mem",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "primitives",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
@@ -1592,7 +1592,7 @@ dependencies = [
  "jsonrpc-tcp-server 15.1.0",
  "keccak-hash",
  "log",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "tokio 0.2.25",
 ]
 
@@ -1639,7 +1639,7 @@ dependencies = [
  "log",
  "malloc_size_of",
  "memory-cache",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "rustc-hex",
 ]
 
@@ -1738,7 +1738,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "once_cell",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pos-ledger-db",
  "pow-types",
  "primal",
@@ -1789,7 +1789,7 @@ dependencies = [
  "cfxkey",
  "cfxstore",
  "log",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "serde",
  "serde_derive",
  "serde_json",
@@ -1829,7 +1829,7 @@ dependencies = [
  "matches",
  "parity-crypto",
  "parity-wordlist",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "rand 0.7.3",
  "rustc-hex",
  "serde",
@@ -1850,7 +1850,7 @@ dependencies = [
  "env_logger",
  "num_cpus",
  "panic_hook",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "serde",
  "tempdir",
 ]
@@ -1997,7 +1997,7 @@ dependencies = [
  "num-bigint 0.2.6",
  "order-stat",
  "parity-version",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "primitives",
  "rand 0.7.3",
  "rand 0.8.5",
@@ -2088,7 +2088,7 @@ dependencies = [
  "malloc_size_of",
  "network",
  "parity-version",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pos-ledger-db",
  "primitives",
  "rand 0.8.5",
@@ -2658,7 +2658,7 @@ dependencies = [
  "mirai-annotations",
  "once_cell",
  "openssl",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pkcs8 0.7.6",
  "proptest",
  "proptest-derive",
@@ -2750,7 +2750,7 @@ dependencies = [
  "erased-serde",
  "hostname",
  "once_cell",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "pipe-logger-lib",
  "prometheus",
  "serde",
@@ -3505,9 +3505,9 @@ dependencies = [
 
 [[package]]
 name = "fixedbitset"
-version = "0.2.0"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
+checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "flate2"
@@ -4637,7 +4637,7 @@ dependencies = [
  "log",
  "metrics",
  "mio 0.6.23",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "slab",
 ]
 
@@ -5140,7 +5140,7 @@ dependencies = [
  "malloc_size_of_derive",
  "num_cpus",
  "parity-util-mem",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "regex",
  "rocksdb",
  "tempdir",
@@ -5284,7 +5284,7 @@ name = "link-cut-tree"
 version = "0.1.0"
 dependencies = [
  "malloc_size_of",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "rand 0.7.3",
 ]
 
@@ -5341,7 +5341,7 @@ dependencies = [
  "byteorder",
  "db",
  "kvdb",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "rand 0.7.3",
  "rlp 0.4.6",
  "rlp_derive",
@@ -5412,7 +5412,7 @@ dependencies = [
  "cfx-types",
  "hashbrown 0.7.2",
  "jemallocator",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "slab",
  "smallvec 1.13.2",
  "winapi 0.3.9",
@@ -5499,7 +5499,7 @@ dependencies = [
  "influx_db_client",
  "lazy_static",
  "log",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "rand 0.7.3",
  "reqwest 0.12.9",
  "serde",
@@ -5704,7 +5704,7 @@ dependencies = [
  "mio 0.6.23",
  "natpmp",
  "parity-path",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "priority-send-queue",
  "rand 0.7.3",
  "rlp 0.4.6",
@@ -6262,14 +6262,11 @@ version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60a2cfe6f0ad2bfc16aefa463b497d5c7a5ecd44a23efa72aa342d90177356dc"
 dependencies = [
- "backtrace",
  "cfg-if 1.0.0",
  "instant",
  "libc",
- "petgraph",
  "redox_syscall 0.2.16",
  "smallvec 1.13.2",
- "thread-id",
  "winapi 0.3.9",
 ]
 
@@ -6279,10 +6276,13 @@ version = "0.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9069cbb9f99e3a5083476ccb29ceb1de18b9118cafa53e90c9551235de2b9521"
 dependencies = [
+ "backtrace",
  "cfg-if 1.0.0",
  "libc",
+ "petgraph",
  "redox_syscall 0.2.16",
  "smallvec 1.13.2",
+ "thread-id",
  "windows-sys 0.45.0",
 ]
 
@@ -6397,12 +6397,12 @@ dependencies = [
 
 [[package]]
 name = "petgraph"
-version = "0.5.1"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
+checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset",
- "indexmap 1.9.2",
+ "indexmap 2.8.0",
 ]
 
 [[package]]
@@ -7110,7 +7110,7 @@ version = "1.0.0"
 dependencies = [
  "lazy_static",
  "log",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "rand 0.7.3",
 ]
 
@@ -7897,7 +7897,7 @@ dependencies = [
  "cfxkey",
  "malloc_size_of",
  "malloc_size_of_derive",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -8426,7 +8426,7 @@ dependencies = [
  "diem-state-view",
  "diem-types",
  "itertools 0.10.5",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "scratchpad",
  "serde",
  "thiserror 1.0.63",
@@ -8753,7 +8753,7 @@ version = "0.1.0"
 dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "toml",
 ]
 
@@ -9372,7 +9372,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "primitives",
  "rand 0.7.3",
  "rlp 0.4.6",
