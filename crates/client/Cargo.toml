@@ -2,6 +2,7 @@
 name = "client"
 version = { workspace = true }
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 bigdecimal = { workspace = true }
