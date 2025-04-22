@@ -2756,7 +2756,7 @@ dependencies = [
  "diem-logger",
  "diem-metrics-core",
  "futures 0.3.30",
- "hyper 0.14.25",
+ "hyper 0.14.32",
  "once_cell",
  "prometheus",
  "rusty-fork",
@@ -3865,9 +3865,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.16"
+version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5be7b54589b581f624f566bf5d8eb2bab1db736c51528720b6bd36b96b55924d"
+checksum = "81fe527a889e1532da5c525686d96d4c2e74cdd345badf8dfef9f6b39dd5f5e8"
 dependencies = [
  "bytes 1.9.0",
  "fnv",
@@ -3875,7 +3875,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http 0.2.9",
- "indexmap 1.9.2",
+ "indexmap 2.8.0",
  "slab",
  "tokio 1.44.2",
  "tokio-util 0.7.7",
@@ -4171,22 +4171,22 @@ checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
-version = "0.14.25"
+version = "0.14.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc5e554ff619822309ffd57d8734d77cd5ce6238bc956f037ea06c58238c9899"
+checksum = "41dfc780fdec9373c01bae43289ea34c972e40ee3c9f6b3c8801a35f35586ce7"
 dependencies = [
  "bytes 1.9.0",
  "futures-channel",
  "futures-core",
  "futures-util",
- "h2 0.3.16",
+ "h2 0.3.26",
  "http 0.2.9",
  "http-body 0.4.5",
  "httparse",
  "httpdate",
  "itoa",
  "pin-project-lite 0.2.14",
- "socket2 0.4.9",
+ "socket2",
  "tokio 1.44.2",
  "tower-service",
  "tracing",
@@ -4238,7 +4238,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
 dependencies = [
  "bytes 1.9.0",
- "hyper 0.14.25",
+ "hyper 0.14.32",
  "native-tls",
  "tokio 1.44.2",
  "tokio-native-tls",
@@ -4273,7 +4273,7 @@ dependencies = [
  "http-body 1.0.1",
  "hyper 1.4.1",
  "pin-project-lite 0.2.14",
- "socket2 0.5.7",
+ "socket2",
  "tokio 1.44.2",
  "tower",
  "tower-service",
@@ -4760,7 +4760,7 @@ checksum = "d2b99d4207e2a04fb4581746903c2bb7eb376f88de9c699d0f3e10feeac0cd3a"
 dependencies = [
  "derive_more",
  "futures 0.3.30",
- "hyper 0.14.25",
+ "hyper 0.14.32",
  "jsonrpc-core 18.0.0",
  "jsonrpc-pubsub",
  "log",
@@ -4827,7 +4827,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1dea6e07251d9ce6a552abfb5d7ad6bc290a4596c8dcc3d795fae2bbdc1f3ff"
 dependencies = [
  "futures 0.3.30",
- "hyper 0.14.25",
+ "hyper 0.14.32",
  "jsonrpc-core 18.0.0",
  "jsonrpc-server-utils 18.0.0",
  "log",
@@ -7251,10 +7251,10 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2 0.3.16",
+ "h2 0.3.26",
  "http 0.2.9",
  "http-body 0.4.5",
- "hyper 0.14.25",
+ "hyper 0.14.32",
  "hyper-tls 0.5.0",
  "ipnet",
  "js-sys",
@@ -8292,16 +8292,6 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.4.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64a4a911eed85daf18834cfaa86a79b7d266ff93ff5ba14005426219480ed662"
-dependencies = [
- "libc",
- "winapi 0.3.9",
-]
-
-[[package]]
-name = "socket2"
 version = "0.5.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce305eb0b4296696835b71df73eb912e0f1ffd2556a501fcede6e0c50349191c"
@@ -8912,7 +8902,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite 0.2.14",
  "signal-hook-registry",
- "socket2 0.5.7",
+ "socket2",
  "tokio-macros 2.5.0",
  "windows-sys 0.52.0",
 ]
