@@ -57,7 +57,7 @@ impl<'a> ExecutiveContext<'a> {
         self, tx: &SignedTransaction, options: TransactOptions<O>,
     ) -> DbResult<ExecutionOutcome> {
         // Transaction should execute on an empty cache
-        // assert!(self.state.cache.get_mut().is_empty());
+        assert!(self.state.cache.get_mut().is_empty());
 
         let fresh_exec = FreshExecutive::new(self, tx, options);
 

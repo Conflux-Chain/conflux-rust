@@ -237,7 +237,7 @@ subcommands:
         setting: SubcommandRequiredElseHelp
         subcommands:
             - statetest:
-                about: Run Ethereum Execution Spec statetest
+                about: Execute Ethereum state tests
                 args:
                     - json-path:
                         help: Path to the statetest files

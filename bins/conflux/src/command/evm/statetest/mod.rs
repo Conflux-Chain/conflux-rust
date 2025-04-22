@@ -181,6 +181,7 @@ impl StateTestCmd {
     ) -> Result<(), TestError> {
         for (name, unit) in suite.0 {
             self.trace(format!("\n\tRunning TestUnit: {}", name));
+
             // step1: setup the state according the pre state
             let mut state_override = StateOverride::new();
             for (address, info) in unit.pre {
@@ -212,6 +213,7 @@ impl StateTestCmd {
                     }
                 })?;
 
+            // running each spec's tests
             for (spec_name, tests) in unit.post {
                 // Constantinople was immediately extended by Petersburg.
                 // There isn't any production Constantinople transaction
@@ -223,6 +225,7 @@ impl StateTestCmd {
                 // TODO Enable the appropriate Conflux CIPs based on the
                 // spec_name.
 
+                // running each test
                 for (index, test) in tests.into_iter().enumerate() {
                     let _ = index;
                     let tx = self.make_tx(
@@ -258,14 +261,13 @@ impl StateTestCmd {
                                 hex::encode(txbytes.0),
                                 hex::encode(raw_tx)
                             ));
-                            continue;
-                            // return Err(TestError {
-                            //     name: name.clone(),
-                            //     path: path.clone(),
-                            //     kind: TestErrorKind::Custom(
-                            //         "txbytes check failed".to_string(),
-                            //     ),
-                            // });
+                            return Err(TestError {
+                                name: name.clone(),
+                                path: path.clone(),
+                                kind: TestErrorKind::Custom(
+                                    "txbytes check failed".to_string(),
+                                ),
+                            });
                         }
                     }
 
@@ -301,10 +303,12 @@ impl StateTestCmd {
                             });
                         }
                         (Err(real_err), Some(expected_err)) => {
-                            self.debug(format!(
-                                "expected err: {}, actually error: {:?}",
-                                expected_err, real_err
-                            ));
+                            if real_err.to_string() != expected_err {
+                                self.debug(format!(
+                                    "expected err: {}, actually error: {:?}",
+                                    expected_err, real_err
+                                ));
+                            }
                             // TODO check error message are same kind
                             // TODO revert the state
                         }
@@ -347,7 +351,7 @@ impl StateTestCmd {
                             state.balance(&user_addr).unwrap_or_default();
                         if got_balance != expected_balance {
                             self.trace(format!(
-                                "\tBalance of {} mismatch: expected {} actually {}\n",
+                                "\tBalance of {:?} mismatch: expected {} actually {}\n",
                                 addr, expected_balance, got_balance
                             ));
                             inconsistent_state_err.kind =
@@ -365,7 +369,7 @@ impl StateTestCmd {
                             state.nonce(&user_addr).unwrap_or_default();
                         if got_nonce != expected_nonce {
                             self.trace(format!(
-                                "\tNonce of {} mismatch: expected {} actually {}\n",
+                                "\tNonce of {:?} mismatch: expected {} actually {}\n",
                                 addr, expected_nonce, got_nonce
                             ));
                             inconsistent_state_err.kind =
@@ -387,7 +391,7 @@ impl StateTestCmd {
                         let got_code = hex::encode(got_code);
                         if got_code != expected_code {
                             self.trace(format!(
-                                "\tCode of {} mismatch expected vs actually: \n{}\n{}\n",
+                                "\tCode of {:?} mismatch expected vs actually: \n{}\n{}\n",
                                 addr, expected_code, got_code
                             ));
                             inconsistent_state_err.kind =
@@ -408,7 +412,7 @@ impl StateTestCmd {
                                 .unwrap_or_default();
                             if curr_value != value {
                                 self.trace(format!(
-                                    "\tStorage of {} key {} mismatch: expected {} actually {}\n",
+                                    "\tStorage of {:?} key {} mismatch: expected {} actually {}\n",
                                     addr,
                                     key,
                                     value,
@@ -541,7 +545,6 @@ impl StateTestCmd {
                 })
             }
             _ => {
-                // Custom transaction type
                 return None;
             }
         };
@@ -604,6 +607,10 @@ impl StateTestCmd {
         match account_overrides {
             Some(overrides) => {
                 State::new_with_override(statedb, &overrides, Space::Ethereum)
+                    .map(|mut state| {
+                        state.commit_cache(false);
+                        state
+                    })
             }
             None => State::new(statedb),
         }
