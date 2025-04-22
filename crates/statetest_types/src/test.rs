@@ -15,10 +15,9 @@ pub struct Test {
     pub indexes: TxPartIndices,
     /// Post state hash
     pub hash: H256,
-    /// Post state
-    #[serde(default)]
-    pub post_state: HashMap<Address, AccountInfo>,
-
+    // /// Post state
+    // #[serde(default)]
+    // pub post_state: HashMap<Address, AccountInfo>,
     /// Logs root
     pub logs: H256,
 

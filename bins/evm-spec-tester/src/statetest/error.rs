@@ -1,4 +1,5 @@
 use cfx_bytes::Bytes;
+use cfx_executor::executive::ExecutionOutcome;
 use cfx_types::{H256, U256};
 use thiserror::Error;
 
@@ -17,10 +18,16 @@ pub enum TestErrorKind {
     StateMismatch(#[from] StateMismatch),
     #[error("unknown private key: {0:?}")]
     UnknownPrivateKey(H256),
-    #[error("unexpected exception: got {got_exception:?}, expected {expected_exception:?}")]
-    UnexpectedException {
-        expected_exception: Option<String>,
-        got_exception: Option<String>,
+    #[error("execution error: {outcome:?}")]
+    ExecutionError { outcome: ExecutionOutcome },
+    #[error("should fail but success: {fail_reason}")]
+    ShouldFail { fail_reason: String },
+    #[error(
+        "inconsistent fail_reason: expect: {fail_reason}, actual: {outcome:?}"
+    )]
+    InconsistentError {
+        outcome: ExecutionOutcome,
+        fail_reason: String,
     },
     #[error(
         "unexpected output: got {got_output:?}, expected {expected_output:?}"
@@ -37,8 +44,8 @@ pub enum TestErrorKind {
     InvalidPath,
     #[error("no JSON test files found in path")]
     NoJsonFiles,
-    #[error("custom error: {0}")]
-    Custom(String),
+    #[error("internal error: {0}")]
+    Internal(String),
 }
 
 #[allow(dead_code)]
@@ -50,11 +57,13 @@ pub enum StateMismatch {
     StateRootMismatch { got: H256, expected: H256 },
     #[error("balance mismatch: got {got}, expected {expected}")]
     BalanceMismatch { got: U256, expected: U256 },
+    #[error("gas mismatch: got {got}, expected {expected}")]
+    GasMismatch { got: U256, expected: U256 },
     #[error("nonce mismatch: got {got}, expected {expected}")]
     NonceMismatch { got: U256, expected: U256 },
     #[error("code mismatch: got {got}, expected {expected}")]
     CodeMismatch { got: String, expected: String },
-    #[error("state mismatch: key {key} got {got}, expected {expected}")]
+    #[error("storage mismatch (key {key}): got {got}, expected {expected}")]
     StorageMismatch {
         key: U256,
         got: U256,

@@ -1,0 +1,39 @@
+[package]
+name = "evm-spec-tester"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfxcore = { workspace = true }
+cfx-executor = { workspace = true, features = ["testonly_code"] }
+cfx-rpc-eth-types = { workspace = true }
+cfx-statedb = { workspace = true }
+cfx-types = { workspace = true }
+cfx-vm-types = { workspace = true }
+cfxkey = { workspace = true }
+client = { workspace = true }
+primitives = { workspace = true }
+statetest_types = { workspace = true }
+
+clap = { workspace = true }
+serde_json = { workspace = true }
+walkdir = { workspace = true }
+thiserror = { workspace = true }
+cfx-bytes = { workspace = true }
+rlp = { workspace = true }
+hex = { workspace = true }
+
+log = { workspace = true }
+
+structopt = { version = "0.3", default-features = false }
+env_logger = { workspace = true }
+itertools = "0.14"

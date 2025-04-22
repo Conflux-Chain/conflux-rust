@@ -5,6 +5,7 @@ members = [
     "bins/cfx_store",
     "bins/cfx_key",
     "bins/conflux",
+    "bins/evm-spec-tester",
     # libs
     "crates/cfx_bytes",
     "crates/cfx_types",

@@ -9,6 +9,7 @@ pub(crate) fn skip_test(path: &Path) -> bool {
     matches!(name, "dummy_skip.json")
 }
 
+#[allow(unused)]
 pub(crate) fn allowed_test(path: &Path, matches: Option<&str>) -> bool {
     if matches.is_none() {
         return true;
@@ -58,13 +59,3 @@ pub(crate) fn extract_155_chain_id_from_raw_tx(
 }
 
 fn is_rlp_list(raw: &[u8]) -> bool { !raw.is_empty() && raw[0] >= 0xc0 }
-
-#[repr(u8)]
-pub enum VerboseMode {
-    Fatal = 0,
-    Error = 1,
-    Warn = 2,
-    Info = 3,
-    Debug = 4,
-    Trace = 5,
-}

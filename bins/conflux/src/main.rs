@@ -7,10 +7,7 @@ mod test;
 
 mod command;
 
-use crate::command::{
-    evm::{EvmCommand, StateTestCmd},
-    rpc::RpcCommand,
-};
+use crate::command::rpc::RpcCommand;
 use cfxcore::NodeType;
 use clap::{crate_version, load_yaml, App, ArgMatches};
 use client::{
@@ -138,19 +135,6 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
             _ => unreachable!(),
         };
         let execute_output = command::account::execute(account_cmd)?;
-        return Ok(Some(execute_output));
-    }
-
-    // evm sub-commands
-    if let ("evm", Some(evm_matches)) = matches.subcommand() {
-        let evm_cmd = match evm_matches.subcommand() {
-            ("statetest", Some(statetest_matches)) => EvmCommand::Statetest(
-                StateTestCmd::new(statetest_matches, matches),
-            ),
-            _ => unreachable!(),
-        };
-
-        let execute_output = evm_cmd.run()?;
         return Ok(Some(execute_output));
     }
 
