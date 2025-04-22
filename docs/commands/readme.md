@@ -1,13 +1,13 @@
 # commands
 
-conflux binary 除了主要作为 Conflux 网络的节点运行程序外，还提供了一些命令行工具，方便用户进行一些操作。
+In addition to serving as the main node software for running the Conflux network, the conflux binary also provides a set of command-line tools to help users perform various operations more conveniently.
 
-目前包含的子命令有：
+Currently Available Subcommands：
 
-- `account`：管理账户
-- `evm`：EVM 相关的子命令, 例如运行 statetest 等
-- `rpc`：基于 RPC 的子命令，用于查询区块链信息和发送交易
-- `help`：打印帮助信息
+- `account`：Account Management
+- `evm`：EVM-related subcommands, such as running statetest and others
+- `rpc`：RPC-based subcommands, used for querying blockchain information and sending transactions
+- `help`：Print help message
 
 ```sh
 ./conflux -h
@@ -38,8 +38,8 @@ SUBCOMMANDS:
     rpc        RPC based subcommands to query blockchain information and send transactions
 ```
 
-每个命令行工具都有自己的帮助信息，用户可以通过 `-h` 或 `--help` 参数查看帮助信息。
-例如，查看 `account` 命令的帮助信息：
+Each command-line tool comes with its own help information. Users can view the help message by using the -h or --help flag.
+For example, to view the help information for the account command
 
 ```sh
 ./conflux account -h
