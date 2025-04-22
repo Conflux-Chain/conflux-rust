@@ -10,7 +10,7 @@ The following subcommands are currently supported:
 
 The state tests is used to test the state transition function of the Ethereum Virtual Machine (EVM).
 
-It does so by defining a transaction, a pre-execution state, and a post-execution state, and verifying that the transaction execution results in the expected post-execution state.
+It does so by defining a transaction, a pre-execution state, and a post-execution state, and verifying that the transaction execution results in the expected post-execution state. [`pointer_reentry.json`](./pointer_reentry.json) is an example of a state test case.
 
 Check more details in the [execution-spec-tests documentation](https://eest.ethereum.org/main/consuming_tests/state_test/)
 
@@ -37,29 +37,11 @@ Alternatively, you can clone the repository locally. The `GeneralStateTests` dir
 
 ### How to run the statetest
 
-You can run the evm statetest command and specify the directory containing the state test cases to execute the tests.:
+You can run the evm statetest command and specify the directory containing the state test cases to execute the tests:
 
 ```bash
 conflux -c ./evm-config.yaml evm statetest -p /data/test-fixtures/develop/state_tests/prague
 ```
-
-#### configuration
-
-The `evm-config.yaml` file is a configuration file used to control the behavior of the Conflux node, such as which CIPs (Conflux Improvement Proposals) are enabled. Below is a sample configuration file, where all CIPs are activated at block height 1.:
-
-```yaml
-mode="dev"
-default_transition_time=1
-pos_reference_enable_height=1
-cip43_init_end_number=1
-align_evm_transition_height=1
-cip112_transition_height=1 # block custom field encoding
-tanzanite_transition_height=1 # change block reward from 7 to 2
-chain_id=2
-evm_chain_id=1
-```
-
-If no configuration file is specified, the default activation settings (same as the mainnet) will be used.
 
 #### run single test
 
@@ -76,3 +58,29 @@ You can enable verbose mode by using -v or -vv. In this mode, more debug informa
 ```bash
 conflux -c ./evm-config.yaml evm statetest -p /data/test-fixtures/develop/state_tests/prague --match the-test-file-name.json -vv
 ```
+
+#### configuration
+
+The `evm-config.yaml` file is a configuration file used to control the behavior of the Conflux node, such as which CIPs (Conflux Improvement Proposals) are enabled. 
+
+Below is a sample configuration file, where all CIPs are activated at block height 1:
+
+```yaml
+mode="dev"
+default_transition_time=1
+pos_reference_enable_height=1
+cip43_init_end_number=1
+align_evm_transition_height=1
+cip112_transition_height=1 # block custom field encoding
+tanzanite_transition_height=1 # change block reward from 7 to 2
+chain_id=2
+evm_chain_id=1
+```
+
+If no configuration file is specified, the default activation settings (same as the mainnet) will be used.
+
+### Skiped tests
+
+Some tests are skipped due to conflux does not support some features of the EVM. The skipped tests are listed below:
+
+- EIP-4844 tests

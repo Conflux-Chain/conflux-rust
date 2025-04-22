@@ -184,7 +184,7 @@ impl StateTestCmd {
 
             // step1: setup the state according the pre state
             let mut state_override = StateOverride::new();
-            for (address, info) in unit.pre {
+            for (address, info) in &unit.pre {
                 // let code_hash = keccak(info.code.0.clone());
                 let account_state: HashMap<H256, H256> = info
                     .storage
@@ -194,7 +194,7 @@ impl StateTestCmd {
                     })
                     .collect();
                 state_override.insert(
-                    address,
+                    *address,
                     AccountOverride {
                         balance: Some(info.balance),
                         nonce: Some(U64::from(info.nonce)),
@@ -291,7 +291,7 @@ impl StateTestCmd {
                     //    state.
                     // 3. If it succeeds but expectException is not empty, then
                     //    fail the test.
-                    match (res, test.expect_exception) {
+                    let execution_outcome = match (res, test.expect_exception) {
                         (Err(e), None) => {
                             return Err(TestError {
                                 name: name.clone(),
@@ -311,19 +311,46 @@ impl StateTestCmd {
                             }
                             // TODO check error message are same kind
                             // TODO revert the state
+                            continue;
                         }
-                        (Ok(_), Some(e)) => {
-                            return Err(TestError {
-                                name: name.clone(),
-                                path: path.clone(),
-                                kind: TestErrorKind::UnexpectedException {
-                                    expected_exception: Some(e),
-                                    got_exception: None,
+                        (Ok(execution_outcome), Some(e)) => {
+                            match execution_outcome {
+                                ExecutionOutcome::ExecutionErrorBumpNonce(_, _) | ExecutionOutcome::NotExecutedDrop(_) | ExecutionOutcome::NotExecutedToReconsiderPacking(_) => {
+                                    // expect exception, actually exception
+                                    continue;
                                 },
-                            });
+                                ExecutionOutcome::Finished(_) => {
+                                    return Err(TestError {
+                                        name: name.clone(),
+                                        path: path.clone(),
+                                        kind: TestErrorKind::UnexpectedException {
+                                            expected_exception: Some(e),
+                                            got_exception: None,
+                                        },
+                                    });
+                                }
+                            }
                         }
-                        _ => {}
-                    }
+                        (Ok(execution_outcome), None) => {
+                            match execution_outcome {
+                                ExecutionOutcome::ExecutionErrorBumpNonce(_, _) | ExecutionOutcome::NotExecutedDrop(_) | ExecutionOutcome::NotExecutedToReconsiderPacking(_) => {
+                                    // expect success, actually exception
+                                    return Err(TestError {
+                                        name: name.clone(),
+                                        path: path.clone(),
+                                        kind: TestErrorKind::UnexpectedException {
+                                            expected_exception: None,
+                                            got_exception: Some("ExecutionError".to_string()),
+                                        },
+                                    });
+                                },
+                                ExecutionOutcome::Finished(v) => {
+                                    // expect success, actually success
+                                    v
+                                }
+                            }
+                        }
+                    };
 
                     // check state root hash or state is same
                     for (addr, account_info) in test.state {
@@ -350,6 +377,32 @@ impl StateTestCmd {
                         let got_balance =
                             state.balance(&user_addr).unwrap_or_default();
                         if got_balance != expected_balance {
+                            // log tx detail info
+                            self.trace(format!(
+                                "\tTransaction meta: value {} gas_limit {} gas_price {}",
+                                tx.value(), tx.gas_limit(), tx.gas_price()
+                            ));
+                            self.trace(format!(
+                                "\tExecution outcome: {:?}",
+                                execution_outcome
+                            ));
+                            // log the gas usage
+                            if user_addr == tx.sender() && tx.value().is_zero()
+                            {
+                                let before_balance = unit
+                                    .pre
+                                    .get(&addr)
+                                    .map(|v| v.balance)
+                                    .unwrap_or_default();
+                                let expected_gas_used = (before_balance
+                                    - expected_balance)
+                                    / tx.gas_price();
+                                self.trace(format!(
+                                    "\tGas used: expected {} actually {}",
+                                    expected_gas_used,
+                                    execution_outcome.gas_used
+                                ));
+                            }
                             self.trace(format!(
                                 "\tBalance of {:?} mismatch: expected {} actually {}\n",
                                 addr, expected_balance, got_balance
