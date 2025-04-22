@@ -26,7 +26,7 @@ jobs:
           CMAKE_POLICY_VERSION_MINIMUM: 3.5
           RUSTDOCFLAGS: '--enable-index-page -Z unstable-options'
         run: |
-          rustup default nightly-2024-02-04 && cargo +nightly-2024-02-04 doc --no-deps
+          rustup default nightly-2024-04-22 && cargo +nightly-2024-04-22 doc --no-deps
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
