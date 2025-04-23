@@ -879,7 +879,6 @@
     collections::HashMap,
     fs::create_dir_all,
     path::Path,
-    str::FromStr,
     sync::{Arc, Weak},
     thread,
     time::{Duration, Instant},
@@ -897,7 +896,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::keylib::KeyPair;
 <span class="kw">use </span>blockgen::BlockGenerator;
 <span class="kw">use </span>cfx_executor::machine::{Machine, VmFactory};
-<span class="kw">use </span>cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
+<span class="kw">use </span>cfx_parameters::genesis::{
+    DEV_GENESIS_KEY_PAIR_2, GENESIS_ACCOUNT_ADDRESS,
+};
 <span class="kw">use </span>cfx_storage::StorageManager;
 <span class="kw">use </span>cfx_tasks::TaskManager;
 <span class="kw">use </span>cfx_types::{address_util::AddressUtil, Address, Space, U256};
@@ -945,7 +946,6 @@
         launch_async_rpc_servers, setup_debug_rpc_apis,
         setup_public_eth_rpc_apis, setup_public_rpc_apis,
     },
-    GENESIS_VERSION,
 };
 <span class="kw">use </span>cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1190,7 +1190,7 @@
     <span class="kw">let </span>genesis_block = genesis_block(
         <span class="kw-2">&amp;</span>storage_manager,
         genesis_accounts.clone(),
-        Address::from_str(GENESIS_VERSION).unwrap(),
+        GENESIS_ACCOUNT_ADDRESS,
         U256::zero(),
         machine.clone(),
         conf.raw_conf.execute_genesis, <span class="comment">/* need_to_execute */
