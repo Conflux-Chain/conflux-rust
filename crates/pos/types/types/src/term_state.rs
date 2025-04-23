@@ -1100,10 +1100,14 @@ impl PosState {
 
     pub fn forfeit_node(&mut self, addr: &AccountAddress) -> Result<()> {
         diem_trace!("forfeit_node: {:?}", addr);
+        let mut update_views = Vec::new();
         match self.node_map.get_mut(&addr) {
-            Some(node) => node.lock_status.forfeit(),
+            Some(node) => node
+                .lock_status
+                .forfeit(self.current_view, &mut update_views),
             None => bail!("Forfeiting node does not exist"),
         }
+        self.record_update_views(addr, update_views);
         Ok(())
     }
 }

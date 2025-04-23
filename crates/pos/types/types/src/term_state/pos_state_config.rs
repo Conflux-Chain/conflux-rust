@@ -26,6 +26,9 @@ pub struct PosStateConfig {
     cip136_in_queue_locked_views: u64,
     cip136_round_per_term: u64,
 
+    cip156_transition_view: u64,
+    cip156_dispute_locked_views: u64,
+
     nonce_limit_transition_view: u64,
     max_nonce_per_account: u64,
 }
@@ -46,6 +49,9 @@ pub trait PosStateConfigTrait {
     fn max_nonce_per_account(&self, view: u64) -> u64;
     fn get_term_view(&self, view: u64) -> (u64, u64);
     fn get_starting_view_for_term(&self, term: u64) -> Option<u64>;
+    // Returning None means the stake should be forfeited instead of being
+    // locked.
+    fn dispute_locked_views(&self, view: u64) -> Option<u64>;
 }
 
 impl PosStateConfig {
@@ -56,7 +62,8 @@ impl PosStateConfig {
         cip99_out_queue_locked_views: u64, nonce_limit_transition_view: u64,
         max_nonce_per_account: u64, cip136_transition_view: u64,
         cip136_in_queue_locked_views: u64, cip136_out_queue_locked_views: u64,
-        cip136_round_per_term: u64,
+        cip136_round_per_term: u64, cip156_transition_view: u64,
+        cip156_dispute_locked_views: u64,
     ) -> Self {
         Self {
             round_per_term,
@@ -71,6 +78,8 @@ impl PosStateConfig {
             cip136_out_queue_locked_views,
             cip136_in_queue_locked_views,
             cip136_round_per_term,
+            cip156_transition_view,
+            cip156_dispute_locked_views,
             nonce_limit_transition_view,
             max_nonce_per_account,
         }
@@ -190,6 +199,15 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
                 .map(|v| v + conf.cip136_transition_view)
         }
     }
+
+    fn dispute_locked_views(&self, view: u64) -> Option<u64> {
+        let conf = self.get().unwrap();
+        if view < conf.cip156_transition_view {
+            None
+        } else {
+            Some(conf.cip156_dispute_locked_views)
+        }
+    }
 }
 
 pub static POS_STATE_CONFIG: OnceCell<PosStateConfig> = OnceCell::new();
@@ -209,6 +227,8 @@ impl Default for PosStateConfig {
             cip136_out_queue_locked_views: IN_QUEUE_LOCKED_VIEWS,
             cip136_in_queue_locked_views: OUT_QUEUE_LOCKED_VIEWS,
             cip136_round_per_term: ROUND_PER_TERM,
+            cip156_transition_view: u64::MAX,
+            cip156_dispute_locked_views: u64::MAX,
             nonce_limit_transition_view: u64::MAX,
             max_nonce_per_account: u64::MAX,
         }
