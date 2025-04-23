@@ -1192,7 +1192,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(state.nonce(&sender_with_space).unwrap(), U256::from(1));
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
@@ -1293,7 +1293,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller3.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1340,7 +1340,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller1.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1385,7 +1385,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller2.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1444,7 +1444,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller2.address().with_native_space()).unwrap(),
         U256::from(2)
@@ -1501,7 +1501,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller3.address().with_native_space()).unwrap(),
         U256::from(2)

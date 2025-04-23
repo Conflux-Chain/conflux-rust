@@ -402,10 +402,18 @@ impl<'a> EstimationContext<'a> {
 
 fn estimated_gas_limit(executed: &Executed, tx: &SignedTransaction) -> U256 {
     let cip130_min_gas_limit = U256::from(tx.data().len() * 100);
+    let eip7623_gas_limit = 21000
+        + tx.data()
+            .iter()
+            .map(|&x| if x == 0 { 10 } else { 40 })
+            .sum::<u64>();
     let estimated =
         executed.ext_result.get::<GasLimitEstimation>().unwrap() * 7 / 6
             + executed.base_gas;
-    U256::max(estimated, cip130_min_gas_limit)
+    U256::max(
+        eip7623_gas_limit.into(),
+        U256::max(estimated, cip130_min_gas_limit),
+    )
 }
 
 fn storage_limit(executed: &Executed) -> u64 {

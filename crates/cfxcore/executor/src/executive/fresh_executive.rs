@@ -36,7 +36,8 @@ pub struct FreshExecutive<'a, O: ExecutiveObserver> {
 pub(super) struct CostInfo {
     /// Sender balance
     pub sender_balance: U512,
-    /// The intrinsic gas (21000/53000 + tx data gas + access list gas + authorization list gas)
+    /// The intrinsic gas (21000/53000 + tx data gas + access list gas +
+    /// authorization list gas)
     pub base_gas: u64,
     /// The floor gas from EIP-7623
     pub floor_gas: u64,
