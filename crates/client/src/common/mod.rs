@@ -68,15 +68,13 @@ use crate::{
         extractor::RpcExtractor,
         impls::{
             cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
-            eth_pubsub::PubSubClient as EthPubSubClient, pubsub::PubSubClient,
+            pubsub::PubSubClient,
         },
-        launch_async_rpc_servers, setup_debug_rpc_apis,
-        setup_public_eth_rpc_apis, setup_public_rpc_apis,
+        launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
     },
     GENESIS_VERSION,
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
-use std::net::SocketAddr;
 
 pub mod delegate_convert;
 pub mod shutdown_handler;
@@ -155,7 +153,6 @@ pub fn initialize_common_modules(
         Arc<AccountProvider>,
         Arc<Notifications>,
         PubSubClient,
-        EthPubSubClient,
         Arc<TokioRuntime>,
     ),
     String,
@@ -470,12 +467,6 @@ pub fn initialize_common_modules(
         *network.get_network_type(),
     );
 
-    let eth_pubsub = EthPubSubClient::new(
-        tokio_runtime.clone(),
-        consensus.clone(),
-        notifications.clone(),
-    );
-
     Ok((
         machine,
         secret_store,
@@ -491,7 +482,6 @@ pub fn initialize_common_modules(
         accounts,
         notifications,
         pubsub,
-        eth_pubsub,
         tokio_runtime,
     ))
 }
@@ -514,10 +504,9 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Option<WSServer>,
         Arc<PosVerifier>,
-        Option<HttpServer>,
+        Option<RpcServerHandle>,
         Option<WSServer>,
         Arc<TokioRuntime>,
-        Option<RpcServerHandle>,
         TaskManager,
     ),
     String,
@@ -537,7 +526,6 @@ pub fn initialize_not_light_node_modules(
         accounts,
         _notifications,
         pubsub,
-        eth_pubsub,
         tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
@@ -679,7 +667,6 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             &conf,
         ),
     )?;
@@ -690,19 +677,6 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
-            &conf,
-        ),
-        RpcExtractor,
-    )?;
-
-    let rpc_tcp_server = super::rpc::start_tcp(
-        conf.tcp_config(),
-        setup_public_rpc_apis(
-            common_impl.clone(),
-            rpc_impl.clone(),
-            pubsub.clone(),
-            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -714,7 +688,17 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
+            &conf,
+        ),
+        RpcExtractor,
+    )?;
+
+    let rpc_tcp_server = super::rpc::start_tcp(
+        conf.tcp_config(),
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -726,63 +710,32 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             &conf,
-        ),
-        RpcExtractor,
-    )?;
-
-    let eth_rpc_http_server = super::rpc::start_http(
-        conf.eth_http_config(),
-        setup_public_eth_rpc_apis(
-            rpc_impl.clone(),
-            eth_pubsub.clone(),
-            &conf,
-            task_executor.clone(),
-        ),
-    )?;
-
-    let eth_rpc_ws_server = super::rpc::start_ws(
-        conf.eth_ws_config(),
-        setup_public_eth_rpc_apis(
-            rpc_impl.clone(),
-            eth_pubsub.clone(),
-            &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
 
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
-        setup_public_rpc_apis(
-            common_impl,
-            rpc_impl,
-            pubsub,
-            eth_pubsub.clone(),
-            &conf,
-        ),
+        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
 
     network.start();
 
-    let eth_rpc_http_server_addr =
-        conf.raw_conf.jsonrpc_http_eth_port_v2.map(|port| {
-            format!("0.0.0.0:{}", port)
-                .parse::<SocketAddr>()
-                .expect("Invalid socket port")
-        });
-    let async_eth_rpc_http_server =
+    let eth_rpc_http_server = if conf.eth_http_config().enabled {
         tokio_runtime.block_on(launch_async_rpc_servers(
             conf.rpc_impl_config(),
             conf.raw_conf.throttling_conf.clone(),
-            conf.raw_conf.public_evm_rpc_async_apis.clone(),
+            conf.raw_conf.public_evm_rpc_apis.clone(),
             consensus.clone(),
             sync.clone(),
             txpool.clone(),
-            eth_rpc_http_server_addr,
+            conf.eth_http_config().address,
             task_executor.clone(),
-        ))?;
+        ))?
+    } else {
+        None
+    };
 
     Ok((
         data_man,
@@ -799,9 +752,8 @@ pub fn initialize_not_light_node_modules(
         rpc_ws_server,
         pos_verifier,
         eth_rpc_http_server,
-        eth_rpc_ws_server,
+        None, // eth_rpc_ws_server,
         tokio_runtime,
-        async_eth_rpc_http_server,
         task_manager,
     ))
 }
