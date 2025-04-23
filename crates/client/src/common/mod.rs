@@ -681,7 +681,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
     )?;
 
@@ -693,7 +692,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -706,7 +704,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -719,7 +716,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -732,7 +728,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -740,9 +735,7 @@ pub fn initialize_not_light_node_modules(
     let eth_rpc_http_server = super::rpc::start_http(
         conf.eth_http_config(),
         setup_public_eth_rpc_apis(
-            common_impl.clone(),
             rpc_impl.clone(),
-            pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
             task_executor.clone(),
@@ -752,9 +745,7 @@ pub fn initialize_not_light_node_modules(
     let eth_rpc_ws_server = super::rpc::start_ws(
         conf.eth_ws_config(),
         setup_public_eth_rpc_apis(
-            common_impl.clone(),
             rpc_impl.clone(),
-            pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
             task_executor.clone(),
@@ -770,7 +761,6 @@ pub fn initialize_not_light_node_modules(
             pubsub,
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
     )?;
 
