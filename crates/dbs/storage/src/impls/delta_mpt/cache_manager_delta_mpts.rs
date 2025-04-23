@@ -51,7 +51,7 @@ pub struct CacheManagerDeltaMpts<
     ///
     /// Note that there are also dirty nodes, which always live in memory.
     /// The NodeRef / MaybeNodeRef also covers dirty nodes, but NodeRefMap
-    /// covers only commited nodes.
+    /// covers only committed nodes.
     pub(super) node_ref_map: NodeRefMapDeltaMpts<CacheAlgoDataT>,
     pub(super) cache_algorithm: CacheAlgorithmT,
 }
