@@ -56,9 +56,8 @@ use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
 
 use crate::rpc::{
-    apis::{ApiSet, EthApiSet},
-    impls::RpcImplConfiguration,
-    HttpConfiguration, TcpConfiguration, WsConfiguration,
+    apis::ApiSet, impls::RpcImplConfiguration, HttpConfiguration,
+    TcpConfiguration, WsConfiguration,
 };
 
 lazy_static! {
@@ -223,7 +222,6 @@ build_config! {
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
         (jsonrpc_http_eth_port, (Option<u16>), None)
         (jsonrpc_ws_eth_port, (Option<u16>), None)
-        (jsonrpc_http_eth_port_v2, (Option<u16>), None)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -442,8 +440,7 @@ build_config! {
             ProvideExtraSnapshotSyncConfig::parse_config_list)
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
-        (public_evm_rpc_apis, (EthApiSet), EthApiSet::Evm, EthApiSet::from_str)
-        (public_evm_rpc_async_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
+        (public_evm_rpc_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
         (single_mpt_space, (Option<Space>), None, |s| match s {
             "native" => Ok(Space::Native),
             "evm" => Ok(Space::Ethereum),

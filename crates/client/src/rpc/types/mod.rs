@@ -4,7 +4,6 @@
 
 pub mod cfx;
 mod constants;
-pub mod eth;
 pub mod pos;
 mod provenance;
 

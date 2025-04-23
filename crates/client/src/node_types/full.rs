@@ -33,11 +33,8 @@ pub struct FullClientExtraComponents {
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
-    pub eth_rpc_http_server: Option<HttpServer>,
+    pub eth_rpc_http_server: Option<RpcServerHandle>,
     pub eth_rpc_ws_server: Option<WsServer>,
-    /// Handle to the started ETH RPC server. This is version 2 of the ETH RPC.
-    /// Which use Rust async I/O
-    pub eth_rpc_server_handle: Option<RpcServerHandle>,
     pub tokio_runtime: Arc<TokioRuntime>,
     pub task_manager: TaskManager,
 }
@@ -73,7 +70,6 @@ impl FullClient {
             eth_rpc_http_server,
             eth_rpc_ws_server,
             tokio_runtime,
-            eth_rpc_server_handle,
             task_manager,
         ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
@@ -93,7 +89,6 @@ impl FullClient {
                 pow,
                 eth_rpc_http_server,
                 eth_rpc_ws_server,
-                eth_rpc_server_handle,
                 tokio_runtime,
                 task_manager,
             },

@@ -267,6 +267,8 @@ pub enum EthRpcModule {
     Rpc,
     /// `parity_` module
     Parity,
+    ///
+    PubSub,
 }
 
 impl EthRpcModule {
@@ -302,7 +304,7 @@ impl FromStr for EthRpcModule {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             // "admin" => Self::Admin,
-            "debug" => Self::Debug,
+            "debug" | "ethdebug" => Self::Debug,
             "eth" => Self::Eth,
             "net" => Self::Net,
             "trace" => Self::Trace,
@@ -310,6 +312,7 @@ impl FromStr for EthRpcModule {
             "web3" => Self::Web3,
             "rpc" => Self::Rpc,
             "parity" => Self::Parity,
+            "pubsub" | "ethpubsub" => Self::PubSub,
             _ => return Err(ParseError::VariantNotFound),
         })
     }

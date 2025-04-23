@@ -6,7 +6,7 @@ use crate::rpc::{
     errors,
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
-    traits::pubsub::PubSub,
+    traits::PubSub,
     types::{
         pubsub::{self, SubscriptionEpoch},
         Header as RpcHeader, Log as RpcLog,
@@ -18,7 +18,9 @@ use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
 };
 use cfx_types::{Space, H256};
-use cfxcore::{BlockDataManager, Notifications, SharedConsensusGraph};
+use cfxcore::{
+    channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
+};
 use futures::future::join_all;
 use itertools::zip;
 use jsonrpc_core::Result as RpcResult;
@@ -81,6 +83,10 @@ impl PubSubClient {
     /// Returns a chain notification handler.
     pub fn handler(&self) -> Weak<ChainNotificationHandler> {
         Arc::downgrade(&self.handler)
+    }
+
+    pub fn epochs_ordered(&self) -> Arc<Channel<(u64, Vec<H256>)>> {
+        self.notifications.epochs_ordered.clone()
     }
 
     fn start_head_loop(&self) {

@@ -37,7 +37,7 @@ use crate::{
         errors::{self, invalid_params_check},
         helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
         impls::common::{self, RpcImpl as CommonImpl},
-        traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
+        traits::{Cfx, DebugRpc, TestRpc},
         types::{
             cfx::check_rpc_address_network,
             pos::{Block as PosBlock, PoSEpochReward},
@@ -1342,7 +1342,7 @@ impl DebugRpcImpl {
     }
 }
 
-impl LocalRpc for DebugRpcImpl {
+impl DebugRpc for DebugRpcImpl {
     delegate! {
         to self.common {
             fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<

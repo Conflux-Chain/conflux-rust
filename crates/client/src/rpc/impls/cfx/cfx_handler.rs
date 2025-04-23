@@ -81,10 +81,9 @@ use crate::{
             common::{self, RpcImpl as CommonImpl},
             RpcImplConfiguration,
         },
-        traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
+        traits::{Cfx, DebugRpc, TestRpc},
         types::{
-            eth::Transaction as EthTransaction, pos::Block as PosBlock,
-            Account as RpcAccount, AccountPendingInfo,
+            pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CfxRpcLogFilter,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
@@ -107,6 +106,7 @@ use cfx_parameters::{
     },
     staking::{BLOCKS_PER_YEAR, DRIPS_PER_STORAGE_COLLATERAL_UNIT},
 };
+use cfx_rpc_eth_types::Transaction as EthTransaction;
 use cfx_storage::state::StateDbGetOriginalMethods;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
@@ -2430,7 +2430,7 @@ impl LocalRpcImpl {
     }
 }
 
-impl LocalRpc for LocalRpcImpl {
+impl DebugRpc for LocalRpcImpl {
     delegate! {
         to self.common {
             fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<

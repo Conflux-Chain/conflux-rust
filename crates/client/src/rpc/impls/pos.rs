@@ -6,7 +6,7 @@ use crate::{
     common::delegate_convert::into_jsonrpc_result,
     rpc::{
         errors::{build_rpc_server_error, codes::POS_NOT_ENABLED},
-        traits::pos::Pos,
+        traits::Pos,
         types::{
             pos::{
                 tx_type, Account, Block, BlockNumber, CommitteeState, Decision,

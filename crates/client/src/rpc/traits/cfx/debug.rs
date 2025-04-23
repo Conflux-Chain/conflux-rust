@@ -19,7 +19,7 @@ use network::{
 use std::collections::BTreeMap;
 
 #[rpc(server)]
-pub trait LocalRpc {
+pub trait DebugRpc {
     #[rpc(name = "debug_inspectTxPool")]
     fn txpool_inspect(
         &self, address: Option<RpcAddress>,

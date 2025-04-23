@@ -6,7 +6,7 @@ use crate::{
     common::delegate_convert,
     rpc::{
         impls::common::RpcImpl as CommonImpl,
-        traits::pool::TransactionPool,
+        traits::TransactionPool,
         types::{
             AccountPendingInfo, AccountPendingTransactions, RpcAddress,
             Transaction as RpcTransaction, TxPoolPendingNonceRange,
