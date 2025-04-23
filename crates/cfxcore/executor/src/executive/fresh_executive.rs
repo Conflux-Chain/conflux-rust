@@ -4,7 +4,10 @@ use super::{
     transact_options::{ChargeCollateral, TransactOptions, TransactSettings},
     ExecutiveContext, PreCheckedExecutive,
 };
-use crate::{executive_observer::ExecutiveObserver, substate::Substate};
+use crate::{
+    executive::eip7623_required_gas, executive_observer::ExecutiveObserver,
+    substate::Substate,
+};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 
 use cfx_statedb::Result as DbResult;
@@ -28,14 +31,15 @@ pub struct FreshExecutive<'a, O: ExecutiveObserver> {
     tx: &'a SignedTransaction,
     observer: O,
     settings: TransactSettings,
-    base_gas: u64,
 }
 
 pub(super) struct CostInfo {
     /// Sender balance
     pub sender_balance: U512,
-    /// The intrinsic gas (21000/53000 + tx data gas + access list gas)
+    /// The intrinsic gas (21000/53000 + tx data gas + access list gas + authorization list gas)
     pub base_gas: u64,
+    /// The floor gas from EIP-7623
+    pub floor_gas: u64,
 
     /// Transaction value + gas cost (except the sponsored part)
     pub total_cost: U512,
@@ -67,19 +71,11 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let TransactOptions {
             observer, settings, ..
         } = options;
-        let base_gas = gas_required_for(
-            tx.action() == Action::Create,
-            &tx.data(),
-            tx.access_list(),
-            tx.authorization_len(),
-            context.spec,
-        );
         FreshExecutive {
             context,
             tx,
             observer,
             settings,
-            base_gas,
         }
     }
 
@@ -236,6 +232,28 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let env = self.context.env;
         let spec = self.context.spec;
 
+        let base_gas = gas_required_for(
+            tx.action() == Action::Create,
+            &tx.data(),
+            tx.access_list(),
+            tx.authorization_len(),
+            &spec.to_consensus_spec(),
+        );
+
+        let floor_gas =
+            eip7623_required_gas(&tx.data(), &spec.to_consensus_spec());
+
+        let minimum_tx_gas = u64::max(base_gas, floor_gas);
+
+        if *tx.gas() < minimum_tx_gas.into() {
+            return Ok(Err(ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit {
+                    expected: minimum_tx_gas.into(),
+                    got: *tx.gas(),
+                },
+            )));
+        }
+
         let check_base_price = self.settings.check_base_price;
 
         let gas_price = if !spec.cip1559 || !check_base_price {
@@ -275,7 +293,8 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
             let sender_cost = U512::from(tx.value()) + gas_cost;
             return Ok(Ok(CostInfo {
                 sender_balance,
-                base_gas: self.base_gas,
+                base_gas,
+                floor_gas,
                 gas_cost,
                 gas_price,
                 burnt_gas_price,
@@ -388,7 +407,8 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
 
         return Ok(Ok(CostInfo {
             sender_intended_cost,
-            base_gas: self.base_gas,
+            base_gas,
+            floor_gas,
             gas_cost,
             gas_price,
             burnt_gas_price,

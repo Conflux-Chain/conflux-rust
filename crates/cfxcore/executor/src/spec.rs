@@ -18,7 +18,7 @@ use cfx_parameters::{
     },
 };
 use cfx_types::{AllChainID, Space, SpaceMap, U256, U512};
-use cfx_vm_types::Spec;
+use cfx_vm_types::{ConsensusGasSpec, Spec};
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
 
@@ -147,10 +147,15 @@ pub struct TransitionsEpochHeight {
     pub cip154: BlockHeight,
     /// CIP-7702: Set Code for EOA
     pub cip7702: BlockHeight,
+    /// CIP-645: Align Conflux Gas Pricing with EVM
     pub cip645: BlockHeight,
     pub align_evm: BlockHeight,
+    /// EIP-2935: Serve historical block hashes from state
     pub eip2935: BlockHeight,
+    /// EIP-2537: Precompile for BLS12-381 curve operations
     pub eip2537: BlockHeight,
+    /// EIP-7623: Increase calldata cost
+    pub eip7623: BlockHeight,
     pub cip_c2_fix: BlockHeight,
 }
 
@@ -217,8 +222,21 @@ impl CommonParams {
         spec.cip7702 = height >= self.transition_heights.cip7702;
         spec.cip645 = height >= self.transition_heights.cip645;
         spec.eip2935 = height >= self.transition_heights.eip2935;
+        spec.eip7623 = height >= self.transition_heights.eip7623;
         spec.cip_c2_fix = number >= self.transition_heights.cip_c2_fix;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
+        spec.align_evm =
+            height >= self.transition_heights.align_evm && spec.cip645;
+
+        spec.overwrite_gas_plan_by_cip();
+
+        spec
+    }
+
+    pub fn consensus_spec(&self, height: BlockHeight) -> ConsensusGasSpec {
+        let mut spec = ConsensusGasSpec::genesis_spec();
+        spec.cip1559 = height >= self.transition_heights.cip1559;
+        spec.cip645 = height >= self.transition_heights.cip645;
         spec.align_evm =
             height >= self.transition_heights.align_evm && spec.cip645;
 

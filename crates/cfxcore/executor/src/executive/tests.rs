@@ -47,8 +47,7 @@ fn make_byzantium_machine(max_depth: usize) -> Machine {
         params,
         VmFactory::new(1024 * 32),
     );
-    machine
-        .set_spec_creation_rules(Box::new(move |s, _| s.max_depth = max_depth));
+    machine.set_max_depth(max_depth);
     machine
 }
 
