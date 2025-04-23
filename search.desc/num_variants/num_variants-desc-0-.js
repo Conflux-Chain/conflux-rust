@@ -1,0 +1,1 @@
+searchState.loadedDescShard("num_variants", 0, "Add an associated constant to an enum describing the …\nDerives an associated constant with the number of variants …")

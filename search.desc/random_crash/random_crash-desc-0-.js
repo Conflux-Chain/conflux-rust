@@ -1,0 +1,1 @@
+searchState.loadedDescShard("random_crash", 0, "The process exit code set for random crash.\nThe probability to trigger a random crash. Set to <code>None</code> to …\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nRandomly crash with the probability and exit code already …")

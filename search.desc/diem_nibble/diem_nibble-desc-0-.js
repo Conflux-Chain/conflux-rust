@@ -1,0 +1,1 @@
+searchState.loadedDescShard("diem_nibble", 0, "<code>Nibble</code> represents a four-bit unsigned integer.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

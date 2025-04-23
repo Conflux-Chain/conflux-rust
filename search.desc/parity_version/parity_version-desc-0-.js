@@ -1,0 +1,1 @@
+searchState.loadedDescShard("parity_version", 0, "Parity version specific information.\nGet the platform identifier.\nGet the standard version string for this software.")

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("diem_temppath", 0, "A simple wrapper for creating a temporary directory that …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCreate new, uninitialized temporary path in the system …\nCreate new, uninitialized temporary path in the specified …\nReturn the underlying path to this temporary directory.\nKeep the temp path")

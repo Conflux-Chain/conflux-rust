@@ -1,6 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/dbs/storage/src/utils/tuple.rs`."><title>tuple.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfx_storage" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (b11fbfbf3 2024-02-03)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
-            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
-    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../cfx_storage/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/dbs/storage/src/utils/tuple.rs`."><title>tuple.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-081576b923113409.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfx_storage" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (fb898629a 2024-04-21)" data-channel="nightly" data-search-js="search-bf21c90c8c1d92b1.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../cfx_storage/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Type ‘S’ or ‘/’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -695,7 +693,7 @@
 <span class="doccomment">/// We don't support generics and lifetime yet because it will take some time to
 /// update the macro implementation.
 </span><span class="attr">#[cfg(test)]
-</span><span class="macro">macro_rules! </span>make_tuple_with_index_ext {
+</span><span class="macro">macro_rules!</span> make_tuple_with_index_ext {
     ( <span class="macro-nonterminal">$tuple_struct_name</span>:ident($(<span class="macro-nonterminal">$element_type</span>:ty$(: <span class="macro-nonterminal">$pub_vis</span>:tt)<span class="kw-2">*</span>),<span class="kw-2">*</span>) ) =&gt; {
         <span class="attr">#[derive(Default, Clone)]
         </span><span class="kw">pub struct </span><span class="macro-nonterminal">$tuple_struct_name</span>($($(<span class="macro-nonterminal">$pub_vis </span>)<span class="kw-2">*</span><span class="macro-nonterminal">$element_type</span>),<span class="kw-2">*</span>);
@@ -802,7 +800,7 @@
 // Macro parser doesn't allow 'path' followed by '+',
 // use '|' in generic part instead, e.g. 'generic A, B: traitA | traitB, C;'.
 // FIXME: lifetime support for generic part
-</span><span class="macro">macro_rules! </span>enable_impl_transmute_for_element_satisfy {
+</span><span class="macro">macro_rules!</span> enable_impl_transmute_for_element_satisfy {
     (
         generic $( <span class="macro-nonterminal">$N</span>:ident $(: <span class="macro-nonterminal">$b0</span>:path $(|<span class="macro-nonterminal">$b</span>:path)* )<span class="question-mark">? </span>),<span class="kw-2">*</span>;
         <span class="kw">trait </span><span class="macro-nonterminal">$lifetime</span>:lifetime + <span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">path</span>;
@@ -836,7 +834,7 @@
         <span class="macro-nonterminal">generic </span>$( <span class="macro-nonterminal">$N</span>:ident $(: <span class="macro-nonterminal">$b0</span>:path $(|<span class="macro-nonterminal">$b</span>:path)* )<span class="question-mark">? </span>),<span class="kw-2">*</span>;
         <span class="kw">trait </span><span class="macro-nonterminal">$lifetime</span>:lifetime + <span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">path</span>;
     ) =&gt; {
-        <span class="macro">enable_impl_transmute_for_element_satisfy! </span>{
+        <span class="macro">enable_impl_transmute_for_element_satisfy!</span> {
             generic $( <span class="macro-nonterminal">$N </span>$(: <span class="macro-nonterminal">$b0 </span>$(|<span class="macro-nonterminal">$b</span>)* )<span class="question-mark">? </span>),* , TempGeneric:<span class="macro-nonterminal">$</span><span class="kw">trait</span>;
             <span class="kw">trait </span><span class="macro-nonterminal">$lifetime </span>+ <span class="macro-nonterminal">$</span><span class="kw">trait</span>;
             <span class="kw">for </span><span class="macro-nonterminal">TempGeneric</span>;
@@ -909,13 +907,13 @@
 
 <span class="attr">#[macro_use]
 </span><span class="kw">mod </span>macros {
-    <span class="macro">macro_rules! </span>placeholder {
+    <span class="macro">macro_rules!</span> placeholder {
         (<span class="macro-nonterminal">$t</span>:ident) =&gt; {
             <span class="macro-nonterminal">$crate::utils::tuple::placeholders</span>::<span class="macro-nonterminal">$t
         </span>};
     }
 
-    <span class="macro">macro_rules! </span>make_placeholder {
+    <span class="macro">macro_rules!</span> make_placeholder {
         (<span class="macro-nonterminal">$index</span>:tt) =&gt; {
             <span class="attr">#[derive(Default, Debug)]
             </span><span class="kw">pub struct </span><span class="macro-nonterminal">$index</span>();
@@ -926,7 +924,7 @@
         };
     }
 
-    <span class="macro">macro_rules! </span>make_placeholders {
+    <span class="macro">macro_rules!</span> make_placeholders {
         ($(<span class="macro-nonterminal">$index</span>:tt),<span class="kw-2">*</span>) =&gt; {
             $( <span class="macro">make_placeholder!</span>{<span class="macro-nonterminal">$index</span>} )*
 
@@ -940,7 +938,7 @@
     }
 
     <span class="attr">#[cfg(test)]
-    </span><span class="macro">macro_rules! </span>make_get_index_ext {
+    </span><span class="macro">macro_rules!</span> make_get_index_ext {
         (
             <span class="macro-nonterminal">$tuple_type</span>:ty,
             <span class="macro-nonterminal">$element_type</span>:ty,
@@ -978,7 +976,7 @@
     }
 
     <span class="attr">#[cfg(test)]
-    </span><span class="macro">macro_rules! </span>make_get_index_ext_all {
+    </span><span class="macro">macro_rules!</span> make_get_index_ext_all {
         (
             <span class="macro-nonterminal">$tuple_struct_name</span>:ident(),
             (<span class="macro-nonterminal">$place_holder_max</span>:ty $(, <span class="macro-nonterminal">$place_holder_rest</span>:ty)<span class="kw-2">*</span>),
@@ -1011,7 +1009,7 @@
         }
     }
 
-    <span class="macro">macro_rules! </span>tuple_from_to_iter_impl {
+    <span class="macro">macro_rules!</span> tuple_from_to_iter_impl {
         (
             (($(<span class="macro-nonterminal">$place_holder</span>:ty),<span class="kw-2">*</span>) ()),
             (($(<span class="macro-nonterminal">$place_holder_as_field</span>:tt),<span class="kw-2">*</span>) ())
@@ -1061,7 +1059,7 @@
         }
     }
 
-    <span class="macro">macro_rules! </span>tuple_iter_impl {
+    <span class="macro">macro_rules!</span> tuple_iter_impl {
         (
             (($(<span class="macro-nonterminal">$place_holder</span>:ty),<span class="kw-2">*</span>) ()),
             (($(<span class="macro-nonterminal">$place_holder_as_field</span>:tt),<span class="kw-2">*</span>) ())
@@ -1100,9 +1098,9 @@
 <span class="kw">pub mod </span>placeholders {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
-    <span class="macro">make_placeholders! </span>{_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13}
+    <span class="macro">make_placeholders!</span> {_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13}
 
-    <span class="macro">tuple_iter_impl! </span>{
+    <span class="macro">tuple_iter_impl!</span> {
         (() (
             <span class="macro">placeholder!</span>(_0), <span class="macro">placeholder!</span>(_1), <span class="macro">placeholder!</span>(_2),
             <span class="macro">placeholder!</span>(_3), <span class="macro">placeholder!</span>(_4), <span class="macro">placeholder!</span>(_5),

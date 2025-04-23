@@ -1,6 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/cfxcore/executor/src/internal_contract/contracts/cross_space.rs`."><title>cross_space.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="cfx_executor" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (b11fbfbf3 2024-02-03)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
-            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
-    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../cfx_executor/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/cfxcore/executor/src/internal_contract/contracts/cross_space.rs`."><title>cross_space.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-081576b923113409.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="cfx_executor" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (fb898629a 2024-04-21)" data-channel="nightly" data-search-js="search-bf21c90c8c1d92b1.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../cfx_executor/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Type ‘S’ or ‘/’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -341,7 +339,7 @@
 <span class="kw">type </span>Bytes = Vec&lt;u8&gt;;
 <span class="kw">type </span>Bytes20 = [u8; <span class="number">20</span>];
 
-<span class="macro">make_solidity_contract! </span>{
+<span class="macro">make_solidity_contract!</span> {
     <span class="kw">pub struct </span>CrossSpaceCall(CROSS_SPACE_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: <span class="kw-2">&amp;</span>CommonParams| params.transition_numbers.cip90b, is_active: |spec: <span class="kw-2">&amp;</span>Spec| spec.cip90);
 }
 
@@ -370,19 +368,19 @@
     DeployEip1820,
 );
 
-<span class="macro">make_solidity_event! </span>{
+<span class="macro">make_solidity_event!</span> {
     <span class="kw">pub struct </span>CallEvent(<span class="string">"Call(bytes20,bytes20,uint256,uint256,bytes)"</span>, indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, Bytes));
 }
 
-<span class="macro">make_solidity_event! </span>{
+<span class="macro">make_solidity_event!</span> {
     <span class="kw">pub struct </span>CreateEvent(<span class="string">"Create(bytes20,bytes20,uint256,uint256,bytes)"</span>, indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, Bytes));
 }
 
-<span class="macro">make_solidity_event! </span>{
+<span class="macro">make_solidity_event!</span> {
     <span class="kw">pub struct </span>WithdrawEvent(<span class="string">"Withdraw(bytes20,address,uint256,uint256)"</span>, indexed: (Bytes20, Address), non_indexed: (U256,U256));
 }
 
-<span class="macro">make_solidity_event! </span>{
+<span class="macro">make_solidity_event!</span> {
     <span class="kw">pub struct </span>ReturnEvent(<span class="string">"Outcome(bool)"</span>, indexed: (), non_indexed: bool);
 }
 
@@ -390,7 +388,7 @@
     <span class="kw">pub use super</span>::{CallEvent, CreateEvent, ReturnEvent, WithdrawEvent};
 }
 
-<span class="macro">make_solidity_function! </span>{
+<span class="macro">make_solidity_function!</span> {
     <span class="kw">pub struct </span>CreateToEVM(Bytes, <span class="string">"createEVM(bytes)"</span>, Bytes20);
 }
 
@@ -415,7 +413,7 @@
     }
 }
 
-<span class="macro">make_solidity_function! </span>{
+<span class="macro">make_solidity_function!</span> {
     <span class="kw">pub struct </span>TransferToEVM(Bytes20, <span class="string">"transferEVM(bytes20)"</span>, Bytes);
 }
 
@@ -447,7 +445,7 @@
     }
 }
 
-<span class="macro">make_solidity_function! </span>{
+<span class="macro">make_solidity_function!</span> {
     <span class="kw">pub struct </span>CallToEVM((Bytes20,Bytes), <span class="string">"callEVM(bytes20,bytes)"</span>, Bytes);
 }
 
@@ -479,7 +477,7 @@
     }
 }
 
-<span class="macro">make_solidity_function! </span>{
+<span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>StaticCallToEVM((Bytes20,Bytes), <span class="string">"staticCallEVM(bytes20,bytes)"</span>, Bytes);
 }
 
@@ -511,7 +509,7 @@
     }
 }
 
-<span class="macro">make_solidity_function! </span>{
+<span class="macro">make_solidity_function!</span> {
     <span class="kw">pub struct </span>Withdraw(U256, <span class="string">"withdrawFromMapped(uint256)"</span>);
 }
 
@@ -534,7 +532,7 @@
     }
 }
 
-<span class="macro">make_solidity_function! </span>{
+<span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>MappedBalance(Address, <span class="string">"mappedBalance(address)"</span>, U256);
 }
 
@@ -549,7 +547,7 @@
     }
 }
 
-<span class="macro">make_solidity_function! </span>{
+<span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>MappedNonce(Address, <span class="string">"mappedNonce(address)"</span>, U256);
 }
 
@@ -564,7 +562,7 @@
     }
 }
 
-<span class="macro">make_solidity_function! </span>{
+<span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>DeployEip1820((), <span class="string">"deployEip1820()"</span>);
 }
 
@@ -643,7 +641,7 @@
         <span class="string">"1820a4b7618bde71dce8cdc73aab6c95905fad24"</span>;
     <span class="kw">const </span>HEX_BYTE_CODE: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str = <span class="string">"608060405234801561001057600080fd5b50600436106100a5576000357c010000000000000000000000000000000000000000000000000000000090048063a41e7d5111610078578063a41e7d51146101d4578063aabbb8ca1461020a578063b705676514610236578063f712f3e814610280576100a5565b806329965a1d146100aa5780633d584063146100e25780635df8122f1461012457806365ba36c114610152575b600080fd5b6100e0600480360360608110156100c057600080fd5b50600160a060020a038135811691602081013591604090910135166102b6565b005b610108600480360360208110156100f857600080fd5b5035600160a060020a0316610570565b60408051600160a060020a039092168252519081900360200190f35b6100e06004803603604081101561013a57600080fd5b50600160a060020a03813581169160200135166105bc565b6101c26004803603602081101561016857600080fd5b81019060208101813564010000000081111561018357600080fd5b82018360208201111561019557600080fd5b803590602001918460018302840111640100000000831117156101b757600080fd5b5090925090506106b3565b60408051918252519081900360200190f35b6100e0600480360360408110156101ea57600080fd5b508035600160a060020a03169060200135600160e060020a0319166106ee565b6101086004803603604081101561022057600080fd5b50600160a060020a038135169060200135610778565b61026c6004803603604081101561024c57600080fd5b508035600160a060020a03169060200135600160e060020a0319166107ef565b604080519115158252519081900360200190f35b61026c6004803603604081101561029657600080fd5b508035600160a060020a03169060200135600160e060020a0319166108aa565b6000600160a060020a038416156102cd57836102cf565b335b9050336102db82610570565b600160a060020a031614610339576040805160e560020a62461bcd02815260206004820152600f60248201527f4e6f7420746865206d616e616765720000000000000000000000000000000000604482015290519081900360640190fd5b6103428361092a565b15610397576040805160e560020a62461bcd02815260206004820152601a60248201527f4d757374206e6f7420626520616e204552433136352068617368000000000000604482015290519081900360640190fd5b600160a060020a038216158015906103b85750600160a060020a0382163314155b156104ff5760405160200180807f455243313832305f4143434550545f4d4147494300000000000000000000000081525060140190506040516020818303038152906040528051906020012082600160a060020a031663249cb3fa85846040518363ffffffff167c01000000000000000000000000000000000000000000000000000000000281526004018083815260200182600160a060020a0316600160a060020a031681526020019250505060206040518083038186803b15801561047e57600080fd5b505afa158015610492573d6000803e3d6000fd5b505050506040513d60208110156104a857600080fd5b5051146104ff576040805160e560020a62461bcd02815260206004820181905260248201527f446f6573206e6f7420696d706c656d656e742074686520696e74657266616365604482015290519081900360640190fd5b600160a060020a03818116600081815260208181526040808320888452909152808220805473ffffffffffffffffffffffffffffffffffffffff19169487169485179055518692917f93baa6efbd2244243bfee6ce4cfdd1d04fc4c0e9a786abd3a41313bd352db15391a450505050565b600160a060020a03818116600090815260016020526040812054909116151561059a5750806105b7565b50600160a060020a03808216600090815260016020526040902054165b919050565b336105c683610570565b600160a060020a031614610624576040805160e560020a62461bcd02815260206004820152600f60248201527f4e6f7420746865206d616e616765720000000000000000000000000000000000604482015290519081900360640190fd5b81600160a060020a031681600160a060020a0316146106435780610646565b60005b600160a060020a03838116600081815260016020526040808220805473ffffffffffffffffffffffffffffffffffffffff19169585169590951790945592519184169290917f605c2dbf762e5f7d60a546d42e7205dcb1b011ebc62a61736a57c9089d3a43509190a35050565b600082826040516020018083838082843780830192505050925050506040516020818303038152906040528051906020012090505b92915050565b6106f882826107ef565b610703576000610705565b815b600160a060020a03928316600081815260208181526040808320600160e060020a031996909616808452958252808320805473ffffffffffffffffffffffffffffffffffffffff19169590971694909417909555908152600284528181209281529190925220805460ff19166001179055565b600080600160a060020a038416156107905783610792565b335b905061079d8361092a565b156107c357826107ad82826108aa565b6107b85760006107ba565b815b925050506106e8565b600160a060020a0390811660009081526020818152604080832086845290915290205416905092915050565b6000808061081d857f01ffc9a70000000000000000000000000000000000000000000000000000000061094c565b909250905081158061082d575080155b1561083d576000925050506106e8565b61084f85600160e060020a031961094c565b909250905081158061086057508015155b15610870576000925050506106e8565b61087a858561094c565b909250905060018214801561088f5750806001145b1561089f576001925050506106e8565b506000949350505050565b600160a060020a0382166000908152600260209081526040808320600160e060020a03198516845290915281205460ff1615156108f2576108eb83836107ef565b90506106e8565b50600160a060020a03808316600081815260208181526040808320600160e060020a0319871684529091529020549091161492915050565b7bffffffffffffffffffffffffffffffffffffffffffffffffffffffff161590565b6040517f01ffc9a7000000000000000000000000000000000000000000000000000000008082526004820183905260009182919060208160248189617530fa90519096909550935050505056fea165627a7a72305820377f4a2d4301ede9949f163f319021a6e9c687c292a5e2b2c4734c126b524e6c0029"</span>;
 
-    <span class="macro">lazy_static! </span>{
+    <span class="macro">lazy_static!</span> {
         <span class="kw">pub static </span><span class="kw-2">ref </span>ADDRESS: Address = HEX_ADDRESS.parse().unwrap();
         <span class="kw">pub static </span><span class="kw-2">ref </span>BYTE_CODE: Vec&lt;u8&gt; = HEX_BYTE_CODE.from_hex().unwrap();
     }

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("txgen", 0, "This tx generator directly push simple transactions and …\nReturns the argument unchanged.\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.")

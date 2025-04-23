@@ -1,0 +1,1 @@
+searchState.loadedDescShard("crash_handler", 0, "Returns the argument unchanged.\nCalls <code>U::from(self)</code>.\nInvoke to ensure process exits on a thread panic.")

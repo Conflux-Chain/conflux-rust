@@ -1,0 +1,1 @@
+searchState.loadedDescShard("diem_network_address_encryption", 0, "This generates an Encryptor for use in default / testing …\nReturns the argument unchanged.\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.")

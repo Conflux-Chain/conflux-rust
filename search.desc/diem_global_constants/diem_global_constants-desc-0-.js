@@ -1,0 +1,1 @@
+searchState.loadedDescShard("diem_global_constants", 0, "The purpose of this crate is to offer a single source of …\nDefinitions of global cryptographic keys (e.g., as held in …\nDefinitions of global data items (e.g., as held in secure …")

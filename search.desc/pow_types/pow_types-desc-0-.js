@@ -1,0 +1,1 @@
+searchState.loadedDescShard("pow_types", 0, "This is just used to execute PoS genesis, where …\n(address, updated_voting_power)\n(address, bls_public_key, vrf_public_key)\n(address, unlock_voting_power)\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.")

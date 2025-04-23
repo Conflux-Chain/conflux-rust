@@ -1,0 +1,1 @@
+searchState.loadedDescShard("fallible", 0, "A fallible wrapper around <code>std::vec::Vec::copy_from_slice</code>\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

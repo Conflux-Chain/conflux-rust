@@ -1,0 +1,1 @@
+searchState.loadedDescShard("diem_crypto_derive", 0, "Derive macros for crypto operations\nDeserialize from a human readable format where applicable\nSerialize into a human readable format where applicable")

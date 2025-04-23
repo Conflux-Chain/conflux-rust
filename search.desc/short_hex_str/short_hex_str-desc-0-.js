@@ -1,0 +1,1 @@
+searchState.loadedDescShard("short_hex_str", 0, "An efficient container for formatting a byte slice as a …\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nFormat a new <code>ShortHexStr</code> from a byte slice.")

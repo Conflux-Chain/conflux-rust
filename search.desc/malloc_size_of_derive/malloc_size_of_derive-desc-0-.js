@@ -1,0 +1,1 @@
+searchState.loadedDescShard("malloc_size_of_derive", 0, "A crate for deriving the MallocSizeOf trait.")

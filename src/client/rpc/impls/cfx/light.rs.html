@@ -1,6 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/client/src/rpc/impls/cfx/light.rs`."><title>light.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-5bc39a1768837dd0.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.78.0-nightly (b11fbfbf3 2024-02-03)" data-channel="nightly" data-search-js="search-dd67cee4cfa65049.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-4c98445ec4002617.js"></script><script defer src="../../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../../src-files.js"></script><script defer src="../../../../../static.files/main-48f368f3872407c8.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
-            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
-    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../../client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/client/src/rpc/impls/cfx/light.rs`."><title>light.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-081576b923113409.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="client" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (fb898629a 2024-04-21)" data-channel="nightly" data-search-js="search-bf21c90c8c1d92b1.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../../src-files.js"></script><script defer src="../../../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../../client/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Type ‘S’ or ‘/’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1444,7 +1442,7 @@
 <span class="kw">use </span>diem_types::account_address::AccountAddress;
 
 <span class="comment">// macro for reducing boilerplate for unsupported methods
-</span><span class="macro">macro_rules! </span>not_supported {
+</span><span class="macro">macro_rules!</span> not_supported {
     () =&gt; {};
     ( <span class="kw">fn </span><span class="macro-nonterminal">$</span><span class="kw">fn</span>:<span class="macro-nonterminal">ident </span>( <span class="kw-2">&amp;</span><span class="self">self </span>$(, <span class="macro-nonterminal">$name</span>:ident : <span class="macro-nonterminal">$</span><span class="kw">type</span>:<span class="macro-nonterminal">ty</span>)* ) $( -&gt; BoxFuture&lt;<span class="macro-nonterminal">$ret</span>:ty&gt; )<span class="question-mark">? </span>; $(<span class="macro-nonterminal">$tail</span>:tt)* ) =&gt; {
         <span class="attr">#[allow(unused_variables)]
@@ -2595,7 +2593,7 @@
 }
 
 <span class="kw">impl </span>Cfx <span class="kw">for </span>CfxHandler {
-    <span class="macro">delegate! </span>{
+    <span class="macro">delegate!</span> {
         to <span class="self">self</span>.common {
             <span class="kw">fn </span>best_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; JsonRpcResult&lt;H256&gt;;
             <span class="kw">fn </span>confirmation_risk_by_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: H256) -&gt; JsonRpcResult&lt;<span class="prelude-ty">Option</span>&lt;U256&gt;&gt;;
@@ -2637,7 +2635,7 @@
     }
 
     <span class="comment">// TODO(thegaram): add support for these
-    </span><span class="macro">not_supported! </span>{
+    </span><span class="macro">not_supported!</span> {
         <span class="kw">fn </span>account_pending_transactions(<span class="kw-2">&amp;</span><span class="self">self</span>, address: RpcAddress, maybe_start_nonce: <span class="prelude-ty">Option</span>&lt;U256&gt;, maybe_limit: <span class="prelude-ty">Option</span>&lt;U64&gt;) -&gt; BoxFuture&lt;JsonRpcResult&lt;AccountPendingTransactions&gt;&gt;;
         <span class="kw">fn </span>block_by_block_number(<span class="kw-2">&amp;</span><span class="self">self</span>, block_number: U64, include_txs: bool) -&gt; BoxFuture&lt;JsonRpcResult&lt;<span class="prelude-ty">Option</span>&lt;RpcBlock&gt;&gt;&gt;;
         <span class="kw">fn </span>call(<span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_hash_or_epoch_number: <span class="prelude-ty">Option</span>&lt;BlockHashOrEpochNumber&gt;) -&gt; JsonRpcResult&lt;Bytes&gt;;
@@ -2666,7 +2664,7 @@
 }
 
 <span class="kw">impl </span>TestRpc <span class="kw">for </span>TestRpcImpl {
-    <span class="macro">delegate! </span>{
+    <span class="macro">delegate!</span> {
         to <span class="self">self</span>.common {
             <span class="kw">fn </span>add_latency(<span class="kw-2">&amp;</span><span class="self">self</span>, id: NodeId, latency_ms: f64) -&gt; JsonRpcResult&lt;()&gt;;
             <span class="kw">fn </span>add_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, node_id: NodeId, address: SocketAddr) -&gt; JsonRpcResult&lt;()&gt;;
@@ -2696,7 +2694,7 @@
         }
     }
 
-    <span class="macro">not_supported! </span>{
+    <span class="macro">not_supported!</span> {
         <span class="kw">fn </span>expire_block_gc(<span class="kw-2">&amp;</span><span class="self">self</span>, timeout: u64) -&gt; JsonRpcResult&lt;()&gt;;
         <span class="kw">fn </span>generate_block_with_blame_info(<span class="kw-2">&amp;</span><span class="self">self</span>, num_txs: usize, block_size_limit: usize, blame_info: BlameInfo) -&gt; JsonRpcResult&lt;H256&gt;;
         <span class="kw">fn </span>generate_block_with_fake_txs(<span class="kw-2">&amp;</span><span class="self">self</span>, raw_txs_without_data: Bytes, adaptive: <span class="prelude-ty">Option</span>&lt;bool&gt;, tx_data_len: <span class="prelude-ty">Option</span>&lt;usize&gt;) -&gt; JsonRpcResult&lt;H256&gt;;
@@ -2726,7 +2724,7 @@
 }
 
 <span class="kw">impl </span>LocalRpc <span class="kw">for </span>DebugRpcImpl {
-    <span class="macro">delegate! </span>{
+    <span class="macro">delegate!</span> {
         to <span class="self">self</span>.common {
             <span class="kw">fn </span>txpool_content(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="prelude-ty">Option</span>&lt;RpcAddress&gt;) -&gt; JsonRpcResult&lt;
                 BTreeMap&lt;String, BTreeMap&lt;String, BTreeMap&lt;usize, Vec&lt;RpcTransaction&gt;&gt;&gt;&gt;&gt;;
@@ -2750,7 +2748,7 @@
         }
     }
 
-    <span class="macro">not_supported! </span>{
+    <span class="macro">not_supported!</span> {
         <span class="kw">fn </span>consensus_graph_state(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; JsonRpcResult&lt;ConsensusGraphStates&gt;;
         <span class="kw">fn </span>current_sync_phase(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; JsonRpcResult&lt;String&gt;;
         <span class="kw">fn </span>epoch_receipts(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: BlockHashOrEpochNumber, include_eth_recepits: <span class="prelude-ty">Option</span>&lt;bool&gt;) -&gt; JsonRpcResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;Vec&lt;RpcReceipt&gt;&gt;&gt;&gt;;

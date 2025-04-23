@@ -1,0 +1,1 @@
+searchState.loadedDescShard("cfx_bytes", 0, "Vector of bytes.\nA byte collection reference that can either be a slice or …\nThis is a reference to a slice\nThis is a reference to a vector\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nWrites given <code>input</code> to this <code>BytesRef</code> starting at <code>offset</code>. …")
