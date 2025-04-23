@@ -367,7 +367,7 @@
             .get_account_state_range_proof(rightmost_key, version)
     }
 
-    <span class="doccomment">/// Gets the epoch, commited version, and synced version of the DB.
+    <span class="doccomment">/// Gets the epoch, committed version, and synced version of the DB.
     </span><span class="kw">pub fn </span>get_db_state(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;DbState&gt;&gt; {
         <span class="self">self</span>.ledger_store
             .get_startup_info(<span class="bool-val">false</span>)<span class="question-mark">?

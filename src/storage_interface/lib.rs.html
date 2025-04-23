@@ -755,7 +755,7 @@
     </span><span class="kw">fn </span>get_block_timestamp(<span class="kw-2">&amp;</span><span class="self">self</span>, version: u64) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt;;
 
     <span class="doccomment">/// Gets the version of the last transaction committed before timestamp,
-    /// a commited block at or after the required timestamp must exist
+    /// a committed block at or after the required timestamp must exist
     /// (otherwise it's possible the next block committed as a timestamp
     /// smaller than the one in the request).
     </span><span class="kw">fn </span>get_last_version_before_timestamp(

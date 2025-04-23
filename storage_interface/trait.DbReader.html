@@ -131,7 +131,7 @@ Used by the Db-bootstrapper.</p>
     _timestamp: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
     _ledger_version: <a class="type" href="../diem_types/transaction/type.Version.html" title="type diem_types::transaction::Version">Version</a>
 ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.70/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="type" href="../diem_types/transaction/type.Version.html" title="type diem_types::transaction::Version">Version</a>&gt;</h4></section></summary><div class="docblock"><p>Gets the version of the last transaction committed before timestamp,
-a commited block at or after the required timestamp must exist
+a committed block at or after the required timestamp must exist
 (otherwise it’s possible the next block committed as a timestamp
 smaller than the one in the request).</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.get_latest_version" class="method"><a class="src rightside" href="../src/storage_interface/lib.rs.html#231-233">source</a><h4 class="code-header">fn <a href="#method.get_latest_version" class="fn">get_latest_version</a>(&amp;self) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.70/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="type" href="../diem_types/transaction/type.Version.html" title="type diem_types::transaction::Version">Version</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the latest ledger info.</p>
