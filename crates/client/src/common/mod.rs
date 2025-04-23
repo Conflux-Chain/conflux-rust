@@ -7,7 +7,6 @@ use std::{
     collections::HashMap,
     fs::create_dir_all,
     path::Path,
-    str::FromStr,
     sync::{Arc, Weak},
     thread,
     time::{Duration, Instant},
@@ -25,7 +24,9 @@ use threadpool::ThreadPool;
 use crate::keylib::KeyPair;
 use blockgen::BlockGenerator;
 use cfx_executor::machine::{Machine, VmFactory};
-use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
+use cfx_parameters::genesis::{
+    DEV_GENESIS_KEY_PAIR_2, GENESIS_ACCOUNT_ADDRESS,
+};
 use cfx_storage::StorageManager;
 use cfx_tasks::TaskManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
@@ -73,7 +74,6 @@ use crate::{
         launch_async_rpc_servers, setup_debug_rpc_apis,
         setup_public_eth_rpc_apis, setup_public_rpc_apis,
     },
-    GENESIS_VERSION,
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 use std::net::SocketAddr;
@@ -318,7 +318,7 @@ pub fn initialize_common_modules(
     let genesis_block = genesis_block(
         &storage_manager,
         genesis_accounts.clone(),
-        Address::from_str(GENESIS_VERSION).unwrap(),
+        GENESIS_ACCOUNT_ADDRESS,
         U256::zero(),
         machine.clone(),
         conf.raw_conf.execute_genesis, /* need_to_execute */
