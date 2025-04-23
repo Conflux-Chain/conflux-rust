@@ -56,8 +56,9 @@ use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
 
 use crate::rpc::{
-    impls::RpcImplConfiguration, rpc_apis::ApiSet, HttpConfiguration,
-    TcpConfiguration, WsConfiguration,
+    apis::{ApiSet, EthApiSet},
+    impls::RpcImplConfiguration,
+    HttpConfiguration, TcpConfiguration, WsConfiguration,
 };
 
 lazy_static! {
@@ -441,7 +442,7 @@ build_config! {
             ProvideExtraSnapshotSyncConfig::parse_config_list)
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
-        (public_evm_rpc_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
+        (public_evm_rpc_apis, (EthApiSet), EthApiSet::Evm, EthApiSet::from_str)
         (public_evm_rpc_async_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
         (single_mpt_space, (Option<Space>), None, |s| match s {
             "native" => Ok(Space::Native),
