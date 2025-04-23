@@ -1592,6 +1592,11 @@
 <a href="#1592" id="1592">1592</a>
 <a href="#1593" id="1593">1593</a>
 <a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
+<a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1965,6 +1970,9 @@
         (pos_cip136_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
         (pos_cip136_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
         (pos_cip136_round_per_term, (u64), ROUND_PER_TERM)
+        (pos_cip156_transition_view, (u64), u64::MAX)
+        <span class="comment">// 6 months with 30s rounds
+        </span>(pos_cip156_dispute_locked_views, (u64), <span class="number">6 </span>* <span class="number">30 </span>* <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">2</span>)
         (dev_pos_private_key_encryption_password, (<span class="prelude-ty">Option</span>&lt;String&gt;), <span class="prelude-val">None</span>)
         (pos_started_as_voter, (bool), <span class="bool-val">true</span>)
 
@@ -2928,6 +2936,8 @@
             <span class="self">self</span>.raw_conf.pos_cip136_in_queue_locked_views,
             <span class="self">self</span>.raw_conf.pos_cip136_out_queue_locked_views,
             <span class="self">self</span>.raw_conf.pos_cip136_round_per_term,
+            <span class="self">self</span>.raw_conf.pos_cip156_transition_view,
+            <span class="self">self</span>.raw_conf.pos_cip156_dispute_locked_views,
         )
     }
 

@@ -1357,6 +1357,10 @@
 <a href="#1357" id="1357">1357</a>
 <a href="#1358" id="1358">1358</a>
 <a href="#1359" id="1359">1359</a>
+<a href="#1360" id="1360">1360</a>
+<a href="#1361" id="1361">1361</a>
+<a href="#1362" id="1362">1362</a>
+<a href="#1363" id="1363">1363</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2459,10 +2463,14 @@
 
     <span class="kw">pub fn </span>forfeit_node(<span class="kw-2">&amp;mut </span><span class="self">self</span>, addr: <span class="kw-2">&amp;</span>AccountAddress) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">diem_trace!</span>(<span class="string">"forfeit_node: {:?}"</span>, addr);
+        <span class="kw">let </span><span class="kw-2">mut </span>update_views = Vec::new();
         <span class="kw">match </span><span class="self">self</span>.node_map.get_mut(<span class="kw-2">&amp;</span>addr) {
-            <span class="prelude-val">Some</span>(node) =&gt; node.lock_status.forfeit(),
+            <span class="prelude-val">Some</span>(node) =&gt; node
+                .lock_status
+                .forfeit(<span class="self">self</span>.current_view, <span class="kw-2">&amp;mut </span>update_views),
             <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Forfeiting node does not exist"</span>),
         }
+        <span class="self">self</span>.record_update_views(addr, update_views);
         <span class="prelude-val">Ok</span>(())
     }
 }

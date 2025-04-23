@@ -214,6 +214,26 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
     block_info::Round,
     term_state::{
@@ -242,6 +262,9 @@
     cip136_in_queue_locked_views: u64,
     cip136_round_per_term: u64,
 
+    cip156_transition_view: u64,
+    cip156_dispute_locked_views: u64,
+
     nonce_limit_transition_view: u64,
     max_nonce_per_account: u64,
 }
@@ -262,6 +285,9 @@
     <span class="kw">fn </span>max_nonce_per_account(<span class="kw-2">&amp;</span><span class="self">self</span>, view: u64) -&gt; u64;
     <span class="kw">fn </span>get_term_view(<span class="kw-2">&amp;</span><span class="self">self</span>, view: u64) -&gt; (u64, u64);
     <span class="kw">fn </span>get_starting_view_for_term(<span class="kw-2">&amp;</span><span class="self">self</span>, term: u64) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt;;
+    <span class="comment">// Returning None means the stake should be forfeited instead of being
+    // locked.
+    </span><span class="kw">fn </span>dispute_locked_views(<span class="kw-2">&amp;</span><span class="self">self</span>, view: u64) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt;;
 }
 
 <span class="kw">impl </span>PosStateConfig {
@@ -272,7 +298,8 @@
         cip99_out_queue_locked_views: u64, nonce_limit_transition_view: u64,
         max_nonce_per_account: u64, cip136_transition_view: u64,
         cip136_in_queue_locked_views: u64, cip136_out_queue_locked_views: u64,
-        cip136_round_per_term: u64,
+        cip136_round_per_term: u64, cip156_transition_view: u64,
+        cip156_dispute_locked_views: u64,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             round_per_term,
@@ -287,6 +314,8 @@
             cip136_out_queue_locked_views,
             cip136_in_queue_locked_views,
             cip136_round_per_term,
+            cip156_transition_view,
+            cip156_dispute_locked_views,
             nonce_limit_transition_view,
             max_nonce_per_account,
         }
@@ -406,6 +435,15 @@
                 .map(|v| v + conf.cip136_transition_view)
         }
     }
+
+    <span class="kw">fn </span>dispute_locked_views(<span class="kw-2">&amp;</span><span class="self">self</span>, view: u64) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+        <span class="kw">let </span>conf = <span class="self">self</span>.get().unwrap();
+        <span class="kw">if </span>view &lt; conf.cip156_transition_view {
+            <span class="prelude-val">None
+        </span>} <span class="kw">else </span>{
+            <span class="prelude-val">Some</span>(conf.cip156_dispute_locked_views)
+        }
+    }
 }
 
 <span class="kw">pub static </span>POS_STATE_CONFIG: OnceCell&lt;PosStateConfig&gt; = OnceCell::new();
@@ -425,6 +463,8 @@
             cip136_out_queue_locked_views: IN_QUEUE_LOCKED_VIEWS,
             cip136_in_queue_locked_views: OUT_QUEUE_LOCKED_VIEWS,
             cip136_round_per_term: ROUND_PER_TERM,
+            cip156_transition_view: u64::MAX,
+            cip156_dispute_locked_views: u64::MAX,
             nonce_limit_transition_view: u64::MAX,
             max_nonce_per_account: u64::MAX,
         }
