@@ -6,16 +6,12 @@ use super::{
     utils::extract_155_chain_id_from_raw_tx,
 };
 use cfx_executor::{
-    executive::{
-        gas_required_for, ExecutionOutcome, ExecutiveContext, TransactOptions,
-        TxDropError,
-    },
+    executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
     machine::Machine,
     state::State,
 };
-use cfx_types::U256;
 use cfx_vm_types::Env;
-use primitives::{transaction::Action, SignedTransaction};
+use primitives::SignedTransaction;
 use statetest_types::{SpecName, Test, TestUnit};
 
 pub struct UnitTester {
@@ -147,34 +143,6 @@ impl UnitTester {
         transaction: &SignedTransaction, options: TransactOptions<()>,
     ) -> ExecutionOutcome {
         let spec = machine.spec(env.number, env.epoch_height);
-
-        // intrinsic gas check
-        let tx_intrinsic_gas = gas_required_for(
-            transaction.action() == Action::Create,
-            &transaction.data(),
-            transaction.access_list(),
-            transaction.authorization_len(),
-            &spec,
-        );
-
-        if transaction.gas_limit() < &U256::from(tx_intrinsic_gas) {
-            return ExecutionOutcome::NotExecutedDrop(
-                TxDropError::NotEnoughGasLimit {
-                    expected: tx_intrinsic_gas.into(),
-                    got: *transaction.gas_limit(),
-                },
-            );
-        }
-
-        // if transaction.gas_limit() <
-        // &U256::from(eip7623_gas(&transaction.data())) {     return
-        // ExecutionOutcome::NotExecutedDrop(
-        //         TxDropError::NotEnoughGasLimit {
-        //             expected: eip7623_gas(&transaction.data()).into(),
-        //             got: *transaction.gas_limit(),
-        //         },
-        //     );
-        // }
 
         let evm = ExecutiveContext::new(state, env, &machine, &spec);
         let outcome = evm.transact(transaction, options).expect("db error");

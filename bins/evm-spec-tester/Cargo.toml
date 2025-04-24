@@ -31,6 +31,7 @@ thiserror = { workspace = true }
 cfx-bytes = { workspace = true }
 rlp = { workspace = true }
 hex = { workspace = true }
+hex-literal = { workspace = true }
 
 log = { workspace = true }
 

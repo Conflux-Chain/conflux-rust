@@ -3348,6 +3348,7 @@ dependencies = [
  "client",
  "env_logger",
  "hex",
+ "hex-literal",
  "itertools 0.14.0",
  "log",
  "primitives",

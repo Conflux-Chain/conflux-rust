@@ -185,8 +185,6 @@ pub fn make_state(pre_state: &HashMap<Address, AccountInfo>) -> State {
         State::new_with_override(statedb, &state_override, Space::Ethereum)
             .expect("db error");
     state.commit_cache(false);
-    state.apply_changes_to_statedb(None).unwrap();
-    state.clear();
     state
 }
 

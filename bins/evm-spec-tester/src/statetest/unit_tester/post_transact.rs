@@ -39,7 +39,7 @@ pub fn extract_executed(
     }
 
     Ok(match outcome {
-        Finished(executed) => Some(dbg!(executed)),
+        Finished(executed) => Some(executed),
         NotExecutedDrop(_) => None,
         NotExecutedToReconsiderPacking(_) => None,
         ExecutionErrorBumpNonce(_, executed) => Some(executed),
