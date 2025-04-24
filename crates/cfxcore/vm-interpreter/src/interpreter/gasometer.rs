@@ -591,7 +591,7 @@ fn calc_sstore_gas<Gas: CostType>(
         0
     };
 
-    let not_write_db_refund_gas = if ori_val == new_val {
+    let not_write_db_refund_gas = if ori_val == new_val && !is_clean {
         if ori_val.is_zero() && space == Space::Ethereum {
             // charge storage write gas + storage occupation gas
             spec.sstore_set_gas * spec.evm_gas_ratio

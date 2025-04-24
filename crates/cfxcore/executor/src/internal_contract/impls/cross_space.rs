@@ -37,7 +37,7 @@ pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
         code,
         None,
         0,
-        context.spec,
+        &context.spec.to_consensus_spec(),
     ) + context.spec.tx_gas as u64;
 
     let create_gas = U256::from(context.spec.create_gas);
@@ -77,7 +77,7 @@ pub fn call_gas(
         data,
         None,
         0,
-        context.spec,
+        &context.spec.to_consensus_spec(),
     ) + context.spec.tx_gas as u64;
 
     let new_account = !context

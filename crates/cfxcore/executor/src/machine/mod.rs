@@ -27,7 +27,8 @@ pub struct Machine {
     builtins: Arc<BTreeMap<Address, Builtin>>,
     builtins_evm: Arc<BTreeMap<Address, Builtin>>,
     internal_contracts: Arc<InternalContractMap>,
-    spec_rules: Option<Box<SpecCreationRules>>,
+    #[cfg(test)]
+    max_depth: Option<usize>,
 }
 
 impl Machine {
@@ -38,7 +39,8 @@ impl Machine {
             builtins: Arc::new(BTreeMap::new()),
             builtins_evm: Arc::new(Default::default()),
             internal_contracts: Arc::new(InternalContractMap::default()),
-            spec_rules: None,
+            #[cfg(test)]
+            max_depth: None,
         }
     }
 
@@ -55,7 +57,8 @@ impl Machine {
             builtins: Arc::new(builtin),
             builtins_evm: Arc::new(builtin_evm),
             internal_contracts: Arc::new(internal_contracts),
-            spec_rules: None,
+            #[cfg(test)]
+            max_depth: None,
         }
     }
 
@@ -75,25 +78,25 @@ impl Machine {
         })
     }
 
-    /// Attach special rules to the creation of spec.
-    pub fn set_spec_creation_rules(&mut self, rules: Box<SpecCreationRules>) {
-        self.spec_rules = Some(rules);
-    }
-
     /// Get the general parameters of the chain.
     pub fn params(&self) -> &CommonParams { &self.params }
 
     pub fn spec(&self, number: BlockNumber, height: BlockHeight) -> Spec {
-        let mut spec = self.params.spec(number, height);
-        if let Some(ref rules) = self.spec_rules {
-            (rules)(&mut spec, number)
-        }
-        spec
+        self.params.spec(number, height)
+    }
+
+    #[cfg(test)]
+    pub fn set_max_depth(&mut self, max_depth: usize) {
+        self.max_depth = Some(max_depth)
     }
 
     #[cfg(test)]
     pub fn spec_for_test(&self, number: u64) -> Spec {
-        self.spec(number, number)
+        let mut spec = self.spec(number, number);
+        if let Some(max_depth) = self.max_depth {
+            spec.max_depth = max_depth;
+        }
+        spec
     }
 
     /// Builtin-contracts for the chain..

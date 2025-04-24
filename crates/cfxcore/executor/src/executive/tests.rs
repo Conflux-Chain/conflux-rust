@@ -47,8 +47,7 @@ fn make_byzantium_machine(max_depth: usize) -> Machine {
         params,
         VmFactory::new(1024 * 32),
     );
-    machine
-        .set_spec_creation_rules(Box::new(move |s, _| s.max_depth = max_depth));
+    machine.set_max_depth(max_depth);
     machine
 }
 
@@ -1193,7 +1192,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(state.nonce(&sender_with_space).unwrap(), U256::from(1));
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
@@ -1294,7 +1293,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller3.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1341,7 +1340,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller1.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1386,7 +1385,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller2.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1445,7 +1444,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller2.address().with_native_space()).unwrap(),
         U256::from(2)
@@ -1502,7 +1501,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(52_332));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller3.address().with_native_space()).unwrap(),
         U256::from(2)
