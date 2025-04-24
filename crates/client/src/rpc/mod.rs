@@ -8,7 +8,8 @@ use cfx_rpc_builder::{
 };
 use cfx_tasks::TaskExecutor;
 use cfxcore::{
-    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+    Notifications, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::{MetaIoHandler, RemoteProcedure, Value};
 use jsonrpc_http_server::{
@@ -24,7 +25,8 @@ use jsonrpc_ws_server::{
 };
 pub use jsonrpsee::server::ServerBuilder;
 use log::{info, warn};
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
+use tokio::runtime::Runtime;
 
 pub mod apis;
 mod authcodes;
@@ -404,30 +406,63 @@ where
 
 // start espace rpc server v2(async)
 pub async fn launch_async_rpc_servers(
-    rpc_conf: RpcImplConfiguration, throttling_conf_file: Option<String>,
-    apis: RpcModuleSelection, consensus: SharedConsensusGraph,
-    sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-    addr: SocketAddr, executor: TaskExecutor,
+    consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
+    tx_pool: SharedTransactionPool, notifications: Arc<Notifications>,
+    apis: RpcModuleSelection, executor: TaskExecutor, runtime: Arc<Runtime>,
+    conf: &Configuration, throttling_conf_file: Option<String>,
 ) -> Result<Option<RpcServerHandle>, String> {
+    let http_config = conf.eth_http_config();
+    let ws_config = conf.eth_ws_config();
+
+    let (transport_rpc_module_config, server_config) =
+        match (http_config.enabled, ws_config.enabled) {
+            (true, true) => {
+                let transport_rpc_module_config =
+                    TransportRpcModuleConfig::set_http(apis.clone())
+                        .with_ws(apis.clone());
+
+                let server_config =
+                    RpcServerConfig::http(ServerBuilder::default())
+                        .with_ws(ServerBuilder::default())
+                        .with_http_address(http_config.address)
+                        .with_ws_address(ws_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            (true, false) => {
+                let transport_rpc_module_config =
+                    TransportRpcModuleConfig::set_http(apis.clone());
+                let server_config =
+                    RpcServerConfig::http(ServerBuilder::default())
+                        .with_http_address(ws_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            (false, true) => {
+                let transport_rpc_module_config =
+                    TransportRpcModuleConfig::set_ws(apis.clone());
+                let server_config =
+                    RpcServerConfig::ws(ServerBuilder::default())
+                        .with_ws_address(ws_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            _ => return Ok(None),
+        };
+
+    info!("Enabled evm async rpc modules: {:?}", apis.into_selection());
+    let rpc_conf = conf.rpc_impl_config();
     let enable_metrics = rpc_conf.enable_metrics;
 
-    let rpc_module_builder =
-        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool, executor);
-
-    info!(
-        "Enabled evm async rpc modules: {:?}",
-        apis.clone().into_selection()
+    let rpc_module_builder = RpcModuleBuilder::new(
+        rpc_conf,
+        consensus,
+        sync,
+        tx_pool,
+        executor,
+        runtime,
+        notifications,
     );
-
-    let transport_rpc_module_config = TransportRpcModuleConfig::set_http(apis);
 
     let transport_rpc_modules =
         rpc_module_builder.build(transport_rpc_module_config);
-
-    // TODO: set server config according to config
-    let http_server_builder = ServerBuilder::default();
-    let server_config =
-        RpcServerConfig::http(http_server_builder).with_http_address(addr);
 
     let server_handle = server_config
         .start(&transport_rpc_modules, throttling_conf_file, enable_metrics)

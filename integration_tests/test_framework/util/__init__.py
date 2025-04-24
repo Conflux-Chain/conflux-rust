@@ -653,9 +653,6 @@ def evm_rpc_port(n):
 def evm_rpc_ws_port(n):
     return rpc_port(n) + 4
 
-def evm_rpc_port_v2(n):
-    return rpc_port(n) + 5
-
 def rpc_url(i, rpchost=None, rpcport=None):
     if rpchost is None:
         # Do not use localhost because our test environment doesn't support

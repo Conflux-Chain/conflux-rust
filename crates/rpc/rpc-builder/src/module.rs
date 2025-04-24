@@ -41,14 +41,19 @@ pub enum RpcModuleSelection {
     /// The default modules `eth`, `net`, `web3`
     #[default]
     Standard,
-    /// eth, ethpubsub(not implemented)
+    /// eth, ethpubsub
     Evm,
     /// Only use the configured modules.
     Selection(HashSet<EthRpcModule>),
 }
 
 impl RpcModuleSelection {
-    pub const EVM_MODULES: [EthRpcModule; 1] = [EthRpcModule::Eth];
+    pub const EVM_MODULES: [EthRpcModule; 4] = [
+        EthRpcModule::Eth,
+        EthRpcModule::PubSub,
+        EthRpcModule::Net,
+        EthRpcModule::Web3,
+    ];
     /// The standard modules to instantiate by default `eth`, `net`, `web3`
     pub const STANDARD_MODULES: [EthRpcModule; 3] =
         [EthRpcModule::Eth, EthRpcModule::Net, EthRpcModule::Web3];

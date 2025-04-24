@@ -524,7 +524,7 @@ pub fn initialize_not_light_node_modules(
         network,
         common_impl,
         accounts,
-        _notifications,
+        notifications,
         pubsub,
         tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
@@ -722,20 +722,18 @@ pub fn initialize_not_light_node_modules(
 
     network.start();
 
-    let eth_rpc_http_server = if conf.eth_http_config().enabled {
+    let eth_rpc_http_server =
         tokio_runtime.block_on(launch_async_rpc_servers(
-            conf.rpc_impl_config(),
-            conf.raw_conf.throttling_conf.clone(),
-            conf.raw_conf.public_evm_rpc_apis.clone(),
             consensus.clone(),
             sync.clone(),
             txpool.clone(),
-            conf.eth_http_config().address,
+            notifications.clone(),
+            conf.raw_conf.public_evm_rpc_apis.clone(),
             task_executor.clone(),
-        ))?
-    } else {
-        None
-    };
+            tokio_runtime.clone(),
+            conf,
+            conf.raw_conf.throttling_conf.clone(),
+        ))?;
 
     Ok((
         data_man,
