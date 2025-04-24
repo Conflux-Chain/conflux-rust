@@ -31,7 +31,7 @@ pub fn platform() -> String {
 
 /// Get the standard version string for this software.
 pub fn version(crate_version: &str) -> String {
-    let sha3 = env!("VERGEN_GIT_SHA_SHORT");
+    let sha3 = env!("VERGEN_GIT_SHA");
     let sha3_dash = if sha3.is_empty() { "" } else { "-" };
     let commit_date = env!("VERGEN_GIT_COMMIT_DATE").replace("-", "");
     let date_dash = if commit_date.is_empty() { "" } else { "-" };
@@ -52,4 +52,44 @@ macro_rules! conflux_client_version {
     () => {
         parity_version::version(env!("CARGO_PKG_VERSION"))
     };
+}
+
+#[cfg(test)]
+
+mod tests {
+    use crate::{platform, version};
+
+    use super::Target;
+
+    #[test]
+    fn test_platform() {
+        let platform = platform();
+
+        assert!(!platform.is_empty());
+        assert!(platform.contains(Target::arch()));
+        assert!(platform.contains(Target::os()));
+    }
+
+    #[test]
+    fn test_version() {
+        let test_version = "0.0.0";
+        let version_string = version(test_version);
+        // example:  conflux-rust/v0.0.0-b7cca2a-20250423/x86_64-linux-gnu/rustc1.77.2
+
+        println!("version_string: {}", version_string);
+        assert!(version_string
+            .starts_with(&format!("conflux-rust/v{}", test_version)));
+        assert!(version_string.contains(&format!("{}", platform())));
+
+        let sha = env!("VERGEN_GIT_SHA");
+
+        assert!(version_string.contains(&format!("-{}", sha)));
+        let commit_date = env!("VERGEN_GIT_COMMIT_DATE").replace("-", "");
+
+        assert_eq!(commit_date.len(), 8);
+        assert!(version_string.contains(&format!("-{}", commit_date)));
+
+        let rust_version = env!("VERGEN_RUSTC_SEMVER");
+        assert!(version_string.contains(&format!("/rustc{}", rust_version)));
+    }
 }
