@@ -505,7 +505,6 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Arc<PosVerifier>,
         Option<RpcServerHandle>,
-        Option<WSServer>,
         Arc<TokioRuntime>,
         TaskManager,
     ),
@@ -722,7 +721,7 @@ pub fn initialize_not_light_node_modules(
 
     network.start();
 
-    let eth_rpc_http_server =
+    let eth_rpc_server_handle =
         tokio_runtime.block_on(launch_async_rpc_servers(
             consensus.clone(),
             sync.clone(),
@@ -749,8 +748,7 @@ pub fn initialize_not_light_node_modules(
         debug_rpc_ws_server,
         rpc_ws_server,
         pos_verifier,
-        eth_rpc_http_server,
-        None, // eth_rpc_ws_server,
+        eth_rpc_server_handle,
         tokio_runtime,
         task_manager,
     ))
