@@ -11,13 +11,17 @@ pub struct StateTestCmd {
     #[structopt(parse(from_os_str), required = true)]
     pub(super) paths: Vec<PathBuf>,
 
-    /// Configuration file path
+    /// Configuration
     #[structopt(short, long, parse(try_from_str = make_configuration), required = true, help = "Path to the configuration file")]
     pub(super) config: Configuration,
 
     /// Only run tests matching this string
     #[structopt(short, long)]
     pub(super) matches: Option<String>,
+
+    /// Only run tests of this hardfork, e.g. "prague"
+    #[structopt(long)]
+    pub(super) fork: Option<String>,
 
     /// Verbosity level (can be used multiple times)
     #[structopt(short, long, parse(from_occurrences))]

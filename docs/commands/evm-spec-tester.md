@@ -1,10 +1,8 @@
 # evm
 
-The evm subcommand is primarily used to run tests related to the Ethereum Virtual Machine (EVM), in order to verify the compatibility of the Conflux eSpace VM.
+The `evm-spec-tester` command is primarily used to run tests related to the Ethereum Virtual Machine (EVM), in order to verify the compatibility of the Conflux eSpace VM.
 
-The following subcommands are currently supported:
-
-- `evm statetest`: Execute Ethereum state tests
+Currently, it supports one type of tests: `statetest`.
 
 ## statetest
 
@@ -40,7 +38,7 @@ Alternatively, you can clone the repository locally. The `GeneralStateTests` dir
 You can run the evm statetest command and specify the directory containing the state test cases to execute the tests:
 
 ```bash
-conflux -c ./evm-config.yaml evm statetest -p /data/test-fixtures/develop/state_tests/prague
+evm-spec-tester -c ./evm-config.toml /data/test-fixtures/develop/state_tests/prague
 ```
 
 #### run single test
@@ -48,7 +46,7 @@ conflux -c ./evm-config.yaml evm statetest -p /data/test-fixtures/develop/state_
 If you only want to run a single test file, you can use the --match parameter to specify the name of the test file:
 
 ```bash
-conflux -c ./evm-config.yaml evm statetest -p /data/test-fixtures/develop/state_tests/prague --match the-test-file-name.json
+evm-spec-tester -c ./evm-config.toml /data/test-fixtures/develop/state_tests/prague --matches the-test-file-name.json
 ```
 
 #### verbose mode
@@ -56,12 +54,12 @@ conflux -c ./evm-config.yaml evm statetest -p /data/test-fixtures/develop/state_
 You can enable verbose mode by using -v or -vv. In this mode, more debug information will be printed, such as:
 
 ```bash
-conflux -c ./evm-config.yaml evm statetest -p /data/test-fixtures/develop/state_tests/prague --match the-test-file-name.json -vv
+evm-spec-tester -c ./evm-config.toml /data/test-fixtures/develop/state_tests/prague --matches the-test-file-name.json -vv
 ```
 
 #### configuration
 
-The `evm-config.yaml` file is a configuration file used to control the behavior of the Conflux node, such as which CIPs (Conflux Improvement Proposals) are enabled. 
+The `evm-config.toml` file is a configuration file used to control the behavior of the Conflux node, such as which CIPs (Conflux Improvement Proposals) are enabled. 
 
 Below is a sample configuration file, where all CIPs are activated at block height 1:
 
@@ -84,3 +82,4 @@ If no configuration file is specified, the default activation settings (same as 
 Some tests are skipped due to conflux does not support some features of the EVM. The skipped tests are listed below:
 
 - EIP-4844 tests
+- EOF tests

@@ -67,15 +67,13 @@ impl StateTestCmd {
                 continue;
             }
 
-            // only run selective tests
-            // if !allowed_test(&path, self.matches.as_deref()) {
-            //     skipped_suite += 1;
-            //     continue;
-            // }
-
             let (success_cnt, skipped_cnt, errors) =
                 match SuiteTester::load(&path) {
-                    Ok(tester) => tester.run(&machine, self.matches.as_deref()),
+                    Ok(tester) => tester.run(
+                        &machine,
+                        self.matches.as_deref(),
+                        self.fork.as_deref(),
+                    ),
                     Err(err_msg) => {
                         warn!("TestSuite load failed: {}", err_msg);
                         load_err_suite += 1;
@@ -127,6 +125,7 @@ impl SuiteTester {
 
     fn run(
         self, machine: &Machine, matches: Option<&str>,
+        target_fork: Option<&str>,
     ) -> (usize, usize, Vec<TestError>) {
         if matches.is_some() {
             trace!("Running TestUnit: {}", self.path);
@@ -139,7 +138,7 @@ impl SuiteTester {
         let mut skipped_cnt = 0;
         for (name, unit) in self.suite.0 {
             let unit_tester = UnitTester::new(&self.path, name, unit);
-            match unit_tester.run(&machine, matches) {
+            match unit_tester.run(&machine, matches, target_fork) {
                 Ok(true) => {
                     success_cnt += 1;
                 }

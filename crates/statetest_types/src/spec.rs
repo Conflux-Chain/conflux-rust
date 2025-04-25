@@ -62,3 +62,20 @@ impl SpecName {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_spec_format() {
+        let spec = SpecName::Frontier;
+        assert_eq!(format!("{:?}", spec), "Frontier");
+
+        let spec = SpecName::Istanbul;
+        assert_eq!(format!("{:?}", spec), "Istanbul");
+
+        let spec = SpecName::Unknown;
+        assert_eq!(format!("{:?}", spec), "Unknown");
+    }
+}
