@@ -36,7 +36,6 @@ pub mod impls;
 pub mod informant;
 mod interceptor;
 pub mod metadata;
-pub mod server_configuration;
 mod traits;
 pub mod types;
 
@@ -89,11 +88,11 @@ use crate::{
         traits::eth_space::debug::Debug,
     },
 };
-use interceptor::{MetricsInterceptor, ThrottleInterceptor};
-pub use metadata::Metadata;
-pub use server_configuration::{
+pub use cfx_config::rpc_server_config::{
     HttpConfiguration, TcpConfiguration, WsConfiguration,
 };
+use interceptor::{MetricsInterceptor, ThrottleInterceptor};
+pub use metadata::Metadata;
 use std::collections::HashSet;
 
 pub fn setup_public_rpc_apis(

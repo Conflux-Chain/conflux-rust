@@ -18,6 +18,9 @@ use cfx_internal_common::{
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
+use cfx_rpc_cfx_types::{
+    apis::ApiSet, eth_apis::EthApiSet, RpcImplConfiguration,
+};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -55,11 +58,7 @@ use network::DiscoveryConfiguration;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
 
-use crate::rpc::{
-    apis::{ApiSet, EthApiSet},
-    impls::RpcImplConfiguration,
-    HttpConfiguration, TcpConfiguration, WsConfiguration,
-};
+use crate::{HttpConfiguration, TcpConfiguration, WsConfiguration};
 
 lazy_static! {
     pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
@@ -452,14 +451,6 @@ build_config! {
     }
 }
 
-macro_rules! set_conf {
-    ($src: expr; $dst: expr => {$($field: tt),* }) => {
-        {
-            let number = $src;
-            $($dst.$field = number;)*
-        }
-    };
-}
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }

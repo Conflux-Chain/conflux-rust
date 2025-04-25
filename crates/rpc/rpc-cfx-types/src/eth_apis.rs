@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+// Temp put it here, will be removed very soon
+
 use std::{
     collections::HashSet,
     fmt::{Display, Formatter},
