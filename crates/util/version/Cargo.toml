@@ -14,4 +14,4 @@ target_info = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }
-vergen = { workspace = true }
+vergen = { workspace = true, features = ["git", "rustc", "git2"] }
