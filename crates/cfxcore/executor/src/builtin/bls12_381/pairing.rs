@@ -122,7 +122,7 @@ impl Pricer for PairingPricer {
 
 pub fn pairing_gas() -> impl Pricer {
     PairingPricer {
-        base: PAIRING_PAIRING_MULTIPLIER_BASE,
-        item_price: PAIRING_PAIRING_OFFSET_BASE,
+        base: PAIRING_PAIRING_OFFSET_BASE,
+        item_price: PAIRING_PAIRING_MULTIPLIER_BASE,
     }
 }

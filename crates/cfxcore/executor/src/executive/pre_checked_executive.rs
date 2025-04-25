@@ -532,6 +532,10 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             );
         }
 
+        if gas_used < cost.floor_gas.into() {
+            gas_used = cost.floor_gas.into()
+        }
+
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
         let charge_all =
@@ -541,7 +545,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             let gas_charged = tx.gas() - gas_refunded;
             (gas_charged, gas_refunded)
         } else {
-            (gas_used, gas_left)
+            (gas_used, tx.gas() - gas_used)
         };
 
         let fees_value = gas_charged.saturating_mul(cost.gas_price);
