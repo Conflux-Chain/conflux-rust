@@ -3,7 +3,7 @@
     H: CryptoHasher,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.new" class="method"><a class="src rightside" href="../../../src/diem_types/proof/accumulator/mod.rs.html#67-87">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>(
     frozen_subtree_roots: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;HashValue&gt;,
     num_leaves: <a class="type" href="../definition/type.LeafCount.html" title="type diem_types::proof::definition::LeafCount">LeafCount</a>
-) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.70/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Constructs a new accumulator with roots of existing frozen subtrees.
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.98/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Constructs a new accumulator with roots of existing frozen subtrees.
 Returns error if the number of frozen subtree roots does not match
 the number of leaves.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.from_leaves" class="method"><a class="src rightside" href="../../../src/diem_types/proof/accumulator/mod.rs.html#90-92">source</a><h4 class="code-header">pub fn <a href="#method.from_leaves" class="fn">from_leaves</a>(leaves: &amp;[HashValue]) -&gt; Self</h4></section></summary><div class="docblock"><p>Constructs a new accumulator with given leaves.</p>
@@ -14,7 +14,7 @@ new one representing the result is returned.</p>
     &amp;self,
     subtrees: &amp;[HashValue],
     num_new_leaves: <a class="type" href="../definition/type.LeafCount.html" title="type diem_types::proof::definition::LeafCount">LeafCount</a>
-) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.70/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Appends a list of new subtrees to the existing accumulator. This is
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.98/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;Self&gt;</h4></section></summary><div class="docblock"><p>Appends a list of new subtrees to the existing accumulator. This is
 similar to [<code>append</code>](Accumulator::append) except that the new
 leaves themselves are not known and they are represented by
 <code>subtrees</code>. As an example, given the following accumulator that

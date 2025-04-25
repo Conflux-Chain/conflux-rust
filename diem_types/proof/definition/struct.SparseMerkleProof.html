@@ -10,7 +10,7 @@ constructed on top of this structure.</p>
     expected_root_hash: HashValue,
     element_key: HashValue,
     element_value: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.reference.html">&amp;V</a>&gt;
-) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.70/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>If <code>element_value</code> is present, verifies an element whose key is
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.98/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>If <code>element_value</code> is present, verifies an element whose key is
 <code>element_key</code> and value is <code>element_value</code> exists in the Sparse
 Merkle Tree using the provided proof. Otherwise verifies the proof
 is a valid non-inclusion proof that shows this key doesn’t exist in the

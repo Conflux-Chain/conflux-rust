@@ -18,7 +18,7 @@ from state root to the account.</p>
     state_version: <a class="type" href="../../transaction/type.Version.html" title="type diem_types::transaction::Version">Version</a>,
     account_address_hash: HashValue,
     account_state_blob: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="struct" href="../../account_state_blob/struct.AccountStateBlob.html" title="struct diem_types::account_state_blob::AccountStateBlob">AccountStateBlob</a>&gt;
-) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.70/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Verifies that the state of an account at version <code>state_version</code> is
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.98/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class="docblock"><p>Verifies that the state of an account at version <code>state_version</code> is
 correct using the provided proof. If <code>account_state_blob</code> is
 present, we expect the account to exist, otherwise we expect the
 account to not exist.</p>
