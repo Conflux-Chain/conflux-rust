@@ -67,7 +67,7 @@ impl State {
         // cleared directly, thus, the accounts in state's cache should
         // all discard all checkpoints
         for addr in cleared_addresses {
-            if let Some(AccountEntry::Cached(ref mut overlay_account, true)) =
+            if let Some(AccountEntry::Cached(ref mut overlay_account, _dirty)) =
                 self.cache.get_mut().get_mut(&addr).map(|x| &mut x.entry)
             {
                 overlay_account.clear_checkpoint();
