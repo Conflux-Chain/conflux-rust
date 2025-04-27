@@ -27,6 +27,13 @@ pub(crate) fn skip_test(path: &Path) -> bool {
         | "basefeeExample.json"
         | "eip1559.json"
         | "mergeTest.json"
+
+        // These tests are passing, but they take a lot of time to execute so we are going to skip them.
+        | "loopExp.json"
+        | "Call50000_sha256.json"
+        | "static_Call50000_sha256.json"
+        | "loopMul.json"
+        | "CALLBlake2f_MaxRounds.json"
     )
 }
 

@@ -12,6 +12,9 @@ use cfx_types::{
     u256_to_h256_be, AllChainID, Space, SpaceMap, H256, U256, U64,
 };
 use cfx_vm_types::Env;
+use cfxcore::verification::{
+    VerificationConfig, VerifyTxLocalMode, VerifyTxMode,
+};
 use cfxkey::{Address, Secret};
 use primitives::{
     transaction::{
@@ -247,5 +250,34 @@ pub fn check_tx_bytes(
         ));
     }
 
+    Ok(())
+}
+
+pub fn check_tx_common(
+    machine: &Machine, env: &Env, transaction: &SignedTransaction,
+    verification: &VerificationConfig,
+) -> Result<(), TestErrorKind> {
+    let spec = machine.spec(env.number, env.epoch_height);
+    let verify_mode = VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec);
+
+    let chain_id = AllChainID::new(
+        env.chain_id[&Space::Native],
+        env.chain_id[&Space::Ethereum],
+    );
+
+    verification
+        .verify_transaction_common(
+            &transaction.transaction,
+            chain_id,
+            env.epoch_height,
+            &machine.params().transition_heights,
+            verify_mode,
+        )
+        .map_err(|e| {
+            TestErrorKind::Internal(format!(
+                "Tx common filed check failed: {}",
+                e
+            ))
+        })?;
     Ok(())
 }

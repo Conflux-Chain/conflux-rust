@@ -11,6 +11,7 @@ use cfx_executor::{
     state::State,
 };
 use cfx_vm_types::Env;
+use cfxcore::verification::VerificationConfig;
 use primitives::SignedTransaction;
 use statetest_types::{SpecName, Test, TestUnit};
 
@@ -38,8 +39,8 @@ impl UnitTester {
     }
 
     pub fn run(
-        &self, machine: &Machine, matches: Option<&str>,
-        target_fork: Option<&str>,
+        &self, machine: &Machine, verification: &VerificationConfig,
+        matches: Option<&str>, target_fork: Option<&str>,
     ) -> Result<bool, TestError> {
         if !matches.map_or(true, |pat| {
             format!("{}::{}", &self.path, &self.name).contains(pat)
@@ -72,7 +73,7 @@ impl UnitTester {
 
             // running each test
             for single_test in tests.iter() {
-                self.execute_single_test(single_test, machine)?;
+                self.execute_single_test(single_test, machine, verification)?;
                 non_empty_unit = true;
             }
         }
@@ -82,6 +83,7 @@ impl UnitTester {
 
     fn execute_single_test(
         &self, test: &Test, machine: &Machine,
+        verification: &VerificationConfig,
     ) -> Result<(), TestError> {
         let mut state = pre_transact::make_state(&self.unit.pre);
 
@@ -112,6 +114,9 @@ impl UnitTester {
             self.unit.config.chainid,
             tx.hash(),
         );
+
+        pre_transact::check_tx_common(machine, &env, &tx, verification)
+            .map_err(|kind| self.err(kind))?;
 
         let transact_options = pre_transact::make_transact_options(true);
 
