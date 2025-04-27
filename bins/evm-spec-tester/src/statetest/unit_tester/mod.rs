@@ -10,6 +10,7 @@ use cfx_executor::{
     machine::Machine,
     state::State,
 };
+use cfx_types::Space;
 use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
 use primitives::SignedTransaction;
@@ -93,12 +94,6 @@ impl UnitTester {
             self.unit.config.chainid,
             extract_155_chain_id_from_raw_tx(&test.txbytes).is_none(),
         ) else {
-            // if self.unit.transaction.tx_type(test.indexes.data).is_none() {
-            //     trace!(
-            //         "\tSkipping test because of unkonwn tx type: {}",
-            //         self.name.clone()
-            //     );
-            // }
             return Ok(());
         };
 
@@ -115,11 +110,11 @@ impl UnitTester {
             tx.hash(),
         );
 
-        let check_res =
+        let check_result =
             pre_transact::check_tx_common(machine, &env, &tx, verification);
 
         let check_pass = post_transact::match_common_check_error(
-            check_res,
+            check_result,
             test.expect_exception.as_ref(),
         )
         .map_err(|kind| self.err(kind))?;
@@ -141,6 +136,13 @@ impl UnitTester {
             // TODO: error matched
             return Ok(());
         };
+
+        post_transact::distribute_tx_fee_to_miner(
+            &mut state,
+            &executed,
+            &env.author,
+            Space::Ethereum,
+        );
 
         post_transact::check_execution_outcome(
             &tx,
