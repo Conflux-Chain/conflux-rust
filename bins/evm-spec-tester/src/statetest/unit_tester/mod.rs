@@ -115,8 +115,17 @@ impl UnitTester {
             tx.hash(),
         );
 
-        pre_transact::check_tx_common(machine, &env, &tx, verification)
-            .map_err(|kind| self.err(kind))?;
+        let check_res =
+            pre_transact::check_tx_common(machine, &env, &tx, verification);
+
+        let check_pass = post_transact::match_common_check_error(
+            check_res,
+            test.expect_exception.as_ref(),
+        )
+        .map_err(|kind| self.err(kind))?;
+        if !check_pass {
+            return Ok(());
+        }
 
         let transact_options = pre_transact::make_transact_options(true);
 
@@ -141,8 +150,6 @@ impl UnitTester {
             &test.state,
         )
         .map_err(|kind| self.err(kind))?;
-
-        // TODO: check logs hash is same
 
         Ok(())
     }

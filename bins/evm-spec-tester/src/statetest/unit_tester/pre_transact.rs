@@ -20,6 +20,7 @@ use primitives::{
     transaction::{
         Action, AuthorizationListItem, Eip1559Transaction, Eip155Transaction,
         Eip2930Transaction, Eip7702Transaction, EthereumTransaction,
+        TransactionError,
     },
     SignedTransaction, Transaction,
 };
@@ -256,7 +257,7 @@ pub fn check_tx_bytes(
 pub fn check_tx_common(
     machine: &Machine, env: &Env, transaction: &SignedTransaction,
     verification: &VerificationConfig,
-) -> Result<(), TestErrorKind> {
+) -> Result<(), TransactionError> {
     let spec = machine.spec(env.number, env.epoch_height);
     let verify_mode = VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec);
 
@@ -265,19 +266,11 @@ pub fn check_tx_common(
         env.chain_id[&Space::Ethereum],
     );
 
-    verification
-        .verify_transaction_common(
-            &transaction.transaction,
-            chain_id,
-            env.epoch_height,
-            &machine.params().transition_heights,
-            verify_mode,
-        )
-        .map_err(|e| {
-            TestErrorKind::Internal(format!(
-                "Tx common filed check failed: {}",
-                e
-            ))
-        })?;
-    Ok(())
+    verification.verify_transaction_common(
+        &transaction.transaction,
+        chain_id,
+        env.epoch_height,
+        &machine.params().transition_heights,
+        verify_mode,
+    )
 }

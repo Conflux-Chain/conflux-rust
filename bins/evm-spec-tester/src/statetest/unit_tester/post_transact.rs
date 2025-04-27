@@ -8,9 +8,12 @@ use cfx_executor::{
 };
 use cfx_types::{AddressSpaceUtil, U256};
 use cfxkey::Address;
-use primitives::SignedTransaction;
+use primitives::{transaction::TransactionError, SignedTransaction};
 use statetest_types::{AccountInfo, TestUnit};
 use std::collections::HashMap;
+
+const INTRINSIC_GAS_TOO_LOW: &str =
+    "TransactionException.INTRINSIC_GAS_TOO_LOW";
 
 macro_rules! bail {
     ($e:expr) => {
@@ -51,7 +54,7 @@ fn match_fail_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
     // TODO: check consistency of exception
 
     match reason {
-        "TransactionException.INTRINSIC_GAS_TOO_LOW" => matches!(
+        INTRINSIC_GAS_TOO_LOW => matches!(
             outcome,
             NotExecutedDrop(TxDropError::NotEnoughGasLimit { .. })
         ),
@@ -66,6 +69,30 @@ fn match_fail_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
             )
         ),
         _ => false,
+    }
+}
+
+pub fn match_common_check_error(
+    check: Result<(), TransactionError>, expect_exception: Option<&String>,
+) -> Result<bool, TestErrorKind> {
+    match (check, expect_exception.map(|v| v.as_str())) {
+        (Ok(_), None) => Ok(true),
+        (Ok(_), Some(_)) => {
+            // expect_exception will be check again in extract_executed
+            Ok(true)
+        }
+        (Err(e), None) => Err(TestErrorKind::CommonCheckError { tx_error: e }),
+        (
+            Err(TransactionError::NotEnoughBaseGas {
+                required: _,
+                got: _,
+            }),
+            Some(INTRINSIC_GAS_TOO_LOW),
+        ) => Ok(false),
+        (Err(e), Some(expect)) => {
+            trace!("expect exception: {} actually: {}", expect, e);
+            Ok(false)
+        }
     }
 }
 
@@ -141,6 +168,8 @@ pub fn check_execution_outcome(
                 });
             }
         }
+
+        // TODO: logs hash check
     }
 
     Ok(())
