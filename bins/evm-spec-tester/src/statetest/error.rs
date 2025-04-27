@@ -1,6 +1,7 @@
 use cfx_bytes::Bytes;
 use cfx_executor::executive::ExecutionOutcome;
 use cfx_types::{H256, U256};
+use cfxkey::Address;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -55,12 +56,24 @@ pub enum StateMismatch {
     LogsRootMismatch { got: H256, expected: H256 },
     #[error("state root mismatch: got {got}, expected {expected}")]
     StateRootMismatch { got: H256, expected: H256 },
-    #[error("balance mismatch: got {got}, expected {expected}")]
-    BalanceMismatch { got: U256, expected: U256 },
+    #[error(
+        "balance mismatch: address {address}, got {got}, expected {expected}"
+    )]
+    BalanceMismatch {
+        address: Address,
+        got: U256,
+        expected: U256,
+    },
     #[error("gas mismatch: got {got}, expected {expected}")]
     GasMismatch { got: U256, expected: U256 },
-    #[error("nonce mismatch: got {got}, expected {expected}")]
-    NonceMismatch { got: U256, expected: U256 },
+    #[error(
+        "nonce mismatch: address {address}, got {got}, expected {expected}"
+    )]
+    NonceMismatch {
+        address: Address,
+        got: U256,
+        expected: U256,
+    },
     #[error("code mismatch: got {got}, expected {expected}")]
     CodeMismatch { got: String, expected: String },
     #[error("storage mismatch (key {key}): got {got}, expected {expected}")]

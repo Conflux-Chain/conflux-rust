@@ -68,6 +68,9 @@ impl UnitTester {
 
             // running each test
             for single_test in tests.iter() {
+                if matches.is_some() {
+                    info!("Running item");
+                }
                 self.execute_single_test(single_test, machine)?;
                 non_empty_unit = true;
             }

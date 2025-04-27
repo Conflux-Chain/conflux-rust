@@ -20,6 +20,7 @@ fn init_logger(verbosity: u8) {
     };
 
     env_logger::Builder::new()
+        .target(env_logger::Target::Stdout)
         .filter(None, LevelFilter::Off)
         .filter_module("evm_spec_tester", level)
         .format_timestamp(None) // 可选：添加时间戳
