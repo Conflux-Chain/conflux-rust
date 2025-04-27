@@ -1165,6 +1165,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-config"
+version = "2.4.0"
+dependencies = [
+ "cfx-addr",
+ "cfx-executor",
+ "cfx-internal-common",
+ "cfx-parameters",
+ "cfx-rpc-builder",
+ "cfx-rpc-cfx-types",
+ "cfx-storage",
+ "cfx-types",
+ "cfxcore",
+ "clap",
+ "db",
+ "diem-types",
+ "jsonrpc-http-server",
+ "kvdb-rocksdb",
+ "lazy_static",
+ "log",
+ "metrics",
+ "network",
+ "parking_lot 0.11.2",
+ "primitives",
+ "rand 0.7.3",
+ "toml",
+ "txgen",
+]
+
+[[package]]
 name = "cfx-db-errors"
 version = "2.0.2"
 dependencies = [
@@ -1939,6 +1968,7 @@ dependencies = [
  "bls-signatures",
  "cfx-addr",
  "cfx-bytes",
+ "cfx-config",
  "cfx-execute-helper",
  "cfx-executor",
  "cfx-internal-common",
@@ -3337,6 +3367,7 @@ name = "evm-spec-tester"
 version = "2.4.0"
 dependencies = [
  "cfx-bytes",
+ "cfx-config",
  "cfx-executor",
  "cfx-rpc-eth-types",
  "cfx-statedb",
@@ -3344,7 +3375,6 @@ dependencies = [
  "cfx-vm-types",
  "cfxcore",
  "cfxkey",
- "client",
  "env_logger",
  "hex",
  "hex-literal",

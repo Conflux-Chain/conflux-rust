@@ -15,7 +15,7 @@ use cfx_types::{
     address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space,
     SpaceMap, H256, U256,
 };
-use cfx_vm_types::{CreateContractAddress, Env, Spec};
+use cfx_vm_types::{ConsensusGasSpec, CreateContractAddress, Env, Spec};
 use primitives::{AccessList, SignedTransaction};
 
 use fresh_executive::FreshExecutive;
@@ -98,9 +98,10 @@ impl<'a> ExecutiveContext<'a> {
     }
 }
 
+#[inline]
 pub fn gas_required_for(
     is_create: bool, data: &[u8], access_list: Option<&AccessList>,
-    authorization_len: usize, spec: &Spec,
+    authorization_len: usize, spec: &ConsensusGasSpec,
 ) -> u64 {
     let init_gas = (if is_create {
         spec.tx_create_gas
@@ -143,6 +144,21 @@ pub fn gas_required_for(
         * authorization_len as u64;
 
     init_gas + data_gas + access_gas + authorization_gas + initcode_gas
+}
+
+pub fn eip7623_required_gas(data: &[u8], spec: &ConsensusGasSpec) -> u64 {
+    if !spec.eip7623 {
+        return 0;
+    }
+
+    let byte_floor_gas = |b: &u8| {
+        (match *b {
+            0 => spec.tx_data_floor_zero_gas,
+            _ => spec.tx_data_floor_non_zero_gas,
+        }) as u64
+    };
+
+    spec.tx_gas as u64 + data.iter().map(byte_floor_gas).sum::<u64>()
 }
 
 pub fn contract_address(

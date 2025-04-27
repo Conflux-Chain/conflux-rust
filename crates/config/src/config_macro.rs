@@ -130,3 +130,13 @@ macro_rules! build_config{
         }
     }
 }
+
+#[macro_export]
+macro_rules! set_conf {
+    ($src: expr; $dst: expr => {$($field: tt),* }) => {
+        {
+            let number = $src;
+            $($dst.$field = number;)*
+        }
+    };
+}

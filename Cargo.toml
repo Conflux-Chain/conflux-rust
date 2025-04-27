@@ -108,6 +108,7 @@ members = [
     "crates/rpc/rpc-middlewares",
     "crates/tasks",
     "crates/statetest_types",
+    "crates/config",
 ]
 
 resolver = "2"
@@ -243,6 +244,7 @@ diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
 statetest_types = { path = "./crates/statetest_types" }
+cfx-config = { path = "./crates/config" }
 
 # basics
 bytes = "1.9"

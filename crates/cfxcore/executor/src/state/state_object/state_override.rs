@@ -28,11 +28,15 @@ impl State {
             };
 
             let loaded_account = self.db.get_account(&addr_with_space)?;
+            // The override phase's warm bit is not important because it will
+            // soon be written from the cache to the committed cache, which does
+            // not include the warm bit.
             let account_entry = AccountEntry::from_loaded_with_override(
                 &addr_with_space,
                 loaded_account,
                 account,
-            );
+            )
+            .with_warm(false);
 
             cache.insert(addr_with_space, account_entry);
         }

@@ -8,7 +8,9 @@ use crate::{
     sync::Error as SyncError,
 };
 use cfx_executor::{
-    executive::gas_required_for, machine::Machine, spec::TransitionsEpochHeight,
+    executive::{eip7623_required_gas, gas_required_for},
+    machine::Machine,
+    spec::TransitionsEpochHeight,
 };
 use cfx_parameters::{block::*, consensus_internal::ELASTICITY_MULTIPLIER};
 use cfx_storage::{
@@ -19,7 +21,7 @@ use cfx_types::{
     address_util::AddressUtil, AllChainID, BigEndianHash, Space, SpaceMap,
     H256, U256,
 };
-use cfx_vm_types::Spec;
+use cfx_vm_types::{ConsensusGasSpec, Spec};
 use primitives::{
     block::BlockHeight,
     block_header::compute_next_price_tuple,
@@ -463,6 +465,8 @@ impl VerificationConfig {
 
         let mut block_size = 0;
         let transitions = &self.machine.params().transition_heights;
+        let consensus_spec =
+            &self.machine.params().consensus_spec(block_height);
 
         for t in &block.transactions {
             self.verify_transaction_common(
@@ -470,7 +474,7 @@ impl VerificationConfig {
                 chain_id,
                 block_height,
                 transitions,
-                VerifyTxMode::Remote,
+                VerifyTxMode::Remote(consensus_spec),
             )?;
             block_size += t.rlp_size();
         }
@@ -761,6 +765,7 @@ impl VerificationConfig {
         let cip1559 = height >= transitions.cip1559;
         let cip7702 = height >= transitions.cip7702;
         let cip645 = height >= transitions.cip645;
+        let eip7623 = height >= transitions.eip7623;
 
         if let Transaction::Native(ref tx) = tx.unsigned {
             Self::verify_transaction_epoch_height(
@@ -787,7 +792,7 @@ impl VerificationConfig {
             bail!(TransactionError::CreateInitCodeSizeLimit)
         }
 
-        Self::check_gas_limit(tx, cip76, &mode)?;
+        Self::check_gas_limit(tx, cip76, eip7623, &mode)?;
         Self::check_gas_limit_with_calldata(tx, cip130)?;
 
         Ok(())
@@ -804,7 +809,7 @@ impl VerificationConfig {
         match mode {
             VerifyTxMode::Local(Full, spec) => cip90a && spec.cip90,
             VerifyTxMode::Local(MaybeLater, _spec) => true,
-            VerifyTxMode::Remote => cip90a,
+            VerifyTxMode::Remote(_) => cip90a,
         }
     }
 
@@ -819,7 +824,7 @@ impl VerificationConfig {
         match mode {
             VerifyTxMode::Local(Full, spec) => cip1559 && spec.cip1559,
             VerifyTxMode::Local(MaybeLater, _spec) => true,
-            VerifyTxMode::Remote => cip1559,
+            VerifyTxMode::Remote(_) => cip1559,
         }
     }
 
@@ -834,7 +839,7 @@ impl VerificationConfig {
         match mode {
             VerifyTxMode::Local(Full, spec) => cip7702 && spec.cip7702,
             VerifyTxMode::Local(MaybeLater, _spec) => true,
-            VerifyTxMode::Remote => cip7702,
+            VerifyTxMode::Remote(_) => cip7702,
         }
     }
 
@@ -851,32 +856,43 @@ impl VerificationConfig {
         tx.data().len() <= SPEC.init_code_data_limit
     }
 
-    /// Check transaction intrinsic gas. Influenced by CIP-76.
+    /// Check transaction intrinsic gas. Influenced by CIP-76 and EIP-7623.
     fn check_gas_limit(
-        tx: &TransactionWithSignature, cip76: bool, mode: &VerifyTxMode,
+        tx: &TransactionWithSignature, cip76: bool, eip7623: bool,
+        mode: &VerifyTxMode,
     ) -> Result<(), TransactionError> {
-        const GENESIS_SPEC: Spec = Spec::genesis_spec();
-        let maybe_spec = if let VerifyTxMode::Local(_, spec) = mode {
-            // In local mode, we check gas limit as usual.
-            Some(*spec)
-        } else if !cip76 {
-            // In remote mode, we only check gas limit before cip-76 activated.
-            Some(&GENESIS_SPEC)
-        } else {
-            None
+        let consensus_spec = match mode {
+            VerifyTxMode::Local(_, spec) => spec.to_consensus_spec(),
+            VerifyTxMode::Remote(spec) => {
+                if !eip7623 && cip76 {
+                    return Ok(());
+                } else {
+                    (*spec).clone()
+                }
+            }
         };
 
-        if let Some(spec) = maybe_spec {
-            let tx_intrinsic_gas = gas_required_for(
-                tx.action() == Action::Create,
-                &tx.data(),
-                tx.access_list(),
-                tx.authorization_len(),
-                &spec,
-            );
-            if *tx.gas() < (tx_intrinsic_gas as usize).into() {
+        let tx_intrinsic_gas = gas_required_for(
+            tx.action() == Action::Create,
+            &tx.data(),
+            tx.access_list(),
+            tx.authorization_len(),
+            &consensus_spec,
+        );
+
+        if *tx.gas() < tx_intrinsic_gas.into() {
+            bail!(TransactionError::NotEnoughBaseGas {
+                required: tx_intrinsic_gas.into(),
+                got: *tx.gas()
+            });
+        }
+
+        if eip7623 {
+            let floor_gas = eip7623_required_gas(&tx.data(), &consensus_spec);
+
+            if *tx.gas() < floor_gas.into() {
                 bail!(TransactionError::NotEnoughBaseGas {
-                    required: tx_intrinsic_gas.into(),
+                    required: floor_gas.into(),
                     got: *tx.gas()
                 });
             }
@@ -928,7 +944,7 @@ pub enum VerifyTxMode<'a> {
     Local(VerifyTxLocalMode, &'a Spec),
     /// Check transactions for received blocks in sync graph, may have less
     /// constraints
-    Remote,
+    Remote(&'a ConsensusGasSpec),
 }
 
 #[derive(Copy, Clone)]

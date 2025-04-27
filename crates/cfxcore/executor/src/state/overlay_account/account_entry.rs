@@ -2,7 +2,26 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use std::ops::{Deref, DerefMut};
+
 use super::OverlayAccount;
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
+pub struct AccountEntryWithWarm {
+    pub warm: bool,
+    pub entry: AccountEntry,
+}
+
+impl Deref for AccountEntryWithWarm {
+    type Target = AccountEntry;
+
+    fn deref(&self) -> &Self::Target { &self.entry }
+}
+
+impl DerefMut for AccountEntryWithWarm {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.entry }
+}
 
 /// Entry object in cache and checkpoint layers, adding additional markers
 /// like dirty bits to the `OverlayAccount` structure.
@@ -104,5 +123,9 @@ impl AccountEntry {
             DbAbsent => DbAbsent,
             Cached(acc, dirty_bit) => Cached(acc.clone_account(), *dirty_bit),
         }
+    }
+
+    pub fn with_warm(self, warm: bool) -> AccountEntryWithWarm {
+        AccountEntryWithWarm { warm, entry: self }
     }
 }

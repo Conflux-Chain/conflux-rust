@@ -1,4 +1,4 @@
-use client::{common::Configuration, configuration::RawConfiguration};
+use cfx_config::{Configuration, RawConfiguration};
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use std::path::PathBuf;
 use structopt::StructOpt;

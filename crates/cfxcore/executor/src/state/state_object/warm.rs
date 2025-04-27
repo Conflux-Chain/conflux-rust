@@ -15,7 +15,7 @@ impl State {
         {
             return true;
         }
-        self.cache.read().contains_key(address)
+        self.cache.read().get(address).map_or(false, |x| x.warm)
     }
 
     pub fn is_warm_storage_entry(
