@@ -79,7 +79,7 @@ members = [
     "crates/pos/common/subscription-service",
     "crates/pos/common/temppath",
     "crates/pos/common/time-service",
-    "crates/pos/config/generate-key",
+    # "crates/pos/config/generate-key",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
