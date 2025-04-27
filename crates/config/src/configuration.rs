@@ -18,6 +18,9 @@ use cfx_internal_common::{
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
+use cfx_rpc_cfx_types::{
+    apis::ApiSet, eth_apis::EthApiSet, RpcImplConfiguration,
+};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -55,10 +58,7 @@ use network::DiscoveryConfiguration;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
 
-use crate::rpc::{
-    impls::RpcImplConfiguration, rpc_apis::ApiSet, HttpConfiguration,
-    TcpConfiguration, WsConfiguration,
-};
+use crate::{HttpConfiguration, TcpConfiguration, WsConfiguration};
 
 lazy_static! {
     pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
@@ -441,7 +441,7 @@ build_config! {
             ProvideExtraSnapshotSyncConfig::parse_config_list)
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
-        (public_evm_rpc_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
+        (public_evm_rpc_apis, (EthApiSet), EthApiSet::Evm, EthApiSet::from_str)
         (public_evm_rpc_async_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
         (single_mpt_space, (Option<Space>), None, |s| match s {
             "native" => Ok(Space::Native),
@@ -451,14 +451,6 @@ build_config! {
     }
 }
 
-macro_rules! set_conf {
-    ($src: expr; $dst: expr => {$($field: tt),* }) => {
-        {
-            let number = $src;
-            $($dst.$field = number;)*
-        }
-    };
-}
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }
@@ -1505,7 +1497,7 @@ impl Configuration {
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935 }
+            params.transition_heights => { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935, eip7623 }
         );
         if let Some(x) = self.raw_conf.cip151_transition_height {
             params.transition_heights.cip151 = x;

@@ -152,8 +152,8 @@ impl OverlayAccount {
             is_newly_created_contract: self.is_newly_created_contract,
             pending_db_clear: self.pending_db_clear,
             storage_write_cache: self.storage_write_cache.clone(),
-            storage_write_checkpoint: Some(WriteCheckpointLayer::new_empty(
-                checkpoint_id,
+            storage_write_checkpoint: Some(RwLock::new(
+                WriteCheckpointLayer::new_empty(checkpoint_id),
             )),
             storage_committed_cache: self.storage_committed_cache.clone(),
             storage_read_cache: self.storage_read_cache.clone(),

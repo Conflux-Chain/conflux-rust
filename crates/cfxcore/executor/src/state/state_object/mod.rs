@@ -65,7 +65,9 @@ use self::checkpoints::CheckpointLayer;
 use super::{
     checkpoints::LazyDiscardedVec,
     global_stat::GlobalStat,
-    overlay_account::{AccountEntry, OverlayAccount, RequireFields},
+    overlay_account::{
+        AccountEntry, AccountEntryWithWarm, OverlayAccount, RequireFields,
+    },
 };
 use crate::substate::Substate;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
@@ -84,7 +86,7 @@ pub struct State {
     ///
     /// WARNING: Don't delete cache entries outside of `State::commit`, unless
     /// you are familiar with checkpoint maintenance.
-    pub cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
+    pub cache: RwLock<HashMap<AddressWithSpace, AccountEntryWithWarm>>,
 
     pub committed_cache: HashMap<AddressWithSpace, AccountEntry>,
     tx_access_list: Option<HashMap<AddressWithSpace, HashSet<H256>>>,
@@ -134,7 +136,7 @@ impl State {
         .collect::<DbResult<()>>()?;
 
         assert!(self.committed_cache.is_empty());
-        self.committed_cache = std::mem::take(self.cache.get_mut());
+        self.commit_cache(false);
         Ok(())
     }
 }

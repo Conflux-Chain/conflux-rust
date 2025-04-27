@@ -52,6 +52,12 @@ def pytest_addoption(parser):
         action="store_true",
         help="Print out all RPC calls as they are made")
     parser.addoption(
+        "--conflux-tracetx",
+        dest="trace_tx",
+        default=False,
+        action="store_true",
+        help="Print out tx opcodes traces on getting tx receipt using web3 sdk")
+    parser.addoption(
         "--conflux-portseed",
         dest="port_seed",
         default=os.getpid(),
@@ -98,6 +104,13 @@ def pytest_addoption(parser):
         dest="port_min",
         default=0,
         type=int)  # only used if set to bigger than 0
+    parser.addoption(
+        "--conflux-use-anvil",
+        dest="use_anvil_for_spec_tests",
+        default=False,
+        action="store_true",
+        help="Use anvil for spec tests instead of Conflux to check if test cases can pass in Ethereum's implementation"
+    )
 
 def get_args_from_request(request: pytest.FixtureRequest) -> FrameworkOptions:
     return FrameworkOptions(
@@ -114,6 +127,8 @@ def get_args_from_request(request: pytest.FixtureRequest) -> FrameworkOptions:
         metrics_report_interval_ms=request.config.getoption("metrics_report_interval_ms"),  # type: ignore
         conflux=request.config.getoption("conflux"), # type: ignore
         port_min=request.config.getoption("port_min"),  # type: ignore
+        trace_tx=request.config.getoption("trace_tx"),  # type: ignore
+        use_anvil_for_spec_tests=request.config.getoption("use_anvil_for_spec_tests"),  # type: ignore
     )
     
 @pytest.fixture(scope="session")

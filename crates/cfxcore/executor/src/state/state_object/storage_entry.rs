@@ -153,7 +153,9 @@ impl State {
         use super::super::checkpoints::CheckpointEntry::*;
         use crate::state::{
             checkpoints::CheckpointLayerTrait,
-            overlay_account::{AccountEntry, OverlayAccount},
+            overlay_account::{
+                AccountEntry, AccountEntryWithWarm, OverlayAccount,
+            },
         };
         use cfx_statedb::StateDbExt;
         use primitives::StorageKey;
@@ -180,11 +182,17 @@ impl State {
                 checkpoints.elements_from_index(start_checkpoint_index);
             for checkpoint in &mut checkpoints_iter {
                 match checkpoint.as_hash_map().get(address) {
-                    Some(Recorded(AccountEntry::Cached(ref account, _))) => {
+                    Some(Recorded(AccountEntryWithWarm {
+                        entry: AccountEntry::Cached(ref account, _),
+                        ..
+                    })) => {
                         first_account = Some(account);
                         break;
                     }
-                    Some(Recorded(AccountEntry::DbAbsent)) => {
+                    Some(Recorded(AccountEntryWithWarm {
+                        entry: AccountEntry::DbAbsent,
+                        ..
+                    })) => {
                         return Ok(Some(U256::zero()));
                     }
                     Some(Unchanged) => {
@@ -221,10 +229,10 @@ impl State {
                 let mut account_changed = false;
                 let mut require_cache = true;
                 for checkpoint in checkpoints_iter {
-                    if let Some(Recorded(AccountEntry::Cached(
-                        ref account,
-                        _,
-                    ))) = checkpoint.as_hash_map().get(address)
+                    if let Some(Recorded(AccountEntryWithWarm {
+                        entry: AccountEntry::Cached(ref account, _),
+                        ..
+                    })) = checkpoint.as_hash_map().get(address)
                     {
                         if !first_account.unwrap().eq_write_cache(account) {
                             account_changed = true;
@@ -248,8 +256,10 @@ impl State {
                 // if not breaked by further iter of outer checkpoints
                 if !account_changed && require_cache {
                     let outer_cache = self.cache.read();
-                    if let Some(AccountEntry::Cached(ref account, _)) =
-                        outer_cache.get(address)
+                    if let Some(AccountEntryWithWarm {
+                        entry: AccountEntry::Cached(ref account, _),
+                        ..
+                    }) = outer_cache.get(address)
                     {
                         if !first_account.unwrap().eq_write_cache(account) {
                             account_changed = true;

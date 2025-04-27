@@ -11,15 +11,12 @@ use std::{
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Api {
     Cfx,
-    Eth,
-    Debug, // core space parity style debug
+    Debug,
     Pubsub,
     Test,
     Trace,
     TxPool,
     Pos,
-    EthPubsub,
-    EthDebug,
 }
 
 impl FromStr for Api {
@@ -29,15 +26,12 @@ impl FromStr for Api {
         use self::Api::*;
         match s {
             "cfx" => Ok(Cfx),
-            "eth" => Ok(Eth),
             "debug" => Ok(Debug),
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
             "trace" => Ok(Trace),
             "txpool" => Ok(TxPool),
             "pos" => Ok(Pos),
-            "ethpubsub" => Ok(EthPubsub),
-            "ethdebug" => Ok(EthDebug),
             _ => Err("Unknown api type".into()),
         }
     }
@@ -47,15 +41,12 @@ impl Display for Api {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Api::Cfx => write!(f, "cfx"),
-            Api::Eth => write!(f, "eth"),
             Api::Debug => write!(f, "debug"),
             Api::Pubsub => write!(f, "pubsub"),
             Api::Test => write!(f, "test"),
             Api::Trace => write!(f, "trace"),
             Api::TxPool => write!(f, "txpool"),
             Api::Pos => write!(f, "pos"),
-            Api::EthPubsub => write!(f, "ethpubsub"),
-            Api::EthDebug => write!(f, "ethdebug"),
         }
     }
 }
@@ -64,7 +55,6 @@ impl Display for Api {
 pub enum ApiSet {
     All, // core space all apis
     Safe,
-    Evm, // Ethereum api set
     List(HashSet<Api>),
 }
 
@@ -88,7 +78,6 @@ impl ApiSet {
                 .iter()
                 .cloned()
                 .collect(),
-            ApiSet::Evm => [Api::Eth, Api::EthPubsub].iter().cloned().collect(),
         }
     }
 }
@@ -111,9 +100,6 @@ impl FromStr for ApiSet {
                 "safe" => {
                     // Safe APIs are those that are safe even in UnsafeContext.
                     apis.extend(ApiSet::Safe.list_apis());
-                }
-                "evm" => {
-                    apis.extend(ApiSet::Evm.list_apis());
                 }
                 // Remove the API
                 api if api.starts_with("-") => {

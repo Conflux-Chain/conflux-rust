@@ -3,7 +3,7 @@
 //! the logic for loading extension fields of an account.
 
 use super::{AccountEntry, OverlayAccount, RequireFields, State};
-use crate::unwrap_or_return;
+use crate::{state::overlay_account::AccountEntryWithWarm, unwrap_or_return};
 use cfx_statedb::{
     Error as DbErrorKind, Result as DbResult, StateDb, StateDbExt,
 };
@@ -51,6 +51,8 @@ impl State {
             require,
         )?;
 
+        self.copy_cache_entry_to_checkpoint(*address, account_entry);
+
         Ok(if !account_entry.is_db_absent() {
             Some(RwLockReadGuard::map(
                 RwLockWriteGuard::downgrade(cache),
@@ -94,7 +96,12 @@ impl State {
             AccountEntry::new_loaded(self.db.get_account(address)?);
         Self::load_account_ext_fields(require, &mut account_entry, &self.db)?;
 
-        self.cache.write().insert(*address, account_entry);
+        // The prefetch phase's warm bit is not important because it will soon
+        // be written from the cache to the committed cache, which does not
+        // include the warm bit.
+        self.cache
+            .write()
+            .insert(*address, account_entry.with_warm(false));
         Ok(())
     }
 }
@@ -175,10 +182,10 @@ impl State {
         self.copy_cache_entry_to_checkpoint(*address, account_entry);
 
         // Set the dirty flag in cache.
-        if let AccountEntry::Cached(_, dirty_bit) = account_entry {
+        if let AccountEntry::Cached(_, dirty_bit) = &mut account_entry.entry {
             *dirty_bit = true;
         } else {
-            *account_entry = AccountEntry::new_dirty(default(address)?);
+            account_entry.entry = AccountEntry::new_dirty(default(address)?);
         }
 
         Ok(RwLockWriteGuard::map(cache, |c| {
@@ -194,25 +201,27 @@ impl State {
     /// Retrieves data using a read-through caching strategy and automatically
     /// loads extension fields as required.
     fn fetch_account_mut<'a>(
-        cache: &'a mut HashMap<AddressWithSpace, AccountEntry>,
+        cache: &'a mut HashMap<AddressWithSpace, AccountEntryWithWarm>,
         committed_cache: &'a HashMap<AddressWithSpace, AccountEntry>,
         db: &StateDb, address: &AddressWithSpace, require: RequireFields,
-    ) -> DbResult<&'a mut AccountEntry> {
+    ) -> DbResult<&'a mut AccountEntryWithWarm> {
         let account_entry = match cache.entry(*address) {
             Occupied(e) => e.into_mut(),
-            Vacant(e) => match committed_cache.get(address) {
-                Some(committed) => {
-                    e.insert(committed.clone_from_committed_cache())
-                }
-                None => {
-                    let address = *e.key();
-                    e.insert(AccountEntry::new_loaded(
-                        db.get_account(&address)?,
-                    ))
-                }
-            },
+            Vacant(e) => {
+                let entry = match committed_cache.get(address) {
+                    Some(committed) => committed.clone_from_committed_cache(),
+                    None => {
+                        let address = *e.key();
+                        AccountEntry::new_loaded(db.get_account(&address)?)
+                    }
+                };
+                // The item is set to "cold" by default when loading. After
+                // processing the checkpoint-related logic, it will be marked as
+                // "warm."
+                e.insert(entry.with_warm(false))
+            }
         };
-        Self::load_account_ext_fields(require, account_entry, db)?;
+        Self::load_account_ext_fields(require, &mut account_entry.entry, db)?;
         Ok(account_entry)
     }
 

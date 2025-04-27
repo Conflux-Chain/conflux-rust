@@ -25,6 +25,8 @@ pip3 install \
     pytest-xdist \
     git+https://github.com/petertdavies/ethereum-spec-evm-resolver.git@623ac4565025e72b65f45b926da2a3552041b469 \
     git+https://github.com/ethereum/execution-spec-tests.git@e04edbe1f9c0b932b628165d12af8d244e4da776
+# set global solc version which is required by execution-spec-tests
+solc-select use 0.8.24 --always-install
 
 ################################################################################
 # temporary solution to use eip7702 signing from viem implementation
