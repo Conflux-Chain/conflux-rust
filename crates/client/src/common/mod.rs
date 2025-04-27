@@ -60,10 +60,10 @@ use secret_store::{SecretStore, SharedSecretStore};
 use tokio::runtime::Runtime as TokioRuntime;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
-pub use crate::configuration::Configuration;
+use cfx_config::{parse_config_address_string, Configuration};
+
 use crate::{
     accounts::{account_provider, keys_path},
-    configuration::parse_config_address_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{
