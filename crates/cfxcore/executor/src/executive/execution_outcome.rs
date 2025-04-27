@@ -90,6 +90,7 @@ pub enum ExecutionError {
         /// Maximum storage limit cost.
         max_storage_limit_cost: U256,
     },
+    NonceOverflow(Address),
     VmError(vm::Error),
 }
 

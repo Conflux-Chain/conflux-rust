@@ -88,9 +88,8 @@ impl State {
         Ok(*acc.nonce())
     }
 
-    pub fn inc_nonce(&mut self, address: &AddressWithSpace) -> DbResult<()> {
-        self.write_account_or_new_lock(address)?.inc_nonce();
-        Ok(())
+    pub fn inc_nonce(&mut self, address: &AddressWithSpace) -> DbResult<bool> {
+        Ok(self.write_account_or_new_lock(address)?.inc_nonce())
     }
 
     pub fn set_nonce(

@@ -241,6 +241,15 @@ impl EthApi {
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::NonceOverflow(addr),
+                _executed,
+            ) => {
+                bail!(geth_call_execution_error(
+                    format!("address nonce overflow: {})", addr),
+                    "".into()
+                ))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(VmError::Reverted),
                 executed,
             ) => bail!(geth_call_execution_error(
