@@ -2146,6 +2146,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "consensus_bench"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "cfxcore",
+ "db",
+ "log",
+ "log4rs",
+ "parking_lot 0.11.2",
+ "primitives",
+ "threadpool",
+]
+
+[[package]]
 name = "console"
 version = "0.15.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"

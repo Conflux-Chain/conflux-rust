@@ -19,6 +19,7 @@ members = [
     "bins/cfx_store",
     "bins/cfx_key",
     "bins/conflux",
+    "bins/consensus_bench",
     "crates/cfxcore/core",
     "crates/cfxcore/execute-helper",
     "crates/cfxcore/executor",
