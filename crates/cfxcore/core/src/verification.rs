@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::pos_handler::PosVerifier,
     core_error::{BlockError, CoreError as Error},
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     sync::Error as SyncError,
@@ -44,7 +43,7 @@ pub struct VerificationConfig {
     pub transaction_epoch_bound: u64,
     pub max_nonce: Option<U256>,
     machine: Arc<Machine>,
-    pos_verifier: Arc<PosVerifier>,
+    pos_enable_height: u64,
 }
 
 /// Create an MPT from the ordered list of block transactions.
@@ -223,33 +222,21 @@ impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
         transaction_epoch_bound: u64, tx_pool_nonce_bits: usize,
-        machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
+        pos_enable_height: u64, machine: Arc<Machine>,
     ) -> Self {
         let max_nonce = if tx_pool_nonce_bits < 256 {
             Some((U256::one() << tx_pool_nonce_bits) - 1)
         } else {
             None
         };
-        if test_mode {
-            VerificationConfig {
-                verify_timestamp: false,
-                referee_bound,
-                max_block_size_in_bytes,
-                transaction_epoch_bound,
-                machine,
-                pos_verifier,
-                max_nonce,
-            }
-        } else {
-            VerificationConfig {
-                verify_timestamp: true,
-                referee_bound,
-                max_block_size_in_bytes,
-                transaction_epoch_bound,
-                machine,
-                pos_verifier,
-                max_nonce,
-            }
+        VerificationConfig {
+            verify_timestamp: !test_mode,
+            referee_bound,
+            max_block_size_in_bytes,
+            transaction_epoch_bound,
+            machine,
+            pos_enable_height,
+            max_nonce,
         }
     }
 
@@ -340,6 +327,10 @@ impl VerificationConfig {
         Ok(())
     }
 
+    fn is_pos_enabled_at_height(&self, height: u64) -> bool {
+        height >= self.pos_enable_height
+    }
+
     /// Check basic header parameters.
     /// This does not require header to be graph or parental tree ready.
     #[inline]
@@ -358,7 +349,7 @@ impl VerificationConfig {
             )));
         }
 
-        if self.pos_verifier.is_enabled_at_height(header.height()) {
+        if self.is_pos_enabled_at_height(header.height()) {
             if header.pos_reference().is_none() {
                 bail!(BlockError::MissingPosReference);
             }
