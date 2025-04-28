@@ -265,7 +265,7 @@ pub enum EthRpcModule {
     /// `trace_` module
     Trace,
     /// `txpool_` module
-    // Txpool,
+    Txpool,
     /// `web3_` module
     Web3,
     /// `rpc_` module
@@ -313,7 +313,7 @@ impl FromStr for EthRpcModule {
             "eth" => Self::Eth,
             "net" => Self::Net,
             "trace" => Self::Trace,
-            // "txpool" => Self::Txpool,
+            "txpool" => Self::Txpool,
             "web3" => Self::Web3,
             "rpc" => Self::Rpc,
             "parity" => Self::Parity,

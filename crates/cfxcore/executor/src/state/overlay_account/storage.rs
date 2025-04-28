@@ -173,17 +173,9 @@ impl OverlayAccount {
             return Some(*entry);
         }
         if let Some(entry) = self.storage_committed_cache.read().get(key) {
-            self.storage_write_cache
-                .write()
-                .entry(key.to_vec())
-                .or_insert(WriteCacheItem::Read);
             return Some(*entry);
         }
         if let Some(entry) = self.storage_read_cache.read().get(key) {
-            self.storage_write_cache
-                .write()
-                .entry(key.to_vec())
-                .or_insert(WriteCacheItem::Read);
             return Some(*entry);
         }
         None
@@ -206,12 +198,18 @@ impl OverlayAccount {
             .storage_write_checkpoint
             .as_ref()
             .unwrap()
+            .read()
             .get_state_cp_id()
             < state_checkpoint_id
         {
             return None;
         }
-        let res = self.storage_write_checkpoint.as_ref().unwrap().get(key)?;
+        let res = self
+            .storage_write_checkpoint
+            .as_ref()
+            .unwrap()
+            .read()
+            .get(key)?;
         Some(match res {
             Unchanged => Unchanged,
             Recorded(WriteCacheItem::Read) => Unchanged,
@@ -260,6 +258,7 @@ impl OverlayAccount {
     pub fn storage_entry_at(
         &self, db: &StateDbGeneric, key: &[u8],
     ) -> DbResult<StorageValue> {
+        self.mark_storage_warm(key);
         Ok(if let Some(value) = self.cached_entry_at(key) {
             value
         } else if self.fresh_storage() {
@@ -292,9 +291,6 @@ impl OverlayAccount {
         self.storage_read_cache
             .write()
             .insert(key.to_vec(), storage_value.clone());
-        self.storage_write_cache
-            .write()
-            .insert(key.to_vec(), WriteCacheItem::Read);
         Ok(storage_value)
     }
 

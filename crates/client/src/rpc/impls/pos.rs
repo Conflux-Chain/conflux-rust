@@ -12,9 +12,9 @@ use crate::{
                 tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
                 EpochState as RpcEpochState,
                 LedgerInfoWithSignatures as RpcLedgerInfoWithSignatures,
-                NodeLockStatus, PoSEpochReward, RpcCommittee, RpcTermData,
-                RpcTransactionStatus, RpcTransactionType, Signature, Status,
-                Transaction, VotePowerState,
+                NodeLockStatus, PoSEpochReward, Reward, RpcCommittee,
+                RpcTermData, RpcTransactionStatus, RpcTransactionType,
+                Signature, Status, Transaction, VotePowerState,
             },
             EpochNumber, RpcAddress,
         },
@@ -25,10 +25,12 @@ use cfx_addr::Network;
 use cfx_executor::internal_contract;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_statedb::StateDbExt;
-use cfx_types::{hexstr_to_h256, BigEndianHash, H256, U64};
+use cfx_types::{hexstr_to_h256, BigEndianHash, H256, U256, U64};
 use cfx_util_macros::bail;
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, BlockDataManager, SharedConsensusGraph,
+    block_data_manager::block_data_types::PosRewardInfo,
+    consensus::pos_handler::PosVerifier, BlockDataManager,
+    SharedConsensusGraph,
 };
 use consensus_types::block::Block as ConsensusBlock;
 use diem_crypto::hash::HashValue;
@@ -43,7 +45,7 @@ use itertools::Itertools;
 use jsonrpc_core::Result as JsonRpcResult;
 use log::{debug, info};
 use primitives::{StorageKey, StorageValue};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use storage_interface::{DBReaderForPoW, DbReader};
 
 pub struct PoSInterceptor {
@@ -697,9 +699,39 @@ impl Pos for PosHandler {
             .pow_data_manager
             .pos_reward_by_pos_epoch(epoch.as_u64())
             .map(|reward_info| {
-                PoSEpochReward::try_from(reward_info, self.network_type).ok()
+                convert_to_pos_epoch_reward(reward_info, self.network_type).ok()
             })
             .unwrap_or(None);
         Ok(reward)
     }
+}
+
+pub fn convert_to_pos_epoch_reward(
+    reward: PosRewardInfo, network_type: Network,
+) -> Result<PoSEpochReward, String> {
+    let default_value = U256::from(0);
+    let mut account_reward_map = HashMap::new();
+    let mut account_address_map = HashMap::new();
+    for r in reward.account_rewards.iter() {
+        let key = r.pos_identifier;
+        let r1 = account_reward_map.get(&key).unwrap_or(&default_value);
+        let merged_reward = r.reward + r1;
+        account_reward_map.insert(key, merged_reward);
+
+        let rpc_address = RpcAddress::try_from_h160(r.address, network_type)?;
+        account_address_map.insert(key, rpc_address);
+    }
+    let account_rewards = account_reward_map
+        .iter()
+        .map(|(k, v)| Reward {
+            pos_address: *k,
+            pow_address: account_address_map.get(k).unwrap().clone(),
+            reward: *v,
+        })
+        .filter(|r| r.reward > U256::from(0))
+        .collect();
+    Ok(PoSEpochReward {
+        pow_epoch_hash: reward.execution_epoch_hash,
+        account_rewards,
+    })
 }

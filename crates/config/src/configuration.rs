@@ -10,6 +10,7 @@ use log::{error, warn};
 use parking_lot::RwLock;
 use rand::Rng;
 
+use crate::{HttpConfiguration, TcpConfiguration, WsConfiguration};
 use cfx_addr::{cfx_addr_decode, Network};
 use cfx_executor::{machine::Machine, spec::CommonParams};
 use cfx_internal_common::{
@@ -18,6 +19,7 @@ use cfx_internal_common::{
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
+use cfx_rpc_cfx_types::{apis::ApiSet, RpcImplConfiguration};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -54,11 +56,6 @@ use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
-
-use crate::rpc::{
-    apis::ApiSet, impls::RpcImplConfiguration, HttpConfiguration,
-    TcpConfiguration, WsConfiguration,
-};
 
 lazy_static! {
     pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
@@ -134,6 +131,7 @@ build_config! {
         (metrics_influxdb_node, (Option<String>), None)
         (metrics_output_file, (Option<String>), None)
         (metrics_report_interval_ms, (u64), 3_000)
+        (metrics_prometheus_listen_addr, (Option<String>), None)
         (rocksdb_disable_wal, (bool), false)
         (txgen_account_count, (usize), 10)
 
@@ -385,6 +383,9 @@ build_config! {
         (pos_cip136_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
         (pos_cip136_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
         (pos_cip136_round_per_term, (u64), ROUND_PER_TERM)
+        (pos_cip156_transition_view, (u64), u64::MAX)
+        // 6 months with 30s rounds
+        (pos_cip156_dispute_locked_views, (u64), 6 * 30 * 24 * 60 * 2)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 
@@ -410,6 +411,9 @@ build_config! {
         // Recover the latest MPT snapshot from the era checkpoint
         (recovery_latest_mpt_snapshot, (bool), false)
         (keep_era_genesis_snapshot, (bool), true)
+
+        // This is designed for fast node catch-up but has not been thoroughly tested. Do not use it in production environments.
+        (backup_mpt_snapshot, (bool), true)
     }
     {
         // Development related section.
@@ -449,14 +453,6 @@ build_config! {
     }
 }
 
-macro_rules! set_conf {
-    ($src: expr; $dst: expr => {$($field: tt),* }) => {
-        {
-            let number = $src;
-            $($dst.$field = number;)*
-        }
-    };
-}
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }
@@ -854,6 +850,7 @@ impl Configuration {
                 .raw_conf
                 .use_isolated_db_for_mpt_table_height,
             keep_era_genesis_snapshot: self.raw_conf.keep_era_genesis_snapshot,
+            backup_mpt_snapshot: self.raw_conf.backup_mpt_snapshot,
         }
     }
 
@@ -1075,6 +1072,10 @@ impl Configuration {
                 .metrics_influxdb_password
                 .clone(),
             influxdb_report_node: self.raw_conf.metrics_influxdb_node.clone(),
+            prometheus_listen_addr: self
+                .raw_conf
+                .metrics_prometheus_listen_addr
+                .clone(),
         }
     }
 
@@ -1339,6 +1340,8 @@ impl Configuration {
             self.raw_conf.pos_cip136_in_queue_locked_views,
             self.raw_conf.pos_cip136_out_queue_locked_views,
             self.raw_conf.pos_cip136_round_per_term,
+            self.raw_conf.pos_cip156_transition_view,
+            self.raw_conf.pos_cip156_dispute_locked_views,
         )
     }
 
@@ -1503,7 +1506,7 @@ impl Configuration {
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935 }
+            params.transition_heights => { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935, eip7623 }
         );
         if let Some(x) = self.raw_conf.cip151_transition_height {
             params.transition_heights.cip151 = x;

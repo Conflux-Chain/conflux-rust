@@ -11,15 +11,9 @@ cfxcore = { workspace = true }
 cfx-types = { workspace = true }
 primitives = { workspace = true }
 db = { workspace = true }
-threadpool = "1.0"
+threadpool = { workspace = true }
 parking_lot = { workspace = true }
 log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 log = { workspace = true }
 
 [dev-dependencies]
-
-[workspace]
-# Note: try to list it in the top level workspace and to exclude it from cfxcore.
-
-[profile.release]
-debug = false

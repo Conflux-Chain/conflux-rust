@@ -28,7 +28,6 @@ use log::{info, warn};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-pub mod apis;
 mod authcodes;
 pub mod errors;
 pub mod extractor;
@@ -38,7 +37,6 @@ pub mod impls;
 pub mod informant;
 mod interceptor;
 pub mod metadata;
-pub mod server_configuration;
 mod traits;
 pub mod types;
 
@@ -64,21 +62,21 @@ use self::{
         Cfx, CfxFilter, DebugRpc, Pos, PubSub, TestRpc, Trace, TransactionPool,
     },
 };
+use cfx_rpc_cfx_types::apis::{Api, ApiSet};
 
 pub use self::types::{Block as RpcBlock, Origin};
 use crate::{
     configuration::Configuration,
     rpc::{
-        apis::{Api, ApiSet},
         impls::RpcImplConfiguration,
         interceptor::{RpcInterceptor, RpcProxy},
     },
 };
-use interceptor::{MetricsInterceptor, ThrottleInterceptor};
-pub use metadata::Metadata;
-pub use server_configuration::{
+pub use cfx_config::rpc_server_config::{
     HttpConfiguration, TcpConfiguration, WsConfiguration,
 };
+use interceptor::{MetricsInterceptor, ThrottleInterceptor};
+pub use metadata::Metadata;
 use std::collections::HashSet;
 
 pub fn setup_public_rpc_apis(

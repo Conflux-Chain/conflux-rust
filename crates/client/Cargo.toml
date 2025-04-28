@@ -2,6 +2,7 @@
 name = "client"
 version = { workspace = true }
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 bigdecimal = { workspace = true }
@@ -82,6 +83,7 @@ jsonrpsee = { workspace = true }
 cfx-rpc-common-impl = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 cfx-tasks = { workspace = true }
+cfx-config = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

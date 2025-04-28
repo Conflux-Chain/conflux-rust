@@ -101,12 +101,6 @@ impl MockContext {
         context
     }
 
-    /// Alter mock context to allow wasm
-    pub fn with_wasm(mut self) -> Self {
-        self.spec.wasm = Some(Default::default());
-        self
-    }
-
     pub fn with_chain_id(mut self, chain_id: u64) -> Self {
         self.chain_id = chain_id;
         self
