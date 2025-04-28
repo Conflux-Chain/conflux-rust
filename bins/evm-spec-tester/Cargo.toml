@@ -16,7 +16,7 @@ license-file.workspace = true
 cfxcore = { workspace = true }
 cfx-executor = { workspace = true, features = ["testonly_code"] }
 cfx-rpc-eth-types = { workspace = true }
-cfx-statedb = { workspace = true }
+cfx-statedb = { workspace = true, features = ["testonly_code"] }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
 cfxkey = { workspace = true }
@@ -24,7 +24,6 @@ cfx-config = { workspace = true }
 primitives = { workspace = true }
 statetest_types = { workspace = true }
 
-clap = { workspace = true }
 serde_json = { workspace = true }
 walkdir = { workspace = true }
 thiserror = { workspace = true }
@@ -35,6 +34,6 @@ hex-literal = { workspace = true }
 
 log = { workspace = true }
 
-structopt = { version = "0.3", default-features = false }
+structopt = { workspace = true }
 env_logger = { workspace = true }
-itertools = "0.14"
+itertools = { workspace = true }

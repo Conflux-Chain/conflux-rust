@@ -10,7 +10,9 @@ use cfx_executor::{
     machine::Machine,
     state::State,
 };
+use cfx_types::Space;
 use cfx_vm_types::Env;
+use cfxcore::verification::VerificationConfig;
 use primitives::SignedTransaction;
 use statetest_types::{SpecName, Test, TestUnit};
 
@@ -38,7 +40,8 @@ impl UnitTester {
     }
 
     pub fn run(
-        &self, machine: &Machine, matches: Option<&str>,
+        &self, machine: &Machine, verification: &VerificationConfig,
+        matches: Option<&str>,
     ) -> Result<bool, TestError> {
         if !matches.map_or(true, |pat| {
             format!("{}::{}", &self.path, &self.name).contains(pat)
@@ -59,19 +62,16 @@ impl UnitTester {
             // Constantinople was immediately extended by Petersburg.
             // There isn't any production Constantinople transaction
             // so we don't support it and skip right to Petersburg.
-            if spec_name != SpecName::Prague {
+            if spec_name == SpecName::Prague {
                 continue;
             }
-
-            // TODO Enable the appropriate Conflux CIPs based on the
-            // spec_name.
 
             // running each test
             for single_test in tests.iter() {
                 if matches.is_some() {
                     info!("Running item");
                 }
-                self.execute_single_test(single_test, machine)?;
+                self.execute_single_test(single_test, machine, verification)?;
                 non_empty_unit = true;
             }
         }
@@ -81,6 +81,7 @@ impl UnitTester {
 
     fn execute_single_test(
         &self, test: &Test, machine: &Machine,
+        verification: &VerificationConfig,
     ) -> Result<(), TestError> {
         let mut state = pre_transact::make_state(&self.unit.pre);
 
@@ -90,12 +91,6 @@ impl UnitTester {
             self.unit.config.chainid,
             extract_155_chain_id_from_raw_tx(&test.txbytes).is_none(),
         ) else {
-            // if self.unit.transaction.tx_type(test.indexes.data).is_none() {
-            //     trace!(
-            //         "\tSkipping test because of unkonwn tx type: {}",
-            //         self.name.clone()
-            //     );
-            // }
             return Ok(());
         };
 
@@ -112,6 +107,18 @@ impl UnitTester {
             tx.hash(),
         );
 
+        let check_result =
+            pre_transact::check_tx_common(machine, &env, &tx, verification);
+
+        let check_pass = post_transact::match_common_check_error(
+            check_result,
+            test.expect_exception.as_ref(),
+        )
+        .map_err(|kind| self.err(kind))?;
+        if !check_pass {
+            return Ok(());
+        }
+
         let transact_options = pre_transact::make_transact_options(true);
 
         let outcome =
@@ -127,6 +134,13 @@ impl UnitTester {
             return Ok(());
         };
 
+        post_transact::distribute_tx_fee_to_miner(
+            &mut state,
+            &executed,
+            &env.author,
+            Space::Ethereum,
+        );
+
         post_transact::check_execution_outcome(
             &tx,
             &executed,
@@ -135,8 +149,6 @@ impl UnitTester {
             &test.state,
         )
         .map_err(|kind| self.err(kind))?;
-
-        // TODO: check logs hash is same
 
         Ok(())
     }
