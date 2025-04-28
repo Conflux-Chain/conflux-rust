@@ -19,7 +19,7 @@
 //! * `page_interval`: Number of consecutive blocks in each page
 //! * Each page contains:
 //!   - Major section: Full hashes for blocks every `major_interval` heights
-//!   - Minor section: Hash prefixes (in length of `minor_hash_length``) for
+//!   - Minor section: Hash prefixes (in length of `minor_hash_length`) for
 //!     blocks every `minor_interval` heights
 //!
 //! # Parameter Constraints

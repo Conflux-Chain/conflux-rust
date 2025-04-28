@@ -1,8 +1,6 @@
-use crate::rpc::types::{
-    pos::{Decision, EpochState},
-    Bytes,
-};
+use crate::pos::{Decision, EpochState};
 use bls_signatures::{self, Serialize as BlsSerialize};
+use cfx_rpc_primitives::Bytes;
 use cfx_types::{H256, U64};
 use diem_crypto::ValidCryptoMaterial;
 use diem_types::{

@@ -1,4 +1,5 @@
 target
+*.profraw
 **/Cargo.lock
 **/target
 **/*.rs.bk
