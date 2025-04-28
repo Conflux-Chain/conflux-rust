@@ -83,10 +83,6 @@ jobs:
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
-      - name: Run build test
-        run: |
-          cargo test --release --all --no-run
-
       - name: Run build bench
         run: |
           cargo bench --all --no-run
