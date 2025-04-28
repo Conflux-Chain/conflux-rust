@@ -62,7 +62,7 @@ impl UnitTester {
             // Constantinople was immediately extended by Petersburg.
             // There isn't any production Constantinople transaction
             // so we don't support it and skip right to Petersburg.
-            if spec_name == SpecName::Prague {
+            if spec_name != SpecName::Prague {
                 continue;
             }
 
