@@ -41,7 +41,7 @@ impl UnitTester {
 
     pub fn run(
         &self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>, target_fork: Option<&str>,
+        matches: Option<&str>,
     ) -> Result<bool, TestError> {
         if !matches.map_or(true, |pat| {
             format!("{}::{}", &self.path, &self.name).contains(pat)
@@ -62,18 +62,15 @@ impl UnitTester {
             // Constantinople was immediately extended by Petersburg.
             // There isn't any production Constantinople transaction
             // so we don't support it and skip right to Petersburg.
-            if spec_name == SpecName::Constantinople {
+            if spec_name != SpecName::Prague {
                 continue;
-            }
-
-            if let Some(target_fork_str) = target_fork {
-                if format!("{:?}", spec_name) != target_fork_str {
-                    continue;
-                }
             }
 
             // running each test
             for single_test in tests.iter() {
+                if matches.is_some() {
+                    info!("Running item");
+                }
                 self.execute_single_test(single_test, machine, verification)?;
                 non_empty_unit = true;
             }

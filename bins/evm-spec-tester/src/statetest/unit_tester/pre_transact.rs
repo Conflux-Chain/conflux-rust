@@ -60,7 +60,7 @@ pub fn make_tx(
         .get(tx_part_indices.data)
         .map(|item| item.clone())
         .unwrap_or(Some(vec![]))
-        .unwrap();
+        .unwrap_or_default();
 
     let tx = match tx_meta.tx_type(tx_part_indices.data) {
         Some(TransactionType::Legacy) => {

@@ -1,8 +1,8 @@
 use super::super::error::{StateMismatch, TestErrorKind};
 use cfx_executor::{
     executive::{
-        execution_outcome::ToRepackError, Executed, ExecutionOutcome,
-        TxDropError,
+        execution_outcome::ToRepackError, Executed, ExecutionError,
+        ExecutionOutcome, TxDropError,
     },
     state::{CleanupMode, State},
 };
@@ -50,6 +50,12 @@ pub fn extract_executed(
 }
 
 fn match_fail_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
+    reason
+        .split("|")
+        .any(|reason| match_fail_single_reason(reason, outcome))
+}
+
+fn match_fail_single_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
     use ExecutionOutcome::*;
     // TODO: check consistency of exception
 
@@ -67,6 +73,13 @@ fn match_fail_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
             NotExecutedToReconsiderPacking(
                 ToRepackError::NotEnoughBaseFee { .. }
             )
+        ),
+        "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS" => matches!(
+            outcome,
+            ExecutionErrorBumpNonce(ExecutionError::NotEnoughCash { .. }, _)
+                | NotExecutedToReconsiderPacking(
+                    ToRepackError::SenderDoesNotExist
+                )
         ),
         _ => false,
     }
@@ -122,6 +135,7 @@ pub fn check_execution_outcome(
             }
 
             bail!(StateMismatch::BalanceMismatch {
+                address: user_addr.address,
                 got: got_balance,
                 expected: expected_balance,
             });
@@ -132,6 +146,7 @@ pub fn check_execution_outcome(
         let got_nonce = state.nonce(&user_addr).unwrap_or_default();
         if got_nonce != expected_nonce {
             bail!(StateMismatch::NonceMismatch {
+                address: user_addr.address,
                 got: got_nonce,
                 expected: expected_nonce,
             })

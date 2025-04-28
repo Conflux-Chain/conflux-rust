@@ -76,7 +76,6 @@ impl StateTestCmd {
                         &machine,
                         &verification,
                         self.matches.as_deref(),
-                        self.fork.as_deref(),
                     ),
                     Err(err_msg) => {
                         warn!("TestSuite load failed: {}", err_msg);
@@ -129,7 +128,7 @@ impl SuiteTester {
 
     fn run(
         self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>, target_fork: Option<&str>,
+        matches: Option<&str>,
     ) -> (usize, usize, Vec<TestError>) {
         if matches.is_some() {
             trace!("Running TestUnit: {}", self.path);
@@ -142,8 +141,7 @@ impl SuiteTester {
         let mut skipped_cnt = 0;
         for (name, unit) in self.suite.0 {
             let unit_tester = UnitTester::new(&self.path, name, unit);
-            match unit_tester.run(&machine, verification, matches, target_fork)
-            {
+            match unit_tester.run(&machine, verification, matches) {
                 Ok(true) => {
                     success_cnt += 1;
                 }
