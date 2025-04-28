@@ -2,6 +2,7 @@
 name = "metrics"
 version = "0.1.0"
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 lazy_static = { workspace = true }
@@ -10,14 +11,17 @@ timer = { workspace = true }
 rand = { workspace = true }
 influx_db_client = { workspace = true }
 log = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "macros"] }
 chrono = { workspace = true }
 serde = { workspace = true }
 duration-str = { workspace = true }
-
+hyper = { workspace = true, features = ["http1", "server"] }
+hyper-util = { version = "0.1.8", features = ['tokio', 'client'] }
+cfx-tasks = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
-
+reqwest = { version = "0.12" }
+tokio = { version = "1", features = ["full"] }
 [[bench]]
 name = "benchmark"
 harness = false

@@ -385,7 +385,7 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                 // Set the size of the original Snapshot mpt. When the update in
                 // the subtree of last node is finished, The new mpt's subtree
                 // size is computed from the subtree_size_delta, and the
-                // subtree_size_delta is propogated upward.
+                // subtree_size_delta is propagated upward.
                 last_node_as_child.subtree_size = (last_node
                     .get_read_only_path_node()
                     .trie_node

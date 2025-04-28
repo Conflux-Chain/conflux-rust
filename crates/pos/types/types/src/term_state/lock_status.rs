@@ -106,6 +106,11 @@ impl StatusList {
         }
     }
 
+    fn clear(&mut self) {
+        self.inner.clear();
+        self.sorted = true;
+    }
+
     pub fn len(&self) -> usize { self.inner.len() }
 
     pub fn iter(&self) -> Iter<StatusItem> { self.inner.iter() }
@@ -265,11 +270,40 @@ impl NodeLockStatus {
         }
     }
 
-    pub(super) fn forfeit(&mut self) {
+    pub(super) fn forfeit(
+        &mut self, view: View, updated_views: &mut Vec<View>,
+    ) {
         if self.exempt_from_forfeit.is_some() {
             return;
         }
-        self.exempt_from_forfeit = Some(self.unlocked)
+        match POS_STATE_CONFIG.dispute_locked_views(view) {
+            None => self.exempt_from_forfeit = Some(self.unlocked),
+            Some(dispute_locked_views) => {
+                if self.available_votes > 0 {
+                    // We will lock all votes in `in_queue`, `locked`, and
+                    // `out_queue`.
+                    let mut to_lock_votes = self.available_votes;
+                    self.in_queue.clear();
+                    self.locked = 0;
+                    self.available_votes = 0;
+
+                    while let Some(item) = self.out_queue.pop_by_view(u64::MAX)
+                    {
+                        to_lock_votes += item.votes;
+                    }
+                    // `out_queue` is cleared, so we also clear force_retired in
+                    // case it will not be updated in the
+                    // future.
+                    self.force_retired = None;
+
+                    self.out_queue.push(
+                        view.saturating_add(dispute_locked_views),
+                        to_lock_votes,
+                        updated_views,
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -321,7 +355,9 @@ pub mod tests {
                     Operation::ForceRetire => {
                         lock_status.force_retire(view, &mut update_views);
                     }
-                    Operation::Forfeit => lock_status.forfeit(),
+                    Operation::Forfeit => {
+                        lock_status.forfeit(view, &mut update_views)
+                    }
                     Operation::AssertAvailable(votes) => {
                         if lock_status.available_votes != votes {
                             panic!("View {}\n {:?}", view, lock_status);
