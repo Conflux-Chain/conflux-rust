@@ -458,6 +458,7 @@ pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
             Error::CreateInitCodeSizeLimit => {
                 InstructionResult::CreateInitCodeSizeLimit
             }
+            Error::NonceOverflow(_) => InstructionResult::NonceOverflow,
         },
     };
     result
