@@ -22,9 +22,9 @@ fn init_logger(verbosity: u8) {
     env_logger::Builder::new()
         .filter(None, LevelFilter::Off)
         .filter_module("evm_spec_tester", level)
-        .format_timestamp(None) // 可选：添加时间戳
-        // .format_level(true)     // 显示日志级别
-        // .format_module_path(true)  // 显示模块路径
+        .format_timestamp(None) // Optional: add timestamp
+        // .format_level(true)     // show log level
+        // .format_module_path(true)  // show module path
         .init();
 }
 

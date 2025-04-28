@@ -38,8 +38,7 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-        pivot_hint::PivotHintConfig, pos_handler::PosVerifier, ConsensusConfig,
-        ConsensusInnerConfig,
+        pivot_hint::PivotHintConfig, ConsensusConfig, ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
@@ -746,7 +745,7 @@ impl Configuration {
     }
 
     pub fn verification_config(
-        &self, machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
+        &self, machine: Arc<Machine>,
     ) -> VerificationConfig {
         VerificationConfig::new(
             self.is_test_mode(),
@@ -754,8 +753,8 @@ impl Configuration {
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
             self.raw_conf.tx_pool_nonce_bits,
+            self.raw_conf.pos_reference_enable_height,
             machine,
-            pos_verifier,
         )
     }
 

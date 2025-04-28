@@ -1,6 +1,7 @@
 use cfx_bytes::Bytes;
 use cfx_executor::executive::ExecutionOutcome;
 use cfx_types::{H256, U256};
+use primitives::transaction::TransactionError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -20,6 +21,8 @@ pub enum TestErrorKind {
     UnknownPrivateKey(H256),
     #[error("execution error: {outcome:?}")]
     ExecutionError { outcome: ExecutionOutcome },
+    #[error("common check error: {tx_error:?}")]
+    CommonCheckError { tx_error: TransactionError },
     #[error("should fail but success: {fail_reason}")]
     ShouldFail { fail_reason: String },
     #[error(

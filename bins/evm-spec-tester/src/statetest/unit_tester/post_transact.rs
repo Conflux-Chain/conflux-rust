@@ -4,13 +4,16 @@ use cfx_executor::{
         execution_outcome::ToRepackError, Executed, ExecutionOutcome,
         TxDropError,
     },
-    state::State,
+    state::{CleanupMode, State},
 };
-use cfx_types::{AddressSpaceUtil, U256};
+use cfx_types::{AddressSpaceUtil, AddressWithSpace, Space, U256};
 use cfxkey::Address;
-use primitives::SignedTransaction;
+use primitives::{transaction::TransactionError, SignedTransaction};
 use statetest_types::{AccountInfo, TestUnit};
 use std::collections::HashMap;
+
+const INTRINSIC_GAS_TOO_LOW: &str =
+    "TransactionException.INTRINSIC_GAS_TOO_LOW";
 
 macro_rules! bail {
     ($e:expr) => {
@@ -51,7 +54,7 @@ fn match_fail_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
     // TODO: check consistency of exception
 
     match reason {
-        "TransactionException.INTRINSIC_GAS_TOO_LOW" => matches!(
+        INTRINSIC_GAS_TOO_LOW => matches!(
             outcome,
             NotExecutedDrop(TxDropError::NotEnoughGasLimit { .. })
         ),
@@ -69,15 +72,35 @@ fn match_fail_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
     }
 }
 
+pub fn match_common_check_error(
+    check: Result<(), TransactionError>, expect_exception: Option<&String>,
+) -> Result<bool, TestErrorKind> {
+    match (check, expect_exception.map(|v| v.as_str())) {
+        (Ok(_), None) => Ok(true),
+        (Ok(_), Some(_)) => {
+            // expect_exception will be check again in extract_executed
+            Ok(true)
+        }
+        (Err(e), None) => Err(TestErrorKind::CommonCheckError { tx_error: e }),
+        (
+            Err(TransactionError::NotEnoughBaseGas {
+                required: _,
+                got: _,
+            }),
+            Some(INTRINSIC_GAS_TOO_LOW),
+        ) => Ok(false),
+        (Err(e), Some(expect)) => {
+            trace!("expect exception: {} actually: {}", expect, e);
+            Ok(false)
+        }
+    }
+}
+
 pub fn check_execution_outcome(
     tx: &SignedTransaction, executed: &Executed, state: &State,
     unit: &TestUnit, expected_state: &HashMap<Address, AccountInfo>,
 ) -> Result<(), TestErrorKind> {
     for (&addr, account_info) in expected_state {
-        // TODO: temp skip coinbase address check
-        if addr == unit.env.current_coinbase {
-            continue;
-        }
         let user_addr = addr.with_evm_space();
 
         // balance check
@@ -141,7 +164,25 @@ pub fn check_execution_outcome(
                 });
             }
         }
+
+        // TODO: logs hash check
     }
 
     Ok(())
+}
+
+pub fn distribute_tx_fee_to_miner(
+    state: &mut State, executed: &Executed, miner: &Address, space: Space,
+) {
+    let to_add = match executed.burnt_fee {
+        Some(burnt_fee) => executed.fee - burnt_fee,
+        None => executed.fee,
+    };
+    let miner = AddressWithSpace {
+        address: miner.clone(),
+        space,
+    };
+    state
+        .add_balance(&miner, &to_add, CleanupMode::NoEmpty)
+        .expect("should success");
 }

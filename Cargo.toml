@@ -337,12 +337,13 @@ rand_08 = { package = "rand", version = "0.8" }
 rand_chacha = "0.2.1"
 
 # misc
-clap = "2"
+clap = "2" # outdated, need to migrate to clap 4
+structopt = { version = "0.3", default-features = false } # unmaintained, need to migrate to clap 4
 log = "0.4"
 log4rs = "1.2.0"
 env_logger = "0.11"
 lazy_static = "1.4"
-itertools = "0.10.0"
+itertools = "0.14"
 once_cell = "1.17.1"
 byteorder = "1.2.7"
 strum = "0.26"
