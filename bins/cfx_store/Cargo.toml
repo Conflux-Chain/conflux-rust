@@ -22,4 +22,4 @@ path = "src/main.rs"
 doc = false
 
 [dev-dependencies]
-tempdir = { workspace = true }
+tempfile = { workspace = true }

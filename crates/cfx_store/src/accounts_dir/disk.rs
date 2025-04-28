@@ -429,7 +429,7 @@ mod test {
     use crate::account::SafeAccount;
     use cfxkey::{Generator, Random};
     use std::{env, fs};
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     #[test]
     fn should_create_new_account() {
@@ -558,7 +558,7 @@ mod test {
     #[test]
     fn should_list_vaults() {
         // given
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let directory = RootDiskDirectory::create(&temp_path).unwrap();
         let vault_provider = directory.as_vault_provider().unwrap();
         vault_provider
@@ -577,7 +577,7 @@ mod test {
 
     #[test]
     fn hash_of_files() {
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let directory = RootDiskDirectory::create(&temp_path).unwrap();
 
         let hash = directory

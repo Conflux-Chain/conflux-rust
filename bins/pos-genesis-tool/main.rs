@@ -16,7 +16,7 @@ use log::*;
 use rand_08::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
 use serde::Deserialize;
-use tempdir::TempDir;
+use tempfile::Builder;
 
 use cfx_types::H256;
 use cfxcore::{
@@ -93,27 +93,39 @@ enum Error {
 }
 
 impl From<EthkeyError> for Error {
-    fn from(err: EthkeyError) -> Self { Error::Ethkey(err) }
+    fn from(err: EthkeyError) -> Self {
+        Error::Ethkey(err)
+    }
 }
 
 impl From<FromHexError> for Error {
-    fn from(err: FromHexError) -> Self { Error::FromHex(err) }
+    fn from(err: FromHexError) -> Self {
+        Error::FromHex(err)
+    }
 }
 
 impl From<ParseIntError> for Error {
-    fn from(err: ParseIntError) -> Self { Error::ParseInt(err) }
+    fn from(err: ParseIntError) -> Self {
+        Error::ParseInt(err)
+    }
 }
 
 impl From<docopt::Error> for Error {
-    fn from(err: docopt::Error) -> Self { Error::Docopt(err) }
+    fn from(err: docopt::Error) -> Self {
+        Error::Docopt(err)
+    }
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self { Error::Io(err) }
+    fn from(err: io::Error) -> Self {
+        Error::Io(err)
+    }
 }
 
 impl From<std::fmt::Error> for Error {
-    fn from(err: std::fmt::Error) -> Self { Error::Fmt(err) }
+    fn from(err: std::fmt::Error) -> Self {
+        Error::Fmt(err)
+    }
 }
 
 impl fmt::Display for Error {
@@ -144,7 +156,7 @@ fn main() {
 }
 
 fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
-    let tmp_dir = TempDir::new("example").unwrap();
+    let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
     let (_, db) = DbReaderWriter::wrap(
         PosLedgerDB::open(
             tmp_dir.path(),
