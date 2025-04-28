@@ -1221,6 +1221,9 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                 self.stack.push(U256::zero());
             }
             Instruction::BLOBBASEFEE => {
+                #[cfg(feature = "align_evm")]
+                self.stack.push(context.env().blob_gas_fee);
+                #[cfg(not(feature = "align_evm"))]
                 self.stack.push(U256::zero());
             }
             instructions::BLOCKHASH => {

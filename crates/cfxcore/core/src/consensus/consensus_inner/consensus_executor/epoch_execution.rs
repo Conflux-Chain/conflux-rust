@@ -212,6 +212,7 @@ impl ConsensusExecutionHandler {
             // Temporarily set `transaction_hash` to zero; it will be updated
             // with the actual transaction hash for each transaction.
             transaction_hash: H256::zero(),
+            ..Default::default()
         }
     }
 

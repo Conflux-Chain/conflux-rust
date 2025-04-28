@@ -440,9 +440,17 @@ impl Impl for EcRecover {
         let r = H256::from_slice(&input[64..96]);
         let s = H256::from_slice(&input[96..128]);
 
+        if &v.0[..31] != &[0; 31] {
+            return Ok(());
+        }
+
         let bit = match v[31] {
-            0 | 1 if &v.0[..31] == &[0; 31] => v[31],
-            27 | 28 if &v.0[..31] == &[0; 31] => v[31] - 27,
+            0 | 1
+                if self.0 == Space::Native || !cfg!(feature = "align_evm") =>
+            {
+                v[31]
+            }
+            27 | 28 => v[31] - 27,
             _ => {
                 return Ok(());
             }
