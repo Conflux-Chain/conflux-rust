@@ -14,7 +14,13 @@ impl OverlayAccount {
 
     pub fn set_nonce(&mut self, nonce: &U256) { self.nonce = *nonce; }
 
-    pub fn inc_nonce(&mut self) { self.nonce = self.nonce + U256::from(1u8); }
+    pub fn inc_nonce(&mut self) -> bool {
+        let u64_overflow = self.nonce >= U256::from(u64::MAX);
+        if !u64_overflow {
+            self.nonce = self.nonce + U256::from(1u8);
+        }
+        u64_overflow
+    }
 
     pub fn balance(&self) -> &U256 { &self.balance }
 

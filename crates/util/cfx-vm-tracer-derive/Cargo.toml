@@ -3,6 +3,7 @@ name = "cfx-vm-tracer-derive"
 version = "0.1.0"
 authors = ["Your Name <your.email@example.com>"]
 edition = "2021"
+license-file.workspace = true
 
 # Set the crate type to "proc-macro"
 [lib]

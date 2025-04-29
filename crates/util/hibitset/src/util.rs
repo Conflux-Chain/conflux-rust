@@ -57,7 +57,7 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
 /// Returns `None` if the `usize` has only one or zero set bits.
 ///
 /// # Examples
-/// ````rust,ignore
+/// ```rust,ignore
 /// use hibitset::util::average_ones;
 ///
 /// assert_eq!(Some(4), average_ones(0b10110));

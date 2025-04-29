@@ -144,7 +144,7 @@ impl BackupHandler {
             .get_account_state_range_proof(rightmost_key, version)
     }
 
-    /// Gets the epoch, commited version, and synced version of the DB.
+    /// Gets the epoch, committed version, and synced version of the DB.
     pub fn get_db_state(&self) -> Result<Option<DbState>> {
         self.ledger_store
             .get_startup_info(false)?

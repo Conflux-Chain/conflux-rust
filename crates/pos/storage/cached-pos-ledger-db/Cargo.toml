@@ -2,6 +2,7 @@
 name = "cached-pos-ledger-db"
 version = "0.1.0"
 edition = "2018"
+license-file.workspace = true
 
 [dependencies]
 anyhow = "1.0.38"

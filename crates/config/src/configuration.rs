@@ -133,6 +133,7 @@ build_config! {
         (metrics_influxdb_node, (Option<String>), None)
         (metrics_output_file, (Option<String>), None)
         (metrics_report_interval_ms, (u64), 3_000)
+        (metrics_prometheus_listen_addr, (Option<String>), None)
         (rocksdb_disable_wal, (bool), false)
         (txgen_account_count, (usize), 10)
 
@@ -385,6 +386,9 @@ build_config! {
         (pos_cip136_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
         (pos_cip136_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
         (pos_cip136_round_per_term, (u64), ROUND_PER_TERM)
+        (pos_cip156_transition_view, (u64), u64::MAX)
+        // 6 months with 30s rounds
+        (pos_cip156_dispute_locked_views, (u64), 6 * 30 * 24 * 60 * 2)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 
@@ -410,6 +414,9 @@ build_config! {
         // Recover the latest MPT snapshot from the era checkpoint
         (recovery_latest_mpt_snapshot, (bool), false)
         (keep_era_genesis_snapshot, (bool), true)
+
+        // This is designed for fast node catch-up but has not been thoroughly tested. Do not use it in production environments.
+        (backup_mpt_snapshot, (bool), true)
     }
     {
         // Development related section.
@@ -847,6 +854,7 @@ impl Configuration {
                 .raw_conf
                 .use_isolated_db_for_mpt_table_height,
             keep_era_genesis_snapshot: self.raw_conf.keep_era_genesis_snapshot,
+            backup_mpt_snapshot: self.raw_conf.backup_mpt_snapshot,
         }
     }
 
@@ -1068,6 +1076,10 @@ impl Configuration {
                 .metrics_influxdb_password
                 .clone(),
             influxdb_report_node: self.raw_conf.metrics_influxdb_node.clone(),
+            prometheus_listen_addr: self
+                .raw_conf
+                .metrics_prometheus_listen_addr
+                .clone(),
         }
     }
 
@@ -1332,6 +1344,8 @@ impl Configuration {
             self.raw_conf.pos_cip136_in_queue_locked_views,
             self.raw_conf.pos_cip136_out_queue_locked_views,
             self.raw_conf.pos_cip136_round_per_term,
+            self.raw_conf.pos_cip156_transition_view,
+            self.raw_conf.pos_cip156_dispute_locked_views,
         )
     }
 

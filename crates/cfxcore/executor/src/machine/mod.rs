@@ -161,7 +161,7 @@ fn new_builtin_map(
     // CIP-645e: EIP-2565
     let mod_exp_pricer = IfPricer::new(
         |spec| spec.cip645,
-        ModexpPricer::new_berlin(),
+        ModexpPricer::new_berlin(200),
         ModexpPricer::new_byzantium(20),
     );
     btree.insert(

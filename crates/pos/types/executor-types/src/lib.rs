@@ -229,7 +229,7 @@ impl StateComputeResult {
 #[derive(Clone, Debug)]
 pub struct ExecutedTrees {
     /// The in-memory Sparse Merkle Tree representing a specific state after
-    /// execution. If this tree is presenting the latest commited state, it
+    /// execution. If this tree is presenting the latest committed state, it
     /// will have a single Subtree node (or Empty node) whose hash equals
     /// the root hash of the newest Sparse Merkle Tree in storage.
     state_tree: Arc<SparseMerkleTree>,

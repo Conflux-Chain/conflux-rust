@@ -229,14 +229,19 @@ impl EthApi {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
-                e @ ExecutionError::NotEnoughCash { .. },
+                ExecutionError::NotEnoughCash { .. },
+                _executed,
+            ) => {
+                bail!(RpcError::from(
+                    RpcInvalidTransactionError::InsufficientFunds
+                ))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::NonceOverflow(addr),
                 _executed,
             ) => {
                 bail!(geth_call_execution_error(
-                    format!(
-                        "insufficient funds for gas * price + value: {:?})",
-                        e
-                    ),
+                    format!("address nonce overflow: {})", addr),
                     "".into()
                 ))
             }
