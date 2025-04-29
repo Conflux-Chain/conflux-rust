@@ -39,7 +39,7 @@ impl State {
     }
 
     /// Apply changes for the accounts and global variables to the statedb.
-    fn apply_changes_to_statedb(
+    pub fn apply_changes_to_statedb(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<Vec<Account>> {
         debug!("state.commit_changes");

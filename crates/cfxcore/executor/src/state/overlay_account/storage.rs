@@ -243,11 +243,14 @@ impl OverlayAccount {
         if let Some(value) = self.storage_committed_cache.read().get(key) {
             return Some(value.value);
         }
-        if self.fresh_storage() {
+        if self.fresh_storage() && !self.storage_overrided {
             return Some(U256::zero());
         }
         if let Some(value) = self.storage_read_cache.read().get(key) {
             return Some(value.value);
+        }
+        if self.storage_overrided {
+            return Some(U256::zero());
         }
         None
     }

@@ -209,8 +209,8 @@ pub fn initialize_synchronization_graph_with_data_manager(
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
         TXPOOL_DEFAULT_NONCE_BITS,
+        pos_verifier.enable_height(),
         machine.clone(),
-        pos_verifier.clone(),
     );
 
     let txpool = Arc::new(TransactionPool::new(

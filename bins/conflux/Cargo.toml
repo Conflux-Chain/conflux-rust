@@ -43,13 +43,23 @@ tempdir = { workspace = true }
 parity-version = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 bls-signatures = { workspace = true }
+cfx-vm-types = { workspace = true }
+cfx-statedb = { workspace = true }
+cfx-executor = { workspace = true }
+walkdir = { workspace = true }
+thiserror = { workspace = true }
+cfx-bytes = { workspace = true }
+statetest_types = { workspace = true }
+keccak-hash = { workspace = true }
+cfx-rpc-eth-types = { workspace = true }
+hex = { workspace = true}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
 version = "0.3.2"
 optional = true
 
 [features]
-default = ["jemalloc-global"]
+default = ["jemalloc-global", "testonly_code"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
 u64-mpt-db-key = ["client/u64_mpt_db_key"]
@@ -57,3 +67,4 @@ u64-mpt-db-key = ["client/u64_mpt_db_key"]
 # it will be enabled across all paths depending on that package. 
 # (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification)
 blst-portable = ["bls-signatures/blst-portable"]
+testonly_code = ["cfx-statedb/testonly_code"]

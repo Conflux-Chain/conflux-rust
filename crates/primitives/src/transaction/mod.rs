@@ -275,7 +275,7 @@ pub type AccessList = Vec<AccessListItem>;
 )]
 #[serde(rename_all = "camelCase")]
 pub struct AuthorizationListItem {
-    pub chain_id: u64,
+    pub chain_id: U256,
     pub address: Address,
     pub nonce: u64,
     pub y_parity: u8,

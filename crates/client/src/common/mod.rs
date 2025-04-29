@@ -380,8 +380,7 @@ pub fn initialize_common_modules(
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
-    let verification_config =
-        conf.verification_config(machine.clone(), pos_verifier.clone());
+    let verification_config = conf.verification_config(machine.clone());
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
         verification_config.clone(),
