@@ -48,7 +48,6 @@ cfx-executor = { workspace = true }
 walkdir = { workspace = true }
 thiserror = { workspace = true }
 cfx-bytes = { workspace = true }
-statetest_types = { workspace = true }
 keccak-hash = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 hex = { workspace = true}

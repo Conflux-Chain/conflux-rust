@@ -1,9 +1,9 @@
 [package]
-name = "statetest_types"
+name = "eest_types"
 edition = "2021"
+description = "Ethereum execution spec test types"
 version.workspace = true
 authors.workspace = true
-description.workspace = true
 documentation.workspace = true
 homepage.workspace = true
 keywords.workspace = true
@@ -18,7 +18,6 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 enumn = { workspace = true }
-cfx-bytes = { workspace = true }
 primitives = { workspace = true }
 
 [features]

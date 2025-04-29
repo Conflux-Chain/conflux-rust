@@ -1,4 +1,4 @@
-use super::{
+use crate::{
     deserializer::deserialize_maybe_empty, TestAuthorization, TransactionType,
 };
 use cfx_rpc_primitives::Bytes;
