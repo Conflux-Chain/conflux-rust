@@ -19,6 +19,7 @@ pub struct Config {
     pub blob_schedule: Option<HashMap<SpecName, BlobConfig>>,
     #[serde(deserialize_with = "deserialize_str_as_u64")]
     pub chainid: u64,
+    pub network: Option<SpecName>,
 }
 
 #[cfg(test)]
