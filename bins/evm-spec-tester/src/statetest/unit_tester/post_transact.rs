@@ -8,8 +8,8 @@ use cfx_executor::{
 };
 use cfx_types::{AddressSpaceUtil, AddressWithSpace, Space, U256};
 use cfxkey::Address;
+use eest_types::{AccountInfo, StateTestUnit};
 use primitives::{transaction::TransactionError, SignedTransaction};
-use statetest_types::{AccountInfo, TestUnit};
 use std::collections::HashMap;
 
 const INTRINSIC_GAS_TOO_LOW: &str =
@@ -111,7 +111,7 @@ pub fn match_common_check_error(
 
 pub fn check_execution_outcome(
     tx: &SignedTransaction, executed: &Executed, state: &State,
-    unit: &TestUnit, expected_state: &HashMap<Address, AccountInfo>,
+    unit: &StateTestUnit, expected_state: &HashMap<Address, AccountInfo>,
 ) -> Result<(), TestErrorKind> {
     for (&addr, account_info) in expected_state {
         let user_addr = addr.with_evm_space();

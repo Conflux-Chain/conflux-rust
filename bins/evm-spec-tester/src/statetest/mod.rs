@@ -7,8 +7,8 @@ pub use error::TestError;
 
 use cfx_executor::machine::{Machine, VmFactory};
 use cfxcore::verification::VerificationConfig;
+use eest_types::StateTestSuite;
 use itertools::Itertools;
-use statetest_types::TestSuite;
 use std::{path::PathBuf, sync::Arc};
 
 use command::StateTestCmd;
@@ -113,13 +113,13 @@ impl StateTestCmd {
 
 struct SuiteTester {
     path: String,
-    suite: TestSuite,
+    suite: StateTestSuite,
 }
 
 impl SuiteTester {
     pub fn load(path: &PathBuf) -> Result<Self, String> {
         let s = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        let suite: TestSuite =
+        let suite: StateTestSuite =
             serde_json::from_str(&s).map_err(|e| e.to_string())?;
 
         let path = path.to_string_lossy().into_owned();

@@ -22,7 +22,7 @@ cfx-vm-types = { workspace = true }
 cfxkey = { workspace = true }
 cfx-config = { workspace = true }
 primitives = { workspace = true }
-statetest_types = { workspace = true }
+eest_types = { workspace = true }
 
 serde_json = { workspace = true }
 walkdir = { workspace = true }
