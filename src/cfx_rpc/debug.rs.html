@@ -351,7 +351,7 @@
                 </span>.consensus_graph()
                 .get_block_epoch_number_with_pivot_check(
                     <span class="kw-2">&amp;</span>hash,
-                    require_canonical,
+                    require_canonical.unwrap_or_default(),
                 )
                 .map_err(|err| err.to_string())<span class="question-mark">?</span>,
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"not supported"</span>.to_string()),
