@@ -398,7 +398,7 @@
 <span class="kw">use </span>rand_08::{rngs::StdRng, SeedableRng};
 <span class="kw">use </span>rustc_hex::FromHexError;
 <span class="kw">use </span>serde::Deserialize;
-<span class="kw">use </span>tempdir::TempDir;
+<span class="kw">use </span>tempfile::Builder;
 
 <span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>cfxcore::{
@@ -526,7 +526,7 @@ Commands:
 }
 
 <span class="kw">fn </span>execute_genesis_transaction(genesis_txn: Transaction) -&gt; Waypoint {
-    <span class="kw">let </span>tmp_dir = TempDir::new(<span class="string">"example"</span>).unwrap();
+    <span class="kw">let </span>tmp_dir = Builder::new().prefix(<span class="string">"example"</span>).tempdir().unwrap();
     <span class="kw">let </span>(<span class="kw">_</span>, db) = DbReaderWriter::wrap(
         PosLedgerDB::open(
             tmp_dir.path(),

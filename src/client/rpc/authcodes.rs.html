@@ -603,7 +603,7 @@
         io::{Read, Write},
         time,
     };
-    <span class="kw">use </span>tempdir::TempDir;
+    <span class="kw">use </span>tempfile::tempdir;
 
     <span class="kw">fn </span>generate_hash(val: <span class="kw-2">&amp;</span>str, time: u64) -&gt; H256 {
         keccak(<span class="macro">format!</span>(<span class="string">"{}:{}"</span>, val, time))
@@ -673,7 +673,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>should_read_old_format_from_file() {
         <span class="comment">// given
-        </span><span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>tempdir = tempdir().unwrap();
         <span class="kw">let </span>file_path = tempdir.path().join(<span class="string">"file"</span>);
         <span class="kw">let </span>code = <span class="string">"23521352asdfasdfadf"</span>;
         {
@@ -695,7 +695,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>should_remove_old_unused_tokens() {
         <span class="comment">// given
-        </span><span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>tempdir = tempdir().unwrap();
         <span class="kw">let </span>file_path = tempdir.path().join(<span class="string">"file"</span>);
         <span class="kw">let </span>code1 = <span class="string">"11111111asdfasdf111"</span>;
         <span class="kw">let </span>code2 = <span class="string">"22222222asdfasdf222"</span>;

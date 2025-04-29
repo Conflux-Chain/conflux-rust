@@ -388,11 +388,11 @@
     <span class="kw">use super</span>::{Address, AddressBook};
     <span class="kw">use </span><span class="kw">crate</span>::account_data::AccountMeta;
     <span class="kw">use </span>std::collections::HashMap;
-    <span class="kw">use </span>tempdir::TempDir;
+    <span class="kw">use </span>tempfile::tempdir;
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>should_save_and_reload_address_book() {
-        <span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>tempdir = tempdir().unwrap();
         <span class="kw">let </span><span class="kw-2">mut </span>b = AddressBook::new(tempdir.path());
         b.set_name(Address::from_low_u64_be(<span class="number">1</span>), <span class="string">"One"</span>.to_owned());
         b.set_meta(Address::from_low_u64_be(<span class="number">1</span>), <span class="string">"{1:1}"</span>.to_owned());
@@ -414,7 +414,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>should_remove_address() {
-        <span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>tempdir = tempdir().unwrap();
         <span class="kw">let </span><span class="kw-2">mut </span>b = AddressBook::new(tempdir.path());
 
         b.set_name(Address::from_low_u64_be(<span class="number">1</span>), <span class="string">"One"</span>.to_owned());

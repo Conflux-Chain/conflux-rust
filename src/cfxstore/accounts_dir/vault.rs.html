@@ -838,7 +838,7 @@
         read_vault_file, VaultDiskDirectory, VaultKey, VAULT_FILE_NAME,
     };
     <span class="kw">use </span>std::{fs, io::Write, path::PathBuf};
-    <span class="kw">use </span>tempdir::TempDir;
+    <span class="kw">use </span>tempfile::tempdir;
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>check_vault_name_succeeds() {
@@ -885,7 +885,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>create_vault_file_succeeds() {
         <span class="comment">// given
-        </span><span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>temp_path = tempdir().unwrap();
         <span class="kw">let </span>key = VaultKey::new(<span class="kw-2">&amp;</span><span class="string">"password"</span>.into(), <span class="number">1024</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>vault_dir: PathBuf = temp_path.path().into();
         vault_dir.push(<span class="string">"vault"</span>);
@@ -904,7 +904,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>read_vault_file_succeeds() {
         <span class="comment">// given
-        </span><span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>temp_path = tempdir().unwrap();
         <span class="kw">let </span>key = VaultKey::new(<span class="kw-2">&amp;</span><span class="string">"password"</span>.into(), <span class="number">1024</span>);
         <span class="kw">let </span>vault_file_contents = <span class="string">r#"{"crypto":{"cipher":"aes-128-ctr","cipherparams":{"iv":"758696c8dc6378ab9b25bb42790da2f5"},"ciphertext":"54eb50683717d41caaeb12ea969f2c159daada5907383f26f327606a37dc7168","kdf":"pbkdf2","kdfparams":{"c":1024,"dklen":32,"prf":"hmac-sha256","salt":"3c320fa566a1a7963ac8df68a19548d27c8f40bf92ef87c84594dcd5bbc402b6"},"mac":"9e5c2314c2a0781962db85611417c614bd6756666b6b1e93840f5b6ed895f003"}}"#</span>;
         <span class="kw">let </span>dir: PathBuf = temp_path.path().into();
@@ -927,7 +927,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>read_vault_file_fails() {
         <span class="comment">// given
-        </span><span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>temp_path = tempdir().unwrap();
         <span class="kw">let </span>key = VaultKey::new(<span class="kw-2">&amp;</span><span class="string">"password1"</span>.into(), <span class="number">1024</span>);
         <span class="kw">let </span>dir: PathBuf = temp_path.path().into();
         <span class="kw">let </span><span class="kw-2">mut </span>vault_file_path: PathBuf = dir.clone();
@@ -958,7 +958,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>vault_directory_can_be_created() {
         <span class="comment">// given
-        </span><span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>temp_path = tempdir().unwrap();
         <span class="kw">let </span>key = VaultKey::new(<span class="kw-2">&amp;</span><span class="string">"password"</span>.into(), <span class="number">1024</span>);
         <span class="kw">let </span>dir: PathBuf = temp_path.path().into();
 
@@ -978,7 +978,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>vault_directory_cannot_be_created_if_already_exists() {
         <span class="comment">// given
-        </span><span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>temp_path = tempdir().unwrap();
         <span class="kw">let </span>key = VaultKey::new(<span class="kw-2">&amp;</span><span class="string">"password"</span>.into(), <span class="number">1024</span>);
         <span class="kw">let </span>dir: PathBuf = temp_path.path().into();
         <span class="kw">let </span><span class="kw-2">mut </span>vault_dir = dir.clone();
@@ -995,7 +995,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>vault_directory_cannot_be_opened_if_not_exists() {
         <span class="comment">// given
-        </span><span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>temp_path = tempdir().unwrap();
         <span class="kw">let </span>key = VaultKey::new(<span class="kw-2">&amp;</span><span class="string">"password"</span>.into(), <span class="number">1024</span>);
         <span class="kw">let </span>dir: PathBuf = temp_path.path().into();
 

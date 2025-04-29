@@ -1707,10 +1707,10 @@
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
     <span class="kw">use </span>cfx_types::H256;
     <span class="kw">use </span>std::str::FromStr;
-    <span class="kw">use </span>tempdir::TempDir;
+    <span class="kw">use </span>tempfile::tempdir;
 
     <span class="kw">fn </span>test_db(config: <span class="kw-2">&amp;</span>DatabaseConfig) {
-        <span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>tempdir = tempdir().unwrap();
         <span class="kw">let </span>db =
             Database::open(config, tempdir.path().to_str().unwrap()).unwrap();
         <span class="kw">let </span>key1 = H256::from_str(
@@ -1780,7 +1780,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>kvdb() {
-        <span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>tempdir = tempdir().unwrap();
         <span class="kw">let _ </span>=
             Database::open_default(tempdir.path().to_str().unwrap()).unwrap();
         test_db(<span class="kw-2">&amp;</span>DatabaseConfig::default());
@@ -1811,7 +1811,7 @@
         <span class="kw">let </span>config = DatabaseConfig::default();
         <span class="kw">let </span>config_5 = DatabaseConfig::with_columns(<span class="number">5</span>);
 
-        <span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>tempdir = tempdir().unwrap();
 
         <span class="comment">// open empty, add 5.
         </span>{
@@ -1839,7 +1839,7 @@
         <span class="kw">let </span>config = DatabaseConfig::default();
         <span class="kw">let </span>config_5 = DatabaseConfig::with_columns(<span class="number">5</span>);
 
-        <span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>tempdir = tempdir().unwrap();
 
         <span class="comment">// open 5, remove all.
         </span>{
@@ -1864,7 +1864,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>write_clears_buffered_ops() {
-        <span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>tempdir = tempdir().unwrap();
         <span class="kw">let </span>config = DatabaseConfig::default();
         <span class="kw">let </span>db =
             Database::open(<span class="kw-2">&amp;</span>config, tempdir.path().to_str().unwrap()).unwrap();
@@ -1882,7 +1882,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_memory_property() {
-        <span class="kw">let </span>tempdir = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>tempdir = tempdir().unwrap();
         <span class="kw">let </span>db = Database::open(
             <span class="kw-2">&amp;</span>DatabaseConfig::default(),
             tempdir.path().to_str().unwrap(),

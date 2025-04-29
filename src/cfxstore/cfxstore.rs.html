@@ -1575,7 +1575,6 @@
 <a href="#1575" id="1575">1575</a>
 <a href="#1576" id="1576">1576</a>
 <a href="#1577" id="1577">1577</a>
-<a href="#1578" id="1578">1578</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -2479,8 +2478,7 @@
     };
     <span class="kw">use </span>cfx_types::H256;
     <span class="kw">use </span>cfxkey::{Generator, KeyPair, Random};
-    <span class="kw">use </span>tempdir::TempDir;
-
+    <span class="kw">use </span>tempfile::{tempdir, TempDir};
     <span class="kw">fn </span>keypair() -&gt; KeyPair { Random.generate().unwrap() }
 
     <span class="kw">fn </span>store() -&gt; CfxStore {
@@ -2500,7 +2498,7 @@
 
     <span class="kw">impl </span>RootDiskDirectoryGuard {
         <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-            <span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+            <span class="kw">let </span>temp_path = tempdir().unwrap();
             <span class="kw">let </span>disk_dir =
                 Box::new(RootDiskDirectory::create(temp_path.path()).unwrap());
 

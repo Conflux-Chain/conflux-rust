@@ -1037,7 +1037,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::account::SafeAccount;
     <span class="kw">use </span>cfxkey::{Generator, Random};
     <span class="kw">use </span>std::{env, fs};
-    <span class="kw">use </span>tempdir::TempDir;
+    <span class="kw">use </span>tempfile::tempdir;
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>should_create_new_account() {
@@ -1166,7 +1166,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>should_list_vaults() {
         <span class="comment">// given
-        </span><span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+        </span><span class="kw">let </span>temp_path = tempdir().unwrap();
         <span class="kw">let </span>directory = RootDiskDirectory::create(<span class="kw-2">&amp;</span>temp_path).unwrap();
         <span class="kw">let </span>vault_provider = directory.as_vault_provider().unwrap();
         vault_provider
@@ -1185,7 +1185,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>hash_of_files() {
-        <span class="kw">let </span>temp_path = TempDir::new(<span class="string">""</span>).unwrap();
+        <span class="kw">let </span>temp_path = tempdir().unwrap();
         <span class="kw">let </span>directory = RootDiskDirectory::create(<span class="kw-2">&amp;</span>temp_path).unwrap();
 
         <span class="kw">let </span>hash = directory
