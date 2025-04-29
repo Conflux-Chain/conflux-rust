@@ -21,4 +21,4 @@ parity-util-mem = { workspace = true, default-features = false }
 rocksdb = { workspace = true }
 
 [dev-dependencies]
-tempdir = { workspace = true }
+tempfile = { workspace = true }

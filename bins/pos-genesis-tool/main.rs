@@ -16,7 +16,7 @@ use log::*;
 use rand_08::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
 use serde::Deserialize;
-use tempdir::TempDir;
+use tempfile::Builder;
 
 use cfx_types::H256;
 use cfxcore::{
@@ -144,7 +144,7 @@ fn main() {
 }
 
 fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
-    let tmp_dir = TempDir::new("example").unwrap();
+    let tmp_dir = Builder::new().prefix("example").tempdir().unwrap();
     let (_, db) = DbReaderWriter::wrap(
         PosLedgerDB::open(
             tmp_dir.path(),
