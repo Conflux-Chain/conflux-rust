@@ -18,3 +18,4 @@ solidity-abi = { workspace = true }
 
 [features]
 testonly_code = []
+align_evm = []
