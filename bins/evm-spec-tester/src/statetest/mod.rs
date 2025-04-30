@@ -17,7 +17,8 @@ use utils::{find_all_json_tests, skip_test};
 
 impl StateTestCmd {
     /// Runs `statetest` command.
-    pub fn run(&self) {
+    pub fn run(&self) -> bool {
+        let mut success = true;
         for path in &self.paths {
             if !path.exists() {
                 panic!("Path not exists: {:?}", path);
@@ -30,16 +31,25 @@ impl StateTestCmd {
                 continue;
             }
 
-            if let Err(_) = self.run_file_tests(test_files, path) {
-                warn!("Failed to run tests in directory: {:?}", path);
-                continue;
+            match self.run_file_tests(test_files, path) {
+                Ok(true) => {}
+                Ok(false) => {
+                    success = false;
+                }
+                Err(_) => {
+                    success = false;
+                    warn!("Failed to run tests in directory: {:?}", path);
+                    continue;
+                }
             }
         }
+        success
     }
 
     fn run_file_tests(
         &self, test_files: Vec<PathBuf>, path: &PathBuf,
-    ) -> Result<(), String> {
+    ) -> Result<bool, String> {
+        let mut success = true;
         info!(
             "Running {} TestSuites in {}",
             test_files.len(),
@@ -83,6 +93,7 @@ impl StateTestCmd {
                             "TestSuite load failed. path: {:?}, error: {}",
                             path, err_msg
                         );
+                        success = false;
                         load_err_suite += 1;
                         continue;
                     }
@@ -100,6 +111,7 @@ impl StateTestCmd {
         for (path, units) in
             &error_list.into_iter().chunk_by(|err| err.path.clone())
         {
+            success = false;
             println!("\nPath {path} fails:");
             for TestError { name, kind, .. } in units {
                 println!("\t{name}: {kind}");
@@ -113,7 +125,7 @@ impl StateTestCmd {
         println!("Error Units  : {}", error_units);
         println!("Total Executions: {}", total_executions);
 
-        Ok(())
+        Ok(success)
     }
 }
 

@@ -146,3 +146,45 @@ jobs:
           CMAKE_POLICY_VERSION_MINIMUM: 3.5
         run: |
           cargo doc --document-private-items
+
+  evm-spec-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Cache release artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/release/deps
+            target/release/.fingerprint
+            target/release/build
+            !target/release/build/**/out
+            !target/release/incremental
+            !target/release/.cargo-lock
+          key: ${{ runner.os }}-build-evm-spec-tester-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-build-evm-spec-tester-
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Install zstd
+        run: sudo apt-get install -y zstd
+
+      - name: Extract test data
+        working-directory: ./testdata
+        run: tar --use-compress-program="zstd --long=31" -xvf evm-spec-test.tar.zst
+
+      - name: Build in release mode
+        run: cargo build --release --bin evm-spec-tester
+
+      - name: Run EVM spec tests
+        run: cargo run --release --bin evm-spec-tester -- testdata/evm-spec-test
