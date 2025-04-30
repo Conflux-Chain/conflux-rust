@@ -1,6 +1,8 @@
 mod post_transact;
 mod pre_transact;
 
+use self::post_transact::is_unsupport_reason;
+
 use super::{
     error::{TestError, TestErrorKind},
     utils::extract_155_chain_id_from_raw_tx,
@@ -14,7 +16,7 @@ use cfx_types::Space;
 use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
 use primitives::SignedTransaction;
-use statetest_types::{SpecName, Test, TestUnit};
+use statetest_types::{SpecId, SpecName, Test, TestUnit};
 
 pub struct UnitTester {
     path: String,
@@ -42,11 +44,11 @@ impl UnitTester {
     pub fn run(
         &self, machine: &Machine, verification: &VerificationConfig,
         matches: Option<&str>,
-    ) -> Result<bool, TestError> {
+    ) -> Result<usize, TestError> {
         if !matches.map_or(true, |pat| {
             format!("{}::{}", &self.path, &self.name).contains(pat)
         }) {
-            return Ok(false);
+            return Ok(0);
         }
 
         if matches.is_some() {
@@ -55,28 +57,24 @@ impl UnitTester {
             trace!("Running TestUnit: {}", self.name);
         }
 
-        let mut non_empty_unit = false;
+        let Some((spec, tests)) = pick_spec(self.unit.post.iter()) else {
+            return Ok(0);
+        };
 
-        // running each spec's tests
-        for (&spec_name, tests) in &self.unit.post {
-            // Constantinople was immediately extended by Petersburg.
-            // There isn't any production Constantinople transaction
-            // so we don't support it and skip right to Petersburg.
-            if spec_name != SpecName::Prague {
+        let mut transact_cnt = 0;
+        // running each test
+        for single_test in tests.iter() {
+            if is_unsupport_reason(&single_test.expect_exception) {
                 continue;
             }
-
-            // running each test
-            for single_test in tests.iter() {
-                if matches.is_some() {
-                    info!("Running item");
-                }
-                self.execute_single_test(single_test, machine, verification)?;
-                non_empty_unit = true;
+            if matches.is_some() {
+                info!("Running item with spec {:?}", spec);
             }
+            self.execute_single_test(single_test, machine, verification)?;
+            transact_cnt += 1;
         }
 
-        Ok(non_empty_unit)
+        Ok(transact_cnt)
     }
 
     fn execute_single_test(
@@ -107,16 +105,14 @@ impl UnitTester {
             tx.hash(),
         );
 
-        let check_result =
-            pre_transact::check_tx_common(machine, &env, &tx, verification);
-
-        let check_pass = post_transact::match_common_check_error(
-            check_result,
-            test.expect_exception.as_ref(),
-        )
-        .map_err(|kind| self.err(kind))?;
-        if !check_pass {
-            return Ok(());
+        if let Err(e) =
+            pre_transact::check_tx_common(machine, &env, &tx, verification)
+        {
+            return post_transact::process_consensus_check_fail(
+                e,
+                test.expect_exception.as_ref(),
+            )
+            .map_err(|kind| self.err(kind));
         }
 
         let transact_options = pre_transact::make_transact_options(true);
@@ -130,7 +126,6 @@ impl UnitTester {
         )
         .map_err(|kind| self.err(kind))?
         else {
-            // TODO: error matched
             return Ok(());
         };
 
@@ -164,4 +159,33 @@ impl UnitTester {
         state.update_state_post_tx_execution(false);
         outcome
     }
+}
+
+fn pick_spec<'a, T>(
+    specs: impl Iterator<Item = (&'a SpecName, &'a T)>,
+) -> Option<(&'a SpecName, &'a T)> {
+    specs
+        .filter_map(|spec| {
+            let spec_id = spec.0.to_spec_id();
+            if spec_id <= SpecId::PRAGUE {
+                Some((spec, spec_id))
+            } else {
+                None
+            }
+        })
+        .fold(None, |acc, (spec, spec_id)| match acc {
+            Some((_, old_spec_id)) if spec_id > old_spec_id => {
+                Some((spec, spec_id))
+            }
+            Some((old_spec, old_spec_id)) if spec_id == old_spec_id => {
+                warn!(
+                    "Duplicate spec with the same id: {:?} {:?}",
+                    old_spec.0, spec.0
+                );
+                acc
+            }
+            Some(_) => acc,
+            None => Some((spec, spec_id)),
+        })
+        .map(|(spec, _)| spec)
 }

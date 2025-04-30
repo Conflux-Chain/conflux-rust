@@ -61,6 +61,7 @@ impl StateTestCmd {
 
         let mut success_units = 0;
         let mut skipped_units = 0;
+        let mut total_executions = 0;
 
         let mut error_list = vec![];
 
@@ -70,7 +71,7 @@ impl StateTestCmd {
                 continue;
             }
 
-            let (success_cnt, skipped_cnt, errors) =
+            let (success_cnt, skipped_cnt, transact_cnt, errors) =
                 match SuiteTester::load(&path) {
                     Ok(tester) => tester.run(
                         &machine,
@@ -78,7 +79,10 @@ impl StateTestCmd {
                         self.matches.as_deref(),
                     ),
                     Err(err_msg) => {
-                        warn!("TestSuite load failed: {}", err_msg);
+                        warn!(
+                            "TestSuite load failed. path: {:?}, error: {}",
+                            path, err_msg
+                        );
                         load_err_suite += 1;
                         continue;
                     }
@@ -86,6 +90,7 @@ impl StateTestCmd {
 
             success_units += success_cnt;
             skipped_units += skipped_cnt;
+            total_executions += transact_cnt;
 
             error_list.extend(errors);
         }
@@ -106,6 +111,7 @@ impl StateTestCmd {
         println!("Success Units: {}", success_units);
         println!("Skipped Units: {}", skipped_units);
         println!("Error Units  : {}", error_units);
+        println!("Total Executions: {}", total_executions);
 
         Ok(())
     }
@@ -129,7 +135,7 @@ impl SuiteTester {
     fn run(
         self, machine: &Machine, verification: &VerificationConfig,
         matches: Option<&str>,
-    ) -> (usize, usize, Vec<TestError>) {
+    ) -> (usize, usize, usize, Vec<TestError>) {
         if matches.is_some() {
             trace!("Running TestUnit: {}", self.path);
         } else {
@@ -139,18 +145,21 @@ impl SuiteTester {
         let mut error_list = vec![];
         let mut success_cnt = 0;
         let mut skipped_cnt = 0;
+        let mut transact_cnt = 0;
         for (name, unit) in self.suite.0 {
             let unit_tester = UnitTester::new(&self.path, name, unit);
             match unit_tester.run(&machine, verification, matches) {
-                Ok(true) => {
-                    success_cnt += 1;
-                }
-                Ok(false) => {
-                    skipped_cnt += 1;
+                Ok(cnt) => {
+                    transact_cnt += cnt;
+                    if cnt > 0 {
+                        success_cnt += 1;
+                    } else {
+                        skipped_cnt += 1;
+                    }
                 }
                 Err(e) => error_list.push(e),
             }
         }
-        (success_cnt, skipped_cnt, error_list)
+        (success_cnt, skipped_cnt, transact_cnt, error_list)
     }
 }

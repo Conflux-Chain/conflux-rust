@@ -4,37 +4,37 @@ use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
 pub(crate) fn skip_test(path: &Path) -> bool {
+    if contains_meta_dir(path) {
+        return true;
+    }
+
     let name = path.file_name().unwrap().to_str().unwrap();
 
     matches!(
         name,
-        // This test is valid_from("London") and valid_until("Shanghai")
-        "value_transfer_gas_calculation.json"
-        // Funky test with `bigint 0x00` value in json :) not possible to happen on mainnet and require
-        // custom json parser. https://github.com/ethereum/tests/issues/971
-        |"ValueOverflow.json"| "ValueOverflowParis.json"
+        // Tests not valid at Prague
+        "intrinsicCancun.json"
 
-        // Precompiles having storage is not possible
-        | "RevertPrecompiledTouch_storage.json"
-        | "RevertPrecompiledTouch.json"
+        // Unreasonable test cases and also skipped by revm (fails in revm)
+        | "RevertInCreateInInitCreate2Paris.json"
+        | "create2collisionStorageParis.json"
+        | "dynamicAccountOverwriteEmpty_Paris.json"
+        | "InitCollisionParis.json"
+        | "RevertInCreateInInit_Paris.json"
 
-        // Need to handle Test errors
-        // | "transactionIntinsicBug.json"
-
-        // Skip test where basefee/accesslist/difficulty is present but it shouldn't be supported in
-        // London/Berlin/TheMerge. https://github.com/ethereum/tests/blob/5b7e1ab3ffaf026d99d20b17bb30f533a2c80c8b/GeneralStateTests/stExample/eip1559.json#L130
-        // It is expected to not execute these tests.
-        | "basefeeExample.json"
-        | "eip1559.json"
-        | "mergeTest.json"
-
-        // These tests are passing, but they take a lot of time to execute so we are going to skip them.
-        | "loopExp.json"
-        | "Call50000_sha256.json"
-        | "static_Call50000_sha256.json"
+        // ## These tests are passing, but they take a lot of time to execute so we are going to skip them.
+        // | "loopExp.json"
+        // | "Call50000_sha256.json"
+        // | "static_Call50000_sha256.json"
         | "loopMul.json"
         | "CALLBlake2f_MaxRounds.json"
     )
+}
+
+/// Check if the path matches `.meta/**`.
+fn contains_meta_dir(path: &Path) -> bool {
+    path.iter()
+        .any(|c| c.to_str().map_or(false, |s| s == ".meta"))
 }
 
 #[allow(unused)]
@@ -57,6 +57,7 @@ pub(crate) fn find_all_json_tests(path: &Path) -> Vec<PathBuf> {
         vec![path.to_path_buf()]
     } else {
         WalkDir::new(path)
+            .follow_links(true)
             .into_iter()
             .filter_map(Result::ok)
             .filter(|e| e.path().extension() == Some("json".as_ref()))
