@@ -204,7 +204,7 @@ unlikely case that there are a lot of partial invalid blocks.</p>
 eth_call, eth_estimateGas etc.</p>
 </div><div class="impl-items"><section id="method.new_with_override" class="method"><a class="src rightside" href="../../src/cfx_executor/state/state_object/state_override.rs.html#10-16">source</a><h4 class="code-header">pub fn <a href="#method.new_with_override" class="fn">new_with_override</a>(
     db: StateDb,
-    state_override: &amp;<a class="type" href="../../cfx_rpc_eth_types/state/type.StateOverride.html" title="type cfx_rpc_eth_types::state::StateOverride">StateOverride</a>,
+    state_override: &amp;StateOverride,
     space: Space
 ) -&gt; DbResult&lt;Self&gt;</h4></section></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-State-14" class="impl"><a class="src rightside" href="../../src/cfx_executor/state/state_object/mod.rs.html#95-125">source</a><a href="#impl-State-14" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.State.html" title="struct cfx_executor::state::State">State</a></h3></section></summary><div class="impl-items"><section id="method.new" class="method"><a class="src rightside" href="../../src/cfx_executor/state/state_object/mod.rs.html#96-112">source</a><h4 class="code-header">pub fn <a href="#method.new" class="fn">new</a>(db: StateDb) -&gt; DbResult&lt;Self&gt;</h4></section><section id="method.prefetch_accounts" class="method"><a class="src rightside" href="../../src/cfx_executor/state/state_object/mod.rs.html#114-124">source</a><h4 class="code-header">pub fn <a href="#method.prefetch_accounts" class="fn">prefetch_accounts</a>(
     &amp;self,
