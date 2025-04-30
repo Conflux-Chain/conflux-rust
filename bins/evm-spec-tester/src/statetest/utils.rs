@@ -8,30 +8,29 @@ pub(crate) fn skip_test(path: &Path) -> bool {
 
     matches!(
         name,
-        // This test is valid_from("London") and valid_until("Shanghai")
-        "value_transfer_gas_calculation.json"
-        // Funky test with `bigint 0x00` value in json :) not possible to happen on mainnet and require
-        // custom json parser. https://github.com/ethereum/tests/issues/971
-        |"ValueOverflow.json"| "ValueOverflowParis.json"
+        // Tests not valid at Prague
+        // "value_transfer_gas_calculation.json"
+        "intrinsicCancun.json"
 
-        // Precompiles having storage is not possible
-        | "RevertPrecompiledTouch_storage.json"
-        | "RevertPrecompiledTouch.json"
-
-        // Need to handle Test errors
-        // | "transactionIntinsicBug.json"
+        // Unreasonable test cases and also skipped by revm
+        | "RevertInCreateInInitCreate2Paris.json"
+        | "create2collisionStorageParis.json"
+        | "dynamicAccountOverwriteEmpty_Paris.json"
+        | "InitCollisionParis.json"
+        | "RevertInCreateInInit_Paris.json"
 
         // Skip test where basefee/accesslist/difficulty is present but it shouldn't be supported in
         // London/Berlin/TheMerge. https://github.com/ethereum/tests/blob/5b7e1ab3ffaf026d99d20b17bb30f533a2c80c8b/GeneralStateTests/stExample/eip1559.json#L130
         // It is expected to not execute these tests.
-        | "basefeeExample.json"
-        | "eip1559.json"
-        | "mergeTest.json"
+        // | "basefeeExample.json"
+        // | "eip1559.json"
+        // | "mergeTest.json"
 
-        // These tests are passing, but they take a lot of time to execute so we are going to skip them.
-        | "loopExp.json"
-        | "Call50000_sha256.json"
-        | "static_Call50000_sha256.json"
+
+        // ## These tests are passing, but they take a lot of time to execute so we are going to skip them.
+        // | "loopExp.json"
+        // | "Call50000_sha256.json"
+        // | "static_Call50000_sha256.json"
         | "loopMul.json"
         | "CALLBlake2f_MaxRounds.json"
     )

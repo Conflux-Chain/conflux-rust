@@ -18,6 +18,8 @@ pub struct TestError {
 pub enum TestErrorKind {
     #[error("state mismatch: {0}")]
     StateMismatch(#[from] StateMismatch),
+    #[error("consensus check fail: {0}")]
+    ConsensusCheckFail(#[from] TransactionError),
     #[error("unknown private key: {0:?}")]
     UnknownPrivateKey(H256),
     #[error("execution error: {outcome:?}")]
@@ -27,10 +29,17 @@ pub enum TestErrorKind {
     #[error("should fail but success: {fail_reason}")]
     ShouldFail { fail_reason: String },
     #[error(
-        "inconsistent fail_reason: expect: {fail_reason}, actual: {outcome:?}"
+        "inconsistent fail_reason (execution): expect: {fail_reason}, actual: {outcome:?}"
     )]
     InconsistentError {
         outcome: ExecutionOutcome,
+        fail_reason: String,
+    },
+    #[error(
+        "inconsistent fail_reason (consensus): expect: {fail_reason}, actual: {error:?}"
+    )]
+    InconsistentErrorConsensus {
+        error: TransactionError,
         fail_reason: String,
     },
     #[error(

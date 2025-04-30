@@ -12,13 +12,16 @@ use primitives::{transaction::TransactionError, SignedTransaction};
 use statetest_types::{AccountInfo, TestUnit};
 use std::collections::HashMap;
 
-const INTRINSIC_GAS_TOO_LOW: &str =
-    "TransactionException.INTRINSIC_GAS_TOO_LOW";
-
 macro_rules! bail {
     ($e:expr) => {
         return Err($e.into())
     };
+}
+
+#[derive(Clone, Copy)]
+pub enum TestOutcome<'a> {
+    Consensus(&'a TransactionError),
+    Execution(&'a ExecutionOutcome),
 }
 
 pub fn extract_executed(
@@ -31,7 +34,10 @@ pub fn extract_executed(
             Err(TestErrorKind::ShouldFail {
                 fail_reason: fail_reason.clone(),
             })
-        } else if match_fail_reason(&*fail_reason, &outcome) {
+        } else if match_fail_reason(
+            &*fail_reason,
+            TestOutcome::Execution(&outcome),
+        ) {
             Ok(None)
         } else {
             Err(TestErrorKind::InconsistentError {
@@ -41,71 +47,86 @@ pub fn extract_executed(
         };
     }
 
-    Ok(match outcome {
-        Finished(executed) => Some(executed),
-        NotExecutedDrop(_) => None,
-        NotExecutedToReconsiderPacking(_) => None,
-        ExecutionErrorBumpNonce(_, executed) => Some(executed),
-    })
+    match outcome {
+        Finished(executed) => Ok(Some(executed)),
+        NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => {
+            Err(TestErrorKind::ExecutionError { outcome })
+        }
+        ExecutionErrorBumpNonce(_, executed) => {
+            // The post-execution validation will detect that the execution has
+            // reverted because the expected post-execution state indicates a
+            // failure, even if the test cases do not explicitly
+            // specify an error message.
+            Ok(Some(executed))
+        }
+    }
 }
 
-fn match_fail_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
+pub fn process_consensus_check_fail(
+    error: TransactionError, expect_exception: Option<&String>,
+) -> Result<(), TestErrorKind> {
+    if let Some(fail_reason) = expect_exception {
+        if match_fail_reason(fail_reason, TestOutcome::Consensus(&error)) {
+            Ok(())
+        } else {
+            Err(TestErrorKind::InconsistentErrorConsensus {
+                error,
+                fail_reason: fail_reason.clone(),
+            })
+        }
+    } else {
+        Err(error.into())
+    }
+}
+
+fn match_fail_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
     reason
         .split("|")
         .any(|reason| match_fail_single_reason(reason, outcome))
 }
 
-fn match_fail_single_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
+fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
     use ExecutionOutcome::*;
-    // TODO: check consistency of exception
-
+    use TestOutcome::*;
     match reason {
-        INTRINSIC_GAS_TOO_LOW => matches!(
+        "TransactionException.INITCODE_SIZE_EXCEEDED" => matches!(
             outcome,
-            NotExecutedDrop(TxDropError::NotEnoughGasLimit { .. })
-        ),
-        "TransactionException.SENDER_NOT_EOA" => matches!(
-            outcome,
-            NotExecutedDrop(TxDropError::SenderWithCode { .. })
-        ),
-        "TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS" => matches!(
-            outcome,
-            NotExecutedToReconsiderPacking(
-                ToRepackError::NotEnoughBaseFee { .. }
-            )
+            Consensus(TransactionError::CreateInitCodeSizeLimit)
         ),
         "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS" => matches!(
             outcome,
-            ExecutionErrorBumpNonce(ExecutionError::NotEnoughCash { .. }, _)
-                | NotExecutedToReconsiderPacking(
+            Execution(
+                ExecutionErrorBumpNonce(
+                    ExecutionError::NotEnoughCash { .. },
+                    _
+                ) | NotExecutedToReconsiderPacking(
                     ToRepackError::SenderDoesNotExist
                 )
+            )
+        ),
+        "TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS" => matches!(
+            outcome,
+            Execution(NotExecutedToReconsiderPacking(
+                ToRepackError::NotEnoughBaseFee { .. }
+            ))
+        ),
+        "TransactionException.INTRINSIC_GAS_TOO_LOW" => matches!(
+            outcome,
+            Execution(NotExecutedDrop(TxDropError::NotEnoughGasLimit { .. }))
+                | Consensus(TransactionError::NotEnoughBaseGas { .. })
+        ),
+        "TransactionException.NONCE_IS_MAX" => matches!(
+            outcome,
+            Execution(ExecutionErrorBumpNonce(
+                ExecutionError::NonceOverflow(_),
+                _
+            ))
+        ),
+        "TransactionException.SENDER_NOT_EOA" => matches!(
+            outcome,
+            Execution(NotExecutedDrop(TxDropError::SenderWithCode { .. }))
         ),
         _ => false,
-    }
-}
-
-pub fn match_common_check_error(
-    check: Result<(), TransactionError>, expect_exception: Option<&String>,
-) -> Result<bool, TestErrorKind> {
-    match (check, expect_exception.map(|v| v.as_str())) {
-        (Ok(_), None) => Ok(true),
-        (Ok(_), Some(_)) => {
-            // expect_exception will be check again in extract_executed
-            Ok(true)
-        }
-        (Err(e), None) => Err(TestErrorKind::CommonCheckError { tx_error: e }),
-        (
-            Err(TransactionError::NotEnoughBaseGas {
-                required: _,
-                got: _,
-            }),
-            Some(INTRINSIC_GAS_TOO_LOW),
-        ) => Ok(false),
-        (Err(e), Some(expect)) => {
-            trace!("expect exception: {} actually: {}", expect, e);
-            Ok(false)
-        }
     }
 }
 
