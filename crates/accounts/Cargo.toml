@@ -18,4 +18,4 @@ serde_derive = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-tempdir = { workspace = true }
+tempfile = { workspace = true }
