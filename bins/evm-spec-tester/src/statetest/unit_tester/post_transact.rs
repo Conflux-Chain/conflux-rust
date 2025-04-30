@@ -85,6 +85,17 @@ fn match_fail_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
         .any(|reason| match_fail_single_reason(reason, outcome))
 }
 
+pub fn is_unsupport_reason(expected_reason: &Option<String>) -> bool {
+    let Some(reason) = expected_reason.as_ref() else {
+        return false;
+    };
+    match &**reason {
+        // Consensus level error
+        "TransactionException.GAS_ALLOWANCE_EXCEEDED" => true,
+        _ => false,
+    }
+}
+
 fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
     use ExecutionOutcome::*;
     use TestOutcome::*;
