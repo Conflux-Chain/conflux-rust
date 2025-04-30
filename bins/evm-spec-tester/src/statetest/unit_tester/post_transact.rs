@@ -154,8 +154,8 @@ fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
 }
 
 pub fn check_execution_outcome(
-    tx: &SignedTransaction, executed: &Executed, state: &State,
-    unit: &TestUnit, expected_state: &HashMap<Address, AccountInfo>,
+    tx: &SignedTransaction, state: &State, unit: &TestUnit,
+    expected_state: &HashMap<Address, AccountInfo>, gas_used: U256,
 ) -> Result<(), TestErrorKind> {
     for (&addr, account_info) in expected_state {
         let user_addr = addr.with_evm_space();
@@ -170,9 +170,9 @@ pub fn check_execution_outcome(
                     unit.pre.get(&addr).map(|v| v.balance).unwrap_or_default();
                 let expected_gas_used =
                     (before_balance - expected_balance) / tx.gas_price();
-                if expected_gas_used != executed.gas_used {
+                if expected_gas_used != gas_used {
                     bail!(StateMismatch::GasMismatch {
-                        got: executed.gas_used,
+                        got: gas_used,
                         expected: expected_gas_used,
                     });
                 }
@@ -231,7 +231,7 @@ pub fn check_execution_outcome(
 }
 
 pub fn distribute_tx_fee_to_miner(
-    state: &mut State, executed: &Executed, miner: &Address, space: Space,
+    state: &mut State, executed: &Executed, miner: &Address,
 ) {
     let to_add = match executed.burnt_fee {
         Some(burnt_fee) => executed.fee - burnt_fee,
@@ -239,7 +239,7 @@ pub fn distribute_tx_fee_to_miner(
     };
     let miner = AddressWithSpace {
         address: miner.clone(),
-        space,
+        space: Space::Ethereum,
     };
     state
         .add_balance(&miner, &to_add, CleanupMode::NoEmpty)

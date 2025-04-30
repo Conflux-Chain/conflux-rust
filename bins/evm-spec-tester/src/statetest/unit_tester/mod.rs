@@ -12,7 +12,6 @@ use cfx_executor::{
     machine::Machine,
     state::State,
 };
-use cfx_types::Space;
 use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
 use primitives::SignedTransaction;
@@ -120,28 +119,30 @@ impl UnitTester {
         let outcome =
             self.transact(machine, &env, &mut state, &tx, transact_options);
 
-        let Some(executed) = post_transact::extract_executed(
+        let maybe_executed = post_transact::extract_executed(
             outcome,
             test.expect_exception.as_ref(),
         )
-        .map_err(|kind| self.err(kind))?
-        else {
-            return Ok(());
-        };
+        .map_err(|kind| self.err(kind))?;
 
-        post_transact::distribute_tx_fee_to_miner(
-            &mut state,
-            &executed,
-            &env.author,
-            Space::Ethereum,
-        );
+        if let Some(ref executed) = maybe_executed {
+            post_transact::distribute_tx_fee_to_miner(
+                &mut state,
+                &executed,
+                &env.author,
+            );
+        }
 
+        let gas_used = maybe_executed
+            .as_ref()
+            .map(|e| e.gas_used)
+            .unwrap_or_default();
         post_transact::check_execution_outcome(
             &tx,
-            &executed,
             &state,
             &self.unit,
             &test.state,
+            gas_used,
         )
         .map_err(|kind| self.err(kind))?;
 
