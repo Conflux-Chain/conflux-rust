@@ -4,6 +4,10 @@ use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
 
 pub(crate) fn skip_test(path: &Path) -> bool {
+    if contains_meta_dir(path) {
+        return true;
+    }
+
     let name = path.file_name().unwrap().to_str().unwrap();
 
     matches!(
@@ -36,6 +40,12 @@ pub(crate) fn skip_test(path: &Path) -> bool {
     )
 }
 
+/// Check if the path matches `.meta/**`.
+fn contains_meta_dir(path: &Path) -> bool {
+    path.iter()
+        .any(|c| c.to_str().map_or(false, |s| s == ".meta"))
+}
+
 #[allow(unused)]
 pub(crate) fn allowed_test(path: &Path, matches: Option<&str>) -> bool {
     if matches.is_none() {
@@ -56,6 +66,7 @@ pub(crate) fn find_all_json_tests(path: &Path) -> Vec<PathBuf> {
         vec![path.to_path_buf()]
     } else {
         WalkDir::new(path)
+            .follow_links(true)
             .into_iter()
             .filter_map(Result::ok)
             .filter(|e| e.path().extension() == Some("json".as_ref()))

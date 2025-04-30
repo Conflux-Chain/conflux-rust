@@ -9,7 +9,8 @@ use cfx_rpc_eth_types::{
 };
 use cfx_statedb::StateDb;
 use cfx_types::{
-    u256_to_h256_be, AllChainID, Space, SpaceMap, H256, U256, U64,
+    h256_to_u256_be, u256_to_h256_be, AllChainID, Space, SpaceMap, H256, U256,
+    U64,
 };
 use cfx_vm_types::Env;
 use cfxcore::verification::{VerificationConfig, VerifyTxMode};
@@ -213,7 +214,7 @@ pub fn make_block_env(
         author: env.current_coinbase,
         timestamp: env.current_timestamp.as_u64(),
         // After ETH2.0, the DIFFICULTY opcode is changed to PREVRANDAO
-        difficulty: env.current_random,
+        difficulty: h256_to_u256_be(env.current_random.unwrap_or_default()),
         gas_limit: env.current_gas_limit,
         last_hash: env.previous_hash.unwrap_or_default(),
         accumulated_gas_used: U256::zero(),

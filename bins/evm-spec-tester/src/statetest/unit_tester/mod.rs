@@ -42,11 +42,11 @@ impl UnitTester {
     pub fn run(
         &self, machine: &Machine, verification: &VerificationConfig,
         matches: Option<&str>,
-    ) -> Result<bool, TestError> {
+    ) -> Result<usize, TestError> {
         if !matches.map_or(true, |pat| {
             format!("{}::{}", &self.path, &self.name).contains(pat)
         }) {
-            return Ok(false);
+            return Ok(0);
         }
 
         if matches.is_some() {
@@ -56,20 +56,20 @@ impl UnitTester {
         }
 
         let Some((spec, tests)) = pick_spec(self.unit.post.iter()) else {
-            return Ok(false);
+            return Ok(0);
         };
 
-        let mut non_empty_unit = false;
+        let mut transact_cnt = 0;
         // running each test
         for single_test in tests.iter() {
             if matches.is_some() {
                 info!("Running item with spec {:?}", spec);
             }
             self.execute_single_test(single_test, machine, verification)?;
-            non_empty_unit = true;
+            transact_cnt += 1;
         }
 
-        Ok(non_empty_unit)
+        Ok(transact_cnt)
     }
 
     fn execute_single_test(
