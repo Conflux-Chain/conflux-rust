@@ -105,7 +105,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         self.context.state.inc_nonce(&self.tx.sender())
     }
 
-    fn charge_gas<'t>(&mut self) -> DbResult<(U256, bool)> {
+    fn charge_gas(&mut self) -> DbResult<(U256, bool)> {
         let sender = self.tx.sender();
         let spec = self.context.spec;
         let substate = &mut self.substate;

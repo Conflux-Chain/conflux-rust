@@ -71,6 +71,8 @@ impl From<TransactionPoolError> for EthApiError {
                 TransactionError::InvalidReceiver => Self::Other("Invalid receiver".to_string()),
                 TransactionError::TooLargeNonce => Self::InvalidTransaction(RpcInvalidTransactionError::NonceMaxValue),
                 TransactionError::CreateInitCodeSizeLimit => Self::InvalidTransaction(RpcInvalidTransactionError::MaxInitCodeSizeExceeded),
+                TransactionError::EmptyAuthorizationList => Self::InvalidTransaction(RpcInvalidTransactionError::EmptyAuthorizationList),
+                TransactionError::PriortyGreaterThanMaxFee => Self::InvalidTransaction(RpcInvalidTransactionError::PriortyGreaterThanMaxFee),
             },
             TransactionPoolError::GasLimitExceeded { .. } => Self::PoolError(RpcPoolError::ExceedsGasLimit),
             TransactionPoolError::GasPriceLessThanMinimum { .. } => Self::PoolError(RpcPoolError::Underpriced),

@@ -38,7 +38,8 @@ pub fn extract_executed(
             &*fail_reason,
             TestOutcome::Execution(&outcome),
         ) {
-            Ok(None)
+            Ok(outcome.try_into_executed())
+            // Ok(None)
         } else {
             Err(TestErrorKind::InconsistentError {
                 outcome,
@@ -112,6 +113,7 @@ fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
                     _
                 ) | NotExecutedToReconsiderPacking(
                     ToRepackError::SenderDoesNotExist
+                        | ToRepackError::NotEnoughBalance { .. }
                 )
             )
         ),
@@ -133,9 +135,19 @@ fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
                 _
             ))
         ),
+        "TransactionException.PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS" => {
+            matches!(
+                outcome,
+                Consensus(TransactionError::PriortyGreaterThanMaxFee)
+            )
+        }
         "TransactionException.SENDER_NOT_EOA" => matches!(
             outcome,
             Execution(NotExecutedDrop(TxDropError::SenderWithCode { .. }))
+        ),
+        "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST" => matches!(
+            outcome,
+            Consensus(TransactionError::EmptyAuthorizationList)
         ),
         _ => false,
     }
