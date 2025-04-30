@@ -212,7 +212,8 @@ pub fn make_block_env(
         number: env.current_number.as_u64(),
         author: env.current_coinbase,
         timestamp: env.current_timestamp.as_u64(),
-        difficulty: env.current_difficulty,
+        // After ETH2.0, the DIFFICULTY opcode is changed to PREVRANDAO
+        difficulty: env.current_random,
         gas_limit: env.current_gas_limit,
         last_hash: env.previous_hash.unwrap_or_default(),
         accumulated_gas_used: U256::zero(),
