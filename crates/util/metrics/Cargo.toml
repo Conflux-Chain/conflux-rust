@@ -16,12 +16,14 @@ chrono = { workspace = true }
 serde = { workspace = true }
 duration-str = { workspace = true }
 hyper = { workspace = true, features = ["http1", "server"] }
-hyper-util = { version = "0.1.8", features = ['tokio', 'client'] }
+hyper-util = { workspace = true, features = ['tokio', 'client'] }
 cfx-tasks = { workspace = true }
+
 [dev-dependencies]
 criterion = { workspace = true }
-reqwest = { version = "0.12" }
-tokio = { version = "1", features = ["full"] }
+reqwest = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
 [[bench]]
 name = "benchmark"
 harness = false
