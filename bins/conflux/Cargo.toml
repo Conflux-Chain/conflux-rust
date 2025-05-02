@@ -17,7 +17,7 @@ cfxstore = { workspace = true }
 rpassword = { workspace = true }
 #io = { workspace = true }
 jsonrpc-core = { workspace = true }
-jsonrpc-core-client = { workspace = true, features = ["http"] }
+jsonrpsee = { workspace = true, features = ["http-client"] }
 log = { workspace = true }
 cfxcore = { workspace = true }
 network = { workspace = true }
@@ -69,3 +69,7 @@ u64-mpt-db-key = ["client/u64_mpt_db_key"]
 # it will be enabled across all paths depending on that package. 
 # (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification)
 blst-portable = ["bls-signatures/blst-portable"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+mockito = "1.5.0"
