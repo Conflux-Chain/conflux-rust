@@ -467,4 +467,108 @@ mod tests {
             response
         );
     }
+
+    #[test]
+    fn test_can_subscribe_with_secret() {
+        let addr = "127.0.0.1:19971".parse().unwrap();
+        let secret_str = "test_secret";
+        let secret_hash = keccak(secret_str);
+
+        let stratum =
+            Stratum::start(&addr, Arc::new(VoidManager), Some(secret_hash))
+                .expect("Should start stratum with secret");
+
+        let request = format!(
+            r#"{{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", "{}"], "id": 1}}"#,
+            secret_str
+        );
+
+        let response =
+            String::from_utf8(dummy_request(&addr, &request)).unwrap();
+
+        assert_eq!(
+            terminated_str(r#"{"jsonrpc":"2.0","result":true,"id":1}"#),
+            response
+        );
+        assert_eq!(1, stratum.implementation.workers.read().len());
+    }
+
+    #[test]
+    fn test_can_subscribe_with_invalid_secret() {
+        let addr = "127.0.0.1:19972".parse().unwrap();
+        let secret_str = "test_secret";
+        let secret_hash = keccak(secret_str);
+        let stratum =
+            Stratum::start(&addr, Arc::new(VoidManager), Some(secret_hash))
+                .expect("Should start stratum with secret");
+
+        let request = r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", "wrong_secret"], "id": 2}"#;
+        let response =
+            String::from_utf8(dummy_request(&addr, request)).unwrap();
+
+        assert_eq!(
+            terminated_str(r#"{"jsonrpc":"2.0","result":false,"id":2}"#),
+            response
+        );
+        assert_eq!(0, stratum.implementation.workers.read().len());
+    }
+
+    #[test]
+    fn test_can_submit() {
+        let addr = "127.0.0.1:19972".parse().unwrap();
+
+        struct TestDispatcher {
+            submissions: Arc<RwLock<Vec<Vec<String>>>>,
+        }
+
+        impl JobDispatcher for TestDispatcher {
+            fn submit(&self, payload: Vec<String>) -> Result<(), Error> {
+                self.submissions.write().push(payload);
+                Ok(())
+            }
+        }
+
+        let test_dispatcher = TestDispatcher {
+            submissions: Arc::new(RwLock::new(Vec::new())),
+        };
+        let submissions = test_dispatcher.submissions.clone();
+
+        let stratum = Stratum::start(&addr, Arc::new(test_dispatcher), None)
+            .expect("Should start stratum");
+
+        // subscribe
+        let subscribe_request = r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", ""], "id": 1}"#;
+        let subscribe_response =
+            String::from_utf8(dummy_request(&addr, subscribe_request)).unwrap();
+
+        assert_eq!(
+            terminated_str(r#"{"jsonrpc":"2.0","result":true,"id":1}"#),
+            subscribe_response
+        );
+
+        // submit
+
+        let submit_request = r#"{"jsonrpc": "2.0", "method": "mining.submit", "params": ["test_miner", "job_id", "0x1", "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"], "id": 2}"#;
+
+        let submit_response =
+            String::from_utf8(dummy_request(&addr, submit_request)).unwrap();
+
+        assert_eq!(
+            terminated_str(r#"{"jsonrpc":"2.0","result":[true],"id":2}"#),
+            submit_response
+        );
+
+        assert_eq!(1, submissions.read().len());
+        assert_eq!(
+            vec![
+            "test_miner",
+            "job_id",
+            "0x1",
+            "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+        ],
+            submissions.read()[0]
+        );
+
+        assert_eq!(1, stratum.implementation.workers.read().len());
+    }
 }
