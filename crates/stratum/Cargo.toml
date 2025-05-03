@@ -13,7 +13,8 @@ jsonrpc-core = "15.1.0"
 jsonrpc-tcp-server = "15.1.0"
 log = { workspace = true }
 parking_lot = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [dev-dependencies]
 env_logger = { workspace = true }
-tokio02 = { workspace = true }
+

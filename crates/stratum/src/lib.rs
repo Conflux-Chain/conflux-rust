@@ -279,15 +279,12 @@ impl MetaExtractor<SocketMetadata> for PeerMetaExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        net::{Shutdown, SocketAddr},
-        sync::Arc,
-    };
-    use tokio02::{
+    use std::{net::SocketAddr, sync::Arc};
+    use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpStream,
         runtime::Runtime,
-        time::delay_for,
+        time::sleep,
     };
 
     pub struct VoidManager;
@@ -297,7 +294,7 @@ mod tests {
     }
 
     fn dummy_request(addr: &SocketAddr, data: &str) -> Vec<u8> {
-        let mut runtime = Runtime::new()
+        let runtime = Runtime::new()
             .expect("Tokio Runtime should be created with no errors");
 
         runtime.block_on(async {
@@ -313,9 +310,7 @@ mod tests {
                 .await
                 .expect("Should write data to stream");
 
-            stream
-                .shutdown(Shutdown::Write)
-                .expect("Should shutdown write half");
+            stream.shutdown().await.expect("Should shutdown write half");
 
             let mut read_buf = Vec::with_capacity(2048);
             stream
@@ -412,7 +407,7 @@ mod tests {
 
         let auth_response = "{\"jsonrpc\":\"2.0\",\"result\":true,\"id\":1}\n";
 
-        let mut runtime = Runtime::new()
+        let runtime = Runtime::new()
             .expect("Tokio Runtime should be created with no errors");
 
         let response = runtime.block_on(async {
@@ -437,7 +432,7 @@ mod tests {
             trace!(target: "stratum", "Received authorization confirmation");
 
             // Wait a bit
-            delay_for(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
             // Push work
             trace!(target: "stratum", "Pusing work to peers");
@@ -446,14 +441,12 @@ mod tests {
                 .expect("Pushing work should produce no errors");
 
             // Wait a bit
-            delay_for(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
             trace!(target: "stratum", "Ready to read work from server");
-            delay_for(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
-            stream
-                .shutdown(Shutdown::Write)
-                .expect("Should shutdown write half");
+            stream.shutdown().await.expect("Should shutdown write half");
 
             // Read work response
             let mut read_buf1 = Vec::with_capacity(2048);
