@@ -81,9 +81,21 @@ impl Stratum {
         let mut delegate = IoDelegate::<StratumImpl, SocketMetadata>::new(
             implementation.clone(),
         );
-        delegate
-            .add_method_with_meta("mining.subscribe", StratumImpl::subscribe);
-        delegate.add_method_with_meta("mining.submit", StratumImpl::submit);
+        delegate.add_method_with_meta("mining.subscribe", {
+            let implementation = implementation.clone();
+            move |_, params, meta| {
+                let implementation = implementation.clone();
+                async move { implementation.subscribe(params, meta).await }
+            }
+        });
+
+        delegate.add_method_with_meta("mining.submit", {
+            let implementation = implementation.clone();
+            move |_, params, meta| {
+                let implementation = implementation.clone();
+                async move { implementation.submit(params, meta).await }
+            }
+        });
         let mut handler = MetaIoHandler::<SocketMetadata>::with_compatibility(
             Compatibility::Both,
         );
@@ -137,7 +149,9 @@ struct StratumImpl {
 
 impl StratumImpl {
     /// rpc method `mining.subscribe`
-    fn subscribe(&self, params: Params, meta: SocketMetadata) -> RpcResult {
+    async fn subscribe(
+        &self, params: Params, meta: SocketMetadata,
+    ) -> RpcResult {
         params.parse::<(String, String)>().map(|(worker_id, secret)|{
             if let Some(valid_secret) = self.secret {
                 let hash = keccak(secret);
@@ -152,7 +166,7 @@ impl StratumImpl {
     }
 
     /// rpc method `mining.submit`
-    fn submit(&self, params: Params, _meta: SocketMetadata) -> RpcResult {
+    async fn submit(&self, params: Params, _meta: SocketMetadata) -> RpcResult {
         Ok(Value::Array(match params {
             Params::Array(vals) => {
                 // first two elements are service messages (worker_id & job_id)
@@ -252,7 +266,9 @@ impl Default for SocketMetadata {
 }
 
 impl SocketMetadata {
-    pub fn addr(&self) -> &SocketAddr { &self.addr }
+    pub fn addr(&self) -> &SocketAddr {
+        &self.addr
+    }
 }
 
 impl Metadata for SocketMetadata {}
@@ -290,7 +306,9 @@ mod tests {
     pub struct VoidManager;
 
     impl JobDispatcher for VoidManager {
-        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> { Ok(()) }
+        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> {
+            Ok(())
+        }
     }
 
     fn dummy_request(addr: &SocketAddr, data: &str) -> Vec<u8> {
@@ -350,7 +368,9 @@ mod tests {
     }
 
     impl JobDispatcher for DummyManager {
-        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> { Ok(()) }
+        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> {
+            Ok(())
+        }
     }
 
     fn terminated_str(origin: &'static str) -> String {
