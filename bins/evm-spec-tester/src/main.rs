@@ -32,5 +32,8 @@ fn init_logger(verbosity: u8) {
 fn main() {
     let cmd = StateTestCmd::from_args();
     init_logger(cmd.verbose);
-    cmd.run()
+    let success = cmd.run();
+    if !success {
+        std::process::exit(1);
+    }
 }
