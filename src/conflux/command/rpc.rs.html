@@ -141,21 +141,98 @@
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">use </span><span class="kw">crate</span>::command::helpers::{input_password, password_prompt};
 <span class="kw">use </span>clap::ArgMatches;
-<span class="kw">use </span>jsonrpc_core::{Params, Value};
-<span class="kw">use </span>jsonrpc_core_client::{transports::http::connect, RawClient};
-<span class="kw">use </span>serde_json::Map;
+<span class="kw">use </span>jsonrpsee::core::client::ClientT;
+<span class="kw">use </span>jsonrpsee::http_client::HttpClientBuilder;
+<span class="kw">use </span>serde_json::{Map, Value};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">pub struct </span>RpcCommand {
     <span class="kw">pub </span>url: String,
     <span class="kw">pub </span>method: String,
-    <span class="kw">pub </span>args: Params,
+    <span class="kw">pub </span>args: Vec&lt;Value&gt;,
 }
 
 <span class="kw">impl </span>RpcCommand {
@@ -170,37 +247,33 @@
             .ok_or_else(|| String::from(<span class="string">"RPC URL not specified"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>args = <span class="kw">match </span>matches.values_of(<span class="string">"rpc-args"</span>) {
-            <span class="prelude-val">Some</span>(args) =&gt; args,
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(RpcCommand {
-                    url: url.into(),
-                    method: method.into(),
-                    args: Params::None,
-                }));
-            }
-        };
+            <span class="prelude-val">Some</span>(args) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>params = Vec::new();
-        <span class="kw">for </span>arg <span class="kw">in </span>args {
-            <span class="kw">match </span>ArgSchema::parse(arg).value(matches)<span class="question-mark">? </span>{
-                <span class="prelude-val">Some</span>(val) =&gt; params.push(val),
-                <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+                <span class="kw">for </span>arg <span class="kw">in </span>args {
+                    <span class="kw">match </span>ArgSchema::parse(arg).value(matches)<span class="question-mark">? </span>{
+                        <span class="prelude-val">Some</span>(val) =&gt; params.push(val),
+                        <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
+                    }
+                }
+                params
             }
-        }
+            <span class="prelude-val">None </span>=&gt; Vec::new(),
+        };
 
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(RpcCommand {
             url: url.into(),
             method: method.into(),
-            args: Params::Array(params),
+            args,
         }))
     }
 
     <span class="kw">pub async fn </span>execute(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String, String&gt; {
-        <span class="kw">let </span>client = connect::&lt;RawClient&gt;(<span class="self">self</span>.url.as_str())
-            .<span class="kw">await
-            </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>;
-        <span class="kw">let </span>result = client
-            .call_method(<span class="self">self</span>.method.as_str(), <span class="self">self</span>.args)
+        <span class="kw">let </span>client = HttpClientBuilder::default()
+            .build(<span class="kw-2">&amp;</span><span class="self">self</span>.url)
+            .map_err(|e| e.to_string())<span class="question-mark">?</span>;
+        <span class="kw">let </span>result: Value = client
+            .request(<span class="kw-2">&amp;</span><span class="self">self</span>.method, <span class="self">self</span>.args)
             .<span class="kw">await
             </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="macro">format!</span>(<span class="string">"{:#}"</span>, result))
@@ -282,6 +355,87 @@
 
     <span class="kw">fn </span>password2(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Value, String&gt; {
         password_prompt().map(|pwd| Value::String(pwd.as_str().to_string()))
+    }
+}
+
+<span class="attr">#[cfg(test)]
+
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span>mockito::{Matcher, Server};
+    <span class="kw">use </span>serde_json::json;
+    <span class="kw">use </span>tokio;
+
+    <span class="kw">async fn </span>run_rpc_test(
+        method: <span class="kw-2">&amp;</span>str, args: Vec&lt;Value&gt;, expected_result_value: Value,
+    ) {
+        <span class="kw">let </span><span class="kw-2">mut </span>server = Server::new_async().<span class="kw">await</span>;
+        <span class="kw">let </span>url = server.url();
+
+        <span class="kw">let </span>expected_request_body = <span class="macro">json!</span>({
+            <span class="string">"jsonrpc"</span>: <span class="string">"2.0"</span>,
+            <span class="string">"method"</span>: method,
+            <span class="string">"params"</span>: args.clone(),
+            <span class="string">"id"</span>: <span class="number">0
+        </span>});
+
+        <span class="kw">let </span>mock_response_body = <span class="macro">json!</span>({
+          <span class="string">"jsonrpc"</span>: <span class="string">"2.0"</span>,
+          <span class="string">"id"</span>: <span class="number">0</span>,
+          <span class="string">"result"</span>: expected_result_value.clone()
+        });
+
+        <span class="kw">let </span>mock = server
+            .mock(<span class="string">"POST"</span>, <span class="string">"/"</span>)
+            .match_header(<span class="string">"content-type"</span>, <span class="string">"application/json"</span>)
+            .match_body(Matcher::Json(expected_request_body.clone()))
+            .with_status(<span class="number">200</span>)
+            .with_body(mock_response_body.to_string())
+            .create_async()
+            .<span class="kw">await</span>;
+
+        <span class="kw">let </span>command = RpcCommand {
+            url,
+            method: method.to_string(),
+            args,
+        };
+
+        <span class="kw">let </span>result = command.execute().<span class="kw">await</span>;
+
+        mock.assert_async().<span class="kw">await</span>;
+        <span class="macro">assert!</span>(result.is_ok());
+        <span class="kw">let </span>result_str = result.unwrap();
+        <span class="macro">assert_eq!</span>(result_str, <span class="macro">format!</span>(<span class="string">"{:#}"</span>, expected_result_value));
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>test_rpc_execute_without_args() {
+        <span class="kw">let </span>method = <span class="string">"cfx_getStatus"</span>;
+        <span class="kw">let </span>args: Vec&lt;Value&gt; = <span class="macro">vec!</span>[];
+        <span class="kw">let </span>expected_result = <span class="macro">json!</span>({
+            <span class="string">"bestHash"</span>: <span class="string">"0x64c936773e434069ede6bec161419b37ab6110409095a1d91d2bb91c344b523f"</span>,
+            <span class="string">"chainId"</span>: <span class="string">"0x1"</span>,
+            <span class="string">"ethereumSpaceChainId"</span>: <span class="string">"0x47"</span>,
+            <span class="string">"networkId"</span>: <span class="string">"0x1"</span>,
+            <span class="string">"epochNumber"</span>: <span class="string">"0xcdee1fd"</span>,
+            <span class="string">"blockNumber"</span>: <span class="string">"0x10be2f9b"</span>,
+            <span class="string">"pendingTxNumber"</span>: <span class="string">"0x8cf"</span>,
+            <span class="string">"latestCheckpoint"</span>: <span class="string">"0xcdd7500"</span>,
+            <span class="string">"latestConfirmed"</span>: <span class="string">"0xcdee1c3"</span>,
+            <span class="string">"latestState"</span>: <span class="string">"0xcdee1f9"</span>,
+            <span class="string">"latestFinalized"</span>: <span class="string">"0xcdee0ac"
+        </span>});
+
+        run_rpc_test(method, args, expected_result).<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[tokio::test]
+    </span><span class="kw">async fn </span>test_rpc_execute_cfx_epoch_number_with_param() {
+        <span class="kw">let </span>method = <span class="string">"cfx_epochNumber"</span>;
+        <span class="kw">let </span>args: Vec&lt;Value&gt; = <span class="macro">vec!</span>[<span class="macro">json!</span>(<span class="string">"0x4350b21"</span>)];
+        <span class="kw">let </span>expected_result = <span class="macro">json!</span>(<span class="string">"0x4350b21"</span>);
+
+        run_rpc_test(method, args, expected_result).<span class="kw">await</span>;
     }
 }
 </code></pre></div></section></main></body></html>

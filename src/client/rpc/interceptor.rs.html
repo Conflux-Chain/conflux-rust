@@ -329,6 +329,12 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -562,23 +568,24 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::rpc::interceptor::{RpcInterceptor, RpcProxy};
-    <span class="kw">use </span>jsonrpc_core::{Error <span class="kw">as </span>RpcError, MetaIoHandler, <span class="prelude-ty">Result </span><span class="kw">as </span>RpcResult};
-    <span class="kw">use </span>jsonrpc_derive::rpc;
+    <span class="kw">use </span>jsonrpc_core::{
+        BoxFuture, Error <span class="kw">as </span>RpcError, MetaIoHandler, Params, RemoteProcedure,
+        <span class="prelude-ty">Result </span><span class="kw">as </span>RpcResult, RpcMethod, Value,
+    };
+
+    <span class="kw">use </span>futures::future::{<span class="self">self</span>, FutureExt};
     <span class="kw">use </span>std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     };
+    <span class="kw">struct </span>MockRpcMethod;
 
-    <span class="attr">#[rpc]
-    </span><span class="kw">pub trait </span>Foo {
-        <span class="attr">#[rpc(name = <span class="string">"cfx_balance"</span>)]
-        </span><span class="kw">fn </span>balance(<span class="kw-2">&amp;</span><span class="self">self</span>, _id: usize) -&gt; RpcResult&lt;usize&gt;;
-    }
-
-    <span class="kw">struct </span>FooImpl;
-
-    <span class="kw">impl </span>Foo <span class="kw">for </span>FooImpl {
-        <span class="kw">fn </span>balance(<span class="kw-2">&amp;</span><span class="self">self</span>, id: usize) -&gt; RpcResult&lt;usize&gt; { <span class="prelude-val">Ok</span>(id) }
+    <span class="kw">impl </span>RpcMethod&lt;()&gt; <span class="kw">for </span>MockRpcMethod {
+        <span class="kw">fn </span>call(
+            <span class="kw-2">&amp;</span><span class="self">self</span>, _params: Params, _meta: (),
+        ) -&gt; BoxFuture&lt;RpcResult&lt;Value&gt;&gt; {
+            future::ready(<span class="prelude-val">Ok</span>(Value::from(<span class="number">8</span>))).boxed()
+        }
     }
 
     <span class="attr">#[derive(Default)]
@@ -599,14 +606,16 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_interceptor_success() {
-        <span class="kw">let </span>foo = FooImpl.to_delegate();
+        <span class="kw">let </span>mock_method = RemoteProcedure::Method(Arc::new(MockRpcMethod));
+        <span class="kw">let </span>methods: Vec&lt;(String, RemoteProcedure&lt;()&gt;)&gt; =
+            <span class="macro">vec!</span>[(<span class="string">"cfx_balance"</span>.to_string(), mock_method)];
 
         <span class="comment">// interceptor not handled
         </span><span class="kw">let </span>bar = Bar::default();
         <span class="kw">let </span>interceptor_handled = bar.handled.clone();
 
         <span class="kw">let </span><span class="kw-2">mut </span>handler: MetaIoHandler&lt;()&gt; = MetaIoHandler::default();
-        handler.extend_with(RpcProxy::new(foo, bar));
+        handler.extend_with(RpcProxy::new(methods, bar));
 
         <span class="kw">let </span>request = <span class="string">r#"{"jsonrpc": "2.0", "method": "cfx_balance", "params": [8], "id": 1}"#</span>;
         <span class="macro">assert_eq!</span>(
@@ -618,14 +627,16 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_interceptor_failure() {
-        <span class="kw">let </span>foo = FooImpl.to_delegate();
+        <span class="kw">let </span>mock_method = RemoteProcedure::Method(Arc::new(MockRpcMethod));
+        <span class="kw">let </span>methods: Vec&lt;(String, RemoteProcedure&lt;()&gt;)&gt; =
+            <span class="macro">vec!</span>[(<span class="string">"cfx_balance"</span>.to_string(), mock_method)];
 
         <span class="comment">// interceptor with RPC error
         </span><span class="kw">let </span><span class="kw-2">mut </span>bar = Bar::default();
         bar.error = <span class="prelude-val">Some</span>(RpcError::invalid_params(<span class="string">"some test error"</span>));
 
         <span class="kw">let </span><span class="kw-2">mut </span>handler: MetaIoHandler&lt;()&gt; = MetaIoHandler::default();
-        handler.extend_with(RpcProxy::new(foo, bar));
+        handler.extend_with(RpcProxy::new(methods, bar));
 
         <span class="kw">let </span>request = <span class="string">r#"{"jsonrpc": "2.0", "method": "cfx_balance", "params": [8], "id": 1}"#</span>;
         <span class="macro">assert_eq!</span>(
@@ -636,12 +647,13 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_interceptor_embedded() {
-        <span class="kw">let </span>foo = FooImpl.to_delegate();
-
+        <span class="kw">let </span>mock_method = RemoteProcedure::Method(Arc::new(MockRpcMethod));
+        <span class="kw">let </span>methods: Vec&lt;(String, RemoteProcedure&lt;()&gt;)&gt; =
+            <span class="macro">vec!</span>[(<span class="string">"cfx_balance"</span>.to_string(), mock_method)];
         <span class="comment">// interceptor 1
         </span><span class="kw">let </span>bar = Bar::default();
         <span class="kw">let </span>interceptor_1_handled = bar.handled.clone();
-        <span class="kw">let </span>proxy_1 = RpcProxy::new(foo, bar);
+        <span class="kw">let </span>proxy_1 = RpcProxy::new(methods.clone(), bar);
 
         <span class="comment">// interceptor 2
         </span><span class="kw">let </span>bar = Bar::default();
