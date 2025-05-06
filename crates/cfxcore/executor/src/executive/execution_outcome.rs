@@ -57,6 +57,12 @@ pub enum ToRepackError {
         expected: U256,
         got: U256,
     },
+
+    // For align_evm test only
+    NotEnoughBalance {
+        expected: U512,
+        got: U256,
+    },
 }
 
 #[derive(Debug)]
@@ -146,6 +152,15 @@ impl ExecutionOutcome {
 
     #[inline]
     pub fn try_as_executed(&self) -> Option<&Executed> {
+        match self {
+            NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => None,
+            ExecutionErrorBumpNonce(_, executed) | Finished(executed) => {
+                Some(executed)
+            }
+        }
+    }
+
+    pub fn try_into_executed(self) -> Option<Executed> {
         match self {
             NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => None,
             ExecutionErrorBumpNonce(_, executed) | Finished(executed) => {

@@ -138,6 +138,10 @@ pub enum TransactionError {
     InvalidReceiver,
     /// Transaction nonce exceeds local limit.
     TooLargeNonce,
+    /// Empty authorization list (EIP-7702)
+    EmptyAuthorizationList,
+    /// Max priority fee greater than max fee (EIP-1559)
+    PriortyGreaterThanMaxFee,
 }
 
 impl From<keylib::Error> for TransactionError {
@@ -203,6 +207,8 @@ impl fmt::Display for TransactionError {
             InvalidReceiver => "Sending transaction to invalid address. The first four bits of address must be 0x0, 0x1, or 0x8.".into(),
             TooLargeNonce => "Transaction nonce is too large.".into(),
             CreateInitCodeSizeLimit => "Transaction initcode is too large.".into(),
+            EmptyAuthorizationList => "Empty authorization list".into(),
+            PriortyGreaterThanMaxFee => "Max priority fee greater than max fee".into(),
         };
 
         f.write_fmt(format_args!("Transaction error ({})", msg))
