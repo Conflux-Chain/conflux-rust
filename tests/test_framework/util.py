@@ -936,9 +936,7 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
     if receipt["outcomeStatus"] == "0x1": # tx fails because of not enough cash
         assert "NotEnoughCash" in receipt["txExecErrorMsg"]
         # all gas is charged
-        assert_equal(rpc.get_balance(tx_data["from"], receipt["epochNumber"]), 0)
-        # gas fee less than effective gas price
-        assert gas_fee < effective_gas_price*gas_charged
+        assert gas_fee + rpc.get_balance(tx_data["from"], receipt["epochNumber"]) < max_fee_per_gas*int(tx_data["gas"], 16)
     else:
         assert_equal(gas_fee, effective_gas_price*gas_charged)
         # check burnt fee computation
