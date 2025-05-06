@@ -231,23 +231,24 @@ impl RpcInterceptor for MetricsInterceptor {
 #[cfg(test)]
 mod tests {
     use crate::rpc::interceptor::{RpcInterceptor, RpcProxy};
-    use jsonrpc_core::{Error as RpcError, MetaIoHandler, Result as RpcResult};
-    use jsonrpc_derive::rpc;
+    use jsonrpc_core::{
+        BoxFuture, Error as RpcError, MetaIoHandler, Params, RemoteProcedure,
+        Result as RpcResult, RpcMethod, Value,
+    };
+
+    use futures::future::{self, FutureExt};
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     };
+    struct MockRpcMethod;
 
-    #[rpc]
-    pub trait Foo {
-        #[rpc(name = "cfx_balance")]
-        fn balance(&self, _id: usize) -> RpcResult<usize>;
-    }
-
-    struct FooImpl;
-
-    impl Foo for FooImpl {
-        fn balance(&self, id: usize) -> RpcResult<usize> { Ok(id) }
+    impl RpcMethod<()> for MockRpcMethod {
+        fn call(
+            &self, _params: Params, _meta: (),
+        ) -> BoxFuture<RpcResult<Value>> {
+            future::ready(Ok(Value::from(8))).boxed()
+        }
     }
 
     #[derive(Default)]
@@ -268,14 +269,16 @@ mod tests {
 
     #[test]
     fn test_interceptor_success() {
-        let foo = FooImpl.to_delegate();
+        let mock_method = RemoteProcedure::Method(Arc::new(MockRpcMethod));
+        let methods: Vec<(String, RemoteProcedure<()>)> =
+            vec![("cfx_balance".to_string(), mock_method)];
 
         // interceptor not handled
         let bar = Bar::default();
         let interceptor_handled = bar.handled.clone();
 
         let mut handler: MetaIoHandler<()> = MetaIoHandler::default();
-        handler.extend_with(RpcProxy::new(foo, bar));
+        handler.extend_with(RpcProxy::new(methods, bar));
 
         let request = r#"{"jsonrpc": "2.0", "method": "cfx_balance", "params": [8], "id": 1}"#;
         assert_eq!(
@@ -287,14 +290,16 @@ mod tests {
 
     #[test]
     fn test_interceptor_failure() {
-        let foo = FooImpl.to_delegate();
+        let mock_method = RemoteProcedure::Method(Arc::new(MockRpcMethod));
+        let methods: Vec<(String, RemoteProcedure<()>)> =
+            vec![("cfx_balance".to_string(), mock_method)];
 
         // interceptor with RPC error
         let mut bar = Bar::default();
         bar.error = Some(RpcError::invalid_params("some test error"));
 
         let mut handler: MetaIoHandler<()> = MetaIoHandler::default();
-        handler.extend_with(RpcProxy::new(foo, bar));
+        handler.extend_with(RpcProxy::new(methods, bar));
 
         let request = r#"{"jsonrpc": "2.0", "method": "cfx_balance", "params": [8], "id": 1}"#;
         assert_eq!(
@@ -305,12 +310,13 @@ mod tests {
 
     #[test]
     fn test_interceptor_embedded() {
-        let foo = FooImpl.to_delegate();
-
+        let mock_method = RemoteProcedure::Method(Arc::new(MockRpcMethod));
+        let methods: Vec<(String, RemoteProcedure<()>)> =
+            vec![("cfx_balance".to_string(), mock_method)];
         // interceptor 1
         let bar = Bar::default();
         let interceptor_1_handled = bar.handled.clone();
-        let proxy_1 = RpcProxy::new(foo, bar);
+        let proxy_1 = RpcProxy::new(methods.clone(), bar);
 
         // interceptor 2
         let bar = Bar::default();

@@ -88,7 +88,6 @@ cfx-tasks = { workspace = true }
 criterion = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-executor = { workspace = true, features = ["testonly_code"] }
-jsonrpc-core-client = { workspace = true }
 
 [features]
 # Unfortunately cfg test attributes doesn't work across crates,

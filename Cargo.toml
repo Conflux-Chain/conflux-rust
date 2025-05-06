@@ -287,7 +287,6 @@ jsonrpc-core = "18.0.0"
 jsonrpc-tcp-server = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-derive = "18.0.0"
-jsonrpc-core-client = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
 
