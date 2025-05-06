@@ -426,7 +426,7 @@ impl TracingInspector {
             let num_pushed = stack_push_count(
                 step.op.get(),
                 spec.cancun_opcodes,
-                spec.cip645,
+                spec.cip645.opcode_update,
             );
             let start = interp.stack().len() - num_pushed;
             let push_stack = interp.stack()[start..].to_vec();

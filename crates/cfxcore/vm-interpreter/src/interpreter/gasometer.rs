@@ -148,7 +148,7 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::Gas(Gas::from(to_charge_gas))
             }
             instructions::SLOAD => {
-                let gas = if spec.cip645 {
+                let gas = if spec.cip645.eip_cold_warm_access {
                     let mut key = H256::zero();
                     stack.peek(0).to_big_endian(&mut key.0);
                     if context.is_warm_storage_entry(&key)? {
@@ -162,7 +162,7 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::Gas(Gas::from(gas))
             }
             instructions::BALANCE => {
-                let gas = if spec.cip645 {
+                let gas = if spec.cip645.eip_cold_warm_access {
                     account_access_gas(0)
                 } else {
                     spec.balance_gas
@@ -170,7 +170,7 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::Gas(Gas::from(gas))
             }
             instructions::EXTCODESIZE => {
-                let gas = if spec.cip645 {
+                let gas = if spec.cip645.eip_cold_warm_access {
                     account_access_gas(0)
                 } else {
                     spec.extcodesize_gas
@@ -178,7 +178,7 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::Gas(Gas::from(gas))
             }
             instructions::EXTCODEHASH => {
-                let gas = if spec.cip645 {
+                let gas = if spec.cip645.eip_cold_warm_access {
                     account_access_gas(0)
                 } else {
                     spec.extcodehash_gas
@@ -190,7 +190,9 @@ impl<Gas: CostType> Gasometer<Gas> {
 
                 let is_value_transfer = !context.origin_balance()?.is_zero();
                 let address = u256_to_address(stack.peek(0));
-                if spec.cip645 && !context.is_warm_account(address) {
+                if spec.cip645.eip_cold_warm_access
+                    && !context.is_warm_account(address)
+                {
                     gas += Gas::from(spec.cold_account_access_cost);
                 }
                 if (!spec.no_empty && !context.exists(&address)?)
@@ -242,7 +244,7 @@ impl<Gas: CostType> Gasometer<Gas> {
             instructions::JUMPSUB_MCOPY if spec.cancun_opcodes => {
                 let dst_mem_needed = mem_needed(stack.peek(0), stack.peek(2))?;
                 let src_mem_needed = mem_needed(stack.peek(1), stack.peek(2))?;
-                let copy_mem_needed = if spec.cip645 {
+                let copy_mem_needed = if spec.cip645.fix_eip5656 {
                     std::cmp::max(dst_mem_needed, src_mem_needed)
                 } else {
                     dst_mem_needed
@@ -260,7 +262,7 @@ impl<Gas: CostType> Gasometer<Gas> {
                 Request::Gas(Gas::from(spec.warm_access_gas))
             }
             instructions::EXTCODECOPY => {
-                let base_gas = if spec.cip645 {
+                let base_gas = if spec.cip645.eip_cold_warm_access {
                     account_access_gas(0)
                 } else {
                     spec.extcodecopy_base_gas
@@ -349,8 +351,7 @@ impl<Gas: CostType> Gasometer<Gas> {
                 } else {
                     spec.sha3_word_gas
                 };
-                let init_code_word_price = if spec.cip645 {
-                    // CIP-645i: EIP-3860
+                let init_code_word_price = if spec.cip645.eip3860 {
                     spec.init_code_word_gas
                 } else {
                     0
@@ -376,7 +377,7 @@ impl<Gas: CostType> Gasometer<Gas> {
                     && spec.align_evm
                 {
                     spec.blockhash_gas
-                } else if !spec.cip645 {
+                } else if !spec.cip645.blockhash_gas {
                     match context.blockhash_source() {
                         BlockHashSource::Env => spec.blockhash_gas,
                         BlockHashSource::State => spec.sload_gas(),
@@ -524,7 +525,7 @@ fn calc_sstore_gas<Gas: CostType>(
     let spec = context.spec();
     let space = context.space();
 
-    if space == Space::Native && !spec.cip645 {
+    if space == Space::Native && !spec.cip645.eip_sstore_and_refund_gas {
         // The only simple case without checking values
         return Ok((spec.sstore_reset_gas, 0));
     }
@@ -541,7 +542,7 @@ fn calc_sstore_gas<Gas: CostType>(
     let warm_val = context.is_warm_storage_entry(&key)?;
     let cur_val = context.storage_at(&key[..])?;
 
-    if !spec.cip645 {
+    if !spec.cip645.eip_sstore_and_refund_gas {
         // For eSpace only, the core space before cip645 has been filtted out.
         return Ok(if cur_val.is_zero() && !new_val.is_zero() {
             (spec.sstore_set_gas * spec.evm_gas_ratio, 0)
@@ -612,7 +613,7 @@ fn calc_call_gas<Gas: CostType>(
     context: &dyn vm::Context, stack: &dyn Stack<U256>, current_gas: Gas,
 ) -> vm::Result<usize> {
     let spec = context.spec();
-    if !spec.cip645 {
+    if !spec.cip645.eip_cold_warm_access {
         return Ok(spec.call_gas);
     }
 

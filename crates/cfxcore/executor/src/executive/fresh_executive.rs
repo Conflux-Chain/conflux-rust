@@ -304,12 +304,12 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         };
 
         // EIP-1559 requires the user balance can afford "max gas price * gas limit", instead of "effective gas price * gas limit", this variable represents "(effective gas price - max gas price) * gas limit"
-        let additional_gas_required_1559 = if settings.charge_gas && spec.cip645
-        {
-            (max_gas_price - gas_price).full_mul(*tx.gas_limit())
-        } else {
-            0.into()
-        };
+        let additional_gas_required_1559 =
+            if settings.charge_gas && spec.cip645.fix_eip1559 {
+                (max_gas_price - gas_price).full_mul(*tx.gas_limit())
+            } else {
+                0.into()
+            };
         let storage_cost =
             if let (Transaction::Native(tx), ChargeCollateral::Normal) = (
                 &tx.transaction.transaction.unsigned,

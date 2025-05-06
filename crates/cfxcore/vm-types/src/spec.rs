@@ -207,14 +207,87 @@ pub struct Spec {
     pub cip154: bool,
     /// CIP-7702: Set Code for EOA
     pub cip7702: bool,
-    /// CIP-645(GAS)
-    pub cip645: bool,
+    /// CIP-645: Align Conflux Gas Pricing with EVM
+    pub cip645: CIP645Spec,
     /// EIP-2935: Serve historical block hashes from state
     pub eip2935: bool,
     /// EIP-7623: Increase calldata cost
     pub eip7623: bool,
     pub align_evm: bool,
     pub cip_c2_fix: bool,
+}
+
+/// Represents the feature flags for CIP-645 implementation.
+///
+/// While the protocol treats these features as a single atomic upgrade,
+/// separating them into named fields is merely to make the code more
+/// maintainable and self-documenting.
+///
+/// IMPORTANT NOTE:
+/// All fields must be consistently set to either `true` (enabled) or `false`
+/// (disabled). Mixed states will lead to undefined behavior as these features
+/// were designed to be activated as a coordinated bundle in CIP-645.
+#[derive(Debug, Clone, Copy)]
+pub struct CIP645Spec {
+    /// EIP-1108: Reduces gas costs for alt_bn128 precompile  
+    pub eip1108: bool,
+
+    /// EIP-1884: Reprices trie-size-dependent opcodes  
+    pub eip1884: bool,
+
+    /// EIP-2028: Reduces Calldata gas cost  
+    pub eip2028: bool,
+
+    /// EIP-2200: Rebalances net-metered SSTORE gas cost  
+    /// EIP-3529: Removes gas refunds for SELFDESTRUCT and reduces SSTORE
+    /// refunds
+    pub eip_sstore_and_refund_gas: bool,
+
+    /// EIP-2565: Reduces gas cost for modular exponentiation transactions  
+    pub eip2565: bool,
+
+    /// EIP-2929: Increases gas costs for opcode transactions to mitigate DDoS
+    /// EIP-3651: Reduces gas fees for accessing COINBASE address  
+    pub eip_cold_warm_access: bool,
+
+    /// EIP-3860: Limits initcode size to 49152  
+    pub eip3860: bool,
+
+    /// EIP-684: Revert creation in case of collision
+    pub fix_eip684: bool,
+
+    /// EIP-1559: EIP-1559: Fee market change for ETH 1.0 chain
+    pub fix_eip1559: bool,
+
+    /// EIP-5656: MCOPY - Memory copying instruction
+    pub fix_eip5656: bool,
+
+    /// EIP-1153: Transient storage opcodes
+    pub fix_eip1153: bool,
+
+    pub blockhash_gas: bool,
+
+    pub opcode_update: bool,
+}
+
+impl CIP645Spec {
+    pub const fn new(enabled: bool) -> Self {
+        Self {
+            eip1108: enabled,
+            eip1884: enabled,
+            eip2028: enabled,
+            eip_sstore_and_refund_gas: enabled,
+            eip2565: enabled,
+            eip_cold_warm_access: enabled,
+            eip3860: enabled,
+            fix_eip684: enabled,
+            fix_eip1153: enabled,
+            fix_eip1559: enabled,
+            fix_eip5656: enabled,
+            blockhash_gas: enabled,
+            opcode_update: enabled,
+        }
+    }
 }
 
 /// Spec parameters are determined solely by block height and thus accessible to
@@ -226,7 +299,7 @@ pub struct ConsensusGasSpec {
     /// CIP-1559: Fee Market Change for Conflux
     pub cip1559: bool,
     /// CIP-645(GAS)
-    pub cip645: bool,
+    pub cip645: CIP645Spec,
     /// Transaction cost
     pub tx_gas: usize,
     /// `CREATE` transaction cost
@@ -359,7 +432,7 @@ impl Spec {
             cip151: false,
             cip152: false,
             cip154: false,
-            cip645: false,
+            cip645: CIP645Spec::new(false),
             cip7702: false,
             eip2935: false,
             eip7623: false,
@@ -373,7 +446,7 @@ impl Spec {
     // their original semantics. This function is introduced to distinguish
     // these cases.
     pub fn sload_gas(&self) -> usize {
-        assert!(!self.cip645);
+        assert!(!self.cip645.eip_cold_warm_access);
         self.cold_sload_gas
     }
 
@@ -381,15 +454,16 @@ impl Spec {
         if self.cancun_opcodes {
             self.cold_sload_gas = 800;
         }
-        if self.cip645 {
-            // CIP-645b: EIP-1884
+        if self.cip645.eip1884 {
             self.balance_gas = 700;
             self.extcodehash_gas = 700;
+        }
 
-            // CIP-645c: EIP-2028
+        if self.cip645.eip2028 {
             self.tx_data_non_zero_gas = 16;
+        }
 
-            // CIP-645f: EIP-2929
+        if self.cip645.eip_cold_warm_access {
             self.cold_sload_gas = 2100;
             self.sstore_reset_gas = 2900;
         }
@@ -440,8 +514,7 @@ impl ConsensusGasSpec {
     }
 
     pub fn overwrite_gas_plan_by_cip(&mut self) {
-        if self.cip645 {
-            // CIP-645c: EIP-2028
+        if self.cip645.eip2028 {
             self.tx_data_non_zero_gas = 16;
         }
 

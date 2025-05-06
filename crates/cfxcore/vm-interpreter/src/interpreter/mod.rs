@@ -592,7 +592,8 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             }
         };
 
-        let info = instruction.info::<CANCUN>(context.spec().cip645);
+        let info =
+            instruction.info::<CANCUN>(context.spec().cip645.opcode_update);
         self.last_stack_ret_len = info.ret;
         if let Err(e) = self.verify_instruction(context, instruction, info) {
             return Err(InterpreterResult::Done(Err(e)));
@@ -741,7 +742,7 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                 let init_off = self.stack.pop_back();
                 let init_size = self.stack.pop_back();
                 let spec = context.spec();
-                if spec.cip645
+                if spec.cip645.eip3860
                     && init_size > U256::from(spec.init_code_data_limit)
                 {
                     return Err(vm::Error::CreateInitCodeSizeLimit);
