@@ -139,7 +139,9 @@ impl<
         }
     }
 
-    fn get_key_for_comparison<'x>(&'x self, value: &'x PosT) -> &'x Self::KeyType {
+    fn get_key_for_comparison<'x>(
+        &'x self, value: &'x PosT,
+    ) -> &'x Self::KeyType {
         unsafe { self.array.get_unchecked(MyInto::<usize>::into(*value)) }
             .as_ref()
     }

@@ -45,7 +45,9 @@ where T: DeserializeOwned
 }
 
 impl<T> VariadicValue<T> {
-    pub fn iter<'a>(&'a self) -> Box<dyn std::iter::Iterator<Item = &'a T> + 'a> {
+    pub fn iter<'a>(
+        &'a self,
+    ) -> Box<dyn std::iter::Iterator<Item = &'a T> + 'a> {
         match self {
             VariadicValue::Null => Box::new(std::iter::empty()),
             VariadicValue::Single(x) => Box::new(std::iter::once(x)),
