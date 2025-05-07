@@ -901,8 +901,7 @@ mod tests {
     };
     use cfx_types::H256;
     use cfxkey::{Generator, KeyPair, Random};
-    use tempdir::TempDir;
-
+    use tempfile::{tempdir, TempDir};
     fn keypair() -> KeyPair { Random.generate().unwrap() }
 
     fn store() -> CfxStore {
@@ -922,7 +921,7 @@ mod tests {
 
     impl RootDiskDirectoryGuard {
         pub fn new() -> Self {
-            let temp_path = TempDir::new("").unwrap();
+            let temp_path = tempdir().unwrap();
             let disk_dir =
                 Box::new(RootDiskDirectory::create(temp_path.path()).unwrap());
 
