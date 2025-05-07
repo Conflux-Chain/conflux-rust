@@ -382,7 +382,7 @@ derive_more = "0.99"
 c-kzg = { version = "1.0.2", default-features = false }
 strfmt = "0.1"
 smart-default = "0.6.0"
-num-derive = { version = "0.3.3", default-features = false }
+num-derive = { version = "0.4.2", default-features = false }
 mirai-annotations = { version = "1.10.1", default-features = false }
 rangetools = "0.1.4"
 # prometheus = { version = "0.7.0", default-features = false }
@@ -419,7 +419,7 @@ duration-str = "0.17"
 
 # parity crates
 rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
+rlp_derive = { package = "rlp-derive", version = "0.2.0" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
@@ -437,7 +437,7 @@ ethcore-bytes = "0.1.1"
 similar-asserts = "1.5"
 criterion = "0.3.0"
 proptest = "1.0.0"
-proptest-derive = "0.3.0"
+proptest-derive = "0.5.1"
 
 # dbs
 sqlite = "0.25"

@@ -19,5 +19,5 @@ thiserror = "1.0.24"
 hex = "0.4.3"
 proptest = "1.0.0"
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
+# [lints.rust]
+# unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
