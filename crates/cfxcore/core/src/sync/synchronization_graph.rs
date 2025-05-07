@@ -1028,13 +1028,11 @@ pub type SharedSynchronizationGraph = Arc<SynchronizationGraph>;
 
 impl SynchronizationGraph {
     pub fn new(
-        consensus: SharedConsensusGraph,
-        data_man: Arc<BlockDataManager>,
-        statistics: SharedStatistics,
-        verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
-        notifications: Arc<Notifications>, machine: Arc<Machine>,
-        pos_verifier: Arc<PosVerifier>,
+        consensus: SharedConsensusGraph, data_man: Arc<BlockDataManager>,
+        statistics: SharedStatistics, verification_config: VerificationConfig,
+        pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
+        sync_config: SyncGraphConfig, notifications: Arc<Notifications>,
+        machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
     ) -> Self {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let genesis_block_header = data_man
@@ -1194,9 +1192,7 @@ impl SynchronizationGraph {
     pub fn get_to_propagate_trans(
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
-        self.consensus
-            .tx_pool()
-            .get_to_be_propagated_transactions()
+        self.consensus.tx_pool().get_to_be_propagated_transactions()
     }
 
     pub fn set_to_propagate_trans(

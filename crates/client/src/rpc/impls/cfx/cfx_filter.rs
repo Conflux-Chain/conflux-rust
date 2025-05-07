@@ -508,8 +508,7 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                         revert_to: epochs.first().unwrap().0.into(),
                     }));
                 }
-                let data_man =
-                    self.consensus_graph().data_manager().clone();
+                let data_man = self.consensus_graph().data_manager().clone();
 
                 // logs from new epochs
                 for (num, blocks) in epochs.into_iter() {

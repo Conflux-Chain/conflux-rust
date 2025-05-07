@@ -3,109 +3,28 @@
 // See http://www.gnu.org/licenses/
 
 mod anticone_cache;
+mod config;
+mod consensus_graph;
 pub mod consensus_inner;
-pub mod consensus_trait;
 pub mod debug_recompute;
 mod pastset_cache;
 pub mod pivot_hint;
 pub mod pos_handler;
-mod config;
 mod statistics;
-mod consensus_graph;
 
-
-use self::pivot_hint::{PivotHint, PivotHintConfig};
-
-use super::consensus::consensus_inner::{
-    confirmation_meter::ConfirmationMeter,
-    consensus_executor::ConsensusExecutor,
-    consensus_new_block_handler::ConsensusNewBlockHandler,
+pub use crate::consensus::consensus_inner::{
+    ConsensusGraphInner, ConsensusInnerConfig,
 };
-pub use crate::consensus::{
-    consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
-    consensus_trait::SharedConsensusGraph,
-};
-use crate::{
-    block_data_manager::{
-        BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
-    },
-    consensus::{
-        consensus_inner::{
-            consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
-        },
-        pos_handler::PosVerifier,
-    },
-    errors::{invalid_params, invalid_params_check, Result as CoreResult},
-    pow::{PowComputer, ProofOfWorkConfig},
-    statistics::SharedStatistics,
-    transaction_pool::SharedTransactionPool,
-    verification::VerificationConfig,
-    NodeType, Notifications,
-};
-use cfx_execute_helper::{
-    estimation::{EstimateExt, EstimateRequest},
-    exec_tracer::{
-        recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
-        TraceFilter,
-    },
-    phantom_tx::build_bloom_and_recover_phantom,
-};
-use cfx_executor::{
-    executive::ExecutionOutcome, spec::CommonParams, state::State,
-};
-use cfx_rpc_eth_types::EvmOverrides;
-use geth_tracer::GethTraceWithHash;
-
-use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
-use cfx_internal_common::ChainIdParams;
-use cfx_parameters::{
-    consensus::*,
-    consensus_internal::REWARD_EPOCH_COUNT,
-    rpc::{
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_DEFAULT_VALUE,
-        GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-    },
-};
-use cfx_rpc_cfx_types::PhantomBlock;
-use cfx_statedb::StateDb;
-use cfx_storage::{
-    state::StateTrait, state_manager::StateManagerTrait, StorageState,
-};
-use cfx_types::{AddressWithSpace, AllChainID, Bloom, Space, H256, U256};
-use either::Either;
-use itertools::Itertools;
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use metrics::{
-    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
-};
-use parking_lot::{Mutex, RwLock};
-use primitives::{
-    compute_block_number,
-    epoch::BlockHashOrEpochNumber,
-    filter::{FilterError, LogFilter},
-    log_entry::LocalizedLogEntry,
-    pos::PosBlockId,
-    receipt::Receipt,
-    Block, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-    TransactionStatus,
-};
-use rayon::prelude::*;
-use std::{
-    cmp::{max, min},
-    collections::HashSet,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread::sleep,
-    time::Duration,
-};
-
-
 
 pub use config::ConsensusConfig;
+pub use consensus_graph::{
+    best_info_provider::BestInformation,
+    rpc_api::transaction_provider::{
+        MaybeExecutedTxExtraInfo, TransactionInfo,
+    },
+    ConsensusGraph,
+};
 pub use statistics::ConsensusGraphStatistics;
-pub use consensus_graph::best_info_provider::BestInformation;
-pub use consensus_graph::rpc_api::transaction_provider::{MaybeExecutedTxExtraInfo, TransactionInfo};
-pub use consensus_graph::ConsensusGraph;
+
+use std::sync::Arc;
+pub type SharedConsensusGraph = Arc<ConsensusGraph>;

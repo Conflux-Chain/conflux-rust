@@ -8,7 +8,7 @@ use cfx_types::{Space, H160, H256, U256, U64};
 use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
-    consensus::{ConsensusGraphInner},
+    consensus::ConsensusGraphInner,
     pow, ConsensusGraph, SharedConsensusGraph,
 };
 use jsonrpc_core::Error as RpcError;

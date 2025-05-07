@@ -929,8 +929,7 @@ impl RpcImpl {
     }
 
     pub fn pos_start(&self) -> CoreResult<()> {
-        self.pos_handler
-            .initialize(self.consensus.clone())?;
+        self.pos_handler.initialize(self.consensus.clone())?;
         Ok(())
     }
 

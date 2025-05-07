@@ -486,11 +486,7 @@ impl Handler {
         if peer_protocol_version == LIGHT_PROTO_V1 {
             msg = Box::new(StatusPingDeprecatedV1 {
                 protocol_version: self.protocol_version.0,
-                genesis_hash: self
-                    .consensus
-                    .data_manager()
-                    .true_genesis
-                    .hash(),
+                genesis_hash: self.consensus.data_manager().true_genesis.hash(),
                 node_type: NodeType::Light,
             });
         } else {
@@ -498,11 +494,7 @@ impl Handler {
                 chain_id: ChainIdParamsDeprecated {
                     chain_id: self.consensus.best_chain_id().in_native_space(),
                 },
-                genesis_hash: self
-                    .consensus
-                    .data_manager()
-                    .true_genesis
-                    .hash(),
+                genesis_hash: self.consensus.data_manager().true_genesis.hash(),
                 node_type: NodeType::Light,
             });
         }

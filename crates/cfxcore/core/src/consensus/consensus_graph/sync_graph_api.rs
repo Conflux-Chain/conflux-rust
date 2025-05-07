@@ -1,82 +1,13 @@
-pub use crate::consensus::{
-    consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
-    consensus_trait::SharedConsensusGraph,
-};
-use crate::{
-    block_data_manager::{
-        BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
-    },
-    consensus::{
-        consensus_inner::{
-            consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
-        },
-        pos_handler::PosVerifier,
-    },
-    errors::{invalid_params, invalid_params_check, Result as CoreResult},
-    pow::{PowComputer, ProofOfWorkConfig},
-    statistics::SharedStatistics,
-    transaction_pool::SharedTransactionPool,
-    verification::VerificationConfig,
-    NodeType, Notifications,
-};
-use cfx_execute_helper::{
-    estimation::{EstimateExt, EstimateRequest},
-    exec_tracer::{
-        recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
-        TraceFilter,
-    },
-    phantom_tx::build_bloom_and_recover_phantom,
-};
-use cfx_executor::{
-    executive::ExecutionOutcome, spec::CommonParams, state::State,
-};
-use cfx_rpc_eth_types::EvmOverrides;
-use geth_tracer::GethTraceWithHash;
+pub use crate::consensus::consensus_inner::ConsensusGraphInner;
 
-use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
-use cfx_internal_common::ChainIdParams;
-use cfx_parameters::{
-    consensus::*,
-    consensus_internal::REWARD_EPOCH_COUNT,
-    rpc::{
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_DEFAULT_VALUE,
-        GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-    },
-};
-use cfx_rpc_cfx_types::PhantomBlock;
-use cfx_statedb::StateDb;
-use cfx_storage::{
-    state::StateTrait, state_manager::StateManagerTrait, StorageState,
-};
-use cfx_types::{AddressWithSpace, AllChainID, Bloom, Space, H256, U256};
-use either::Either;
-use itertools::Itertools;
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use metrics::{
-    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
-};
-use parking_lot::{Mutex, RwLock};
-use primitives::{
-    compute_block_number,
-    epoch::BlockHashOrEpochNumber,
-    filter::{FilterError, LogFilter},
-    log_entry::LocalizedLogEntry,
-    pos::PosBlockId,
-    receipt::Receipt,
-    Block, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-    TransactionStatus,
-};
-use rayon::prelude::*;
+use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
+use cfx_types::{H256, U256};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
+use primitives::EpochId;
+
 use std::{
-    cmp::{max, min},
     collections::HashSet,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread::sleep,
-    time::Duration,
+    sync::{atomic::Ordering, Arc},
 };
 
 use super::ConsensusGraph;
@@ -84,12 +15,10 @@ use super::ConsensusGraph;
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "consensus_on_new_block_timer");
-    static ref BEST_EPOCH_NUMBER: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("graph_statistic", "best_epoch_number");
 }
 
 impl ConsensusGraph {
-        /// Reset the information in consensus graph with only checkpoint
+    /// Reset the information in consensus graph with only checkpoint
     /// information kept.
     pub fn reset(&self) {
         let old_consensus_inner = &mut *self.inner.write();
@@ -113,7 +42,7 @@ impl ConsensusGraph {
         self.confirmation_meter.clear();
     }
 
-        /// Return the blocks without bodies in the subtree of stable genesis and
+    /// Return the blocks without bodies in the subtree of stable genesis and
     /// the blocks in the `REWARD_EPOCH_COUNT` epochs before it. Block
     /// bodies of other blocks in the consensus graph will never be needed
     /// for executions after this stable genesis, as long as the checkpoint
@@ -156,6 +85,7 @@ impl ConsensusGraph {
         missing_body_blocks.remove(&self.data_man.true_genesis.hash());
         missing_body_blocks
     }
+
     pub fn enter_normal_phase(&self) {
         self.ready_for_mining.store(true, Ordering::SeqCst);
         self.update_best_info(true);
@@ -169,19 +99,20 @@ impl ConsensusGraph {
         self.inner.write().set_initial_sequence_number(initial_sn);
     }
 
-        /// Find a trusted blame block for snapshot full sync
-        pub fn get_trusted_blame_block_for_snapshot(
-            &self, snapshot_epoch_id: &EpochId,
-        ) -> Option<H256> {
-            self.inner
-                .read()
-                .get_trusted_blame_block_for_snapshot(snapshot_epoch_id)
-        }
-    
-        /// Return the epoch that we are going to sync the state
-        pub fn get_to_sync_epoch_id(&self) -> EpochId {
-            self.inner.read().get_to_sync_epoch_id()
-        }
+    /// Find a trusted blame block for snapshot full sync
+    pub fn get_trusted_blame_block_for_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Option<H256> {
+        self.inner
+            .read()
+            .get_trusted_blame_block_for_snapshot(snapshot_epoch_id)
+    }
+
+    /// Return the epoch that we are going to sync the state
+    pub fn get_to_sync_epoch_id(&self) -> EpochId {
+        self.inner.read().get_to_sync_epoch_id()
+    }
+
     /// Check if we have downloaded all the headers to find the lowest needed
     /// checkpoint. We can enter `CatchUpCheckpoint` if it's true.
     pub fn catch_up_completed(&self, peer_median_epoch: u64) -> bool {
@@ -213,13 +144,13 @@ impl ConsensusGraph {
         true
     }
 
-        // FIXME store this in BlockDataManager
+    // FIXME store this in BlockDataManager
     /// Return the sequence number of the current era genesis hash.
     pub fn current_era_genesis_seq_num(&self) -> u64 {
         self.inner.read_recursive().current_era_genesis_seq_num()
     }
 
-        /// This is the main function that SynchronizationGraph calls to deliver a
+    /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
     pub fn on_new_block(&self, hash: &H256) {
         let _timer =
@@ -264,10 +195,9 @@ impl ConsensusGraph {
         inner.finish_block_recovery();
     }
 
-        /// Compute the expected difficulty of a new block given its parent
-        pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
-            let inner = self.inner.read();
-            inner.expected_difficulty(parent_hash)
-        }
-
+    /// Compute the expected difficulty of a new block given its parent
+    pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
+        let inner = self.inner.read();
+        inner.expected_difficulty(parent_hash)
+    }
 }

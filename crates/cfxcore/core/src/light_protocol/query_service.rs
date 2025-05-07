@@ -234,10 +234,8 @@ impl QueryService {
             return Ok(Some((*genesis).clone()));
         }
 
-        let maybe_block_header = self
-            .consensus
-            .data_manager()
-            .block_header_by_hash(&hash);
+        let maybe_block_header =
+            self.consensus.data_manager().block_header_by_hash(&hash);
 
         let block_header = match maybe_block_header {
             None => return Ok(None),

@@ -1,6 +1,6 @@
 use cfx_internal_common::ChainIdParams;
 
-use super::{pivot_hint::{PivotHint, PivotHintConfig}, ConsensusInnerConfig};
+use super::{pivot_hint::PivotHintConfig, ConsensusInnerConfig};
 
 #[derive(Clone)]
 pub struct ConsensusConfig {

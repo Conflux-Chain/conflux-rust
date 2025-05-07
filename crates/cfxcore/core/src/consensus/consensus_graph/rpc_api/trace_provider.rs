@@ -1,168 +1,29 @@
-pub use crate::consensus::{
-    consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
-    consensus_trait::SharedConsensusGraph,
-};
 use crate::{
-    block_data_manager::{
-        BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
-    },
-    consensus::{
-        consensus_inner::{
-            consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
-        },
-        pos_handler::PosVerifier,
-    },
-    errors::{invalid_params, invalid_params_check, Result as CoreResult},
-    pow::{PowComputer, ProofOfWorkConfig},
-    statistics::SharedStatistics,
-    transaction_pool::SharedTransactionPool,
-    verification::VerificationConfig,
-    NodeType, Notifications,
+    block_data_manager::DataVersionTuple, errors::Result as CoreResult,
 };
-use cfx_execute_helper::{
-    estimation::{EstimateExt, EstimateRequest},
-    exec_tracer::{
-        recover_phantom_traces, ActionType, BlockExecTraces, LocalizedTrace,
-        TraceFilter,
-    },
-    phantom_tx::build_bloom_and_recover_phantom,
-};
-use cfx_executor::{
-    executive::ExecutionOutcome, spec::CommonParams, state::State,
-};
-use cfx_rpc_eth_types::EvmOverrides;
-use geth_tracer::GethTraceWithHash;
-
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
-use cfx_internal_common::ChainIdParams;
-use cfx_parameters::{
-    consensus::*,
-    consensus_internal::REWARD_EPOCH_COUNT,
-    rpc::{
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_DEFAULT_VALUE,
-        GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-    },
+use cfx_execute_helper::exec_tracer::{
+    ActionType, BlockExecTraces, LocalizedTrace, TraceFilter,
 };
-use cfx_rpc_cfx_types::PhantomBlock;
-use cfx_statedb::StateDb;
-use cfx_storage::{
-    state::StateTrait, state_manager::StateManagerTrait, StorageState,
-};
-use cfx_types::{AddressWithSpace, AllChainID, Bloom, Space, H256, U256};
+use cfx_executor::state::State;
+use cfx_types::{AddressWithSpace, Bloom, Space, H256, U256};
 use either::Either;
+use geth_tracer::GethTraceWithHash;
 use itertools::Itertools;
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use metrics::{
-    register_meter_with_group, Gauge, GaugeUsize, Meter, MeterTimer,
-};
-use parking_lot::{Mutex, RwLock};
+
 use primitives::{
-    compute_block_number,
     epoch::BlockHashOrEpochNumber,
     filter::{FilterError, LogFilter},
     log_entry::LocalizedLogEntry,
-    pos::PosBlockId,
     receipt::Receipt,
-    Block, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
-    TransactionStatus,
+    Block, EpochNumber, SignedTransaction,
 };
 use rayon::prelude::*;
-use std::{
-    cmp::{max, min},
-    collections::HashSet,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    thread::sleep,
-    time::Duration,
-};
-
+use std::{cmp::max, collections::HashSet, sync::Arc};
 
 use super::super::ConsensusGraph;
 
 impl ConsensusGraph {
-    /// Get the average gas price of the last GAS_PRICE_TRANSACTION_SAMPLE_SIZE
-    /// blocks
-    pub fn gas_price(&self, space: Space) -> Option<U256> {
-        let inner = self.inner.read();
-        let mut last_epoch_number = inner.best_epoch_number();
-        let (
-            number_of_tx_to_sample,
-            mut number_of_blocks_to_sample,
-            block_gas_ratio,
-        ) = (
-            GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-            GAS_PRICE_BLOCK_SAMPLE_SIZE,
-            1,
-        );
-        let mut prices = Vec::new();
-        let mut total_block_gas_limit: u64 = 0;
-        let mut total_tx_gas_limit: u64 = 0;
-
-        loop {
-            if number_of_blocks_to_sample == 0 || last_epoch_number == 0 {
-                break;
-            }
-            if prices.len() == number_of_tx_to_sample {
-                break;
-            }
-            let mut hashes = inner
-                .block_hashes_by_epoch(last_epoch_number.into())
-                .unwrap();
-            hashes.reverse();
-            last_epoch_number -= 1;
-
-            for hash in hashes {
-                let block = self
-                    .data_man
-                    .block_by_hash(&hash, false /* update_cache */)
-                    .unwrap();
-                total_block_gas_limit +=
-                    block.block_header.gas_limit().as_u64() * block_gas_ratio;
-                for tx in block.transactions.iter() {
-                    if space == Space::Native && tx.space() != Space::Native {
-                        // For cfx_gasPrice, we only count Native transactions.
-                        continue;
-                    }
-                    // add the tx.gas() to total_tx_gas_limit even it is packed
-                    // multiple times because these tx all
-                    // will occupy block's gas space
-                    total_tx_gas_limit += tx.transaction.gas().as_u64();
-                    prices.push(tx.gas_price().clone());
-                    if prices.len() == number_of_tx_to_sample {
-                        break;
-                    }
-                }
-                number_of_blocks_to_sample -= 1;
-                if number_of_blocks_to_sample == 0
-                    || prices.len() == number_of_tx_to_sample
-                {
-                    break;
-                }
-            }
-        }
-
-        prices.sort();
-        if prices.is_empty() || total_tx_gas_limit == 0 {
-            Some(U256::from(GAS_PRICE_DEFAULT_VALUE))
-        } else {
-            let average_gas_limit_multiple =
-                total_block_gas_limit / total_tx_gas_limit;
-            if average_gas_limit_multiple > 5 {
-                // used less than 20%
-                Some(U256::from(GAS_PRICE_DEFAULT_VALUE))
-            } else if average_gas_limit_multiple >= 2 {
-                // used less than 50%
-                Some(prices[prices.len() / 8])
-            } else {
-                // used more than 50%
-                Some(prices[prices.len() / 2])
-            }
-        }
-    }
-
     // TODO: maybe return error for reserved address? Not sure where is the best
     //  place to do the check.
     pub fn next_nonce(
@@ -568,8 +429,8 @@ impl ConsensusGraph {
         Ok(logs)
     }
 
-       // collect epoch number, block index in epoch, block hash, pivot hash
-       fn collect_block_info(
+    // collect epoch number, block index in epoch, block hash, pivot hash
+    fn collect_block_info(
         &self, block_hash: H256,
     ) -> Result<(u64, usize, H256, H256), FilterError> {
         // special case for genesis
@@ -853,7 +714,7 @@ impl ConsensusGraph {
             .take(filter.count.unwrap_or(usize::max_value()))
             .collect())
     }
-    
+
     pub fn collect_epoch_geth_trace(
         &self, epoch_num: u64, tx_hash: Option<H256>,
         opts: GethDebugTracingOptions,
