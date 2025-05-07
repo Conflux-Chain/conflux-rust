@@ -1,0 +1,26 @@
+[package]
+name = "statetest_types"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+cfx-types = { workspace = true }
+cfx-rpc-primitives = { workspace = true }
+enumn = { workspace = true }
+cfx-bytes = { workspace = true }
+primitives = { workspace = true }
+
+[features]
+default = ["serde"]
+serde = []

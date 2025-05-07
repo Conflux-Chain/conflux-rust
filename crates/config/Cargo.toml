@@ -1,0 +1,38 @@
+[package]
+name = "cfx-config"
+edition = "2021"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfx-rpc-builder = { workspace = true }
+cfx-rpc-cfx-types = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+parking_lot = { workspace = true }
+rand = { workspace = true }
+cfx-addr = { workspace = true }
+cfxcore = { workspace = true }
+cfx-internal-common = { workspace = true }
+cfx-parameters = { workspace = true }
+cfx-storage = { workspace = true }
+cfx-types = { workspace = true }
+diem-types = { workspace = true }
+metrics = { workspace = true }
+network = { workspace = true }
+primitives = { workspace = true }
+txgen = { workspace = true }
+cfx-executor = { workspace = true }
+db = { workspace = true }
+clap = { workspace = true }
+kvdb-rocksdb = { workspace = true }
+toml = { workspace = true }
+jsonrpc-http-server = { workspace = true }

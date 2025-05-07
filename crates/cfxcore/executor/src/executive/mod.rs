@@ -15,7 +15,7 @@ use cfx_types::{
     address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space,
     SpaceMap, H256, U256,
 };
-use cfx_vm_types::{CreateContractAddress, Env, Spec};
+use cfx_vm_types::{ConsensusGasSpec, CreateContractAddress, Env, Spec};
 use primitives::{AccessList, SignedTransaction};
 
 use fresh_executive::FreshExecutive;
@@ -52,9 +52,13 @@ impl<'a> ExecutiveContext<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn transact<O: ExecutiveObserver>(
         self, tx: &SignedTransaction, options: TransactOptions<O>,
     ) -> DbResult<ExecutionOutcome> {
+        // Transaction should execute on an empty cache
+        assert!(self.state.cache.get_mut().is_empty());
+
         let fresh_exec = FreshExecutive::new(self, tx, options);
 
         Ok(match fresh_exec.check_all()? {
@@ -94,8 +98,10 @@ impl<'a> ExecutiveContext<'a> {
     }
 }
 
+#[inline]
 pub fn gas_required_for(
-    is_create: bool, data: &[u8], access_list: Option<&AccessList>, spec: &Spec,
+    is_create: bool, data: &[u8], access_list: Option<&AccessList>,
+    authorization_len: usize, spec: &ConsensusGasSpec,
 ) -> u64 {
     let init_gas = (if is_create {
         spec.tx_create_gas
@@ -110,6 +116,14 @@ pub fn gas_required_for(
         }) as u64
     };
     let data_gas: u64 = data.iter().map(byte_gas).sum();
+    let data_word = (data.len() as u64 + 31) / 32;
+
+    // CIP-645i: EIP-3860: Limit and meter initcode
+    let initcode_gas = if spec.cip645.eip3860 && is_create {
+        data_word * spec.init_code_word_gas as u64
+    } else {
+        0
+    };
 
     let access_gas: u64 = if let Some(acc) = access_list {
         let address_gas =
@@ -125,7 +139,26 @@ pub fn gas_required_for(
         0
     };
 
-    init_gas + data_gas + access_gas
+    let authorization_gas = spec.per_empty_account_cost as u64
+        * spec.evm_gas_ratio as u64
+        * authorization_len as u64;
+
+    init_gas + data_gas + access_gas + authorization_gas + initcode_gas
+}
+
+pub fn eip7623_required_gas(data: &[u8], spec: &ConsensusGasSpec) -> u64 {
+    if !spec.eip7623 {
+        return 0;
+    }
+
+    let byte_floor_gas = |b: &u8| {
+        (match *b {
+            0 => spec.tx_data_floor_zero_gas,
+            _ => spec.tx_data_floor_non_zero_gas,
+        }) as u64
+    };
+
+    spec.tx_gas as u64 + data.iter().map(byte_floor_gas).sum::<u64>()
 }
 
 pub fn contract_address(

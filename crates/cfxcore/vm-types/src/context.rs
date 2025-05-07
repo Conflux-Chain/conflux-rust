@@ -75,7 +75,10 @@ pub enum BlockHashSource {
 /// Context for VMs
 pub trait Context {
     /// Returns a value for given key.
-    fn storage_at(&self, key: &Vec<u8>) -> Result<U256>;
+    fn storage_at(&self, key: &[u8]) -> Result<U256>;
+
+    /// Returns a value for given key.
+    fn origin_storage_at(&self, key: &[u8]) -> Result<Option<U256>>;
 
     /// Stores a value for given key.
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()>;
@@ -136,6 +139,8 @@ pub trait Context {
     /// Creates log entry with given topics and data
     fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> Result<()>;
 
+    fn refund(&mut self, refund_gas: i64);
+
     /// Should be called when transaction calls `RETURN` opcode.
     /// Returns gas_left if cost of returning the data is not too high.
     fn ret(
@@ -163,6 +168,10 @@ pub trait Context {
     /// If contract A calls contract B, and contract B calls C,
     /// then A depth is 0, B is 1, C is 2 and so on.
     fn depth(&self) -> usize;
+
+    fn is_warm_account(&self, account: Address) -> bool;
+
+    fn is_warm_storage_entry(&self, key: &H256) -> Result<bool>;
 
     // /// Decide if any more operations should be traced. Passthrough for the
     // VM /// trace.

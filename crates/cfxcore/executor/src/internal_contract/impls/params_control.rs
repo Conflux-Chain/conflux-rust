@@ -164,10 +164,12 @@ pub fn cast_vote(
 
 pub fn cast_vote_gas(length: usize, spec: &Spec) -> usize {
     let version_gas =
-        2 * spec.sload_gas + spec.sha3_gas + spec.sstore_reset_gas;
+        2 * spec.cold_sload_gas + spec.sha3_gas + spec.sstore_reset_gas;
 
     let io_gas_per_topic = 3
-        * (2 * spec.sload_gas + 2 * spec.sstore_reset_gas + 2 * spec.sha3_gas);
+        * (2 * spec.cold_sload_gas
+            + 2 * spec.sstore_reset_gas
+            + 2 * spec.sha3_gas);
 
     let log_gas_per_topic = 2 * spec.log_gas
         + 8 * spec.log_topic_gas

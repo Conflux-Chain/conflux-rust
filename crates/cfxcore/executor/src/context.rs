@@ -151,6 +151,10 @@ impl<'a> Context<'a> {
                 return_if!(number
                     .checked_add(65536)
                     .map_or(false, |n| n <= self.env.epoch_height));
+                if self.spec.align_evm {
+                    return_if!(number >= self.env.epoch_height);
+                    return_if!(number + 256 < self.env.epoch_height);
+                }
                 self.state.get_system_storage(&epoch_hash_slot(number))?
             }
         };
@@ -160,12 +164,22 @@ impl<'a> Context<'a> {
 }
 
 impl<'a> ContextTrait for Context<'a> {
-    fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
+    fn storage_at(&self, key: &[u8]) -> vm::Result<U256> {
         let receiver = AddressWithSpace {
             address: self.origin.address,
             space: self.space,
         };
         self.state.storage_at(&receiver, key).map_err(Into::into)
+    }
+
+    fn origin_storage_at(&self, key: &[u8]) -> vm::Result<Option<U256>> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        self.state
+            .origin_storage_at(&receiver, key)
+            .map_err(Into::into)
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
@@ -284,6 +298,9 @@ impl<'a> ContextTrait for Context<'a> {
         };
 
         if conflict_address {
+            if self.spec.cip645.fix_eip684 {
+                self.state.inc_nonce(&caller)?;
+            }
             debug!("Contract address conflict!");
             let err = Error::ConflictAddress(address.clone());
             return Ok(Ok(ContractCreateResult::Failed(err)));
@@ -312,7 +329,11 @@ impl<'a> ContextTrait for Context<'a> {
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                self.state.inc_nonce(&caller)?;
+                let nonce_overflow = self.state.inc_nonce(&caller)?;
+                if nonce_overflow {
+                    let err = Error::NonceOverflow(caller.address);
+                    return Ok(Ok(ContractCreateResult::Failed(err)));
+                }
             }
         }
 
@@ -336,10 +357,8 @@ impl<'a> ContextTrait for Context<'a> {
         {
             (Some(contract.code()), contract.code_hash())
         } else {
-            (
-                self.state.code(&code_address_with_space)?,
-                self.state.code_hash(&code_address_with_space)?,
-            )
+            self.state
+                .code_with_hash_on_call(&code_address_with_space)?
         };
 
         let mut params = ActionParams {
@@ -428,6 +447,10 @@ impl<'a> ContextTrait for Context<'a> {
         Ok(())
     }
 
+    fn refund(&mut self, refund_gas: i64) {
+        self.substate.refund_gas += refund_gas as i128;
+    }
+
     fn ret(
         mut self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
@@ -436,6 +459,10 @@ impl<'a> ContextTrait for Context<'a> {
 
         if self.create_address.is_none() || !apply_state {
             return Ok(*gas);
+        }
+
+        if self.spec.cip7702 && data.first().cloned() == Some(0xef) {
+            return Err(Error::CreateContractStartingWithEF);
         }
 
         self.insert_create_address_to_substate();
@@ -470,7 +497,10 @@ impl<'a> ContextTrait for Context<'a> {
             Address::zero()
         };
 
-        self.state.init_code(&caller, data.to_vec(), owner)?;
+        let tx_hash = self.env.transaction_hash;
+        assert_ne!(tx_hash, H256::zero());
+        self.state
+            .init_code(&caller, data.to_vec(), owner, tx_hash)?;
         Ok(*gas - return_cost)
     }
 
@@ -479,12 +509,8 @@ impl<'a> ContextTrait for Context<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        let contract_address = self.origin.address;
         let contract_address_with_space =
             self.origin.address.with_space(self.space);
-        let balance = self.state.balance(&contract_address_with_space)?;
-        self.tracer
-            .selfdestruct(&contract_address, refund_address, balance);
 
         suicide_impl(
             &contract_address_with_space,
@@ -492,6 +518,9 @@ impl<'a> ContextTrait for Context<'a> {
             self.state,
             &self.spec,
             &mut self.substate,
+            self.env,
+            self.callstack
+                .creating_contract(&contract_address_with_space),
             self.tracer,
         )
     }
@@ -558,6 +587,46 @@ impl<'a> ContextTrait for Context<'a> {
             BlockHashSource::Env
         }
     }
+
+    fn is_warm_account(&self, account: Address) -> bool {
+        let address_with_space = account.with_space(self.space);
+        let maybe_builtin = &account[..19] == &[0u8; 19];
+        if maybe_builtin
+            && self
+                .machine
+                .builtin(&address_with_space, self.env.number)
+                .is_some()
+        {
+            return true;
+        }
+
+        let maybe_internal = self.space == Space::Native
+            && &account[..2] == b"\x08\x88"
+            && &account[2..19] == &[0u8; 17];
+        if maybe_internal
+            && self
+                .machine
+                .internal_contracts()
+                .contract(&address_with_space, &self.spec)
+                .is_some()
+        {
+            return true;
+        }
+
+        if address_with_space == self.env.author.with_native_space() {
+            return true;
+        }
+
+        self.state.is_warm_account(&address_with_space)
+    }
+
+    fn is_warm_storage_entry(&self, key: &H256) -> vm::Result<bool> {
+        let receiver = AddressWithSpace {
+            address: self.origin.address,
+            space: self.space,
+        };
+        Ok(self.state.is_warm_storage_entry(&receiver, key)?)
+    }
 }
 
 impl<'a> Context<'a> {
@@ -577,8 +646,7 @@ impl<'a> Context<'a> {
     pub fn insert_create_address_to_substate(&mut self) {
         if let Some(create_address) = self.create_address {
             self.substate
-                .contracts_created
-                .push(create_address.with_space(self.space));
+                .record_contract_create(create_address.with_space(self.space));
         }
     }
 }
@@ -593,6 +661,7 @@ mod tests {
         stack::{CallStackInfo, OwnedRuntimeRes},
         state::{get_state_for_genesis_write, State},
         substate::Substate,
+        tests::MOCK_TX_HASH,
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
     use cfx_types::{
@@ -632,6 +701,9 @@ mod tests {
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
             base_gas_price: Default::default(),
             burnt_gas_price: Default::default(),
+            transaction_hash: MOCK_TX_HASH,
+            #[cfg(feature = "align_evm")]
+            blob_gas_fee: 0.into(),
         }
     }
 
@@ -664,7 +736,7 @@ mod tests {
                 machine,
                 spec,
                 substate: Substate::new(),
-                env,
+                env: env.clone(),
                 callstack,
             };
             setup
@@ -673,6 +745,7 @@ mod tests {
                     &Address::zero().with_native_space(),
                     vec![],
                     Address::zero(),
+                    env.transaction_hash,
                 )
                 .ok();
 
@@ -862,6 +935,7 @@ mod tests {
         refund_account.set_user_account_type_bits();
 
         let mut setup = TestSetup::new();
+        setup.spec.cip151 = false;
         let state = &mut setup.state;
         let mut origin = get_test_origin();
 
@@ -879,6 +953,7 @@ mod tests {
                 // collateral balance.
                 "".into(),
                 contract_address,
+                setup.env.transaction_hash,
             )
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
 

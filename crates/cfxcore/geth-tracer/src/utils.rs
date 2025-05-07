@@ -2,7 +2,9 @@
 use alloy_primitives::{hex, B256};
 use alloy_sol_types::{ContractError, GenericRevertReason};
 use cfx_types::{Address, H160, H256, U256};
-use cfx_vm_interpreter::instructions::{INSTRUCTIONS, INSTRUCTIONS_CANCUN};
+use cfx_vm_interpreter::instructions::{
+    INSTRUCTIONS, INSTRUCTIONS_CANCUN, INSTRUCTIONS_CIP645,
+};
 use revm::primitives::{Address as RAddress, U256 as RU256};
 
 /// creates the memory data in 32byte chunks
@@ -51,16 +53,19 @@ pub(crate) fn maybe_revert_reason(output: &[u8]) -> Option<String> {
 /// The value is obvious for most opcodes, but SWAP* and DUP* are a bit weird,
 /// and we handle those as they are handled in parity vmtraces.
 /// For reference: <https://github.com/ledgerwatch/erigon/blob/9b74cf0384385817459f88250d1d9c459a18eab1/turbo/jsonrpc/trace_adhoc.go#L451>
-pub(crate) fn stack_push_count(step_op: u8, cancun_enabled: bool) -> usize {
-    match cancun_enabled {
-        true => match INSTRUCTIONS_CANCUN.get(step_op as usize) {
-            Some(Some(instruct)) => instruct.ret,
-            _ => 0,
-        },
-        false => match INSTRUCTIONS.get(step_op as usize) {
-            Some(Some(instruct)) => instruct.ret,
-            _ => 0,
-        },
+pub(crate) fn stack_push_count(
+    step_op: u8, cancun_enabled: bool, cip645: bool,
+) -> usize {
+    let instuction_set = if !cancun_enabled {
+        &*INSTRUCTIONS
+    } else if cip645 {
+        &*INSTRUCTIONS_CANCUN
+    } else {
+        &*INSTRUCTIONS_CIP645
+    };
+    match instuction_set.get(step_op as usize) {
+        Some(Some(instruct)) => instruct.ret,
+        _ => 0,
     }
 }
 

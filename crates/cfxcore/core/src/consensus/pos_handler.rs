@@ -258,6 +258,8 @@ impl PosHandler {
         height >= self.enable_height
     }
 
+    pub fn enable_height(&self) -> u64 { self.enable_height }
+
     pub fn is_committed(&self, h: &PosBlockId) -> bool {
         self.pos().get_committed_block(h).is_some()
     }

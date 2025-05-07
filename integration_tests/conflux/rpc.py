@@ -148,6 +148,8 @@ class RpcClient:
         for tx in txs:
             if isinstance(tx, SignedTransaction):
                 raw_txs.append(tx.raw_transaction)
+            elif isinstance(tx, bytes):
+                raw_txs.append(tx)
             elif isinstance(tx, Transaction):
                 raw_txs.append(rlp.encode(tx))
             else:

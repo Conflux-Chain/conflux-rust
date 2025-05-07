@@ -3,8 +3,10 @@ use crate::{state::CleanupMode, try_loaded};
 use cfx_bytes::Bytes;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    Space, H256, U256,
 };
+use cfx_vm_types::extract_7702_payload;
 use keccak_hash::KECCAK_EMPTY;
 #[cfg(test)]
 use primitives::StorageLayout;
@@ -13,6 +15,12 @@ use std::sync::Arc;
 impl State {
     pub fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {
         Ok(self.read_account_lock(address)?.is_some())
+    }
+
+    /// Touch an account to mark it as warm
+    pub fn touch(&self, address: &AddressWithSpace) -> DbResult<()> {
+        self.exists(address)?;
+        Ok(())
     }
 
     pub fn exists_and_not_null(
@@ -80,9 +88,8 @@ impl State {
         Ok(*acc.nonce())
     }
 
-    pub fn inc_nonce(&mut self, address: &AddressWithSpace) -> DbResult<()> {
-        self.write_account_or_new_lock(address)?.inc_nonce();
-        Ok(())
+    pub fn inc_nonce(&mut self, address: &AddressWithSpace) -> DbResult<bool> {
+        Ok(self.write_account_or_new_lock(address)?.inc_nonce())
     }
 
     pub fn set_nonce(
@@ -119,6 +126,13 @@ impl State {
         Ok(acc.code_hash())
     }
 
+    pub fn has_no_code(&self, address: &AddressWithSpace) -> DbResult<bool> {
+        let Some(acc) = self.read_account_lock(address)? else {
+            return Ok(true);
+        };
+        Ok(acc.code_hash() == KECCAK_EMPTY)
+    }
+
     pub fn code_size(&self, address: &AddressWithSpace) -> DbResult<usize> {
         let acc = try_loaded!(
             self.read_account_ext_lock(address, RequireFields::Code)
@@ -143,10 +157,67 @@ impl State {
         Ok(acc.code())
     }
 
+    pub fn code_with_hash_on_call(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<(Option<Arc<Vec<u8>>>, H256)> {
+        let authority_acc = try_loaded!(
+            self.read_account_ext_lock(address, RequireFields::Code)
+        );
+        let authority_code = authority_acc.code();
+        let authority_code_hash = authority_acc.code_hash();
+
+        std::mem::drop(authority_acc);
+
+        let (code, code_hash) = if address.space == Space::Native {
+            // Core space does not support-7702
+            (authority_code, authority_code_hash)
+        } else if let Some(delegated_address) = authority_code
+            .as_ref()
+            .and_then(|x| extract_7702_payload(&**x))
+        {
+            let delegated_acc = try_loaded!(self.read_account_ext_lock(
+                &delegated_address.with_space(address.space),
+                RequireFields::Code
+            ));
+            (delegated_acc.code(), delegated_acc.code_hash())
+        } else {
+            (authority_code, authority_code_hash)
+        };
+
+        Ok((code, code_hash))
+    }
+
     pub fn init_code(
         &mut self, address: &AddressWithSpace, code: Bytes, owner: Address,
+        transaction_hash: H256,
     ) -> DbResult<()> {
-        self.write_account_lock(address)?.init_code(code, owner);
+        self.write_account_lock(address)?.init_code(
+            code,
+            owner,
+            transaction_hash,
+        );
+        Ok(())
+    }
+
+    pub fn created_at_transaction(
+        &self, address: &AddressWithSpace, transaction_hash: H256,
+    ) -> DbResult<bool> {
+        Ok(
+            if let Some(acc) =
+                self.read_account_ext_lock(&address, RequireFields::None)?
+            {
+                acc.create_transaction_hash() == Some(transaction_hash)
+            } else {
+                false
+            },
+        )
+    }
+
+    pub fn set_authorization(
+        &mut self, authority: &AddressWithSpace, address: &Address,
+    ) -> DbResult<()> {
+        self.write_account_or_new_lock(authority)?
+            .set_authorization(address);
         Ok(())
     }
 

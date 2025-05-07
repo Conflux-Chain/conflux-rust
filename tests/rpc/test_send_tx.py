@@ -32,7 +32,7 @@ class TestSendTx(RpcClient):
 
     def test_address_prefix(self):
         # call builtin address starts with 0x0
-        tx = self.new_tx(receiver="0x0000000000000000000000000000000000000002", data=b'\x00' * 32, gas=21128)
+        tx = self.new_tx(receiver="0x0000000000000000000000000000000000000002", data=b'\x00' * 32, gas=21320)
         assert_equal(self.send_tx(tx, True), tx.hash_hex())
         # non-builtin address starts with 0x0
         tx = self.new_tx(receiver="0x00e45681ac6c53d5a40475f7526bac1fe7590fb8")
