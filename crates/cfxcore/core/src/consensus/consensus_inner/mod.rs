@@ -4197,9 +4197,4 @@ impl StateMaintenanceTrait for ConsensusGraphInner {
         self.data_man
             .get_epoch_execution_commitment_with_db(block_hash)
     }
-
-    fn remove_epoch_execution_commitment_from_db(&self, block_hash: &EpochId) {
-        self.data_man
-            .remove_epoch_execution_commitment_from_db(block_hash)
-    }
 }

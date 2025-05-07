@@ -19,7 +19,7 @@ use super::consensus::consensus_inner::{
 };
 pub use crate::consensus::{
     consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
-    consensus_trait::{ConsensusGraphTrait, SharedConsensusGraph},
+    consensus_trait::SharedConsensusGraph,
 };
 use crate::{
     block_data_manager::{
@@ -643,10 +643,6 @@ impl ConsensusGraph {
             parent_block_hash,
             &self.inner,
         )
-    }
-
-    pub fn best_block_hash(&self) -> H256 {
-        self.best_info.read_recursive().best_block_hash
     }
 
     /// Returns the latest epoch whose state can be exposed safely, which means
@@ -2145,16 +2141,12 @@ impl Drop for ConsensusGraph {
     fn drop(&mut self) { self.executor.stop(); }
 }
 
-impl ConsensusGraphTrait for ConsensusGraph {
-    type ConsensusConfig = ConsensusConfig;
-
-    fn as_any(&self) -> &dyn Any { self }
-
-    fn get_config(&self) -> &Self::ConsensusConfig { &self.config }
+impl ConsensusGraph {
+    pub fn get_config(&self) -> &ConsensusConfig { &self.config }
 
     /// This is the main function that SynchronizationGraph calls to deliver a
     /// new block to the consensus graph.
-    fn on_new_block(&self, hash: &H256) {
+    pub fn on_new_block(&self, hash: &H256) {
         let _timer =
             MeterTimer::time_func(CONSENSIS_ON_NEW_BLOCK_TIMER.as_ref());
         self.statistics.inc_consensus_graph_processed_block_count();
@@ -2179,7 +2171,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// This function is a wrapper function for the function in the confirmation
     /// meter. The synchronization layer is supposed to call this function
     /// every 2 * BLOCK_PROPAGATION_DELAY seconds
-    fn update_total_weight_delta_heartbeat(&self) {
+    pub fn update_total_weight_delta_heartbeat(&self) {
         self.confirmation_meter
             .update_total_weight_delta_heartbeat();
     }
@@ -2187,7 +2179,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// construct_pivot_state() rebuild pivot chain state info from db
     /// avoiding intermediate redundant computation triggered by
     /// on_new_block().
-    fn construct_pivot_state(&self) {
+    pub fn construct_pivot_state(&self) {
         let inner = &mut *self.inner.write();
         // Ensure that `state_valid` of the first valid block after
         // cur_era_stable_genesis is set
@@ -2197,15 +2189,15 @@ impl ConsensusGraphTrait for ConsensusGraph {
         inner.finish_block_recovery();
     }
 
-    fn best_info(&self) -> Arc<BestInformation> {
+    pub fn best_info(&self) -> Arc<BestInformation> {
         self.best_info.read_recursive().clone()
     }
 
-    fn best_epoch_number(&self) -> u64 {
+    pub fn best_epoch_number(&self) -> u64 {
         self.best_info.read_recursive().best_epoch_number
     }
 
-    fn latest_checkpoint_epoch_number(&self) -> u64 {
+    pub fn latest_checkpoint_epoch_number(&self) -> u64 {
         self.data_man
             .block_height_by_hash(
                 &self.data_man.get_cur_consensus_era_genesis_hash(),
@@ -2213,42 +2205,42 @@ impl ConsensusGraphTrait for ConsensusGraph {
             .expect("header for cur_era_genesis should exist")
     }
 
-    fn latest_confirmed_epoch_number(&self) -> u64 {
+    pub fn latest_confirmed_epoch_number(&self) -> u64 {
         self.confirmation_meter.get_confirmed_epoch_num()
     }
 
-    fn latest_finalized_epoch_number(&self) -> u64 {
+    pub fn latest_finalized_epoch_number(&self) -> u64 {
         self.inner
             .read_recursive()
             .latest_epoch_confirmed_by_pos()
             .1
     }
 
-    fn best_chain_id(&self) -> AllChainID {
+    pub fn best_chain_id(&self) -> AllChainID {
         self.best_info.read_recursive().best_chain_id()
     }
 
-    fn best_block_hash(&self) -> H256 {
+    pub fn best_block_hash(&self) -> H256 {
         self.best_info.read_recursive().best_block_hash
     }
 
     /// Compute the expected difficulty of a new block given its parent
-    fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
+    pub fn expected_difficulty(&self, parent_hash: &H256) -> U256 {
         let inner = self.inner.read();
         inner.expected_difficulty(parent_hash)
     }
 
     // FIXME store this in BlockDataManager
     /// Return the sequence number of the current era genesis hash.
-    fn current_era_genesis_seq_num(&self) -> u64 {
+    pub fn current_era_genesis_seq_num(&self) -> u64 {
         self.inner.read_recursive().current_era_genesis_seq_num()
     }
 
-    fn get_data_manager(&self) -> &Arc<BlockDataManager> { &self.data_man }
+    pub fn get_data_manager(&self) -> &Arc<BlockDataManager> { &self.data_man }
 
-    fn get_tx_pool(&self) -> &SharedTransactionPool { &self.txpool }
+    pub fn get_tx_pool(&self) -> &SharedTransactionPool { &self.txpool }
 
-    fn get_statistics(&self) -> &SharedStatistics { &self.statistics }
+    pub fn get_statistics(&self) -> &SharedStatistics { &self.statistics }
 
     /// Returns the total number of blocks processed in consensus graph.
     ///
@@ -2256,11 +2248,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// If the process crashes and recovered, the blocks in the anticone of the
     /// current checkpoint may not be counted since they will not be
     /// inserted into consensus in the recover process.
-    fn block_count(&self) -> u64 {
+    pub fn block_count(&self) -> u64 {
         self.inner.read_recursive().total_processed_block_count()
     }
 
-    fn get_hash_from_epoch_number(
+    pub fn get_hash_from_epoch_number(
         &self, epoch_number: EpochNumber,
     ) -> Result<H256, String> {
         self.get_height_from_epoch_number(epoch_number)
@@ -2269,7 +2261,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             })
     }
 
-    fn get_skipped_block_hashes_by_epoch(
+    pub fn get_skipped_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
         self.get_height_from_epoch_number(epoch_number)
@@ -2280,7 +2272,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             })
     }
 
-    fn get_transaction_info_by_hash(
+    pub fn get_transaction_info_by_hash(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, TransactionInfo)> {
         // We need to hold the inner lock to ensure that tx_index and receipts
@@ -2307,7 +2299,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         }
     }
 
-    fn get_block_number(
+    pub fn get_block_number(
         &self, block_hash: &H256,
     ) -> Result<Option<u64>, String> {
         let inner = self.inner.read_recursive();
@@ -2351,7 +2343,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     }
 
     /// Find a trusted blame block for snapshot full sync
-    fn get_trusted_blame_block_for_snapshot(
+    pub fn get_trusted_blame_block_for_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Option<H256> {
         self.inner
@@ -2360,20 +2352,20 @@ impl ConsensusGraphTrait for ConsensusGraph {
     }
 
     /// Return the epoch that we are going to sync the state
-    fn get_to_sync_epoch_id(&self) -> EpochId {
+    pub fn get_to_sync_epoch_id(&self) -> EpochId {
         self.inner.read().get_to_sync_epoch_id()
     }
 
     /// Find a trusted blame block for checkpoint
-    fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
+    pub fn get_trusted_blame_block(&self, stable_hash: &H256) -> Option<H256> {
         self.inner.read().get_trusted_blame_block(stable_hash, 0)
     }
 
-    fn set_initial_sequence_number(&self, initial_sn: u64) {
+    pub fn set_initial_sequence_number(&self, initial_sn: u64) {
         self.inner.write().set_initial_sequence_number(initial_sn);
     }
 
-    fn get_storage_state_by_epoch_number(
+    pub fn get_storage_state_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> CoreResult<StorageState> {
         invalid_params_check(
@@ -2389,7 +2381,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.get_storage_state_by_height_and_hash(height, &hash)
     }
 
-    fn get_state_db_by_epoch_number(
+    pub fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> CoreResult<StateDb> {
         self.get_state_db_by_epoch_number_with_space(
@@ -2399,7 +2391,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         )
     }
 
-    fn get_eth_state_db_by_epoch_number(
+    pub fn get_eth_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> CoreResult<StateDb> {
         self.get_state_db_by_epoch_number_with_space(
@@ -2414,7 +2406,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
     /// bodies of other blocks in the consensus graph will never be needed
     /// for executions after this stable genesis, as long as the checkpoint
     /// is not reverted.
-    fn get_blocks_needing_bodies(&self) -> HashSet<H256> {
+    pub fn get_blocks_needing_bodies(&self) -> HashSet<H256> {
         let inner = self.inner.read();
         // TODO: This may not be stable genesis with other configurations.
         let stable_genesis = self.data_man.get_cur_consensus_era_stable_hash();
@@ -2455,7 +2447,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// Check if we have downloaded all the headers to find the lowest needed
     /// checkpoint. We can enter `CatchUpCheckpoint` if it's true.
-    fn catch_up_completed(&self, peer_median_epoch: u64) -> bool {
+    pub fn catch_up_completed(&self, peer_median_epoch: u64) -> bool {
         let stable_genesis_height = self
             .data_man
             .block_height_by_hash(
@@ -2484,7 +2476,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         true
     }
 
-    fn enter_normal_phase(&self) {
+    pub fn enter_normal_phase(&self) {
         self.ready_for_mining.store(true, Ordering::SeqCst);
         self.update_best_info(true);
         self.txpool.set_ready_for_mining();
@@ -2495,7 +2487,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     /// Reset the information in consensus graph with only checkpoint
     /// information kept.
-    fn reset(&self) {
+    pub fn reset(&self) {
         let old_consensus_inner = &mut *self.inner.write();
 
         let cur_era_genesis_hash =
@@ -2517,7 +2509,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.confirmation_meter.clear();
     }
 
-    fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
+    pub fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
         // try to get from memory
         if let Some(e) =
             self.inner.read_recursive().get_block_epoch_number(hash)
@@ -2529,7 +2521,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.data_man.block_epoch_number(hash)
     }
 
-    fn get_block_hashes_by_epoch(
+    pub fn get_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
         self.get_height_from_epoch_number(epoch_number)
@@ -2538,5 +2530,5 @@ impl ConsensusGraphTrait for ConsensusGraph {
             })
     }
 
-    fn to_arc_consensus(self: Arc<Self>) -> Arc<ConsensusGraph> { self }
+    pub fn to_arc_consensus(self: Arc<Self>) -> Arc<ConsensusGraph> { self }
 }

@@ -43,7 +43,7 @@ use cfxcore::{
     state_exposer::STATE_EXPOSER,
     transaction_pool::TransactionPoolError,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
-    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    ConsensusGraph, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
@@ -155,12 +155,7 @@ impl RpcImpl {
         }
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn check_address_network(&self, network: Network) -> CoreResult<()> {
         invalid_params_check(

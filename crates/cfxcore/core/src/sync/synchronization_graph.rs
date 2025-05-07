@@ -1015,11 +1015,7 @@ impl MallocSizeOf for SynchronizationGraph {
 
         // TODO: Add statistics for consortium.
         if !self.is_consortium() {
-            let consensus_graph = self
-                .consensus
-                .as_any()
-                .downcast_ref::<ConsensusGraph>()
-                .expect("downcast should succeed");
+            let consensus_graph = &*self.consensus;
             malloc_size += consensus_graph.size_of(ops);
         }
         // Does not count size_of machine.

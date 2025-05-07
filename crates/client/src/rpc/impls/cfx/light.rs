@@ -12,8 +12,7 @@ use cfxcore::{
     errors::account_result_to_rpc_result,
     light_protocol::{self, query_service::TxInfo, Error as LightError},
     verification::EpochReceiptProof,
-    ConsensusGraph, ConsensusGraphTrait, LightQueryService, PeerInfo,
-    SharedConsensusGraph,
+    ConsensusGraph, LightQueryService, PeerInfo, SharedConsensusGraph,
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
@@ -130,9 +129,6 @@ impl RpcImpl {
                 require_pivot,
             }) => {
                 let epoch_number = consensus_graph
-                    .as_any()
-                    .downcast_ref::<ConsensusGraph>()
-                    .expect("downcast should succeed")
                     .get_block_epoch_number_with_pivot_check(
                         &hash,
                         require_pivot.unwrap_or(true),
@@ -799,12 +795,7 @@ impl RpcImpl {
                 Some(b) => b,
             };
 
-            let inner = consensus_graph
-                .as_any()
-                .downcast_ref::<ConsensusGraph>()
-                .expect("downcast should succeed")
-                .inner
-                .read();
+            let inner = consensus_graph.inner.read();
 
             Ok(Some(RpcBlock::new(
                 &block,
@@ -841,9 +832,6 @@ impl RpcImpl {
             // check pivot assumption
             // make sure not to hold the lock through await's
             consensus_graph
-                .as_any()
-                .downcast_ref::<ConsensusGraph>()
-                .expect("downcast should succeed")
                 .inner
                 .read()
                 .check_block_pivot_assumption(&pivot_hash, epoch_number)
@@ -855,12 +843,7 @@ impl RpcImpl {
                 .await?
                 .ok_or_else(|| RpcError::invalid_params("Block not found"))?;
 
-            let inner = consensus_graph
-                .as_any()
-                .downcast_ref::<ConsensusGraph>()
-                .expect("downcast should succeed")
-                .inner
-                .read();
+            let inner = consensus_graph.inner.read();
 
             Ok(RpcBlock::new(
                 &block,
@@ -897,9 +880,6 @@ impl RpcImpl {
 
             // make sure not to hold the lock through await's
             let hash = consensus_graph
-                .as_any()
-                .downcast_ref::<ConsensusGraph>()
-                .expect("downcast should succeed")
                 .inner
                 .read()
                 .get_pivot_hash_from_epoch_number(epoch)
@@ -911,12 +891,7 @@ impl RpcImpl {
                 Some(b) => b,
             };
 
-            let inner = consensus_graph
-                .as_any()
-                .downcast_ref::<ConsensusGraph>()
-                .expect("downcast should succeed")
-                .inner
-                .read();
+            let inner = consensus_graph.inner.read();
 
             Ok(Some(RpcBlock::new(
                 &block,
@@ -943,9 +918,6 @@ impl RpcImpl {
 
         let hashes = self
             .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
             .inner
             .read()
             .block_hashes_by_epoch(height)
@@ -1180,15 +1152,9 @@ impl RpcImpl {
 }
 
 async fn fetch_block_for_fee_history(
-    consensus_graph: Arc<
-        dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
-    >,
-    light: Arc<QueryService>, height: u64,
+    consensus_graph: Arc<ConsensusGraph>, light: Arc<QueryService>, height: u64,
 ) -> cfxcore::errors::Result<primitives::Block> {
     let hash = consensus_graph
-        .as_any()
-        .downcast_ref::<ConsensusGraph>()
-        .expect("downcast should succeed")
         .inner
         .read()
         .get_pivot_hash_from_epoch_number(height)

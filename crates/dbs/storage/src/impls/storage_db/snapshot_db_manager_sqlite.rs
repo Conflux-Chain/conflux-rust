@@ -1018,13 +1018,9 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     type SnapshotDb = SnapshotDbSqlite;
     type SnapshotDbWrite = SnapshotDbWriteable;
 
-    fn get_snapshot_dir(&self) -> &Path {
-        self.snapshot_path.as_path()
-    }
+    fn get_snapshot_dir(&self) -> &Path { self.snapshot_path.as_path() }
 
-    fn get_mpt_snapshot_dir(&self) -> &Path {
-        self.mpt_snapshot_path.as_path()
-    }
+    fn get_mpt_snapshot_dir(&self) -> &Path { self.mpt_snapshot_path.as_path() }
 
     fn get_latest_mpt_snapshot_db_name(&self) -> String {
         Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()

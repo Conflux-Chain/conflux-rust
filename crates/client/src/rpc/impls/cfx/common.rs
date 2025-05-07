@@ -46,7 +46,7 @@ use cfx_types::{
 use cfxcore::{
     consensus::pos_handler::PosVerifier, errors::Error as CoreError,
     genesis_block::register_transaction, BlockDataManager, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -183,12 +183,7 @@ impl RpcImpl {
         }
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn check_address_network(&self, network: Network) -> CoreResult<()> {
         invalid_params_check(

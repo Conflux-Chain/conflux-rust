@@ -13,7 +13,7 @@ use crate::{
         LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     sync::SynchronizationGraph,
-    ConsensusGraph, Notifications,
+    Notifications,
 };
 use cfx_addr::Network;
 use cfx_executor::state::COMMISSION_PRIVILEGE_SPECIAL_KEY;
@@ -274,13 +274,7 @@ impl QueryService {
         let mut total_transaction_count_in_processed_blocks = 0;
         let mut processed_block_count = 0;
 
-        let inner = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-            .inner
-            .clone();
+        let inner = self.consensus.inner.clone();
 
         loop {
             if hashes.len() >= GAS_PRICE_BLOCK_SAMPLE_SIZE || epoch == 0 {
