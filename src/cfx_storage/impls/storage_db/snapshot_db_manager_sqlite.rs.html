@@ -1586,6 +1586,15 @@
 <a href="#1586" id="1586">1586</a>
 <a href="#1587" id="1587">1587</a>
 <a href="#1588" id="1588">1588</a>
+<a href="#1589" id="1589">1589</a>
+<a href="#1590" id="1590">1590</a>
+<a href="#1591" id="1591">1591</a>
+<a href="#1592" id="1592">1592</a>
+<a href="#1593" id="1593">1593</a>
+<a href="#1594" id="1594">1594</a>
+<a href="#1595" id="1595">1595</a>
+<a href="#1596" id="1596">1596</a>
+<a href="#1597" id="1597">1597</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1882,7 +1891,8 @@
                     </span>.map_err(|_err| Error::SemaphoreTryAcquireError)<span class="question-mark">?
             </span>} <span class="kw">else </span>{
                 executor::block_on(<span class="self">self</span>.open_snapshot_semaphore.acquire())
-            };
+                    .map_err(|_err| Error::SemaphoreAcquireError)<span class="question-mark">?
+            </span>};
 
             <span class="comment">// If it's not in already_open_snapshots, the sqlite db must have
             // been closed.
@@ -2000,7 +2010,8 @@
         }
 
         <span class="kw">let </span>semaphore_permit =
-            executor::block_on(<span class="self">self</span>.open_snapshot_semaphore.acquire());
+            executor::block_on(<span class="self">self</span>.open_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)<span class="question-mark">?</span>;
         <span class="comment">// When an open happens around the same time, we should make sure that
         // the open returns None.
 
@@ -2087,7 +2098,8 @@
                     </span>.map_err(|_err| Error::SemaphoreTryAcquireError)<span class="question-mark">?
             </span>} <span class="kw">else </span>{
                 executor::block_on(<span class="self">self</span>.mpt_open_snapshot_semaphore.acquire())
-            };
+                    .map_err(|_err| Error::SemaphoreAcquireError)<span class="question-mark">?
+            </span>};
 
             <span class="comment">// If it's not in already_open_snapshots, the sqlite db must have
             // been closed.
@@ -2161,8 +2173,9 @@
             <span class="string">"open mpt snapshot with write {:?}, new epoch height {}"</span>,
             snapshot_path, new_epoch_height
         );
-        <span class="kw">let </span>latest_mpt_semaphore_permit: tokio02::sync::SemaphorePermit =
-            executor::block_on(<span class="self">self</span>.latest_mpt_snapshot_semaphore.acquire());
+        <span class="kw">let </span>latest_mpt_semaphore_permit: tokio::sync::SemaphorePermit =
+            executor::block_on(<span class="self">self</span>.latest_mpt_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)<span class="question-mark">?</span>;
 
         <span class="kw">if </span><span class="self">self
             </span>.mpt_already_open_snapshots
@@ -2174,7 +2187,8 @@
         }
 
         <span class="kw">let </span>semaphore_permit =
-            executor::block_on(<span class="self">self</span>.mpt_open_snapshot_semaphore.acquire());
+            executor::block_on(<span class="self">self</span>.mpt_open_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>snapshot_db = <span class="kw">if </span>create {
             SnapshotMptDbSqlite::create(
@@ -2601,9 +2615,13 @@
     <span class="kw">type </span>SnapshotDb = SnapshotDbSqlite;
     <span class="kw">type </span>SnapshotDbWrite = SnapshotDbWriteable;
 
-    <span class="kw">fn </span>get_snapshot_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Path { <span class="self">self</span>.snapshot_path.as_path() }
+    <span class="kw">fn </span>get_snapshot_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Path {
+        <span class="self">self</span>.snapshot_path.as_path()
+    }
 
-    <span class="kw">fn </span>get_mpt_snapshot_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Path { <span class="self">self</span>.mpt_snapshot_path.as_path() }
+    <span class="kw">fn </span>get_mpt_snapshot_dir(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Path {
+        <span class="self">self</span>.mpt_snapshot_path.as_path()
+    }
 
     <span class="kw">fn </span>get_latest_mpt_snapshot_db_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="self">Self</span>::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
@@ -3167,7 +3185,7 @@
     thread,
     time::Duration,
 };
-<span class="kw">use </span>tokio02::sync::Semaphore;
+<span class="kw">use </span>tokio::sync::Semaphore;
 
 <span class="kw">use super</span>::{
     kvdb_sqlite_sharded::KvdbSqliteShardedBorrowMut,
