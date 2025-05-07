@@ -523,8 +523,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         // gas_used is only used to estimate gas needed
         let mut gas_used = tx.gas() - gas_left;
 
-        // CIP-645g: EIP-3529
-        if spec.cip645 {
+        if spec.cip645.eip_sstore_and_refund_gas {
             let substate_refund = if self.substate.refund_gas > 0 {
                 self.substate.refund_gas as u128
             } else {

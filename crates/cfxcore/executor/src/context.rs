@@ -298,7 +298,7 @@ impl<'a> ContextTrait for Context<'a> {
         };
 
         if conflict_address {
-            if self.spec.cip645 {
+            if self.spec.cip645.fix_eip684 {
                 self.state.inc_nonce(&caller)?;
             }
             debug!("Contract address conflict!");
