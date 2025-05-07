@@ -1,10 +1,11 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+#![allow(unused)]
 
 use crate::{
     block_data_manager::BlockDataManager,
-    consensus::{BestInformation, TransactionInfo},
+    consensus::{BestInformation},
     errors::Result as CoreResult,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,

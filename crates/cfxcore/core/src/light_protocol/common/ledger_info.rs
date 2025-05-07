@@ -38,7 +38,7 @@ impl LedgerInfo {
     #[inline]
     pub fn block(&self, hash: H256) -> Result<Block, Error> {
         self.consensus
-            .get_data_manager()
+            .data_manager()
             .block_by_hash(&hash, false /* update_cache */)
             .map(|b| (*b).clone())
             .ok_or_else(|| {
@@ -51,7 +51,7 @@ impl LedgerInfo {
     #[inline]
     pub fn header(&self, hash: H256) -> Result<BlockHeader, Error> {
         self.consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(&hash)
             .map(|h| (*h).clone())
             .ok_or_else(|| {
@@ -93,7 +93,7 @@ impl LedgerInfo {
 
         let commitments = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
                 Error::from(Error::InternalError(format!(
@@ -119,7 +119,7 @@ impl LedgerInfo {
 
         let commitments = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
                 Error::from(Error::InternalError(format!(
@@ -142,7 +142,7 @@ impl LedgerInfo {
 
         let commitments = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment_with_db(&pivot)
             .ok_or_else(|| {
                 Error::from(Error::InternalError(format!(
@@ -157,7 +157,7 @@ impl LedgerInfo {
     /// Get the number of epochs per snapshot period.
     #[inline]
     pub fn snapshot_epoch_count(&self) -> u32 {
-        self.consensus.get_data_manager().get_snapshot_epoch_count()
+        self.consensus.data_manager().get_snapshot_epoch_count()
     }
 
     /// Get the state trie corresponding to the execution of `epoch`.
@@ -167,11 +167,11 @@ impl LedgerInfo {
 
         let maybe_state_index = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .get_state_readonly_index(&pivot);
         let state = maybe_state_index.map(|state_index| {
             self.consensus
-                .get_data_manager()
+                .data_manager()
                 .storage_manager
                 .get_state_no_commit_inner(
                     state_index,
@@ -248,7 +248,7 @@ impl LedgerInfo {
             .into_iter()
             .map(|h| {
                 self.consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_pivot_assumption */
                         false, /* update_cache */
@@ -279,7 +279,7 @@ impl LedgerInfo {
             .into_iter()
             .map(|h| {
                 self.consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_pivot_assumption */
                         false, /* update_cache */

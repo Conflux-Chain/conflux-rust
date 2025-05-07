@@ -44,7 +44,7 @@ use crate::{
     statistics::SharedStatistics,
     sync::synchronization_protocol_handler::FutureBlockContainer,
     verification::*,
-    ConsensusGraph, Notifications,
+    Notifications,
 };
 
 lazy_static! {
@@ -1029,12 +1029,13 @@ pub type SharedSynchronizationGraph = Arc<SynchronizationGraph>;
 impl SynchronizationGraph {
     pub fn new(
         consensus: SharedConsensusGraph,
+        data_man: Arc<BlockDataManager>,
+        statistics: SharedStatistics,
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
         notifications: Arc<Notifications>, machine: Arc<Machine>,
         pos_verifier: Arc<PosVerifier>,
     ) -> Self {
-        let data_man = consensus.get_data_manager().clone();
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         let genesis_block_header = data_man
             .block_header_by_hash(&genesis_hash)
@@ -1065,7 +1066,7 @@ impl SynchronizationGraph {
             verification_config,
             sync_config,
             consensus: consensus.clone(),
-            statistics: consensus.get_statistics().clone(),
+            statistics: statistics.clone(),
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
             machine,
@@ -1109,8 +1110,8 @@ impl SynchronizationGraph {
                                 let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
 
                                 // start pos with an era advance.
-                                if !pos_started && pos_verifier.is_enabled_at_height(header.height() + consensus.get_config().inner_conf.era_epoch_count) {
-                                    if let Err(e) = pos_verifier.initialize(consensus.clone().to_arc_consensus()) {
+                                if !pos_started && pos_verifier.is_enabled_at_height(header.height() + consensus.config().inner_conf.era_epoch_count) {
+                                    if let Err(e) = pos_verifier.initialize(consensus.clone()) {
                                         info!("PoS cannot be started at the expected height: e={}", e);
                                     } else {
                                         pos_started = true;
@@ -1194,7 +1195,7 @@ impl SynchronizationGraph {
         &self,
     ) -> HashMap<H256, Arc<SignedTransaction>> {
         self.consensus
-            .get_tx_pool()
+            .tx_pool()
             .get_to_be_propagated_transactions()
     }
 
@@ -1202,7 +1203,7 @@ impl SynchronizationGraph {
         &self, transactions: HashMap<H256, Arc<SignedTransaction>>,
     ) {
         self.consensus
-            .get_tx_pool()
+            .tx_pool()
             .set_to_be_propagated_transactions(transactions);
     }
 

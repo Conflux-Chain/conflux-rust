@@ -847,7 +847,7 @@ impl EthApi {
     ) -> CoreResult<Option<Transaction>> {
         let tx_index = match self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .transaction_index_by_hash(&hash, false /* update_cache */)
         {
             None => return Ok(self.get_tx_from_txpool(hash)),
@@ -901,7 +901,7 @@ impl EthApi {
         &self, tx_hash: H256,
     ) -> CoreResult<Option<Receipt>> {
         let tx_index =
-            match self.consensus.get_data_manager().transaction_index_by_hash(
+            match self.consensus.data_manager().transaction_index_by_hash(
                 &tx_hash, false, /* update_cache */
             ) {
                 None => return Ok(None),

@@ -230,7 +230,7 @@ fn setup_rpc_apis(
             Api::Pos => {
                 let pos = PosHandler::new(
                     common.pos_handler.clone(),
-                    rpc.consensus.get_data_manager().clone(),
+                    rpc.consensus.data_manager().clone(),
                     *rpc.sync.network.get_network_type(),
                     rpc.consensus.clone(),
                 )

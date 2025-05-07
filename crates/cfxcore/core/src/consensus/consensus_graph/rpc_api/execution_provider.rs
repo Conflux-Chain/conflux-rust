@@ -1,26 +1,5 @@
-// Copyright 2019 Conflux Foundation. All rights reserved.
-// Conflux is free software and distributed under GNU General Public License.
-// See http://www.gnu.org/licenses/
+use super::super::ConsensusGraph;
 
-mod anticone_cache;
-pub mod consensus_inner;
-pub mod consensus_trait;
-pub mod debug_recompute;
-mod pastset_cache;
-pub mod pivot_hint;
-pub mod pos_handler;
-mod config;
-mod statistics;
-mod consensus_graph;
-
-
-use self::pivot_hint::{PivotHint, PivotHintConfig};
-
-use super::consensus::consensus_inner::{
-    confirmation_meter::ConfirmationMeter,
-    consensus_executor::ConsensusExecutor,
-    consensus_new_block_handler::ConsensusNewBlockHandler,
-};
 pub use crate::consensus::{
     consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
     consensus_trait::SharedConsensusGraph,
@@ -103,9 +82,58 @@ use std::{
 };
 
 
+impl ConsensusGraph {
+    pub fn get_block_execution_info(
+        &self, block_hash: &H256,
+    ) -> Option<(BlockExecutionResultWithEpoch, Option<H256>)> {
+        let results_with_epoch = self
+            .inner
+            .read_recursive()
+            .block_execution_results_by_hash(block_hash, true)?;
 
-pub use config::ConsensusConfig;
-pub use statistics::ConsensusGraphStatistics;
-pub use consensus_graph::best_info_provider::BestInformation;
-pub use consensus_graph::rpc_api::transaction_provider::{MaybeExecutedTxExtraInfo, TransactionInfo};
-pub use consensus_graph::ConsensusGraph;
+        let pivot_hash = results_with_epoch.0;
+
+        let maybe_state_root = match self.executor.wait_for_result(pivot_hash) {
+            Ok(execution_commitment) => {
+                // We already has transaction address with epoch_hash executed,
+                // so we can always get the state_root with
+                // `wait_for_result`
+                Some(
+                    execution_commitment
+                        .state_root_with_aux_info
+                        .aux_info
+                        .state_root_hash,
+                )
+            }
+            Err(msg) => {
+                warn!("get_transaction_receipt_and_block_info() gets the following error from ConsensusExecutor: {}", msg);
+                None
+            }
+        };
+
+        Some((results_with_epoch, maybe_state_root))
+    }
+
+
+    pub fn call_virtual(
+        &self, tx: &SignedTransaction, epoch: EpochNumber,
+        request: EstimateRequest, evm_overrides: EvmOverrides,
+    ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
+        // only allow to call against stated epoch
+        self.validate_stated_epoch(&epoch)?;
+        let (epoch_id, epoch_size) = if let Ok(v) =
+            self.get_block_hashes_by_epoch(epoch)
+        {
+            (v.last().expect("pivot block always exist").clone(), v.len())
+        } else {
+            bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
+        };
+        self.executor.call_virtual(
+            tx,
+            &epoch_id,
+            epoch_size,
+            request,
+            evm_overrides,
+        )
+    }
+}

@@ -170,7 +170,7 @@ impl RpcImpl {
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
     ) -> Self {
-        let data_man = consensus.get_data_manager().clone();
+        let data_man = consensus.data_manager().clone();
 
         RpcImpl {
             exit,
@@ -402,7 +402,7 @@ impl RpcImpl {
             block_hash, pivot_hash, epoch_number
         );
 
-        let genesis = self.consensus.get_data_manager().true_genesis.hash();
+        let genesis = self.consensus.data_manager().true_genesis.hash();
 
         // for genesis, check criteria directly
         if block_hash == genesis && (pivot_hash != genesis || epoch_number != 0)
@@ -930,7 +930,7 @@ impl RpcImpl {
 
     pub fn pos_start(&self) -> CoreResult<()> {
         self.pos_handler
-            .initialize(self.consensus.clone().to_arc_consensus())?;
+            .initialize(self.consensus.clone())?;
         Ok(())
     }
 

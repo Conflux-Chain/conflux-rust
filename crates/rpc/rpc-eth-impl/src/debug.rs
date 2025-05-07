@@ -215,7 +215,7 @@ impl DebugApi {
 
         let tx_index = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .transaction_index_by_hash(&hash, false /* update_cache */)
             .ok_or(CoreError::Msg("invalid tx hash".to_string()))?;
 

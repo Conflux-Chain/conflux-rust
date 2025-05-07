@@ -16,7 +16,7 @@ use crate::{
         anticone_cache::AnticoneCache,
         consensus_inner::consensus_executor::ConsensusExecutor,
         debug_recompute::log_invalid_state_root, pastset_cache::PastSetCache,
-        pos_handler::PosVerifier, MaybeExecutedTxExtraInfo, TransactionInfo,
+        pos_handler::PosVerifier,
     },
     pos::pow_handler::POS_TERM_EPOCHS,
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
@@ -2358,54 +2358,6 @@ impl ConsensusGraphInner {
         self.hash_to_arena_indices
             .get(block_hash)
             .and_then(|index| Some(self.arena[*index].data.pending))
-    }
-
-    pub fn get_transaction_info(
-        &self, tx_hash: &H256,
-    ) -> Option<TransactionInfo> {
-        trace!("Get receipt with tx_hash {}", tx_hash);
-        let tx_index = self.data_man.transaction_index_by_hash(
-            tx_hash, false, /* update_cache */
-        )?;
-        // receipts should never be None if transaction index isn't none.
-        let maybe_executed_extra_info = self
-            .block_execution_results_by_hash(
-                &tx_index.block_hash,
-                false, /* update_cache */
-            )
-            .map(|receipt| {
-                let block_receipts = receipt.1.block_receipts;
-
-                let prior_gas_used = if tx_index.real_index == 0 {
-                    U256::zero()
-                } else {
-                    block_receipts.receipts[tx_index.real_index - 1]
-                        .accumulated_gas_used
-                };
-                let tx_exec_error_msg = block_receipts
-                    .tx_execution_error_messages[tx_index.real_index]
-                    .clone();
-
-                MaybeExecutedTxExtraInfo {
-                    receipt: block_receipts
-                        .receipts
-                        .get(tx_index.real_index)
-                        .expect("Error: can't get receipt by tx_index ")
-                        .clone(),
-                    block_number: block_receipts.block_number,
-                    prior_gas_used,
-                    tx_exec_error_msg: if tx_exec_error_msg.is_empty() {
-                        None
-                    } else {
-                        Some(tx_exec_error_msg.clone())
-                    },
-                }
-            });
-
-        Some(TransactionInfo {
-            tx_index,
-            maybe_executed_extra_info,
-        })
     }
 
     pub fn check_block_pivot_assumption(

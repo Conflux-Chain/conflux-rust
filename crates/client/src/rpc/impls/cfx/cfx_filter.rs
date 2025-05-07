@@ -509,7 +509,7 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                     }));
                 }
                 let data_man =
-                    self.consensus_graph().get_data_manager().clone();
+                    self.consensus_graph().data_manager().clone();
 
                 // logs from new epochs
                 for (num, blocks) in epochs.into_iter() {

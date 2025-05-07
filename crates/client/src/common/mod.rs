@@ -399,7 +399,7 @@ pub fn initialize_common_modules(
     let consensus = Arc::new(ConsensusGraph::new(
         consensus_conf,
         txpool.clone(),
-        statistics,
+        statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
         pow.clone(),
@@ -428,6 +428,8 @@ pub fn initialize_common_modules(
 
     let sync_graph = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
+        data_man.clone(),
+        statistics.clone(),
         verification_config,
         pow_config,
         pow.clone(),

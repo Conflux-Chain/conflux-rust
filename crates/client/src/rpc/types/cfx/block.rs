@@ -8,7 +8,7 @@ use cfx_types::{Space, H160, H256, U256, U64};
 use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
-    consensus::{ConsensusConfig, ConsensusGraphInner},
+    consensus::{ConsensusGraphInner},
     pow, ConsensusGraph, SharedConsensusGraph,
 };
 use jsonrpc_core::Error as RpcError;
@@ -455,7 +455,7 @@ impl Header {
 
         let epoch_number = consensus
             .get_block_epoch_number(&hash)
-            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash))
+            .or_else(|| consensus.data_manager().block_epoch_number(&hash))
             .map(Into::into);
 
         let block_number = consensus.get_block_number(&hash)?.map(Into::into);

@@ -327,7 +327,7 @@ pub struct ChainDataProvider {
 
 impl ChainDataProvider {
     pub fn new(consensus: SharedConsensusGraph) -> ChainDataProvider {
-        let data_man = consensus.get_data_manager().clone();
+        let data_man = consensus.data_manager().clone();
         ChainDataProvider {
             consensus,
             data_man,

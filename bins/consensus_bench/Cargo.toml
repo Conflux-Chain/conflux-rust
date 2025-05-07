@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cfxcore = { workspace = true }
+cfxcore = { workspace = true, features = ["consensus_bench"]}
 cfx-types = { workspace = true }
 primitives = { workspace = true }
 db = { workspace = true }

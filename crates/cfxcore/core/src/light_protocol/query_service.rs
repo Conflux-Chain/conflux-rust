@@ -228,7 +228,7 @@ impl QueryService {
     pub async fn retrieve_block(
         &self, hash: H256,
     ) -> Result<Option<Block>, LightError> {
-        let genesis = self.consensus.get_data_manager().true_genesis.clone();
+        let genesis = self.consensus.data_manager().true_genesis.clone();
 
         if hash == genesis.hash() {
             return Ok(Some((*genesis).clone()));
@@ -236,7 +236,7 @@ impl QueryService {
 
         let maybe_block_header = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(&hash);
 
         let block_header = match maybe_block_header {
@@ -774,7 +774,7 @@ impl QueryService {
         let epoch_number = self.get_latest_verifiable_epoch_number()?;
         Ok(self
             .consensus
-            .get_config()
+            .config()
             .chain_id
             .read()
             .get_chain_id(epoch_number))
@@ -1008,7 +1008,7 @@ impl QueryService {
                 log
             })
             // Limit logs can return
-            .take(self.consensus.get_config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
+            .take(self.consensus.config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
             .try_collect();
         // --> TryFuture<Vec<LocalizedLogEntry>>
 

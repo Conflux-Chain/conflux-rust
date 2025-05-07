@@ -32,7 +32,7 @@ pub struct TraceHandler {
 impl TraceHandler {
     pub fn new(network: Network, consensus: SharedConsensusGraph) -> Self {
         TraceHandler {
-            data_man: consensus.get_data_manager().clone(),
+            data_man: consensus.data_manager().clone(),
             consensus,
             network,
         }

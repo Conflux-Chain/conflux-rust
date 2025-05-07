@@ -8,7 +8,6 @@ use cfx_types::{
 use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    consensus::ConsensusConfig,
     errors::account_result_to_rpc_result,
     light_protocol::{self, query_service::TxInfo, Error as LightError},
     verification::EpochReceiptProof,

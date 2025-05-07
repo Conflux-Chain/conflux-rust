@@ -100,7 +100,7 @@ impl Handleable for GetBlockTxnResponse {
                             .manager
                             .graph
                             .consensus
-                            .get_tx_pool()
+                            .tx_pool()
                             .insert_new_signed_transactions(signed_txns);
                         // a transaction from compact block should be
                         // added to received pool
