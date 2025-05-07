@@ -57,6 +57,9 @@
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
 <a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -89,7 +92,10 @@
     instruction_result::InstructionResult,
     interpreter_info::InterpreterInfo,
     return_data::{GasLeft, ReturnData},
-    spec::{CleanDustMode, Spec, WasmCosts},
+    spec::{
+        extract_7702_payload, CIP645Spec, CleanDustMode, ConsensusGasSpec,
+        Spec, CODE_PREFIX_7702,
+    },
 };
 
 <span class="doccomment">/// Virtual Machine interface

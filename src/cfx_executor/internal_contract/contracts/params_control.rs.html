@@ -212,7 +212,7 @@
     <span class="kw">struct </span>ReadVote(Address, <span class="string">"readVote(address)"</span>, Vec&lt;Vote&gt;);
 }
 
-<span class="macro">impl_function_type!</span>(ReadVote, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| params_index_max(spec) * OPTION_INDEX_MAX * (spec.sload_gas + <span class="number">2 </span>* spec.sha3_gas));
+<span class="macro">impl_function_type!</span>(ReadVote, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| params_index_max(spec) * OPTION_INDEX_MAX * (spec.cold_sload_gas + <span class="number">2 </span>* spec.sha3_gas));
 
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>ReadVote {
     <span class="kw">fn </span>execute_inner(
@@ -243,7 +243,7 @@
 <span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>TotalVotes(u64, <span class="string">"totalVotes(uint64)"</span>, Vec&lt;Vote&gt;);
 }
-<span class="macro">impl_function_type!</span>(TotalVotes, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| params_index_max(spec) * OPTION_INDEX_MAX * spec.sload_gas);
+<span class="macro">impl_function_type!</span>(TotalVotes, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| params_index_max(spec) * OPTION_INDEX_MAX * spec.cold_sload_gas);
 
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>TotalVotes {
     <span class="kw">fn </span>execute_inner(
@@ -257,7 +257,7 @@
 <span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>PosStakeForVotes(u64, <span class="string">"posStakeForVotes(uint64)"</span>, U256);
 }
-<span class="macro">impl_function_type!</span>(PosStakeForVotes, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| <span class="number">2 </span>* spec.sload_gas);
+<span class="macro">impl_function_type!</span>(PosStakeForVotes, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| <span class="number">2 </span>* spec.cold_sload_gas);
 
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>PosStakeForVotes {
     <span class="kw">fn </span>execute_inner(

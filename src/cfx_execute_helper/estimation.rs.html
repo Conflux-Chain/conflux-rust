@@ -485,6 +485,16 @@
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_executor::{
     executive::{
         ChargeCollateral, Executed, ExecutionError, ExecutionOutcome,
@@ -610,7 +620,7 @@
                             <span class="kw-2">&amp;</span>tx.sender().address,
                         )<span class="question-mark">?
                     </span>{
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="kw-2">*</span>to));
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(to));
                     }
                 }
             }
@@ -709,6 +719,7 @@
             <span class="string">"Transaction estimate first pass outcome {:?}"</span>,
             sender_pay_executed
         );
+        <span class="self">self</span>.state.update_state_post_tx_execution(<span class="bool-val">false</span>);
         <span class="self">self</span>.state.restore(saved);
 
         <span class="comment">// Second pass
@@ -888,10 +899,18 @@
 
 <span class="kw">fn </span>estimated_gas_limit(executed: <span class="kw-2">&amp;</span>Executed, tx: <span class="kw-2">&amp;</span>SignedTransaction) -&gt; U256 {
     <span class="kw">let </span>cip130_min_gas_limit = U256::from(tx.data().len() * <span class="number">100</span>);
+    <span class="kw">let </span>eip7623_gas_limit = <span class="number">21000
+        </span>+ tx.data()
+            .iter()
+            .map(|<span class="kw-2">&amp;</span>x| <span class="kw">if </span>x == <span class="number">0 </span>{ <span class="number">10 </span>} <span class="kw">else </span>{ <span class="number">40 </span>})
+            .sum::&lt;u64&gt;();
     <span class="kw">let </span>estimated =
         executed.ext_result.get::&lt;GasLimitEstimation&gt;().unwrap() * <span class="number">7 </span>/ <span class="number">6
             </span>+ executed.base_gas;
-    U256::max(estimated, cip130_min_gas_limit)
+    U256::max(
+        eip7623_gas_limit.into(),
+        U256::max(estimated, cip130_min_gas_limit),
+    )
 }
 
 <span class="kw">fn </span>storage_limit(executed: <span class="kw-2">&amp;</span>Executed) -&gt; u64 {
@@ -955,6 +974,7 @@
             charge_gas: <span class="self">self</span>.charge_gas(),
             check_epoch_bound: <span class="bool-val">false</span>,
             check_base_price: <span class="self">self</span>.has_gas_price,
+            forbid_eoa_with_code: <span class="bool-val">false</span>,
         }
     }
 

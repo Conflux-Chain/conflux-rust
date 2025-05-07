@@ -185,7 +185,7 @@
     <span class="kw">struct </span>EpochHash(U256, <span class="string">"epochHash(uint256)"</span>, H256);
 }
 
-<span class="macro">impl_function_type!</span>(EpochHash, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.sload_gas);
+<span class="macro">impl_function_type!</span>(EpochHash, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.cold_sload_gas);
 
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>EpochHash {
     <span class="kw">fn </span>execute_inner(

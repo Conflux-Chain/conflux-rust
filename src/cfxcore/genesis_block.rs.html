@@ -572,6 +572,11 @@
 <a href="#572" id="572">572</a>
 <a href="#573" id="573">573</a>
 <a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -740,6 +745,7 @@
             CleanupMode::NoEmpty,
         )
         .unwrap();
+    state.commit_cache(<span class="bool-val">false</span>);
 
     <span class="kw">let </span><span class="kw-2">mut </span>debug_record = <span class="prelude-val">Some</span>(ComputeEpochDebugRecord::default());
 
@@ -918,6 +924,7 @@
                 contract_name_list[i - <span class="number">1</span>],
                 contract_address
             );
+            state.commit_cache(<span class="bool-val">false</span>);
         }
     }
 
@@ -936,6 +943,7 @@
             state
                 .deposit(<span class="kw-2">&amp;</span>node.address, <span class="kw-2">&amp;</span>stake_balance, <span class="number">0</span>, <span class="bool-val">false</span>)
                 .unwrap();
+            state.commit_cache(<span class="bool-val">false</span>);
             <span class="kw">let </span>signed_tx = node
                 .register_tx
                 .clone()
@@ -1062,7 +1070,8 @@
 <span class="kw">fn </span>execute_genesis_transaction(
     transaction: <span class="kw-2">&amp;</span>SignedTransaction, state: <span class="kw-2">&amp;mut </span>State, machine: Arc&lt;Machine&gt;,
 ) {
-    <span class="kw">let </span>env = Env::default();
+    <span class="kw">let </span><span class="kw-2">mut </span>env = Env::default();
+    env.transaction_hash = transaction.hash();
 
     <span class="kw">let </span>options = TransactOptions::default();
     <span class="kw">let </span>r = {
@@ -1075,6 +1084,7 @@
         .transact(transaction, options)
         .unwrap()
     };
+    state.update_state_post_tx_execution(<span class="bool-val">false</span>);
 
     <span class="kw">match </span><span class="kw-2">&amp;</span>r {
         ExecutionOutcome::Finished(_executed) =&gt; {}

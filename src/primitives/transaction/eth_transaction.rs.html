@@ -286,13 +286,65 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
-</pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
-    bytes::Bytes, transaction::AccessList, Action, SignedTransaction,
-    Transaction, TransactionWithSignature,
-    TransactionWithSignatureSerializePart,
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::AuthorizationListItem;
+<span class="kw">use crate</span>::{
+    bytes::Bytes, transaction::AccessList, AccessListItem, Action,
+    AuthorizationList, SignedTransaction, Transaction,
+    TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
 <span class="kw">use </span>cfx_types::{AddressWithSpace, H256, U256};
+<span class="kw">use </span>cfxkey::Address;
 <span class="kw">use </span>rlp::{Encodable, RlpStream};
+<span class="kw">use </span>rlp_derive::{RlpDecodable, RlpEncodable};
 <span class="kw">use </span>serde_derive::{Deserialize, Serialize};
 
 <span class="kw">impl </span>Eip155Transaction {
@@ -396,7 +448,17 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+<span class="attr">#[derive(
+    Default,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    RlpEncodable,
+    RlpDecodable,
+)]
 </span><span class="kw">pub struct </span>Eip2930Transaction {
     <span class="kw">pub </span>chain_id: u32,
     <span class="kw">pub </span>nonce: U256,
@@ -405,24 +467,20 @@
     <span class="kw">pub </span>action: Action,
     <span class="kw">pub </span>value: U256,
     <span class="kw">pub </span>data: Bytes,
-    <span class="kw">pub </span>access_list: AccessList,
+    <span class="kw">pub </span>access_list: Vec&lt;AccessListItem&gt;,
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>Eip2930Transaction {
-    <span class="kw">fn </span>rlp_append(<span class="kw-2">&amp;</span><span class="self">self</span>, s: <span class="kw-2">&amp;mut </span>RlpStream) {
-        s.begin_list(<span class="number">8</span>);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.chain_id);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.nonce);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.gas_price);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.gas);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.action);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.value);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.data);
-        s.append_list(<span class="kw-2">&amp;</span><span class="self">self</span>.access_list);
-    }
-}
-
-<span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+<span class="attr">#[derive(
+    Default,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    RlpEncodable,
+    RlpDecodable,
+)]
 </span><span class="kw">pub struct </span>Eip1559Transaction {
     <span class="kw">pub </span>chain_id: u32,
     <span class="kw">pub </span>nonce: U256,
@@ -432,22 +490,31 @@
     <span class="kw">pub </span>action: Action,
     <span class="kw">pub </span>value: U256,
     <span class="kw">pub </span>data: Bytes,
-    <span class="kw">pub </span>access_list: AccessList,
+    <span class="kw">pub </span>access_list: Vec&lt;AccessListItem&gt;,
 }
 
-<span class="kw">impl </span>Encodable <span class="kw">for </span>Eip1559Transaction {
-    <span class="kw">fn </span>rlp_append(<span class="kw-2">&amp;</span><span class="self">self</span>, s: <span class="kw-2">&amp;mut </span>RlpStream) {
-        s.begin_list(<span class="number">9</span>);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.chain_id);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.nonce);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.max_priority_fee_per_gas);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.max_fee_per_gas);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.gas);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.action);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.value);
-        s.append(<span class="kw-2">&amp;</span><span class="self">self</span>.data);
-        s.append_list(<span class="kw-2">&amp;</span><span class="self">self</span>.access_list);
-    }
+<span class="attr">#[derive(
+    Default,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    RlpEncodable,
+    RlpDecodable,
+)]
+</span><span class="kw">pub struct </span>Eip7702Transaction {
+    <span class="kw">pub </span>chain_id: u32,
+    <span class="kw">pub </span>nonce: U256,
+    <span class="kw">pub </span>max_priority_fee_per_gas: U256,
+    <span class="kw">pub </span>max_fee_per_gas: U256,
+    <span class="kw">pub </span>gas: U256,
+    <span class="kw">pub </span>destination: Address,
+    <span class="kw">pub </span>value: U256,
+    <span class="kw">pub </span>data: Bytes,
+    <span class="kw">pub </span>access_list: Vec&lt;AccessListItem&gt;,
+    <span class="kw">pub </span>authorization_list: Vec&lt;AuthorizationListItem&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -455,6 +522,7 @@
     Eip155(Eip155Transaction),
     Eip1559(Eip1559Transaction),
     Eip2930(Eip2930Transaction),
+    Eip7702(Eip7702Transaction),
 }
 <span class="kw">use </span>EthereumTransaction::<span class="kw-2">*</span>;
 
@@ -485,6 +553,7 @@
                 EthereumTransaction::Eip155(tx) =&gt; <span class="kw-2">&amp;</span>tx.<span class="macro-nonterminal">$field</span>,
                 EthereumTransaction::Eip2930(tx) =&gt; <span class="kw-2">&amp;</span>tx.<span class="macro-nonterminal">$field</span>,
                 EthereumTransaction::Eip1559(tx) =&gt; <span class="kw-2">&amp;</span>tx.<span class="macro-nonterminal">$field</span>,
+                EthereumTransaction::Eip7702(tx) =&gt; <span class="kw-2">&amp;</span>tx.<span class="macro-nonterminal">$field</span>,
             }
         }
     };
@@ -497,15 +566,23 @@
 
     <span class="macro">eth_access_common_ref!</span>(nonce, U256);
 
-    <span class="macro">eth_access_common_ref!</span>(action, Action);
-
     <span class="macro">eth_access_common_ref!</span>(value, U256);
+
+    <span class="kw">pub fn </span>action(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Action {
+        <span class="kw">match </span><span class="self">self </span>{
+            Eip155(tx) =&gt; tx.action,
+            Eip1559(tx) =&gt; tx.action,
+            Eip2930(tx) =&gt; tx.action,
+            Eip7702(tx) =&gt; Action::Call(tx.destination),
+        }
+    }
 
     <span class="kw">pub fn </span>gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 {
         <span class="kw">match </span><span class="self">self </span>{
             Eip155(tx) =&gt; <span class="kw-2">&amp;</span>tx.gas_price,
             Eip1559(tx) =&gt; <span class="kw-2">&amp;</span>tx.max_fee_per_gas,
             Eip2930(tx) =&gt; <span class="kw-2">&amp;</span>tx.gas_price,
+            Eip7702(tx) =&gt; <span class="kw-2">&amp;</span>tx.max_fee_per_gas,
         }
     }
 
@@ -514,6 +591,7 @@
             Eip155(tx) =&gt; <span class="kw-2">&amp;</span>tx.gas_price,
             Eip1559(tx) =&gt; <span class="kw-2">&amp;</span>tx.max_priority_fee_per_gas,
             Eip2930(tx) =&gt; <span class="kw-2">&amp;</span>tx.gas_price,
+            Eip7702(tx) =&gt; <span class="kw-2">&amp;</span>tx.max_priority_fee_per_gas,
         }
     }
 
@@ -522,6 +600,7 @@
             Eip155(tx) =&gt; tx.chain_id,
             Eip1559(tx) =&gt; <span class="prelude-val">Some</span>(tx.chain_id),
             Eip2930(tx) =&gt; <span class="prelude-val">Some</span>(tx.chain_id),
+            Eip7702(tx) =&gt; <span class="prelude-val">Some</span>(tx.chain_id),
         }
     }
 
@@ -530,6 +609,16 @@
             Eip155(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.nonce,
             Eip2930(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.nonce,
             Eip1559(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.nonce,
+            Eip7702(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.nonce,
+        }
+    }
+
+    <span class="kw">pub fn </span>data_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            Eip155(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.data,
+            Eip2930(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.data,
+            Eip1559(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.data,
+            Eip7702(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.data,
         }
     }
 
@@ -538,7 +627,16 @@
             Eip155(_tx) =&gt; <span class="prelude-val">None</span>,
             Eip2930(tx) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>tx.access_list),
             Eip1559(tx) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>tx.access_list),
+            Eip7702(tx) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>tx.access_list),
         }
+    }
+
+    <span class="kw">pub fn </span>authorization_list(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>AuthorizationList&gt; {
+        <span class="kw">if let </span>Eip7702(tx) = <span class="self">self </span>{
+            <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>tx.authorization_list)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>}
     }
 }
 

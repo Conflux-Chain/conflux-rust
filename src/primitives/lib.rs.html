@@ -49,6 +49,7 @@
 <a href="#49" id="49">49</a>
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -93,7 +94,8 @@
     },
     storage_key::<span class="kw-2">*</span>,
     transaction::{
-        AccessList, AccessListItem, Action, SignedTransaction, Transaction,
+        AccessList, AccessListItem, Action, AuthorizationList,
+        AuthorizationListItem, SignedTransaction, Transaction,
         TransactionWithSignature, TransactionWithSignatureSerializePart,
         TxPropagateId,
     },

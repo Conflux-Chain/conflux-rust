@@ -133,12 +133,35 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">use crate</span>::{
     executive_observer::{AddressPocket, TracerTrait},
+    stack::CallStackInfo,
     state::State,
     substate::{cleanup_mode, Substate},
 };
@@ -148,6 +171,7 @@
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space,
 };
+<span class="kw">use </span>vm::Env;
 
 <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::components::InternalRefContext;
 
@@ -164,13 +188,30 @@
 ///   4. kill the contract
 </span><span class="kw">pub fn </span>suicide(
     contract_address: <span class="kw-2">&amp;</span>AddressWithSpace, refund_address: <span class="kw-2">&amp;</span>AddressWithSpace,
-    state: <span class="kw-2">&amp;mut </span>State, spec: <span class="kw-2">&amp;</span>Spec, substate: <span class="kw-2">&amp;mut </span>Substate,
-    tracer: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>TracerTrait,
+    state: <span class="kw-2">&amp;mut </span>State, spec: <span class="kw-2">&amp;</span>Spec, substate: <span class="kw-2">&amp;mut </span>Substate, env: <span class="kw-2">&amp;</span>Env,
+    creating_contract: bool, tracer: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>TracerTrait,
 ) -&gt; vm::Result&lt;()&gt; {
-    substate.suicides.insert(contract_address.clone());
+    <span class="comment">// After CIP-151, contract can only be killed in the same transaction as
+    // its creation.
+    </span><span class="kw">let </span>transaction_hash = env.transaction_hash;
+    <span class="kw">let </span>contract_create_in_same_tx = state
+        .created_at_transaction(contract_address, transaction_hash)<span class="question-mark">?
+        </span>|| creating_contract;
+    <span class="kw">let </span>soft_suicide = spec.cip151 &amp;&amp; !contract_create_in_same_tx;
+
     <span class="kw">let </span>balance = state.balance(contract_address)<span class="question-mark">?</span>;
 
-    <span class="kw">if </span>refund_address == contract_address
+    <span class="kw">if </span>!soft_suicide {
+        tracer.selfdestruct(
+            <span class="kw-2">&amp;</span>contract_address.address,
+            <span class="kw-2">&amp;</span>refund_address.address,
+            balance,
+        );
+
+        substate.suicides.insert(contract_address.clone());
+    }
+
+    <span class="kw">if </span>(refund_address == contract_address &amp;&amp; !soft_suicide)
         || (!spec.is_valid_address(<span class="kw-2">&amp;</span>refund_address.address)
             &amp;&amp; refund_address.space == Space::Native)
     {
@@ -189,7 +230,7 @@
         <span class="kw">if </span>contract_address.space == Space::Ethereum {
             state.sub_total_evm_tokens(balance);
         }
-    } <span class="kw">else </span>{
+    } <span class="kw">else if </span>refund_address != contract_address {
         <span class="macro">trace!</span>(target: <span class="string">"context"</span>, <span class="string">"Destroying {} -&gt; {} (xfer: {})"</span>, contract_address.address, refund_address.address, balance);
         tracer.trace_internal_transfer(
             AddressPocket::Balance(<span class="kw-2">*</span>contract_address),
@@ -217,14 +258,14 @@
     <span class="kw">let </span>requester = <span class="kw-2">&amp;</span>params.sender;
     <span class="macro">debug!</span>(
         <span class="string">"set_admin requester {:?} contract {:?}, \
-         new_admin {:?}, contract_in_creation {:?}"</span>,
+         new_admin {:?}, admin_control_in_creation {:?}"</span>,
         requester,
         contract_address,
         new_admin_address,
-        context.callstack.contract_in_creation(),
+        context.callstack.admin_control_in_creation(),
     );
 
-    <span class="kw">let </span>clear_admin_in_create = context.callstack.contract_in_creation()
+    <span class="kw">let </span>clear_admin_in_create = context.callstack.admin_control_in_creation()
         == <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>contract_address.with_native_space())
         &amp;&amp; new_admin_address.is_null_address();
 
@@ -249,7 +290,8 @@
 /// The input should consist of 20 bytes `contract_address`
 </span><span class="kw">pub fn </span>destroy(
     contract_address: Address, params: <span class="kw-2">&amp;</span>ActionParams, state: <span class="kw-2">&amp;mut </span>State,
-    spec: <span class="kw-2">&amp;</span>Spec, substate: <span class="kw-2">&amp;mut </span>Substate, tracer: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>TracerTrait,
+    spec: <span class="kw-2">&amp;</span>Spec, substate: <span class="kw-2">&amp;mut </span>Substate, env: <span class="kw-2">&amp;</span>Env,
+    tracer: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>TracerTrait, callstack: <span class="kw-2">&amp;</span>CallStackInfo,
 ) -&gt; vm::Result&lt;()&gt; {
     <span class="macro">debug!</span>(<span class="string">"contract_address={:?}"</span>, contract_address);
 
@@ -262,6 +304,8 @@
             state,
             spec,
             substate,
+            env,
+            callstack.creating_contract(<span class="kw-2">&amp;</span>contract_address.with_native_space()),
             tracer,
         )
     } <span class="kw">else </span>{

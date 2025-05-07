@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["PendingReason","TransactionStatus"],"mod":["address","epoch_number","pos","random","trace","trace_eth","trace_filter","traits"],"struct":["CfxFeeHistory","ChainStaticMeta","FeeHistoryCacheEntry","PhantomBlock","RpcImplConfiguration","SubId"]};
+window.SIDEBAR_ITEMS = {"enum":["PendingReason","TransactionStatus"],"mod":["address","apis","epoch_number","eth_apis","pos","random","trace","trace_eth","trace_filter","traits"],"struct":["CfxFeeHistory","ChainStaticMeta","FeeHistoryCacheEntry","PhantomBlock","RpcImplConfiguration","SubId"]};

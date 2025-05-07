@@ -61,6 +61,17 @@
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Conflux Executor: A Rust crate for the core logic of executing transactions
 //! on the Conflux blockchain. It encapsulates all the necessary logic for a
 //! consensus node during execution, focusing solely on the execution logic
@@ -124,4 +135,15 @@
 
 <span class="kw">pub use </span>internal_contract::{InternalContractMap, InternalContractTrait};
 <span class="kw">pub use </span>observer <span class="kw">as </span>executive_observer;
+
+<span class="doccomment">/// Common tools for test
+</span><span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>cfx_types::H256;
+    <span class="kw">use </span>hex_literal::hex;
+    <span class="comment">// Mock transaction hash for tests not contruct an actual transaction.
+    </span><span class="kw">pub const </span>MOCK_TX_HASH: H256 = H256(<span class="macro">hex!</span>(
+        <span class="string">"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    </span>));
+}
 </code></pre></div></section></main></body></html>

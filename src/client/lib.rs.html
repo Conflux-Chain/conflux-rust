@@ -13,8 +13,6 @@
 <a href="#13" id="13">13</a>
 <a href="#14" id="14">14</a>
 <a href="#15" id="15">15</a>
-<a href="#16" id="16">16</a>
-<a href="#17" id="17">17</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -24,12 +22,10 @@
 
 </span><span class="kw">use </span>cfxkey <span class="kw">as </span>keylib;
 
-<span class="attr">#[macro_use]
-</span><span class="kw">mod </span>config_macro;
 <span class="kw">pub mod </span>accounts;
 <span class="kw">pub mod </span>common;
-<span class="kw">pub mod </span>configuration;
 <span class="kw">mod </span>node_types;
 <span class="kw">pub mod </span>rpc;
+<span class="kw">pub use </span>cfx_config <span class="kw">as </span>configuration;
 <span class="kw">pub use </span>node_types::{archive, full, light};
 </code></pre></div></section></main></body></html>

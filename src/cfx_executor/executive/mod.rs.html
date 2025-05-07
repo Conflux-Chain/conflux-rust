@@ -169,6 +169,39 @@
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -186,7 +219,7 @@
     address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space,
     SpaceMap, H256, U256,
 };
-<span class="kw">use </span>cfx_vm_types::{CreateContractAddress, Env, Spec};
+<span class="kw">use </span>cfx_vm_types::{ConsensusGasSpec, CreateContractAddress, Env, Spec};
 <span class="kw">use </span>primitives::{AccessList, SignedTransaction};
 
 <span class="kw">use </span>fresh_executive::FreshExecutive;
@@ -223,9 +256,13 @@
         }
     }
 
-    <span class="kw">pub fn </span>transact&lt;O: ExecutiveObserver&gt;(
+    <span class="attr">#[inline(never)]
+    </span><span class="kw">pub fn </span>transact&lt;O: ExecutiveObserver&gt;(
         <span class="self">self</span>, tx: <span class="kw-2">&amp;</span>SignedTransaction, options: TransactOptions&lt;O&gt;,
     ) -&gt; DbResult&lt;ExecutionOutcome&gt; {
+        <span class="comment">// Transaction should execute on an empty cache
+        </span><span class="macro">assert!</span>(<span class="self">self</span>.state.cache.get_mut().is_empty());
+
         <span class="kw">let </span>fresh_exec = FreshExecutive::new(<span class="self">self</span>, tx, options);
 
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>fresh_exec.check_all()<span class="question-mark">? </span>{
@@ -265,8 +302,10 @@
     }
 }
 
-<span class="kw">pub fn </span>gas_required_for(
-    is_create: bool, data: <span class="kw-2">&amp;</span>[u8], access_list: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>AccessList&gt;, spec: <span class="kw-2">&amp;</span>Spec,
+<span class="attr">#[inline]
+</span><span class="kw">pub fn </span>gas_required_for(
+    is_create: bool, data: <span class="kw-2">&amp;</span>[u8], access_list: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>AccessList&gt;,
+    authorization_len: usize, spec: <span class="kw-2">&amp;</span>ConsensusGasSpec,
 ) -&gt; u64 {
     <span class="kw">let </span>init_gas = (<span class="kw">if </span>is_create {
         spec.tx_create_gas
@@ -281,6 +320,14 @@
         }) <span class="kw">as </span>u64
     };
     <span class="kw">let </span>data_gas: u64 = data.iter().map(byte_gas).sum();
+    <span class="kw">let </span>data_word = (data.len() <span class="kw">as </span>u64 + <span class="number">31</span>) / <span class="number">32</span>;
+
+    <span class="comment">// CIP-645i: EIP-3860: Limit and meter initcode
+    </span><span class="kw">let </span>initcode_gas = <span class="kw">if </span>spec.cip645.eip3860 &amp;&amp; is_create {
+        data_word * spec.init_code_word_gas <span class="kw">as </span>u64
+    } <span class="kw">else </span>{
+        <span class="number">0
+    </span>};
 
     <span class="kw">let </span>access_gas: u64 = <span class="kw">if let </span><span class="prelude-val">Some</span>(acc) = access_list {
         <span class="kw">let </span>address_gas =
@@ -296,7 +343,26 @@
         <span class="number">0
     </span>};
 
-    init_gas + data_gas + access_gas
+    <span class="kw">let </span>authorization_gas = spec.per_empty_account_cost <span class="kw">as </span>u64
+        * spec.evm_gas_ratio <span class="kw">as </span>u64
+        * authorization_len <span class="kw">as </span>u64;
+
+    init_gas + data_gas + access_gas + authorization_gas + initcode_gas
+}
+
+<span class="kw">pub fn </span>eip7623_required_gas(data: <span class="kw-2">&amp;</span>[u8], spec: <span class="kw-2">&amp;</span>ConsensusGasSpec) -&gt; u64 {
+    <span class="kw">if </span>!spec.eip7623 {
+        <span class="kw">return </span><span class="number">0</span>;
+    }
+
+    <span class="kw">let </span>byte_floor_gas = |b: <span class="kw-2">&amp;</span>u8| {
+        (<span class="kw">match </span><span class="kw-2">*</span>b {
+            <span class="number">0 </span>=&gt; spec.tx_data_floor_zero_gas,
+            <span class="kw">_ </span>=&gt; spec.tx_data_floor_non_zero_gas,
+        }) <span class="kw">as </span>u64
+    };
+
+    spec.tx_gas <span class="kw">as </span>u64 + data.iter().map(byte_floor_gas).sum::&lt;u64&gt;()
 }
 
 <span class="kw">pub fn </span>contract_address(

@@ -217,6 +217,8 @@
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -307,6 +309,8 @@
     + ops::Sub&lt;Output = <span class="self">Self</span>&gt;
     + ops::Shr&lt;usize, Output = <span class="self">Self</span>&gt;
     + ops::Shl&lt;usize, Output = <span class="self">Self</span>&gt;
+    + ops::AddAssign
+    + ops::SubAssign
     + cmp::Ord
     + fmt::Debug
 {

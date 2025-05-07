@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["generate_and_save_key","generate_key","load_key","save_key"]};

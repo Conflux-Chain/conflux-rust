@@ -218,6 +218,8 @@
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -286,8 +288,9 @@
             register_log_data_gas + spec.log_gas + spec.log_topic_gas;
         <span class="kw">let </span>increase_stake_log_gas =
             <span class="number">32 </span>* spec.log_data_gas + spec.log_gas + spec.log_topic_gas;
-        <span class="kw">let </span>io_gas =
-            <span class="number">4 </span>* spec.sstore_reset_gas + <span class="number">5 </span>* spec.sload_gas + <span class="number">7 </span>* spec.sha3_gas;
+        <span class="kw">let </span>io_gas = <span class="number">4 </span>* spec.sstore_reset_gas
+            + <span class="number">5 </span>* spec.cold_sload_gas
+            + <span class="number">7 </span>* spec.sha3_gas;
         <span class="kw">let </span>pubkey_hash_gas =
             (bls_pubkey.len() + vrf_pubkey.len() + <span class="number">31</span>) / <span class="number">32 </span>* spec.sha3_gas;
         <span class="kw">let </span>pubkey_verify_gas = <span class="number">50_000</span>;
@@ -338,8 +341,9 @@
         <span class="kw">let </span>spec = context.spec;
         <span class="kw">let </span>log_gas =
             <span class="number">32 </span>* spec.log_data_gas + spec.log_gas + spec.log_topic_gas;
-        <span class="kw">let </span>io_gas =
-            <span class="number">2 </span>* spec.sstore_reset_gas + <span class="number">3 </span>* spec.sload_gas + <span class="number">3 </span>* spec.sha3_gas;
+        <span class="kw">let </span>io_gas = <span class="number">2 </span>* spec.sstore_reset_gas
+            + <span class="number">3 </span>* spec.cold_sload_gas
+            + <span class="number">3 </span>* spec.sha3_gas;
 
         <span class="kw">return </span><span class="prelude-val">Ok</span>(U256::from(log_gas + io_gas));
     }
@@ -379,7 +383,7 @@
 <span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>GetStatus(H256, <span class="string">"getVotes(bytes32)"</span>, (u64,u64));
 }
-<span class="macro">impl_function_type!</span>(GetStatus, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.sload_gas + spec.sha3_gas);
+<span class="macro">impl_function_type!</span>(GetStatus, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.cold_sload_gas + spec.sha3_gas);
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>GetStatus {
     <span class="kw">fn </span>execute_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>, inputs: H256, params: <span class="kw-2">&amp;</span>ActionParams,
@@ -393,7 +397,7 @@
 <span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>IdentifierToAddress(H256, <span class="string">"identifierToAddress(bytes32)"</span>, Address);
 }
-<span class="macro">impl_function_type!</span>(IdentifierToAddress, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.sload_gas + spec.sha3_gas);
+<span class="macro">impl_function_type!</span>(IdentifierToAddress, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.cold_sload_gas + spec.sha3_gas);
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>IdentifierToAddress {
     <span class="kw">fn </span>execute_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>, inputs: H256, params: <span class="kw-2">&amp;</span>ActionParams,
@@ -406,7 +410,7 @@
 <span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>AddressToIdentifier(Address, <span class="string">"addressToIdentifier(address)"</span>, H256);
 }
-<span class="macro">impl_function_type!</span>(AddressToIdentifier, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.sload_gas + spec.sha3_gas);
+<span class="macro">impl_function_type!</span>(AddressToIdentifier, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.cold_sload_gas + spec.sha3_gas);
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>AddressToIdentifier {
     <span class="kw">fn </span>execute_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>, inputs: Address, params: <span class="kw-2">&amp;</span>ActionParams,

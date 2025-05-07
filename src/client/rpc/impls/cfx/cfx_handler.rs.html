@@ -2470,27 +2470,6 @@
 <a href="#2470" id="2470">2470</a>
 <a href="#2471" id="2471">2471</a>
 <a href="#2472" id="2472">2472</a>
-<a href="#2473" id="2473">2473</a>
-<a href="#2474" id="2474">2474</a>
-<a href="#2475" id="2475">2475</a>
-<a href="#2476" id="2476">2476</a>
-<a href="#2477" id="2477">2477</a>
-<a href="#2478" id="2478">2478</a>
-<a href="#2479" id="2479">2479</a>
-<a href="#2480" id="2480">2480</a>
-<a href="#2481" id="2481">2481</a>
-<a href="#2482" id="2482">2482</a>
-<a href="#2483" id="2483">2483</a>
-<a href="#2484" id="2484">2484</a>
-<a href="#2485" id="2485">2485</a>
-<a href="#2486" id="2486">2486</a>
-<a href="#2487" id="2487">2487</a>
-<a href="#2488" id="2488">2488</a>
-<a href="#2489" id="2489">2489</a>
-<a href="#2490" id="2490">2490</a>
-<a href="#2491" id="2491">2491</a>
-<a href="#2492" id="2492">2492</a>
-<a href="#2493" id="2493">2493</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2552,7 +2531,7 @@
 <span class="kw">use </span>primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block, BlockHeader,
     BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
-    StorageValue, Transaction, TransactionIndex, TransactionStatus,
+    StorageValue, TransactionIndex, TransactionStatus,
     TransactionWithSignature, VoteStakeInfo,
 };
 <span class="kw">use </span>random_crash::<span class="kw-2">*</span>;
@@ -2606,10 +2585,6 @@
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
 };
 <span class="kw">use </span>diem_types::account_address::AccountAddress;
-<span class="kw">use </span>primitives::transaction::{
-    eth_transaction::EthereumTransaction,
-    native_transaction::TypedNativeTransaction,
-};
 <span class="kw">use </span>serde::Serialize;
 
 <span class="attr">#[derive(Debug)]
@@ -3626,39 +3601,10 @@
             <span class="kw">let </span><span class="kw-2">mut </span>signed_tx = SignedTransaction::new(public, tx);
 
             <span class="comment">// set fake data for latency tests
-            </span><span class="kw">match </span>signed_tx.transaction.transaction.unsigned {
-                Transaction::Native(TypedNativeTransaction::Cip155(
-                    <span class="kw-2">ref mut </span>unsigned,
-                )) <span class="kw">if </span>tx_data_len &gt; <span class="number">0 </span>=&gt; {
-                    unsigned.data = <span class="macro">vec!</span>[<span class="number">0</span>; tx_data_len];
-                }
-                Transaction::Native(TypedNativeTransaction::Cip1559(
-                    <span class="kw-2">ref mut </span>unsigned,
-                )) <span class="kw">if </span>tx_data_len &gt; <span class="number">0 </span>=&gt; {
-                    unsigned.data = <span class="macro">vec!</span>[<span class="number">0</span>; tx_data_len];
-                }
-                Transaction::Native(TypedNativeTransaction::Cip2930(
-                    <span class="kw-2">ref mut </span>unsigned,
-                )) <span class="kw">if </span>tx_data_len &gt; <span class="number">0 </span>=&gt; {
-                    unsigned.data = <span class="macro">vec!</span>[<span class="number">0</span>; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip155(
-                    <span class="kw-2">ref mut </span>unsigned,
-                )) <span class="kw">if </span>tx_data_len &gt; <span class="number">0 </span>=&gt; {
-                    unsigned.data = <span class="macro">vec!</span>[<span class="number">0</span>; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip1559(
-                    <span class="kw-2">ref mut </span>unsigned,
-                )) <span class="kw">if </span>tx_data_len &gt; <span class="number">0 </span>=&gt; {
-                    unsigned.data = <span class="macro">vec!</span>[<span class="number">0</span>; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip2930(
-                    <span class="kw-2">ref mut </span>unsigned,
-                )) <span class="kw">if </span>tx_data_len &gt; <span class="number">0 </span>=&gt; {
-                    unsigned.data = <span class="macro">vec!</span>[<span class="number">0</span>; tx_data_len];
-                }
-                <span class="kw">_ </span>=&gt; {}
-            };
+            </span><span class="kw">if </span>tx_data_len &gt; <span class="number">0 </span>{
+                <span class="kw-2">*</span>signed_tx.transaction.transaction.unsigned.data_mut() =
+                    <span class="macro">vec!</span>[<span class="number">0</span>; tx_data_len];
+            }
 
             transactions.push(Arc::new(signed_tx));
         }
@@ -3814,6 +3760,12 @@
                 <span class="string">"Transaction can not be executed"</span>.into(),
                 <span class="macro">format!</span> {<span class="string">"not enough gas limit with respected to tx size: expected {:?} got {:?}"</span>, expected, got}
             )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) =&gt; <span class="macro">bail!</span>(call_execution_error(
+                <span class="string">"Transaction can not be executed"</span>.into(),
+                <span class="macro">format!</span> {<span class="string">"tx sender has contract code: {:?}"</span>, address}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) =&gt; {
                 <span class="macro">bail!</span>(call_execution_error(
                     <span class="string">"Transaction can not be executed"</span>.into(),
@@ -3858,6 +3810,12 @@
             ) =&gt; <span class="macro">bail!</span>(call_execution_error(
                 <span class="string">"Can not estimate: transaction can not be executed"</span>.into(),
                 <span class="macro">format!</span> {<span class="string">"invalid recipient address {:?}"</span>, recipient}
+            )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) =&gt; <span class="macro">bail!</span>(call_execution_error(
+                <span class="string">"Can not estimate: transaction sender has code"</span>.into(),
+                <span class="macro">format!</span> {<span class="string">"transaction sender has code {:?}"</span>, address}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) =&gt; {
                 <span class="macro">bail!</span>(call_execution_error(

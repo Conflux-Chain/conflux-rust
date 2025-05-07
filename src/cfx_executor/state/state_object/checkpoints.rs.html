@@ -172,6 +172,10 @@
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Checkpoints: Defines the account entry type within checkpoint layers and
 //! implements checkpoint maintenance logic.
 
@@ -180,11 +184,11 @@
 
 <span class="kw">use super</span>::{
     <span class="kw">super</span>::checkpoints::CheckpointEntry::{<span class="self">self</span>, Recorded, Unchanged},
-    AccountEntry, GlobalStat, OverlayAccount, State,
+    AccountEntry, AccountEntryWithWarm, GlobalStat, OverlayAccount, State,
 };
 <span class="kw">use crate</span>::{state::checkpoints::CheckpointLayerTrait, unwrap_or_return};
 
-<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>AccountCheckpointEntry = CheckpointEntry&lt;AccountEntry&gt;;
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">type </span>AccountCheckpointEntry = CheckpointEntry&lt;AccountEntryWithWarm&gt;;
 
 <span class="doccomment">/// Represents a recoverable point within a checkpoint. including
 /// and. The addition of account entries to the checkpoint is lazy; they are
@@ -207,7 +211,7 @@
 
 <span class="kw">impl </span>CheckpointLayerTrait <span class="kw">for </span>CheckpointLayer {
     <span class="kw">type </span>Key = AddressWithSpace;
-    <span class="kw">type </span>Value = AccountEntry;
+    <span class="kw">type </span>Value = AccountEntryWithWarm;
 
     <span class="kw">fn </span>as_hash_map(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>HashMap&lt;<span class="self">Self</span>::Key, CheckpointEntry&lt;<span class="self">Self</span>::Value&gt;&gt; {
         <span class="kw-2">&amp;</span><span class="self">self</span>.entries
@@ -241,8 +245,8 @@
         // cleared directly, thus, the accounts in state's cache should
         // all discard all checkpoints
         </span><span class="kw">for </span>addr <span class="kw">in </span>cleared_addresses {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(AccountEntry::Cached(<span class="kw-2">ref mut </span>overlay_account, <span class="bool-val">true</span>)) =
-                <span class="self">self</span>.cache.get_mut().get_mut(<span class="kw-2">&amp;</span>addr)
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(AccountEntry::Cached(<span class="kw-2">ref mut </span>overlay_account, _dirty)) =
+                <span class="self">self</span>.cache.get_mut().get_mut(<span class="kw-2">&amp;</span>addr).map(|x| <span class="kw-2">&amp;mut </span>x.entry)
             {
                 overlay_account.clear_checkpoint();
             }
@@ -272,7 +276,7 @@
         <span class="kw">let </span>old_account_entry = <span class="self">self
             </span>.cache
             .get_mut()
-            .insert(address, AccountEntry::new_dirty(account));
+            .insert(address, AccountEntry::new_dirty(account).with_warm(<span class="bool-val">true</span>));
 
         <span class="self">self</span>.checkpoints
             .get_mut()
@@ -285,33 +289,41 @@
     /// this function to incoroprates the old version to the checkpoint in
     /// needed.
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>copy_cache_entry_to_checkpoint(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, address: AddressWithSpace, entry_in_cache: <span class="kw-2">&amp;mut </span>AccountEntry,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, address: AddressWithSpace,
+        entry_in_cache: <span class="kw-2">&amp;mut </span>AccountEntryWithWarm,
     ) {
         <span class="self">self</span>.checkpoints
             .write()
             .insert_element(address, |checkpoint_id| {
                 <span class="kw">let </span><span class="kw-2">mut </span>new_entry_in_cache = entry_in_cache
-                    .clone_cache_entry_for_checkpoint(checkpoint_id);
+                    .entry
+                    .clone_cache_entry_for_checkpoint(checkpoint_id)
+                    .with_warm(<span class="bool-val">true</span>);
 
                 std::mem::swap(<span class="kw-2">&amp;mut </span>new_entry_in_cache, entry_in_cache);
                 <span class="comment">// Rename after memswap
-                </span><span class="kw">let </span>old_entry_in_cache = new_entry_in_cache;
+                </span><span class="kw">let </span>entry_to_checkpoint = new_entry_in_cache;
 
-                Recorded(old_entry_in_cache)
+                Recorded(entry_to_checkpoint)
             });
+        <span class="comment">// If there is no checkpoint, the above function will not be executed,
+        // so we need to mark warm bit here.
+        </span>entry_in_cache.warm = <span class="bool-val">true</span>;
     }
 
     <span class="attr">#[cfg(any(test, feature = <span class="string">"testonly_code"</span>))]
     </span><span class="kw">pub fn </span>clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="macro">assert!</span>(<span class="self">self</span>.no_checkpoint());
         <span class="self">self</span>.cache.get_mut().clear();
+        <span class="self">self</span>.committed_cache.clear();
         <span class="self">self</span>.global_stat = GlobalStat::loaded(<span class="kw-2">&amp;</span><span class="self">self</span>.db).expect(<span class="string">"no db error"</span>);
     }
 }
 
 <span class="kw">fn </span>apply_checkpoint_layer_to_cache(
     entries: HashMap&lt;AddressWithSpace, AccountCheckpointEntry&gt;,
-    cache: <span class="kw-2">&amp;mut </span>HashMap&lt;AddressWithSpace, AccountEntry&gt;, checkpoint_id: usize,
+    cache: <span class="kw-2">&amp;mut </span>HashMap&lt;AddressWithSpace, AccountEntryWithWarm&gt;,
+    checkpoint_id: usize,
 ) {
     <span class="kw">for </span>(k, v) <span class="kw">in </span>entries.into_iter() {
         <span class="kw">let </span><span class="kw-2">mut </span>entry_in_cache = <span class="kw">if let </span>Occupied(e) = cache.entry(k) {
@@ -330,18 +342,14 @@
         };
         <span class="kw">match </span>v {
             Recorded(entry_in_checkpoint) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(acc) = entry_in_cache.get_mut().dirty_account_mut()
-                {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(acc) = entry_in_cache.get_mut().account_mut() {
                     acc.revert_checkpoint(checkpoint_id);
                 }
                 <span class="kw-2">*</span>entry_in_cache.get_mut() = entry_in_checkpoint;
             }
             Unchanged =&gt; {
-                <span class="comment">// If the AccountEntry in cache does not have a dirty bit, we
-                // can keep it in cache to avoid an duplicate db load.
-                </span><span class="kw">if </span>entry_in_cache.get().is_dirty() {
-                    entry_in_cache.remove();
-                }
+                <span class="comment">// The warm/cold storage relies on the existence of cache
+                </span>entry_in_cache.remove();
             }
         }
     }

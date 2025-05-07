@@ -322,6 +322,7 @@
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
 <a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -589,8 +590,9 @@
             <span class="kw-2">&amp;</span>address,
             eip_1820::BYTE_CODE.clone(),
             Address::zero(),
+            context.env.transaction_hash,
         )<span class="question-mark">?</span>;
-        context.substate.contracts_created.push(address);
+        context.substate.record_contract_create(address);
         <span class="prelude-val">Ok</span>(())
     }
 }

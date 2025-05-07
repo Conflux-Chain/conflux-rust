@@ -261,13 +261,66 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{State, Substate};
 <span class="kw">use crate</span>::{return_if, try_loaded};
 <span class="kw">use </span>cfx_parameters::internal_contract_addresses::{
     SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, SYSTEM_STORAGE_ADDRESS,
 };
 <span class="kw">use </span>cfx_statedb::Result <span class="kw">as </span>DbResult;
-<span class="kw">use </span>cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
+<span class="kw">use </span>cfx_types::{
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H256,
+    U256,
+};
 <span class="kw">use </span>primitives::StorageValue;
 
 <span class="kw">impl </span>State {
@@ -299,12 +352,49 @@
         )
     }
 
+    <span class="kw">pub fn </span>set_eip2935_storage(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, block_height: u64, block_hash: H256,
+    ) -&gt; DbResult&lt;()&gt; {
+        <span class="kw">use </span>cfx_types::H160;
+        <span class="kw">use </span>hex_literal::hex;
+
+        <span class="kw">pub const </span>EIP2935_ADDRESS: AddressWithSpace = AddressWithSpace {
+            address: H160(<span class="macro">hex!</span>(<span class="string">"0000F90827F1C53a10cb7A02335B175320002935"</span>)),
+            space: Space::Ethereum,
+        };
+        <span class="kw">pub const </span>HISTORY_SERVE_WINDOW: usize = <span class="number">8191</span>;
+
+        <span class="kw">if </span><span class="self">self</span>.has_no_code(<span class="kw-2">&amp;</span>EIP2935_ADDRESS)<span class="question-mark">? </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+
+        <span class="kw">let </span>slot_index = U256::from(block_height % HISTORY_SERVE_WINDOW <span class="kw">as </span>u64);
+        <span class="kw">let </span>key: H256 = BigEndianHash::from_uint(<span class="kw-2">&amp;</span>slot_index);
+
+        <span class="comment">// The espace does not have owner.
+        </span><span class="self">self</span>.set_storage(
+            <span class="kw-2">&amp;</span>EIP2935_ADDRESS,
+            key.<span class="number">0</span>.to_vec(),
+            block_hash.into_uint(),
+            Address::zero(),
+            <span class="kw-2">&amp;mut </span>Substate::new(),
+        )
+    }
+
     <span class="attr">#[inline]
     </span><span class="kw">pub fn </span>storage_at(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, key: <span class="kw-2">&amp;</span>[u8],
     ) -&gt; DbResult&lt;U256&gt; {
         <span class="kw">let </span>acc = <span class="macro">try_loaded!</span>(<span class="self">self</span>.read_account_lock(address));
         acc.storage_at(<span class="kw-2">&amp;</span><span class="self">self</span>.db, key)
+    }
+
+    <span class="attr">#[inline]
+    </span><span class="kw">pub fn </span>origin_storage_at(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, key: <span class="kw-2">&amp;</span>[u8],
+    ) -&gt; DbResult&lt;<span class="prelude-ty">Option</span>&lt;U256&gt;&gt; {
+        <span class="kw">let </span>acc = <span class="macro">try_loaded!</span>(<span class="self">self</span>.read_account_lock(address));
+        <span class="prelude-val">Ok</span>(acc.origin_storage_at(key))
     }
 
     <span class="attr">#[inline]
@@ -376,7 +466,9 @@
         <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::checkpoints::CheckpointEntry::<span class="kw-2">*</span>;
         <span class="kw">use </span><span class="kw">crate</span>::state::{
             checkpoints::CheckpointLayerTrait,
-            overlay_account::{AccountEntry, OverlayAccount},
+            overlay_account::{
+                AccountEntry, AccountEntryWithWarm, OverlayAccount,
+            },
         };
         <span class="kw">use </span>cfx_statedb::StateDbExt;
         <span class="kw">use </span>primitives::StorageKey;
@@ -403,11 +495,17 @@
                 checkpoints.elements_from_index(start_checkpoint_index);
             <span class="kw">for </span>checkpoint <span class="kw">in </span><span class="kw-2">&amp;mut </span>checkpoints_iter {
                 <span class="kw">match </span>checkpoint.as_hash_map().get(address) {
-                    <span class="prelude-val">Some</span>(Recorded(AccountEntry::Cached(<span class="kw-2">ref </span>account, <span class="kw">_</span>))) =&gt; {
+                    <span class="prelude-val">Some</span>(Recorded(AccountEntryWithWarm {
+                        entry: AccountEntry::Cached(<span class="kw-2">ref </span>account, <span class="kw">_</span>),
+                        ..
+                    })) =&gt; {
                         first_account = <span class="prelude-val">Some</span>(account);
                         <span class="kw">break</span>;
                     }
-                    <span class="prelude-val">Some</span>(Recorded(AccountEntry::DbAbsent)) =&gt; {
+                    <span class="prelude-val">Some</span>(Recorded(AccountEntryWithWarm {
+                        entry: AccountEntry::DbAbsent,
+                        ..
+                    })) =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(U256::zero()));
                     }
                     <span class="prelude-val">Some</span>(Unchanged) =&gt; {
@@ -444,10 +542,10 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>account_changed = <span class="bool-val">false</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>require_cache = <span class="bool-val">true</span>;
                 <span class="kw">for </span>checkpoint <span class="kw">in </span>checkpoints_iter {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(Recorded(AccountEntry::Cached(
-                        <span class="kw-2">ref </span>account,
-                        <span class="kw">_</span>,
-                    ))) = checkpoint.as_hash_map().get(address)
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(Recorded(AccountEntryWithWarm {
+                        entry: AccountEntry::Cached(<span class="kw-2">ref </span>account, <span class="kw">_</span>),
+                        ..
+                    })) = checkpoint.as_hash_map().get(address)
                     {
                         <span class="kw">if </span>!first_account.unwrap().eq_write_cache(account) {
                             account_changed = <span class="bool-val">true</span>;
@@ -471,8 +569,10 @@
                 // if not breaked by further iter of outer checkpoints
                 </span><span class="kw">if </span>!account_changed &amp;&amp; require_cache {
                     <span class="kw">let </span>outer_cache = <span class="self">self</span>.cache.read();
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(AccountEntry::Cached(<span class="kw-2">ref </span>account, <span class="kw">_</span>)) =
-                        outer_cache.get(address)
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(AccountEntryWithWarm {
+                        entry: AccountEntry::Cached(<span class="kw-2">ref </span>account, <span class="kw">_</span>),
+                        ..
+                    }) = outer_cache.get(address)
                     {
                         <span class="kw">if </span>!first_account.unwrap().eq_write_cache(account) {
                             account_changed = <span class="bool-val">true</span>;

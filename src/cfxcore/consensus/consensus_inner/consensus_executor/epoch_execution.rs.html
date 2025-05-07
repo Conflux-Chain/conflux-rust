@@ -647,6 +647,24 @@
 <a href="#647" id="647">647</a>
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::ConsensusExecutionHandler;
 <span class="kw">use </span>std::{collections::BTreeSet, convert::From, sync::Arc};
 
@@ -658,8 +676,8 @@
 <span class="kw">use </span>cfx_statedb::{Error <span class="kw">as </span>DbErrorKind, <span class="prelude-ty">Result </span><span class="kw">as </span>DbResult};
 <span class="kw">use </span>cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 <span class="kw">use </span>primitives::{
-    receipt::BlockReceipts, Action, Block, BlockNumber, Receipt,
-    SignedTransaction, TransactionIndex,
+    receipt::BlockReceipts, AccessListItem, Action, Block, BlockNumber,
+    Receipt, SignedTransaction, TransactionIndex,
 };
 
 <span class="kw">use crate</span>::{
@@ -699,7 +717,7 @@
         start_block_number: u64, on_local_pivot: bool,
         virtual_call: <span class="prelude-ty">Option</span>&lt;VirtualCall&lt;<span class="lifetime">'a</span>&gt;&gt;,
     ) -&gt; DbResult&lt;Vec&lt;Arc&lt;BlockReceipts&gt;&gt;&gt; {
-        <span class="self">self</span>.prefetch_storage_for_execution(<span class="kw-2">&amp;*</span>state, epoch_blocks);
+        <span class="self">self</span>.prefetch_storage_for_execution(state, epoch_blocks);
 
         <span class="kw">let </span>pivot_block = epoch_blocks.last().expect(<span class="string">"Epoch not empty"</span>);
 
@@ -776,7 +794,7 @@
     }
 
     <span class="kw">fn </span>prefetch_storage_for_execution(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;</span>State, epoch_blocks: <span class="kw-2">&amp;</span>Vec&lt;Arc&lt;Block&gt;&gt;,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>State, epoch_blocks: <span class="kw-2">&amp;</span>Vec&lt;Arc&lt;Block&gt;&gt;,
     ) {
         <span class="comment">// Prefetch accounts for transactions.
         // The return value _prefetch_join_handles is used to join all threads
@@ -796,6 +814,11 @@
                 accounts.insert(transaction.sender.with_space(space));
                 <span class="kw">if let </span>Action::Call(<span class="kw-2">ref </span>address) = transaction.action() {
                     accounts.insert(address.with_space(space));
+                }
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(access_list) = transaction.access_list() {
+                    <span class="kw">for </span>AccessListItem { address, .. } <span class="kw">in </span>access_list.iter() {
+                        accounts.insert(address.with_space(space));
+                    }
                 }
             }
         }
@@ -853,6 +876,10 @@
                 .transaction_epoch_bound,
             base_gas_price,
             burnt_gas_price,
+            <span class="comment">// Temporarily set `transaction_hash` to zero; it will be updated
+            // with the actual transaction hash for each transaction.
+            </span>transaction_hash: H256::zero(),
+            ..Default::default()
         }
     }
 
@@ -927,9 +954,11 @@
             settings: TransactSettings::all_checks(),
         };
 
+        env.transaction_hash = transaction.hash();
         <span class="kw">let </span>execution_outcome =
             ExecutiveContext::new(state, env, machine, <span class="kw-2">&amp;</span>spec)
                 .transact(transaction, options)<span class="question-mark">?</span>;
+        state.update_state_post_tx_execution(!spec.cip645.fix_eip1153);
         execution_outcome.log(transaction, <span class="kw-2">&amp;</span>block_context.block.hash());
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(burnt_fee) = execution_outcome
@@ -1051,12 +1080,17 @@
 
         <span class="kw">let </span>epoch_number = pivot_block.block_header.height();
         <span class="kw">let </span>hash = pivot_block.hash();
+        <span class="kw">let </span>parent_hash = pivot_block.block_header.parent_hash();
 
         <span class="kw">if </span>epoch_number &gt;= params.transition_heights.cip133e {
             state.set_system_storage(
                 epoch_hash_slot(epoch_number).into(),
                 U256::from_big_endian(<span class="kw-2">&amp;</span>hash.<span class="number">0</span>),
             )<span class="question-mark">?</span>;
+        }
+
+        <span class="kw">if </span>epoch_number &gt;= params.transition_heights.eip2935 {
+            state.set_eip2935_storage(epoch_number - <span class="number">1</span>, <span class="kw-2">*</span>parent_hash)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -1111,6 +1145,8 @@
                 .internal_contracts()
                 .initialized_at(block_number),
         )<span class="question-mark">?</span>;
+
+        state.commit_cache(<span class="bool-val">false</span>);
 
         <span class="prelude-val">Ok</span>(secondary_reward)
     }

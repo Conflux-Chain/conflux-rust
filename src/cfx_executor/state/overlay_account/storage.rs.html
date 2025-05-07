@@ -276,6 +276,76 @@
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::Substate;
 
 <span class="attr">#[cfg(test)]
@@ -288,9 +358,10 @@
 <span class="kw">use </span>cfx_types::{Address, Space, U256};
 
 <span class="kw">use </span>primitives::{
-    SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
+    storage::WriteCacheItem, SkipInputCheck, StorageKey, StorageKeyWithSpace,
+    StorageValue,
 };
-<span class="kw">use </span>std::collections::hash_map::Entry::<span class="kw-2">*</span>;
+<span class="kw">use </span>std::collections::{hash_map::Entry::<span class="kw-2">*</span>, HashSet};
 
 <span class="kw">use </span><span class="kw">super</span>::OverlayAccount;
 
@@ -350,8 +421,15 @@
         // unless in test and gas estimation.
         </span><span class="macro">assert!</span>(<span class="self">self</span>.storage_write_checkpoint.is_none());
         <span class="kw">let </span>write_cache = <span class="kw-2">&amp;mut </span><span class="self">self</span>.storage_write_cache.write();
+        <span class="kw">let </span>commit_cache = <span class="kw-2">&amp;mut </span><span class="self">self</span>.storage_committed_cache.write();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>read_keys = HashSet::new();
         <span class="comment">// Must have no checkpoint in range deletion
-        </span><span class="kw">for </span>(k, v) <span class="kw">in </span>write_cache.iter_mut() {
+        </span><span class="kw">for </span>(k, item) <span class="kw">in </span>write_cache.iter_mut() {
+            <span class="kw">let </span>WriteCacheItem::Write(v) = item <span class="kw">else </span>{
+                read_keys.insert(k.clone());
+                <span class="kw">continue</span>;
+            };
             <span class="kw">if </span>k.starts_with(key_prefix) &amp;&amp; !v.value.is_zero() {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(old_owner) = v.owner {
                     substate.record_storage_release(
@@ -360,6 +438,28 @@
                     );
                 };
                 <span class="kw-2">*</span>v = StorageValue::default();
+            }
+        }
+
+        <span class="kw">for </span>k <span class="kw">in </span>read_keys {
+            write_cache.remove(<span class="kw-2">&amp;</span>k);
+        }
+
+        <span class="kw">for </span>(k, v) <span class="kw">in </span>commit_cache.iter_mut() {
+            <span class="kw">if </span>write_cache.get(k).is_some() {
+                <span class="kw">continue</span>;
+            }
+            <span class="kw">if </span>k.starts_with(key_prefix) &amp;&amp; !v.value.is_zero() {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(old_owner) = v.owner {
+                    substate.record_storage_release(
+                        <span class="kw-2">&amp;</span>old_owner,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
+                    );
+                };
+                write_cache.insert(
+                    k.clone(),
+                    WriteCacheItem::Write(StorageValue::default()),
+                );
             }
         }
 
@@ -374,7 +474,9 @@
                     // However, if all keys are removed, we don't update
                     // cache since it will be cleared later.
                     </span><span class="kw">if </span>!delete_all {
-                        entry.insert(StorageValue::default());
+                        entry.insert(WriteCacheItem::Write(
+                            StorageValue::default(),
+                        ));
                     }
 
                     <span class="kw">if </span>!delete_all &amp;&amp; !read_cache.contains_key(<span class="kw-2">&amp;</span>key) {
@@ -413,7 +515,12 @@
     }
 
     <span class="kw">fn </span>cached_entry_at(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;StorageValue&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(entry) = <span class="self">self</span>.storage_write_cache.read().get(key) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(WriteCacheItem::Write(entry)) =
+            <span class="self">self</span>.storage_write_cache.read().get(key)
+        {
+            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="kw-2">*</span>entry);
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(entry) = <span class="self">self</span>.storage_committed_cache.read().get(key) {
             <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="kw-2">*</span>entry);
         }
         <span class="kw">if let </span><span class="prelude-val">Some</span>(entry) = <span class="self">self</span>.storage_read_cache.read().get(key) {
@@ -431,6 +538,7 @@
     </span><span class="kw">fn </span>cached_entry_at_checkpoint(
         <span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], state_checkpoint_id: usize,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;CheckpointEntry&lt;StorageValue&gt;&gt; {
+        <span class="kw">use </span>CheckpointEntry::<span class="kw-2">*</span>;
         <span class="kw">if </span><span class="self">self</span>.storage_write_checkpoint.is_none() {
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
@@ -438,12 +546,23 @@
             </span>.storage_write_checkpoint
             .as_ref()
             .unwrap()
+            .read()
             .get_state_cp_id()
             &lt; state_checkpoint_id
         {
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
-        <span class="self">self</span>.storage_write_checkpoint.as_ref().unwrap().get(key)
+        <span class="kw">let </span>res = <span class="self">self
+            </span>.storage_write_checkpoint
+            .as_ref()
+            .unwrap()
+            .read()
+            .get(key)<span class="question-mark">?</span>;
+        <span class="prelude-val">Some</span>(<span class="kw">match </span>res {
+            Unchanged =&gt; Unchanged,
+            Recorded(WriteCacheItem::Read) =&gt; Unchanged,
+            Recorded(WriteCacheItem::Write(v)) =&gt; Recorded(v),
+        })
     }
 
     <span class="attr">#[cfg(test)]
@@ -468,12 +587,29 @@
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.storage_entry_at(db, key)<span class="question-mark">?</span>.value)
     }
 
+    <span class="kw">pub fn </span>origin_storage_at(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;U256&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="self">self</span>.storage_committed_cache.read().get(key) {
+            <span class="kw">return </span><span class="prelude-val">Some</span>(value.value);
+        }
+        <span class="kw">if </span><span class="self">self</span>.fresh_storage() &amp;&amp; !<span class="self">self</span>.storage_overrided {
+            <span class="kw">return </span><span class="prelude-val">Some</span>(U256::zero());
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="self">self</span>.storage_read_cache.read().get(key) {
+            <span class="kw">return </span><span class="prelude-val">Some</span>(value.value);
+        }
+        <span class="kw">if </span><span class="self">self</span>.storage_overrided {
+            <span class="kw">return </span><span class="prelude-val">Some</span>(U256::zero());
+        }
+        <span class="prelude-val">None
+    </span>}
+
     <span class="comment">// If a contract is removed, and then some one transfer balance to it,
     // `storage_at` will return incorrect value. But this case should never
     // happens.
     </span><span class="kw">pub fn </span>storage_entry_at(
         <span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>StateDbGeneric, key: <span class="kw-2">&amp;</span>[u8],
     ) -&gt; DbResult&lt;StorageValue&gt; {
+        <span class="self">self</span>.mark_storage_warm(key);
         <span class="prelude-val">Ok</span>(<span class="kw">if let </span><span class="prelude-val">Some</span>(value) = <span class="self">self</span>.cached_entry_at(key) {
             value
         } <span class="kw">else if </span><span class="self">self</span>.fresh_storage() {
@@ -529,6 +665,10 @@
             <span class="macro">warn!</span>(<span class="string">"Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}"</span>, <span class="self">self</span>.address, key);
         }
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub fn </span>is_warm_storage_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; bool {
+        <span class="self">self</span>.storage_write_cache.read().get(key).is_some()
     }
 
     <span class="attr">#[cfg(test)]

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"macro":["build_config"],"mod":["accounts","archive","common","configuration","full","light","rpc"]};
+window.SIDEBAR_ITEMS = {"mod":["accounts","archive","common","full","light","rpc"]};

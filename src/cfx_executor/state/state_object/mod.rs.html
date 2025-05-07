@@ -123,6 +123,23 @@
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! A caching and checkpoint layer built upon semantically meaningful database
 //! interfaces, providing interfaces and logics for managing accounts and global
 //! statistics to the execution engine.
@@ -151,6 +168,8 @@
 
 <span class="doccomment">/// Implements access functions global statistic variables of `State`.
 </span><span class="kw">mod </span>global_statistics;
+
+<span class="kw">mod </span>warm;
 
 <span class="doccomment">/// Implements functions for the PoS rewarding of `State`.
 </span><span class="kw">mod </span>pos;
@@ -188,13 +207,15 @@
 <span class="kw">use super</span>::{
     checkpoints::LazyDiscardedVec,
     global_stat::GlobalStat,
-    overlay_account::{AccountEntry, OverlayAccount, RequireFields},
+    overlay_account::{
+        AccountEntry, AccountEntryWithWarm, OverlayAccount, RequireFields,
+    },
 };
 <span class="kw">use </span><span class="kw">crate</span>::substate::Substate;
 <span class="kw">use </span>cfx_statedb::{<span class="prelude-ty">Result </span><span class="kw">as </span>DbResult, StateDbExt, StateDbGeneric <span class="kw">as </span>StateDb};
-<span class="kw">use </span>cfx_types::AddressWithSpace;
+<span class="kw">use </span>cfx_types::{AddressWithSpace, H256};
 <span class="kw">use </span>parking_lot::RwLock;
-<span class="kw">use </span>std::collections::{BTreeSet, HashMap};
+<span class="kw">use </span>std::collections::{BTreeSet, HashMap, HashSet};
 
 <span class="doccomment">/// A caching and checkpoint layer built upon semantically meaningful database
 /// interfaces, providing interfaces and logics for managing accounts and global
@@ -207,13 +228,18 @@
     ///
     /// WARNING: Don't delete cache entries outside of `State::commit`, unless
     /// you are familiar with checkpoint maintenance.
-    </span>cache: RwLock&lt;HashMap&lt;AddressWithSpace, AccountEntry&gt;&gt;,
+    </span><span class="kw">pub </span>cache: RwLock&lt;HashMap&lt;AddressWithSpace, AccountEntryWithWarm&gt;&gt;,
+
+    <span class="kw">pub </span>committed_cache: HashMap&lt;AddressWithSpace, AccountEntry&gt;,
+    tx_access_list: <span class="prelude-ty">Option</span>&lt;HashMap&lt;AddressWithSpace, HashSet&lt;H256&gt;&gt;&gt;,
 
     <span class="doccomment">/// In-memory global statistic variables.
     </span><span class="comment">// TODO: try not to make it special?
     </span>global_stat: GlobalStat,
 
     <span class="doccomment">/// Checkpoint layers for the account entries
+    </span><span class="comment">// TODO: it seems `RwLock` is not necessary here. But we need to change the
+    // signature of `write_account` from `&amp;self` to `&amp;mut self` first
     </span>checkpoints: RwLock&lt;LazyDiscardedVec&lt;CheckpointLayer&gt;&gt;,
 }
 
@@ -231,21 +257,29 @@
         <span class="prelude-val">Ok</span>(State {
             db,
             cache: Default::default(),
+            committed_cache: Default::default(),
             checkpoints: Default::default(),
+            tx_access_list: <span class="prelude-val">None</span>,
             global_stat: world_stat,
         })
     }
 
     <span class="kw">pub fn </span>prefetch_accounts(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, addresses: BTreeSet&lt;AddressWithSpace&gt;, pool: <span class="kw-2">&amp;</span>rayon::ThreadPool,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, addresses: BTreeSet&lt;AddressWithSpace&gt;,
+        pool: <span class="kw-2">&amp;</span>rayon::ThreadPool,
     ) -&gt; DbResult&lt;()&gt; {
         <span class="kw">use </span>rayon::prelude::<span class="kw-2">*</span>;
+
         pool.install(|| {
             addresses
                 .into_par_iter()
                 .map(|addr| <span class="self">self</span>.prefetch(<span class="kw-2">&amp;</span>addr, RequireFields::Code))
         })
-        .collect::&lt;DbResult&lt;()&gt;&gt;()
+        .collect::&lt;DbResult&lt;()&gt;&gt;()<span class="question-mark">?</span>;
+
+        <span class="macro">assert!</span>(<span class="self">self</span>.committed_cache.is_empty());
+        <span class="self">self</span>.commit_cache(<span class="bool-val">false</span>);
+        <span class="prelude-val">Ok</span>(())
     }
 }
 </code></pre></div></section></main></body></html>

@@ -371,17 +371,110 @@
 <a href="#371" id="371">371</a>
 <a href="#372" id="372">372</a>
 <a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     execution_outcome::{ExecutionOutcome, ToRepackError, TxDropError},
     gas_required_for,
     transact_options::{ChargeCollateral, TransactOptions, TransactSettings},
     ExecutiveContext, PreCheckedExecutive,
 };
-<span class="kw">use crate</span>::{executive_observer::ExecutiveObserver, substate::Substate};
+<span class="kw">use crate</span>::{
+    executive::eip7623_required_gas, executive_observer::ExecutiveObserver,
+    substate::Substate,
+};
 <span class="kw">use </span>cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 
 <span class="kw">use </span>cfx_statedb::Result <span class="kw">as </span>DbResult;
 <span class="kw">use </span>cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
+<span class="kw">use </span>cfx_vm_types::extract_7702_payload;
 <span class="kw">use </span>primitives::{transaction::Action, SignedTransaction, Transaction};
 
 <span class="macro">macro_rules!</span> early_return_on_err {
@@ -400,14 +493,16 @@
     tx: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>SignedTransaction,
     observer: O,
     settings: TransactSettings,
-    base_gas: u64,
 }
 
 <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct </span>CostInfo {
     <span class="doccomment">/// Sender balance
     </span><span class="kw">pub </span>sender_balance: U512,
-    <span class="doccomment">/// The intrinsic gas (21000/53000 + tx data gas + access list gas)
+    <span class="doccomment">/// The intrinsic gas (21000/53000 + tx data gas + access list gas +
+    /// authorization list gas)
     </span><span class="kw">pub </span>base_gas: u64,
+    <span class="doccomment">/// The floor gas from EIP-7623
+    </span><span class="kw">pub </span>floor_gas: u64,
 
     <span class="doccomment">/// Transaction value + gas cost (except the sponsored part)
     </span><span class="kw">pub </span>total_cost: U512,
@@ -439,18 +534,11 @@
         <span class="kw">let </span>TransactOptions {
             observer, settings, ..
         } = options;
-        <span class="kw">let </span>base_gas = gas_required_for(
-            tx.action() == <span class="kw-2">&amp;</span>Action::Create,
-            <span class="kw-2">&amp;</span>tx.data(),
-            tx.access_list(),
-            context.spec,
-        );
         FreshExecutive {
             context,
             tx,
             observer,
             settings,
-            base_gas,
         }
     }
 
@@ -461,12 +549,20 @@
         <span class="comment">// Validate transaction nonce
         </span><span class="macro">early_return_on_err!</span>(<span class="self">self</span>.check_nonce()<span class="question-mark">?</span>);
 
+        <span class="kw">if </span><span class="self">self</span>.context.spec.cip152 &amp;&amp; <span class="self">self</span>.settings.forbid_eoa_with_code {
+            <span class="macro">early_return_on_err!</span>(<span class="self">self</span>.check_from_eoa_with_code()<span class="question-mark">?</span>);
+        }
+
         <span class="comment">// Validate transaction epoch height.
         </span><span class="kw">if </span><span class="self">self</span>.settings.check_epoch_bound {
             <span class="macro">early_return_on_err!</span>(<span class="self">self</span>.check_epoch_bound()<span class="question-mark">?</span>);
         }
 
         <span class="kw">let </span>cost = <span class="macro">early_return_on_err!</span>(<span class="self">self</span>.compute_cost_info()<span class="question-mark">?</span>);
+
+        <span class="kw">if </span><span class="self">self</span>.context.spec.align_evm {
+            <span class="macro">early_return_on_err!</span>(<span class="self">self</span>.check_enough_balance(<span class="kw-2">&amp;</span>cost));
+        }
 
         <span class="macro">early_return_on_err!</span>(<span class="self">self</span>.check_sender_exist(<span class="kw-2">&amp;</span>cost)<span class="question-mark">?</span>);
 
@@ -504,6 +600,33 @@
         } <span class="kw">else </span>{
             <span class="prelude-val">Ok</span>(())
         })
+    }
+
+    <span class="kw">fn </span>check_from_eoa_with_code(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; DbResult&lt;<span class="prelude-ty">Result</span>&lt;(), ExecutionOutcome&gt;&gt; {
+        <span class="kw">let </span>sender = <span class="self">self</span>.tx.sender();
+        <span class="kw">let </span><span class="prelude-val">Some</span>(code) = <span class="self">self</span>.context.state.code(<span class="kw-2">&amp;</span>sender)<span class="question-mark">? </span><span class="kw">else </span>{
+            <span class="comment">// EOA with no code
+            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(()));
+        };
+
+        <span class="kw">if </span>code.is_empty() {
+            <span class="comment">// Empty code
+            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(()));
+        }
+
+        <span class="kw">if </span><span class="self">self</span>.tx.space() == Space::Ethereum
+            &amp;&amp; extract_7702_payload(<span class="kw-2">&amp;</span>code).is_some()
+        {
+            <span class="comment">// 7702 code in eSpace is allowed
+            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(()));
+        }
+
+        <span class="comment">// extract_7702_payload
+        </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(ExecutionOutcome::NotExecutedDrop(
+            TxDropError::SenderWithCode(sender.address),
+        )))
     }
 
     <span class="kw">fn </span>check_base_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), ExecutionOutcome&gt; {
@@ -553,7 +676,7 @@
     <span class="kw">fn </span>check_sender_exist(
         <span class="kw-2">&amp;</span><span class="self">self</span>, cost: <span class="kw-2">&amp;</span>CostInfo,
     ) -&gt; DbResult&lt;<span class="prelude-ty">Result</span>&lt;(), ExecutionOutcome&gt;&gt; {
-        <span class="kw">if </span>cost.sender_balance &lt; cost.sender_intended_cost
+        <span class="kw">if </span>!cost.sender_intended_cost.is_zero()
             &amp;&amp; !<span class="self">self</span>.context.state.exists(<span class="kw-2">&amp;</span><span class="self">self</span>.tx.sender())<span class="question-mark">?
         </span>{
             <span class="comment">// We don't want to bump nonce for non-existent account when we
@@ -566,6 +689,25 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(()))
     }
 
+    <span class="comment">// In the EVM, when the transaction sender's balance is insufficient to
+    // cover the required `gas fee + transfer value`, the transaction does not
+    // bump the nonce or charge a fee, which differs from Conflux. This function
+    // is only used for `align_evm` testing to simulate this EVM behavior.
+    </span><span class="kw">fn </span>check_enough_balance(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, cost: <span class="kw-2">&amp;</span>CostInfo,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ExecutionOutcome&gt; {
+        <span class="kw">if </span>cost.sender_balance &lt; cost.sender_intended_cost {
+            <span class="prelude-val">Err</span>(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::NotEnoughBalance {
+                    expected: cost.sender_intended_cost,
+                    got: cost.sender_balance.try_into().unwrap(),
+                },
+            ))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(())
+        }
+    }
+
     <span class="kw">fn </span>compute_cost_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; DbResult&lt;<span class="prelude-ty">Result</span>&lt;CostInfo, ExecutionOutcome&gt;&gt; {
@@ -575,6 +717,28 @@
         <span class="kw">let </span>state = <span class="kw-2">&amp;</span><span class="self">self</span>.context.state;
         <span class="kw">let </span>env = <span class="self">self</span>.context.env;
         <span class="kw">let </span>spec = <span class="self">self</span>.context.spec;
+
+        <span class="kw">let </span>base_gas = gas_required_for(
+            tx.action() == Action::Create,
+            <span class="kw-2">&amp;</span>tx.data(),
+            tx.access_list(),
+            tx.authorization_len(),
+            <span class="kw-2">&amp;</span>spec.to_consensus_spec(),
+        );
+
+        <span class="kw">let </span>floor_gas =
+            eip7623_required_gas(<span class="kw-2">&amp;</span>tx.data(), <span class="kw-2">&amp;</span>spec.to_consensus_spec());
+
+        <span class="kw">let </span>minimum_tx_gas = u64::max(base_gas, floor_gas);
+
+        <span class="kw">if </span><span class="kw-2">*</span>tx.gas() &lt; minimum_tx_gas.into() {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit {
+                    expected: minimum_tx_gas.into(),
+                    got: <span class="kw-2">*</span>tx.gas(),
+                },
+            )));
+        }
 
         <span class="kw">let </span>check_base_price = <span class="self">self</span>.settings.check_base_price;
 
@@ -586,6 +750,7 @@
                 U256::min(<span class="kw-2">*</span>tx.gas_price(), env.base_gas_price[tx.space()]);
             tx.effective_gas_price(<span class="kw-2">&amp;</span>actual_base_gas)
         };
+        <span class="kw">let </span>max_gas_price = <span class="kw-2">*</span>tx.gas_price();
 
         <span class="kw">let </span>burnt_gas_price = env.burnt_gas_price[tx.space()];
         <span class="comment">// gas_price &gt;= actual_base_gas &gt;=
@@ -599,6 +764,14 @@
         } <span class="kw">else </span>{
             <span class="number">0</span>.into()
         };
+
+        <span class="comment">// EIP-1559 requires the user balance can afford "max gas price * gas limit", instead of "effective gas price * gas limit", this variable represents "(effective gas price - max gas price) * gas limit"
+        </span><span class="kw">let </span>additional_gas_required_1559 =
+            <span class="kw">if </span>settings.charge_gas &amp;&amp; spec.cip645.fix_eip1559 {
+                (max_gas_price - gas_price).full_mul(<span class="kw-2">*</span>tx.gas_limit())
+            } <span class="kw">else </span>{
+                <span class="number">0</span>.into()
+            };
         <span class="kw">let </span>storage_cost =
             <span class="kw">if let </span>(Transaction::Native(tx), ChargeCollateral::Normal) = (
                 <span class="kw-2">&amp;</span>tx.transaction.transaction.unsigned,
@@ -613,14 +786,17 @@
         <span class="kw">if </span>sender.space == Space::Ethereum {
             <span class="macro">assert_eq!</span>(storage_cost, U256::zero());
             <span class="kw">let </span>sender_cost = U512::from(tx.value()) + gas_cost;
+            <span class="kw">let </span>sender_intended_cost =
+                sender_cost + additional_gas_required_1559;
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(CostInfo {
                 sender_balance,
-                base_gas: <span class="self">self</span>.base_gas,
+                base_gas,
+                floor_gas,
                 gas_cost,
                 gas_price,
                 burnt_gas_price,
                 storage_cost,
-                sender_intended_cost: sender_cost,
+                sender_intended_cost,
                 total_cost: sender_cost,
                 gas_sponsored: <span class="bool-val">false</span>,
                 storage_sponsored: <span class="bool-val">false</span>,
@@ -646,6 +822,7 @@
                 </span>{
                     <span class="comment">// No need to check for gas sponsor account existence.
                     </span>gas_sponsor_eligible = gas_cost
+                        + additional_gas_required_1559
                         &lt;= U512::from(state.sponsor_gas_bound(<span class="kw-2">&amp;</span>code_address)<span class="question-mark">?</span>);
                     storage_sponsor_eligible =
                         state.sponsor_for_collateral(<span class="kw-2">&amp;</span>code_address)<span class="question-mark">?</span>.is_some();
@@ -679,7 +856,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>sender_intended_cost = U512::from(tx.value());
 
             <span class="kw">if </span>!gas_sponsor_eligible {
-                sender_intended_cost += gas_cost;
+                sender_intended_cost += gas_cost + additional_gas_required_1559;
             }
             <span class="kw">if </span>!storage_sponsor_eligible {
                 sender_intended_cost += storage_cost.into();
@@ -728,7 +905,8 @@
 
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(CostInfo {
             sender_intended_cost,
-            base_gas: <span class="self">self</span>.base_gas,
+            base_gas,
+            floor_gas,
             gas_cost,
             gas_price,
             burnt_gas_price,

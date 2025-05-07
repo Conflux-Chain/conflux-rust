@@ -144,14 +144,14 @@
 </span><span class="kw">pub fn </span>run(input: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
     <span class="comment">// Verify input length.
     </span><span class="kw">if </span>input.len() != <span class="number">192 </span>{
-        <span class="kw">return </span><span class="prelude-val">Err</span>(Error(<span class="string">"Blob invalid input length"</span>));
+        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Blob invalid input length"</span>.into());
     }
 
     <span class="comment">// Verify commitment matches versioned_hash
     </span><span class="kw">let </span>versioned_hash = <span class="kw-2">&amp;</span>input[..<span class="number">32</span>];
     <span class="kw">let </span>commitment = <span class="kw-2">&amp;</span>input[<span class="number">96</span>..<span class="number">144</span>];
     <span class="kw">if </span>kzg_to_versioned_hash(commitment) != versioned_hash {
-        <span class="kw">return </span><span class="prelude-val">Err</span>(Error(<span class="string">"Blob mismatched version"</span>));
+        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Blob mismatched version"</span>.into());
     }
 
     <span class="comment">// Verify KZG proof with z and y in big endian format
@@ -160,7 +160,7 @@
     <span class="kw">let </span>y = as_bytes32(<span class="kw-2">&amp;</span>input[<span class="number">64</span>..<span class="number">96</span>]);
     <span class="kw">let </span>proof = as_bytes48(<span class="kw-2">&amp;</span>input[<span class="number">144</span>..<span class="number">192</span>]);
     <span class="kw">if </span>!verify_kzg_proof(commitment, z, y, proof, default_kzg_settings()) {
-        <span class="kw">return </span><span class="prelude-val">Err</span>(Error(<span class="string">"Blob verify kzg proof failed"</span>));
+        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Blob verify kzg proof failed"</span>.into());
     }
     <span class="prelude-val">Ok</span>(())
 }

@@ -859,17 +859,6 @@
 <a href="#859" id="859">859</a>
 <a href="#860" id="860">860</a>
 <a href="#861" id="861">861</a>
-<a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
-<a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -933,10 +922,10 @@
 <span class="kw">use </span>tokio::runtime::Runtime <span class="kw">as </span>TokioRuntime;
 <span class="kw">use </span>txgen::{DirectTransactionGenerator, TransactionGenerator};
 
-<span class="kw">pub use </span><span class="kw">crate</span>::configuration::Configuration;
+<span class="kw">use </span>cfx_config::{parse_config_address_string, Configuration};
+
 <span class="kw">use crate</span>::{
     accounts::{account_provider, keys_path},
-    configuration::parse_config_address_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -1252,8 +1241,7 @@
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
-    <span class="kw">let </span>verification_config =
-        conf.verification_config(machine.clone(), pos_verifier.clone());
+    <span class="kw">let </span>verification_config = conf.verification_config(machine.clone());
     <span class="kw">let </span>txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
         verification_config.clone(),
@@ -1550,7 +1538,6 @@
             pubsub.clone(),
             eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
-            task_executor.clone(),
         ),
     )<span class="question-mark">?</span>;
 
@@ -1562,7 +1549,6 @@
             pubsub.clone(),
             eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )<span class="question-mark">?</span>;
@@ -1575,7 +1561,6 @@
             pubsub.clone(),
             eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )<span class="question-mark">?</span>;
@@ -1588,7 +1573,6 @@
             pubsub.clone(),
             eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )<span class="question-mark">?</span>;
@@ -1601,7 +1585,6 @@
             pubsub.clone(),
             eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )<span class="question-mark">?</span>;
@@ -1609,9 +1592,7 @@
     <span class="kw">let </span>eth_rpc_http_server = <span class="kw">super</span>::rpc::start_http(
         conf.eth_http_config(),
         setup_public_eth_rpc_apis(
-            common_impl.clone(),
             rpc_impl.clone(),
-            pubsub.clone(),
             eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
             task_executor.clone(),
@@ -1621,9 +1602,7 @@
     <span class="kw">let </span>eth_rpc_ws_server = <span class="kw">super</span>::rpc::start_ws(
         conf.eth_ws_config(),
         setup_public_eth_rpc_apis(
-            common_impl.clone(),
             rpc_impl.clone(),
-            pubsub.clone(),
             eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
             task_executor.clone(),
@@ -1639,7 +1618,6 @@
             pubsub,
             eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
-            task_executor.clone(),
         ),
     )<span class="question-mark">?</span>;
 

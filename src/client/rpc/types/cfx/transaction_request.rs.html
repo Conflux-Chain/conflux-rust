@@ -430,6 +430,8 @@
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
 <a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -638,7 +640,8 @@
                     access_list: to_primitive_access_list(access_list),
                 })
             }
-            x =&gt; {
+            <span class="comment">// TODO(7702): support transaction 7702
+            </span>x =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(
                     invalid_params(<span class="string">"Unrecognized transaction type"</span>, x).into()
                 );
@@ -729,7 +732,8 @@
                 data,
                 access_list: to_primitive_access_list(access_list),
             }),
-            x =&gt; {
+            <span class="comment">// TODO(7702): support 7702 transaction
+            </span>x =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(
                     invalid_params(<span class="string">"Unrecognized transaction type"</span>, x).into()
                 );

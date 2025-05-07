@@ -102,11 +102,41 @@
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>cfx_internal_common::debug::ComputeEpochDebugRecord;
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>cfx_internal_common::debug::ComputeEpochDebugRecord;
 <span class="kw">use </span>cfx_statedb::{<span class="prelude-ty">Result </span><span class="kw">as </span>DbResult, StateDb, StateDbExt};
 <span class="kw">use </span>cfx_types::AddressWithSpace;
 <span class="kw">use </span>primitives::{
-    Account, CodeInfo, DepositList, StorageKey, StorageValue, VoteStakeList,
+    storage::WriteCacheItem, Account, CodeInfo, DepositList, StorageKey,
+    StorageValue, VoteStakeList,
 };
 
 <span class="kw">use </span><span class="kw">super</span>::OverlayAccount;
@@ -124,7 +154,9 @@
         // Commit storage entries
 
         </span><span class="macro">assert!</span>(<span class="self">self</span>.storage_write_checkpoint.is_none());
-        <span class="kw">let </span>write_cache = <span class="kw-2">&amp;mut </span><span class="self">self</span>.storage_write_cache.write();
+        <span class="macro">assert_eq!</span>(Arc::strong_count(<span class="kw-2">&amp;</span><span class="self">self</span>.storage_write_cache), <span class="number">1</span>);
+        <span class="macro">assert!</span>(<span class="self">self</span>.storage_write_cache.read().is_empty());
+        <span class="kw">let </span>write_cache = <span class="kw-2">&amp;mut </span><span class="self">self</span>.storage_committed_cache.write();
         <span class="kw">for </span>(k, <span class="kw-2">mut </span>v) <span class="kw">in </span>write_cache.drain() {
             <span class="kw">let </span>address_key =
                 StorageKey::new_storage_key(<span class="kw-2">&amp;</span><span class="self">self</span>.address.address, k.as_ref())
@@ -204,6 +236,28 @@
         )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub fn </span>commit_cache(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, retain_transient_storage: bool, dirty: bool,
+    ) {
+        <span class="macro">assert!</span>(<span class="self">self</span>.storage_write_checkpoint.is_none());
+        <span class="macro">assert!</span>(<span class="self">self</span>.transient_storage_checkpoint.is_none());
+        <span class="macro">assert_eq!</span>(Arc::strong_count(<span class="kw-2">&amp;</span><span class="self">self</span>.storage_write_cache), <span class="number">1</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>storage_write_cache = <span class="self">self</span>.storage_write_cache.write();
+        <span class="kw">let </span><span class="kw-2">mut </span>storage_commit_cache = <span class="self">self</span>.storage_committed_cache.write();
+
+        <span class="kw">for </span>(key, value) <span class="kw">in </span>storage_write_cache.drain() {
+            <span class="kw">if let </span>WriteCacheItem::Write(value) = value {
+                <span class="macro">assert!</span>(dirty);
+                storage_commit_cache.insert(key, value);
+            }
+        }
+
+        <span class="kw">if </span>!retain_transient_storage {
+            <span class="self">self</span>.transient_storage_cache.write().clear();
+        }
     }
 }
 </code></pre></div></section></main></body></html>

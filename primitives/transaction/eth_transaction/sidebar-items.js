@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["EthereumTransaction"],"mod":["eip155_signature"],"struct":["Eip1559Transaction","Eip155Transaction","Eip2930Transaction"]};
+window.SIDEBAR_ITEMS = {"enum":["EthereumTransaction"],"mod":["eip155_signature"],"struct":["Eip1559Transaction","Eip155Transaction","Eip2930Transaction","Eip7702Transaction"]};

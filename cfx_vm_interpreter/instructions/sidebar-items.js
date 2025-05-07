@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_NO_OF_TOPICS"],"enum":["GasPriceTier","Instruction"],"struct":["INSTRUCTIONS","INSTRUCTIONS_CANCUN","InstructionInfo"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_NO_OF_TOPICS"],"enum":["GasPriceTier","Instruction"],"struct":["INSTRUCTIONS","INSTRUCTIONS_CANCUN","INSTRUCTIONS_CIP645","InstructionInfo"]};

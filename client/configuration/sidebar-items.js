@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["parse_config_address_string","to_bootnodes"],"struct":["CHAIN_ID","Configuration","RawConfiguration"]};

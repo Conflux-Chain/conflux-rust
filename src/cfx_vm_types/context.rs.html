@@ -204,6 +204,15 @@
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -281,7 +290,10 @@
 <span class="doccomment">/// Context for VMs
 </span><span class="kw">pub trait </span>Context {
     <span class="doccomment">/// Returns a value for given key.
-    </span><span class="kw">fn </span>storage_at(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;U256&gt;;
+    </span><span class="kw">fn </span>storage_at(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;U256&gt;;
+
+    <span class="doccomment">/// Returns a value for given key.
+    </span><span class="kw">fn </span>origin_storage_at(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;U256&gt;&gt;;
 
     <span class="doccomment">/// Stores a value for given key.
     </span><span class="kw">fn </span>set_storage(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: Vec&lt;u8&gt;, value: U256) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
@@ -342,6 +354,8 @@
     <span class="doccomment">/// Creates log entry with given topics and data
     </span><span class="kw">fn </span>log(<span class="kw-2">&amp;mut </span><span class="self">self</span>, topics: Vec&lt;H256&gt;, data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
+    <span class="kw">fn </span>refund(<span class="kw-2">&amp;mut </span><span class="self">self</span>, refund_gas: i64);
+
     <span class="doccomment">/// Should be called when transaction calls `RETURN` opcode.
     /// Returns gas_left if cost of returning the data is not too high.
     </span><span class="kw">fn </span>ret(
@@ -369,6 +383,10 @@
     /// If contract A calls contract B, and contract B calls C,
     /// then A depth is 0, B is 1, C is 2 and so on.
     </span><span class="kw">fn </span>depth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+
+    <span class="kw">fn </span>is_warm_account(<span class="kw-2">&amp;</span><span class="self">self</span>, account: Address) -&gt; bool;
+
+    <span class="kw">fn </span>is_warm_storage_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>H256) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt;;
 
     <span class="comment">// /// Decide if any more operations should be traced. Passthrough for the
     // VM /// trace.

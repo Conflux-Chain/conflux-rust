@@ -176,6 +176,17 @@
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -205,8 +216,10 @@
     </span><span class="kw">pub </span>storage_released: HashMap&lt;Address, u64&gt;,
     <span class="doccomment">/// Any logs.
     </span><span class="kw">pub </span>logs: Vec&lt;LogEntry&gt;,
+    <span class="doccomment">/// gas to be refunded
+    </span><span class="kw">pub </span>refund_gas: i128,
     <span class="doccomment">/// Created contracts.
-    </span><span class="kw">pub </span>contracts_created: Vec&lt;AddressWithSpace&gt;,
+    </span>contracts_created: Vec&lt;AddressWithSpace&gt;,
 }
 
 <span class="kw">impl </span>Substate {
@@ -221,6 +234,7 @@
         <span class="kw">for </span>(address, amount) <span class="kw">in </span>s.storage_released {
             <span class="kw-2">*</span><span class="self">self</span>.storage_released.entry(address).or_insert(<span class="number">0</span>) += amount;
         }
+        <span class="self">self</span>.refund_gas += s.refund_gas;
     }
 
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{ Substate::default() }
@@ -266,6 +280,14 @@
             storage_collateralized,
             storage_released,
         }
+    }
+
+    <span class="kw">pub fn </span>contracts_created(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Vec&lt;AddressWithSpace&gt; {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.contracts_created
+    }
+
+    <span class="kw">pub fn </span>record_contract_create(<span class="kw-2">&amp;mut </span><span class="self">self</span>, address: AddressWithSpace) {
+        <span class="self">self</span>.contracts_created.push(address);
     }
 
     <span class="kw">pub fn </span>record_storage_occupy(

@@ -216,6 +216,12 @@
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -283,71 +289,7 @@
 
     <span class="kw">let </span>conf = Configuration::parse(<span class="kw-2">&amp;</span>matches)<span class="question-mark">?</span>;
 
-    <span class="comment">// If log_conf is provided, use it for log configuration and ignore
-    // log_file and log_level. Otherwise, set stdout to INFO and set
-    // all our crate log to log_level.
-    </span><span class="kw">match </span>conf.raw_conf.log_conf {
-        <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>log_conf) =&gt; {
-            log4rs::init_file(log_conf, Default::default()).map_err(|e| {
-                <span class="macro">format!</span>(
-                    <span class="string">"failed to initialize log with log config file: {:?}"</span>,
-                    e
-                )
-            })<span class="question-mark">?</span>;
-        }
-        <span class="prelude-val">None </span>=&gt; {
-            <span class="kw">let </span><span class="kw-2">mut </span>conf_builder =
-                LogConfig::builder().appender(Appender::builder().build(
-                    <span class="string">"stdout"</span>,
-                    Box::new(ConsoleAppender::builder().build()),
-                ));
-            <span class="kw">let </span><span class="kw-2">mut </span>root_builder = Root::builder().appender(<span class="string">"stdout"</span>);
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>log_file) = conf.raw_conf.log_file {
-                conf_builder =
-                    conf_builder.appender(Appender::builder().build(
-                        <span class="string">"logfile"</span>,
-                        Box::new(
-                            FileAppender::builder().encoder(
-                                Box::new(
-                                    PatternEncoder::new(
-                                        <span class="string">"{d} {h({l}):5.5} {T:&lt;20.20} {t:12.12} - {m}{n}"</span>)))
-                                .build(log_file)
-                                .map_err(
-                                    |e| <span class="macro">format!</span>(<span class="string">"failed to build log pattern: {:?}"</span>, e))<span class="question-mark">?</span>,
-                        ),
-                    ));
-                root_builder = root_builder.appender(<span class="string">"logfile"</span>);
-            };
-            <span class="comment">// Should add new crate names here
-            </span><span class="kw">for </span>crate_name <span class="kw">in </span>[
-                <span class="string">"blockgen"</span>,
-                <span class="string">"cfxcore"</span>,
-                <span class="string">"cfx_statedb"</span>,
-                <span class="string">"cfx_storage"</span>,
-                <span class="string">"conflux"</span>,
-                <span class="string">"db"</span>,
-                <span class="string">"keymgr"</span>,
-                <span class="string">"network"</span>,
-                <span class="string">"txgen"</span>,
-                <span class="string">"client"</span>,
-                <span class="string">"primitives"</span>,
-                <span class="string">"io"</span>,
-            ]
-            .iter()
-            {
-                conf_builder = conf_builder.logger(
-                    Logger::builder()
-                        .build(<span class="kw-2">*</span>crate_name, conf.raw_conf.log_level),
-                );
-            }
-            <span class="kw">let </span>log_config = conf_builder
-                .build(root_builder.build(LevelFilter::Info))
-                .map_err(|e| <span class="macro">format!</span>(<span class="string">"failed to build log config: {:?}"</span>, e))<span class="question-mark">?</span>;
-            log4rs::init_config(log_config).map_err(|e| {
-                <span class="macro">format!</span>(<span class="string">"failed to initialize log with config: {:?}"</span>, e)
-            })<span class="question-mark">?</span>;
-        }
-    };
+    setup_logger(<span class="kw-2">&amp;</span>conf)<span class="question-mark">?</span>;
 
     THROTTLING_SERVICE.write().initialize(
         conf.raw_conf.egress_queue_capacity,
@@ -433,5 +375,75 @@ Current Version: {}
     }
 
     <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+}
+
+<span class="comment">// If log_conf is provided, use it for log configuration and ignore
+// log_file and log_level. Otherwise, set stdout to INFO and set
+// all our crate log to log_level.
+</span><span class="kw">fn </span>setup_logger(conf: <span class="kw-2">&amp;</span>Configuration) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+    <span class="kw">match </span>conf.raw_conf.log_conf {
+        <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>log_conf) =&gt; {
+            log4rs::init_file(log_conf, Default::default()).map_err(|e| {
+                <span class="macro">format!</span>(
+                    <span class="string">"failed to initialize log with log config file: {:?}"</span>,
+                    e
+                )
+            })<span class="question-mark">?</span>;
+        }
+        <span class="prelude-val">None </span>=&gt; {
+            <span class="kw">let </span><span class="kw-2">mut </span>conf_builder =
+                LogConfig::builder().appender(Appender::builder().build(
+                    <span class="string">"stdout"</span>,
+                    Box::new(ConsoleAppender::builder().build()),
+                ));
+            <span class="kw">let </span><span class="kw-2">mut </span>root_builder = Root::builder().appender(<span class="string">"stdout"</span>);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>log_file) = conf.raw_conf.log_file {
+                conf_builder =
+                    conf_builder.appender(Appender::builder().build(
+                        <span class="string">"logfile"</span>,
+                        Box::new(
+                            FileAppender::builder().encoder(
+                                Box::new(
+                                    PatternEncoder::new(
+                                        <span class="string">"{d} {h({l}):5.5} {T:&lt;20.20} {t:12.12} - {m}{n}"</span>)))
+                                .build(log_file)
+                                .map_err(
+                                    |e| <span class="macro">format!</span>(<span class="string">"failed to build log pattern: {:?}"</span>, e))<span class="question-mark">?</span>,
+                        ),
+                    ));
+                root_builder = root_builder.appender(<span class="string">"logfile"</span>);
+            };
+            <span class="comment">// Should add new crate names here
+            </span><span class="kw">for </span>crate_name <span class="kw">in </span>[
+                <span class="string">"blockgen"</span>,
+                <span class="string">"cfxcore"</span>,
+                <span class="string">"cfx_statedb"</span>,
+                <span class="string">"cfx_storage"</span>,
+                <span class="string">"conflux"</span>,
+                <span class="string">"db"</span>,
+                <span class="string">"keymgr"</span>,
+                <span class="string">"network"</span>,
+                <span class="string">"txgen"</span>,
+                <span class="string">"client"</span>,
+                <span class="string">"primitives"</span>,
+                <span class="string">"io"</span>,
+            ]
+            .iter()
+            {
+                conf_builder = conf_builder.logger(
+                    Logger::builder()
+                        .build(<span class="kw-2">*</span>crate_name, conf.raw_conf.log_level),
+                );
+            }
+            <span class="kw">let </span>log_config = conf_builder
+                .build(root_builder.build(LevelFilter::Info))
+                .map_err(|e| <span class="macro">format!</span>(<span class="string">"failed to build log config: {:?}"</span>, e))<span class="question-mark">?</span>;
+            log4rs::init_config(log_config).map_err(|e| {
+                <span class="macro">format!</span>(<span class="string">"failed to initialize log with config: {:?}"</span>, e)
+            })<span class="question-mark">?</span>;
+        }
+    };
+
+    <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div></section></main></body></html>

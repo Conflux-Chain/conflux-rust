@@ -243,6 +243,56 @@
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -295,7 +345,7 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests;
 
-<span class="kw">pub use </span>account_entry::AccountEntry;
+<span class="kw">pub use </span>account_entry::{AccountEntry, AccountEntryWithWarm};
 <span class="kw">pub use </span>ext_fields::RequireFields;
 
 <span class="kw">use </span><span class="kw">crate</span>::substate::Substate;
@@ -305,8 +355,8 @@
 <span class="kw">use </span>keccak_hash::KECCAK_EMPTY;
 <span class="kw">use </span>parking_lot::RwLock;
 <span class="kw">use </span>primitives::{
-    is_default::IsDefault, CodeInfo, DepositList, SponsorInfo, StorageLayout,
-    StorageValue, VoteStakeList,
+    is_default::IsDefault, storage::WriteCacheItem, CodeInfo, DepositList,
+    SponsorInfo, StorageLayout, StorageValue, VoteStakeList,
 };
 <span class="kw">use </span>std::{collections::HashMap, sync::Arc};
 
@@ -316,7 +366,6 @@
 <span class="kw">use </span><span class="self">self</span>::checkpoints::WriteCheckpointLayer;
 
 <span class="attr">#[derive(Debug)]
-#[cfg_attr(test, derive(Clone))]
 </span><span class="doccomment">/// The access and manipulation object during execution, which includes both
 /// database-stored information and in-execution data of an account. It is a
 /// basic unit of state caching map and the checkpoint layers (more
@@ -378,15 +427,19 @@
     </span><span class="doccomment">/// Storage layout change of the account
     </span>storage_layout_change: <span class="prelude-ty">Option</span>&lt;StorageLayout&gt;,
 
-    <span class="doccomment">/// Read cache for the storage entries of this account for recording
-    /// unchanged values.
+    <span class="doccomment">/// Read cache of database for the storage entries of this account for
+    /// recording unchanged values.
     </span>storage_read_cache: Arc&lt;RwLock&lt;HashMap&lt;Vec&lt;u8&gt;, StorageValue&gt;&gt;&gt;,
+
+    <span class="doccomment">/// Committed storage after a transaction for the storage entries of this
+    /// account for recording unchanged values.
+    </span>storage_committed_cache: Arc&lt;RwLock&lt;HashMap&lt;Vec&lt;u8&gt;, StorageValue&gt;&gt;&gt;,
 
     <span class="doccomment">/// Write cache for the storage entries of this account for recording
     /// changed values.
-    </span>storage_write_cache: Arc&lt;RwLock&lt;HashMap&lt;Vec&lt;u8&gt;, StorageValue&gt;&gt;&gt;,
+    </span>storage_write_cache: Arc&lt;RwLock&lt;HashMap&lt;Vec&lt;u8&gt;, WriteCacheItem&gt;&gt;&gt;,
     storage_write_checkpoint:
-        <span class="prelude-ty">Option</span>&lt;WriteCheckpointLayer&lt;Vec&lt;u8&gt;, StorageValue&gt;&gt;,
+        <span class="prelude-ty">Option</span>&lt;RwLock&lt;WriteCheckpointLayer&lt;Vec&lt;u8&gt;, WriteCacheItem&gt;&gt;&gt;,
 
     <span class="doccomment">/// Transient storage from CIP-142
     </span>transient_storage_cache: Arc&lt;RwLock&lt;HashMap&lt;Vec&lt;u8&gt;, U256&gt;&gt;&gt;,
@@ -409,6 +462,15 @@
     /// When this flag is set, the storage entries will only be read from the
     /// cache
     </span>storage_overrided: bool,
+
+    <span class="comment">/* ---------------
+    -  Helper fields -
+    --------------- */
+    </span><span class="doccomment">/// For CIP-151, `None` indicates that this is either a non-contract, a
+    /// contract in the process of being created, or a contract not created
+    /// in the current epoch. A `Some(_)` value indicates that this is a
+    /// contract created by a specific transaction.
+    </span>create_transaction_hash: <span class="prelude-ty">Option</span>&lt;H256&gt;,
 }
 
 <span class="kw">impl </span>OverlayAccount {
@@ -448,6 +510,44 @@
 
     <span class="attr">#[cfg(test)]
     </span><span class="kw">pub fn </span>is_basic(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.code_hash == KECCAK_EMPTY }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">impl </span>Clone <span class="kw">for </span>OverlayAccount {
+    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            address: <span class="self">self</span>.address.clone(),
+            balance: <span class="self">self</span>.balance.clone(),
+            nonce: <span class="self">self</span>.nonce.clone(),
+            code_hash: <span class="self">self</span>.code_hash.clone(),
+            staking_balance: <span class="self">self</span>.staking_balance.clone(),
+            collateral_for_storage: <span class="self">self</span>.collateral_for_storage.clone(),
+            accumulated_interest_return: <span class="self">self
+                </span>.accumulated_interest_return
+                .clone(),
+            admin: <span class="self">self</span>.admin.clone(),
+            sponsor_info: <span class="self">self</span>.sponsor_info.clone(),
+            deposit_list: <span class="self">self</span>.deposit_list.clone(),
+            vote_stake_list: <span class="self">self</span>.vote_stake_list.clone(),
+            code: <span class="self">self</span>.code.clone(),
+            storage_layout_change: <span class="self">self</span>.storage_layout_change.clone(),
+            storage_read_cache: <span class="self">self</span>.storage_read_cache.clone(),
+            storage_committed_cache: <span class="self">self</span>.storage_committed_cache.clone(),
+            storage_write_cache: <span class="self">self</span>.storage_write_cache.clone(),
+            storage_write_checkpoint: <span class="self">self
+                </span>.storage_write_checkpoint
+                .as_ref()
+                .map(|x| RwLock::new(x.read().clone())),
+            transient_storage_cache: <span class="self">self</span>.transient_storage_cache.clone(),
+            transient_storage_checkpoint: <span class="self">self
+                </span>.transient_storage_checkpoint
+                .clone(),
+            is_newly_created_contract: <span class="self">self</span>.is_newly_created_contract.clone(),
+            pending_db_clear: <span class="self">self</span>.pending_db_clear.clone(),
+            storage_overrided: <span class="self">self</span>.storage_overrided.clone(),
+            create_transaction_hash: <span class="self">self</span>.create_transaction_hash.clone(),
+        }
+    }
 }
 
 <span class="attr">#[cfg(test)]

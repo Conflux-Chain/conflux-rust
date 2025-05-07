@@ -492,6 +492,12 @@
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -808,6 +814,12 @@
     <span class="doccomment">/// Blob transaction is a create transaction
     </span><span class="attr">#[error(<span class="string">"blob transaction is a create transaction"</span>)]
     </span>BlobTransactionIsCreate,
+    <span class="doccomment">/// Empty authorization list (EIP-7702)
+    </span><span class="attr">#[error(<span class="string">"empty authorization list"</span>)]
+    </span>EmptyAuthorizationList,
+    <span class="doccomment">/// Max priority fee greater than max fee (EIP-1559)
+    </span><span class="attr">#[error(<span class="string">"blob transaction is a create transaction"</span>)]
+    </span>PriortyGreaterThanMaxFee,
 }
 
 <span class="kw">impl </span>RpcInvalidTransactionError {

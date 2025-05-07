@@ -1002,6 +1002,81 @@
 <a href="#1002" id="1002">1002</a>
 <a href="#1003" id="1003">1003</a>
 <a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1155,6 +1230,10 @@
                 <span class="macro">return_if!</span>(number
                     .checked_add(<span class="number">65536</span>)
                     .map_or(<span class="bool-val">false</span>, |n| n &lt;= <span class="self">self</span>.env.epoch_height));
+                <span class="kw">if </span><span class="self">self</span>.spec.align_evm {
+                    <span class="macro">return_if!</span>(number &gt;= <span class="self">self</span>.env.epoch_height);
+                    <span class="macro">return_if!</span>(number + <span class="number">256 </span>&lt; <span class="self">self</span>.env.epoch_height);
+                }
                 <span class="self">self</span>.state.get_system_storage(<span class="kw-2">&amp;</span>epoch_hash_slot(number))<span class="question-mark">?
             </span>}
         };
@@ -1164,12 +1243,22 @@
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ContextTrait <span class="kw">for </span>Context&lt;<span class="lifetime">'a</span>&gt; {
-    <span class="kw">fn </span>storage_at(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>Vec&lt;u8&gt;) -&gt; vm::Result&lt;U256&gt; {
+    <span class="kw">fn </span>storage_at(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; vm::Result&lt;U256&gt; {
         <span class="kw">let </span>receiver = AddressWithSpace {
             address: <span class="self">self</span>.origin.address,
             space: <span class="self">self</span>.space,
         };
         <span class="self">self</span>.state.storage_at(<span class="kw-2">&amp;</span>receiver, key).map_err(Into::into)
+    }
+
+    <span class="kw">fn </span>origin_storage_at(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; vm::Result&lt;<span class="prelude-ty">Option</span>&lt;U256&gt;&gt; {
+        <span class="kw">let </span>receiver = AddressWithSpace {
+            address: <span class="self">self</span>.origin.address,
+            space: <span class="self">self</span>.space,
+        };
+        <span class="self">self</span>.state
+            .origin_storage_at(<span class="kw-2">&amp;</span>receiver, key)
+            .map_err(Into::into)
     }
 
     <span class="kw">fn </span>set_storage(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: Vec&lt;u8&gt;, value: U256) -&gt; vm::Result&lt;()&gt; {
@@ -1288,6 +1377,9 @@
         </span>};
 
         <span class="kw">if </span>conflict_address {
+            <span class="kw">if </span><span class="self">self</span>.spec.cip645.fix_eip684 {
+                <span class="self">self</span>.state.inc_nonce(<span class="kw-2">&amp;</span>caller)<span class="question-mark">?</span>;
+            }
             <span class="macro">debug!</span>(<span class="string">"Contract address conflict!"</span>);
             <span class="kw">let </span>err = Error::ConflictAddress(address.clone());
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(ContractCreateResult::Failed(err)));
@@ -1316,7 +1408,11 @@
             <span class="kw">if </span>!<span class="self">self</span>.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                <span class="self">self</span>.state.inc_nonce(<span class="kw-2">&amp;</span>caller)<span class="question-mark">?</span>;
+                <span class="kw">let </span>nonce_overflow = <span class="self">self</span>.state.inc_nonce(<span class="kw-2">&amp;</span>caller)<span class="question-mark">?</span>;
+                <span class="kw">if </span>nonce_overflow {
+                    <span class="kw">let </span>err = Error::NonceOverflow(caller.address);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(ContractCreateResult::Failed(err)));
+                }
             }
         }
 
@@ -1340,11 +1436,9 @@
         {
             (<span class="prelude-val">Some</span>(contract.code()), contract.code_hash())
         } <span class="kw">else </span>{
-            (
-                <span class="self">self</span>.state.code(<span class="kw-2">&amp;</span>code_address_with_space)<span class="question-mark">?</span>,
-                <span class="self">self</span>.state.code_hash(<span class="kw-2">&amp;</span>code_address_with_space)<span class="question-mark">?</span>,
-            )
-        };
+            <span class="self">self</span>.state
+                .code_with_hash_on_call(<span class="kw-2">&amp;</span>code_address_with_space)<span class="question-mark">?
+        </span>};
 
         <span class="kw">let </span><span class="kw-2">mut </span>params = ActionParams {
             space: <span class="self">self</span>.space,
@@ -1432,6 +1526,10 @@
         <span class="prelude-val">Ok</span>(())
     }
 
+    <span class="kw">fn </span>refund(<span class="kw-2">&amp;mut </span><span class="self">self</span>, refund_gas: i64) {
+        <span class="self">self</span>.substate.refund_gas += refund_gas <span class="kw">as </span>i128;
+    }
+
     <span class="kw">fn </span>ret(
         <span class="kw-2">mut </span><span class="self">self</span>, gas: <span class="kw-2">&amp;</span>U256, data: <span class="kw-2">&amp;</span>ReturnData, apply_state: bool,
     ) -&gt; vm::Result&lt;U256&gt;
@@ -1440,6 +1538,10 @@
 
         <span class="kw">if </span><span class="self">self</span>.create_address.is_none() || !apply_state {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw-2">*</span>gas);
+        }
+
+        <span class="kw">if </span><span class="self">self</span>.spec.cip7702 &amp;&amp; data.first().cloned() == <span class="prelude-val">Some</span>(<span class="number">0xef</span>) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::CreateContractStartingWithEF);
         }
 
         <span class="self">self</span>.insert_create_address_to_substate();
@@ -1474,7 +1576,10 @@
             Address::zero()
         };
 
-        <span class="self">self</span>.state.init_code(<span class="kw-2">&amp;</span>caller, data.to_vec(), owner)<span class="question-mark">?</span>;
+        <span class="kw">let </span>tx_hash = <span class="self">self</span>.env.transaction_hash;
+        <span class="macro">assert_ne!</span>(tx_hash, H256::zero());
+        <span class="self">self</span>.state
+            .init_code(<span class="kw-2">&amp;</span>caller, data.to_vec(), owner, tx_hash)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>gas - return_cost)
     }
 
@@ -1483,12 +1588,8 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(vm::Error::MutableCallInStaticContext);
         }
 
-        <span class="kw">let </span>contract_address = <span class="self">self</span>.origin.address;
         <span class="kw">let </span>contract_address_with_space =
             <span class="self">self</span>.origin.address.with_space(<span class="self">self</span>.space);
-        <span class="kw">let </span>balance = <span class="self">self</span>.state.balance(<span class="kw-2">&amp;</span>contract_address_with_space)<span class="question-mark">?</span>;
-        <span class="self">self</span>.tracer
-            .selfdestruct(<span class="kw-2">&amp;</span>contract_address, refund_address, balance);
 
         suicide_impl(
             <span class="kw-2">&amp;</span>contract_address_with_space,
@@ -1496,6 +1597,9 @@
             <span class="self">self</span>.state,
             <span class="kw-2">&amp;</span><span class="self">self</span>.spec,
             <span class="kw-2">&amp;mut </span><span class="self">self</span>.substate,
+            <span class="self">self</span>.env,
+            <span class="self">self</span>.callstack
+                .creating_contract(<span class="kw-2">&amp;</span>contract_address_with_space),
             <span class="self">self</span>.tracer,
         )
     }
@@ -1562,6 +1666,46 @@
             BlockHashSource::Env
         }
     }
+
+    <span class="kw">fn </span>is_warm_account(<span class="kw-2">&amp;</span><span class="self">self</span>, account: Address) -&gt; bool {
+        <span class="kw">let </span>address_with_space = account.with_space(<span class="self">self</span>.space);
+        <span class="kw">let </span>maybe_builtin = <span class="kw-2">&amp;</span>account[..<span class="number">19</span>] == <span class="kw-2">&amp;</span>[<span class="number">0u8</span>; <span class="number">19</span>];
+        <span class="kw">if </span>maybe_builtin
+            &amp;&amp; <span class="self">self
+                </span>.machine
+                .builtin(<span class="kw-2">&amp;</span>address_with_space, <span class="self">self</span>.env.number)
+                .is_some()
+        {
+            <span class="kw">return </span><span class="bool-val">true</span>;
+        }
+
+        <span class="kw">let </span>maybe_internal = <span class="self">self</span>.space == Space::Native
+            &amp;&amp; <span class="kw-2">&amp;</span>account[..<span class="number">2</span>] == <span class="string">b"\x08\x88"
+            </span>&amp;&amp; <span class="kw-2">&amp;</span>account[<span class="number">2</span>..<span class="number">19</span>] == <span class="kw-2">&amp;</span>[<span class="number">0u8</span>; <span class="number">17</span>];
+        <span class="kw">if </span>maybe_internal
+            &amp;&amp; <span class="self">self
+                </span>.machine
+                .internal_contracts()
+                .contract(<span class="kw-2">&amp;</span>address_with_space, <span class="kw-2">&amp;</span><span class="self">self</span>.spec)
+                .is_some()
+        {
+            <span class="kw">return </span><span class="bool-val">true</span>;
+        }
+
+        <span class="kw">if </span>address_with_space == <span class="self">self</span>.env.author.with_native_space() {
+            <span class="kw">return </span><span class="bool-val">true</span>;
+        }
+
+        <span class="self">self</span>.state.is_warm_account(<span class="kw-2">&amp;</span>address_with_space)
+    }
+
+    <span class="kw">fn </span>is_warm_storage_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>H256) -&gt; vm::Result&lt;bool&gt; {
+        <span class="kw">let </span>receiver = AddressWithSpace {
+            address: <span class="self">self</span>.origin.address,
+            space: <span class="self">self</span>.space,
+        };
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.state.is_warm_storage_entry(<span class="kw-2">&amp;</span>receiver, key)<span class="question-mark">?</span>)
+    }
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Context&lt;<span class="lifetime">'a</span>&gt; {
@@ -1581,8 +1725,7 @@
     <span class="kw">pub fn </span>insert_create_address_to_substate(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(create_address) = <span class="self">self</span>.create_address {
             <span class="self">self</span>.substate
-                .contracts_created
-                .push(create_address.with_space(<span class="self">self</span>.space));
+                .record_contract_create(create_address.with_space(<span class="self">self</span>.space));
         }
     }
 }
@@ -1597,6 +1740,7 @@
         stack::{CallStackInfo, OwnedRuntimeRes},
         state::{get_state_for_genesis_write, State},
         substate::Substate,
+        tests::MOCK_TX_HASH,
     };
     <span class="kw">use </span>cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
     <span class="kw">use </span>cfx_types::{
@@ -1636,6 +1780,9 @@
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
             base_gas_price: Default::default(),
             burnt_gas_price: Default::default(),
+            transaction_hash: MOCK_TX_HASH,
+            <span class="attr">#[cfg(feature = <span class="string">"align_evm"</span>)]
+            </span>blob_gas_fee: <span class="number">0</span>.into(),
         }
     }
 
@@ -1668,7 +1815,7 @@
                 machine,
                 spec,
                 substate: Substate::new(),
-                env,
+                env: env.clone(),
                 callstack,
             };
             setup
@@ -1677,6 +1824,7 @@
                     <span class="kw-2">&amp;</span>Address::zero().with_native_space(),
                     <span class="macro">vec!</span>[],
                     Address::zero(),
+                    env.transaction_hash,
                 )
                 .ok();
 
@@ -1866,6 +2014,7 @@
         refund_account.set_user_account_type_bits();
 
         <span class="kw">let </span><span class="kw-2">mut </span>setup = TestSetup::new();
+        setup.spec.cip151 = <span class="bool-val">false</span>;
         <span class="kw">let </span>state = <span class="kw-2">&amp;mut </span>setup.state;
         <span class="kw">let </span><span class="kw-2">mut </span>origin = get_test_origin();
 
@@ -1883,6 +2032,7 @@
                 // collateral balance.
                 </span><span class="string">""</span>.into(),
                 contract_address,
+                setup.env.transaction_hash,
             )
             .expect(<span class="kw-2">&amp;</span><span class="macro">concat!</span>(<span class="macro">file!</span>(), <span class="string">":"</span>, <span class="macro">line!</span>(), <span class="string">":"</span>, <span class="macro">column!</span>()));
 

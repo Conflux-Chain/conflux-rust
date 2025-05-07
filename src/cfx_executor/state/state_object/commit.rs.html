@@ -129,7 +129,24 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::State;
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::state::overlay_account::AccountEntry;
+
+<span class="kw">use </span><span class="kw">super</span>::State;
 <span class="kw">use </span>cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
@@ -168,7 +185,7 @@
     }
 
     <span class="doccomment">/// Apply changes for the accounts and global variables to the statedb.
-    </span><span class="kw">fn </span>apply_changes_to_statedb(
+    </span><span class="kw">pub fn </span>apply_changes_to_statedb(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>debug_record: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>ComputeEpochDebugRecord&gt;,
     ) -&gt; DbResult&lt;Vec&lt;Account&gt;&gt; {
         <span class="macro">debug!</span>(<span class="string">"state.commit_changes"</span>);
@@ -184,7 +201,8 @@
     ) -&gt; DbResult&lt;Vec&lt;Account&gt;&gt; {
         <span class="macro">assert!</span>(<span class="self">self</span>.no_checkpoint());
 
-        <span class="kw">let </span>cache_items = <span class="self">self</span>.cache.get_mut().drain();
+        <span class="self">self</span>.commit_cache(<span class="bool-val">false</span>);
+        <span class="kw">let </span>cache_items = <span class="self">self</span>.committed_cache.drain();
         <span class="kw">let </span><span class="kw-2">mut </span>to_commit_accounts = cache_items
             .filter_map(|(<span class="kw">_</span>, acc)| acc.into_to_commit_account())
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
@@ -247,6 +265,18 @@
             )<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">impl </span>State {
+    <span class="kw">pub fn </span>commit_cache(<span class="kw-2">&amp;mut </span><span class="self">self</span>, retain_transient_storage: bool) {
+        <span class="macro">assert!</span>(<span class="self">self</span>.no_checkpoint());
+        <span class="kw">for </span>(addr, <span class="kw-2">mut </span>account) <span class="kw">in </span><span class="self">self</span>.cache.get_mut().drain() {
+            <span class="kw">if let </span>AccountEntry::Cached(<span class="kw-2">ref mut </span>acc, dirty) = account.entry {
+                acc.commit_cache(retain_transient_storage, dirty);
+            }
+            <span class="self">self</span>.committed_cache.insert(addr, account.entry);
+        }
     }
 }
 

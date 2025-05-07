@@ -592,7 +592,7 @@
 <span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>IsWhitelisted((Address,Address), <span class="string">"isWhitelisted(address,address)"</span>, bool);
 }
-<span class="macro">impl_function_type!</span>(IsWhitelisted, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.sload_gas);
+<span class="macro">impl_function_type!</span>(IsWhitelisted, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.cold_sload_gas);
 
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>IsWhitelisted {
     <span class="kw">fn </span>execute_inner(
@@ -610,7 +610,7 @@
 <span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>IsAllWhitelisted(Address, <span class="string">"isAllWhitelisted(address)"</span>, bool);
 }
-<span class="macro">impl_function_type!</span>(IsAllWhitelisted, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.sload_gas);
+<span class="macro">impl_function_type!</span>(IsAllWhitelisted, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.cold_sload_gas);
 
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>IsAllWhitelisted {
     <span class="kw">fn </span>execute_inner(
@@ -698,7 +698,7 @@
 <span class="macro">make_solidity_function!</span> {
     <span class="kw">struct </span>AvailableStoragePoints(Address, <span class="string">"getAvailableStoragePoints(address)"</span>, U256);
 }
-<span class="macro">impl_function_type!</span>(AvailableStoragePoints, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.sload_gas);
+<span class="macro">impl_function_type!</span>(AvailableStoragePoints, <span class="string">"query"</span>, gas: |spec: <span class="kw-2">&amp;</span>Spec| spec.cold_sload_gas);
 
 <span class="kw">impl </span>SimpleExecutionTrait <span class="kw">for </span>AvailableStoragePoints {
     <span class="kw">fn </span>execute_inner(

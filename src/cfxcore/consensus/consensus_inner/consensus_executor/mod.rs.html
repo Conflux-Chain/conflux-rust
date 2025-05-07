@@ -1778,6 +1778,8 @@
 <a href="#1778" id="1778">1778</a>
 <a href="#1779" id="1779">1779</a>
 <a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
+<a href="#1782" id="1782">1782</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -3449,6 +3451,8 @@
                 .transaction_epoch_bound,
             base_gas_price,
             burnt_gas_price,
+            transaction_hash: tx.hash(),
+            ..Default::default()
         };
         <span class="kw">if </span>evm_overrides.has_block() {
             ExecutiveContext::apply_env_overrides(

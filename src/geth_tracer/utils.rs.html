@@ -102,11 +102,18 @@
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Util functions for revm related ops
 </span><span class="kw">use </span>alloy_primitives::{hex, B256};
 <span class="kw">use </span>alloy_sol_types::{ContractError, GenericRevertReason};
 <span class="kw">use </span>cfx_types::{Address, H160, H256, U256};
-<span class="kw">use </span>cfx_vm_interpreter::instructions::{INSTRUCTIONS, INSTRUCTIONS_CANCUN};
+<span class="kw">use </span>cfx_vm_interpreter::instructions::{
+    INSTRUCTIONS, INSTRUCTIONS_CANCUN, INSTRUCTIONS_CIP645,
+};
 <span class="kw">use </span>revm::primitives::{Address <span class="kw">as </span>RAddress, U256 <span class="kw">as </span>RU256};
 
 <span class="doccomment">/// creates the memory data in 32byte chunks
@@ -155,16 +162,19 @@
 /// The value is obvious for most opcodes, but SWAP* and DUP* are a bit weird,
 /// and we handle those as they are handled in parity vmtraces.
 /// For reference: &lt;https://github.com/ledgerwatch/erigon/blob/9b74cf0384385817459f88250d1d9c459a18eab1/turbo/jsonrpc/trace_adhoc.go#L451&gt;
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>stack_push_count(step_op: u8, cancun_enabled: bool) -&gt; usize {
-    <span class="kw">match </span>cancun_enabled {
-        <span class="bool-val">true </span>=&gt; <span class="kw">match </span>INSTRUCTIONS_CANCUN.get(step_op <span class="kw">as </span>usize) {
-            <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(instruct)) =&gt; instruct.ret,
-            <span class="kw">_ </span>=&gt; <span class="number">0</span>,
-        },
-        <span class="bool-val">false </span>=&gt; <span class="kw">match </span>INSTRUCTIONS.get(step_op <span class="kw">as </span>usize) {
-            <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(instruct)) =&gt; instruct.ret,
-            <span class="kw">_ </span>=&gt; <span class="number">0</span>,
-        },
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>stack_push_count(
+    step_op: u8, cancun_enabled: bool, cip645: bool,
+) -&gt; usize {
+    <span class="kw">let </span>instuction_set = <span class="kw">if </span>!cancun_enabled {
+        <span class="kw-2">&amp;*</span>INSTRUCTIONS
+    } <span class="kw">else if </span>cip645 {
+        <span class="kw-2">&amp;*</span>INSTRUCTIONS_CANCUN
+    } <span class="kw">else </span>{
+        <span class="kw-2">&amp;*</span>INSTRUCTIONS_CIP645
+    };
+    <span class="kw">match </span>instuction_set.get(step_op <span class="kw">as </span>usize) {
+        <span class="prelude-val">Some</span>(<span class="prelude-val">Some</span>(instruct)) =&gt; instruct.ret,
+        <span class="kw">_ </span>=&gt; <span class="number">0</span>,
     }
 }
 

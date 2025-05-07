@@ -613,6 +613,8 @@
 <a href="#613" id="613">613</a>
 <a href="#614" id="614">614</a>
 <a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -779,10 +781,12 @@
 
 <span class="kw">pub fn </span>cast_vote_gas(length: usize, spec: <span class="kw-2">&amp;</span>Spec) -&gt; usize {
     <span class="kw">let </span>version_gas =
-        <span class="number">2 </span>* spec.sload_gas + spec.sha3_gas + spec.sstore_reset_gas;
+        <span class="number">2 </span>* spec.cold_sload_gas + spec.sha3_gas + spec.sstore_reset_gas;
 
     <span class="kw">let </span>io_gas_per_topic = <span class="number">3
-        </span>* (<span class="number">2 </span>* spec.sload_gas + <span class="number">2 </span>* spec.sstore_reset_gas + <span class="number">2 </span>* spec.sha3_gas);
+        </span>* (<span class="number">2 </span>* spec.cold_sload_gas
+            + <span class="number">2 </span>* spec.sstore_reset_gas
+            + <span class="number">2 </span>* spec.sha3_gas);
 
     <span class="kw">let </span>log_gas_per_topic = <span class="number">2 </span>* spec.log_gas
         + <span class="number">8 </span>* spec.log_topic_gas

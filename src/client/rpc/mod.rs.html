@@ -557,8 +557,6 @@
 <a href="#557" id="557">557</a>
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -587,6 +585,7 @@
 <span class="kw">use </span>log::{info, warn};
 <span class="kw">use </span>std::{net::SocketAddr, sync::Arc};
 
+<span class="kw">pub mod </span>apis;
 <span class="kw">mod </span>authcodes;
 <span class="kw">pub mod </span>errors;
 <span class="kw">pub mod </span>extractor;
@@ -596,8 +595,6 @@
 <span class="kw">pub mod </span>informant;
 <span class="kw">mod </span>interceptor;
 <span class="kw">pub mod </span>metadata;
-<span class="kw">pub mod </span>rpc_apis;
-<span class="kw">pub mod </span>server_configuration;
 <span class="kw">mod </span>traits;
 <span class="kw">pub mod </span>types;
 
@@ -640,26 +637,26 @@
 <span class="kw">use crate</span>::{
     configuration::Configuration,
     rpc::{
+        apis::{Api, ApiSet, EthApi},
         impls::{
             eth::{EthHandler, EthTraceHandler, GethDebugHandler},
             eth_filter::EthFilterHelper <span class="kw">as </span>EthFilterClient,
             RpcImplConfiguration,
         },
         interceptor::{RpcInterceptor, RpcProxy},
-        rpc_apis::{Api, ApiSet},
         traits::eth_space::debug::Debug,
     },
 };
-<span class="kw">use </span>interceptor::{MetricsInterceptor, ThrottleInterceptor};
-<span class="kw">pub use </span>metadata::Metadata;
-<span class="kw">pub use </span>server_configuration::{
+<span class="kw">pub use </span>cfx_config::rpc_server_config::{
     HttpConfiguration, TcpConfiguration, WsConfiguration,
 };
+<span class="kw">use </span>interceptor::{MetricsInterceptor, ThrottleInterceptor};
+<span class="kw">pub use </span>metadata::Metadata;
 <span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">pub fn </span>setup_public_rpc_apis(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;RpcImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration, executor: TaskExecutor,
+    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     setup_rpc_apis(
         common,
@@ -669,18 +666,15 @@
         <span class="kw-2">&amp;</span>conf.raw_conf.throttling_conf,
         <span class="string">"rpc"</span>,
         conf.raw_conf.public_rpc_apis.list_apis(),
-        executor,
     )
 }
 
 <span class="kw">pub fn </span>setup_public_eth_rpc_apis(
-    common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;RpcImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration, executor: TaskExecutor,
+    rpc: Arc&lt;RpcImpl&gt;, eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration,
+    executor: TaskExecutor,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
-    setup_rpc_apis(
-        common,
+    setup_evm_rpc_apis(
         rpc,
-        pubsub,
         eth_pubsub,
         <span class="kw-2">&amp;</span>conf.raw_conf.throttling_conf,
         <span class="string">"rpc"</span>,
@@ -691,7 +685,7 @@
 
 <span class="kw">pub fn </span>setup_debug_rpc_apis(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;RpcImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration, executor: TaskExecutor,
+    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     setup_rpc_apis(
         common,
@@ -701,14 +695,13 @@
         <span class="kw-2">&amp;</span>conf.raw_conf.throttling_conf,
         <span class="string">"rpc_local"</span>,
         ApiSet::All.list_apis(),
-        executor,
     )
 }
 
 <span class="kw">fn </span>setup_rpc_apis(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;RpcImpl&gt;, pubsub: PubSubClient,
     eth_pubsub: EthPubSubClient, throttling_conf: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-    throttling_section: <span class="kw-2">&amp;</span>str, apis: HashSet&lt;Api&gt;, executor: TaskExecutor,
+    throttling_section: <span class="kw-2">&amp;</span>str, apis: HashSet&lt;Api&gt;,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>handler = MetaIoHandler::default();
     <span class="kw">for </span>api <span class="kw">in </span><span class="kw-2">&amp;</span>apis {
@@ -748,53 +741,6 @@
                     }
                 }
             }
-            Api::Eth =&gt; {
-                <span class="macro">info!</span>(<span class="string">"Add EVM RPC"</span>);
-                <span class="kw">let </span>evm = EthHandler::new(
-                    rpc.config.clone(),
-                    rpc.consensus.clone(),
-                    rpc.sync.clone(),
-                    rpc.tx_pool.clone(),
-                    executor.clone(),
-                )
-                .to_delegate();
-                <span class="kw">let </span>evm_trace_handler = EthTraceHandler {
-                    trace_handler: TraceHandler::new(
-                        <span class="kw-2">*</span>rpc.sync.network.get_network_type(),
-                        rpc.consensus.clone(),
-                    ),
-                }
-                .to_delegate();
-                extend_with_interceptor(
-                    <span class="kw-2">&amp;mut </span>handler,
-                    <span class="kw-2">&amp;</span>rpc.config,
-                    evm,
-                    throttling_conf,
-                    throttling_section,
-                );
-                handler.extend_with(evm_trace_handler);
-
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
-                {
-                    <span class="kw">let </span>filter_client = EthFilterClient::new(
-                        rpc.consensus.clone(),
-                        rpc.tx_pool.clone(),
-                        eth_pubsub.epochs_ordered(),
-                        eth_pubsub.executor.clone(),
-                        poll_lifetime,
-                        rpc.config.get_logs_filter_max_limit,
-                    )
-                    .to_delegate();
-
-                    extend_with_interceptor(
-                        <span class="kw-2">&amp;mut </span>handler,
-                        <span class="kw-2">&amp;</span>rpc.config,
-                        filter_client,
-                        throttling_conf,
-                        throttling_section,
-                    );
-                }
-            }
             Api::Debug =&gt; {
                 handler.extend_with(
                     LocalRpcImpl::new(common.clone(), rpc.clone())
@@ -806,30 +752,6 @@
                     <span class="kw-2">&amp;mut </span>handler,
                     <span class="kw-2">&amp;</span>rpc.config,
                     pubsub.clone().to_delegate(),
-                    throttling_conf,
-                    throttling_section,
-                );
-            }
-            Api::EthPubsub =&gt; {
-                <span class="macro">info!</span>(<span class="string">"Add EVM pubsub"</span>);
-                extend_with_interceptor(
-                    <span class="kw-2">&amp;mut </span>handler,
-                    <span class="kw-2">&amp;</span>rpc.config,
-                    eth_pubsub.clone().to_delegate(),
-                    throttling_conf,
-                    throttling_section,
-                );
-            }
-            Api::EthDebug =&gt; {
-                <span class="macro">info!</span>(<span class="string">"Add geth debug method"</span>);
-                <span class="kw">let </span>geth_debug = GethDebugHandler::new(
-                    rpc.consensus.clone(),
-                    rpc.config.max_estimation_gas_limit,
-                );
-                extend_with_interceptor(
-                    <span class="kw-2">&amp;mut </span>handler,
-                    <span class="kw-2">&amp;</span>rpc.config,
-                    geth_debug.to_delegate(),
                     throttling_conf,
                     throttling_section,
                 );
@@ -882,6 +804,91 @@
     add_meta_rpc_methods(handler, apis)
 }
 
+<span class="kw">fn </span>setup_evm_rpc_apis(
+    rpc: Arc&lt;RpcImpl&gt;, eth_pubsub: EthPubSubClient,
+    throttling_conf: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;, throttling_section: <span class="kw-2">&amp;</span>str,
+    apis: HashSet&lt;EthApi&gt;, executor: TaskExecutor,
+) -&gt; MetaIoHandler&lt;Metadata&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>handler = MetaIoHandler::default();
+    <span class="kw">for </span>api <span class="kw">in </span><span class="kw-2">&amp;</span>apis {
+        <span class="kw">match </span>api {
+            EthApi::Eth =&gt; {
+                <span class="macro">info!</span>(<span class="string">"Add EVM RPC"</span>);
+                <span class="kw">let </span>evm = EthHandler::new(
+                    rpc.config.clone(),
+                    rpc.consensus.clone(),
+                    rpc.sync.clone(),
+                    rpc.tx_pool.clone(),
+                    executor.clone(),
+                )
+                .to_delegate();
+                <span class="kw">let </span>evm_trace_handler = EthTraceHandler {
+                    trace_handler: TraceHandler::new(
+                        <span class="kw-2">*</span>rpc.sync.network.get_network_type(),
+                        rpc.consensus.clone(),
+                    ),
+                }
+                .to_delegate();
+                extend_with_interceptor(
+                    <span class="kw-2">&amp;mut </span>handler,
+                    <span class="kw-2">&amp;</span>rpc.config,
+                    evm,
+                    throttling_conf,
+                    throttling_section,
+                );
+                handler.extend_with(evm_trace_handler);
+
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
+                {
+                    <span class="kw">let </span>filter_client = EthFilterClient::new(
+                        rpc.consensus.clone(),
+                        rpc.tx_pool.clone(),
+                        eth_pubsub.epochs_ordered(),
+                        eth_pubsub.executor.clone(),
+                        poll_lifetime,
+                        rpc.config.get_logs_filter_max_limit,
+                    )
+                    .to_delegate();
+
+                    extend_with_interceptor(
+                        <span class="kw-2">&amp;mut </span>handler,
+                        <span class="kw-2">&amp;</span>rpc.config,
+                        filter_client,
+                        throttling_conf,
+                        throttling_section,
+                    );
+                }
+            }
+            EthApi::Pubsub =&gt; {
+                <span class="macro">info!</span>(<span class="string">"Add EVM pubsub"</span>);
+                extend_with_interceptor(
+                    <span class="kw-2">&amp;mut </span>handler,
+                    <span class="kw-2">&amp;</span>rpc.config,
+                    eth_pubsub.clone().to_delegate(),
+                    throttling_conf,
+                    throttling_section,
+                );
+            }
+            EthApi::Debug =&gt; {
+                <span class="macro">info!</span>(<span class="string">"Add geth debug method"</span>);
+                <span class="kw">let </span>geth_debug = GethDebugHandler::new(
+                    rpc.consensus.clone(),
+                    rpc.config.max_estimation_gas_limit,
+                );
+                extend_with_interceptor(
+                    <span class="kw-2">&amp;mut </span>handler,
+                    <span class="kw-2">&amp;</span>rpc.config,
+                    geth_debug.to_delegate(),
+                    throttling_conf,
+                    throttling_section,
+                );
+            }
+        }
+    }
+
+    handler
+}
+
 <span class="kw">pub fn </span>extend_with_interceptor&lt;
     T: IntoIterator&lt;Item = (String, RemoteProcedure&lt;Metadata&gt;)&gt;,
 &gt;(
@@ -932,13 +939,12 @@
 
 <span class="kw">pub fn </span>setup_public_rpc_apis_light(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;LightImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration,
+    conf: <span class="kw-2">&amp;</span>Configuration,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     setup_rpc_apis_light(
         common,
         rpc,
         pubsub,
-        eth_pubsub,
         <span class="kw-2">&amp;</span>conf.raw_conf.throttling_conf,
         <span class="string">"rpc"</span>,
         conf.raw_conf.public_rpc_apis.list_apis(),
@@ -947,7 +953,7 @@
 
 <span class="kw">pub fn </span>setup_debug_rpc_apis_light(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;LightImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: <span class="kw-2">&amp;</span>Configuration,
+    conf: <span class="kw-2">&amp;</span>Configuration,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>light_debug_apis = ApiSet::All.list_apis();
     light_debug_apis.remove(<span class="kw-2">&amp;</span>Api::Trace);
@@ -955,7 +961,6 @@
         common,
         rpc,
         pubsub,
-        eth_pubsub,
         <span class="kw-2">&amp;</span>conf.raw_conf.throttling_conf,
         <span class="string">"rpc_local"</span>,
         light_debug_apis,
@@ -964,8 +969,8 @@
 
 <span class="kw">fn </span>setup_rpc_apis_light(
     common: Arc&lt;CommonImpl&gt;, rpc: Arc&lt;LightImpl&gt;, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, throttling_conf: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-    throttling_section: <span class="kw-2">&amp;</span>str, apis: HashSet&lt;Api&gt;,
+    throttling_conf: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;, throttling_section: <span class="kw-2">&amp;</span>str,
+    apis: HashSet&lt;Api&gt;,
 ) -&gt; MetaIoHandler&lt;Metadata&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>handler = MetaIoHandler::default();
     <span class="kw">for </span>api <span class="kw">in </span>apis {
@@ -979,12 +984,6 @@
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
-            Api::Eth =&gt; {
-                <span class="macro">warn!</span>(<span class="string">"Light nodes do not support evm ports."</span>);
-            }
-            Api::EthDebug =&gt; {
-                <span class="macro">warn!</span>(<span class="string">"Light nodes do not support evm ports."</span>);
-            }
             Api::Debug =&gt; {
                 handler.extend_with(
                     LightDebugRpcImpl::new(common.clone(), rpc.clone())
@@ -992,9 +991,6 @@
                 );
             }
             Api::Pubsub =&gt; handler.extend_with(pubsub.clone().to_delegate()),
-            Api::EthPubsub =&gt; {
-                handler.extend_with(eth_pubsub.clone().to_delegate())
-            }
             Api::Test =&gt; {
                 handler.extend_with(
                     LightTestRpcImpl::new(common.clone(), rpc.clone())

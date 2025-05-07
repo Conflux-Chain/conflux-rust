@@ -233,6 +233,21 @@
 <a href="#233" id="233">233</a>
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -338,11 +353,13 @@
     /// exceed the `storage_limit`.
     </span>ExceedStorageLimit,
     <span class="doccomment">/// Built-in contract failed on given input
-    </span>BuiltIn(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str),
+    </span>BuiltIn(String),
     <span class="doccomment">/// Internal contract failed
     </span>InternalContract(String),
     <span class="doccomment">/// When execution tries to modify the state in static context
     </span>MutableCallInStaticContext,
+    <span class="doccomment">/// Too large init code size (CIP-645i: EIP-3860)
+    </span>CreateInitCodeSizeLimit,
     <span class="doccomment">/// Error from storage.
     </span>StateDbError(PartialEqWrapper&lt;DbError&gt;),
     <span class="doccomment">/// Wasm runtime error
@@ -355,6 +372,10 @@
     </span>InvalidAddress(Address),
     <span class="doccomment">/// Create a contract on an address with existing contract
     </span>ConflictAddress(Address),
+    <span class="doccomment">/// Create a contract on an address with existing contract
+    </span>NonceOverflow(Address),
+    <span class="doccomment">/// CIP-150: Reject new contract code starting with the 0xEF byte
+    </span>CreateContractStartingWithEF,
 }
 
 <span class="attr">#[derive(Debug)]
@@ -414,7 +435,7 @@
                 <span class="macro">write!</span>(f, <span class="string">"Not enough balance for storage {}/{}"</span>, required, got,)
             }
             ExceedStorageLimit =&gt; <span class="macro">write!</span>(f, <span class="string">"Exceed storage limit"</span>),
-            BuiltIn(name) =&gt; <span class="macro">write!</span>(f, <span class="string">"Built-in failed: {}"</span>, name),
+            BuiltIn(<span class="kw-2">ref </span>name) =&gt; <span class="macro">write!</span>(f, <span class="string">"Built-in failed: {}"</span>, name),
             InternalContract(<span class="kw-2">ref </span>name) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">"InternalContract failed: {}"</span>, name)
             }
@@ -424,12 +445,21 @@
             MutableCallInStaticContext =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">"Mutable call in static context"</span>)
             }
+            CreateInitCodeSizeLimit =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">"Exceed create initcode size limit"</span>)
+            }
             Wasm(<span class="kw-2">ref </span>msg) =&gt; <span class="macro">write!</span>(f, <span class="string">"Internal error: {}"</span>, msg),
             OutOfBounds =&gt; <span class="macro">write!</span>(f, <span class="string">"Out of bounds"</span>),
             Reverted =&gt; <span class="macro">write!</span>(f, <span class="string">"Reverted by bytecode"</span>),
             InvalidAddress(<span class="kw-2">ref </span>addr) =&gt; <span class="macro">write!</span>(f, <span class="string">"InvalidAddress: {}"</span>, addr),
             ConflictAddress(<span class="kw-2">ref </span>addr) =&gt; {
                 <span class="macro">write!</span>(f, <span class="string">"Contract creation on an existing address: {}"</span>, addr)
+            }
+            NonceOverflow(<span class="kw-2">ref </span>addr) =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">"Address nonce overflow: {}"</span>, addr)
+            }
+            CreateContractStartingWithEF =&gt; {
+                <span class="macro">write!</span>(f, <span class="string">"Create contract starting with EF"</span>)
             }
         }
     }

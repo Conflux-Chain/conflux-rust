@@ -221,12 +221,42 @@
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Cache Layer in State: Implements a read-through write-back cache logic and
 //! provides interfaces for reading and writing account data. It also handles
 //! the logic for loading extension fields of an account.
 
 </span><span class="kw">use super</span>::{AccountEntry, OverlayAccount, RequireFields, State};
-<span class="kw">use </span><span class="kw">crate</span>::unwrap_or_return;
+<span class="kw">use crate</span>::{state::overlay_account::AccountEntryWithWarm, unwrap_or_return};
 <span class="kw">use </span>cfx_statedb::{
     Error <span class="kw">as </span>DbErrorKind, <span class="prelude-ty">Result </span><span class="kw">as </span>DbResult, StateDb, StateDbExt,
 };
@@ -261,13 +291,20 @@
     <span class="doccomment">/// Requests an immutable reference of an account through the cache by the
     /// address and required, returning a reference with a read lock guard.
     /// It returns `None` if the account doesn't exist.
-    </span><span class="comment">// FIXME: the current implementation may affect prefetch performance.
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>read_account_ext_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, require: RequireFields,
     ) -&gt; DbResult&lt;<span class="prelude-ty">Option</span>&lt;AccountReadGuard&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>cache = <span class="self">self</span>.cache.write();
-        <span class="kw">let </span>account_entry =
-            <span class="self">Self</span>::fetch_account_mut(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span><span class="self">self</span>.db, address, require)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>account_entry = <span class="self">Self</span>::fetch_account_mut(
+            <span class="kw-2">&amp;mut </span>cache,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.committed_cache,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.db,
+            address,
+            require,
+        )<span class="question-mark">?</span>;
+
+        <span class="self">self</span>.copy_cache_entry_to_checkpoint(<span class="kw-2">*</span>address, account_entry);
 
         <span class="prelude-val">Ok</span>(<span class="kw">if </span>!account_entry.is_db_absent() {
             <span class="prelude-val">Some</span>(RwLockReadGuard::map(
@@ -284,7 +321,9 @@
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>prefetch(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, require: RequireFields,
     ) -&gt; DbResult&lt;()&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(account_entry) = <span class="self">self</span>.cache.read().get(address) {
+        <span class="comment">// TODO: this logic seems useless, since the prefetch is always called
+        // on a newly inited state.
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(account_entry) = <span class="self">self</span>.cache.read().get(address) {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(account) = account_entry.account() {
                 <span class="kw">if </span>!account.should_load_ext_fields(require) {
                     <span class="comment">// Return if the account has been loaded and no more field
@@ -310,7 +349,12 @@
             AccountEntry::new_loaded(<span class="self">self</span>.db.get_account(address)<span class="question-mark">?</span>);
         <span class="self">Self</span>::load_account_ext_fields(require, <span class="kw-2">&amp;mut </span>account_entry, <span class="kw-2">&amp;</span><span class="self">self</span>.db)<span class="question-mark">?</span>;
 
-        <span class="self">self</span>.cache.write().insert(<span class="kw-2">*</span>address, account_entry);
+        <span class="comment">// The prefetch phase's warm bit is not important because it will soon
+        // be written from the cache to the committed cache, which does not
+        // include the warm bit.
+        </span><span class="self">self</span>.cache
+            .write()
+            .insert(<span class="kw-2">*</span>address, account_entry.with_warm(<span class="bool-val">false</span>));
         <span class="prelude-val">Ok</span>(())
     }
 }
@@ -378,17 +422,23 @@
     ) -&gt; DbResult&lt;AccountWriteGuard&gt;
     <span class="kw">where </span>F: Fn(<span class="kw-2">&amp;</span>AddressWithSpace) -&gt; DbResult&lt;OverlayAccount&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>cache = <span class="self">self</span>.cache.write();
-        <span class="kw">let </span>account_entry =
-            <span class="self">Self</span>::fetch_account_mut(<span class="kw-2">&amp;mut </span>cache, <span class="kw-2">&amp;</span><span class="self">self</span>.db, address, require)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>account_entry = <span class="self">Self</span>::fetch_account_mut(
+            <span class="kw-2">&amp;mut </span>cache,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.committed_cache,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.db,
+            address,
+            require,
+        )<span class="question-mark">?</span>;
 
         <span class="comment">// Save the value before modification into the checkpoint.
         </span><span class="self">self</span>.copy_cache_entry_to_checkpoint(<span class="kw-2">*</span>address, account_entry);
 
         <span class="comment">// Set the dirty flag in cache.
-        </span><span class="kw">if let </span>AccountEntry::Cached(<span class="kw">_</span>, dirty_bit) = account_entry {
+        </span><span class="kw">if let </span>AccountEntry::Cached(<span class="kw">_</span>, dirty_bit) = <span class="kw-2">&amp;mut </span>account_entry.entry {
             <span class="kw-2">*</span>dirty_bit = <span class="bool-val">true</span>;
         } <span class="kw">else </span>{
-            <span class="kw-2">*</span>account_entry = AccountEntry::new_dirty(default(address)<span class="question-mark">?</span>);
+            account_entry.entry = AccountEntry::new_dirty(default(address)<span class="question-mark">?</span>);
         }
 
         <span class="prelude-val">Ok</span>(RwLockWriteGuard::map(cache, |c| {
@@ -404,17 +454,27 @@
     <span class="doccomment">/// Retrieves data using a read-through caching strategy and automatically
     /// loads extension fields as required.
     </span><span class="kw">fn </span>fetch_account_mut&lt;<span class="lifetime">'a</span>&gt;(
-        cache: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>HashMap&lt;AddressWithSpace, AccountEntry&gt;, db: <span class="kw-2">&amp;</span>StateDb,
-        address: <span class="kw-2">&amp;</span>AddressWithSpace, require: RequireFields,
-    ) -&gt; DbResult&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>AccountEntry&gt; {
+        cache: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>HashMap&lt;AddressWithSpace, AccountEntryWithWarm&gt;,
+        committed_cache: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>HashMap&lt;AddressWithSpace, AccountEntry&gt;,
+        db: <span class="kw-2">&amp;</span>StateDb, address: <span class="kw-2">&amp;</span>AddressWithSpace, require: RequireFields,
+    ) -&gt; DbResult&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>AccountEntryWithWarm&gt; {
         <span class="kw">let </span>account_entry = <span class="kw">match </span>cache.entry(<span class="kw-2">*</span>address) {
             Occupied(e) =&gt; e.into_mut(),
             Vacant(e) =&gt; {
-                <span class="kw">let </span>address = <span class="kw-2">*</span>e.key();
-                e.insert(AccountEntry::new_loaded(db.get_account(<span class="kw-2">&amp;</span>address)<span class="question-mark">?</span>))
+                <span class="kw">let </span>entry = <span class="kw">match </span>committed_cache.get(address) {
+                    <span class="prelude-val">Some</span>(committed) =&gt; committed.clone_from_committed_cache(),
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="kw">let </span>address = <span class="kw-2">*</span>e.key();
+                        AccountEntry::new_loaded(db.get_account(<span class="kw-2">&amp;</span>address)<span class="question-mark">?</span>)
+                    }
+                };
+                <span class="comment">// The item is set to "cold" by default when loading. After
+                // processing the checkpoint-related logic, it will be marked as
+                // "warm."
+                </span>e.insert(entry.with_warm(<span class="bool-val">false</span>))
             }
         };
-        <span class="self">Self</span>::load_account_ext_fields(require, account_entry, db)<span class="question-mark">?</span>;
+        <span class="self">Self</span>::load_account_ext_fields(require, <span class="kw-2">&amp;mut </span>account_entry.entry, db)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(account_entry)
     }
 

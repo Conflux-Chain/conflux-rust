@@ -208,16 +208,56 @@
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
     bytes::Bytes, transaction::AccessListItem, Action, SignedTransaction,
     Transaction, TransactionWithSignature,
     TransactionWithSignatureSerializePart,
 };
 <span class="kw">use </span>cfx_types::{AddressWithSpace, H256, U256};
+<span class="kw">use </span>cfxkey::Address;
 <span class="kw">use </span>rlp_derive::{RlpDecodable, RlpEncodable};
 <span class="kw">use </span>serde_derive::{Deserialize, Serialize};
 
-<span class="kw">use </span><span class="kw">super</span>::AccessList;
+<span class="kw">use super</span>::{AccessList, AuthorizationListItem};
 
 <span class="attr">#[derive(
     Default,
@@ -298,8 +338,7 @@
     <span class="kw">pub </span>epoch_height: u64,
     <span class="kw">pub </span>chain_id: u32,
     <span class="kw">pub </span>data: Bytes,
-    <span class="comment">// We do not use `AccessList` here because we need `Vec` for rlp derive.
-    </span><span class="kw">pub </span>access_list: Vec&lt;AccessListItem&gt;,
+    <span class="kw">pub </span>access_list: Vec&lt;AccessListItem&gt;,
 }
 
 <span class="attr">#[derive(
@@ -324,8 +363,33 @@
     <span class="kw">pub </span>epoch_height: u64,
     <span class="kw">pub </span>chain_id: u32,
     <span class="kw">pub </span>data: Bytes,
-    <span class="comment">// We do not use `AccessList` here because we need `Vec` for rlp derive.
-    </span><span class="kw">pub </span>access_list: Vec&lt;AccessListItem&gt;,
+    <span class="kw">pub </span>access_list: Vec&lt;AccessListItem&gt;,
+}
+
+<span class="attr">#[derive(
+    Default,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    RlpEncodable,
+    RlpDecodable,
+    Serialize,
+    Deserialize,
+)]
+</span><span class="kw">pub struct </span>Cip7702Transaction {
+    <span class="kw">pub </span>nonce: U256,
+    <span class="kw">pub </span>max_priority_fee_per_gas: U256,
+    <span class="kw">pub </span>max_fee_per_gas: U256,
+    <span class="kw">pub </span>gas: U256,
+    <span class="kw">pub </span>destination: Address,
+    <span class="kw">pub </span>value: U256,
+    <span class="kw">pub </span>storage_limit: u64,
+    <span class="kw">pub </span>epoch_height: u64,
+    <span class="kw">pub </span>chain_id: u32,
+    <span class="kw">pub </span>data: Bytes,
+    <span class="kw">pub </span>access_list: Vec&lt;AccessListItem&gt;,
+    <span class="kw">pub </span>authorization_list: Vec&lt;AuthorizationListItem&gt;,
 }
 
 <span class="macro">macro_rules!</span> access_common_ref {
@@ -347,8 +411,6 @@
 
     <span class="macro">access_common_ref!</span>(nonce, U256);
 
-    <span class="macro">access_common_ref!</span>(action, Action);
-
     <span class="macro">access_common_ref!</span>(value, U256);
 
     <span class="macro">access_common_ref!</span>(chain_id, u32);
@@ -357,19 +419,27 @@
 
     <span class="macro">access_common_ref!</span>(storage_limit, u64);
 
+    <span class="kw">pub fn </span>action(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Action {
+        <span class="kw">match </span><span class="self">self </span>{
+            TypedNativeTransaction::Cip155(tx) =&gt; tx.action,
+            TypedNativeTransaction::Cip2930(tx) =&gt; tx.action,
+            TypedNativeTransaction::Cip1559(tx) =&gt; tx.action,
+        }
+    }
+
     <span class="kw">pub fn </span>gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 {
         <span class="kw">match </span><span class="self">self </span>{
             Cip155(tx) =&gt; <span class="kw-2">&amp;</span>tx.gas_price,
-            Cip1559(tx) =&gt; <span class="kw-2">&amp;</span>tx.max_fee_per_gas,
             Cip2930(tx) =&gt; <span class="kw-2">&amp;</span>tx.gas_price,
+            Cip1559(tx) =&gt; <span class="kw-2">&amp;</span>tx.max_fee_per_gas,
         }
     }
 
     <span class="kw">pub fn </span>max_priority_gas_price(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>U256 {
         <span class="kw">match </span><span class="self">self </span>{
             Cip155(tx) =&gt; <span class="kw-2">&amp;</span>tx.gas_price,
-            Cip1559(tx) =&gt; <span class="kw-2">&amp;</span>tx.max_priority_fee_per_gas,
             Cip2930(tx) =&gt; <span class="kw-2">&amp;</span>tx.gas_price,
+            Cip1559(tx) =&gt; <span class="kw-2">&amp;</span>tx.max_priority_fee_per_gas,
         }
     }
 
@@ -378,6 +448,14 @@
             Cip155(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.nonce,
             Cip2930(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.nonce,
             Cip1559(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.nonce,
+        }
+    }
+
+    <span class="kw">pub fn </span>data_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>Vec&lt;u8&gt; {
+        <span class="kw">match </span><span class="self">self </span>{
+            Cip155(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.data,
+            Cip2930(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.data,
+            Cip1559(tx) =&gt; <span class="kw-2">&amp;mut </span>tx.data,
         }
     }
 

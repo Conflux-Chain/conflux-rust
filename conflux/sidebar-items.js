@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["handle_sub_command","main"],"mod":["command"]};
+window.SIDEBAR_ITEMS = {"fn":["handle_sub_command","main","setup_logger"],"mod":["command"]};

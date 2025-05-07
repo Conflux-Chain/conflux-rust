@@ -1,0 +1,137 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/cfxcore/executor/src/builtin/bls12_381/consts.rs`."><title>consts.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-081576b923113409.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="cfx_executor" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (fb898629a 2024-04-21)" data-channel="nightly" data-search-js="search-bf21c90c8c1d92b1.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../cfx_executor/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Type ‘S’ or ‘/’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<a href="#2" id="2">2</a>
+<a href="#3" id="3">3</a>
+<a href="#4" id="4">4</a>
+<a href="#5" id="5">5</a>
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a>
+<a href="#10" id="10">10</a>
+<a href="#11" id="11">11</a>
+<a href="#12" id="12">12</a>
+<a href="#13" id="13">13</a>
+<a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
+<a href="#43" id="43">43</a>
+<a href="#44" id="44">44</a>
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
+<a href="#49" id="49">49</a>
+<a href="#50" id="50">50</a>
+<a href="#51" id="51">51</a>
+<a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
+<a href="#56" id="56">56</a>
+<a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+</pre></div><pre class="rust"><code><span class="kw">pub const </span>G1_ADD_ADDRESS: u64 = <span class="number">0x0b</span>;
+<span class="kw">pub const </span>G1_ADD_BASE_GAS_FEE: u64 = <span class="number">375</span>;
+<span class="kw">pub const </span>G1_ADD_INPUT_LENGTH: usize = <span class="number">256</span>;
+<span class="kw">pub const </span>G1_MSM_ADDRESS: u64 = <span class="number">0x0c</span>;
+<span class="kw">pub const </span>G1_MSM_BASE_GAS_FEE: u64 = <span class="number">12000</span>;
+<span class="kw">pub const </span>G1_MSM_INPUT_LENGTH: usize = <span class="number">160</span>;
+<span class="kw">pub const </span>G1_OUTPUT_LENGTH: usize = <span class="number">128</span>;
+<span class="kw">pub const </span>G1_INPUT_ITEM_LENGTH: usize = <span class="number">128</span>;
+<span class="kw">pub const </span>G2_ADD_ADDRESS: u64 = <span class="number">0x0d</span>;
+<span class="kw">pub const </span>G2_ADD_BASE_GAS_FEE: u64 = <span class="number">600</span>;
+<span class="kw">pub const </span>G2_ADD_INPUT_LENGTH: usize = <span class="number">512</span>;
+<span class="kw">pub const </span>G2_MSM_ADDRESS: u64 = <span class="number">0x0e</span>;
+<span class="kw">pub const </span>G2_MSM_BASE_GAS_FEE: u64 = <span class="number">22500</span>;
+<span class="kw">pub const </span>G2_MSM_INPUT_LENGTH: usize = <span class="number">288</span>;
+<span class="kw">pub const </span>G2_OUTPUT_LENGTH: usize = <span class="number">256</span>;
+<span class="kw">pub const </span>G2_INPUT_ITEM_LENGTH: usize = <span class="number">256</span>;
+<span class="kw">pub const </span>PAIRING_ADDRESS: u64 = <span class="number">0x0f</span>;
+<span class="kw">pub const </span>PAIRING_PAIRING_MULTIPLIER_BASE: u64 = <span class="number">32600</span>;
+<span class="kw">pub const </span>PAIRING_PAIRING_OFFSET_BASE: u64 = <span class="number">37700</span>;
+<span class="kw">pub const </span>PAIRING_INPUT_LENGTH: usize = <span class="number">384</span>;
+<span class="kw">pub const </span>MAP_FP_TO_G1_ADDRESS: u64 = <span class="number">0x10</span>;
+<span class="kw">pub const </span>MAP_FP_TO_G1_BASE_GAS_FEE: u64 = <span class="number">5500</span>;
+<span class="kw">pub const </span>MAP_FP2_TO_G2_ADDRESS: u64 = <span class="number">0x11</span>;
+<span class="kw">pub const </span>MAP_FP2_TO_G2_BASE_GAS_FEE: u64 = <span class="number">23800</span>;
+<span class="kw">pub const </span>MSM_MULTIPLIER: u64 = <span class="number">1000</span>;
+<span class="doccomment">/// Number of bits used in the BLS12-381 curve finite field elements.
+</span><span class="kw">pub const </span>NBITS: usize = <span class="number">256</span>;
+<span class="doccomment">/// Finite field element input length.
+</span><span class="kw">pub const </span>FP_LENGTH: usize = <span class="number">48</span>;
+<span class="doccomment">/// Finite field element padded input length.
+</span><span class="kw">pub const </span>PADDED_FP_LENGTH: usize = <span class="number">64</span>;
+<span class="doccomment">/// Quadratic extension of finite field element input length.
+</span><span class="kw">pub const </span>PADDED_FP2_LENGTH: usize = <span class="number">128</span>;
+<span class="doccomment">/// Input elements padding length.
+</span><span class="kw">pub const </span>PADDING_LENGTH: usize = <span class="number">16</span>;
+<span class="doccomment">/// Scalar length.
+</span><span class="kw">pub const </span>SCALAR_LENGTH: usize = <span class="number">32</span>;
+<span class="comment">// Big-endian non-Montgomery form.
+</span><span class="kw">pub const </span>MODULUS_REPR: [u8; <span class="number">48</span>] = [
+    <span class="number">0x1a</span>, <span class="number">0x01</span>, <span class="number">0x11</span>, <span class="number">0xea</span>, <span class="number">0x39</span>, <span class="number">0x7f</span>, <span class="number">0xe6</span>, <span class="number">0x9a</span>, <span class="number">0x4b</span>, <span class="number">0x1b</span>, <span class="number">0xa7</span>, <span class="number">0xb6</span>,
+    <span class="number">0x43</span>, <span class="number">0x4b</span>, <span class="number">0xac</span>, <span class="number">0xd7</span>, <span class="number">0x64</span>, <span class="number">0x77</span>, <span class="number">0x4b</span>, <span class="number">0x84</span>, <span class="number">0xf3</span>, <span class="number">0x85</span>, <span class="number">0x12</span>, <span class="number">0xbf</span>,
+    <span class="number">0x67</span>, <span class="number">0x30</span>, <span class="number">0xd2</span>, <span class="number">0xa0</span>, <span class="number">0xf6</span>, <span class="number">0xb0</span>, <span class="number">0xf6</span>, <span class="number">0x24</span>, <span class="number">0x1e</span>, <span class="number">0xab</span>, <span class="number">0xff</span>, <span class="number">0xfe</span>,
+    <span class="number">0xb1</span>, <span class="number">0x53</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xb9</span>, <span class="number">0xfe</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xaa</span>, <span class="number">0xab</span>,
+];
+<span class="doccomment">/// Discounts table for G1 MSM as a vector of pairs `[k, discount]`.
+</span><span class="kw">pub static </span>DISCOUNT_TABLE_G1_MSM: [u16; <span class="number">128</span>] = [
+    <span class="number">1000</span>, <span class="number">949</span>, <span class="number">848</span>, <span class="number">797</span>, <span class="number">764</span>, <span class="number">750</span>, <span class="number">738</span>, <span class="number">728</span>, <span class="number">719</span>, <span class="number">712</span>, <span class="number">705</span>, <span class="number">698</span>, <span class="number">692</span>, <span class="number">687</span>, <span class="number">682</span>,
+    <span class="number">677</span>, <span class="number">673</span>, <span class="number">669</span>, <span class="number">665</span>, <span class="number">661</span>, <span class="number">658</span>, <span class="number">654</span>, <span class="number">651</span>, <span class="number">648</span>, <span class="number">645</span>, <span class="number">642</span>, <span class="number">640</span>, <span class="number">637</span>, <span class="number">635</span>, <span class="number">632</span>,
+    <span class="number">630</span>, <span class="number">627</span>, <span class="number">625</span>, <span class="number">623</span>, <span class="number">621</span>, <span class="number">619</span>, <span class="number">617</span>, <span class="number">615</span>, <span class="number">613</span>, <span class="number">611</span>, <span class="number">609</span>, <span class="number">608</span>, <span class="number">606</span>, <span class="number">604</span>, <span class="number">603</span>,
+    <span class="number">601</span>, <span class="number">599</span>, <span class="number">598</span>, <span class="number">596</span>, <span class="number">595</span>, <span class="number">593</span>, <span class="number">592</span>, <span class="number">591</span>, <span class="number">589</span>, <span class="number">588</span>, <span class="number">586</span>, <span class="number">585</span>, <span class="number">584</span>, <span class="number">582</span>, <span class="number">581</span>,
+    <span class="number">580</span>, <span class="number">579</span>, <span class="number">577</span>, <span class="number">576</span>, <span class="number">575</span>, <span class="number">574</span>, <span class="number">573</span>, <span class="number">572</span>, <span class="number">570</span>, <span class="number">569</span>, <span class="number">568</span>, <span class="number">567</span>, <span class="number">566</span>, <span class="number">565</span>, <span class="number">564</span>,
+    <span class="number">563</span>, <span class="number">562</span>, <span class="number">561</span>, <span class="number">560</span>, <span class="number">559</span>, <span class="number">558</span>, <span class="number">557</span>, <span class="number">556</span>, <span class="number">555</span>, <span class="number">554</span>, <span class="number">553</span>, <span class="number">552</span>, <span class="number">551</span>, <span class="number">550</span>, <span class="number">549</span>,
+    <span class="number">548</span>, <span class="number">547</span>, <span class="number">547</span>, <span class="number">546</span>, <span class="number">545</span>, <span class="number">544</span>, <span class="number">543</span>, <span class="number">542</span>, <span class="number">541</span>, <span class="number">540</span>, <span class="number">540</span>, <span class="number">539</span>, <span class="number">538</span>, <span class="number">537</span>, <span class="number">536</span>,
+    <span class="number">536</span>, <span class="number">535</span>, <span class="number">534</span>, <span class="number">533</span>, <span class="number">532</span>, <span class="number">532</span>, <span class="number">531</span>, <span class="number">530</span>, <span class="number">529</span>, <span class="number">528</span>, <span class="number">528</span>, <span class="number">527</span>, <span class="number">526</span>, <span class="number">525</span>, <span class="number">525</span>,
+    <span class="number">524</span>, <span class="number">523</span>, <span class="number">522</span>, <span class="number">522</span>, <span class="number">521</span>, <span class="number">520</span>, <span class="number">520</span>, <span class="number">519</span>,
+];
+<span class="comment">// Discounts table for G2 MSM as a vector of pairs `[k, discount]`:
+</span><span class="kw">pub static </span>DISCOUNT_TABLE_G2_MSM: [u16; <span class="number">128</span>] = [
+    <span class="number">1000</span>, <span class="number">1000</span>, <span class="number">923</span>, <span class="number">884</span>, <span class="number">855</span>, <span class="number">832</span>, <span class="number">812</span>, <span class="number">796</span>, <span class="number">782</span>, <span class="number">770</span>, <span class="number">759</span>, <span class="number">749</span>, <span class="number">740</span>, <span class="number">732</span>,
+    <span class="number">724</span>, <span class="number">717</span>, <span class="number">711</span>, <span class="number">704</span>, <span class="number">699</span>, <span class="number">693</span>, <span class="number">688</span>, <span class="number">683</span>, <span class="number">679</span>, <span class="number">674</span>, <span class="number">670</span>, <span class="number">666</span>, <span class="number">663</span>, <span class="number">659</span>, <span class="number">655</span>,
+    <span class="number">652</span>, <span class="number">649</span>, <span class="number">646</span>, <span class="number">643</span>, <span class="number">640</span>, <span class="number">637</span>, <span class="number">634</span>, <span class="number">632</span>, <span class="number">629</span>, <span class="number">627</span>, <span class="number">624</span>, <span class="number">622</span>, <span class="number">620</span>, <span class="number">618</span>, <span class="number">615</span>,
+    <span class="number">613</span>, <span class="number">611</span>, <span class="number">609</span>, <span class="number">607</span>, <span class="number">606</span>, <span class="number">604</span>, <span class="number">602</span>, <span class="number">600</span>, <span class="number">598</span>, <span class="number">597</span>, <span class="number">595</span>, <span class="number">593</span>, <span class="number">592</span>, <span class="number">590</span>, <span class="number">589</span>,
+    <span class="number">587</span>, <span class="number">586</span>, <span class="number">584</span>, <span class="number">583</span>, <span class="number">582</span>, <span class="number">580</span>, <span class="number">579</span>, <span class="number">578</span>, <span class="number">576</span>, <span class="number">575</span>, <span class="number">574</span>, <span class="number">573</span>, <span class="number">571</span>, <span class="number">570</span>, <span class="number">569</span>,
+    <span class="number">568</span>, <span class="number">567</span>, <span class="number">566</span>, <span class="number">565</span>, <span class="number">563</span>, <span class="number">562</span>, <span class="number">561</span>, <span class="number">560</span>, <span class="number">559</span>, <span class="number">558</span>, <span class="number">557</span>, <span class="number">556</span>, <span class="number">555</span>, <span class="number">554</span>, <span class="number">553</span>,
+    <span class="number">552</span>, <span class="number">552</span>, <span class="number">551</span>, <span class="number">550</span>, <span class="number">549</span>, <span class="number">548</span>, <span class="number">547</span>, <span class="number">546</span>, <span class="number">545</span>, <span class="number">545</span>, <span class="number">544</span>, <span class="number">543</span>, <span class="number">542</span>, <span class="number">541</span>, <span class="number">541</span>,
+    <span class="number">540</span>, <span class="number">539</span>, <span class="number">538</span>, <span class="number">537</span>, <span class="number">537</span>, <span class="number">536</span>, <span class="number">535</span>, <span class="number">535</span>, <span class="number">534</span>, <span class="number">533</span>, <span class="number">532</span>, <span class="number">532</span>, <span class="number">531</span>, <span class="number">530</span>, <span class="number">530</span>,
+    <span class="number">529</span>, <span class="number">528</span>, <span class="number">528</span>, <span class="number">527</span>, <span class="number">526</span>, <span class="number">526</span>, <span class="number">525</span>, <span class="number">524</span>, <span class="number">524</span>,
+];
+</code></pre></div></section></main></body></html>

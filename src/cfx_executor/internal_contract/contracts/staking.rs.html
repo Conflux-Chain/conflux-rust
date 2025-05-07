@@ -280,7 +280,7 @@
         context: <span class="kw-2">&amp;</span>InternalRefContext,
     ) -&gt; DbResult&lt;U256&gt; {
         <span class="kw">if </span>context.spec.cip97 {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(U256::from(<span class="number">2 </span>* context.spec.sload_gas));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(U256::from(<span class="number">2 </span>* context.spec.cold_sload_gas));
         }
         <span class="kw">let </span>length = context.state.deposit_list_length(<span class="kw-2">&amp;</span>params.sender)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(U256::from(<span class="number">2 </span>* context.spec.sstore_reset_gas) * U256::from(length))
@@ -352,7 +352,7 @@
         context: <span class="kw-2">&amp;</span>InternalRefContext,
     ) -&gt; DbResult&lt;U256&gt; {
         <span class="kw">let </span>length = context.state.vote_stake_list_length(address)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(U256::from(context.spec.sload_gas) * U256::from(length + <span class="number">1</span>))
+        <span class="prelude-val">Ok</span>(U256::from(context.spec.cold_sload_gas) * U256::from(length + <span class="number">1</span>))
     }
 }
 
@@ -381,7 +381,7 @@
         context: <span class="kw-2">&amp;</span>InternalRefContext,
     ) -&gt; DbResult&lt;U256&gt; {
         <span class="kw">let </span>length = context.state.vote_stake_list_length(address)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(U256::from(context.spec.sload_gas) * U256::from(length + <span class="number">1</span>))
+        <span class="prelude-val">Ok</span>(U256::from(context.spec.cold_sload_gas) * U256::from(length + <span class="number">1</span>))
     }
 }
 

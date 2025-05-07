@@ -152,6 +152,29 @@
 <a href="#152" id="152">152</a>
 <a href="#153" id="153">153</a>
 <a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 <span class="kw">use </span>cfx_types::{AddressSpaceUtil, AddressWithSpace};
 <span class="kw">use </span>cfx_vm_types::Spec;
@@ -161,6 +184,7 @@
 </span><span class="kw">pub struct </span>CallStackInfo {
     call_stack_recipient_addresses: Vec&lt;(AddressWithSpace, bool)&gt;,
     address_counter: HashMap&lt;AddressWithSpace, u32&gt;,
+    create_address_counter: HashMap&lt;AddressWithSpace, u32&gt;,
     first_reentrancy_depth: <span class="prelude-ty">Option</span>&lt;usize&gt;,
 }
 
@@ -169,6 +193,7 @@
         CallStackInfo {
             call_stack_recipient_addresses: Vec::default(),
             address_counter: HashMap::default(),
+            create_address_counter: HashMap::default(),
             first_reentrancy_depth: <span class="prelude-val">None</span>,
         }
     }
@@ -184,18 +209,20 @@
         <span class="self">self</span>.call_stack_recipient_addresses
             .push((address.clone(), is_create));
         <span class="kw-2">*</span><span class="self">self</span>.address_counter.entry(address).or_insert(<span class="number">0</span>) += <span class="number">1</span>;
+        <span class="kw">if </span>is_create {
+            <span class="kw-2">*</span><span class="self">self</span>.create_address_counter.entry(address).or_insert(<span class="number">0</span>) += <span class="number">1</span>;
+        }
     }
 
     <span class="kw">pub fn </span>pop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;(AddressWithSpace, bool)&gt; {
         <span class="kw">let </span>maybe_address = <span class="self">self</span>.call_stack_recipient_addresses.pop();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>((address, _is_create)) = <span class="kw-2">&amp;</span>maybe_address {
-            <span class="kw">let </span>poped_address_cnt = <span class="self">self
-                </span>.address_counter
-                .get_mut(address)
-                .expect(<span class="string">"The lookup table should consistent with call stack"</span>);
-            <span class="kw-2">*</span>poped_address_cnt -= <span class="number">1</span>;
-            <span class="kw">if </span><span class="kw-2">*</span>poped_address_cnt == <span class="number">0 </span>{
-                <span class="self">self</span>.address_counter.remove(address);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>((address, is_create)) = <span class="kw-2">&amp;</span>maybe_address {
+            <span class="self">Self</span>::decrease_counter(<span class="kw-2">&amp;mut </span><span class="self">self</span>.address_counter, address);
+            <span class="kw">if </span><span class="kw-2">*</span>is_create {
+                <span class="self">Self</span>::decrease_counter(
+                    <span class="kw-2">&amp;mut </span><span class="self">self</span>.create_address_counter,
+                    address,
+                );
             }
             <span class="kw">if </span><span class="self">self</span>.first_reentrancy_depth
                 == <span class="prelude-val">Some</span>(<span class="self">self</span>.call_stack_recipient_addresses.len())
@@ -204,6 +231,19 @@
             </span>}
         }
         maybe_address
+    }
+
+    <span class="kw">fn </span>decrease_counter(
+        counter_map: <span class="kw-2">&amp;mut </span>HashMap&lt;AddressWithSpace, u32&gt;,
+        address: <span class="kw-2">&amp;</span>AddressWithSpace,
+    ) {
+        <span class="kw">let </span>poped_address_cnt = counter_map
+            .get_mut(address)
+            .expect(<span class="string">"The lookup table should consistent with call stack"</span>);
+        <span class="kw-2">*</span>poped_address_cnt -= <span class="number">1</span>;
+        <span class="kw">if </span><span class="kw-2">*</span>poped_address_cnt == <span class="number">0 </span>{
+            counter_map.remove(address);
+        }
     }
 
     <span class="kw">pub fn </span>last(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>AddressWithSpace&gt; {
@@ -231,7 +271,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>contract_in_creation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>AddressWithSpace&gt; {
+    <span class="kw">pub fn </span>admin_control_in_creation(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>AddressWithSpace&gt; {
         <span class="kw">if let </span>[.., second_last, last] =
             <span class="self">self</span>.call_stack_recipient_addresses.as_slice()
         {
@@ -245,6 +285,12 @@
         } <span class="kw">else </span>{
             <span class="prelude-val">None
         </span>}
+    }
+
+    <span class="kw">pub fn </span>creating_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace) -&gt; bool {
+        <span class="self">self</span>.create_address_counter
+            .get(address)
+            .map_or(<span class="bool-val">false</span>, |x| <span class="kw-2">*</span>x &gt; <span class="number">0</span>)
     }
 }
 

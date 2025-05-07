@@ -83,6 +83,9 @@
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_rpc_utils::error::errors::{
     EthApiError, RpcInvalidTransactionError, RpcPoolError,
 };
@@ -155,6 +158,9 @@
                 TransactionError::FutureTransactionType =&gt; <span class="self">Self</span>::InvalidTransaction(RpcInvalidTransactionError::TxTypeNotSupported),
                 TransactionError::InvalidReceiver =&gt; <span class="self">Self</span>::Other(<span class="string">"Invalid receiver"</span>.to_string()),
                 TransactionError::TooLargeNonce =&gt; <span class="self">Self</span>::InvalidTransaction(RpcInvalidTransactionError::NonceMaxValue),
+                TransactionError::CreateInitCodeSizeLimit =&gt; <span class="self">Self</span>::InvalidTransaction(RpcInvalidTransactionError::MaxInitCodeSizeExceeded),
+                TransactionError::EmptyAuthorizationList =&gt; <span class="self">Self</span>::InvalidTransaction(RpcInvalidTransactionError::EmptyAuthorizationList),
+                TransactionError::PriortyGreaterThanMaxFee =&gt; <span class="self">Self</span>::InvalidTransaction(RpcInvalidTransactionError::PriortyGreaterThanMaxFee),
             },
             TransactionPoolError::GasLimitExceeded { .. } =&gt; <span class="self">Self</span>::PoolError(RpcPoolError::ExceedsGasLimit),
             TransactionPoolError::GasPriceLessThanMinimum { .. } =&gt; <span class="self">Self</span>::PoolError(RpcPoolError::Underpriced),

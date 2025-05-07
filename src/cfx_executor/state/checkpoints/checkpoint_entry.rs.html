@@ -17,10 +17,12 @@
 <a href="#17" id="17">17</a>
 <a href="#18" id="18">18</a>
 <a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// An account entry in the checkpoint
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub enum </span>CheckpointEntry&lt;T&gt; {
-    <span class="doccomment">/// The account has not been read or modified from the database.
+    <span class="doccomment">/// The account has not been read or modified from the committed state or
+    /// the database.
     </span>Unchanged,
     <span class="doccomment">/// The recorded state of the account at this checkpoint. It may be
     /// modified or unmodified.

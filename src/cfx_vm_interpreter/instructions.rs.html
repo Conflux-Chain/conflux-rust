@@ -703,6 +703,19 @@
 <a href="#703" id="703">703</a>
 <a href="#704" id="704">704</a>
 <a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -866,11 +879,12 @@
         </span>SELFBALANCE = <span class="number">0x47</span>,
         <span class="attr">#[doc = <span class="string">"base fee for EIP-1559 (EIP-3198)"</span>]
         </span>BASEFEE = <span class="number">0x48</span>,
+        <span class="attr">#[doc = <span class="string">"blob hash for EIP-4844 (dummy)"</span>]
+        </span>BLOBHASH=<span class="number">0x49</span>,
+        <span class="attr">#[doc = <span class="string">"blob base fee for EIP-4844 (dummy)"</span>]
+        </span>BLOBBASEFEE=<span class="number">0x4a</span>,
 
-        <span class="comment">// BLOBHASH=0x49
-        // BLOBBASEFEE=0x4A
-
-        </span><span class="attr">#[doc = <span class="string">"remove item from stack"</span>]
+        <span class="attr">#[doc = <span class="string">"remove item from stack"</span>]
         </span>POP = <span class="number">0x50</span>,
         <span class="attr">#[doc = <span class="string">"load word from memory"</span>]
         </span>MLOAD = <span class="number">0x51</span>,
@@ -1130,11 +1144,13 @@
     }
 
     <span class="doccomment">/// Returns the instruction info.
-    </span><span class="kw">pub fn </span>info&lt;<span class="kw">const </span>CANCUN: bool&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>InstructionInfo {
+    </span><span class="kw">pub fn </span>info&lt;<span class="kw">const </span>CANCUN: bool&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, cip645: bool) -&gt; <span class="kw-2">&amp;</span>InstructionInfo {
         <span class="kw">let </span>instrs = <span class="kw">if </span>!CANCUN {
             <span class="kw-2">&amp;*</span>INSTRUCTIONS
-        } <span class="kw">else </span>{
+        } <span class="kw">else if </span>!cip645 {
             <span class="kw-2">&amp;*</span>INSTRUCTIONS_CANCUN
+        } <span class="kw">else </span>{
+            <span class="kw-2">&amp;*</span>INSTRUCTIONS_CIP645
         };
 
         instrs[<span class="kw-2">*</span><span class="self">self </span><span class="kw">as </span>usize].as_ref().expect(<span class="string">"A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code."</span>)
@@ -1163,7 +1179,7 @@
 
 <span class="kw">impl </span>GasPriceTier {
     <span class="doccomment">/// Returns the index in schedule for specific `GasPriceTier`
-    </span><span class="kw">pub fn </span>idx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    </span><span class="kw">pub const fn </span>idx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="kw">match </span><span class="self">self </span>{
             <span class="kw-2">&amp;</span>GasPriceTier::Zero =&gt; <span class="number">0</span>,
             <span class="kw-2">&amp;</span>GasPriceTier::Base =&gt; <span class="number">1</span>,
@@ -1362,6 +1378,16 @@
         arr[BEGINSUB_TLOAD <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(InstructionInfo::new(<span class="string">"TLOAD"</span>, <span class="number">1</span>, <span class="number">1</span>, GasPriceTier::Special));
         arr[JUMPSUB_MCOPY <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(InstructionInfo::new(<span class="string">"MCOPY"</span>, <span class="number">3</span>, <span class="number">0</span>, GasPriceTier::Special));
         arr[RETURNSUB_TSTORE <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(InstructionInfo::new(<span class="string">"TSTORE"</span>, <span class="number">2</span>, <span class="number">0</span>, GasPriceTier::Special));
+        arr
+    };
+
+    <span class="kw">pub static </span><span class="kw-2">ref </span>INSTRUCTIONS_CIP645: [<span class="prelude-ty">Option</span>&lt;InstructionInfo&gt;; <span class="number">0x100</span>] = {
+        <span class="kw">let </span><span class="kw-2">mut </span>arr = <span class="kw-2">*</span>INSTRUCTIONS_CANCUN;
+        arr[BASEFEE <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(InstructionInfo::new(<span class="string">"BASEFEE"</span>, <span class="number">0</span>, <span class="number">1</span>, GasPriceTier::Base));
+        arr[BLOBHASH <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(InstructionInfo::new(<span class="string">"BLOBHASH"</span>, <span class="number">1</span>, <span class="number">1</span>, GasPriceTier::VeryLow));
+        arr[BLOBBASEFEE <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(InstructionInfo::new(<span class="string">"BLOBBASEFEE"</span>, <span class="number">0</span>, <span class="number">1</span>, GasPriceTier::Base));
+        arr[JUMPSUB_MCOPY <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(InstructionInfo::new(<span class="string">"MCOPY"</span>, <span class="number">3</span>, <span class="number">0</span>, GasPriceTier::VeryLow));
+
         arr
     };
 }

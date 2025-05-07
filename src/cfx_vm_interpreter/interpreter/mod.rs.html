@@ -1800,6 +1800,19 @@
 <a href="#1800" id="1800">1800</a>
 <a href="#1801" id="1801">1801</a>
 <a href="#1802" id="1802">1802</a>
+<a href="#1803" id="1803">1803</a>
+<a href="#1804" id="1804">1804</a>
+<a href="#1805" id="1805">1805</a>
+<a href="#1806" id="1806">1806</a>
+<a href="#1807" id="1807">1807</a>
+<a href="#1808" id="1808">1808</a>
+<a href="#1809" id="1809">1809</a>
+<a href="#1810" id="1810">1810</a>
+<a href="#1811" id="1811">1811</a>
+<a href="#1812" id="1812">1812</a>
+<a href="#1813" id="1813">1813</a>
+<a href="#1814" id="1814">1814</a>
+<a href="#1815" id="1815">1815</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2394,24 +2407,23 @@
             }
         };
 
-        <span class="kw">let </span>info = instruction.info::&lt;CANCUN&gt;();
+        <span class="kw">let </span>info =
+            instruction.info::&lt;CANCUN&gt;(context.spec().cip645.opcode_update);
         <span class="self">self</span>.last_stack_ret_len = info.ret;
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.verify_instruction(context, instruction, info) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(InterpreterResult::Done(<span class="prelude-val">Err</span>(e)));
         }
 
+        <span class="kw">let </span>gasometer = <span class="self">self</span>.gasometer.as_mut().expect(GASOMETER_PROOF);
+
         <span class="comment">// Calculate gas cost
-        </span><span class="kw">let </span>requirements = <span class="kw">match </span><span class="self">self
-            </span>.gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .requirements(
-                context,
-                instruction,
-                info,
-                <span class="kw-2">&amp;</span><span class="self">self</span>.stack,
-                <span class="self">self</span>.mem.size(),
-            ) {
+        </span><span class="kw">let </span>requirements = <span class="kw">match </span>gasometer.requirements(
+            context,
+            instruction,
+            info,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.stack,
+            <span class="self">self</span>.mem.size(),
+        ) {
             <span class="prelude-val">Ok</span>(t) =&gt; t,
             <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(InterpreterResult::Done(<span class="prelude-val">Err</span>(e))),
         };
@@ -2425,36 +2437,26 @@
         //     );
         // }
 
-        </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self
-            </span>.gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .verify_gas(<span class="kw-2">&amp;</span>requirements.gas_cost)
-        {
+        </span><span class="kw">if let </span><span class="prelude-val">Err</span>(e) = gasometer.verify_gas(<span class="kw-2">&amp;</span>requirements.gas_cost) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(InterpreterResult::Done(<span class="prelude-val">Err</span>(e)));
         }
         <span class="self">self</span>.mem.expand(requirements.memory_required_size);
-        <span class="self">self</span>.gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .current_mem_gas = requirements.memory_total_gas;
-        <span class="self">self</span>.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas =
-            <span class="self">self</span>.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas
-                - requirements.gas_cost;
+        gasometer.current_mem_gas = requirements.memory_total_gas;
+        gasometer.current_gas -= requirements.gas_cost;
+        context.refund(requirements.gas_refund);
 
         <span class="macro">evm_debug!</span>({
             <span class="self">self</span>.informant.before_instruction(
                 <span class="self">self</span>.reader.position,
                 instruction,
                 info,
-                <span class="kw-2">&amp;</span><span class="self">self</span>.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas,
+                <span class="kw-2">&amp;</span>gasometer.current_gas,
                 <span class="kw-2">&amp;</span><span class="self">self</span>.stack,
             )
         });
 
         <span class="comment">// Execute instruction
-        </span><span class="kw">let </span>current_gas =
-            <span class="self">self</span>.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas;
+        </span><span class="kw">let </span>current_gas = gasometer.current_gas;
         <span class="kw">let </span>result = <span class="kw">match </span><span class="self">self</span>.exec_instruction_inner(
             current_gas,
             context,
@@ -2502,7 +2504,11 @@
                     <span class="comment">// TLOAD
                     </span><span class="kw">let </span><span class="kw-2">mut </span>key = <span class="macro">vec!</span>[<span class="number">0</span>; <span class="number">32</span>];
                     <span class="self">self</span>.stack.pop_back().to_big_endian(key.as_mut());
-                    <span class="kw">let </span>word = context.storage_at(<span class="kw-2">&amp;</span>key)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>word = <span class="kw">if </span>context.spec().cip154 {
+                        context.transient_storage_at(<span class="kw-2">&amp;</span>key)<span class="question-mark">?
+                    </span>} <span class="kw">else </span>{
+                        context.storage_at(<span class="kw-2">&amp;</span>key)<span class="question-mark">?
+                    </span>};
                     <span class="self">self</span>.stack.push(word);
                 }
             }
@@ -2550,6 +2556,12 @@
                 <span class="kw">let </span>endowment = <span class="self">self</span>.stack.pop_back();
                 <span class="kw">let </span>init_off = <span class="self">self</span>.stack.pop_back();
                 <span class="kw">let </span>init_size = <span class="self">self</span>.stack.pop_back();
+                <span class="kw">let </span>spec = context.spec();
+                <span class="kw">if </span>spec.cip645.eip3860
+                    &amp;&amp; init_size &gt; U256::from(spec.init_code_data_limit)
+                {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(vm::Error::CreateInitCodeSizeLimit);
+                }
                 <span class="kw">let </span>address_scheme = <span class="kw">match </span>instruction {
 					instructions::CREATE <span class="kw">if </span>context.space() == Space::Native =&gt; CreateContractAddress::FromSenderNonceAndCodeHash,
                     instructions::CREATE <span class="kw">if </span>context.space() == Space::Ethereum =&gt; CreateContractAddress::FromSenderNonce,
@@ -2605,9 +2617,13 @@
                                 .expect(<span class="string">"Gas left cannot be greater."</span>),
                         ))
                     }
-                    <span class="prelude-val">Ok</span>(ContractCreateResult::Failed(<span class="kw">_</span>)) =&gt; {
+                    <span class="prelude-val">Ok</span>(ContractCreateResult::Failed(e)) =&gt; {
                         <span class="self">self</span>.stack.push(U256::zero());
-                        <span class="prelude-val">Ok</span>(InstructionResult::Ok)
+                        <span class="kw">if </span><span class="macro">matches!</span>(e, vm::Error::NonceOverflow(<span class="kw">_</span>)) {
+                            <span class="prelude-val">Ok</span>(InstructionResult::UnusedGas(create_gas))
+                        } <span class="kw">else </span>{
+                            <span class="prelude-val">Ok</span>(InstructionResult::Ok)
+                        }
                     }
                     <span class="prelude-val">Err</span>(trap) =&gt; <span class="prelude-val">Ok</span>(InstructionResult::Trap(trap)),
                 };
@@ -3015,6 +3031,16 @@
             instructions::BASEFEE =&gt; {
                 <span class="self">self</span>.stack
                     .push(context.env().base_gas_price[context.space()]);
+            }
+            instructions::BLOBHASH =&gt; {
+                <span class="self">self</span>.stack.pop_back();
+                <span class="self">self</span>.stack.push(U256::zero());
+            }
+            Instruction::BLOBBASEFEE =&gt; {
+                <span class="attr">#[cfg(feature = <span class="string">"align_evm"</span>)]
+                </span><span class="self">self</span>.stack.push(context.env().blob_gas_fee);
+                <span class="attr">#[cfg(not(feature = <span class="string">"align_evm"</span>))]
+                </span><span class="self">self</span>.stack.push(U256::zero());
             }
             instructions::BLOCKHASH =&gt; {
                 <span class="kw">let </span>block_number = <span class="self">self</span>.stack.pop_back();
