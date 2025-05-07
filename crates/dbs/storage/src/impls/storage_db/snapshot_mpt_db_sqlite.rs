@@ -323,7 +323,7 @@ impl SnapshotMptDbSqlite {
 }
 
 use primitives::MerkleHash;
-use tokio02::sync::Semaphore;
+use tokio::sync::Semaphore;
 
 use crate::{
     impls::{

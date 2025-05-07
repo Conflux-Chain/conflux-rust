@@ -108,4 +108,4 @@ use crate::impls::{
 #[cfg(test)]
 use std::{path::Path, sync::Arc};
 #[cfg(test)]
-use tokio02::sync::Semaphore;
+use tokio::sync::Semaphore;
