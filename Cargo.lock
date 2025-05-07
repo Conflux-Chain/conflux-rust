@@ -1589,7 +1589,7 @@ dependencies = [
  "sqlite",
  "sqlite3-sys",
  "strfmt",
- "tokio 0.2.25",
+ "tokio 1.44.2",
 ]
 
 [[package]]
