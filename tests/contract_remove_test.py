@@ -17,6 +17,7 @@ class ContractRemoveTest(ConfluxTestFramework):
         super().__init__()
         self.has_range_delete_bug = False
         self.has_collateral_bug = True
+        self.conf_parameters["cip151_transition_height"] = str(99999999)
 
     @property
     def correct_wl_value(self):
@@ -36,7 +37,7 @@ class ContractRemoveTest(ConfluxTestFramework):
         self.conf_parameters["anticone_penalty_ratio"] = "10"
 
         # Disable CIP-131 on test
-        self.conf_parameters["next_hardfork_transition_number"] = 9999999
+        self.conf_parameters["base_fee_burn_transition_number"] = 9999999
 
     def run_test(self):
         self.w3 = self.cw3

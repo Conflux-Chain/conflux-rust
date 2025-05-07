@@ -7,6 +7,7 @@ use std::collections::HashMap;
 pub struct CallStackInfo {
     call_stack_recipient_addresses: Vec<(AddressWithSpace, bool)>,
     address_counter: HashMap<AddressWithSpace, u32>,
+    create_address_counter: HashMap<AddressWithSpace, u32>,
     first_reentrancy_depth: Option<usize>,
 }
 
@@ -15,6 +16,7 @@ impl CallStackInfo {
         CallStackInfo {
             call_stack_recipient_addresses: Vec::default(),
             address_counter: HashMap::default(),
+            create_address_counter: HashMap::default(),
             first_reentrancy_depth: None,
         }
     }
@@ -30,18 +32,20 @@ impl CallStackInfo {
         self.call_stack_recipient_addresses
             .push((address.clone(), is_create));
         *self.address_counter.entry(address).or_insert(0) += 1;
+        if is_create {
+            *self.create_address_counter.entry(address).or_insert(0) += 1;
+        }
     }
 
     pub fn pop(&mut self) -> Option<(AddressWithSpace, bool)> {
         let maybe_address = self.call_stack_recipient_addresses.pop();
-        if let Some((address, _is_create)) = &maybe_address {
-            let poped_address_cnt = self
-                .address_counter
-                .get_mut(address)
-                .expect("The lookup table should consistent with call stack");
-            *poped_address_cnt -= 1;
-            if *poped_address_cnt == 0 {
-                self.address_counter.remove(address);
+        if let Some((address, is_create)) = &maybe_address {
+            Self::decrease_counter(&mut self.address_counter, address);
+            if *is_create {
+                Self::decrease_counter(
+                    &mut self.create_address_counter,
+                    address,
+                );
             }
             if self.first_reentrancy_depth
                 == Some(self.call_stack_recipient_addresses.len())
@@ -50,6 +54,19 @@ impl CallStackInfo {
             }
         }
         maybe_address
+    }
+
+    fn decrease_counter(
+        counter_map: &mut HashMap<AddressWithSpace, u32>,
+        address: &AddressWithSpace,
+    ) {
+        let poped_address_cnt = counter_map
+            .get_mut(address)
+            .expect("The lookup table should consistent with call stack");
+        *poped_address_cnt -= 1;
+        if *poped_address_cnt == 0 {
+            counter_map.remove(address);
+        }
     }
 
     pub fn last(&self) -> Option<&AddressWithSpace> {
@@ -77,7 +94,7 @@ impl CallStackInfo {
         }
     }
 
-    pub fn contract_in_creation(&self) -> Option<&AddressWithSpace> {
+    pub fn admin_control_in_creation(&self) -> Option<&AddressWithSpace> {
         if let [.., second_last, last] =
             self.call_stack_recipient_addresses.as_slice()
         {
@@ -91,6 +108,12 @@ impl CallStackInfo {
         } else {
             None
         }
+    }
+
+    pub fn creating_contract(&self, address: &AddressWithSpace) -> bool {
+        self.create_address_counter
+            .get(address)
+            .map_or(false, |x| *x > 0)
     }
 }
 

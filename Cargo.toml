@@ -1,6 +1,13 @@
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
 members = [
+    # bins
+    "bins/cfx_store",
+    "bins/cfx_key",
+    "bins/conflux",
+    "bins/evm-spec-tester",
+    "bins/consensus_bench",
+    # libs
     "crates/cfx_bytes",
     "crates/cfx_types",
     "crates/cfx_addr",
@@ -16,9 +23,6 @@ members = [
     "crates/primitives",
     "crates/secret_store",
     "crates/transactiongen",
-    "bins/cfx_store",
-    "bins/cfx_key",
-    "bins/conflux",
     "crates/cfxcore/core",
     "crates/cfxcore/execute-helper",
     "crates/cfxcore/executor",
@@ -78,7 +82,7 @@ members = [
     "crates/pos/common/subscription-service",
     "crates/pos/common/temppath",
     "crates/pos/common/time-service",
-    "crates/pos/config/generate-key",
+    # "crates/pos/config/generate-key",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -104,6 +108,8 @@ members = [
     "crates/pos/config/management/network-address-encryption",
     "crates/rpc/rpc-middlewares",
     "crates/tasks",
+    "crates/statetest_types",
+    "crates/config",
 ]
 
 resolver = "2"
@@ -238,6 +244,8 @@ pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
+statetest_types = { path = "./crates/statetest_types" }
+cfx-config = { path = "./crates/config" }
 
 # basics
 bytes = "1.9"
@@ -319,6 +327,7 @@ bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", 
     "multicore",
     "blst",
 ] }
+blst = "0.3"
 #secp256k1 = "0.30.0"
 #rustls = "0.21"
 hashbrown = "0.7.1"
@@ -330,12 +339,13 @@ rand_08 = { package = "rand", version = "0.8" }
 rand_chacha = "0.2.1"
 
 # misc
-clap = "2"
+clap = "2" # outdated, need to migrate to clap 4
+structopt = { version = "0.3", default-features = false } # unmaintained, need to migrate to clap 4
 log = "0.4"
 log4rs = "1.3.0"
 env_logger = "0.11"
 lazy_static = "1.4"
-itertools = "0.10.0"
+itertools = "0.14"
 once_cell = "1.17.1"
 byteorder = "1.2.7"
 strum = "0.26"
@@ -392,6 +402,8 @@ lru_time_cache = "0.9.0"
 slice-group-by = "0.3.1"
 auto_impl = "1"
 dyn-clone = "1.0.17"
+enumn = "0.1.14"
+walkdir = "2.5"
 
 # num misc
 bigdecimal = "0.1.0"

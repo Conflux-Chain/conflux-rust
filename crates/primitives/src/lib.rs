@@ -42,7 +42,8 @@ pub use crate::{
     },
     storage_key::*,
     transaction::{
-        AccessList, AccessListItem, Action, SignedTransaction, Transaction,
+        AccessList, AccessListItem, Action, AuthorizationList,
+        AuthorizationListItem, SignedTransaction, Transaction,
         TransactionWithSignature, TransactionWithSignatureSerializePart,
         TxPropagateId,
     },

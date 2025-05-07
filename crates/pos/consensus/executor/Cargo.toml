@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 anyhow = { workspace = true }
 fail = { workspace = true }
-itertools = { version = "0.10.0", default-features = false }
+itertools = { workspace = true }
 once_cell = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 

@@ -22,6 +22,8 @@
 use cfx_types::{address_util::AddressUtil, Address};
 use primitives::{block::BlockHeight, BlockNumber};
 
+pub const CODE_PREFIX_7702: &'static [u8] = b"\xef\x01\x00";
+
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
 pub struct Spec {
@@ -41,18 +43,15 @@ pub struct Spec {
     pub sha3_gas: usize,
     /// Additional gas for `SHA3` opcode for each word of hashed memory
     pub sha3_word_gas: usize,
-    /// Gas price for loading from storage
-    pub sload_gas: usize,
+    /// Gas price for loading from storage. Code sload gas after CIP-645f:
+    /// EIP-2929
+    pub cold_sload_gas: usize,
     /// Gas price for setting new value to storage (`storage==0`, `new!=0`)
     pub sstore_set_gas: usize,
     /// Gas price for altering value in storage
     pub sstore_reset_gas: usize,
     /// Gas refund for `SSTORE` clearing (when `storage!=0`, `new==0`)
     pub sstore_refund_gas: usize,
-    /// Gas price for `TLOAD`
-    pub tload_gas: usize,
-    /// Gas price for `TSTORE`
-    pub tstore_gas: usize,
     /// Gas price for `JUMPDEST` opcode
     pub jumpdest_gas: usize,
     /// Gas price for `LOG*`
@@ -81,6 +80,10 @@ pub struct Spec {
     pub create_data_gas: usize,
     /// Maximum code size when creating a contract.
     pub create_data_limit: usize,
+    /// Maximum init code size (CIP-645i: EIP-3860)
+    pub init_code_data_limit: usize,
+    /// Init code word size (CIP-645i: EIP-3860)
+    pub init_code_word_gas: usize,
     /// Transaction cost
     pub tx_gas: usize,
     /// `CREATE` transaction cost
@@ -89,6 +92,10 @@ pub struct Spec {
     pub tx_data_zero_gas: usize,
     /// Aditional cost for non-empty data transaction
     pub tx_data_non_zero_gas: usize,
+    /// Floor gas cost from empty data transaction (EIP-7623)
+    pub tx_data_floor_zero_gas: usize,
+    /// Floor gas cost from non-empty data transaction (EIP-7623)
+    pub tx_data_floor_non_zero_gas: usize,
     /// Gas price for copying memory
     pub copy_gas: usize,
     /// Price of EXTCODESIZE
@@ -107,6 +114,8 @@ pub struct Spec {
     pub eip1820_gas: usize,
     pub access_list_storage_key_gas: usize,
     pub access_list_address_gas: usize,
+    pub cold_account_access_cost: usize,
+    pub warm_access_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -130,10 +139,12 @@ pub struct Spec {
     /// VM execution does not increase null signed address nonce if this field
     /// is true.
     pub keep_unsigned_nonce: bool,
-    /// Wasm extra specs, if wasm activated
-    pub wasm: Option<WasmCosts>,
     /// The magnification of gas storage occupying related operaions.
     pub evm_gas_ratio: usize,
+    /// `PER_AUTH_BASE_COST` in CIP-7702
+    pub per_auth_base_cost: usize,
+    /// `PER_EMPTY_ACCOUNT_COST` in CIP-7702
+    pub per_empty_account_cost: usize,
     /// CIP-43: Introduce Finality via Voting Among Staked
     pub cip43_init: bool,
     pub cip43_contract: bool,
@@ -176,6 +187,7 @@ pub struct Spec {
     pub cip133_core: bool,
     /// CIP-137: Base Fee Sharing in CIP-1559
     pub cip137: bool,
+    /// CIP-1559: Fee Market Change for Conflux
     pub cip1559: bool,
     /// CIP-141: Disable Subroutine Opcodes
     /// CIP-142: Transient Storage Opcodes
@@ -185,64 +197,134 @@ pub struct Spec {
     pub cip144: bool,
     /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
     pub cip145: bool,
+    /// CIP-150: Reject New Contract Code Starting with the 0xEF byte
+    pub cip150: bool,
+    /// CIP-151: SELFDESTRUCT only in Same Transaction
+    pub cip151: bool,
+    /// CIP-152: Reject Transactions from Senders with Deployed Code
+    pub cip152: bool,
+    /// CIP-154: Fix Inconsistent Implementation of TLOAD
+    pub cip154: bool,
+    /// CIP-7702: Set Code for EOA
+    pub cip7702: bool,
+    /// CIP-645: Align Conflux Gas Pricing with EVM
+    pub cip645: CIP645Spec,
+    /// EIP-2935: Serve historical block hashes from state
+    pub eip2935: bool,
+    /// EIP-7623: Increase calldata cost
+    pub eip7623: bool,
+    pub align_evm: bool,
     pub cip_c2_fix: bool,
 }
 
-/// Wasm cost table
-#[derive(Debug, Clone)]
-pub struct WasmCosts {
-    /// Default opcode cost
-    pub regular: u32,
-    /// Div operations multiplier.
-    pub div: u32,
-    /// Div operations multiplier.
-    pub mul: u32,
-    /// Memory (load/store) operations multiplier.
-    pub mem: u32,
-    /// General static query of U256 value from env-info
-    pub static_u256: u32,
-    /// General static query of Address value from env-info
-    pub static_address: u32,
-    /// Memory stipend. Amount of free memory (in 64kb pages) each contract
-    /// can use for stack.
-    pub initial_mem: u32,
-    /// Grow memory cost, per page (64kb)
-    pub grow_mem: u32,
-    /// Memory copy cost, per byte
-    pub memcpy: u32,
-    /// Max stack height (native WebAssembly stack limiter)
-    pub max_stack_height: u32,
-    /// Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul`
-    /// / `opcodes_div`
-    pub opcodes_mul: u32,
-    /// Cost of wasm opcode is calculated as TABLE_ENTRY_COST * `opcodes_mul`
-    /// / `opcodes_div`
-    pub opcodes_div: u32,
-    /// Whether create2 extern function is activated.
-    pub have_create2: bool,
-    /// Whether gasleft extern function is activated.
-    pub have_gasleft: bool,
+/// Represents the feature flags for CIP-645 implementation.
+///
+/// While the protocol treats these features as a single atomic upgrade,
+/// separating them into named fields is merely to make the code more
+/// maintainable and self-documenting.
+///
+/// IMPORTANT NOTE:
+/// All fields must be consistently set to either `true` (enabled) or `false`
+/// (disabled). Mixed states will lead to undefined behavior as these features
+/// were designed to be activated as a coordinated bundle in CIP-645.
+#[derive(Debug, Clone, Copy)]
+pub struct CIP645Spec {
+    /// EIP-1108: Reduces gas costs for alt_bn128 precompile  
+    pub eip1108: bool,
+
+    /// EIP-1884: Reprices trie-size-dependent opcodes  
+    pub eip1884: bool,
+
+    /// EIP-2028: Reduces Calldata gas cost  
+    pub eip2028: bool,
+
+    /// EIP-2200: Rebalances net-metered SSTORE gas cost  
+    /// EIP-3529: Removes gas refunds for SELFDESTRUCT and reduces SSTORE
+    /// refunds
+    pub eip_sstore_and_refund_gas: bool,
+
+    /// EIP-2565: Reduces gas cost for modular exponentiation transactions  
+    pub eip2565: bool,
+
+    /// EIP-2929: Increases gas costs for opcode transactions to mitigate DDoS
+    /// EIP-3651: Reduces gas fees for accessing COINBASE address  
+    pub eip_cold_warm_access: bool,
+
+    /// EIP-3860: Limits initcode size to 49152  
+    pub eip3860: bool,
+
+    /// EIP-684: Revert creation in case of collision
+    pub fix_eip684: bool,
+
+    /// EIP-1559: EIP-1559: Fee market change for ETH 1.0 chain
+    pub fix_eip1559: bool,
+
+    /// EIP-5656: MCOPY - Memory copying instruction
+    pub fix_eip5656: bool,
+
+    /// EIP-1153: Transient storage opcodes
+    pub fix_eip1153: bool,
+
+    pub blockhash_gas: bool,
+
+    pub opcode_update: bool,
 }
 
-impl Default for WasmCosts {
-    fn default() -> Self {
-        WasmCosts {
-            regular: 1,
-            div: 16,
-            mul: 4,
-            mem: 2,
-            static_u256: 64,
-            static_address: 40,
-            initial_mem: 4096,
-            grow_mem: 8192,
-            memcpy: 1,
-            max_stack_height: 64 * 1024,
-            opcodes_mul: 3,
-            opcodes_div: 8,
-            have_create2: false,
-            have_gasleft: false,
+impl CIP645Spec {
+    pub const fn new(enabled: bool) -> Self {
+        Self {
+            eip1108: enabled,
+            eip1884: enabled,
+            eip2028: enabled,
+            eip_sstore_and_refund_gas: enabled,
+            eip2565: enabled,
+            eip_cold_warm_access: enabled,
+            eip3860: enabled,
+            fix_eip684: enabled,
+            fix_eip1153: enabled,
+            fix_eip1559: enabled,
+            fix_eip5656: enabled,
+            blockhash_gas: enabled,
+            opcode_update: enabled,
         }
     }
+}
+
+/// Spec parameters are determined solely by block height and thus accessible to
+/// the consensus protocol.
+#[derive(Debug, Clone)]
+pub struct ConsensusGasSpec {
+    /// EIP-7623: Increase calldata cost
+    pub eip7623: bool,
+    /// CIP-1559: Fee Market Change for Conflux
+    pub cip1559: bool,
+    /// CIP-645(GAS)
+    pub cip645: CIP645Spec,
+    /// Transaction cost
+    pub tx_gas: usize,
+    /// `CREATE` transaction cost
+    pub tx_create_gas: usize,
+    /// Additional cost for empty data transaction
+    pub tx_data_zero_gas: usize,
+    /// Aditional cost for non-empty data transaction
+    pub tx_data_non_zero_gas: usize,
+    /// Floor gas cost from empty data transaction (EIP-7623)
+    pub tx_data_floor_zero_gas: usize,
+    /// Floor gas cost from non-empty data transaction (EIP-7623)
+    pub tx_data_floor_non_zero_gas: usize,
+    /// Maximum init code size (CIP-645i: EIP-3860)
+    pub init_code_data_limit: usize,
+    /// Init code word size (CIP-645i: EIP-3860)
+    pub init_code_word_gas: usize,
+    pub access_list_storage_key_gas: usize,
+    pub access_list_address_gas: usize,
+    /// `PER_AUTH_BASE_COST` in CIP-7702
+    pub per_auth_base_cost: usize,
+    /// `PER_EMPTY_ACCOUNT_COST` in CIP-7702
+    pub per_empty_account_cost: usize,
+    /// The magnification of gas storage occupying related operaions.
+    pub evm_gas_ratio: usize,
+    pub align_evm: bool,
 }
 
 /// Dust accounts cleanup mode.
@@ -270,12 +352,10 @@ impl Spec {
             sha3_gas: 30,
             sha3_word_gas: 6,
             // Become 800 after CIP-142
-            sload_gas: 200,
+            cold_sload_gas: 200,
             sstore_set_gas: 20000,
             sstore_reset_gas: 5000,
             sstore_refund_gas: 15000,
-            tload_gas: 100,
-            tstore_gas: 100,
             jumpdest_gas: 1,
             log_gas: 375,
             log_data_gas: 8,
@@ -290,10 +370,14 @@ impl Spec {
             quad_coeff_div: 512,
             create_data_gas: 200,
             create_data_limit: 49152,
+            init_code_data_limit: 49152,
+            init_code_word_gas: 2,
             tx_gas: 21000,
             tx_create_gas: 53000,
             tx_data_zero_gas: 4,
             tx_data_non_zero_gas: 68,
+            tx_data_floor_zero_gas: 10,
+            tx_data_floor_non_zero_gas: 40,
             copy_gas: 3,
             extcodesize_gas: 700,
             extcodecopy_base_gas: 700,
@@ -304,14 +388,17 @@ impl Spec {
             eip1820_gas: 1_500_000,
             access_list_storage_key_gas: 1900,
             access_list_address_gas: 2400,
+            cold_account_access_cost: 2600,
+            warm_access_gas: 100,
             suicide_to_new_account_cost: 25000,
+            per_auth_base_cost: 17000,
+            per_empty_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
             kill_empty: true,
             blockhash_gas: 20,
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
-            wasm: None,
             cip43_init: false,
             cip43_contract: false,
             cip62: false,
@@ -341,27 +428,117 @@ impl Spec {
             cip1559: false,
             cancun_opcodes: false,
             cip144: false,
+            cip150: false,
+            cip151: false,
+            cip152: false,
+            cip154: false,
+            cip645: CIP645Spec::new(false),
+            cip7702: false,
+            eip2935: false,
+            eip7623: false,
             cip_c2_fix: false,
+            align_evm: false,
         }
+    }
+
+    // `cold_sload_gas` replaces `sload_gas` in certain contexts, primarily for
+    // core space internal contracts. However, some `sload_gas` usages retain
+    // their original semantics. This function is introduced to distinguish
+    // these cases.
+    pub fn sload_gas(&self) -> usize {
+        assert!(!self.cip645.eip_cold_warm_access);
+        self.cold_sload_gas
+    }
+
+    pub fn overwrite_gas_plan_by_cip(&mut self) {
+        if self.cancun_opcodes {
+            self.cold_sload_gas = 800;
+        }
+        if self.cip645.eip1884 {
+            self.balance_gas = 700;
+            self.extcodehash_gas = 700;
+        }
+
+        if self.cip645.eip2028 {
+            self.tx_data_non_zero_gas = 16;
+        }
+
+        if self.cip645.eip_cold_warm_access {
+            self.cold_sload_gas = 2100;
+            self.sstore_reset_gas = 2900;
+        }
+
+        if self.align_evm {
+            self.per_auth_base_cost = 12500;
+            self.create_data_limit = 24576;
+            self.evm_gas_ratio = 1;
+        }
+
+        // Don't forget also update GenesisGasSpec::overwrite_gas_plan_by_cip
     }
 
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn new_spec_for_test() -> Spec { Self::genesis_spec() }
 
-    /// Returns wasm spec
-    ///
-    /// May panic if there is no wasm spec
-    pub fn wasm(&self) -> &WasmCosts {
-        // *** Prefer PANIC here instead of silently breaking consensus! ***
-        self.wasm.as_ref().expect("Wasm spec expected to exist while checking wasm contract. Misconfigured client?")
-    }
-
     pub fn is_valid_address(&self, address: &Address) -> bool {
         address.is_genesis_valid_address()
+    }
+
+    #[inline]
+    pub const fn to_consensus_spec(&self) -> ConsensusGasSpec {
+        ConsensusGasSpec {
+            cip1559: self.cip1559,
+            cip645: self.cip645,
+            eip7623: self.eip7623,
+            tx_gas: self.tx_gas,
+            tx_create_gas: self.tx_create_gas,
+            tx_data_zero_gas: self.tx_data_zero_gas,
+            tx_data_non_zero_gas: self.tx_data_non_zero_gas,
+            init_code_data_limit: self.init_code_data_limit,
+            init_code_word_gas: self.init_code_word_gas,
+            access_list_storage_key_gas: self.access_list_storage_key_gas,
+            access_list_address_gas: self.access_list_address_gas,
+            per_auth_base_cost: self.per_auth_base_cost,
+            per_empty_account_cost: self.per_empty_account_cost,
+            align_evm: self.align_evm,
+            evm_gas_ratio: self.evm_gas_ratio,
+            tx_data_floor_zero_gas: self.tx_data_floor_zero_gas,
+            tx_data_floor_non_zero_gas: self.tx_data_floor_non_zero_gas,
+        }
+    }
+}
+
+impl ConsensusGasSpec {
+    pub const fn genesis_spec() -> Self {
+        Spec::genesis_spec().to_consensus_spec()
+    }
+
+    pub fn overwrite_gas_plan_by_cip(&mut self) {
+        if self.cip645.eip2028 {
+            self.tx_data_non_zero_gas = 16;
+        }
+
+        if self.align_evm {
+            self.per_auth_base_cost = 12500;
+            self.evm_gas_ratio = 1;
+        }
     }
 }
 
 #[cfg(any(test, feature = "testonly_code"))]
 impl Default for Spec {
     fn default() -> Self { Spec::new_spec_for_test() }
+}
+
+pub fn extract_7702_payload(code: &[u8]) -> Option<Address> {
+    if code.starts_with(CODE_PREFIX_7702) {
+        let (_prefix, payload) = code.split_at(CODE_PREFIX_7702.len());
+        if payload.len() == Address::len_bytes() {
+            Some(Address::from_slice(payload))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }

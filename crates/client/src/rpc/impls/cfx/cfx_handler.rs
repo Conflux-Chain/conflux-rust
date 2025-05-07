@@ -59,7 +59,7 @@ use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block, BlockHeader,
     BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
-    StorageValue, Transaction, TransactionIndex, TransactionStatus,
+    StorageValue, TransactionIndex, TransactionStatus,
     TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
@@ -113,10 +113,6 @@ use cfxcore::{
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
 };
 use diem_types::account_address::AccountAddress;
-use primitives::transaction::{
-    eth_transaction::EthereumTransaction,
-    native_transaction::TypedNativeTransaction,
-};
 use serde::Serialize;
 
 #[derive(Debug)]
@@ -1133,39 +1129,10 @@ impl RpcImpl {
             let mut signed_tx = SignedTransaction::new(public, tx);
 
             // set fake data for latency tests
-            match signed_tx.transaction.transaction.unsigned {
-                Transaction::Native(TypedNativeTransaction::Cip155(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Native(TypedNativeTransaction::Cip1559(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Native(TypedNativeTransaction::Cip2930(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip155(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip1559(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip2930(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                _ => {}
-            };
+            if tx_data_len > 0 {
+                *signed_tx.transaction.transaction.unsigned.data_mut() =
+                    vec![0; tx_data_len];
+            }
 
             transactions.push(Arc::new(signed_tx));
         }
@@ -1321,6 +1288,12 @@ impl RpcImpl {
                 "Transaction can not be executed".into(),
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(call_execution_error(
+                "Transaction can not be executed".into(),
+                format! {"tx sender has contract code: {:?}", address}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
@@ -1365,6 +1338,12 @@ impl RpcImpl {
             ) => bail!(call_execution_error(
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
+            )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(call_execution_error(
+                "Can not estimate: transaction sender has code".into(),
+                format! {"transaction sender has code {:?}", address}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(

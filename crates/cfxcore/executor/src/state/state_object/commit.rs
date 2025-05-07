@@ -1,3 +1,5 @@
+use crate::state::overlay_account::AccountEntry;
+
 use super::State;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
@@ -37,7 +39,7 @@ impl State {
     }
 
     /// Apply changes for the accounts and global variables to the statedb.
-    fn apply_changes_to_statedb(
+    pub fn apply_changes_to_statedb(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<Vec<Account>> {
         debug!("state.commit_changes");
@@ -53,7 +55,8 @@ impl State {
     ) -> DbResult<Vec<Account>> {
         assert!(self.no_checkpoint());
 
-        let cache_items = self.cache.get_mut().drain();
+        self.commit_cache(false);
+        let cache_items = self.committed_cache.drain();
         let mut to_commit_accounts = cache_items
             .filter_map(|(_, acc)| acc.into_to_commit_account())
             .collect::<Vec<_>>();
@@ -116,6 +119,18 @@ impl State {
             )?;
         }
         Ok(())
+    }
+}
+
+impl State {
+    pub fn commit_cache(&mut self, retain_transient_storage: bool) {
+        assert!(self.no_checkpoint());
+        for (addr, mut account) in self.cache.get_mut().drain() {
+            if let AccountEntry::Cached(ref mut acc, dirty) = account.entry {
+                acc.commit_cache(retain_transient_storage, dirty);
+            }
+            self.committed_cache.insert(addr, account.entry);
+        }
     }
 }
 

@@ -227,6 +227,11 @@ impl EthApi {
             ) => bail!(invalid_input_rpc_err(
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(invalid_input_rpc_err(
+                format! {"tx sender has contract code: {:?}", address}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
@@ -236,6 +241,15 @@ impl EthApi {
             ) => {
                 bail!(RpcError::from(
                     RpcInvalidTransactionError::InsufficientFunds
+                ))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::NonceOverflow(addr),
+                _executed,
+            ) => {
+                bail!(geth_call_execution_error(
+                    format!("address nonce overflow: {})", addr),
+                    "".into()
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -387,7 +401,7 @@ impl EthApi {
             from: tx.sender().address,
             to: match tx.action() {
                 Action::Create => None,
-                Action::Call(addr) => Some(*addr),
+                Action::Call(addr) => Some(addr),
             },
             block_number: block_height,
             cumulative_gas_used: receipt.accumulated_gas_used,

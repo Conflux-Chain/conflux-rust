@@ -19,8 +19,8 @@ class CIP98Test(ConfluxTestFramework):
         self.conf_parameters["evm_transaction_block_ratio"] = str(1)
         self.conf_parameters["dao_vote_transition_number"] = "100"
         # Disable CIP-133 on test
-        self.conf_parameters["next_hardfork_transition_number"] = str(9999999)
-        self.conf_parameters["next_hardfork_transition_height"] = str(9999999)
+        self.conf_parameters["base_fee_burn_transition_number"] = str(9999999)
+        self.conf_parameters["base_fee_burn_transition_height"] = str(9999999)
 
     def run_test(self):
         rpc = self.nodes[0].rpc

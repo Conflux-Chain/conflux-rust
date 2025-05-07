@@ -4,11 +4,15 @@ use super::{
     transact_options::{ChargeCollateral, TransactOptions, TransactSettings},
     ExecutiveContext, PreCheckedExecutive,
 };
-use crate::{executive_observer::ExecutiveObserver, substate::Substate};
+use crate::{
+    executive::eip7623_required_gas, executive_observer::ExecutiveObserver,
+    substate::Substate,
+};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
+use cfx_vm_types::extract_7702_payload;
 use primitives::{transaction::Action, SignedTransaction, Transaction};
 
 macro_rules! early_return_on_err {
@@ -27,14 +31,16 @@ pub struct FreshExecutive<'a, O: ExecutiveObserver> {
     tx: &'a SignedTransaction,
     observer: O,
     settings: TransactSettings,
-    base_gas: u64,
 }
 
 pub(super) struct CostInfo {
     /// Sender balance
     pub sender_balance: U512,
-    /// The intrinsic gas (21000/53000 + tx data gas + access list gas)
+    /// The intrinsic gas (21000/53000 + tx data gas + access list gas +
+    /// authorization list gas)
     pub base_gas: u64,
+    /// The floor gas from EIP-7623
+    pub floor_gas: u64,
 
     /// Transaction value + gas cost (except the sponsored part)
     pub total_cost: U512,
@@ -66,18 +72,11 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let TransactOptions {
             observer, settings, ..
         } = options;
-        let base_gas = gas_required_for(
-            tx.action() == &Action::Create,
-            &tx.data(),
-            tx.access_list(),
-            context.spec,
-        );
         FreshExecutive {
             context,
             tx,
             observer,
             settings,
-            base_gas,
         }
     }
 
@@ -88,12 +87,20 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         // Validate transaction nonce
         early_return_on_err!(self.check_nonce()?);
 
+        if self.context.spec.cip152 && self.settings.forbid_eoa_with_code {
+            early_return_on_err!(self.check_from_eoa_with_code()?);
+        }
+
         // Validate transaction epoch height.
         if self.settings.check_epoch_bound {
             early_return_on_err!(self.check_epoch_bound()?);
         }
 
         let cost = early_return_on_err!(self.compute_cost_info()?);
+
+        if self.context.spec.align_evm {
+            early_return_on_err!(self.check_enough_balance(&cost));
+        }
 
         early_return_on_err!(self.check_sender_exist(&cost)?);
 
@@ -131,6 +138,33 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         } else {
             Ok(())
         })
+    }
+
+    fn check_from_eoa_with_code(
+        &self,
+    ) -> DbResult<Result<(), ExecutionOutcome>> {
+        let sender = self.tx.sender();
+        let Some(code) = self.context.state.code(&sender)? else {
+            // EOA with no code
+            return Ok(Ok(()));
+        };
+
+        if code.is_empty() {
+            // Empty code
+            return Ok(Ok(()));
+        }
+
+        if self.tx.space() == Space::Ethereum
+            && extract_7702_payload(&code).is_some()
+        {
+            // 7702 code in eSpace is allowed
+            return Ok(Ok(()));
+        }
+
+        // extract_7702_payload
+        Ok(Err(ExecutionOutcome::NotExecutedDrop(
+            TxDropError::SenderWithCode(sender.address),
+        )))
     }
 
     fn check_base_price(&self) -> Result<(), ExecutionOutcome> {
@@ -180,7 +214,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
     fn check_sender_exist(
         &self, cost: &CostInfo,
     ) -> DbResult<Result<(), ExecutionOutcome>> {
-        if cost.sender_balance < cost.sender_intended_cost
+        if !cost.sender_intended_cost.is_zero()
             && !self.context.state.exists(&self.tx.sender())?
         {
             // We don't want to bump nonce for non-existent account when we
@@ -193,6 +227,25 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         Ok(Ok(()))
     }
 
+    // In the EVM, when the transaction sender's balance is insufficient to
+    // cover the required `gas fee + transfer value`, the transaction does not
+    // bump the nonce or charge a fee, which differs from Conflux. This function
+    // is only used for `align_evm` testing to simulate this EVM behavior.
+    fn check_enough_balance(
+        &self, cost: &CostInfo,
+    ) -> Result<(), ExecutionOutcome> {
+        if cost.sender_balance < cost.sender_intended_cost {
+            Err(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::NotEnoughBalance {
+                    expected: cost.sender_intended_cost,
+                    got: cost.sender_balance.try_into().unwrap(),
+                },
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
     fn compute_cost_info(
         &self,
     ) -> DbResult<Result<CostInfo, ExecutionOutcome>> {
@@ -202,6 +255,28 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         let state = &self.context.state;
         let env = self.context.env;
         let spec = self.context.spec;
+
+        let base_gas = gas_required_for(
+            tx.action() == Action::Create,
+            &tx.data(),
+            tx.access_list(),
+            tx.authorization_len(),
+            &spec.to_consensus_spec(),
+        );
+
+        let floor_gas =
+            eip7623_required_gas(&tx.data(), &spec.to_consensus_spec());
+
+        let minimum_tx_gas = u64::max(base_gas, floor_gas);
+
+        if *tx.gas() < minimum_tx_gas.into() {
+            return Ok(Err(ExecutionOutcome::NotExecutedDrop(
+                TxDropError::NotEnoughGasLimit {
+                    expected: minimum_tx_gas.into(),
+                    got: *tx.gas(),
+                },
+            )));
+        }
 
         let check_base_price = self.settings.check_base_price;
 
@@ -213,6 +288,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
                 U256::min(*tx.gas_price(), env.base_gas_price[tx.space()]);
             tx.effective_gas_price(&actual_base_gas)
         };
+        let max_gas_price = *tx.gas_price();
 
         let burnt_gas_price = env.burnt_gas_price[tx.space()];
         // gas_price >= actual_base_gas >=
@@ -226,6 +302,14 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         } else {
             0.into()
         };
+
+        // EIP-1559 requires the user balance can afford "max gas price * gas limit", instead of "effective gas price * gas limit", this variable represents "(effective gas price - max gas price) * gas limit"
+        let additional_gas_required_1559 =
+            if settings.charge_gas && spec.cip645.fix_eip1559 {
+                (max_gas_price - gas_price).full_mul(*tx.gas_limit())
+            } else {
+                0.into()
+            };
         let storage_cost =
             if let (Transaction::Native(tx), ChargeCollateral::Normal) = (
                 &tx.transaction.transaction.unsigned,
@@ -240,14 +324,17 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
         if sender.space == Space::Ethereum {
             assert_eq!(storage_cost, U256::zero());
             let sender_cost = U512::from(tx.value()) + gas_cost;
+            let sender_intended_cost =
+                sender_cost + additional_gas_required_1559;
             return Ok(Ok(CostInfo {
                 sender_balance,
-                base_gas: self.base_gas,
+                base_gas,
+                floor_gas,
                 gas_cost,
                 gas_price,
                 burnt_gas_price,
                 storage_cost,
-                sender_intended_cost: sender_cost,
+                sender_intended_cost,
                 total_cost: sender_cost,
                 gas_sponsored: false,
                 storage_sponsored: false,
@@ -273,6 +360,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
                 {
                     // No need to check for gas sponsor account existence.
                     gas_sponsor_eligible = gas_cost
+                        + additional_gas_required_1559
                         <= U512::from(state.sponsor_gas_bound(&code_address)?);
                     storage_sponsor_eligible =
                         state.sponsor_for_collateral(&code_address)?.is_some();
@@ -306,7 +394,7 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
             let mut sender_intended_cost = U512::from(tx.value());
 
             if !gas_sponsor_eligible {
-                sender_intended_cost += gas_cost;
+                sender_intended_cost += gas_cost + additional_gas_required_1559;
             }
             if !storage_sponsor_eligible {
                 sender_intended_cost += storage_cost.into();
@@ -355,7 +443,8 @@ impl<'a, O: ExecutiveObserver> FreshExecutive<'a, O> {
 
         return Ok(Ok(CostInfo {
             sender_intended_cost,
-            base_gas: self.base_gas,
+            base_gas,
+            floor_gas,
             gas_cost,
             gas_price,
             burnt_gas_price,

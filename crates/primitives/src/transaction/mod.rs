@@ -2,17 +2,20 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+// TODO(7702): refactor this file
+
 pub mod eth_transaction;
 pub mod native_transaction;
 
 pub use eth_transaction::{
     Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
-    EthereumTransaction,
+    Eip7702Transaction, EthereumTransaction,
 };
 pub use native_transaction::{
     Cip1559Transaction, Cip2930Transaction, NativeTransaction,
     TypedNativeTransaction,
 };
+use rlp_derive::{RlpDecodable, RlpEncodable};
 
 use crate::{
     bytes::Bytes,
@@ -44,6 +47,7 @@ pub const TYPED_NATIVE_TX_PREFIX_BYTE: u8 = TYPED_NATIVE_TX_PREFIX[0];
 pub const LEGACY_TX_TYPE: u8 = 0x00;
 pub const EIP2930_TYPE: u8 = 0x01;
 pub const EIP1559_TYPE: u8 = 0x02;
+pub const EIP7702_TYPE: u8 = 0x04;
 pub const CIP2930_TYPE: u8 = 0x01;
 pub const CIP1559_TYPE: u8 = 0x02;
 
@@ -128,10 +132,16 @@ pub enum TransactionError {
     ZeroGasPrice,
     /// Transaction types have not been activated
     FutureTransactionType,
+    /// Create transaction with too large init code size,
+    CreateInitCodeSizeLimit,
     /// Receiver with invalid type bit.
     InvalidReceiver,
     /// Transaction nonce exceeds local limit.
     TooLargeNonce,
+    /// Empty authorization list (EIP-7702)
+    EmptyAuthorizationList,
+    /// Max priority fee greater than max fee (EIP-1559)
+    PriortyGreaterThanMaxFee,
 }
 
 impl From<keylib::Error> for TransactionError {
@@ -196,6 +206,9 @@ impl fmt::Display for TransactionError {
             FutureTransactionType => "Ethereum like transaction should have u64::MAX storage limit".into(),
             InvalidReceiver => "Sending transaction to invalid address. The first four bits of address must be 0x0, 0x1, or 0x8.".into(),
             TooLargeNonce => "Transaction nonce is too large.".into(),
+            CreateInitCodeSizeLimit => "Transaction initcode is too large.".into(),
+            EmptyAuthorizationList => "Empty authorization list".into(),
+            PriortyGreaterThanMaxFee => "Max priority fee greater than max fee".into(),
         };
 
         f.write_fmt(format_args!("Transaction error ({})", msg))
@@ -206,7 +219,7 @@ impl error::Error for TransactionError {
     fn description(&self) -> &str { "Transaction error" }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Action {
     /// Create creates new contract.
     Create,
@@ -238,31 +251,45 @@ impl Encodable for Action {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    RlpEncodable,
+    RlpDecodable,
+)]
 #[serde(rename_all = "camelCase")]
 pub struct AccessListItem {
     pub address: Address,
     pub storage_keys: Vec<H256>,
 }
 
-impl Encodable for AccessListItem {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(2);
-        s.append(&self.address);
-        s.append_list(&self.storage_keys);
-    }
-}
-
-impl Decodable for AccessListItem {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        Ok(Self {
-            address: rlp.val_at(0)?,
-            storage_keys: rlp.list_at(1)?,
-        })
-    }
-}
-
 pub type AccessList = Vec<AccessListItem>;
+
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    RlpEncodable,
+    RlpDecodable,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthorizationListItem {
+    pub chain_id: U256,
+    pub address: Address,
+    pub nonce: u64,
+    pub y_parity: u8,
+    pub r: U256,
+    pub s: U256,
+}
+
+pub type AuthorizationList = Vec<AuthorizationListItem>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Transaction {
@@ -299,17 +326,17 @@ macro_rules! access_common_ref {
     };
 }
 
-#[allow(unused)]
 macro_rules! access_common {
     ($field:ident, $ty:ident) => {
         pub fn $field(&self) -> $ty {
             match self {
-                Transaction::Native(tx) => tx.$field,
-                Transaction::Ethereum(tx) => tx.$field,
+                Transaction::Native(tx) => tx.$field(),
+                Transaction::Ethereum(tx) => tx.$field(),
             }
         }
     };
 }
+
 impl Transaction {
     access_common_ref!(gas, U256);
 
@@ -321,7 +348,7 @@ impl Transaction {
 
     access_common_ref!(nonce, U256);
 
-    access_common_ref!(action, Action);
+    access_common!(action, Action);
 
     access_common_ref!(value, U256);
 
@@ -346,6 +373,13 @@ impl Transaction {
         }
     }
 
+    pub fn data_mut(&mut self) -> &mut Vec<u8> {
+        match self {
+            Transaction::Native(tx) => tx.data_mut(),
+            Transaction::Ethereum(tx) => tx.data_mut(),
+        }
+    }
+
     pub fn type_id(&self) -> u8 {
         match self {
             Transaction::Native(TypedNativeTransaction::Cip155(_))
@@ -356,6 +390,8 @@ impl Transaction {
 
             Transaction::Native(TypedNativeTransaction::Cip1559(_))
             | Transaction::Ethereum(EthereumTransaction::Eip1559(_)) => 2,
+
+            Transaction::Ethereum(EthereumTransaction::Eip7702(_)) => 4,
         }
     }
 
@@ -370,11 +406,17 @@ impl Transaction {
     pub fn is_2718(&self) -> bool { !self.is_legacy() }
 
     pub fn after_1559(&self) -> bool {
+        use EthereumTransaction::*;
+        use TypedNativeTransaction::*;
         matches!(
             self,
-            Transaction::Native(TypedNativeTransaction::Cip1559(_))
-                | Transaction::Ethereum(EthereumTransaction::Eip1559(_))
+            Transaction::Native(Cip1559(_))
+                | Transaction::Ethereum(Eip1559(_) | Eip7702(_))
         )
+    }
+
+    pub fn after_7702(&self) -> bool {
+        matches!(self, Transaction::Ethereum(EthereumTransaction::Eip7702(_)))
     }
 
     pub fn access_list(&self) -> Option<&AccessList> {
@@ -382,6 +424,17 @@ impl Transaction {
             Transaction::Native(tx) => tx.access_list(),
             Transaction::Ethereum(tx) => tx.access_list(),
         }
+    }
+
+    pub fn authorization_list(&self) -> Option<&AuthorizationList> {
+        match self {
+            Transaction::Native(_tx) => None,
+            Transaction::Ethereum(tx) => tx.authorization_list(),
+        }
+    }
+
+    pub fn authorization_len(&self) -> usize {
+        self.authorization_list().map_or(0, Vec::len)
     }
 }
 
@@ -427,6 +480,10 @@ impl Transaction {
             Transaction::Ethereum(EthereumTransaction::Eip2930(tx)) => {
                 s.append(tx);
                 type_prefix.push(EIP2930_TYPE);
+            }
+            Transaction::Ethereum(EthereumTransaction::Eip7702(tx)) => {
+                s.append(tx);
+                type_prefix.push(EIP7702_TYPE);
             }
         };
         let encoded = s.as_raw();
@@ -558,6 +615,23 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 s.append(&self.r);
                 s.append(&self.s);
             }
+            Transaction::Ethereum(EthereumTransaction::Eip7702(ref tx)) => {
+                s.append_raw(&[EIP7702_TYPE], 0);
+                s.begin_list(13);
+                s.append(&tx.chain_id);
+                s.append(&tx.nonce);
+                s.append(&tx.max_priority_fee_per_gas);
+                s.append(&tx.max_fee_per_gas);
+                s.append(&tx.gas);
+                s.append(&tx.destination);
+                s.append(&tx.value);
+                s.append(&tx.data);
+                s.append_list(&tx.access_list);
+                s.append_list(&tx.authorization_list);
+                s.append(&self.v);
+                s.append(&self.r);
+                s.append(&self.s);
+            }
             Transaction::Native(TypedNativeTransaction::Cip2930(ref tx)) => {
                 s.append_raw(TYPED_NATIVE_TX_PREFIX, 0);
                 s.append_raw(&[CIP2930_TYPE], 0);
@@ -575,11 +649,20 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 s.append(&self.v);
                 s.append(&self.r);
                 s.append(&self.s);
-            }
+            } /* Transaction::Native(TypedNativeTransaction::Cip7702(ref tx))
+               * => {     s.append_raw(TYPED_NATIVE_TX_PREFIX,
+               * 0);     s.append_raw(&[CIP7702_TYPE], 0);
+               *     s.begin_list(4);
+               *     s.append(tx);
+               *     s.append(&self.v);
+               *     s.append(&self.r);
+               *     s.append(&self.s);
+               * } */
         }
     }
 }
 
+// TODO(7702): refactor this implementation.
 impl Decodable for TransactionWithSignatureSerializePart {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         if rlp.as_raw().len() == 0 {
@@ -745,6 +828,36 @@ impl Decodable for TransactionWithSignatureSerializePart {
                     Ok(TransactionWithSignatureSerializePart {
                         unsigned: Transaction::Ethereum(
                             EthereumTransaction::Eip1559(tx),
+                        ),
+                        v,
+                        r,
+                        s,
+                    })
+                }
+                EIP7702_TYPE => {
+                    let rlp = Rlp::new(&rlp.as_raw()[1..]);
+                    if rlp.item_count()? != 13 {
+                        return Err(DecoderError::RlpIncorrectListLen);
+                    }
+
+                    let tx = Eip7702Transaction {
+                        chain_id: rlp.val_at(0)?,
+                        nonce: rlp.val_at(1)?,
+                        max_priority_fee_per_gas: rlp.val_at(2)?,
+                        max_fee_per_gas: rlp.val_at(3)?,
+                        gas: rlp.val_at(4)?,
+                        destination: rlp.val_at(5)?,
+                        value: rlp.val_at(6)?,
+                        data: rlp.val_at(7)?,
+                        access_list: rlp.list_at(8)?,
+                        authorization_list: rlp.list_at(9)?,
+                    };
+                    let v = rlp.val_at(10)?;
+                    let r = rlp.val_at(11)?;
+                    let s = rlp.val_at(12)?;
+                    Ok(TransactionWithSignatureSerializePart {
+                        unsigned: Transaction::Ethereum(
+                            EthereumTransaction::Eip7702(tx),
                         ),
                         v,
                         r,

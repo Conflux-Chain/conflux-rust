@@ -10,9 +10,10 @@ use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 use cfx_types::{Address, Space, U256};
 
 use primitives::{
-    SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
+    storage::WriteCacheItem, SkipInputCheck, StorageKey, StorageKeyWithSpace,
+    StorageValue,
 };
-use std::collections::hash_map::Entry::*;
+use std::collections::{hash_map::Entry::*, HashSet};
 
 use super::OverlayAccount;
 
@@ -72,8 +73,15 @@ impl OverlayAccount {
         // unless in test and gas estimation.
         assert!(self.storage_write_checkpoint.is_none());
         let write_cache = &mut self.storage_write_cache.write();
+        let commit_cache = &mut self.storage_committed_cache.write();
+
+        let mut read_keys = HashSet::new();
         // Must have no checkpoint in range deletion
-        for (k, v) in write_cache.iter_mut() {
+        for (k, item) in write_cache.iter_mut() {
+            let WriteCacheItem::Write(v) = item else {
+                read_keys.insert(k.clone());
+                continue;
+            };
             if k.starts_with(key_prefix) && !v.value.is_zero() {
                 if let Some(old_owner) = v.owner {
                     substate.record_storage_release(
@@ -82,6 +90,28 @@ impl OverlayAccount {
                     );
                 };
                 *v = StorageValue::default();
+            }
+        }
+
+        for k in read_keys {
+            write_cache.remove(&k);
+        }
+
+        for (k, v) in commit_cache.iter_mut() {
+            if write_cache.get(k).is_some() {
+                continue;
+            }
+            if k.starts_with(key_prefix) && !v.value.is_zero() {
+                if let Some(old_owner) = v.owner {
+                    substate.record_storage_release(
+                        &old_owner,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
+                    );
+                };
+                write_cache.insert(
+                    k.clone(),
+                    WriteCacheItem::Write(StorageValue::default()),
+                );
             }
         }
 
@@ -96,7 +126,9 @@ impl OverlayAccount {
                     // However, if all keys are removed, we don't update
                     // cache since it will be cleared later.
                     if !delete_all {
-                        entry.insert(StorageValue::default());
+                        entry.insert(WriteCacheItem::Write(
+                            StorageValue::default(),
+                        ));
                     }
 
                     if !delete_all && !read_cache.contains_key(&key) {
@@ -135,7 +167,12 @@ impl OverlayAccount {
     }
 
     fn cached_entry_at(&self, key: &[u8]) -> Option<StorageValue> {
-        if let Some(entry) = self.storage_write_cache.read().get(key) {
+        if let Some(WriteCacheItem::Write(entry)) =
+            self.storage_write_cache.read().get(key)
+        {
+            return Some(*entry);
+        }
+        if let Some(entry) = self.storage_committed_cache.read().get(key) {
             return Some(*entry);
         }
         if let Some(entry) = self.storage_read_cache.read().get(key) {
@@ -153,6 +190,7 @@ impl OverlayAccount {
     fn cached_entry_at_checkpoint(
         &self, key: &[u8], state_checkpoint_id: usize,
     ) -> Option<CheckpointEntry<StorageValue>> {
+        use CheckpointEntry::*;
         if self.storage_write_checkpoint.is_none() {
             return None;
         }
@@ -160,12 +198,23 @@ impl OverlayAccount {
             .storage_write_checkpoint
             .as_ref()
             .unwrap()
+            .read()
             .get_state_cp_id()
             < state_checkpoint_id
         {
             return None;
         }
-        self.storage_write_checkpoint.as_ref().unwrap().get(key)
+        let res = self
+            .storage_write_checkpoint
+            .as_ref()
+            .unwrap()
+            .read()
+            .get(key)?;
+        Some(match res {
+            Unchanged => Unchanged,
+            Recorded(WriteCacheItem::Read) => Unchanged,
+            Recorded(WriteCacheItem::Write(v)) => Recorded(v),
+        })
     }
 
     #[cfg(test)]
@@ -190,12 +239,29 @@ impl OverlayAccount {
         Ok(self.storage_entry_at(db, key)?.value)
     }
 
+    pub fn origin_storage_at(&self, key: &[u8]) -> Option<U256> {
+        if let Some(value) = self.storage_committed_cache.read().get(key) {
+            return Some(value.value);
+        }
+        if self.fresh_storage() && !self.storage_overrided {
+            return Some(U256::zero());
+        }
+        if let Some(value) = self.storage_read_cache.read().get(key) {
+            return Some(value.value);
+        }
+        if self.storage_overrided {
+            return Some(U256::zero());
+        }
+        None
+    }
+
     // If a contract is removed, and then some one transfer balance to it,
     // `storage_at` will return incorrect value. But this case should never
     // happens.
     pub fn storage_entry_at(
         &self, db: &StateDbGeneric, key: &[u8],
     ) -> DbResult<StorageValue> {
+        self.mark_storage_warm(key);
         Ok(if let Some(value) = self.cached_entry_at(key) {
             value
         } else if self.fresh_storage() {
@@ -251,6 +317,10 @@ impl OverlayAccount {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
         Ok(())
+    }
+
+    pub fn is_warm_storage_entry(&self, key: &[u8]) -> bool {
+        self.storage_write_cache.read().get(key).is_some()
     }
 
     #[cfg(test)]

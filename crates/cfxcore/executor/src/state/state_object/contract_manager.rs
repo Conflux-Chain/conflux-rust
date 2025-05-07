@@ -57,7 +57,12 @@ impl State {
         &mut self, contract: &AddressWithSpace, balance: U256,
     ) -> DbResult<()> {
         self.new_contract(contract, balance)?;
-        self.init_code(&contract, vec![0x12, 0x34], Address::zero())?;
+        self.init_code(
+            &contract,
+            vec![0x12, 0x34],
+            Address::zero(),
+            crate::tests::MOCK_TX_HASH,
+        )?;
         Ok(())
     }
 
@@ -71,7 +76,7 @@ impl State {
             .read_account_lock(contract)?
             .map_or(false, |acc| acc.pending_db_clear());
         let account = OverlayAccount::new_contract(
-            &contract.address,
+            &contract,
             balance,
             pending_db_clear,
             Some(STORAGE_LAYOUT_REGULAR_V0),

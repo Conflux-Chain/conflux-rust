@@ -232,6 +232,32 @@ subcommands:
                         value_name: PATH
                         takes_value: true
                         required: true
+    - evm:
+        about: EVM related subcommands
+        setting: SubcommandRequiredElseHelp
+        subcommands:
+            - statetest:
+                about: Execute Ethereum state tests
+                args:
+                    - json-path:
+                        help: Path to the statetest files
+                        long: path
+                        short: p
+                        value_name: PATH
+                        required: true
+                        takes_value: true
+                        multiple: true
+                    - match-path:
+                        help: The statetest fixture file to run if passing only the specified fixture will be run
+                        long: match
+                        value_name: JSON_FILE
+                        takes_value: true
+                    - v: 
+                        help: Verbose mode
+                        long: v
+                        short: v
+                        multiple: true
+                        takes_value: false
     - rpc:
         about: RPC based subcommands to query blockchain information and send transactions
         setting: SubcommandRequiredElseHelp
