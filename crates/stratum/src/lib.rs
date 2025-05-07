@@ -81,9 +81,21 @@ impl Stratum {
         let mut delegate = IoDelegate::<StratumImpl, SocketMetadata>::new(
             implementation.clone(),
         );
-        delegate
-            .add_method_with_meta("mining.subscribe", StratumImpl::subscribe);
-        delegate.add_method_with_meta("mining.submit", StratumImpl::submit);
+        delegate.add_method_with_meta("mining.subscribe", {
+            let implementation = implementation.clone();
+            move |_, params, meta| {
+                let implementation = implementation.clone();
+                async move { implementation.subscribe(params, meta).await }
+            }
+        });
+
+        delegate.add_method_with_meta("mining.submit", {
+            let implementation = implementation.clone();
+            move |_, params, meta| {
+                let implementation = implementation.clone();
+                async move { implementation.submit(params, meta).await }
+            }
+        });
         let mut handler = MetaIoHandler::<SocketMetadata>::with_compatibility(
             Compatibility::Both,
         );
@@ -137,7 +149,9 @@ struct StratumImpl {
 
 impl StratumImpl {
     /// rpc method `mining.subscribe`
-    fn subscribe(&self, params: Params, meta: SocketMetadata) -> RpcResult {
+    async fn subscribe(
+        &self, params: Params, meta: SocketMetadata,
+    ) -> RpcResult {
         params.parse::<(String, String)>().map(|(worker_id, secret)|{
             if let Some(valid_secret) = self.secret {
                 let hash = keccak(secret);
@@ -152,7 +166,7 @@ impl StratumImpl {
     }
 
     /// rpc method `mining.submit`
-    fn submit(&self, params: Params, _meta: SocketMetadata) -> RpcResult {
+    async fn submit(&self, params: Params, _meta: SocketMetadata) -> RpcResult {
         Ok(Value::Array(match params {
             Params::Array(vals) => {
                 // first two elements are service messages (worker_id & job_id)
@@ -252,7 +266,9 @@ impl Default for SocketMetadata {
 }
 
 impl SocketMetadata {
-    pub fn addr(&self) -> &SocketAddr { &self.addr }
+    pub fn addr(&self) -> &SocketAddr {
+        &self.addr
+    }
 }
 
 impl Metadata for SocketMetadata {}
@@ -279,25 +295,24 @@ impl MetaExtractor<SocketMetadata> for PeerMetaExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        net::{Shutdown, SocketAddr},
-        sync::Arc,
-    };
-    use tokio02::{
+    use std::{net::SocketAddr, sync::Arc};
+    use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpStream,
         runtime::Runtime,
-        time::delay_for,
+        time::sleep,
     };
 
     pub struct VoidManager;
 
     impl JobDispatcher for VoidManager {
-        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> { Ok(()) }
+        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> {
+            Ok(())
+        }
     }
 
     fn dummy_request(addr: &SocketAddr, data: &str) -> Vec<u8> {
-        let mut runtime = Runtime::new()
+        let runtime = Runtime::new()
             .expect("Tokio Runtime should be created with no errors");
 
         runtime.block_on(async {
@@ -313,9 +328,7 @@ mod tests {
                 .await
                 .expect("Should write data to stream");
 
-            stream
-                .shutdown(Shutdown::Write)
-                .expect("Should shutdown write half");
+            stream.shutdown().await.expect("Should shutdown write half");
 
             let mut read_buf = Vec::with_capacity(2048);
             stream
@@ -355,7 +368,9 @@ mod tests {
     }
 
     impl JobDispatcher for DummyManager {
-        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> { Ok(()) }
+        fn submit(&self, _payload: Vec<String>) -> Result<(), Error> {
+            Ok(())
+        }
     }
 
     fn terminated_str(origin: &'static str) -> String {
@@ -412,7 +427,7 @@ mod tests {
 
         let auth_response = "{\"jsonrpc\":\"2.0\",\"result\":true,\"id\":1}\n";
 
-        let mut runtime = Runtime::new()
+        let runtime = Runtime::new()
             .expect("Tokio Runtime should be created with no errors");
 
         let response = runtime.block_on(async {
@@ -437,7 +452,7 @@ mod tests {
             trace!(target: "stratum", "Received authorization confirmation");
 
             // Wait a bit
-            delay_for(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
             // Push work
             trace!(target: "stratum", "Pusing work to peers");
@@ -446,14 +461,12 @@ mod tests {
                 .expect("Pushing work should produce no errors");
 
             // Wait a bit
-            delay_for(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
             trace!(target: "stratum", "Ready to read work from server");
-            delay_for(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
-            stream
-                .shutdown(Shutdown::Write)
-                .expect("Should shutdown write half");
+            stream.shutdown().await.expect("Should shutdown write half");
 
             // Read work response
             let mut read_buf1 = Vec::with_capacity(2048);
@@ -473,5 +486,109 @@ mod tests {
             "{ \"id\": 17, \"method\": \"mining.notify\", \"params\": { \"00040008\", \"100500\" } }\n",
             response
         );
+    }
+
+    #[test]
+    fn test_can_subscribe_with_secret() {
+        let addr = "127.0.0.1:19971".parse().unwrap();
+        let secret_str = "test_secret";
+        let secret_hash = keccak(secret_str);
+
+        let stratum =
+            Stratum::start(&addr, Arc::new(VoidManager), Some(secret_hash))
+                .expect("Should start stratum with secret");
+
+        let request = format!(
+            r#"{{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", "{}"], "id": 1}}"#,
+            secret_str
+        );
+
+        let response =
+            String::from_utf8(dummy_request(&addr, &request)).unwrap();
+
+        assert_eq!(
+            terminated_str(r#"{"jsonrpc":"2.0","result":true,"id":1}"#),
+            response
+        );
+        assert_eq!(1, stratum.implementation.workers.read().len());
+    }
+
+    #[test]
+    fn test_can_subscribe_with_invalid_secret() {
+        let addr = "127.0.0.1:19972".parse().unwrap();
+        let secret_str = "test_secret";
+        let secret_hash = keccak(secret_str);
+        let stratum =
+            Stratum::start(&addr, Arc::new(VoidManager), Some(secret_hash))
+                .expect("Should start stratum with secret");
+
+        let request = r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", "wrong_secret"], "id": 2}"#;
+        let response =
+            String::from_utf8(dummy_request(&addr, request)).unwrap();
+
+        assert_eq!(
+            terminated_str(r#"{"jsonrpc":"2.0","result":false,"id":2}"#),
+            response
+        );
+        assert_eq!(0, stratum.implementation.workers.read().len());
+    }
+
+    #[test]
+    fn test_can_submit() {
+        let addr = "127.0.0.1:19972".parse().unwrap();
+
+        struct TestDispatcher {
+            submissions: Arc<RwLock<Vec<Vec<String>>>>,
+        }
+
+        impl JobDispatcher for TestDispatcher {
+            fn submit(&self, payload: Vec<String>) -> Result<(), Error> {
+                self.submissions.write().push(payload);
+                Ok(())
+            }
+        }
+
+        let test_dispatcher = TestDispatcher {
+            submissions: Arc::new(RwLock::new(Vec::new())),
+        };
+        let submissions = test_dispatcher.submissions.clone();
+
+        let stratum = Stratum::start(&addr, Arc::new(test_dispatcher), None)
+            .expect("Should start stratum");
+
+        // subscribe
+        let subscribe_request = r#"{"jsonrpc": "2.0", "method": "mining.subscribe", "params": ["miner1", ""], "id": 1}"#;
+        let subscribe_response =
+            String::from_utf8(dummy_request(&addr, subscribe_request)).unwrap();
+
+        assert_eq!(
+            terminated_str(r#"{"jsonrpc":"2.0","result":true,"id":1}"#),
+            subscribe_response
+        );
+
+        // submit
+
+        let submit_request = r#"{"jsonrpc": "2.0", "method": "mining.submit", "params": ["test_miner", "job_id", "0x1", "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"], "id": 2}"#;
+
+        let submit_response =
+            String::from_utf8(dummy_request(&addr, submit_request)).unwrap();
+
+        assert_eq!(
+            terminated_str(r#"{"jsonrpc":"2.0","result":[true],"id":2}"#),
+            submit_response
+        );
+
+        assert_eq!(1, submissions.read().len());
+        assert_eq!(
+            vec![
+            "test_miner",
+            "job_id",
+            "0x1",
+            "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+        ],
+            submissions.read()[0]
+        );
+
+        assert_eq!(1, stratum.implementation.workers.read().len());
     }
 }
