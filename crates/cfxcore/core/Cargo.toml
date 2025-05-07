@@ -132,3 +132,6 @@ default = []
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
 fuzzing = ["proptest", "proptest-derive"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
