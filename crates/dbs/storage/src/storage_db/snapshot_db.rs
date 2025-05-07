@@ -190,4 +190,4 @@ use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{path::Path, sync::Arc};
-use tokio02::sync::Semaphore;
+use tokio::sync::Semaphore;
