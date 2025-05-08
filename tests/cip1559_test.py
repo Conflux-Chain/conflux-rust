@@ -19,8 +19,8 @@ class CIP1559Test(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["min_native_base_price"] = MIN_NATIVE_BASE_PRICE
-        self.conf_parameters["next_hardfork_transition_height"] = 1
-        self.conf_parameters["next_hardfork_transition_number"] = 1
+        self.conf_parameters["base_fee_burn_transition_height"] = 1
+        self.conf_parameters["base_fee_burn_transition_number"] = 1
         
 
     def setup_network(self):
@@ -161,10 +161,9 @@ class CIP1559Test(ConfluxTestFramework):
         assert_equal(self.rpc.get_balance(acct.address),0)
 
     # two cases to test based on balance enough for max priority fee per gas
-    # maxPriorityFeePerGas = maxFeePerGas <- will fail because balance is not enough for effective_gas_price * gas_charged
-    # maxPriorityFeePerGas = 0 <- succeed
+    # will all fail because balance is not enough for max_fee_per_gas * gas_charged
     def test_balance_enough_for_base_fee_but_not_for_max_fee_per_gas(self, priority_fee_setting: Literal["MAX", "ZERO"]):
-        # ensuring acct does not have enough balance to pay for base fee
+        # ensuring acct does not have enough balance to pay for max fee per gas
         self.log.info(f"current base fee: {self.rpc.base_fee_per_gas()}")
         assert_equal(self.rpc.base_fee_per_gas(), MIN_NATIVE_BASE_PRICE)
         # allow extra 1 priority fee
@@ -183,6 +182,8 @@ class CIP1559Test(ConfluxTestFramework):
 
         tx_data = self.rpc.block_by_hash(block, True)["transactions"][0]
         assert_correct_fee_computation_for_core_tx(self.rpc, tx_data["hash"], BURNT_RATIO)
+        tx_receipt = self.rpc.get_transaction_receipt(tx_data["hash"])
+        assert_equal(tx_receipt["outcomeStatus"], "0x1")
 
         if priority_fee_setting == "MAX":
             # extra test to assert gas fee equal to all of the balance

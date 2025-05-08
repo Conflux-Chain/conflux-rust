@@ -66,8 +66,9 @@ impl UpfrontPaymentTrait for Register {
             register_log_data_gas + spec.log_gas + spec.log_topic_gas;
         let increase_stake_log_gas =
             32 * spec.log_data_gas + spec.log_gas + spec.log_topic_gas;
-        let io_gas =
-            4 * spec.sstore_reset_gas + 5 * spec.sload_gas + 7 * spec.sha3_gas;
+        let io_gas = 4 * spec.sstore_reset_gas
+            + 5 * spec.cold_sload_gas
+            + 7 * spec.sha3_gas;
         let pubkey_hash_gas =
             (bls_pubkey.len() + vrf_pubkey.len() + 31) / 32 * spec.sha3_gas;
         let pubkey_verify_gas = 50_000;
@@ -118,8 +119,9 @@ impl UpfrontPaymentTrait for IncreaseStake {
         let spec = context.spec;
         let log_gas =
             32 * spec.log_data_gas + spec.log_gas + spec.log_topic_gas;
-        let io_gas =
-            2 * spec.sstore_reset_gas + 3 * spec.sload_gas + 3 * spec.sha3_gas;
+        let io_gas = 2 * spec.sstore_reset_gas
+            + 3 * spec.cold_sload_gas
+            + 3 * spec.sha3_gas;
 
         return Ok(U256::from(log_gas + io_gas));
     }
@@ -159,7 +161,7 @@ impl SimpleExecutionTrait for Retire {
 make_solidity_function! {
     struct GetStatus(H256, "getVotes(bytes32)", (u64,u64));
 }
-impl_function_type!(GetStatus, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
+impl_function_type!(GetStatus, "query", gas: |spec: &Spec| spec.cold_sload_gas + spec.sha3_gas);
 impl SimpleExecutionTrait for GetStatus {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
@@ -173,7 +175,7 @@ impl SimpleExecutionTrait for GetStatus {
 make_solidity_function! {
     struct IdentifierToAddress(H256, "identifierToAddress(bytes32)", Address);
 }
-impl_function_type!(IdentifierToAddress, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
+impl_function_type!(IdentifierToAddress, "query", gas: |spec: &Spec| spec.cold_sload_gas + spec.sha3_gas);
 impl SimpleExecutionTrait for IdentifierToAddress {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
@@ -186,7 +188,7 @@ impl SimpleExecutionTrait for IdentifierToAddress {
 make_solidity_function! {
     struct AddressToIdentifier(Address, "addressToIdentifier(address)", H256);
 }
-impl_function_type!(AddressToIdentifier, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
+impl_function_type!(AddressToIdentifier, "query", gas: |spec: &Spec| spec.cold_sload_gas + spec.sha3_gas);
 impl SimpleExecutionTrait for AddressToIdentifier {
     fn execute_inner(
         &self, inputs: Address, params: &ActionParams,

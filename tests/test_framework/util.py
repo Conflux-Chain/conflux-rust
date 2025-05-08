@@ -294,8 +294,11 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000):
-    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000, conflux_binary_path=None):
+    if conflux_binary_path is None:
+        tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
+    else:
+        tg_config_gen = os.path.join(os.path.dirname(conflux_binary_path), "pos-genesis-tool")
     try:
         if pkfile is None:
             check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
@@ -933,9 +936,7 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
     if receipt["outcomeStatus"] == "0x1": # tx fails because of not enough cash
         assert "NotEnoughCash" in receipt["txExecErrorMsg"]
         # all gas is charged
-        assert_equal(rpc.get_balance(tx_data["from"], receipt["epochNumber"]), 0)
-        # gas fee less than effective gas price
-        assert gas_fee < effective_gas_price*gas_charged
+        assert gas_fee + rpc.get_balance(tx_data["from"], receipt["epochNumber"]) < max_fee_per_gas*int(tx_data["gas"], 16)
     else:
         assert_equal(gas_fee, effective_gas_price*gas_charged)
         # check burnt fee computation

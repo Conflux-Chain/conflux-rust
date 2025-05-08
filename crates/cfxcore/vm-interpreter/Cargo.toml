@@ -21,3 +21,6 @@ rustc-hex = { workspace = true }
 
 [dev-dependencies]
 cfx-vm-types = { workspace = true, features = ["testonly_code"] }
+
+[features]
+align_evm = ["cfx-vm-types/align_evm"]

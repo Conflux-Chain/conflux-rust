@@ -1053,7 +1053,7 @@ impl TransactionPoolInner {
 
         // Keep contract call only
         let contract_address = match utx.action() {
-            Action::Call(callee) if callee.is_contract_address() => *callee,
+            Action::Call(callee) if callee.is_contract_address() => callee,
             _ => {
                 return Ok(Default::default());
             }

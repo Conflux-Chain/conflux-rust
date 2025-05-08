@@ -1,6 +1,13 @@
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
 members = [
+    # bins
+    "bins/cfx_store",
+    "bins/cfx_key",
+    "bins/conflux",
+    "bins/evm-spec-tester",
+    "bins/consensus_bench",
+    # libs
     "crates/cfx_bytes",
     "crates/cfx_types",
     "crates/cfx_addr",
@@ -16,9 +23,6 @@ members = [
     "crates/primitives",
     "crates/secret_store",
     "crates/transactiongen",
-    "bins/cfx_store",
-    "bins/cfx_key",
-    "bins/conflux",
     "crates/cfxcore/core",
     "crates/cfxcore/execute-helper",
     "crates/cfxcore/executor",
@@ -78,7 +82,7 @@ members = [
     "crates/pos/common/subscription-service",
     "crates/pos/common/temppath",
     "crates/pos/common/time-service",
-    "crates/pos/config/generate-key",
+    # "crates/pos/config/generate-key",
     "crates/pos/config/global-constants",
     "crates/pos/consensus/consensus-types",
     "crates/pos/config/config",
@@ -104,6 +108,8 @@ members = [
     "crates/pos/config/management/network-address-encryption",
     "crates/rpc/rpc-middlewares",
     "crates/tasks",
+    "crates/statetest_types",
+    "crates/config",
 ]
 
 resolver = "2"
@@ -238,6 +244,8 @@ pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
+statetest_types = { path = "./crates/statetest_types" }
+cfx-config = { path = "./crates/config" }
 
 # basics
 bytes = "1.9"
@@ -268,11 +276,11 @@ thiserror = "2.0.11"
 anyhow = "1.0"
 
 # parallelism
-parking_lot = "0.11"
+parking_lot = "0.12"
 rayon = "1.10"
 threadpool = "1.7"
-crossbeam-deque = "0.7"
-crossbeam-channel = "0.4"
+crossbeam-deque = "0.8"
+crossbeam-channel = "0.5"
 atom = "0.3"
 
 # alloy & revm
@@ -287,7 +295,6 @@ jsonrpc-core = "18.0.0"
 jsonrpc-tcp-server = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-derive = "18.0.0"
-jsonrpc-core-client = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
 
@@ -297,16 +304,18 @@ jsonrpsee-core = "0.24"
 jsonrpsee-types = "0.24"
 
 # async
-tokio = "1.40"
+tokio = "1.44.2"
 tokio-stream = "0.1.11"
 tokio-test = "0.4.1"
 futures = "0.3.30"
 futures-util = "0.3"
 hyper = "1.3"
+hyper-util = "0.1.8"
 async-trait = "0.1"
 tower = "0.4"
 pin-project = "1.0.12"
 mio = "0.6.8"
+reqwest = "0.12"
 # old version tokio 0.2
 tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
 
@@ -318,6 +327,7 @@ bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", 
     "multicore",
     "blst",
 ] }
+blst = "0.3"
 #secp256k1 = "0.30.0"
 #rustls = "0.21"
 hashbrown = "0.7.1"
@@ -329,12 +339,13 @@ rand_08 = { package = "rand", version = "0.8" }
 rand_chacha = "0.2.1"
 
 # misc
-clap = "2"
+clap = "2" # outdated, need to migrate to clap 4
+structopt = { version = "0.3", default-features = false } # unmaintained, need to migrate to clap 4
 log = "0.4"
-log4rs = "1.2.0"
+log4rs = "1.3.0"
 env_logger = "0.11"
 lazy_static = "1.4"
-itertools = "0.10.0"
+itertools = "0.14"
 once_cell = "1.17.1"
 byteorder = "1.2.7"
 strum = "0.26"
@@ -346,7 +357,7 @@ rpassword = "5.0.1"
 static_assertions = "1.1.0"
 transient-hashmap = "0.4"
 num_cpus = "1.6"
-tempdir = "0.3"
+tempfile = "3"
 bcs = "0.1.3"
 order-stat = "0.1"
 matches = "0.1"
@@ -360,7 +371,7 @@ derivative = "2.0.2"
 edit-distance = "2"
 zeroize = "1"
 docopt = "1.0"
-vergen = "7.0.0"
+vergen = "8.3.2"
 target_info = "0.1"
 bit-set = "0.4"
 typenum = "1.17.0"
@@ -391,6 +402,8 @@ lru_time_cache = "0.9.0"
 slice-group-by = "0.3.1"
 auto_impl = "1"
 dyn-clone = "1.0.17"
+enumn = "0.1.14"
+walkdir = "2.5"
 
 # num misc
 bigdecimal = "0.1.0"
@@ -400,16 +413,16 @@ num-traits = { version = "0.2.8", default-features = false }
 
 # time misc 
 timer = "0.2"
-time = "0.1.34"
-chrono = "=0.4.38"
-duration-str = "0.5.1"
+time = "0.3"
+chrono = "0.4"
+duration-str = "0.17"
 
 # parity crates
 rlp = "0.4.0"
-rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
-dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
-unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
+rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
+panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
+dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
+unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 ethereum-types = "0.9"
 parity-wordlist = "1.3.0"
 parity-crypto = "0.9.0"
@@ -432,7 +445,7 @@ sqlite3-sys = "0.12"
 kvdb = "0.4"
 influx_db_client = "0.5.1"
 # conflux forked crates
-rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "3773afe5b953997188f37c39308105b5deb0faac" }
+rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "a2ebf4e00f89c70359d9f3996a1390d9c6b55940" }
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }

@@ -23,9 +23,17 @@ use cfx_vm_types::{
 };
 
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, AddressSpaceUtil, Space, U256, U512};
-use primitives::{transaction::Action, SignedTransaction};
+use cfx_types::{
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, U256, U512,
+};
+use cfxkey::{public_to_address, Signature};
+use keccak_hash::keccak;
+use primitives::{
+    transaction::Action, AuthorizationListItem, SignedTransaction,
+};
+use rlp::RlpStream;
 use std::{convert::TryInto, sync::Arc};
+use vm::CODE_PREFIX_7702;
 
 pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
     pub context: ExecutiveContext<'a>,
@@ -38,7 +46,11 @@ pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     pub(super) fn execute_transaction(mut self) -> DbResult<ExecutionOutcome> {
-        self.inc_sender_nonce()?;
+        let nonce_overflow = self.inc_sender_nonce()?;
+        if nonce_overflow {
+            let sender = self.tx.sender;
+            return self.finalize_on_nonce_overflow(sender);
+        }
 
         let (actual_gas_cost, insufficient_sender_balance) =
             self.charge_gas()?;
@@ -50,7 +62,21 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             return self.finalize_on_insufficient_balance(actual_gas_cost);
         }
 
+        if let Some(access_list) = self.tx.access_list() {
+            self.context
+                .state
+                .set_tx_access_list(self.tx.space(), &access_list);
+        }
+
+        let eip7702_refund = self.process_cip7702_authorization()?;
+
         let params = self.make_action_params()?;
+        self.context.state.touch_tx_addresses(&params)?;
+
+        if self.context.spec.align_evm {
+            let coinbase = self.context.env.author.with_evm_space();
+            self.context.state.touch(&coinbase)?;
+        }
 
         if self.check_conflict_create_address(&params)? {
             return self.finalize_on_conflict_address(params.address);
@@ -58,7 +84,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
         let result = self.exec_vm(params.clone())?;
 
-        let refund_info = self.compute_refunded_gas(&result);
+        let refund_info = self.compute_refunded_gas(&result, eip7702_refund);
         self.refund_gas(&params, refund_info.refund_value)?;
 
         if self.tx.space() == Space::Ethereum {
@@ -75,11 +101,11 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 }
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
-    fn inc_sender_nonce(&mut self) -> DbResult<()> {
+    fn inc_sender_nonce(&mut self) -> DbResult<bool> {
         self.context.state.inc_nonce(&self.tx.sender())
     }
 
-    fn charge_gas<'t>(&mut self) -> DbResult<(U256, bool)> {
+    fn charge_gas(&mut self) -> DbResult<(U256, bool)> {
         let sender = self.tx.sender();
         let spec = self.context.spec;
         let substate = &mut self.substate;
@@ -194,6 +220,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 } else {
                     sender.address
                 };
+                let (code, code_hash) =
+                    state.code_with_hash_on_call(&receipient)?;
                 Ok(ActionParams {
                     space: sender.space,
                     code_address: receipient.address,
@@ -204,8 +232,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                     gas: init_gas,
                     gas_price: cost.gas_price,
                     value: ActionValue::Transfer(*tx.value()),
-                    code: state.code(&receipient)?,
-                    code_hash: state.code_hash(&receipient)?,
+                    code,
+                    code_hash,
                     data: Some(tx.data().clone()),
                     call_type: CallType::Call,
                     create_type: CreateType::None,
@@ -482,7 +510,9 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         Ok(())
     }
 
-    fn compute_refunded_gas(&self, result: &ExecutiveResult) -> RefundInfo {
+    fn compute_refunded_gas(
+        &self, result: &ExecutiveResult, eip7702_refund: u64,
+    ) -> RefundInfo {
         let tx = self.tx;
         let cost = &self.cost;
         let spec = self.context.spec;
@@ -491,16 +521,39 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             _ => 0.into(),
         };
         // gas_used is only used to estimate gas needed
-        let gas_used = tx.gas() - gas_left;
+        let mut gas_used = tx.gas() - gas_left;
+
+        if spec.cip645.eip_sstore_and_refund_gas {
+            let substate_refund = if self.substate.refund_gas > 0 {
+                self.substate.refund_gas as u128
+            } else {
+                0
+            };
+            let eip7702_refund = if spec.align_evm {
+                eip7702_refund as u128
+            } else {
+                0
+            };
+            gas_used -= std::cmp::min(
+                gas_used / 5,
+                U256::from(substate_refund + eip7702_refund),
+            );
+        }
+
+        if gas_used < cost.floor_gas.into() {
+            gas_used = cost.floor_gas.into();
+        }
+
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
-        let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
+        let charge_all =
+            !spec.align_evm && (gas_left + gas_left + gas_left) >= gas_used;
         let (gas_charged, gas_refunded) = if charge_all {
             let gas_refunded = tx.gas() >> 2;
             let gas_charged = tx.gas() - gas_refunded;
             (gas_charged, gas_refunded)
         } else {
-            (gas_used, gas_left)
+            (gas_used, tx.gas() - gas_used)
         };
 
         let fees_value = gas_charged.saturating_mul(cost.gas_price);
@@ -555,6 +608,20 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 }
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
+    fn finalize_on_nonce_overflow(
+        self, address: Address,
+    ) -> DbResult<ExecutionOutcome> {
+        return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+            ExecutionError::NonceOverflow(address),
+            Executed::execution_error_fully_charged(
+                self.tx,
+                self.cost,
+                make_ext_result(self.observer),
+                &self.context.spec,
+            ),
+        ));
+    }
+
     fn finalize_on_insufficient_balance(
         self, actual_gas_cost: U256,
     ) -> DbResult<ExecutionOutcome> {
@@ -629,6 +696,108 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         };
 
         Ok(outcome)
+    }
+}
+
+impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
+    fn process_cip7702_authorization(&mut self) -> DbResult<u64> {
+        const MAGIC: u8 = 0x05;
+
+        let Some(authorization_list) = self.tx.authorization_list() else {
+            return Ok(0);
+        };
+
+        let mut non_empty_cnt = 0usize;
+
+        let current_chain_id =
+            self.context.env.chain_id[&Space::Ethereum] as u64;
+        let state = &mut self.context.state;
+
+        for AuthorizationListItem {
+            chain_id,
+            address,
+            nonce,
+            y_parity,
+            r,
+            s,
+        } in authorization_list.iter()
+        {
+            // 1. Verify the chain id is either 0 or the chain's current ID.
+            if *chain_id != U256::zero()
+                && *chain_id != U256::from(current_chain_id)
+            {
+                continue;
+            }
+
+            // 2. Verify the nonce is less than 2**64 - 1
+            if *nonce == u64::MAX {
+                continue;
+            }
+
+            let valid_signature = {
+                let r: H256 = BigEndianHash::from_uint(r);
+                let s: H256 = BigEndianHash::from_uint(s);
+                let signature = Signature::from_rsv(&r, &s, *y_parity);
+                if !signature.is_low_s() || !signature.is_valid() {
+                    continue;
+                }
+                signature
+            };
+
+            // 3. authority = ecrecover(keccak(MAGIC || rlp([chain_id, address,
+            //    nonce])), y_parity, r, s)
+            let authorization_hash = {
+                let mut rlp = RlpStream::new_list(3);
+                rlp.append(chain_id).append(address).append(nonce);
+
+                let mut hash_input = vec![MAGIC];
+                hash_input.extend_from_slice(rlp.as_raw());
+
+                keccak(hash_input)
+            };
+            let authority = if let Ok(public) =
+                cfxkey::recover(&valid_signature, &authorization_hash)
+            {
+                public_to_address(&public, /* type_nibble */ false)
+                    .with_evm_space()
+            } else {
+                continue;
+            };
+
+            // 4. Add authority to accessed_addresses
+            // state.code will mark it as warm
+
+            // 5. Verify the code of authority is either empty or already
+            //    delegated.
+            let can_set_code = state.code(&authority)?.map_or(true, |x| {
+                x.len() == Address::len_bytes() + CODE_PREFIX_7702.len()
+                    && x.starts_with(CODE_PREFIX_7702)
+            });
+            if !can_set_code {
+                continue;
+            }
+
+            // 6. Verify the nonce of authority is equal to nonce. In case
+            //    authority does not exist in the trie, verify that nonce is
+            //    equal to 0.
+            if state.nonce(&authority)? != (*nonce).into() {
+                continue;
+            }
+
+            // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the
+            //    global refund counter if authority exists in the trie.
+            if state.exists(&authority)? {
+                non_empty_cnt += 1;
+            }
+
+            // 8. Set the code of authority to be 0xef0100 || address.
+            // 9. Increase the nonce of authority by one
+            state.set_authorization(&authority, address)?;
+        }
+        let spec = self.context.spec;
+        let refund_gas = (spec.per_empty_account_cost * spec.evm_gas_ratio
+            - spec.per_auth_base_cost) as u64;
+        Ok(non_empty_cnt as u64 * refund_gas)
     }
 }
 

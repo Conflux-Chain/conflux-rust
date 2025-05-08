@@ -7,7 +7,6 @@ use std::{
     collections::HashMap,
     fs::create_dir_all,
     path::Path,
-    str::FromStr,
     sync::{Arc, Weak},
     thread,
     time::{Duration, Instant},
@@ -25,7 +24,9 @@ use threadpool::ThreadPool;
 use crate::keylib::KeyPair;
 use blockgen::BlockGenerator;
 use cfx_executor::machine::{Machine, VmFactory};
-use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
+use cfx_parameters::genesis::{
+    DEV_GENESIS_KEY_PAIR_2, GENESIS_ACCOUNT_ADDRESS,
+};
 use cfx_storage::StorageManager;
 use cfx_tasks::TaskManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
@@ -60,10 +61,10 @@ use secret_store::{SecretStore, SharedSecretStore};
 use tokio::runtime::Runtime as TokioRuntime;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
-pub use crate::configuration::Configuration;
+use cfx_config::{parse_config_address_string, Configuration};
+
 use crate::{
     accounts::{account_provider, keys_path},
-    configuration::parse_config_address_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -73,7 +74,6 @@ use crate::{
         launch_async_rpc_servers, setup_debug_rpc_apis,
         setup_public_eth_rpc_apis, setup_public_rpc_apis,
     },
-    GENESIS_VERSION,
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 use std::net::SocketAddr;
@@ -215,8 +215,6 @@ pub fn initialize_common_modules(
         }
     };
 
-    metrics::initialize(conf.metrics_config());
-
     let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
         "Tx Recover".into(),
         WORKER_COMPUTATION_PARALLELISM,
@@ -320,7 +318,7 @@ pub fn initialize_common_modules(
     let genesis_block = genesis_block(
         &storage_manager,
         genesis_accounts.clone(),
-        Address::from_str(GENESIS_VERSION).unwrap(),
+        GENESIS_ACCOUNT_ADDRESS,
         U256::zero(),
         machine.clone(),
         conf.raw_conf.execute_genesis, /* need_to_execute */
@@ -382,8 +380,7 @@ pub fn initialize_common_modules(
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
-    let verification_config =
-        conf.verification_config(machine.clone(), pos_verifier.clone());
+    let verification_config = conf.verification_config(machine.clone());
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
         verification_config.clone(),
@@ -459,7 +456,6 @@ pub fn initialize_common_modules(
         accounts.clone(),
         pos_verifier.clone(),
     ));
-
     let tokio_runtime =
         Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
 
@@ -681,7 +677,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
     )?;
 
@@ -693,7 +688,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -706,7 +700,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -719,7 +712,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -732,7 +724,6 @@ pub fn initialize_not_light_node_modules(
             pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -740,9 +731,7 @@ pub fn initialize_not_light_node_modules(
     let eth_rpc_http_server = super::rpc::start_http(
         conf.eth_http_config(),
         setup_public_eth_rpc_apis(
-            common_impl.clone(),
             rpc_impl.clone(),
-            pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
             task_executor.clone(),
@@ -752,9 +741,7 @@ pub fn initialize_not_light_node_modules(
     let eth_rpc_ws_server = super::rpc::start_ws(
         conf.eth_ws_config(),
         setup_public_eth_rpc_apis(
-            common_impl.clone(),
             rpc_impl.clone(),
-            pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
             task_executor.clone(),
@@ -770,7 +757,6 @@ pub fn initialize_not_light_node_modules(
             pubsub,
             eth_pubsub.clone(),
             &conf,
-            task_executor.clone(),
         ),
     )?;
 
@@ -793,6 +779,8 @@ pub fn initialize_not_light_node_modules(
             eth_rpc_http_server_addr,
             task_executor.clone(),
         ))?;
+
+    metrics::initialize(conf.metrics_config(), task_executor.clone());
 
     Ok((
         data_man,

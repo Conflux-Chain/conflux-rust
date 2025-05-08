@@ -1,0 +1,19 @@
+[package]
+description = "Conflux consensus benchmark"
+homepage = "https://www.confluxnetwork.org"
+license = "GPL-3.0"
+name = "consensus_bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cfxcore = { workspace = true }
+cfx-types = { workspace = true }
+primitives = { workspace = true }
+db = { workspace = true }
+threadpool = { workspace = true }
+parking_lot = { workspace = true }
+log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
+log = { workspace = true }
+
+[dev-dependencies]

@@ -145,6 +145,11 @@ impl TraceHandler {
             .data_man
             .transactions_traces_by_block_hash(&tx_index.block_hash)?;
 
+        let epoch_number = self
+            .data_man
+            .block_height_by_hash(&pivot_hash)
+            .expect("pivot block missing");
+
         let traces = block_traces
             .into_iter()
             .nth(tx_index.real_index)?
@@ -158,12 +163,7 @@ impl TraceHandler {
                     .expect("local address convert error"),
                 valid: trace.valid,
                 epoch_hash: Some(pivot_hash),
-                epoch_number: Some(
-                    self.data_man
-                        .block_height_by_hash(&pivot_hash)
-                        .expect("pivot block missing")
-                        .into(),
-                ),
+                epoch_number: Some(epoch_number.into()),
                 block_hash: Some(tx_index.block_hash),
                 transaction_position: Some(
                     tx_index.rpc_index.unwrap_or(tx_index.real_index).into(),

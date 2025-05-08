@@ -1,7 +1,11 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{
+    collections::{hash_map, HashMap},
+    fmt::Debug,
+    hash::Hash,
+};
 
 use cfx_types::U256;
-use primitives::StorageValue;
+use primitives::{storage::WriteCacheItem, StorageValue};
 
 use crate::{
     state::checkpoints::CheckpointEntry::{self, Recorded, Unchanged},
@@ -68,10 +72,24 @@ impl OverlayAccount {
     pub(super) fn insert_storage_write_cache(
         &mut self, key: Vec<u8>, value: StorageValue,
     ) {
-        let old_value =
-            self.storage_write_cache.write().insert(key.clone(), value);
+        let old_value = self
+            .storage_write_cache
+            .write()
+            .insert(key.clone(), WriteCacheItem::Write(value));
         unwrap_or_return!(self.storage_write_checkpoint.as_mut())
+            .get_mut()
             .notify_cache_change(key, old_value);
+    }
+
+    pub(super) fn mark_storage_warm(&self, key: &[u8]) {
+        if let hash_map::Entry::Vacant(v) =
+            self.storage_write_cache.write().entry(key.to_vec())
+        {
+            v.insert(WriteCacheItem::Read);
+            unwrap_or_return!(self.storage_write_checkpoint.as_ref())
+                .write()
+                .notify_cache_change(key.to_vec(), None);
+        }
     }
 
     pub(super) fn insert_transient_write_cache(
@@ -92,7 +110,7 @@ impl OverlayAccount {
 
     pub fn revert_checkpoint(&mut self, state_checkpoint_id: usize) {
         if let Some(ct) = self.storage_write_checkpoint.take() {
-            ct.revert_checkpoint(
+            ct.into_inner().revert_checkpoint(
                 state_checkpoint_id,
                 &mut self.storage_write_cache.write(),
             )

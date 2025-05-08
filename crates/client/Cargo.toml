@@ -2,6 +2,7 @@
 name = "client"
 version = { workspace = true }
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 bigdecimal = { workspace = true }
@@ -47,7 +48,7 @@ keccak-hash = { workspace = true }
 rand = { workspace = true }
 rand_08 = { workspace = true }
 kvdb-rocksdb = { workspace = true }
-tempdir = { workspace = true }
+tempfile = { workspace = true }
 rustc-hex = { workspace = true }
 threadpool = { workspace = true }
 metrics = { workspace = true }
@@ -82,12 +83,12 @@ jsonrpsee = { workspace = true }
 cfx-rpc-common-impl = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 cfx-tasks = { workspace = true }
+cfx-config = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-executor = { workspace = true, features = ["testonly_code"] }
-jsonrpc-core-client = { workspace = true }
 
 [features]
 # Unfortunately cfg test attributes doesn't work across crates,

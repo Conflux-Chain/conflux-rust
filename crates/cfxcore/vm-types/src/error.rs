@@ -103,11 +103,13 @@ pub enum Error {
     /// exceed the `storage_limit`.
     ExceedStorageLimit,
     /// Built-in contract failed on given input
-    BuiltIn(&'static str),
+    BuiltIn(String),
     /// Internal contract failed
     InternalContract(String),
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
+    /// Too large init code size (CIP-645i: EIP-3860)
+    CreateInitCodeSizeLimit,
     /// Error from storage.
     StateDbError(PartialEqWrapper<DbError>),
     /// Wasm runtime error
@@ -120,6 +122,10 @@ pub enum Error {
     InvalidAddress(Address),
     /// Create a contract on an address with existing contract
     ConflictAddress(Address),
+    /// Create a contract on an address with existing contract
+    NonceOverflow(Address),
+    /// CIP-150: Reject new contract code starting with the 0xEF byte
+    CreateContractStartingWithEF,
 }
 
 #[derive(Debug)]
@@ -179,7 +185,7 @@ impl fmt::Display for Error {
                 write!(f, "Not enough balance for storage {}/{}", required, got,)
             }
             ExceedStorageLimit => write!(f, "Exceed storage limit"),
-            BuiltIn(name) => write!(f, "Built-in failed: {}", name),
+            BuiltIn(ref name) => write!(f, "Built-in failed: {}", name),
             InternalContract(ref name) => {
                 write!(f, "InternalContract failed: {}", name)
             }
@@ -189,12 +195,21 @@ impl fmt::Display for Error {
             MutableCallInStaticContext => {
                 write!(f, "Mutable call in static context")
             }
+            CreateInitCodeSizeLimit => {
+                write!(f, "Exceed create initcode size limit")
+            }
             Wasm(ref msg) => write!(f, "Internal error: {}", msg),
             OutOfBounds => write!(f, "Out of bounds"),
             Reverted => write!(f, "Reverted by bytecode"),
             InvalidAddress(ref addr) => write!(f, "InvalidAddress: {}", addr),
             ConflictAddress(ref addr) => {
                 write!(f, "Contract creation on an existing address: {}", addr)
+            }
+            NonceOverflow(ref addr) => {
+                write!(f, "Address nonce overflow: {}", addr)
+            }
+            CreateContractStartingWithEF => {
+                write!(f, "Create contract starting with EF")
             }
         }
     }

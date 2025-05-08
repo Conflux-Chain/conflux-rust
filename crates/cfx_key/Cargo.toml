@@ -4,6 +4,7 @@ name = "cfxkey"
 version = "0.3.0"
 authors = ["Conflux Foundation"]
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 cfx-types = { workspace = true }

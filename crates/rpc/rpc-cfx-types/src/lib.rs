@@ -1,9 +1,12 @@
 pub mod address;
+pub mod apis;
 mod chain_meta;
 pub mod epoch_number;
+pub mod eth_apis;
 mod fee_history;
 mod fee_history_cache_entry;
 mod phantom_block;
+pub mod pos;
 mod rpc_impl_configuration;
 mod subscriber_id;
 pub mod trace;

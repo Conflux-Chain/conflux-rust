@@ -413,7 +413,11 @@ impl KeyFileManager for DiskKeyFileManager {
 fn account_filename(account: &SafeAccount) -> String {
     // build file path
     account.filename.clone().unwrap_or_else(|| {
-        let timestamp = time::strftime("%Y-%m-%dT%H-%M-%S", &time::now_utc())
+        let time_format = time::macros::format_description!(
+            "[year]-[month]-[day]T[hour]-[minute]-[second]"
+        );
+        let timestamp = time::OffsetDateTime::now_utc()
+            .format(&time_format)
             .expect("Time-format string is valid.");
         format!("UTC--{}Z--{}", timestamp, Uuid::from(account.id))
     })
@@ -425,7 +429,7 @@ mod test {
     use crate::account::SafeAccount;
     use cfxkey::{Generator, Random};
     use std::{env, fs};
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     #[test]
     fn should_create_new_account() {
@@ -554,7 +558,7 @@ mod test {
     #[test]
     fn should_list_vaults() {
         // given
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let directory = RootDiskDirectory::create(&temp_path).unwrap();
         let vault_provider = directory.as_vault_provider().unwrap();
         vault_provider
@@ -573,7 +577,7 @@ mod test {
 
     #[test]
     fn hash_of_files() {
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let directory = RootDiskDirectory::create(&temp_path).unwrap();
 
         let hash = directory

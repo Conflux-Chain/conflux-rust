@@ -750,10 +750,10 @@ mod tests {
     use super::*;
     use cfx_types::H256;
     use std::str::FromStr;
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     fn test_db(config: &DatabaseConfig) {
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
         let db =
             Database::open(config, tempdir.path().to_str().unwrap()).unwrap();
         let key1 = H256::from_str(
@@ -823,7 +823,7 @@ mod tests {
 
     #[test]
     fn kvdb() {
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
         let _ =
             Database::open_default(tempdir.path().to_str().unwrap()).unwrap();
         test_db(&DatabaseConfig::default());
@@ -854,7 +854,7 @@ mod tests {
         let config = DatabaseConfig::default();
         let config_5 = DatabaseConfig::with_columns(5);
 
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
 
         // open empty, add 5.
         {
@@ -882,7 +882,7 @@ mod tests {
         let config = DatabaseConfig::default();
         let config_5 = DatabaseConfig::with_columns(5);
 
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
 
         // open 5, remove all.
         {
@@ -907,7 +907,7 @@ mod tests {
 
     #[test]
     fn write_clears_buffered_ops() {
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
         let config = DatabaseConfig::default();
         let db =
             Database::open(&config, tempdir.path().to_str().unwrap()).unwrap();
@@ -925,7 +925,7 @@ mod tests {
 
     #[test]
     fn test_memory_property() {
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
         let db = Database::open(
             &DatabaseConfig::default(),
             tempdir.path().to_str().unwrap(),

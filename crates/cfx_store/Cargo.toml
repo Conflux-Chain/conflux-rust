@@ -4,6 +4,7 @@ name = "cfxstore"
 version = "0.2.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 libc = { workspace = true }
@@ -15,13 +16,13 @@ serde = { workspace = true }
 serde_json = { workspace = true, features = ["std"] }
 serde_derive = { workspace = true }
 rustc-hex = { workspace = true }
-time = { workspace = true }
+time = { workspace = true, features = ["macros", "formatting"] }
 parking_lot = { workspace = true }
 parity-crypto = { workspace = true, features = ["publickey"] }
 dir = { workspace = true }
 smallvec = { workspace = true }
 parity-wordlist = { workspace = true }
-tempdir = { workspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
 matches = { workspace = true }

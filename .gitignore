@@ -1,4 +1,5 @@
 target
+*.profraw
 **/Cargo.lock
 **/target
 **/*.rs.bk
@@ -22,3 +23,5 @@ build_clippy/
 tests/artifacts/**/*.dbg.json
 venv
 .venv
+**/node_modules/**
+testdata/evm-spec-test/

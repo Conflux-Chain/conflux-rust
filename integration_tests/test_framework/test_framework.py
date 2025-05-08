@@ -90,7 +90,20 @@ class FrameworkOptions:
     random_seed: int  # set a random seed
     metrics_report_interval_ms: int  # report metrics interval in milliseconds
     conflux: str  # path to conflux binary
-    
+    trace_tx: bool  # print out tx opcodes traces on getting tx receipt using web3 sdk
+    use_anvil_for_spec_tests: bool  # use anvil for spec tests instead of Conflux to check if test cases can pass in Ethereum's implementation
+
+
+class AutoTraceMiddleware(ConfluxWeb3Middleware):
+    def response_processor(self, method: RPCEndpoint, response: Any):
+        if method == RPC.cfx_getTransactionReceipt or method == "eth_getTransactionReceipt":
+            if "result" in response and response["result"] is not None:
+                tx_hash = response["result"]["transactionHash"]
+                import pprint
+                trace = self._w3.manager.request_blocking("debug_traceTransaction", [tx_hash])
+                pprint.pprint(trace.__dict__)
+        return response
+
 
 class ConfluxTestFramework:
     """Base class for a bitcoin test script.
@@ -379,10 +392,16 @@ class ConfluxTestFramework:
                         log.debug("Auto generate 5 blocks because did not get tx receipt")
                         client.generate_blocks_to_state(num_txs=1)  # why num_txs=1?
                 return response
-        
+            
+            
         self.cw3.middleware_onion.add(TestNodeMiddleware)
         self.ew3.middleware_onion.add(TestNodeMiddleware)
         self._legacy_ew3.middleware_onion.add(TestNodeMiddleware)
+
+        if self.options.trace_tx:
+            self.cw3.middleware_onion.add(AutoTraceMiddleware)
+            self.ew3.middleware_onion.add(AutoTraceMiddleware)
+
 
     def add_nodes(self, num_nodes, genesis_nodes=None, rpchost=None, binary=None, auto_recovery=False,
                   recovery_timeout=30, is_consortium=True):
@@ -394,7 +413,7 @@ class ConfluxTestFramework:
             genesis_nodes = num_nodes
         if is_consortium:
             initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID,
-                                 start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"])
+                                 start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"], conflux_binary_path=self.options.conflux)
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(
@@ -498,11 +517,11 @@ class ConfluxTestFramework:
             self.options.tmpdir + '/test_framework.log', encoding='utf-8')
         fh.setLevel(logging.DEBUG)
         # Create console handler to log messages to stderr. By default this logs only error messages, but can be configured with --loglevel.
-        ch = logging.StreamHandler(sys.stdout)
+        # ch = logging.StreamHandler(sys.stdout)
         # User can provide log level as a number or string (eg DEBUG). loglevel was caught as a string, so try to convert it to an int
         ll = int(self.options.loglevel) if self.options.loglevel.isdigit(
         ) else self.options.loglevel.upper()
-        ch.setLevel(ll)
+        # ch.setLevel(ll)
         # Format logs the same as bitcoind's debug.log with microprecision (so log files can be concatenated and sorted)
         formatter = logging.Formatter(
             fmt=
@@ -510,10 +529,10 @@ class ConfluxTestFramework:
             datefmt='%Y-%m-%dT%H:%M:%S')
         formatter.converter = time.gmtime
         fh.setFormatter(formatter)
-        ch.setFormatter(formatter)
+        # ch.setFormatter(formatter)
         # add the handlers to the logger
         self.log.addHandler(fh)
-        self.log.addHandler(ch)
+        # self.log.addHandler(ch)
 
         if self.options.trace_rpc:
             rpc_logger = logging.getLogger("ConfluxRPC")
