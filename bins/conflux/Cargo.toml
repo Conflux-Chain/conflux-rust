@@ -10,6 +10,7 @@ license-file.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["yaml"] }
+clap4 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 parking_lot = { workspace = true }
@@ -51,7 +52,7 @@ thiserror = { workspace = true }
 cfx-bytes = { workspace = true }
 keccak-hash = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
-hex = { workspace = true}
+hex = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
 version = "0.3.2"
