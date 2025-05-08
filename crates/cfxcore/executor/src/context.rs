@@ -294,7 +294,7 @@ impl<'a> ContextTrait for Context<'a> {
             self.space == Space::Native
                 && self.state.is_contract_with_code(&address_with_space)?
         } else {
-            !self.state.is_eip158_empty(&address_with_space)?
+            !self.state.is_eip684_empty(&address_with_space)?
         };
 
         if conflict_address {

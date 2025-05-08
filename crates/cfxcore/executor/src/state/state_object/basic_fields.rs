@@ -112,13 +112,24 @@ impl State {
         Ok(acc.code_hash() != KECCAK_EMPTY)
     }
 
-    pub fn is_eip158_empty(
+    pub fn is_eip684_empty(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
         let Some(acc) = self.read_account_lock(address)? else {
             return Ok(true);
         };
         Ok(acc.code_hash() == KECCAK_EMPTY && acc.nonce().is_zero())
+    }
+
+    pub fn is_eip158_empty(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<bool> {
+        let Some(acc) = self.read_account_lock(address)? else {
+            return Ok(true);
+        };
+        Ok(acc.code_hash() == KECCAK_EMPTY
+            && acc.nonce().is_zero()
+            && acc.balance().is_zero())
     }
 
     pub fn code_hash(&self, address: &AddressWithSpace) -> DbResult<H256> {

@@ -273,7 +273,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 return Ok(false);
             }
             let address = params.address.with_space(params.space);
-            !self.context.state.is_eip158_empty(&address)?
+            !self.context.state.is_eip684_empty(&address)?
         })
     }
 }
