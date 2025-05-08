@@ -1,27 +1,63 @@
+mod env;
+mod transaction;
+
+pub use env::*;
+pub use transaction::*;
+
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 
-use super::{AccountInfo, Config, Env, SpecName, Test, TransactionParts};
-use cfx_bytes::Bytes;
-use cfx_types::Address;
+use crate::{AccountInfo, Config, SpecName};
+use cfx_rpc_primitives::Bytes;
+use cfx_types::{Address, H256};
+
+/// State test indexed state result deserialization.
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StateTest {
+    pub expect_exception: Option<String>,
+
+    /// Indexes
+    pub indexes: TxPartIndices,
+    /// Post state hash
+    pub hash: H256,
+    // /// Post state
+    // #[serde(default)]
+    // pub post_state: HashMap<Address, AccountInfo>,
+    /// Logs root
+    pub logs: H256,
+
+    /// Output state.
+    ///
+    /// Note: Not used.
+    #[serde(default)]
+    pub state: HashMap<Address, AccountInfo>,
+
+    /// Tx bytes
+    pub txbytes: Option<Bytes>,
+}
 
 /// Single test unit struct
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 //#[serde(deny_unknown_fields)]
 // field config
-pub struct TestUnit {
+pub struct StateTestUnit {
     /// Test info is optional.
     #[serde(default, rename = "_info")]
     pub info: Option<serde_json::Value>,
 
     pub env: Env,
     pub pre: HashMap<Address, AccountInfo>,
-    pub post: BTreeMap<SpecName, Vec<Test>>,
+    pub post: BTreeMap<SpecName, Vec<StateTest>>,
     pub transaction: TransactionParts,
     #[serde(default)]
     pub out: Option<Bytes>,
     pub config: Config,
 }
+
+/// The top level test suite struct
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+pub struct StateTestSuite(pub BTreeMap<String, StateTestUnit>);
 
 #[cfg(test)]
 mod tests {
@@ -135,7 +171,7 @@ mod tests {
             }
         }
         "#;
-        let test_unit: TestUnit = serde_json::from_str(json).unwrap();
+        let test_unit: StateTestUnit = serde_json::from_str(json).unwrap();
         println!("{:?}", test_unit);
     }
 }

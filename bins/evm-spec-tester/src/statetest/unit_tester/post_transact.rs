@@ -8,8 +8,8 @@ use cfx_executor::{
 };
 use cfx_types::{AddressSpaceUtil, AddressWithSpace, Space, U256};
 use cfxkey::Address;
+use eest_types::{AccountInfo, StateTestUnit};
 use primitives::{transaction::TransactionError, SignedTransaction};
-use statetest_types::{AccountInfo, TestUnit};
 use std::collections::HashMap;
 
 macro_rules! bail {
@@ -154,7 +154,7 @@ fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
 }
 
 pub fn check_execution_outcome(
-    tx: &SignedTransaction, state: &State, unit: &TestUnit,
+    tx: &SignedTransaction, state: &State, unit: &StateTestUnit,
     expected_state: &HashMap<Address, AccountInfo>, gas_used: U256,
 ) -> Result<(), TestErrorKind> {
     for (&addr, account_info) in expected_state {

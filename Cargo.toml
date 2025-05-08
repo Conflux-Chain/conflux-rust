@@ -108,7 +108,7 @@ members = [
     "crates/pos/config/management/network-address-encryption",
     "crates/rpc/rpc-middlewares",
     "crates/tasks",
-    "crates/statetest_types",
+    "crates/eest_types",
     "crates/config",
 ]
 
@@ -244,7 +244,7 @@ pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
-statetest_types = { path = "./crates/statetest_types" }
+eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }
 
 # basics

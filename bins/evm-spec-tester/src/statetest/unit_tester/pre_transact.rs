@@ -15,6 +15,10 @@ use cfx_types::{
 use cfx_vm_types::Env;
 use cfxcore::verification::{VerificationConfig, VerifyTxMode};
 use cfxkey::{Address, Secret};
+use eest_types::{
+    AccountInfo, Env as StateTestEnv, SignedAuthorization, TransactionParts,
+    TransactionType, TxPartIndices,
+};
 use primitives::{
     transaction::{
         Action, AuthorizationListItem, Eip1559Transaction, Eip155Transaction,
@@ -22,10 +26,6 @@ use primitives::{
         TransactionError,
     },
     SignedTransaction, Transaction,
-};
-use statetest_types::{
-    AccountInfo, Env as StateTestEnv, SignedAuthorization, TransactionParts,
-    TransactionType, TxPartIndices,
 };
 use std::{
     collections::{BTreeMap, HashMap},

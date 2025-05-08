@@ -14,17 +14,17 @@ use cfx_executor::{
 };
 use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
+use eest_types::{SpecId, SpecName, StateTest, StateTestUnit};
 use primitives::SignedTransaction;
-use statetest_types::{SpecId, SpecName, Test, TestUnit};
 
 pub struct UnitTester {
     path: String,
     name: String,
-    unit: TestUnit,
+    unit: StateTestUnit,
 }
 
 impl UnitTester {
-    pub fn new(path: &String, name: String, unit: TestUnit) -> Self {
+    pub fn new(path: &String, name: String, unit: StateTestUnit) -> Self {
         UnitTester {
             path: path.clone(),
             name,
@@ -77,7 +77,7 @@ impl UnitTester {
     }
 
     fn execute_single_test(
-        &self, test: &Test, machine: &Machine,
+        &self, test: &StateTest, machine: &Machine,
         verification: &VerificationConfig,
     ) -> Result<(), TestError> {
         let mut state = pre_transact::make_state(&self.unit.pre);
