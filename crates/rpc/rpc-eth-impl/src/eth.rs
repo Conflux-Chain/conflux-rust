@@ -33,8 +33,8 @@ use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     errors::{Error as CoreError, Result as CoreResult},
-    ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::Error as RpcError;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
@@ -78,12 +78,7 @@ impl EthApi {
         }
     }
 
-    pub fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    pub fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     pub fn tx_pool(&self) -> &SharedTransactionPool { &self.tx_pool }
 
@@ -852,7 +847,7 @@ impl EthApi {
     ) -> CoreResult<Option<Transaction>> {
         let tx_index = match self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .transaction_index_by_hash(&hash, false /* update_cache */)
         {
             None => return Ok(self.get_tx_from_txpool(hash)),
@@ -906,7 +901,7 @@ impl EthApi {
         &self, tx_hash: H256,
     ) -> CoreResult<Option<Receipt>> {
         let tx_index =
-            match self.consensus.get_data_manager().transaction_index_by_hash(
+            match self.consensus.data_manager().transaction_index_by_hash(
                 &tx_hash, false, /* update_cache */
             ) {
                 None => return Ok(None),

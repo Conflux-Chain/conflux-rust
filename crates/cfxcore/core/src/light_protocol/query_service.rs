@@ -13,7 +13,7 @@ use crate::{
         LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     sync::SynchronizationGraph,
-    ConsensusGraph, Notifications,
+    Notifications,
 };
 use cfx_addr::Network;
 use cfx_executor::state::COMMISSION_PRIVILEGE_SPECIAL_KEY;
@@ -228,16 +228,14 @@ impl QueryService {
     pub async fn retrieve_block(
         &self, hash: H256,
     ) -> Result<Option<Block>, LightError> {
-        let genesis = self.consensus.get_data_manager().true_genesis.clone();
+        let genesis = self.consensus.data_manager().true_genesis.clone();
 
         if hash == genesis.hash() {
             return Ok(Some((*genesis).clone()));
         }
 
-        let maybe_block_header = self
-            .consensus
-            .get_data_manager()
-            .block_header_by_hash(&hash);
+        let maybe_block_header =
+            self.consensus.data_manager().block_header_by_hash(&hash);
 
         let block_header = match maybe_block_header {
             None => return Ok(None),
@@ -274,13 +272,7 @@ impl QueryService {
         let mut total_transaction_count_in_processed_blocks = 0;
         let mut processed_block_count = 0;
 
-        let inner = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-            .inner
-            .clone();
+        let inner = self.consensus.inner.clone();
 
         loop {
             if hashes.len() >= GAS_PRICE_BLOCK_SAMPLE_SIZE || epoch == 0 {
@@ -780,7 +772,7 @@ impl QueryService {
         let epoch_number = self.get_latest_verifiable_epoch_number()?;
         Ok(self
             .consensus
-            .get_config()
+            .config()
             .chain_id
             .read()
             .get_chain_id(epoch_number))
@@ -1014,7 +1006,7 @@ impl QueryService {
                 log
             })
             // Limit logs can return
-            .take(self.consensus.get_config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
+            .take(self.consensus.config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
             .try_collect();
         // --> TryFuture<Vec<LocalizedLogEntry>>
 

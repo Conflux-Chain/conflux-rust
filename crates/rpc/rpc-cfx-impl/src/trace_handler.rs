@@ -8,8 +8,7 @@ use cfx_types::{Space, H256};
 use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::DataVersionTuple, errors::Result as CoreResult,
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
-    SharedConsensusGraph,
+    BlockDataManager, ConsensusGraph, SharedConsensusGraph,
 };
 use jsonrpc_core::Error as JsonRpcError;
 use log::warn;
@@ -33,18 +32,13 @@ pub struct TraceHandler {
 impl TraceHandler {
     pub fn new(network: Network, consensus: SharedConsensusGraph) -> Self {
         TraceHandler {
-            data_man: consensus.get_data_manager().clone(),
+            data_man: consensus.data_manager().clone(),
             consensus,
             network,
         }
     }
 
-    pub fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    pub fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     pub fn block_traces_impl(
         &self, block_hash: H256,

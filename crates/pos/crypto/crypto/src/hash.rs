@@ -197,6 +197,7 @@ impl HashValue {
     }
 
     #[cfg(test)]
+    #[allow(missing_docs)]
     pub fn from_iter_sha3<'a, I>(buffers: I) -> Self
     where I: IntoIterator<Item = &'a [u8]> {
         let mut sha3 = Sha3::v256();

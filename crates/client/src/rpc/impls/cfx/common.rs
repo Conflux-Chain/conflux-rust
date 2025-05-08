@@ -46,7 +46,7 @@ use cfx_types::{
 use cfxcore::{
     consensus::pos_handler::PosVerifier, errors::Error as CoreError,
     genesis_block::register_transaction, BlockDataManager, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -170,7 +170,7 @@ impl RpcImpl {
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
     ) -> Self {
-        let data_man = consensus.get_data_manager().clone();
+        let data_man = consensus.data_manager().clone();
 
         RpcImpl {
             exit,
@@ -183,12 +183,7 @@ impl RpcImpl {
         }
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn check_address_network(&self, network: Network) -> CoreResult<()> {
         invalid_params_check(
@@ -407,7 +402,7 @@ impl RpcImpl {
             block_hash, pivot_hash, epoch_number
         );
 
-        let genesis = self.consensus.get_data_manager().true_genesis.hash();
+        let genesis = self.consensus.data_manager().true_genesis.hash();
 
         // for genesis, check criteria directly
         if block_hash == genesis && (pivot_hash != genesis || epoch_number != 0)
@@ -934,8 +929,7 @@ impl RpcImpl {
     }
 
     pub fn pos_start(&self) -> CoreResult<()> {
-        self.pos_handler
-            .initialize(self.consensus.clone().to_arc_consensus())?;
+        self.pos_handler.initialize(self.consensus.clone())?;
         Ok(())
     }
 

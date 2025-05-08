@@ -15,7 +15,7 @@ use cfx_types::{Space, H256};
 use cfx_util_macros::bail;
 use cfxcore::{
     channel::Channel, errors::Error as CfxRpcError, ConsensusGraph,
-    ConsensusGraphTrait, SharedConsensusGraph, SharedTransactionPool,
+    SharedConsensusGraph, SharedTransactionPool,
 };
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as RpcResult};
 use log::{debug, error, info};
@@ -242,12 +242,7 @@ impl Filterable for EthFilterHelper {
     /// Get a reference to the poll manager.
     fn polls(&self) -> &Mutex<PollManager<SyncPollFilter<Log>>> { &self.polls }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn shared_consensus_graph(&self) -> SharedConsensusGraph {
         self.consensus.clone()

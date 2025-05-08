@@ -4,8 +4,7 @@
 
 use crate::command::helpers::{input_password, password_prompt};
 use clap::ArgMatches;
-use jsonrpsee::core::client::ClientT;
-use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use serde_json::{Map, Value};
 use std::str::FromStr;
 

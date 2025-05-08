@@ -288,6 +288,8 @@ pub fn initialize_synchronization_graph_with_data_manager(
 
     let sync = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
+        data_man.clone(),
+        statistics.clone(),
         verification_config,
         pow_config,
         pow.clone(),

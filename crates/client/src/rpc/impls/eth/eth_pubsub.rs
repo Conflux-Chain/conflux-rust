@@ -62,7 +62,7 @@ impl PubSubClient {
 
         let handler = Arc::new(ChainNotificationHandler {
             consensus: consensus.clone(),
-            data_man: consensus.get_data_manager().clone(),
+            data_man: consensus.data_manager().clone(),
         });
 
         PubSubClient {
@@ -526,12 +526,7 @@ impl ChainNotificationHandler {
         Some(logs)
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 }
 
 impl BlockProvider for &ChainNotificationHandler {

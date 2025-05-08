@@ -5,7 +5,7 @@
 use cfx_types::H256;
 use cfxcore::{
     block_data_manager::DbType,
-    consensus::{ConsensusGraph, ConsensusGraphTrait},
+    consensus::ConsensusGraph,
     pow::PowComputer,
     sync::utils::{
         create_simple_block, initialize_synchronization_graph,

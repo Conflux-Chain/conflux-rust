@@ -22,8 +22,7 @@ use cfx_types::{Space, H128, H256};
 use cfx_util_macros::bail;
 use cfxcore::{
     channel::Channel, errors::Error as CfxRpcError, BlockDataManager,
-    ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
-    SharedTransactionPool,
+    ConsensusGraph, SharedConsensusGraph, SharedTransactionPool,
 };
 use itertools::zip;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as JsonRpcResult};
@@ -239,12 +238,7 @@ impl Filterable for CfxFilterClient {
     /// Get a reference to the poll manager.
     fn polls(&self) -> &Mutex<PollManager<SyncPollFilter<Log>>> { &self.polls }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn shared_consensus_graph(&self) -> SharedConsensusGraph {
         self.consensus.clone()
@@ -514,8 +508,7 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                         revert_to: epochs.first().unwrap().0.into(),
                     }));
                 }
-                let data_man =
-                    self.consensus_graph().get_data_manager().clone();
+                let data_man = self.consensus_graph().data_manager().clone();
 
                 // logs from new epochs
                 for (num, blocks) in epochs.into_iter() {
