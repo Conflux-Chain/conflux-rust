@@ -195,10 +195,8 @@ impl<Gas: CostType> Gasometer<Gas> {
                 {
                     gas += Gas::from(spec.cold_account_access_cost);
                 }
-                if (!spec.no_empty && !context.exists(&address)?)
-                    || (spec.no_empty
-                        && is_value_transfer
-                        && !context.exists_and_not_null(&address)?)
+                if is_value_transfer
+                    && !context.exists_and_not_null(&address)?
                 {
                     let ratio = if context.space() == Space::Ethereum {
                         spec.evm_gas_ratio
@@ -301,10 +299,8 @@ impl<Gas: CostType> Gasometer<Gas> {
                 let is_value_transfer = !stack.peek(2).is_zero();
 
                 if instruction == instructions::CALL
-                    && ((!spec.no_empty && !context.exists(&address)?)
-                        || (spec.no_empty
-                            && is_value_transfer
-                            && !context.exists_and_not_null(&address)?))
+                    && is_value_transfer
+                    && !context.exists_and_not_null(&address)?
                 {
                     let ratio = if context.space() == Space::Ethereum {
                         spec.evm_gas_ratio

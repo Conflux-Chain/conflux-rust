@@ -6,7 +6,6 @@ use crate::{
         Context, Executable, ExecutableOutcome, FrameResult, FrameReturn,
         Resumable,
     },
-    substate::cleanup_mode,
 };
 
 use cfx_parameters::block::CROSS_SPACE_GAS_RATIO;
@@ -260,7 +259,6 @@ pub fn call_to_evmcore(
         &params.address.with_native_space(),
         &mapped_sender,
         &value,
-        cleanup_mode(context.substate, context.spec),
     )?;
     context.state.add_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(
@@ -340,7 +338,6 @@ pub fn create_to_evmcore(
         &params.address.with_native_space(),
         &mapped_sender,
         &value,
-        cleanup_mode(context.substate, context.spec),
     )?;
     context.state.add_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(
@@ -417,7 +414,6 @@ pub fn withdraw_from_evmcore(
         &mapped_address,
         &sender.with_native_space(),
         &value,
-        cleanup_mode(context.substate, context.spec),
     )?;
     context.state.sub_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(

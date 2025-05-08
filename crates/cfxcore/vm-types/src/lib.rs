@@ -31,8 +31,8 @@ pub use self::{
     interpreter_info::InterpreterInfo,
     return_data::{GasLeft, ReturnData},
     spec::{
-        extract_7702_payload, CIP645Spec, CleanDustMode, ConsensusGasSpec,
-        Spec, CODE_PREFIX_7702,
+        extract_7702_payload, CIP645Spec, ConsensusGasSpec, Spec,
+        CODE_PREFIX_7702,
     },
 };
 
