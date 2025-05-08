@@ -499,7 +499,7 @@
     <span class="kw">pub fn </span>new(<span class="kw-2">mut </span>value: Box&lt;[u8]&gt;, size: usize) -&gt; <span class="self">Self </span>{
         <span class="kw">if </span>size &gt; <span class="self">Self</span>::MAX_INPLACE_SIZE {
             <span class="kw">let </span>ptr = value.as_mut_ptr();
-            Box::into_raw(value);
+            <span class="kw">let _ </span>= Box::into_raw(value);
             <span class="self">Self </span>{ ptr }
         } <span class="kw">else </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>in_place: [u8; <span class="self">Self</span>::MAX_INPLACE_SIZE] = Default::default();
@@ -516,7 +516,7 @@
         <span class="kw">if </span>size &gt; <span class="self">Self</span>::MAX_INPLACE_SIZE {
             <span class="kw">let </span><span class="kw-2">mut </span>owned_copy = Box::&lt;[u8]&gt;::from(value);
             <span class="kw">let </span>ptr = owned_copy.as_mut_ptr();
-            Box::into_raw(owned_copy);
+            <span class="kw">let _ </span>= Box::into_raw(owned_copy);
             <span class="self">Self </span>{ ptr }
         } <span class="kw">else </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>x: <span class="self">Self </span>= <span class="self">Self </span>{

@@ -291,6 +291,7 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -393,6 +394,7 @@
 }
 
 <span class="attr">#[derive(Debug)]
+#[allow(dead_code)]
 </span><span class="kw">pub enum </span>PayloadError {
     ArgumentsAmountUnexpected(usize),
     InvalidNonce(String),

@@ -909,8 +909,8 @@
         <span class="self">self</span>.packing_pool.in_space(addr.space).contains(addr)
     }
 
-    <span class="kw">pub fn </span>ready_transactions_by_address&lt;<span class="lifetime">'a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, address: AddressWithSpace,
+    <span class="kw">pub fn </span>ready_transactions_by_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, address: AddressWithSpace,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[Arc&lt;SignedTransaction&gt;]&gt; {
         <span class="self">self</span>.packing_pool
             .in_space(address.space)

@@ -976,14 +976,6 @@
 <a href="#976" id="976">976</a>
 <a href="#977" id="977">977</a>
 <a href="#978" id="978">978</a>
-<a href="#979" id="979">979</a>
-<a href="#980" id="980">980</a>
-<a href="#981" id="981">981</a>
-<a href="#982" id="982">982</a>
-<a href="#983" id="983">983</a>
-<a href="#984" id="984">984</a>
-<a href="#985" id="985">985</a>
-<a href="#986" id="986">986</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -1401,39 +1393,31 @@
         <span class="comment">// TODO(lpl): Decide key management.
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
-        </span><span class="kw">let </span>proposal_generator = <span class="kw">match </span>epoch_state
-            .verifier()
-            .get_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>.author)
-        {
-            <span class="prelude-val">Some</span>(public_key) =&gt; {
-                <span class="comment">// TODO(lpl): Handle no vrf.
-                </span><span class="kw">let </span>vrf_key =
-                    <span class="self">self</span>.config.safety_rules.vrf_private_key.as_ref().unwrap();
-                <span class="kw">let </span>private_key = <span class="self">self
-                    </span>.config
-                    .safety_rules
-                    .test
-                    .as_ref()
-                    .expect(<span class="string">"test config set"</span>)
-                    .consensus_key
-                    .as_ref()
-                    .expect(<span class="string">"private key set in pos"</span>)
-                    .private_key();
-                <span class="prelude-val">Some</span>(ProposalGenerator::new(
-                    <span class="self">self</span>.author,
-                    block_store.clone(),
-                    <span class="self">self</span>.txn_manager.clone(),
-                    <span class="self">self</span>.time_service.clone(),
-                    <span class="self">self</span>.config.max_block_size,
-                    <span class="self">self</span>.pow_handler.clone(),
-                    private_key,
-                    public_key,
-                    vrf_key.private_key(),
-                    vrf_key.public_key(),
-                ))
-            }
-            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
-        };
+        </span><span class="kw">let </span>proposal_generator =
+            <span class="kw">match </span>epoch_state.verifier().get_public_key(<span class="kw-2">&amp;</span><span class="self">self</span>.author) {
+                <span class="prelude-val">Some</span>(_public_key) =&gt; {
+                    <span class="kw">let </span>private_key = <span class="self">self
+                        </span>.config
+                        .safety_rules
+                        .test
+                        .as_ref()
+                        .expect(<span class="string">"test config set"</span>)
+                        .consensus_key
+                        .as_ref()
+                        .expect(<span class="string">"private key set in pos"</span>)
+                        .private_key();
+                    <span class="prelude-val">Some</span>(ProposalGenerator::new(
+                        <span class="self">self</span>.author,
+                        block_store.clone(),
+                        <span class="self">self</span>.txn_manager.clone(),
+                        <span class="self">self</span>.time_service.clone(),
+                        <span class="self">self</span>.config.max_block_size,
+                        <span class="self">self</span>.pow_handler.clone(),
+                        private_key,
+                    ))
+                }
+                <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+            };
 
         <span class="macro">diem_info!</span>(epoch = epoch, <span class="string">"Create RoundState"</span>);
         <span class="kw">let </span>round_state = <span class="self">self</span>.create_round_state(

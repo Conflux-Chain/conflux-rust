@@ -586,12 +586,6 @@
 <a href="#586" id="586">586</a>
 <a href="#587" id="587">587</a>
 <a href="#588" id="588">588</a>
-<a href="#589" id="589">589</a>
-<a href="#590" id="590">590</a>
-<a href="#591" id="591">591</a>
-<a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -860,9 +854,7 @@
 }
 
 <span class="kw">impl </span>SocketMetadata {
-    <span class="kw">pub fn </span>addr(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>SocketAddr {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.addr
-    }
+    <span class="kw">pub fn </span>addr(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>SocketAddr { <span class="kw-2">&amp;</span><span class="self">self</span>.addr }
 }
 
 <span class="kw">impl </span>Metadata <span class="kw">for </span>SocketMetadata {}
@@ -900,9 +892,7 @@
     <span class="kw">pub struct </span>VoidManager;
 
     <span class="kw">impl </span>JobDispatcher <span class="kw">for </span>VoidManager {
-        <span class="kw">fn </span>submit(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: Vec&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-            <span class="prelude-val">Ok</span>(())
-        }
+        <span class="kw">fn </span>submit(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: Vec&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; { <span class="prelude-val">Ok</span>(()) }
     }
 
     <span class="kw">fn </span>dummy_request(addr: <span class="kw-2">&amp;</span>SocketAddr, data: <span class="kw-2">&amp;</span>str) -&gt; Vec&lt;u8&gt; {
@@ -962,9 +952,7 @@
     }
 
     <span class="kw">impl </span>JobDispatcher <span class="kw">for </span>DummyManager {
-        <span class="kw">fn </span>submit(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: Vec&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-            <span class="prelude-val">Ok</span>(())
-        }
+        <span class="kw">fn </span>submit(<span class="kw-2">&amp;</span><span class="self">self</span>, _payload: Vec&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; { <span class="prelude-val">Ok</span>(()) }
     }
 
     <span class="kw">fn </span>terminated_str(origin: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; String {

@@ -455,7 +455,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_debug_does_not_panic() {
-        <span class="macro">format!</span>(<span class="string">"{:#?}"</span>, AccountStateBlob::from(<span class="macro">vec!</span>[<span class="number">1u8</span>, <span class="number">2u8</span>, <span class="number">3u8</span>]));
+        <span class="kw">let _ </span>= <span class="macro">format!</span>(<span class="string">"{:#?}"</span>, AccountStateBlob::from(<span class="macro">vec!</span>[<span class="number">1u8</span>, <span class="number">2u8</span>, <span class="number">3u8</span>]));
     }
 }
 </code></pre></div></section></main></body></html>

@@ -60,7 +60,7 @@
 </span><span class="kw">use </span>backtrace::Backtrace;
 <span class="kw">use </span>diem_logger::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>std::panic::{<span class="self">self</span>, PanicInfo};
+<span class="kw">use </span>std::panic::{<span class="self">self</span>, PanicInfo <span class="kw">as </span>PanicHookInfo};
 
 <span class="attr">#[derive(Debug, Serialize)]
 </span><span class="kw">pub struct </span>CrashInfo {
@@ -74,13 +74,13 @@
 /// function will ensure that all subsequent thread panics (even Tokio threads)
 /// will report the details/backtrace and then exit.
 </span><span class="kw">pub fn </span>setup_panic_handler() {
-    panic::set_hook(Box::new(<span class="kw">move </span>|pi: <span class="kw-2">&amp;</span>PanicInfo&lt;<span class="lifetime">'_</span>&gt;| {
+    panic::set_hook(Box::new(<span class="kw">move </span>|pi: <span class="kw-2">&amp;</span>PanicHookInfo&lt;<span class="lifetime">'_</span>&gt;| {
         handle_panic(pi);
     }));
 }
 
 <span class="comment">// Formats and logs panic information
-</span><span class="kw">fn </span>handle_panic(panic_info: <span class="kw-2">&amp;</span>PanicInfo&lt;<span class="lifetime">'_</span>&gt;) {
+</span><span class="kw">fn </span>handle_panic(panic_info: <span class="kw-2">&amp;</span>PanicHookInfo&lt;<span class="lifetime">'_</span>&gt;) {
     <span class="comment">// The Display formatter for a PanicInfo contains the message, payload and
     // location.
     </span><span class="kw">let </span>details = <span class="macro">format!</span>(<span class="string">"{}"</span>, panic_info);

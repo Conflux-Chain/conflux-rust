@@ -832,7 +832,7 @@
                     <span class="kw">let </span>ptr = value_box.as_mut_ptr();
                     <span class="comment">// Don't free the buffer since it's stored in the return
                     // value.
-                    </span>Box::into_raw(value_box);
+                    </span><span class="kw">let _ </span>= Box::into_raw(value_box);
                     path = MaybeInPlaceByteArray { ptr };
                     slice = std::slice::from_raw_parts_mut(ptr, size);
                 } <span class="kw">else </span>{

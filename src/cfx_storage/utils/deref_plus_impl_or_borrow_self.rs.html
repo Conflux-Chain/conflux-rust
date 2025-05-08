@@ -368,7 +368,7 @@
     }
     <span class="kw">struct </span>Test {}
     <span class="kw">mod </span>my_vec {
-        <span class="kw">pub struct </span>MyVec&lt;T&gt;(<span class="kw">pub </span>Vec&lt;T&gt;);
+        <span class="kw">pub struct </span>MyVec&lt;T&gt;(<span class="attr">#[allow(unused)] </span><span class="kw">pub </span>Vec&lt;T&gt;);
     }
 
     <span class="kw">impl </span>TestTrait <span class="kw">for </span>Test {}

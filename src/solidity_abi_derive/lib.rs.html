@@ -94,13 +94,6 @@
 <a href="#94" id="94">94</a>
 <a href="#95" id="95">95</a>
 <a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>proc_macro::TokenStream;
 <span class="kw">use </span>proc_macro2::{Ident, Span};
 <span class="kw">use </span>proc_macro_crate::{crate_name, FoundCrate};
@@ -148,11 +141,6 @@
         }
     };
 
-    <span class="kw">let </span>dummy_const = syn::Ident::new(
-        <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"_IMPL_ABI_VARIABLE_DUMMY_{}"</span>, ident),
-        Span::call_site(),
-    );
-
     <span class="kw">let </span>env = <span class="macro">quote!</span> {
         <span class="kw">use </span>#abi_crate::{ABIDecodeError, ABIListWriter, ABIVariable, LinkedBytes, read_abi_list};
         #(<span class="kw">type </span>#dummy_types = #types;)*
@@ -194,10 +182,8 @@
     };
 
     <span class="kw">let </span>answer = <span class="macro">quote!</span> {
-        <span class="attr">#[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
-        </span><span class="kw">const </span>#dummy_const: () = {
+        <span class="kw">const _</span>: () = {
             #env
-
             #impl_abi
         };
     };

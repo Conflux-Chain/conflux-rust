@@ -1217,6 +1217,12 @@
 <a href="#1217" id="1217">1217</a>
 <a href="#1218" id="1218">1218</a>
 <a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a>
+<a href="#1224" id="1224">1224</a>
+<a href="#1225" id="1225">1225</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1757,20 +1763,24 @@
             </span><span class="macro">debug_assert!</span>(i &gt; <span class="number">0</span>);
             <span class="kw">unsafe </span>{
                 <span class="kw">let </span>pos = i - <span class="number">1</span>;
-                std::ptr::copy(
-                    <span class="self">self</span>.ordered_iter_ids.get_unchecked(<span class="number">1</span>),
-                    <span class="self">self</span>.ordered_iter_ids.get_unchecked_mut(<span class="number">0</span>),
-                    pos,
-                );
+                <span class="kw">if </span>pos &gt; <span class="number">0 </span>{
+                    std::ptr::copy(
+                        <span class="self">self</span>.ordered_iter_ids.get_unchecked(<span class="number">1</span>),
+                        <span class="self">self</span>.ordered_iter_ids.get_unchecked_mut(<span class="number">0</span>),
+                        pos,
+                    );
+                }
                 std::ptr::write(
                     <span class="self">self</span>.ordered_iter_ids.get_unchecked_mut(pos),
                     iter_id,
                 );
-                std::ptr::copy(
-                    <span class="self">self</span>.ordered_key_prefixes_to_map.get_unchecked(<span class="number">1</span>),
-                    <span class="self">self</span>.ordered_key_prefixes_to_map.get_unchecked_mut(<span class="number">0</span>),
-                    pos,
-                );
+                <span class="kw">if </span>pos &gt; <span class="number">0 </span>{
+                    std::ptr::copy(
+                        <span class="self">self</span>.ordered_key_prefixes_to_map.get_unchecked(<span class="number">1</span>),
+                        <span class="self">self</span>.ordered_key_prefixes_to_map.get_unchecked_mut(<span class="number">0</span>),
+                        pos,
+                    );
+                }
                 std::ptr::write(
                     <span class="self">self</span>.ordered_key_prefixes_to_map.get_unchecked_mut(pos),
                     this_key_prefix_to_map,
@@ -1778,11 +1788,13 @@
                 <span class="kw">let </span>popped = <span class="prelude-val">Ok</span>(std::ptr::read(
                     <span class="self">self</span>.maybe_next_key_values.get_unchecked(<span class="number">0</span>),
                 ));
-                std::ptr::copy(
-                    <span class="self">self</span>.maybe_next_key_values.get_unchecked(<span class="number">1</span>),
-                    <span class="self">self</span>.maybe_next_key_values.get_unchecked_mut(<span class="number">0</span>),
-                    pos,
-                );
+                <span class="kw">if </span>pos &gt; <span class="number">0 </span>{
+                    std::ptr::copy(
+                        <span class="self">self</span>.maybe_next_key_values.get_unchecked(<span class="number">1</span>),
+                        <span class="self">self</span>.maybe_next_key_values.get_unchecked_mut(<span class="number">0</span>),
+                        pos,
+                    );
+                }
                 std::ptr::write(
                     <span class="self">self</span>.maybe_next_key_values.get_unchecked_mut(pos),
                     kv,

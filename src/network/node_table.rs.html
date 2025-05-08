@@ -970,6 +970,7 @@
 <a href="#970" id="970">970</a>
 <a href="#971" id="971">971</a>
 <a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1091,7 +1092,8 @@
                 rlp.append(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>a.ip().octets()[..]));
             }
             SocketAddr::V6(a) =&gt; <span class="kw">unsafe </span>{
-                <span class="kw">let </span>o: <span class="kw-2">*const </span>u8 = a.ip().segments().as_ptr() <span class="kw">as </span><span class="kw-2">*const </span>u8;
+                <span class="kw">let </span>segments = a.ip().segments();
+                <span class="kw">let </span>o: <span class="kw-2">*const </span>u8 = segments.as_ptr() <span class="kw">as </span><span class="kw-2">*const </span>u8;
                 rlp.append(<span class="kw-2">&amp;</span>slice::from_raw_parts(o, <span class="number">16</span>));
             },
         };

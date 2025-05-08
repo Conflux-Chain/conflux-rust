@@ -309,17 +309,6 @@
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -341,10 +330,7 @@
 <span class="kw">use </span>diem_logger::{debug <span class="kw">as </span>diem_debug, error <span class="kw">as </span>diem_error};
 <span class="kw">use </span>diem_types::{
     transaction::{RawTransaction, SignedTransaction, TransactionPayload},
-    validator_config::{
-        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
-        ConsensusVRFPublicKey,
-    },
+    validator_config::ConsensusPrivateKey,
     validator_verifier::ValidatorVerifier,
 };
 <span class="kw">use </span>pow_types::PowInterface;
@@ -386,9 +372,6 @@
     </span>pow_handler: Arc&lt;<span class="kw">dyn </span>PowInterface&gt;,
     <span class="comment">// TODO(lpl): Where to put them?
     </span><span class="kw">pub </span>private_key: ConsensusPrivateKey,
-    <span class="kw">pub </span>public_key: ConsensusPublicKey,
-    <span class="kw">pub </span>vrf_private_key: ConsensusVRFPrivateKey,
-    <span class="kw">pub </span>vrf_public_key: ConsensusVRFPublicKey,
 }
 
 <span class="kw">impl </span>ProposalGenerator {
@@ -396,9 +379,7 @@
         author: Author, block_store: Arc&lt;<span class="kw">dyn </span>BlockReader + Send + Sync&gt;,
         txn_manager: Arc&lt;<span class="kw">dyn </span>TxnManager&gt;, time_service: Arc&lt;<span class="kw">dyn </span>TimeService&gt;,
         max_block_size: u64, pow_handler: Arc&lt;<span class="kw">dyn </span>PowInterface&gt;,
-        private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
-        vrf_private_key: ConsensusVRFPrivateKey,
-        vrf_public_key: ConsensusVRFPublicKey,
+        private_key: ConsensusPrivateKey,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             author,
@@ -409,9 +390,6 @@
             last_round_generated: Mutex::new(<span class="number">0</span>),
             pow_handler,
             private_key,
-            public_key,
-            vrf_private_key,
-            vrf_public_key,
         }
     }
 

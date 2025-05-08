@@ -136,6 +136,8 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -259,9 +261,11 @@
     </span>)]
     </span>SemaphoreTryAcquireError,
 
-    <span class="attr">#[error(<span class="string">"tokio::sync::Semaphore::acquire(): the semaphore is unavailable."</span>)]
+    <span class="attr">#[error(
+        <span class="string">"tokio::sync::Semaphore::acquire(): the semaphore is unavailable."
+    </span>)]
     </span>SemaphoreAcquireError,
-    
+
     <span class="attr">#[error(<span class="string">"{0}"</span>)]
     </span>Msg(String),
 }
