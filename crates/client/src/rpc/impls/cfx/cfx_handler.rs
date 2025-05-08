@@ -43,7 +43,7 @@ use cfxcore::{
     state_exposer::STATE_EXPOSER,
     transaction_pool::TransactionPoolError,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
-    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    ConsensusGraph, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
@@ -155,12 +155,7 @@ impl RpcImpl {
         }
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn check_address_network(&self, network: Network) -> CoreResult<()> {
         invalid_params_check(
@@ -733,14 +728,14 @@ impl RpcImpl {
 
                     let maybe_state_root = self
                         .consensus
-                        .get_data_manager()
+                        .data_manager()
                         .get_executed_state_root(&tx_index.block_hash);
 
                     // Acutally, the return value of `block_header_by_hash`
                     // should not be none.
                     let maybe_base_price = self
                         .consensus
-                        .get_data_manager()
+                        .data_manager()
                         .block_header_by_hash(&tx_index.block_hash)
                         .and_then(|x| x.base_price());
 
@@ -800,7 +795,7 @@ impl RpcImpl {
 
         let epoch_number = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(&pivot_hash)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?
@@ -813,7 +808,7 @@ impl RpcImpl {
 
         let block = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_by_hash(&block_hash, false /* update_cache */)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?;
@@ -824,7 +819,7 @@ impl RpcImpl {
 
         let pivot_header = if let Some(x) = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(&pivot_hash)
         {
             x
@@ -902,7 +897,7 @@ impl RpcImpl {
         // None. If the tx was re-executed in another block on the new pivot
         // chain, `transaction_index_by_hash` will return the updated result.
         let tx_index =
-            match self.consensus.get_data_manager().transaction_index_by_hash(
+            match self.consensus.data_manager().transaction_index_by_hash(
                 &tx_hash, false, /* update_cache */
             ) {
                 None => return Ok(None),
@@ -1236,7 +1231,7 @@ impl RpcImpl {
         for b in blocks {
             if let Some(reward_result) = self
                 .consensus
-                .get_data_manager()
+                .data_manager()
                 .block_reward_result_by_hash_with_epoch(
                     &b,
                     &epoch_later,
@@ -1245,7 +1240,7 @@ impl RpcImpl {
                 )
             {
                 if let Some(block_header) =
-                    self.consensus.get_data_manager().block_header_by_hash(&b)
+                    self.consensus.data_manager().block_header_by_hash(&b)
                 {
                     let author = RpcAddress::try_from_h160(
                         *block_header.author(),
@@ -1513,7 +1508,7 @@ impl RpcImpl {
     fn get_executed_info(&self, block_hash: H256) -> CoreResult<(H256, H256)> {
         let commitment = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment(&block_hash)
             .ok_or(JsonRpcError::invalid_params(
                 "No receipts root. Possibly never pivot?".to_owned(),
@@ -1696,7 +1691,7 @@ impl RpcImpl {
         }
 
         // try to get from db
-        self.consensus.get_data_manager().block_epoch_number(h)
+        self.consensus.data_manager().block_epoch_number(h)
     }
 
     fn epoch_receipts(
@@ -1714,7 +1709,7 @@ impl RpcImpl {
             } => {
                 if self
                     .consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_header_by_hash(&h)
                     .is_none()
                 {
@@ -1835,7 +1830,7 @@ impl RpcImpl {
             .into_iter()
             .map(|h| {
                 self.consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_pivot_assumption */
                         false, /* update_cache */
@@ -1918,7 +1913,7 @@ impl RpcImpl {
                 primitives::EpochNumber::Number(epoch_number),
             )?;
             let blocks = consensus
-                .get_data_manager()
+                .data_manager()
                 .blocks_by_hash_list(&block_hashes, false)
                 .ok_or_else(block_not_found_error)?;
             let pivot_block = blocks
@@ -2012,7 +2007,7 @@ impl RpcImpl {
 
         let blocks = match self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
             None => {
@@ -2063,7 +2058,7 @@ impl RpcImpl {
 
         let blocks = match self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
             None => {
@@ -2115,7 +2110,7 @@ impl RpcImpl {
     ) -> Result<Vec<WrapTransaction>, String> {
         let exec_info = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_execution_result_by_hash_with_epoch(
                 &b.hash(),
                 &pivot.hash(),
@@ -2177,7 +2172,7 @@ impl RpcImpl {
         let network = *self.sync.network.get_network_type();
         let maybe_state_root = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .get_executed_state_root(&b.hash());
         let block_receipts = &execution_result.block_receipts.receipts;
 
