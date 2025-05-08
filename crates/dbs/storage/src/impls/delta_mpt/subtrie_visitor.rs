@@ -399,7 +399,9 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
 
                             Ok((value, node_ref_changed, node_cow.into_child()))
                         },
-                        _ => unsafe { unreachable_unchecked() },
+                        _ => {
+                            unreachable!()
+                        }
                     }
                 } else {
                     Ok((value, false, node_cow.into_child()))
@@ -544,7 +546,9 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 node_cow.into_child(),
                             ));
                         },
-                        _ => unsafe { unreachable_unchecked() },
+                        _ => {
+                            unreachable!()
+                        }
                     }
                 } else {
                     return Ok((value, false, node_cow.into_child()));
@@ -854,4 +858,4 @@ use super::{
 };
 use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
-use std::{hint::unreachable_unchecked, marker::PhantomData};
+use std::marker::PhantomData;
