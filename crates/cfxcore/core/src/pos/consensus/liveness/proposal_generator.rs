@@ -19,10 +19,7 @@ use diem_infallible::Mutex;
 use diem_logger::{debug as diem_debug, error as diem_error};
 use diem_types::{
     transaction::{RawTransaction, SignedTransaction, TransactionPayload},
-    validator_config::{
-        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
-        ConsensusVRFPublicKey,
-    },
+    validator_config::ConsensusPrivateKey,
     validator_verifier::ValidatorVerifier,
 };
 use pow_types::PowInterface;
@@ -64,9 +61,6 @@ pub struct ProposalGenerator {
     pow_handler: Arc<dyn PowInterface>,
     // TODO(lpl): Where to put them?
     pub private_key: ConsensusPrivateKey,
-    pub public_key: ConsensusPublicKey,
-    pub vrf_private_key: ConsensusVRFPrivateKey,
-    pub vrf_public_key: ConsensusVRFPublicKey,
 }
 
 impl ProposalGenerator {
@@ -74,9 +68,7 @@ impl ProposalGenerator {
         author: Author, block_store: Arc<dyn BlockReader + Send + Sync>,
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
         max_block_size: u64, pow_handler: Arc<dyn PowInterface>,
-        private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
-        vrf_private_key: ConsensusVRFPrivateKey,
-        vrf_public_key: ConsensusVRFPublicKey,
+        private_key: ConsensusPrivateKey,
     ) -> Self {
         Self {
             author,
@@ -87,9 +79,6 @@ impl ProposalGenerator {
             last_round_generated: Mutex::new(0),
             pow_handler,
             private_key,
-            public_key,
-            vrf_private_key,
-            vrf_public_key,
         }
     }
 

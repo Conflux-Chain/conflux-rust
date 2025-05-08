@@ -26,3 +26,6 @@ jsonrpsee-core = { workspace = true }
 futures.workspace = true
 tokio.workspace = true
 cfx-tasks = { workspace = true }
+
+[features]
+accounts = []

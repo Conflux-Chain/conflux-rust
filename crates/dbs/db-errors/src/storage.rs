@@ -121,9 +121,11 @@ pub enum Error {
     )]
     SemaphoreTryAcquireError,
 
-    #[error("tokio::sync::Semaphore::acquire(): the semaphore is unavailable.")]
+    #[error(
+        "tokio::sync::Semaphore::acquire(): the semaphore is unavailable."
+    )]
     SemaphoreAcquireError,
-    
+
     #[error("{0}")]
     Msg(String),
 }

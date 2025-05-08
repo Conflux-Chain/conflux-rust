@@ -100,6 +100,7 @@ impl SubmitPayload {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum PayloadError {
     ArgumentsAmountUnexpected(usize),
     InvalidNonce(String),
