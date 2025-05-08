@@ -260,20 +260,18 @@ impl NoncePool {
     ) {
         let mut pending_txs = BTreeMap::new();
         let mut queued_txs = BTreeMap::new();
-        let mut used_balance = U256::zero();
-        for (i, tx_info) in self.iter_tx_by_nonce(&local_nonce).enumerate() {
+        let Some((first_tx, last_pending_nonce)) = self
+            .recalculate_readiness_with_local_info(local_nonce, local_balance)
+        else {
+            return (pending_txs, queued_txs);
+        };
+        for tx_info in self.iter_tx_by_nonce(first_tx.nonce()) {
             let tx = tx_info.transaction.clone();
-            let nonce = *tx.nonce();
-            let cost = tx_info.get_tx_cost();
-
-            if local_nonce + U256::from(i) == nonce
-                && used_balance + cost <= local_balance
-            {
+            if tx.nonce() <= &last_pending_nonce {
                 pending_txs.insert(*tx.nonce(), tx);
             } else {
                 queued_txs.insert(*tx.nonce(), tx);
             }
-            used_balance += cost;
         }
         (pending_txs, queued_txs)
     }
