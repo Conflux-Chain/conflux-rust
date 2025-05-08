@@ -375,15 +375,19 @@
 <a href="#375" id="375">375</a>
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">use </span><span class="kw">crate</span>::consensus::{
     consensus_inner::{NULL, NULLU64},
-    ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
+    ConsensusGraphInner,
 };
-<span class="kw">use </span>cfx_parameters::consensus_internal::<span class="kw-2">*</span>;
+<span class="kw">use </span>cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT, consensus_internal::<span class="kw-2">*</span>,
+};
 <span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>parking_lot::RwLock;
 <span class="kw">use </span>std::{cmp::max, collections::VecDeque, convert::TryFrom};

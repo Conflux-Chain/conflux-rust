@@ -789,7 +789,7 @@
             Api::Pos =&gt; {
                 <span class="kw">let </span>pos = PosHandler::new(
                     common.pos_handler.clone(),
-                    rpc.consensus.get_data_manager().clone(),
+                    rpc.consensus.data_manager().clone(),
                     <span class="kw-2">*</span>rpc.sync.network.get_network_type(),
                     rpc.consensus.clone(),
                 )

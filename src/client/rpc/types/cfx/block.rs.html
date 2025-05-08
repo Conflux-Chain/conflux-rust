@@ -644,7 +644,6 @@
 <a href="#644" id="644">644</a>
 <a href="#645" id="645">645</a>
 <a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -655,8 +654,8 @@
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
-    consensus::{ConsensusConfig, ConsensusGraphInner},
-    pow, ConsensusGraphTrait, SharedConsensusGraph,
+    consensus::ConsensusGraphInner,
+    pow, ConsensusGraph, SharedConsensusGraph,
 };
 <span class="kw">use </span>jsonrpc_core::Error <span class="kw">as </span>RpcError;
 <span class="kw">use </span>primitives::{
@@ -789,8 +788,7 @@
 
 <span class="kw">impl </span>Block {
     <span class="kw">pub fn </span>new(
-        b: <span class="kw-2">&amp;</span>PrimitiveBlock, network: Network,
-        consensus: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ConsensusGraphTrait&lt;ConsensusConfig = ConsensusConfig&gt;,
+        b: <span class="kw-2">&amp;</span>PrimitiveBlock, network: Network, consensus: <span class="kw-2">&amp;</span>ConsensusGraph,
         consensus_inner: <span class="kw-2">&amp;</span>ConsensusGraphInner,
         data_man: <span class="kw-2">&amp;</span>Arc&lt;BlockDataManager&gt;, include_txs: bool,
         tx_space_filter: <span class="prelude-ty">Option</span>&lt;Space&gt;,
@@ -1103,7 +1101,7 @@
 
         <span class="kw">let </span>epoch_number = consensus
             .get_block_epoch_number(<span class="kw-2">&amp;</span>hash)
-            .or_else(|| consensus.get_data_manager().block_epoch_number(<span class="kw-2">&amp;</span>hash))
+            .or_else(|| consensus.data_manager().block_epoch_number(<span class="kw-2">&amp;</span>hash))
             .map(Into::into);
 
         <span class="kw">let </span>block_number = consensus.get_block_number(<span class="kw-2">&amp;</span>hash)<span class="question-mark">?</span>.map(Into::into);

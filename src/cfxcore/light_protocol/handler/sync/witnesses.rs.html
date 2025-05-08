@@ -378,7 +378,7 @@
         consensus: SharedConsensusGraph, peers: Arc&lt;Peers&lt;FullPeerState&gt;&gt;,
         request_id_allocator: Arc&lt;UniqueId&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>data_man = consensus.get_data_manager().clone();
+        <span class="kw">let </span>data_man = consensus.data_manager().clone();
         <span class="kw">let </span>height_of_latest_verified_header = RwLock::new(<span class="number">0</span>);
         <span class="kw">let </span>in_flight = RwLock::new(HashSet::new());
         <span class="kw">let </span>ledger = LedgerInfo::new(consensus.clone());

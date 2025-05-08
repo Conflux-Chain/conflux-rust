@@ -1466,12 +1466,6 @@
 <a href="#1466" id="1466">1466</a>
 <a href="#1467" id="1467">1467</a>
 <a href="#1468" id="1468">1468</a>
-<a href="#1469" id="1469">1469</a>
-<a href="#1470" id="1470">1470</a>
-<a href="#1471" id="1471">1471</a>
-<a href="#1472" id="1472">1472</a>
-<a href="#1473" id="1473">1473</a>
-<a href="#1474" id="1474">1474</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1520,7 +1514,7 @@
 <span class="kw">use </span>cfxcore::{
     consensus::pos_handler::PosVerifier, errors::Error <span class="kw">as </span>CoreError,
     genesis_block::register_transaction, BlockDataManager, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 <span class="kw">use </span>cfxcore_accounts::AccountProvider;
 <span class="kw">use </span>cfxkey::Password;
@@ -1644,7 +1638,7 @@
         network: Arc&lt;NetworkService&gt;, tx_pool: SharedTransactionPool,
         accounts: Arc&lt;AccountProvider&gt;, pos_verifier: Arc&lt;PosVerifier&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>data_man = consensus.get_data_manager().clone();
+        <span class="kw">let </span>data_man = consensus.data_manager().clone();
 
         RpcImpl {
             exit,
@@ -1657,12 +1651,7 @@
         }
     }
 
-    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph {
-        <span class="self">self</span>.consensus
-            .as_any()
-            .downcast_ref::&lt;ConsensusGraph&gt;()
-            .expect(<span class="string">"downcast should succeed"</span>)
-    }
+    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph { <span class="kw-2">&amp;</span><span class="self">self</span>.consensus }
 
     <span class="kw">fn </span>check_address_network(<span class="kw-2">&amp;</span><span class="self">self</span>, network: Network) -&gt; CoreResult&lt;()&gt; {
         invalid_params_check(
@@ -1881,7 +1870,7 @@
             block_hash, pivot_hash, epoch_number
         );
 
-        <span class="kw">let </span>genesis = <span class="self">self</span>.consensus.get_data_manager().true_genesis.hash();
+        <span class="kw">let </span>genesis = <span class="self">self</span>.consensus.data_manager().true_genesis.hash();
 
         <span class="comment">// for genesis, check criteria directly
         </span><span class="kw">if </span>block_hash == genesis &amp;&amp; (pivot_hash != genesis || epoch_number != <span class="number">0</span>)
@@ -2408,8 +2397,7 @@
     }
 
     <span class="kw">pub fn </span>pos_start(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CoreResult&lt;()&gt; {
-        <span class="self">self</span>.pos_handler
-            .initialize(<span class="self">self</span>.consensus.clone().to_arc_consensus())<span class="question-mark">?</span>;
+        <span class="self">self</span>.pos_handler.initialize(<span class="self">self</span>.consensus.clone())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 

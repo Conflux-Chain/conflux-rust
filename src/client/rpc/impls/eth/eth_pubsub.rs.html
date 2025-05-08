@@ -609,11 +609,6 @@
 <a href="#609" id="609">609</a>
 <a href="#610" id="610">610</a>
 <a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a>
-<a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a>
-<a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -678,7 +673,7 @@
 
         <span class="kw">let </span>handler = Arc::new(ChainNotificationHandler {
             consensus: consensus.clone(),
-            data_man: consensus.get_data_manager().clone(),
+            data_man: consensus.data_manager().clone(),
         });
 
         PubSubClient {
@@ -1142,12 +1137,7 @@
         <span class="prelude-val">Some</span>(logs)
     }
 
-    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph {
-        <span class="self">self</span>.consensus
-            .as_any()
-            .downcast_ref::&lt;ConsensusGraph&gt;()
-            .expect(<span class="string">"downcast should succeed"</span>)
-    }
+    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph { <span class="kw-2">&amp;</span><span class="self">self</span>.consensus }
 }
 
 <span class="kw">impl </span>BlockProvider <span class="kw">for </span><span class="kw-2">&amp;</span>ChainNotificationHandler {

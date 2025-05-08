@@ -2184,13 +2184,6 @@
 <a href="#2184" id="2184">2184</a>
 <a href="#2185" id="2185">2185</a>
 <a href="#2186" id="2186">2186</a>
-<a href="#2187" id="2187">2187</a>
-<a href="#2188" id="2188">2188</a>
-<a href="#2189" id="2189">2189</a>
-<a href="#2190" id="2190">2190</a>
-<a href="#2191" id="2191">2191</a>
-<a href="#2192" id="2192">2192</a>
-<a href="#2193" id="2193">2193</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2237,7 +2230,7 @@
     statistics::SharedStatistics,
     sync::synchronization_protocol_handler::FutureBlockContainer,
     verification::<span class="kw-2">*</span>,
-    ConsensusGraph, Notifications,
+    Notifications,
 };
 
 <span class="macro">lazy_static!</span> {
@@ -3208,11 +3201,7 @@
 
         <span class="comment">// TODO: Add statistics for consortium.
         </span><span class="kw">if </span>!<span class="self">self</span>.is_consortium() {
-            <span class="kw">let </span>consensus_graph = <span class="self">self
-                </span>.consensus
-                .as_any()
-                .downcast_ref::&lt;ConsensusGraph&gt;()
-                .expect(<span class="string">"downcast should succeed"</span>);
+            <span class="kw">let </span>consensus_graph = <span class="kw-2">&amp;*</span><span class="self">self</span>.consensus;
             malloc_size += consensus_graph.size_of(ops);
         }
         <span class="comment">// Does not count size_of machine.
@@ -3225,13 +3214,12 @@
 
 <span class="kw">impl </span>SynchronizationGraph {
     <span class="kw">pub fn </span>new(
-        consensus: SharedConsensusGraph,
-        verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
-        pow: Arc&lt;PowComputer&gt;, sync_config: SyncGraphConfig,
-        notifications: Arc&lt;Notifications&gt;, machine: Arc&lt;Machine&gt;,
-        pos_verifier: Arc&lt;PosVerifier&gt;,
+        consensus: SharedConsensusGraph, data_man: Arc&lt;BlockDataManager&gt;,
+        statistics: SharedStatistics, verification_config: VerificationConfig,
+        pow_config: ProofOfWorkConfig, pow: Arc&lt;PowComputer&gt;,
+        sync_config: SyncGraphConfig, notifications: Arc&lt;Notifications&gt;,
+        machine: Arc&lt;Machine&gt;, pos_verifier: Arc&lt;PosVerifier&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>data_man = consensus.get_data_manager().clone();
         <span class="kw">let </span>genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
         <span class="kw">let </span>genesis_block_header = data_man
             .block_header_by_hash(<span class="kw-2">&amp;</span>genesis_hash)
@@ -3262,7 +3250,7 @@
             verification_config,
             sync_config,
             consensus: consensus.clone(),
-            statistics: consensus.get_statistics().clone(),
+            statistics: statistics.clone(),
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
             machine,
@@ -3306,8 +3294,8 @@
                                 <span class="kw">let </span>header = data_man.block_header_by_hash(<span class="kw-2">&amp;</span>hash).expect(<span class="string">"Header must exist before sending to the consensus worker!"</span>);
 
                                 <span class="comment">// start pos with an era advance.
-                                </span><span class="kw">if </span>!pos_started &amp;&amp; pos_verifier.is_enabled_at_height(header.height() + consensus.get_config().inner_conf.era_epoch_count) {
-                                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = pos_verifier.initialize(consensus.clone().to_arc_consensus()) {
+                                </span><span class="kw">if </span>!pos_started &amp;&amp; pos_verifier.is_enabled_at_height(header.height() + consensus.config().inner_conf.era_epoch_count) {
+                                    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = pos_verifier.initialize(consensus.clone()) {
                                         <span class="macro">info!</span>(<span class="string">"PoS cannot be started at the expected height: e={}"</span>, e);
                                     } <span class="kw">else </span>{
                                         pos_started = <span class="bool-val">true</span>;
@@ -3390,16 +3378,14 @@
     <span class="kw">pub fn </span>get_to_propagate_trans(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; HashMap&lt;H256, Arc&lt;SignedTransaction&gt;&gt; {
-        <span class="self">self</span>.consensus
-            .get_tx_pool()
-            .get_to_be_propagated_transactions()
+        <span class="self">self</span>.consensus.tx_pool().get_to_be_propagated_transactions()
     }
 
     <span class="kw">pub fn </span>set_to_propagate_trans(
         <span class="kw-2">&amp;</span><span class="self">self</span>, transactions: HashMap&lt;H256, Arc&lt;SignedTransaction&gt;&gt;,
     ) {
         <span class="self">self</span>.consensus
-            .get_tx_pool()
+            .tx_pool()
             .set_to_be_propagated_transactions(transactions);
     }
 

@@ -787,7 +787,7 @@
                 .manager
                 .graph
                 .consensus
-                .get_tx_pool()
+                .tx_pool()
                 .insert_new_transactions(transactions);
             <span class="kw">if </span>failure.is_empty() {
                 <span class="macro">debug!</span>(
@@ -1294,7 +1294,7 @@
                 .manager
                 .graph
                 .consensus
-                .get_tx_pool()
+                .tx_pool()
                 .insert_new_transactions(<span class="self">self</span>.transactions);
             <span class="kw">if </span>failure.is_empty() {
                 <span class="macro">debug!</span>(
@@ -1373,7 +1373,7 @@
                 .manager
                 .graph
                 .consensus
-                .get_tx_pool()
+                .tx_pool()
                 .insert_new_transactions(<span class="self">self</span>.transactions);
             <span class="kw">if </span>failure.is_empty() {
                 <span class="macro">debug!</span>(

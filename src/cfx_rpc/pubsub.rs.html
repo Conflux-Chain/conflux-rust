@@ -590,11 +590,6 @@
 <a href="#590" id="590">590</a>
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::EpochQueue;
 <span class="kw">use </span>cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
@@ -924,7 +919,7 @@
 
 <span class="kw">impl </span>ChainDataProvider {
     <span class="kw">pub fn </span>new(consensus: SharedConsensusGraph) -&gt; ChainDataProvider {
-        <span class="kw">let </span>data_man = consensus.get_data_manager().clone();
+        <span class="kw">let </span>data_man = consensus.data_manager().clone();
         ChainDataProvider {
             consensus,
             data_man,
@@ -935,12 +930,7 @@
         <span class="self">self</span>.consensus.latest_finalized_epoch_number()
     }
 
-    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph {
-        <span class="self">self</span>.consensus
-            .as_any()
-            .downcast_ref::&lt;ConsensusGraph&gt;()
-            .expect(<span class="string">"downcast should succeed"</span>)
-    }
+    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph { <span class="kw-2">&amp;</span><span class="self">self</span>.consensus }
 
     <span class="kw">async fn </span>get_epoch_logs(
         <span class="kw-2">&amp;</span><span class="self">self</span>, filter: <span class="kw-2">&amp;</span>LogFilter, epoch: (u64, Vec&lt;H256&gt;), removed: bool,

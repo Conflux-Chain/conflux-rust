@@ -1062,14 +1062,6 @@
 <a href="#1062" id="1062">1062</a>
 <a href="#1063" id="1063">1063</a>
 <a href="#1064" id="1064">1064</a>
-<a href="#1065" id="1065">1065</a>
-<a href="#1066" id="1066">1066</a>
-<a href="#1067" id="1067">1067</a>
-<a href="#1068" id="1068">1068</a>
-<a href="#1069" id="1069">1069</a>
-<a href="#1070" id="1070">1070</a>
-<a href="#1071" id="1071">1071</a>
-<a href="#1072" id="1072">1072</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1233,7 +1225,7 @@
         ));
 
         <span class="kw">let </span>snapshot_epoch_count =
-            consensus.get_data_manager().get_snapshot_epoch_count() <span class="kw">as </span>u64;
+            consensus.data_manager().get_snapshot_epoch_count() <span class="kw">as </span>u64;
 
         <span class="kw">let </span>state_roots = Arc::new(StateRoots::new(
             peers.clone(),
@@ -1277,7 +1269,7 @@
             notifications,
             witnesses.clone(),
             stopped.clone(),
-            consensus.get_data_manager().clone(),
+            consensus.data_manager().clone(),
         ));
 
         Handler {
@@ -1434,7 +1426,7 @@
 
     <span class="attr">#[inline]
     </span><span class="kw">fn </span>validate_genesis_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, genesis: H256) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>ours = <span class="self">self</span>.consensus.get_data_manager().true_genesis.hash();
+        <span class="kw">let </span>ours = <span class="self">self</span>.consensus.data_manager().true_genesis.hash();
         <span class="kw">let </span>theirs = genesis;
 
         <span class="kw">if </span>ours != theirs {
@@ -1558,11 +1550,7 @@
         <span class="kw">if </span>peer_protocol_version == LIGHT_PROTO_V1 {
             msg = Box::new(StatusPingDeprecatedV1 {
                 protocol_version: <span class="self">self</span>.protocol_version.<span class="number">0</span>,
-                genesis_hash: <span class="self">self
-                    </span>.consensus
-                    .get_data_manager()
-                    .true_genesis
-                    .hash(),
+                genesis_hash: <span class="self">self</span>.consensus.data_manager().true_genesis.hash(),
                 node_type: NodeType::Light,
             });
         } <span class="kw">else </span>{
@@ -1570,11 +1558,7 @@
                 chain_id: ChainIdParamsDeprecated {
                     chain_id: <span class="self">self</span>.consensus.best_chain_id().in_native_space(),
                 },
-                genesis_hash: <span class="self">self
-                    </span>.consensus
-                    .get_data_manager()
-                    .true_genesis
-                    .hash(),
+                genesis_hash: <span class="self">self</span>.consensus.data_manager().true_genesis.hash(),
                 node_type: NodeType::Light,
             });
         }
@@ -1626,7 +1610,7 @@
         validate_chain_id(
             <span class="kw-2">&amp;</span><span class="self">self
                 </span>.consensus
-                .get_config()
+                .config()
                 .chain_id
                 .read()
                 .to_native_space_params(),

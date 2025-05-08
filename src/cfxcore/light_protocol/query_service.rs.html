@@ -1020,14 +1020,6 @@
 <a href="#1020" id="1020">1020</a>
 <a href="#1021" id="1021">1021</a>
 <a href="#1022" id="1022">1022</a>
-<a href="#1023" id="1023">1023</a>
-<a href="#1024" id="1024">1024</a>
-<a href="#1025" id="1025">1025</a>
-<a href="#1026" id="1026">1026</a>
-<a href="#1027" id="1027">1027</a>
-<a href="#1028" id="1028">1028</a>
-<a href="#1029" id="1029">1029</a>
-<a href="#1030" id="1030">1030</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1043,7 +1035,7 @@
         LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     sync::SynchronizationGraph,
-    ConsensusGraph, Notifications,
+    Notifications,
 };
 <span class="kw">use </span>cfx_addr::Network;
 <span class="kw">use </span>cfx_executor::state::COMMISSION_PRIVILEGE_SPECIAL_KEY;
@@ -1258,16 +1250,14 @@
     <span class="kw">pub async fn </span>retrieve_block(
         <span class="kw-2">&amp;</span><span class="self">self</span>, hash: H256,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Block&gt;, LightError&gt; {
-        <span class="kw">let </span>genesis = <span class="self">self</span>.consensus.get_data_manager().true_genesis.clone();
+        <span class="kw">let </span>genesis = <span class="self">self</span>.consensus.data_manager().true_genesis.clone();
 
         <span class="kw">if </span>hash == genesis.hash() {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((<span class="kw-2">*</span>genesis).clone()));
         }
 
-        <span class="kw">let </span>maybe_block_header = <span class="self">self
-            </span>.consensus
-            .get_data_manager()
-            .block_header_by_hash(<span class="kw-2">&amp;</span>hash);
+        <span class="kw">let </span>maybe_block_header =
+            <span class="self">self</span>.consensus.data_manager().block_header_by_hash(<span class="kw-2">&amp;</span>hash);
 
         <span class="kw">let </span>block_header = <span class="kw">match </span>maybe_block_header {
             <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
@@ -1304,13 +1294,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>total_transaction_count_in_processed_blocks = <span class="number">0</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>processed_block_count = <span class="number">0</span>;
 
-        <span class="kw">let </span>inner = <span class="self">self
-            </span>.consensus
-            .as_any()
-            .downcast_ref::&lt;ConsensusGraph&gt;()
-            .expect(<span class="string">"downcast should succeed"</span>)
-            .inner
-            .clone();
+        <span class="kw">let </span>inner = <span class="self">self</span>.consensus.inner.clone();
 
         <span class="kw">loop </span>{
             <span class="kw">if </span>hashes.len() &gt;= GAS_PRICE_BLOCK_SAMPLE_SIZE || epoch == <span class="number">0 </span>{
@@ -1810,7 +1794,7 @@
         <span class="kw">let </span>epoch_number = <span class="self">self</span>.get_latest_verifiable_epoch_number()<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.consensus
-            .get_config()
+            .config()
             .chain_id
             .read()
             .get_chain_id(epoch_number))
@@ -2044,7 +2028,7 @@
                 log
             })
             <span class="comment">// Limit logs can return
-            </span>.take(<span class="self">self</span>.consensus.get_config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - <span class="number">1</span>) + <span class="number">1</span>)
+            </span>.take(<span class="self">self</span>.consensus.config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - <span class="number">1</span>) + <span class="number">1</span>)
             .try_collect();
         <span class="comment">// --&gt; TryFuture&lt;Vec&lt;LocalizedLogEntry&gt;&gt;
 

@@ -381,7 +381,7 @@
     </span><span class="attr">#[inline]
     </span><span class="kw">pub fn </span>block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: H256) -&gt; <span class="prelude-ty">Result</span>&lt;Block, Error&gt; {
         <span class="self">self</span>.consensus
-            .get_data_manager()
+            .data_manager()
             .block_by_hash(<span class="kw-2">&amp;</span>hash, <span class="bool-val">false </span><span class="comment">/* update_cache */</span>)
             .map(|b| (<span class="kw-2">*</span>b).clone())
             .ok_or_else(|| {
@@ -394,7 +394,7 @@
     </span><span class="attr">#[inline]
     </span><span class="kw">pub fn </span>header(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: H256) -&gt; <span class="prelude-ty">Result</span>&lt;BlockHeader, Error&gt; {
         <span class="self">self</span>.consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(<span class="kw-2">&amp;</span>hash)
             .map(|h| (<span class="kw-2">*</span>h).clone())
             .ok_or_else(|| {
@@ -436,7 +436,7 @@
 
         <span class="kw">let </span>commitments = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment_with_db(<span class="kw-2">&amp;</span>pivot)
             .ok_or_else(|| {
                 Error::from(Error::InternalError(<span class="macro">format!</span>(
@@ -462,7 +462,7 @@
 
         <span class="kw">let </span>commitments = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment_with_db(<span class="kw-2">&amp;</span>pivot)
             .ok_or_else(|| {
                 Error::from(Error::InternalError(<span class="macro">format!</span>(
@@ -485,7 +485,7 @@
 
         <span class="kw">let </span>commitments = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment_with_db(<span class="kw-2">&amp;</span>pivot)
             .ok_or_else(|| {
                 Error::from(Error::InternalError(<span class="macro">format!</span>(
@@ -500,7 +500,7 @@
     <span class="doccomment">/// Get the number of epochs per snapshot period.
     </span><span class="attr">#[inline]
     </span><span class="kw">pub fn </span>snapshot_epoch_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
-        <span class="self">self</span>.consensus.get_data_manager().get_snapshot_epoch_count()
+        <span class="self">self</span>.consensus.data_manager().get_snapshot_epoch_count()
     }
 
     <span class="doccomment">/// Get the state trie corresponding to the execution of `epoch`.
@@ -510,11 +510,11 @@
 
         <span class="kw">let </span>maybe_state_index = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .get_state_readonly_index(<span class="kw-2">&amp;</span>pivot);
         <span class="kw">let </span>state = maybe_state_index.map(|state_index| {
             <span class="self">self</span>.consensus
-                .get_data_manager()
+                .data_manager()
                 .storage_manager
                 .get_state_no_commit_inner(
                     state_index,
@@ -591,7 +591,7 @@
             .into_iter()
             .map(|h| {
                 <span class="self">self</span>.consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         <span class="kw-2">&amp;</span>h, <span class="kw-2">&amp;</span>pivot, <span class="bool-val">false</span>, <span class="comment">/* update_pivot_assumption */
                         </span><span class="bool-val">false</span>, <span class="comment">/* update_cache */
@@ -622,7 +622,7 @@
             .into_iter()
             .map(|h| {
                 <span class="self">self</span>.consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         <span class="kw-2">&amp;</span>h, <span class="kw-2">&amp;</span>pivot, <span class="bool-val">false</span>, <span class="comment">/* update_pivot_assumption */
                         </span><span class="bool-val">false</span>, <span class="comment">/* update_cache */

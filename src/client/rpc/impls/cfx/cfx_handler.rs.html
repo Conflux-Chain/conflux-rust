@@ -2465,11 +2465,6 @@
 <a href="#2465" id="2465">2465</a>
 <a href="#2466" id="2466">2466</a>
 <a href="#2467" id="2467">2467</a>
-<a href="#2468" id="2468">2468</a>
-<a href="#2469" id="2469">2469</a>
-<a href="#2470" id="2470">2470</a>
-<a href="#2471" id="2471">2471</a>
-<a href="#2472" id="2472">2472</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2515,7 +2510,7 @@
     state_exposer::STATE_EXPOSER,
     transaction_pool::TransactionPoolError,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
-    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    ConsensusGraph, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 <span class="kw">use </span>cfxcore_accounts::AccountProvider;
@@ -2627,12 +2622,7 @@
         }
     }
 
-    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph {
-        <span class="self">self</span>.consensus
-            .as_any()
-            .downcast_ref::&lt;ConsensusGraph&gt;()
-            .expect(<span class="string">"downcast should succeed"</span>)
-    }
+    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph { <span class="kw-2">&amp;</span><span class="self">self</span>.consensus }
 
     <span class="kw">fn </span>check_address_network(<span class="kw-2">&amp;</span><span class="self">self</span>, network: Network) -&gt; CoreResult&lt;()&gt; {
         invalid_params_check(
@@ -3205,14 +3195,14 @@
 
                     <span class="kw">let </span>maybe_state_root = <span class="self">self
                         </span>.consensus
-                        .get_data_manager()
+                        .data_manager()
                         .get_executed_state_root(<span class="kw-2">&amp;</span>tx_index.block_hash);
 
                     <span class="comment">// Acutally, the return value of `block_header_by_hash`
                     // should not be none.
                     </span><span class="kw">let </span>maybe_base_price = <span class="self">self
                         </span>.consensus
-                        .get_data_manager()
+                        .data_manager()
                         .block_header_by_hash(<span class="kw-2">&amp;</span>tx_index.block_hash)
                         .and_then(|x| x.base_price());
 
@@ -3272,7 +3262,7 @@
 
         <span class="kw">let </span>epoch_number = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(<span class="kw-2">&amp;</span>pivot_hash)
             <span class="comment">// FIXME: server error, client should request another server.
             </span>.ok_or(<span class="string">"Inconsistent state"</span>)<span class="question-mark">?
@@ -3285,7 +3275,7 @@
 
         <span class="kw">let </span>block = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .block_by_hash(<span class="kw-2">&amp;</span>block_hash, <span class="bool-val">false </span><span class="comment">/* update_cache */</span>)
             <span class="comment">// FIXME: server error, client should request another server.
             </span>.ok_or(<span class="string">"Inconsistent state"</span>)<span class="question-mark">?</span>;
@@ -3296,7 +3286,7 @@
 
         <span class="kw">let </span>pivot_header = <span class="kw">if let </span><span class="prelude-val">Some</span>(x) = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(<span class="kw-2">&amp;</span>pivot_hash)
         {
             x
@@ -3374,7 +3364,7 @@
         // None. If the tx was re-executed in another block on the new pivot
         // chain, `transaction_index_by_hash` will return the updated result.
         </span><span class="kw">let </span>tx_index =
-            <span class="kw">match </span><span class="self">self</span>.consensus.get_data_manager().transaction_index_by_hash(
+            <span class="kw">match </span><span class="self">self</span>.consensus.data_manager().transaction_index_by_hash(
                 <span class="kw-2">&amp;</span>tx_hash, <span class="bool-val">false</span>, <span class="comment">/* update_cache */
             </span>) {
                 <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
@@ -3708,7 +3698,7 @@
         <span class="kw">for </span>b <span class="kw">in </span>blocks {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(reward_result) = <span class="self">self
                 </span>.consensus
-                .get_data_manager()
+                .data_manager()
                 .block_reward_result_by_hash_with_epoch(
                     <span class="kw-2">&amp;</span>b,
                     <span class="kw-2">&amp;</span>epoch_later,
@@ -3717,7 +3707,7 @@
                 </span>)
             {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(block_header) =
-                    <span class="self">self</span>.consensus.get_data_manager().block_header_by_hash(<span class="kw-2">&amp;</span>b)
+                    <span class="self">self</span>.consensus.data_manager().block_header_by_hash(<span class="kw-2">&amp;</span>b)
                 {
                     <span class="kw">let </span>author = RpcAddress::try_from_h160(
                         <span class="kw-2">*</span>block_header.author(),
@@ -3985,7 +3975,7 @@
     <span class="kw">fn </span>get_executed_info(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: H256) -&gt; CoreResult&lt;(H256, H256)&gt; {
         <span class="kw">let </span>commitment = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment(<span class="kw-2">&amp;</span>block_hash)
             .ok_or(JsonRpcError::invalid_params(
                 <span class="string">"No receipts root. Possibly never pivot?"</span>.to_owned(),
@@ -4168,7 +4158,7 @@
         }
 
         <span class="comment">// try to get from db
-        </span><span class="self">self</span>.consensus.get_data_manager().block_epoch_number(h)
+        </span><span class="self">self</span>.consensus.data_manager().block_epoch_number(h)
     }
 
     <span class="kw">fn </span>epoch_receipts(
@@ -4186,7 +4176,7 @@
             } =&gt; {
                 <span class="kw">if </span><span class="self">self
                     </span>.consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_header_by_hash(<span class="kw-2">&amp;</span>h)
                     .is_none()
                 {
@@ -4307,7 +4297,7 @@
             .into_iter()
             .map(|h| {
                 <span class="self">self</span>.consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         <span class="kw-2">&amp;</span>h, <span class="kw-2">&amp;</span>pivot, <span class="bool-val">false</span>, <span class="comment">/* update_pivot_assumption */
                         </span><span class="bool-val">false</span>, <span class="comment">/* update_cache */
@@ -4390,7 +4380,7 @@
                 primitives::EpochNumber::Number(epoch_number),
             )<span class="question-mark">?</span>;
             <span class="kw">let </span>blocks = consensus
-                .get_data_manager()
+                .data_manager()
                 .blocks_by_hash_list(<span class="kw-2">&amp;</span>block_hashes, <span class="bool-val">false</span>)
                 .ok_or_else(block_not_found_error)<span class="question-mark">?</span>;
             <span class="kw">let </span>pivot_block = blocks
@@ -4484,7 +4474,7 @@
 
         <span class="kw">let </span>blocks = <span class="kw">match </span><span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .blocks_by_hash_list(<span class="kw-2">&amp;</span>block_hashs, <span class="bool-val">false</span>)
         {
             <span class="prelude-val">None </span>=&gt; {
@@ -4535,7 +4525,7 @@
 
         <span class="kw">let </span>blocks = <span class="kw">match </span><span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .blocks_by_hash_list(<span class="kw-2">&amp;</span>block_hashs, <span class="bool-val">false</span>)
         {
             <span class="prelude-val">None </span>=&gt; {
@@ -4587,7 +4577,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;WrapTransaction&gt;, String&gt; {
         <span class="kw">let </span>exec_info = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .block_execution_result_by_hash_with_epoch(
                 <span class="kw-2">&amp;</span>b.hash(),
                 <span class="kw-2">&amp;</span>pivot.hash(),
@@ -4649,7 +4639,7 @@
         <span class="kw">let </span>network = <span class="kw-2">*</span><span class="self">self</span>.sync.network.get_network_type();
         <span class="kw">let </span>maybe_state_root = <span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .get_executed_state_root(<span class="kw-2">&amp;</span>b.hash());
         <span class="kw">let </span>block_receipts = <span class="kw-2">&amp;</span>execution_result.block_receipts.receipts;
 

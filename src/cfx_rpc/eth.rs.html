@@ -1509,11 +1509,6 @@
 <a href="#1509" id="1509">1509</a>
 <a href="#1510" id="1510">1510</a>
 <a href="#1511" id="1511">1511</a>
-<a href="#1512" id="1512">1512</a>
-<a href="#1513" id="1513">1513</a>
-<a href="#1514" id="1514">1514</a>
-<a href="#1515" id="1515">1515</a>
-<a href="#1516" id="1516">1516</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cfx_execute_helper::estimation::EstimateRequest;
@@ -1549,8 +1544,8 @@
 <span class="kw">use </span>cfx_vm_types::Error <span class="kw">as </span>VmError;
 <span class="kw">use </span>cfxcore::{
     errors::{Error <span class="kw">as </span>CoreError, <span class="prelude-ty">Result </span><span class="kw">as </span>CoreResult},
-    ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 <span class="kw">use </span>jsonrpc_core::Error <span class="kw">as </span>RpcError;
 <span class="kw">use </span>jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
@@ -1594,12 +1589,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph {
-        <span class="self">self</span>.consensus
-            .as_any()
-            .downcast_ref::&lt;ConsensusGraph&gt;()
-            .expect(<span class="string">"downcast should succeed"</span>)
-    }
+    <span class="kw">pub fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph { <span class="kw-2">&amp;</span><span class="self">self</span>.consensus }
 
     <span class="kw">pub fn </span>tx_pool(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>SharedTransactionPool { <span class="kw-2">&amp;</span><span class="self">self</span>.tx_pool }
 
@@ -2368,7 +2358,7 @@
     ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;Transaction&gt;&gt; {
         <span class="kw">let </span>tx_index = <span class="kw">match </span><span class="self">self
             </span>.consensus
-            .get_data_manager()
+            .data_manager()
             .transaction_index_by_hash(<span class="kw-2">&amp;</span>hash, <span class="bool-val">false </span><span class="comment">/* update_cache */</span>)
         {
             <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.get_tx_from_txpool(hash)),
@@ -2422,7 +2412,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>, tx_hash: H256,
     ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;Receipt&gt;&gt; {
         <span class="kw">let </span>tx_index =
-            <span class="kw">match </span><span class="self">self</span>.consensus.get_data_manager().transaction_index_by_hash(
+            <span class="kw">match </span><span class="self">self</span>.consensus.data_manager().transaction_index_by_hash(
                 <span class="kw-2">&amp;</span>tx_hash, <span class="bool-val">false</span>, <span class="comment">/* update_cache */
             </span>) {
                 <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),

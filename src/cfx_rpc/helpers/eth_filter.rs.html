@@ -393,11 +393,6 @@
 <a href="#393" id="393">393</a>
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     iter::zip,
@@ -415,7 +410,7 @@
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>cfxcore::{
     channel::Channel, errors::Error <span class="kw">as </span>CfxRpcError, ConsensusGraph,
-    ConsensusGraphTrait, SharedConsensusGraph, SharedTransactionPool,
+    SharedConsensusGraph, SharedTransactionPool,
 };
 <span class="kw">use </span>jsonrpc_core::{Error <span class="kw">as </span>RpcError, ErrorCode, <span class="prelude-ty">Result </span><span class="kw">as </span>RpcResult};
 <span class="kw">use </span>log::{debug, error, info};
@@ -642,12 +637,7 @@
     <span class="doccomment">/// Get a reference to the poll manager.
     </span><span class="kw">fn </span>polls(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Mutex&lt;PollManager&lt;SyncPollFilter&lt;Log&gt;&gt;&gt; { <span class="kw-2">&amp;</span><span class="self">self</span>.polls }
 
-    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph {
-        <span class="self">self</span>.consensus
-            .as_any()
-            .downcast_ref::&lt;ConsensusGraph&gt;()
-            .expect(<span class="string">"downcast should succeed"</span>)
-    }
+    <span class="kw">fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph { <span class="kw-2">&amp;</span><span class="self">self</span>.consensus }
 
     <span class="kw">fn </span>shared_consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SharedConsensusGraph {
         <span class="self">self</span>.consensus.clone()

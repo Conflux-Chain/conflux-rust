@@ -221,12 +221,6 @@
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -237,8 +231,7 @@
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>cfxcore::{
     block_data_manager::DataVersionTuple, errors::Result <span class="kw">as </span>CoreResult,
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
-    SharedConsensusGraph,
+    BlockDataManager, ConsensusGraph, SharedConsensusGraph,
 };
 <span class="kw">use </span>jsonrpc_core::Error <span class="kw">as </span>JsonRpcError;
 <span class="kw">use </span>log::warn;
@@ -262,18 +255,13 @@
 <span class="kw">impl </span>TraceHandler {
     <span class="kw">pub fn </span>new(network: Network, consensus: SharedConsensusGraph) -&gt; <span class="self">Self </span>{
         TraceHandler {
-            data_man: consensus.get_data_manager().clone(),
+            data_man: consensus.data_manager().clone(),
             consensus,
             network,
         }
     }
 
-    <span class="kw">pub fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph {
-        <span class="self">self</span>.consensus
-            .as_any()
-            .downcast_ref::&lt;ConsensusGraph&gt;()
-            .expect(<span class="string">"downcast should succeed"</span>)
-    }
+    <span class="kw">pub fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph { <span class="kw-2">&amp;</span><span class="self">self</span>.consensus }
 
     <span class="kw">pub fn </span>block_traces_impl(
         <span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: H256,
