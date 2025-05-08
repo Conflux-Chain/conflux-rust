@@ -255,8 +255,8 @@
 };
 <span class="kw">use </span>cfx_types::{AddressSpaceUtil, AddressWithSpace, Space, U256};
 <span class="kw">use </span>cfxkey::Address;
+<span class="kw">use </span>eest_types::{AccountInfo, StateTestUnit};
 <span class="kw">use </span>primitives::{transaction::TransactionError, SignedTransaction};
-<span class="kw">use </span>statetest_types::{AccountInfo, TestUnit};
 <span class="kw">use </span>std::collections::HashMap;
 
 <span class="macro">macro_rules!</span> bail {
@@ -401,7 +401,7 @@
 }
 
 <span class="kw">pub fn </span>check_execution_outcome(
-    tx: <span class="kw-2">&amp;</span>SignedTransaction, state: <span class="kw-2">&amp;</span>State, unit: <span class="kw-2">&amp;</span>TestUnit,
+    tx: <span class="kw-2">&amp;</span>SignedTransaction, state: <span class="kw-2">&amp;</span>State, unit: <span class="kw-2">&amp;</span>StateTestUnit,
     expected_state: <span class="kw-2">&amp;</span>HashMap&lt;Address, AccountInfo&gt;, gas_used: U256,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TestErrorKind&gt; {
     <span class="kw">for </span>(<span class="kw-2">&amp;</span>addr, account_info) <span class="kw">in </span>expected_state {

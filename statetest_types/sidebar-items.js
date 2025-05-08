@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["SpecId","SpecName","TransactionType"],"mod":["name"],"struct":["AccountInfo","Authorization","BlobConfig","Config","Env","SignedAuthorization","Test","TestAuthorization","TestSuite","TestUnit","TransactionParts","TxPartIndices","UnknownHardfork"]};

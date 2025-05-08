@@ -206,17 +206,17 @@
 };
 <span class="kw">use </span>cfx_vm_types::Env;
 <span class="kw">use </span>cfxcore::verification::VerificationConfig;
+<span class="kw">use </span>eest_types::{SpecId, SpecName, StateTest, StateTestUnit};
 <span class="kw">use </span>primitives::SignedTransaction;
-<span class="kw">use </span>statetest_types::{SpecId, SpecName, Test, TestUnit};
 
 <span class="kw">pub struct </span>UnitTester {
     path: String,
     name: String,
-    unit: TestUnit,
+    unit: StateTestUnit,
 }
 
 <span class="kw">impl </span>UnitTester {
-    <span class="kw">pub fn </span>new(path: <span class="kw-2">&amp;</span>String, name: String, unit: TestUnit) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(path: <span class="kw-2">&amp;</span>String, name: String, unit: StateTestUnit) -&gt; <span class="self">Self </span>{
         UnitTester {
             path: path.clone(),
             name,
@@ -269,7 +269,7 @@
     }
 
     <span class="kw">fn </span>execute_single_test(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, test: <span class="kw-2">&amp;</span>Test, machine: <span class="kw-2">&amp;</span>Machine,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, test: <span class="kw-2">&amp;</span>StateTest, machine: <span class="kw-2">&amp;</span>Machine,
         verification: <span class="kw-2">&amp;</span>VerificationConfig,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TestError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>state = pre_transact::make_state(<span class="kw-2">&amp;</span><span class="self">self</span>.unit.pre);

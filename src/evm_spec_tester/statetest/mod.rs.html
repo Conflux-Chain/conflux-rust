@@ -184,8 +184,8 @@
 
 <span class="kw">use </span>cfx_executor::machine::{Machine, VmFactory};
 <span class="kw">use </span>cfxcore::verification::VerificationConfig;
+<span class="kw">use </span>eest_types::StateTestSuite;
 <span class="kw">use </span>itertools::Itertools;
-<span class="kw">use </span>statetest_types::TestSuite;
 <span class="kw">use </span>std::{path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>command::StateTestCmd;
@@ -308,13 +308,13 @@
 
 <span class="kw">struct </span>SuiteTester {
     path: String,
-    suite: TestSuite,
+    suite: StateTestSuite,
 }
 
 <span class="kw">impl </span>SuiteTester {
     <span class="kw">pub fn </span>load(path: <span class="kw-2">&amp;</span>PathBuf) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, String&gt; {
         <span class="kw">let </span>s = std::fs::read_to_string(<span class="kw-2">&amp;</span>path).map_err(|e| e.to_string())<span class="question-mark">?</span>;
-        <span class="kw">let </span>suite: TestSuite =
+        <span class="kw">let </span>suite: StateTestSuite =
             serde_json::from_str(<span class="kw-2">&amp;</span>s).map_err(|e| e.to_string())<span class="question-mark">?</span>;
 
         <span class="kw">let </span>path = path.to_string_lossy().into_owned();

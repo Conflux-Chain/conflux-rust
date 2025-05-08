@@ -69,6 +69,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["diem_time_service",["",[],["lib.rs","real.rs"]]],\
 ["diem_types",["",[["account_config",[["constants",[],["account.rs","addresses.rs","coins.rs","diem.rs","event.rs","mod.rs"]],["resources",[],["account.rs","balance.rs","chain_id.rs","currency_info.rs","designated_dealer.rs","dual_attestation.rs","freezing_bit.rs","key_rotation_capability.rs","mod.rs","preburn_balance.rs","preburn_queue.rs","preburn_with_metadata.rs","role.rs","role_id.rs","vasp.rs","withdraw_capability.rs"]]],["mod.rs"]],["network_address",[],["encrypted.rs","mod.rs"]],["on_chain_config",[],["diem_version.rs","mod.rs","registered_currencies.rs","validator_set.rs","vm_config.rs","vm_publishing_option.rs"]],["proof",[["accumulator",[],["mod.rs"]],["position",[],["mod.rs"]]],["definition.rs","mod.rs"]],["serde_helper",[],["mod.rs","vec_bytes.rs"]],["term_state",[],["lock_status.rs","pos_state_config.rs"]],["transaction",[],["authenticator.rs","change_set.rs","helpers.rs","metadata.rs","mod.rs","module.rs","script.rs","transaction_argument.rs"]]],["access_path.rs","account_address.rs","account_state.rs","account_state_blob.rs","block_info.rs","block_metadata.rs","chain_id.rs","committed_block.rs","contract_event.rs","diem_timestamp.rs","epoch_change.rs","epoch_state.rs","event.rs","ledger_info.rs","lib.rs","mempool_status.rs","move_resource.rs","reward_distribution_event.rs","term_state.rs","trusted_state.rs","validator_config.rs","validator_info.rs","validator_signer.rs","validator_verifier.rs","vm_status.rs","waypoint.rs","write_set.rs"]]],\
 ["diem_vault_client",["",[],["dev.rs","lib.rs"]]],\
+["eest_types",["",[["blockchain",[],["block.rs","mod.rs","transaction.rs"]],["state",[],["env.rs","mod.rs","transaction.rs"]],["utils",[],["deserializer.rs","mod.rs"]]],["account_info.rs","authorization.rs","config.rs","lib.rs","spec_id.rs","spec_name.rs","test_authorization.rs","transaction_type.rs"]]],\
 ["evm_spec_tester",["",[["statetest",[["unit_tester",[],["mod.rs","post_transact.rs","pre_transact.rs"]]],["command.rs","error.rs","mod.rs","utils.rs"]]],["main.rs"]]],\
 ["executor",["",[],["db_bootstrapper.rs","lib.rs","logging.rs","metrics.rs","vm.rs"]]],\
 ["executor_types",["",[],["error.rs","lib.rs","processed_vm_output.rs"]]],\
@@ -105,7 +106,6 @@ var srcIndex = new Map(JSON.parse('[\
 ["short_hex_str",["",[],["lib.rs"]]],\
 ["solidity_abi",["",[],["array.rs","basic.rs","bytes.rs","lib.rs","string.rs","utils.rs"]]],\
 ["solidity_abi_derive",["",[],["lib.rs"]]],\
-["statetest_types",["",[],["account_info.rs","auth_list.rs","config.rs","deserializer.rs","env.rs","lib.rs","spec.rs","spec_id.rs","test.rs","test_authorization.rs","test_suit.rs","test_unit.rs","transaction.rs","transaction_type.rs"]]],\
 ["storage_interface",["",[],["lib.rs","mock.rs","state_view.rs"]]],\
 ["subscription_service",["",[],["lib.rs"]]],\
 ["throttling",["",[],["lib.rs","time_window_bucket.rs","token_bucket.rs"]]],\

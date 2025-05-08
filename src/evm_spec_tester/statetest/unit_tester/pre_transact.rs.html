@@ -326,6 +326,10 @@
 <span class="kw">use </span>cfx_vm_types::Env;
 <span class="kw">use </span>cfxcore::verification::{VerificationConfig, VerifyTxMode};
 <span class="kw">use </span>cfxkey::{Address, Secret};
+<span class="kw">use </span>eest_types::{
+    AccountInfo, Env <span class="kw">as </span>StateTestEnv, SignedAuthorization, TransactionParts,
+    TransactionType, TxPartIndices,
+};
 <span class="kw">use </span>primitives::{
     transaction::{
         Action, AuthorizationListItem, Eip1559Transaction, Eip155Transaction,
@@ -333,10 +337,6 @@
         TransactionError,
     },
     SignedTransaction, Transaction,
-};
-<span class="kw">use </span>statetest_types::{
-    AccountInfo, Env <span class="kw">as </span>StateTestEnv, SignedAuthorization, TransactionParts,
-    TransactionType, TxPartIndices,
 };
 <span class="kw">use </span>std::{
     collections::{BTreeMap, HashMap},
