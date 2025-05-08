@@ -792,6 +792,9 @@ impl VerificationConfig {
             bail!(TransactionError::CreateInitCodeSizeLimit)
         }
 
+        Self::check_eip1559_validation(tx, cip645)?;
+        Self::check_eip7702_validation(tx)?;
+
         Self::check_gas_limit(tx, cip76, eip7623, &mode)?;
         Self::check_gas_limit_with_calldata(tx, cip130)?;
 
@@ -841,6 +844,30 @@ impl VerificationConfig {
             VerifyTxMode::Local(MaybeLater, _spec) => true,
             VerifyTxMode::Remote(_) => cip7702,
         }
+    }
+
+    fn check_eip7702_validation(
+        tx: &TransactionWithSignature,
+    ) -> Result<(), TransactionError> {
+        if let Some(author_list) = tx.authorization_list() {
+            if author_list.is_empty() {
+                return Err(TransactionError::EmptyAuthorizationList);
+            }
+        }
+        Ok(())
+    }
+
+    fn check_eip1559_validation(
+        tx: &TransactionWithSignature, cip645: bool,
+    ) -> Result<(), TransactionError> {
+        if !cip645 || !tx.after_1559() {
+            return Ok(());
+        }
+
+        if tx.max_priority_gas_price() > tx.gas_price() {
+            return Err(TransactionError::PriortyGreaterThanMaxFee);
+        }
+        Ok(())
     }
 
     fn check_eip3860(tx: &TransactionWithSignature, cip645: bool) -> bool {

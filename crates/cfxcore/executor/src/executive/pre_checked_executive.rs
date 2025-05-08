@@ -46,7 +46,11 @@ pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
     pub(super) fn execute_transaction(mut self) -> DbResult<ExecutionOutcome> {
-        self.inc_sender_nonce()?;
+        let nonce_overflow = self.inc_sender_nonce()?;
+        if nonce_overflow {
+            let sender = self.tx.sender;
+            return self.finalize_on_nonce_overflow(sender);
+        }
 
         let (actual_gas_cost, insufficient_sender_balance) =
             self.charge_gas()?;
@@ -68,6 +72,11 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
         let params = self.make_action_params()?;
         self.context.state.touch_tx_addresses(&params)?;
+
+        if self.context.spec.align_evm {
+            let coinbase = self.context.env.author.with_evm_space();
+            self.context.state.touch(&coinbase)?;
+        }
 
         if self.check_conflict_create_address(&params)? {
             return self.finalize_on_conflict_address(params.address);
@@ -92,11 +101,11 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 }
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
-    fn inc_sender_nonce(&mut self) -> DbResult<()> {
+    fn inc_sender_nonce(&mut self) -> DbResult<bool> {
         self.context.state.inc_nonce(&self.tx.sender())
     }
 
-    fn charge_gas<'t>(&mut self) -> DbResult<(U256, bool)> {
+    fn charge_gas(&mut self) -> DbResult<(U256, bool)> {
         let sender = self.tx.sender();
         let spec = self.context.spec;
         let substate = &mut self.substate;
@@ -514,8 +523,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         // gas_used is only used to estimate gas needed
         let mut gas_used = tx.gas() - gas_left;
 
-        // CIP-645g: EIP-3529
-        if spec.cip645 {
+        if spec.cip645.eip_sstore_and_refund_gas {
             let substate_refund = if self.substate.refund_gas > 0 {
                 self.substate.refund_gas as u128
             } else {
@@ -533,7 +541,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
         }
 
         if gas_used < cost.floor_gas.into() {
-            gas_used = cost.floor_gas.into()
+            gas_used = cost.floor_gas.into();
         }
 
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
@@ -600,6 +608,20 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 }
 
 impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
+    fn finalize_on_nonce_overflow(
+        self, address: Address,
+    ) -> DbResult<ExecutionOutcome> {
+        return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+            ExecutionError::NonceOverflow(address),
+            Executed::execution_error_fully_charged(
+                self.tx,
+                self.cost,
+                make_ext_result(self.observer),
+                &self.context.spec,
+            ),
+        ));
+    }
+
     fn finalize_on_insufficient_balance(
         self, actual_gas_cost: U256,
     ) -> DbResult<ExecutionOutcome> {

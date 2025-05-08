@@ -103,10 +103,11 @@ impl ConstPricer {
 }
 
 /// A special pricing model for modular exponentiation.
+#[derive(Debug)]
 pub(crate) enum ModexpPricer {
     Byzantium { divisor: usize },
     // CIP-645e: EIP-2565
-    Berlin,
+    Berlin { base: usize },
 }
 
 impl ModexpPricer {
@@ -114,7 +115,9 @@ impl ModexpPricer {
         ModexpPricer::Byzantium { divisor }
     }
 
-    pub(crate) fn new_berlin() -> ModexpPricer { ModexpPricer::Berlin }
+    pub(crate) fn new_berlin(base: usize) -> ModexpPricer {
+        ModexpPricer::Berlin { base }
+    }
 }
 
 impl Pricer for Linear {
@@ -165,7 +168,15 @@ impl Pricer for ModexpPricer {
         let exp_len = read_len();
         let mod_len = read_len();
 
+        if mod_len.is_zero() && base_len.is_zero() {
+            return match self {
+                Self::Byzantium { .. } => 0.into(),
+                Self::Berlin { base } => (*base).into(),
+            };
+        }
+
         let max_len = U256::from(u32::max_value() / 2);
+
         if base_len > max_len || mod_len > max_len || exp_len > max_len {
             return U256::max_value();
         }
@@ -191,8 +202,8 @@ impl Pricer for ModexpPricer {
             ModexpPricer::Byzantium { divisor } => Self::byzantium_gas_calc(
                 base_len, mod_len, iter_count, *divisor,
             ),
-            ModexpPricer::Berlin => {
-                Self::berlin_gas_calc(base_len, mod_len, iter_count)
+            ModexpPricer::Berlin { base } => {
+                Self::berlin_gas_calc(base_len, mod_len, iter_count, *base)
             }
         }
     }
@@ -203,9 +214,6 @@ impl ModexpPricer {
         base_len: u64, mod_len: u64, iter_count: u64, divisor: usize,
     ) -> U256 {
         let m = max(mod_len, base_len);
-        if m == 0 {
-            return U256::zero();
-        }
         let (gas, overflow) =
             Self::mult_complexity(m).overflowing_mul(iter_count);
         if overflow {
@@ -236,7 +244,7 @@ impl ModexpPricer {
     }
 
     pub fn berlin_gas_calc(
-        base_len: u64, mod_len: u64, iter_count: u64,
+        base_len: u64, mod_len: u64, iter_count: u64, base_gas: usize,
     ) -> U256 {
         fn calculate_multiplication_complexity(
             base_len: u64, mod_len: u64,
@@ -259,7 +267,7 @@ impl ModexpPricer {
         } else {
             gas.as_u64()
         };
-        max(200, gas_u64).into()
+        max(base_gas as u64, gas_u64).into()
     }
 }
 
@@ -432,9 +440,17 @@ impl Impl for EcRecover {
         let r = H256::from_slice(&input[64..96]);
         let s = H256::from_slice(&input[96..128]);
 
+        if &v.0[..31] != &[0; 31] {
+            return Ok(());
+        }
+
         let bit = match v[31] {
-            0 | 1 if &v.0[..31] == &[0; 31] => v[31],
-            27 | 28 if &v.0[..31] == &[0; 31] => v[31] - 27,
+            0 | 1
+                if self.0 == Space::Native || !cfg!(feature = "align_evm") =>
+            {
+                v[31]
+            }
+            27 | 28 => v[31] - 27,
             _ => {
                 return Ok(());
             }

@@ -18,7 +18,7 @@ use cfx_parameters::{
     },
 };
 use cfx_types::{AllChainID, Space, SpaceMap, U256, U512};
-use cfx_vm_types::{ConsensusGasSpec, Spec};
+use cfx_vm_types::{CIP645Spec, ConsensusGasSpec, Spec};
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
 
@@ -220,13 +220,13 @@ impl CommonParams {
         spec.cip152 = height >= self.transition_heights.cip152;
         spec.cip154 = height >= self.transition_heights.cip154;
         spec.cip7702 = height >= self.transition_heights.cip7702;
-        spec.cip645 = height >= self.transition_heights.cip645;
+        let cip645 = height >= self.transition_heights.cip645;
+        spec.cip645 = CIP645Spec::new(cip645);
         spec.eip2935 = height >= self.transition_heights.eip2935;
         spec.eip7623 = height >= self.transition_heights.eip7623;
         spec.cip_c2_fix = number >= self.transition_heights.cip_c2_fix;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
-        spec.align_evm =
-            height >= self.transition_heights.align_evm && spec.cip645;
+        spec.align_evm = height >= self.transition_heights.align_evm && cip645;
 
         spec.overwrite_gas_plan_by_cip();
 
@@ -236,9 +236,10 @@ impl CommonParams {
     pub fn consensus_spec(&self, height: BlockHeight) -> ConsensusGasSpec {
         let mut spec = ConsensusGasSpec::genesis_spec();
         spec.cip1559 = height >= self.transition_heights.cip1559;
-        spec.cip645 = height >= self.transition_heights.cip645;
-        spec.align_evm =
-            height >= self.transition_heights.align_evm && spec.cip645;
+        let cip645 = height >= self.transition_heights.cip645;
+        spec.cip645 = CIP645Spec::new(cip645);
+
+        spec.align_evm = height >= self.transition_heights.align_evm && cip645;
 
         spec.overwrite_gas_plan_by_cip();
 

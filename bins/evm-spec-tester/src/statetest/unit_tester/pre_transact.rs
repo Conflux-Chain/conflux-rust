@@ -9,12 +9,11 @@ use cfx_rpc_eth_types::{
 };
 use cfx_statedb::StateDb;
 use cfx_types::{
-    u256_to_h256_be, AllChainID, Space, SpaceMap, H256, U256, U64,
+    h256_to_u256_be, u256_to_h256_be, AllChainID, Space, SpaceMap, H256, U256,
+    U64,
 };
 use cfx_vm_types::Env;
-use cfxcore::verification::{
-    VerificationConfig, VerifyTxLocalMode, VerifyTxMode,
-};
+use cfxcore::verification::{VerificationConfig, VerifyTxMode};
 use cfxkey::{Address, Secret};
 use eest_types::{
     AccountInfo, Env as StateTestEnv, SignedAuthorization, TransactionParts,
@@ -60,7 +59,7 @@ pub fn make_tx(
         .get(tx_part_indices.data)
         .map(|item| item.clone())
         .unwrap_or(Some(vec![]))
-        .unwrap();
+        .unwrap_or_default();
 
     let tx = match tx_meta.tx_type(tx_part_indices.data) {
         Some(TransactionType::Legacy) => {
@@ -207,12 +206,15 @@ pub fn make_block_env(
         .map(|v| SpaceMap::new(v, v))
         .unwrap_or_default();
 
+    let blob_gas = env.current_excess_blob_gas.unwrap_or_default().as_u64();
+
     Env {
         chain_id,
         number: env.current_number.as_u64(),
         author: env.current_coinbase,
         timestamp: env.current_timestamp.as_u64(),
-        difficulty: env.current_difficulty,
+        // After ETH2.0, the DIFFICULTY opcode is changed to PREVRANDAO
+        difficulty: h256_to_u256_be(env.current_random.unwrap_or_default()),
         gas_limit: env.current_gas_limit,
         last_hash: env.previous_hash.unwrap_or_default(),
         accumulated_gas_used: U256::zero(),
@@ -224,8 +226,39 @@ pub fn make_block_env(
         transaction_epoch_bound: 100000,           /* set to default
                                                     * epoch bound */
         // pos_view, finalized_epoch is not set
+        blob_gas_fee: calc_blob_gasprice(blob_gas),
         ..Default::default()
     }
+}
+
+fn calc_blob_gasprice(excess_blob_gas: u64) -> U256 {
+    fn fake_exponential(factor: u64, numerator: u64, denominator: u64) -> u128 {
+        assert_ne!(denominator, 0, "attempt to divide by zero");
+        let factor = factor as u128;
+        let numerator = numerator as u128;
+        let denominator = denominator as u128;
+
+        let mut i = 1;
+        let mut output = 0;
+        let mut numerator_accum = factor * denominator;
+        while numerator_accum > 0 {
+            output += numerator_accum;
+
+            // Denominator is asserted as not zero at the start of the function.
+            numerator_accum = (numerator_accum * numerator) / (denominator * i);
+            i += 1;
+        }
+        output / denominator
+    }
+
+    const BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE: u64 = 5007716;
+    const MIN_BLOB_GASPRICE: u64 = 1;
+    fake_exponential(
+        MIN_BLOB_GASPRICE,
+        excess_blob_gas,
+        BLOB_BASE_FEE_UPDATE_FRACTION_PRAGUE,
+    )
+    .into()
 }
 
 pub fn check_tx_bytes(
@@ -258,8 +291,10 @@ pub fn check_tx_common(
     machine: &Machine, env: &Env, transaction: &SignedTransaction,
     verification: &VerificationConfig,
 ) -> Result<(), TransactionError> {
-    let spec = machine.spec(env.number, env.epoch_height);
-    let verify_mode = VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec);
+    let spec = machine
+        .spec(env.number, env.epoch_height)
+        .to_consensus_spec();
+    let verify_mode = VerifyTxMode::Remote(&spec);
 
     let chain_id = AllChainID::new(
         env.chain_id[&Space::Native],

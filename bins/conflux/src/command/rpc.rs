@@ -4,15 +4,14 @@
 
 use crate::command::helpers::{input_password, password_prompt};
 use clap::ArgMatches;
-use jsonrpc_core::{Params, Value};
-use jsonrpc_core_client::{transports::http::connect, RawClient};
-use serde_json::Map;
+use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
+use serde_json::{Map, Value};
 use std::str::FromStr;
 
 pub struct RpcCommand {
     pub url: String,
     pub method: String,
-    pub args: Params,
+    pub args: Vec<Value>,
 }
 
 impl RpcCommand {
@@ -27,37 +26,33 @@ impl RpcCommand {
             .ok_or_else(|| String::from("RPC URL not specified"))?;
 
         let args = match matches.values_of("rpc-args") {
-            Some(args) => args,
-            None => {
-                return Ok(Some(RpcCommand {
-                    url: url.into(),
-                    method: method.into(),
-                    args: Params::None,
-                }));
-            }
-        };
+            Some(args) => {
+                let mut params = Vec::new();
 
-        let mut params = Vec::new();
-        for arg in args {
-            match ArgSchema::parse(arg).value(matches)? {
-                Some(val) => params.push(val),
-                None => break,
+                for arg in args {
+                    match ArgSchema::parse(arg).value(matches)? {
+                        Some(val) => params.push(val),
+                        None => break,
+                    }
+                }
+                params
             }
-        }
+            None => Vec::new(),
+        };
 
         Ok(Some(RpcCommand {
             url: url.into(),
             method: method.into(),
-            args: Params::Array(params),
+            args,
         }))
     }
 
     pub async fn execute(self) -> Result<String, String> {
-        let client = connect::<RawClient>(self.url.as_str())
-            .await
+        let client = HttpClientBuilder::default()
+            .build(&self.url)
             .map_err(|e| e.to_string())?;
-        let result = client
-            .call_method(self.method.as_str(), self.args)
+        let result: Value = client
+            .request(&self.method, self.args)
             .await
             .map_err(|e| e.to_string())?;
         Ok(format!("{:#}", result))
@@ -139,5 +134,86 @@ impl<'a> ArgSchema<'a> {
 
     fn password2(&self) -> Result<Value, String> {
         password_prompt().map(|pwd| Value::String(pwd.as_str().to_string()))
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+    use mockito::{Matcher, Server};
+    use serde_json::json;
+    use tokio;
+
+    async fn run_rpc_test(
+        method: &str, args: Vec<Value>, expected_result_value: Value,
+    ) {
+        let mut server = Server::new_async().await;
+        let url = server.url();
+
+        let expected_request_body = json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": args.clone(),
+            "id": 0
+        });
+
+        let mock_response_body = json!({
+          "jsonrpc": "2.0",
+          "id": 0,
+          "result": expected_result_value.clone()
+        });
+
+        let mock = server
+            .mock("POST", "/")
+            .match_header("content-type", "application/json")
+            .match_body(Matcher::Json(expected_request_body.clone()))
+            .with_status(200)
+            .with_body(mock_response_body.to_string())
+            .create_async()
+            .await;
+
+        let command = RpcCommand {
+            url,
+            method: method.to_string(),
+            args,
+        };
+
+        let result = command.execute().await;
+
+        mock.assert_async().await;
+        assert!(result.is_ok());
+        let result_str = result.unwrap();
+        assert_eq!(result_str, format!("{:#}", expected_result_value));
+    }
+
+    #[tokio::test]
+    async fn test_rpc_execute_without_args() {
+        let method = "cfx_getStatus";
+        let args: Vec<Value> = vec![];
+        let expected_result = json!({
+            "bestHash": "0x64c936773e434069ede6bec161419b37ab6110409095a1d91d2bb91c344b523f",
+            "chainId": "0x1",
+            "ethereumSpaceChainId": "0x47",
+            "networkId": "0x1",
+            "epochNumber": "0xcdee1fd",
+            "blockNumber": "0x10be2f9b",
+            "pendingTxNumber": "0x8cf",
+            "latestCheckpoint": "0xcdd7500",
+            "latestConfirmed": "0xcdee1c3",
+            "latestState": "0xcdee1f9",
+            "latestFinalized": "0xcdee0ac"
+        });
+
+        run_rpc_test(method, args, expected_result).await;
+    }
+
+    #[tokio::test]
+    async fn test_rpc_execute_cfx_epoch_number_with_param() {
+        let method = "cfx_epochNumber";
+        let args: Vec<Value> = vec![json!("0x4350b21")];
+        let expected_result = json!("0x4350b21");
+
+        run_rpc_test(method, args, expected_result).await;
     }
 }

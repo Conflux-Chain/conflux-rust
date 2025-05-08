@@ -160,8 +160,8 @@ fn new_builtin_map(
 
     // CIP-645e: EIP-2565
     let mod_exp_pricer = IfPricer::new(
-        |spec| spec.cip645,
-        ModexpPricer::new_berlin(),
+        |spec| spec.cip645.eip2565,
+        ModexpPricer::new_berlin(200),
         ModexpPricer::new_byzantium(20),
     );
     btree.insert(
@@ -175,7 +175,7 @@ fn new_builtin_map(
 
     // CIP-645a: EIP-1108
     let bn_add_pricer = IfPricer::new(
-        |spec| spec.cip645,
+        |spec| spec.cip645.eip1108,
         Linear::new(150, 0),
         Linear::new(500, 0),
     );
@@ -190,7 +190,7 @@ fn new_builtin_map(
 
     // CIP-645a: EIP-1108
     let bn_mul_pricer = IfPricer::new(
-        |spec| spec.cip645,
+        |spec| spec.cip645.eip1108,
         Linear::new(6_000, 0),
         Linear::new(40_000, 0),
     );
@@ -205,7 +205,7 @@ fn new_builtin_map(
 
     // CIP-645a: EIP-1108
     let bn_pair_pricer = IfPricer::new(
-        |spec| spec.cip645,
+        |spec| spec.cip645.eip1108,
         AltBn128PairingPricer::new(45_000, 34_000),
         AltBn128PairingPricer::new(100_000, 80_000),
     );

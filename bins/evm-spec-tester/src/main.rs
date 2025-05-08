@@ -20,6 +20,7 @@ fn init_logger(verbosity: u8) {
     };
 
     env_logger::Builder::new()
+        .target(env_logger::Target::Stdout)
         .filter(None, LevelFilter::Off)
         .filter_module("evm_spec_tester", level)
         .format_timestamp(None) // Optional: add timestamp
@@ -31,5 +32,8 @@ fn init_logger(verbosity: u8) {
 fn main() {
     let cmd = StateTestCmd::from_args();
     init_logger(cmd.verbose);
-    cmd.run()
+    let success = cmd.run();
+    if !success {
+        std::process::exit(1);
+    }
 }

@@ -334,7 +334,7 @@ mod test {
         read_vault_file, VaultDiskDirectory, VaultKey, VAULT_FILE_NAME,
     };
     use std::{fs, io::Write, path::PathBuf};
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     #[test]
     fn check_vault_name_succeeds() {
@@ -381,7 +381,7 @@ mod test {
     #[test]
     fn create_vault_file_succeeds() {
         // given
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let key = VaultKey::new(&"password".into(), 1024);
         let mut vault_dir: PathBuf = temp_path.path().into();
         vault_dir.push("vault");
@@ -400,7 +400,7 @@ mod test {
     #[test]
     fn read_vault_file_succeeds() {
         // given
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let key = VaultKey::new(&"password".into(), 1024);
         let vault_file_contents = r#"{"crypto":{"cipher":"aes-128-ctr","cipherparams":{"iv":"758696c8dc6378ab9b25bb42790da2f5"},"ciphertext":"54eb50683717d41caaeb12ea969f2c159daada5907383f26f327606a37dc7168","kdf":"pbkdf2","kdfparams":{"c":1024,"dklen":32,"prf":"hmac-sha256","salt":"3c320fa566a1a7963ac8df68a19548d27c8f40bf92ef87c84594dcd5bbc402b6"},"mac":"9e5c2314c2a0781962db85611417c614bd6756666b6b1e93840f5b6ed895f003"}}"#;
         let dir: PathBuf = temp_path.path().into();
@@ -423,7 +423,7 @@ mod test {
     #[test]
     fn read_vault_file_fails() {
         // given
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let key = VaultKey::new(&"password1".into(), 1024);
         let dir: PathBuf = temp_path.path().into();
         let mut vault_file_path: PathBuf = dir.clone();
@@ -454,7 +454,7 @@ mod test {
     #[test]
     fn vault_directory_can_be_created() {
         // given
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let key = VaultKey::new(&"password".into(), 1024);
         let dir: PathBuf = temp_path.path().into();
 
@@ -474,7 +474,7 @@ mod test {
     #[test]
     fn vault_directory_cannot_be_created_if_already_exists() {
         // given
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let key = VaultKey::new(&"password".into(), 1024);
         let dir: PathBuf = temp_path.path().into();
         let mut vault_dir = dir.clone();
@@ -491,7 +491,7 @@ mod test {
     #[test]
     fn vault_directory_cannot_be_opened_if_not_exists() {
         // given
-        let temp_path = TempDir::new("").unwrap();
+        let temp_path = tempdir().unwrap();
         let key = VaultKey::new(&"password".into(), 1024);
         let dir: PathBuf = temp_path.path().into();
 

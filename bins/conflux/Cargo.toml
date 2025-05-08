@@ -6,6 +6,7 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 documentation.workspace = true
+license-file.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["yaml"] }
@@ -16,7 +17,7 @@ cfxstore = { workspace = true }
 rpassword = { workspace = true }
 #io = { workspace = true }
 jsonrpc-core = { workspace = true }
-jsonrpc-core-client = { workspace = true, features = ["http"] }
+jsonrpsee = { workspace = true, features = ["http-client"] }
 log = { workspace = true }
 cfxcore = { workspace = true }
 network = { workspace = true }
@@ -38,7 +39,7 @@ pos-ledger-db = { workspace = true }
 executor = { workspace = true }                                           # used by pos-genesis-tool
 storage-interface = { workspace = true }
 bcs = { workspace = true }
-tempdir = { workspace = true }
+tempfile = { workspace = true }
 parity-version = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 bls-signatures = { workspace = true }
@@ -56,18 +57,6 @@ hex = { workspace = true}
 version = "0.3.2"
 optional = true
 
-[[bin]]
-name = "consensus_bench"
-path = "../../crates/cfxcore/core/benchmark/consensus/src/main.rs"
-
-[[bin]]
-name = "cfx-gen-dot"
-path = "../cfx-gen-dot/main.rs"
-
-[[bin]]
-name = "pos-genesis-tool"
-path = "../pos-genesis-tool/main.rs"
-
 [features]
 default = ["jemalloc-global", "testonly_code"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
@@ -78,3 +67,7 @@ u64-mpt-db-key = ["client/u64_mpt_db_key"]
 # (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification)
 blst-portable = ["bls-signatures/blst-portable"]
 testonly_code = ["cfx-statedb/testonly_code"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+mockito = "1.5.0"

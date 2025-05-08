@@ -45,11 +45,6 @@ pub fn keccak(input_stream: TokenStream) -> TokenStream {
         }
     };
 
-    let dummy_const = syn::Ident::new(
-        &format!("_IMPL_ABI_VARIABLE_DUMMY_{}", ident),
-        Span::call_site(),
-    );
-
     let env = quote! {
         use #abi_crate::{ABIDecodeError, ABIListWriter, ABIVariable, LinkedBytes, read_abi_list};
         #(type #dummy_types = #types;)*
@@ -91,10 +86,8 @@ pub fn keccak(input_stream: TokenStream) -> TokenStream {
     };
 
     let answer = quote! {
-        #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
-        const #dummy_const: () = {
+        const _: () = {
             #env
-
             #impl_abi
         };
     };

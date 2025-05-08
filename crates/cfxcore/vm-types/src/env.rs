@@ -65,6 +65,9 @@ pub struct Env {
     pub burnt_gas_price: SpaceMap<U256>,
     /// Transaction hash for the executing transaction, required by CIP-152
     pub transaction_hash: H256,
+    #[cfg(feature = "align_evm")]
+    /// Blob gas fee, required by EIP-4844 (for test only)
+    pub blob_gas_fee: U256,
 }
 
 #[cfg(test)]

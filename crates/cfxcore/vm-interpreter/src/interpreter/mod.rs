@@ -592,7 +592,8 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             }
         };
 
-        let info = instruction.info::<CANCUN>();
+        let info =
+            instruction.info::<CANCUN>(context.spec().cip645.opcode_update);
         self.last_stack_ret_len = info.ret;
         if let Err(e) = self.verify_instruction(context, instruction, info) {
             return Err(InterpreterResult::Done(Err(e)));
@@ -741,7 +742,7 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                 let init_off = self.stack.pop_back();
                 let init_size = self.stack.pop_back();
                 let spec = context.spec();
-                if spec.cip645
+                if spec.cip645.eip3860
                     && init_size > U256::from(spec.init_code_data_limit)
                 {
                     return Err(vm::Error::CreateInitCodeSizeLimit);
@@ -801,9 +802,13 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                                 .expect("Gas left cannot be greater."),
                         ))
                     }
-                    Ok(ContractCreateResult::Failed(_)) => {
+                    Ok(ContractCreateResult::Failed(e)) => {
                         self.stack.push(U256::zero());
-                        Ok(InstructionResult::Ok)
+                        if matches!(e, vm::Error::NonceOverflow(_)) {
+                            Ok(InstructionResult::UnusedGas(create_gas))
+                        } else {
+                            Ok(InstructionResult::Ok)
+                        }
                     }
                     Err(trap) => Ok(InstructionResult::Trap(trap)),
                 };
@@ -1211,6 +1216,16 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             instructions::BASEFEE => {
                 self.stack
                     .push(context.env().base_gas_price[context.space()]);
+            }
+            instructions::BLOBHASH => {
+                self.stack.pop_back();
+                self.stack.push(U256::zero());
+            }
+            Instruction::BLOBBASEFEE => {
+                #[cfg(feature = "align_evm")]
+                self.stack.push(context.env().blob_gas_fee);
+                #[cfg(not(feature = "align_evm"))]
+                self.stack.push(U256::zero());
             }
             instructions::BLOCKHASH => {
                 let block_number = self.stack.pop_back();

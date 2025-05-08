@@ -14,7 +14,7 @@ license-file.workspace = true
 
 [dependencies]
 cfxcore = { workspace = true }
-cfx-executor = { workspace = true, features = ["testonly_code"] }
+cfx-executor = { workspace = true, features = ["testonly_code", "align_evm"] }
 cfx-rpc-eth-types = { workspace = true }
 cfx-statedb = { workspace = true, features = ["testonly_code"] }
 cfx-types = { workspace = true }

@@ -61,7 +61,7 @@ impl DebugApi {
                 .consensus_graph()
                 .get_block_epoch_number_with_pivot_check(
                     &hash,
-                    require_canonical,
+                    require_canonical.unwrap_or_default(),
                 )
                 .map_err(|err| err.to_string())?,
             _ => return Err("not supported".to_string()),

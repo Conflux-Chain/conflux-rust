@@ -1,6 +1,7 @@
 use cfx_bytes::Bytes;
 use cfx_executor::executive::ExecutionOutcome;
 use cfx_types::{H256, U256};
+use cfxkey::Address;
 use primitives::transaction::TransactionError;
 use thiserror::Error;
 
@@ -17,6 +18,8 @@ pub struct TestError {
 pub enum TestErrorKind {
     #[error("state mismatch: {0}")]
     StateMismatch(#[from] StateMismatch),
+    #[error("consensus check fail: {0}")]
+    ConsensusCheckFail(#[from] TransactionError),
     #[error("unknown private key: {0:?}")]
     UnknownPrivateKey(H256),
     #[error("execution error: {outcome:?}")]
@@ -26,10 +29,17 @@ pub enum TestErrorKind {
     #[error("should fail but success: {fail_reason}")]
     ShouldFail { fail_reason: String },
     #[error(
-        "inconsistent fail_reason: expect: {fail_reason}, actual: {outcome:?}"
+        "inconsistent fail_reason (execution): expect: {fail_reason}, actual: {outcome:?}"
     )]
     InconsistentError {
         outcome: ExecutionOutcome,
+        fail_reason: String,
+    },
+    #[error(
+        "inconsistent fail_reason (consensus): expect: {fail_reason}, actual: {error:?}"
+    )]
+    InconsistentErrorConsensus {
+        error: TransactionError,
         fail_reason: String,
     },
     #[error(
@@ -58,12 +68,24 @@ pub enum StateMismatch {
     LogsRootMismatch { got: H256, expected: H256 },
     #[error("state root mismatch: got {got}, expected {expected}")]
     StateRootMismatch { got: H256, expected: H256 },
-    #[error("balance mismatch: got {got}, expected {expected}")]
-    BalanceMismatch { got: U256, expected: U256 },
+    #[error(
+        "balance mismatch: address {address}, got {got}, expected {expected}"
+    )]
+    BalanceMismatch {
+        address: Address,
+        got: U256,
+        expected: U256,
+    },
     #[error("gas mismatch: got {got}, expected {expected}")]
     GasMismatch { got: U256, expected: U256 },
-    #[error("nonce mismatch: got {got}, expected {expected}")]
-    NonceMismatch { got: U256, expected: U256 },
+    #[error(
+        "nonce mismatch: address {address}, got {got}, expected {expected}"
+    )]
+    NonceMismatch {
+        address: Address,
+        got: U256,
+        expected: U256,
+    },
     #[error("code mismatch: got {got}, expected {expected}")]
     CodeMismatch { got: String, expected: String },
     #[error("storage mismatch (key {key}): got {got}, expected {expected}")]

@@ -298,6 +298,9 @@ impl<'a> ContextTrait for Context<'a> {
         };
 
         if conflict_address {
+            if self.spec.cip645.fix_eip684 {
+                self.state.inc_nonce(&caller)?;
+            }
             debug!("Contract address conflict!");
             let err = Error::ConflictAddress(address.clone());
             return Ok(Ok(ContractCreateResult::Failed(err)));
@@ -326,7 +329,11 @@ impl<'a> ContextTrait for Context<'a> {
             if !self.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                self.state.inc_nonce(&caller)?;
+                let nonce_overflow = self.state.inc_nonce(&caller)?;
+                if nonce_overflow {
+                    let err = Error::NonceOverflow(caller.address);
+                    return Ok(Ok(ContractCreateResult::Failed(err)));
+                }
             }
         }
 
@@ -695,6 +702,8 @@ mod tests {
             base_gas_price: Default::default(),
             burnt_gas_price: Default::default(),
             transaction_hash: MOCK_TX_HASH,
+            #[cfg(feature = "align_evm")]
+            blob_gas_fee: 0.into(),
         }
     }
 

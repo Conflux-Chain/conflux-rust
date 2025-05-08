@@ -294,8 +294,11 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000):
-    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000, conflux_binary_path=None):
+    if conflux_binary_path is None:
+        tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
+    else:
+        tg_config_gen = os.path.join(os.path.dirname(conflux_binary_path), "pos-genesis-tool")
     try:
         if pkfile is None:
             check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
@@ -666,7 +669,7 @@ def checktx(node, tx_hash):
     return node.cfx_getTransactionReceipt(tx_hash) is not None
 
 
-def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
+def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30, max_parallel=500, assert_failure=True):
     """
     Establish connections among nodes with each node having 'sample' outgoing peers.
     It first lets all the nodes link as a loop, then randomly pick 'sample-1'
@@ -674,7 +677,6 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
     """
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
-    threads = []
     num_nodes = len(nodes)
     sample = min(num_nodes - 1, sample)
 
@@ -696,15 +698,29 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
                     latencies[p][i] = lat
                     break
 
-    for i in range(num_nodes):
-        t = ConnectThread(nodes, i, peer[i], latencies, log, min_peers=sample)
-        t.start()
-        threads.append(t)
+    for i in range(0, num_nodes, max_parallel):
+        batch = range(i, min(i + max_parallel, num_nodes))
+        threads = []
+        for j in batch:
+            t = ConnectThread(nodes, j, peer[j], latencies, log, min_peers=sample)
+            t.start()
+            threads.append(t)
 
-    for t in threads:
-        t.join(timeout)
-        assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
-        assert not t.failed, "connect_sample_nodes failed."
+        for t in threads:
+            t.join(timeout)
+            if t.is_alive():
+                msg = "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
+                if assert_failure:
+                    assert False, msg
+                else:
+                    log.info(msg)
+                    
+            if t.failed:
+                msg = "connect_sample_nodes failed."
+                if assert_failure:
+                    assert False, msg
+                else:
+                    log.info(msg)
 
 
 def assert_blocks_valid(nodes, blocks):
@@ -920,9 +936,7 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
     if receipt["outcomeStatus"] == "0x1": # tx fails because of not enough cash
         assert "NotEnoughCash" in receipt["txExecErrorMsg"]
         # all gas is charged
-        assert_equal(rpc.get_balance(tx_data["from"], receipt["epochNumber"]), 0)
-        # gas fee less than effective gas price
-        assert gas_fee < effective_gas_price*gas_charged
+        assert gas_fee + rpc.get_balance(tx_data["from"], receipt["epochNumber"]) < max_fee_per_gas*int(tx_data["gas"], 16)
     else:
         assert_equal(gas_fee, effective_gas_price*gas_charged)
         # check burnt fee computation

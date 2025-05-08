@@ -163,11 +163,11 @@ mod tests {
     use super::{Address, AddressBook};
     use crate::account_data::AccountMeta;
     use std::collections::HashMap;
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     #[test]
     fn should_save_and_reload_address_book() {
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
         let mut b = AddressBook::new(tempdir.path());
         b.set_name(Address::from_low_u64_be(1), "One".to_owned());
         b.set_meta(Address::from_low_u64_be(1), "{1:1}".to_owned());
@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn should_remove_address() {
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
         let mut b = AddressBook::new(tempdir.path());
 
         b.set_name(Address::from_low_u64_be(1), "One".to_owned());

@@ -25,6 +25,7 @@ pub struct SnapshotDbManagerSqlite {
     copying_mpt_snapshot: Arc<Mutex<()>>,
     snapshot_epoch_id_before_recovered: RwLock<Option<EpochId>>,
     reconstruct_snapshot_id_for_reboot: RwLock<Option<EpochId>>,
+    backup_mpt_snapshot: bool,
 }
 
 #[derive(Debug)]
@@ -107,7 +108,7 @@ impl SnapshotDbManagerSqlite {
         snapshot_path: PathBuf, max_open_snapshots: u16,
         use_isolated_db_for_mpt_table: bool,
         use_isolated_db_for_mpt_table_height: Option<u64>,
-        era_epoch_count: u64,
+        era_epoch_count: u64, backup_mpt_snapshot: bool,
     ) -> Result<Self> {
         if !snapshot_path.exists() {
             fs::create_dir_all(snapshot_path.clone())?;
@@ -152,6 +153,7 @@ impl SnapshotDbManagerSqlite {
             copying_mpt_snapshot: Arc::new(Default::default()),
             snapshot_epoch_id_before_recovered: RwLock::new(None),
             reconstruct_snapshot_id_for_reboot: RwLock::new(None),
+            backup_mpt_snapshot,
         })
     }
 
@@ -292,6 +294,7 @@ impl SnapshotDbManagerSqlite {
                     .map_err(|_err| Error::SemaphoreTryAcquireError)?
             } else {
                 executor::block_on(self.open_snapshot_semaphore.acquire())
+                    .map_err(|_err| Error::SemaphoreAcquireError)?
             };
 
             // If it's not in already_open_snapshots, the sqlite db must have
@@ -410,7 +413,8 @@ impl SnapshotDbManagerSqlite {
         }
 
         let semaphore_permit =
-            executor::block_on(self.open_snapshot_semaphore.acquire());
+            executor::block_on(self.open_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)?;
         // When an open happens around the same time, we should make sure that
         // the open returns None.
 
@@ -497,6 +501,7 @@ impl SnapshotDbManagerSqlite {
                     .map_err(|_err| Error::SemaphoreTryAcquireError)?
             } else {
                 executor::block_on(self.mpt_open_snapshot_semaphore.acquire())
+                    .map_err(|_err| Error::SemaphoreAcquireError)?
             };
 
             // If it's not in already_open_snapshots, the sqlite db must have
@@ -571,8 +576,9 @@ impl SnapshotDbManagerSqlite {
             "open mpt snapshot with write {:?}, new epoch height {}",
             snapshot_path, new_epoch_height
         );
-        let latest_mpt_semaphore_permit: tokio02::sync::SemaphorePermit =
-            executor::block_on(self.latest_mpt_snapshot_semaphore.acquire());
+        let latest_mpt_semaphore_permit: tokio::sync::SemaphorePermit =
+            executor::block_on(self.latest_mpt_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)?;
 
         if self
             .mpt_already_open_snapshots
@@ -584,7 +590,8 @@ impl SnapshotDbManagerSqlite {
         }
 
         let semaphore_permit =
-            executor::block_on(self.mpt_open_snapshot_semaphore.acquire());
+            executor::block_on(self.mpt_open_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)?;
 
         let snapshot_db = if create {
             SnapshotMptDbSqlite::create(
@@ -1196,7 +1203,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         };
 
         // Create a specific MPT database for EAR checkpoint
-        let temp_mpt_path = if !mpt_table_in_current_db
+        let temp_mpt_path = if self.backup_mpt_snapshot
+            && !mpt_table_in_current_db
             && new_epoch_height % self.era_epoch_count == 0
         {
             let temp_mpt_path =
@@ -1576,7 +1584,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tokio02::sync::Semaphore;
+use tokio::sync::Semaphore;
 
 use super::{
     kvdb_sqlite_sharded::KvdbSqliteShardedBorrowMut,

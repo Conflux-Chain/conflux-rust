@@ -17,7 +17,8 @@ use utils::{find_all_json_tests, skip_test};
 
 impl StateTestCmd {
     /// Runs `statetest` command.
-    pub fn run(&self) {
+    pub fn run(&self) -> bool {
+        let mut success = true;
         for path in &self.paths {
             if !path.exists() {
                 panic!("Path not exists: {:?}", path);
@@ -30,16 +31,25 @@ impl StateTestCmd {
                 continue;
             }
 
-            if let Err(_) = self.run_file_tests(test_files, path) {
-                warn!("Failed to run tests in directory: {:?}", path);
-                continue;
+            match self.run_file_tests(test_files, path) {
+                Ok(true) => {}
+                Ok(false) => {
+                    success = false;
+                }
+                Err(_) => {
+                    success = false;
+                    warn!("Failed to run tests in directory: {:?}", path);
+                    continue;
+                }
             }
         }
+        success
     }
 
     fn run_file_tests(
         &self, test_files: Vec<PathBuf>, path: &PathBuf,
-    ) -> Result<(), String> {
+    ) -> Result<bool, String> {
+        let mut success = true;
         info!(
             "Running {} TestSuites in {}",
             test_files.len(),
@@ -61,6 +71,7 @@ impl StateTestCmd {
 
         let mut success_units = 0;
         let mut skipped_units = 0;
+        let mut total_executions = 0;
 
         let mut error_list = vec![];
 
@@ -70,16 +81,19 @@ impl StateTestCmd {
                 continue;
             }
 
-            let (success_cnt, skipped_cnt, errors) =
+            let (success_cnt, skipped_cnt, transact_cnt, errors) =
                 match SuiteTester::load(&path) {
                     Ok(tester) => tester.run(
                         &machine,
                         &verification,
                         self.matches.as_deref(),
-                        self.fork.as_deref(),
                     ),
                     Err(err_msg) => {
-                        warn!("TestSuite load failed: {}", err_msg);
+                        warn!(
+                            "TestSuite load failed. path: {:?}, error: {}",
+                            path, err_msg
+                        );
+                        success = false;
                         load_err_suite += 1;
                         continue;
                     }
@@ -87,6 +101,7 @@ impl StateTestCmd {
 
             success_units += success_cnt;
             skipped_units += skipped_cnt;
+            total_executions += transact_cnt;
 
             error_list.extend(errors);
         }
@@ -96,6 +111,7 @@ impl StateTestCmd {
         for (path, units) in
             &error_list.into_iter().chunk_by(|err| err.path.clone())
         {
+            success = false;
             println!("\nPath {path} fails:");
             for TestError { name, kind, .. } in units {
                 println!("\t{name}: {kind}");
@@ -107,8 +123,9 @@ impl StateTestCmd {
         println!("Success Units: {}", success_units);
         println!("Skipped Units: {}", skipped_units);
         println!("Error Units  : {}", error_units);
+        println!("Total Executions: {}", total_executions);
 
-        Ok(())
+        Ok(success)
     }
 }
 
@@ -129,8 +146,8 @@ impl SuiteTester {
 
     fn run(
         self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>, target_fork: Option<&str>,
-    ) -> (usize, usize, Vec<TestError>) {
+        matches: Option<&str>,
+    ) -> (usize, usize, usize, Vec<TestError>) {
         if matches.is_some() {
             trace!("Running TestUnit: {}", self.path);
         } else {
@@ -140,19 +157,21 @@ impl SuiteTester {
         let mut error_list = vec![];
         let mut success_cnt = 0;
         let mut skipped_cnt = 0;
+        let mut transact_cnt = 0;
         for (name, unit) in self.suite.0 {
             let unit_tester = UnitTester::new(&self.path, name, unit);
-            match unit_tester.run(&machine, verification, matches, target_fork)
-            {
-                Ok(true) => {
-                    success_cnt += 1;
-                }
-                Ok(false) => {
-                    skipped_cnt += 1;
+            match unit_tester.run(&machine, verification, matches) {
+                Ok(cnt) => {
+                    transact_cnt += cnt;
+                    if cnt > 0 {
+                        success_cnt += 1;
+                    } else {
+                        skipped_cnt += 1;
+                    }
                 }
                 Err(e) => error_list.push(e),
             }
         }
-        (success_cnt, skipped_cnt, error_list)
+        (success_cnt, skipped_cnt, transact_cnt, error_list)
     }
 }

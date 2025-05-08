@@ -1,8 +1,8 @@
 use super::super::error::{StateMismatch, TestErrorKind};
 use cfx_executor::{
     executive::{
-        execution_outcome::ToRepackError, Executed, ExecutionOutcome,
-        TxDropError,
+        execution_outcome::ToRepackError, Executed, ExecutionError,
+        ExecutionOutcome, TxDropError,
     },
     state::{CleanupMode, State},
 };
@@ -12,13 +12,16 @@ use eest_types::{AccountInfo, StateTestUnit};
 use primitives::{transaction::TransactionError, SignedTransaction};
 use std::collections::HashMap;
 
-const INTRINSIC_GAS_TOO_LOW: &str =
-    "TransactionException.INTRINSIC_GAS_TOO_LOW";
-
 macro_rules! bail {
     ($e:expr) => {
         return Err($e.into())
     };
+}
+
+#[derive(Clone, Copy)]
+pub enum TestOutcome<'a> {
+    Consensus(&'a TransactionError),
+    Execution(&'a ExecutionOutcome),
 }
 
 pub fn extract_executed(
@@ -31,8 +34,12 @@ pub fn extract_executed(
             Err(TestErrorKind::ShouldFail {
                 fail_reason: fail_reason.clone(),
             })
-        } else if match_fail_reason(&*fail_reason, &outcome) {
-            Ok(None)
+        } else if match_fail_reason(
+            &*fail_reason,
+            TestOutcome::Execution(&outcome),
+        ) {
+            Ok(outcome.try_into_executed())
+            // Ok(None)
         } else {
             Err(TestErrorKind::InconsistentError {
                 outcome,
@@ -41,64 +48,114 @@ pub fn extract_executed(
         };
     }
 
-    Ok(match outcome {
-        Finished(executed) => Some(executed),
-        NotExecutedDrop(_) => None,
-        NotExecutedToReconsiderPacking(_) => None,
-        ExecutionErrorBumpNonce(_, executed) => Some(executed),
-    })
+    match outcome {
+        Finished(executed) => Ok(Some(executed)),
+        NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => {
+            Err(TestErrorKind::ExecutionError { outcome })
+        }
+        ExecutionErrorBumpNonce(_, executed) => {
+            // The post-execution validation will detect that the execution has
+            // reverted because the expected post-execution state indicates a
+            // failure, even if the test cases do not explicitly
+            // specify an error message.
+            Ok(Some(executed))
+        }
+    }
 }
 
-fn match_fail_reason(reason: &str, outcome: &ExecutionOutcome) -> bool {
-    use ExecutionOutcome::*;
-    // TODO: check consistency of exception
+pub fn process_consensus_check_fail(
+    error: TransactionError, expect_exception: Option<&String>,
+) -> Result<(), TestErrorKind> {
+    if let Some(fail_reason) = expect_exception {
+        if match_fail_reason(fail_reason, TestOutcome::Consensus(&error)) {
+            Ok(())
+        } else {
+            Err(TestErrorKind::InconsistentErrorConsensus {
+                error,
+                fail_reason: fail_reason.clone(),
+            })
+        }
+    } else {
+        Err(error.into())
+    }
+}
 
+fn match_fail_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
+    reason
+        .split("|")
+        .any(|reason| match_fail_single_reason(reason, outcome))
+}
+
+pub fn is_unsupport_reason(expected_reason: &Option<String>) -> bool {
+    let Some(reason) = expected_reason.as_ref() else {
+        return false;
+    };
+    match &**reason {
+        // Consensus level error
+        "TransactionException.GAS_ALLOWANCE_EXCEEDED" => true,
+        _ => false,
+    }
+}
+
+fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
+    use ExecutionOutcome::*;
+    use TestOutcome::*;
     match reason {
-        INTRINSIC_GAS_TOO_LOW => matches!(
+        "TransactionException.INITCODE_SIZE_EXCEEDED" => matches!(
             outcome,
-            NotExecutedDrop(TxDropError::NotEnoughGasLimit { .. })
+            Consensus(TransactionError::CreateInitCodeSizeLimit)
         ),
-        "TransactionException.SENDER_NOT_EOA" => matches!(
+        "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS" => matches!(
             outcome,
-            NotExecutedDrop(TxDropError::SenderWithCode { .. })
+            Execution(
+                ExecutionErrorBumpNonce(
+                    ExecutionError::NotEnoughCash { .. },
+                    _
+                ) | NotExecutedToReconsiderPacking(
+                    ToRepackError::SenderDoesNotExist
+                        | ToRepackError::NotEnoughBalance { .. }
+                )
+            )
         ),
         "TransactionException.INSUFFICIENT_MAX_FEE_PER_GAS" => matches!(
             outcome,
-            NotExecutedToReconsiderPacking(
+            Execution(NotExecutedToReconsiderPacking(
                 ToRepackError::NotEnoughBaseFee { .. }
+            ))
+        ),
+        "TransactionException.INTRINSIC_GAS_TOO_LOW" => matches!(
+            outcome,
+            Execution(NotExecutedDrop(TxDropError::NotEnoughGasLimit { .. }))
+                | Consensus(TransactionError::NotEnoughBaseGas { .. })
+        ),
+        "TransactionException.NONCE_IS_MAX" => matches!(
+            outcome,
+            Execution(ExecutionErrorBumpNonce(
+                ExecutionError::NonceOverflow(_),
+                _
+            ))
+        ),
+        "TransactionException.PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS" => {
+            matches!(
+                outcome,
+                Consensus(TransactionError::PriortyGreaterThanMaxFee)
             )
+        }
+        "TransactionException.SENDER_NOT_EOA" => matches!(
+            outcome,
+            Execution(NotExecutedDrop(TxDropError::SenderWithCode { .. }))
+        ),
+        "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST" => matches!(
+            outcome,
+            Consensus(TransactionError::EmptyAuthorizationList)
         ),
         _ => false,
     }
 }
 
-pub fn match_common_check_error(
-    check: Result<(), TransactionError>, expect_exception: Option<&String>,
-) -> Result<bool, TestErrorKind> {
-    match (check, expect_exception.map(|v| v.as_str())) {
-        (Ok(_), None) => Ok(true),
-        (Ok(_), Some(_)) => {
-            // expect_exception will be check again in extract_executed
-            Ok(true)
-        }
-        (Err(e), None) => Err(TestErrorKind::CommonCheckError { tx_error: e }),
-        (
-            Err(TransactionError::NotEnoughBaseGas {
-                required: _,
-                got: _,
-            }),
-            Some(INTRINSIC_GAS_TOO_LOW),
-        ) => Ok(false),
-        (Err(e), Some(expect)) => {
-            trace!("expect exception: {} actually: {}", expect, e);
-            Ok(false)
-        }
-    }
-}
-
 pub fn check_execution_outcome(
-    tx: &SignedTransaction, executed: &Executed, state: &State,
-    unit: &StateTestUnit, expected_state: &HashMap<Address, AccountInfo>,
+    tx: &SignedTransaction, state: &State, unit: &StateTestUnit,
+    expected_state: &HashMap<Address, AccountInfo>, gas_used: U256,
 ) -> Result<(), TestErrorKind> {
     for (&addr, account_info) in expected_state {
         let user_addr = addr.with_evm_space();
@@ -113,15 +170,16 @@ pub fn check_execution_outcome(
                     unit.pre.get(&addr).map(|v| v.balance).unwrap_or_default();
                 let expected_gas_used =
                     (before_balance - expected_balance) / tx.gas_price();
-                if expected_gas_used != executed.gas_used {
+                if expected_gas_used != gas_used {
                     bail!(StateMismatch::GasMismatch {
-                        got: executed.gas_used,
+                        got: gas_used,
                         expected: expected_gas_used,
                     });
                 }
             }
 
             bail!(StateMismatch::BalanceMismatch {
+                address: user_addr.address,
                 got: got_balance,
                 expected: expected_balance,
             });
@@ -132,6 +190,7 @@ pub fn check_execution_outcome(
         let got_nonce = state.nonce(&user_addr).unwrap_or_default();
         if got_nonce != expected_nonce {
             bail!(StateMismatch::NonceMismatch {
+                address: user_addr.address,
                 got: got_nonce,
                 expected: expected_nonce,
             })
@@ -172,7 +231,7 @@ pub fn check_execution_outcome(
 }
 
 pub fn distribute_tx_fee_to_miner(
-    state: &mut State, executed: &Executed, miner: &Address, space: Space,
+    state: &mut State, executed: &Executed, miner: &Address,
 ) {
     let to_add = match executed.burnt_fee {
         Some(burnt_fee) => executed.fee - burnt_fee,
@@ -180,7 +239,7 @@ pub fn distribute_tx_fee_to_miner(
     };
     let miner = AddressWithSpace {
         address: miner.clone(),
-        space,
+        space: Space::Ethereum,
     };
     state
         .add_balance(&miner, &to_add, CleanupMode::NoEmpty)

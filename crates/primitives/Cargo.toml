@@ -2,6 +2,7 @@
 name = "primitives"
 version = "0.2.0"
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 byteorder = { workspace = true }
