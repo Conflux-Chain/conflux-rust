@@ -648,7 +648,6 @@
 <a href="#648" id="648">648</a>
 <a href="#649" id="649">649</a>
 <a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1139,7 +1138,7 @@
                 };
             }
         }
-        <span class="kw">unsafe </span>{ unreachable_unchecked() }
+        <span class="macro">unreachable!</span>()
     }
 
     <span class="kw">pub unsafe fn </span>set_first_child_unchecked(
@@ -1296,7 +1295,6 @@
 <span class="kw">use </span>rlp::<span class="kw-2">*</span>;
 <span class="kw">use </span>std::{
     fmt::{Debug, Formatter},
-    hint::unreachable_unchecked,
     marker::{Send, Sync},
     vec::Vec,
 };

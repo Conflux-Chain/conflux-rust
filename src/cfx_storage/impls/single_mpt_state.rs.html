@@ -408,9 +408,6 @@
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
 <a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-<a href="#413" id="413">413</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
     impls::{errors::<span class="kw-2">*</span>, state::ChildrenMerkleMap},
     state::StateTrait,
@@ -423,10 +420,7 @@
     EpochId, MerkleHash, MptValue, StateRoot, StorageKeyWithSpace,
     MERKLE_NULL_NODE,
 };
-<span class="kw">use </span>std::{
-    cell::UnsafeCell, collections::HashSet, hint::unreachable_unchecked,
-    sync::Arc,
-};
+<span class="kw">use </span>std::{cell::UnsafeCell, collections::HashSet, sync::Arc};
 
 <span class="kw">pub struct </span>SingleMptState {
     trie: Arc&lt;DeltaMpt&gt;,
@@ -632,9 +626,9 @@
         <span class="kw">let </span>db_key = <span class="kw-2">*</span>{
             <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.trie_root {
                 <span class="comment">// Dirty state are committed.
-                </span>NodeRefDeltaMpt::Dirty { index: <span class="kw">_ </span>} =&gt; <span class="kw">unsafe </span>{
-                    unreachable_unchecked();
-                },
+                </span>NodeRefDeltaMpt::Dirty { index: <span class="kw">_ </span>} =&gt; {
+                    <span class="macro">unreachable!</span>()
+                }
                 <span class="comment">// Empty block's state root points to its base state.
                 </span>NodeRefDeltaMpt::Committed { db_key } =&gt; db_key,
             }

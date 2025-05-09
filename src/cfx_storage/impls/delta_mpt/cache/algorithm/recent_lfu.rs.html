@@ -571,7 +571,6 @@
 <a href="#571" id="571">571</a>
 <a href="#572" id="572">572</a>
 <a href="#573" id="573">573</a>
-<a href="#574" id="574">574</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -585,7 +584,6 @@
 <span class="kw">use </span>malloc_size_of_derive::MallocSizeOf <span class="kw">as </span>MallocSizeOfDerive;
 <span class="kw">use </span>rand::{Rng, SeedableRng};
 <span class="kw">use </span>rand_chacha::ChaChaRng;
-<span class="kw">use </span>std::hint;
 
 <span class="doccomment">/// In RecentLFU we keep an LRU to maintain frequency for alpha * cache_slots
 /// recently visited elements. When inserting the most recent element, evict the
@@ -1066,7 +1064,7 @@
                             }
                         }
                     }
-                    <span class="kw">_ </span>=&gt; <span class="kw">unsafe </span>{ hint::unreachable_unchecked() },
+                    <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
                 }
             }
         }

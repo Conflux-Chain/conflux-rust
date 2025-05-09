@@ -985,7 +985,6 @@
 <a href="#985" id="985">985</a>
 <a href="#986" id="986">986</a>
 <a href="#987" id="987">987</a>
-<a href="#988" id="988">988</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1697,9 +1696,9 @@
                 <span class="kw">let </span>db_key = <span class="kw-2">*</span>{
                     <span class="kw">match </span><span class="self">self</span>.delta_trie_root.as_ref().unwrap() {
                         <span class="comment">// Dirty state are committed.
-                        </span>NodeRefDeltaMpt::Dirty { index: <span class="kw">_ </span>} =&gt; <span class="kw">unsafe </span>{
-                            unreachable_unchecked();
-                        },
+                        </span>NodeRefDeltaMpt::Dirty { index: <span class="kw">_ </span>} =&gt; {
+                            <span class="macro">unreachable!</span>();
+                        }
                         <span class="comment">// Empty block's state root points to its base state.
                         </span>NodeRefDeltaMpt::Committed { db_key } =&gt; db_key,
                     }
@@ -1971,7 +1970,6 @@
 <span class="kw">use </span>std::{
     cell::UnsafeCell,
     collections::{BTreeMap, HashSet},
-    hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };
 </code></pre></div></section></main></body></html>

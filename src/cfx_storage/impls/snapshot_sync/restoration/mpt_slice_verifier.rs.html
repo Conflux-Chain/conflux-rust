@@ -355,7 +355,6 @@
 <a href="#355" id="355">355</a>
 <a href="#356" id="356">356</a>
 <a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -615,7 +614,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Box&lt;<span class="kw">dyn </span>SnapshotMptIteraterTrait&gt;&gt; {
         <span class="comment">// The validator runs the MptCursorRW in in-place mode, where subtree
         // iteration is unnecessary.
-        </span><span class="kw">unsafe </span>{ unreachable_unchecked() }
+        </span><span class="macro">unreachable!</span>()
     }
 }
 
@@ -712,6 +711,5 @@
 <span class="kw">use </span>std::{
     borrow::Borrow,
     collections::{hash_map::RandomState, HashMap},
-    hint::unreachable_unchecked,
 };
 </code></pre></div></section></main></body></html>

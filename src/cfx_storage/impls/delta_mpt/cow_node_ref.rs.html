@@ -1580,7 +1580,7 @@
 
             <span class="kw">let </span>slot = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.node_ref {
                 NodeRefDeltaMpt::Dirty { index } =&gt; <span class="kw-2">*</span>index,
-                <span class="kw">_ </span>=&gt; <span class="kw">unsafe </span>{ unreachable_unchecked() },
+                <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
             };
             <span class="kw">if let </span><span class="prelude-val">Some</span>(children_merkles) = children_merkle_map.remove(<span class="kw-2">&amp;</span>slot) {
                 commit_transaction.transaction.borrow_mut().put(
@@ -1831,7 +1831,7 @@
 <span class="kw">use </span>primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 <span class="kw">use </span>rlp::<span class="kw-2">*</span>;
 <span class="kw">use </span>std::{
-    borrow::BorrowMut, cell::Cell, convert::TryInto,
-    hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,
+    borrow::BorrowMut, cell::Cell, convert::TryInto, ops::Deref,
+    sync::atomic::Ordering,
 };
 </code></pre></div></section></main></body></html>

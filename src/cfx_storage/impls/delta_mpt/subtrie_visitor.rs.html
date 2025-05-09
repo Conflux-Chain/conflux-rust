@@ -855,6 +855,10 @@
 <a href="#855" id="855">855</a>
 <a href="#856" id="856">856</a>
 <a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1256,7 +1260,9 @@
 
                             <span class="prelude-val">Ok</span>((value, node_ref_changed, node_cow.into_child()))
                         },
-                        <span class="kw">_ </span>=&gt; <span class="kw">unsafe </span>{ unreachable_unchecked() },
+                        <span class="kw">_ </span>=&gt; {
+                            <span class="macro">unreachable!</span>()
+                        }
                     }
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Ok</span>((value, <span class="bool-val">false</span>, node_cow.into_child()))
@@ -1401,7 +1407,9 @@
                                 node_cow.into_child(),
                             ));
                         },
-                        <span class="kw">_ </span>=&gt; <span class="kw">unsafe </span>{ unreachable_unchecked() },
+                        <span class="kw">_ </span>=&gt; {
+                            <span class="macro">unreachable!</span>()
+                        }
                     }
                 } <span class="kw">else </span>{
                     <span class="kw">return </span><span class="prelude-val">Ok</span>((value, <span class="bool-val">false</span>, node_cow.into_child()));
@@ -1711,5 +1719,5 @@
 };
 <span class="kw">use </span>parking_lot::MutexGuard;
 <span class="kw">use </span>primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
-<span class="kw">use </span>std::{hint::unreachable_unchecked, marker::PhantomData};
+<span class="kw">use </span>std::marker::PhantomData;
 </code></pre></div></section></main></body></html>
