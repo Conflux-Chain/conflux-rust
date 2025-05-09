@@ -57,7 +57,10 @@ fn main() -> Result<(), Error> {
     let mut accounts_map = HashMap::new();
     let (genesis_hash, _) = initialize_genesis(&state_manager)?;
     let accounts = matches.get_one::<usize>("accounts").unwrap().clone();
-    let accounts_per_epoch = matches.get_one::<usize>("accounts-per-epoch").unwrap().clone();
+    let accounts_per_epoch = matches
+        .get_one::<usize>("accounts-per-epoch")
+        .unwrap()
+        .clone();
     let state_root_1 = StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
     let mut height = 0;
     let (snapshot1_epoch, snapshot1_delta_root) = prepare_state(
