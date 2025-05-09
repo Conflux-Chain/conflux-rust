@@ -148,9 +148,7 @@ fn apply_checkpoint_layer_to_cache(
     checkpoint_id: usize,
 ) {
     for (k, v) in entries.into_iter() {
-        let mut entry_in_cache = if let Occupied(e) = cache.entry(k) {
-            e
-        } else {
+        let Occupied(mut entry_in_cache) = cache.entry(k) else {
             // All the entries in checkpoint must be copied from cache by the
             // following function `insert_to_cache` and `clone_to_checkpoint`.
             //
@@ -169,9 +167,30 @@ fn apply_checkpoint_layer_to_cache(
                 }
                 *entry_in_cache.get_mut() = entry_in_checkpoint;
             }
+
             Unchanged => {
-                // The warm/cold storage relies on the existence of cache
-                entry_in_cache.remove();
+                // Here we have an optimization: if a checkpoint entry was
+                // Unchanged and the corresponding cache entry
+                // was clean (i.e., its dirty bit was not set),
+                // the cache entry would be retained rather than
+                // removed by checkpoint semantics.
+                //
+                // A theoretical concern arose: if a CheckpointEntry is
+                // Unchanged, its cache entry is clean, and the
+                // account is absent from the database (DbAbsent), the output of
+                // `State::code_hash` might differ with and
+                // without this optimization.
+                //
+                // However, this scenario is impossible under the current
+                // implementation. In this system, DbAbsent and
+                // Recorded() are treated as distinct values, and transitioning
+                // from one to the other would require the dirty flag to be set.
+
+                if entry_in_cache.get().entry.is_dirty() {
+                    entry_in_cache.remove();
+                } else {
+                    entry_in_cache.get_mut().warm = false;
+                }
             }
         }
     }

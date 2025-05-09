@@ -404,7 +404,13 @@ impl<'a> ContextTrait for Context<'a> {
         {
             Ok(contract.code_hash())
         } else {
-            Ok(self.state.code_hash(&address)?)
+            if self.spec.cip645.fix_extcodehash
+                && self.state.is_eip158_empty(&address)?
+            {
+                Ok(H256::zero())
+            } else {
+                Ok(self.state.code_hash(&address)?)
+            }
         }
     }
 

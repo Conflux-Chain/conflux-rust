@@ -256,6 +256,8 @@ pub struct CIP645Spec {
     pub blockhash_gas: bool,
 
     pub opcode_update: bool,
+
+    pub fix_extcodehash: bool,
 }
 
 impl CIP645Spec {
@@ -274,6 +276,7 @@ impl CIP645Spec {
             fix_eip5656: enabled,
             blockhash_gas: enabled,
             opcode_update: enabled,
+            fix_extcodehash: enabled,
         }
     }
 }
