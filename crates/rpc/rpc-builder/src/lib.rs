@@ -30,12 +30,12 @@ mod constants;
 mod error;
 mod id_provider;
 mod module;
-mod result;
 
+use cfx_rpc_middlewares::{Metrics, Throttle};
 pub use error::*;
 pub use id_provider::EthSubscriptionIdProvider;
+use log::debug;
 pub use module::{EthRpcModule, RpcModuleSelection};
-pub use result::*;
 
 use cfx_rpc::{helpers::ChainInfo, *};
 use cfx_rpc_cfx_types::RpcImplConfiguration;
@@ -62,6 +62,7 @@ use std::{
 };
 pub use tower::layer::util::{Identity, Stack};
 // use tower::Layer;
+use cfx_tasks::TaskExecutor;
 
 /// A builder type to configure the RPC module: See [`RpcModule`]
 ///
@@ -72,18 +73,21 @@ pub struct RpcModuleBuilder {
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
+    executor: TaskExecutor,
 }
 
 impl RpcModuleBuilder {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor,
     ) -> Self {
         Self {
             config,
             consensus,
             sync,
             tx_pool,
+            executor,
         }
     }
 
@@ -103,10 +107,12 @@ impl RpcModuleBuilder {
                 consensus,
                 sync,
                 tx_pool,
+                executor,
             } = self;
 
-            let mut registry =
-                RpcRegistryInner::new(config, consensus, sync, tx_pool);
+            let mut registry = RpcRegistryInner::new(
+                config, consensus, sync, tx_pool, executor,
+            );
 
             modules.config = module_config;
             modules.http = registry.maybe_module(http.as_ref());
@@ -125,12 +131,14 @@ pub struct RpcRegistryInner {
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     modules: HashMap<EthRpcModule, Methods>,
+    executor: TaskExecutor,
 }
 
 impl RpcRegistryInner {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
+        executor: TaskExecutor,
     ) -> Self {
         Self {
             consensus,
@@ -138,6 +146,7 @@ impl RpcRegistryInner {
             sync,
             tx_pool,
             modules: Default::default(),
+            executor,
         }
     }
 
@@ -166,7 +175,12 @@ impl RpcRegistryInner {
         self
     }
 
-    pub fn trace_api(&self) -> TraceApi { TraceApi::new() }
+    pub fn trace_api(&self) -> TraceApi {
+        TraceApi::new(
+            self.consensus.clone(),
+            self.sync.network.get_network_type().clone(),
+        )
+    }
 
     pub fn debug_api(&self) -> DebugApi {
         DebugApi::new(
@@ -221,6 +235,7 @@ impl RpcRegistryInner {
                         self.consensus.clone(),
                         self.sync.clone(),
                         self.tx_pool.clone(),
+                        self.executor.clone(),
                     )
                     .into_rpc()
                     .into(),
@@ -229,10 +244,28 @@ impl RpcRegistryInner {
                     )))
                     .into_rpc()
                     .into(),
-                    EthRpcModule::Trace => TraceApi::new().into_rpc().into(),
+                    EthRpcModule::Trace => TraceApi::new(
+                        self.consensus.clone(),
+                        self.sync.network.get_network_type().clone(),
+                    )
+                    .into_rpc()
+                    .into(),
                     EthRpcModule::Web3 => Web3Api.into_rpc().into(),
                     EthRpcModule::Rpc => {
                         RPCApi::new(module_version.clone()).into_rpc().into()
+                    }
+                    EthRpcModule::Parity => {
+                        let eth_api = EthApi::new(
+                            self.config.clone(),
+                            self.consensus.clone(),
+                            self.sync.clone(),
+                            self.tx_pool.clone(),
+                            self.executor.clone(),
+                        );
+                        ParityApi::new(eth_api).into_rpc().into()
+                    }
+                    EthRpcModule::Txpool => {
+                        TxPoolApi::new(self.tx_pool.clone()).into_rpc().into()
                     }
                 })
                 .clone()
@@ -259,7 +292,7 @@ impl RpcRegistryInner {
 /// started, See also [`ServerBuilder::build`] and
 /// [`Server::start`](jsonrpsee::server::Server::start).
 #[derive(Debug)]
-pub struct RpcServerConfig<RpcMiddleware = Identity> {
+pub struct RpcServerConfig {
     /// Configs for JSON-RPC Http.
     http_server_config: Option<ServerBuilder<Identity, Identity>>,
     /// Allowed CORS Domains for http
@@ -272,12 +305,12 @@ pub struct RpcServerConfig<RpcMiddleware = Identity> {
     ws_cors_domains: Option<String>,
     /// Address where to bind the ws server to
     ws_addr: Option<SocketAddr>,
-    /// Configurable RPC middleware
-    #[allow(dead_code)]
-    rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
+    // /// Configurable RPC middleware
+    // #[allow(dead_code)]
+    // rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 }
 
-impl Default for RpcServerConfig<Identity> {
+impl Default for RpcServerConfig {
     fn default() -> Self {
         Self {
             http_server_config: None,
@@ -286,7 +319,7 @@ impl Default for RpcServerConfig<Identity> {
             ws_server_config: None,
             ws_cors_domains: None,
             ws_addr: None,
-            rpc_middleware: RpcServiceBuilder::new(),
+            // rpc_middleware: RpcServiceBuilder::new(),
         }
     }
 }
@@ -329,21 +362,21 @@ impl RpcServerConfig {
     }
 }
 
-impl<RpcMiddleware> RpcServerConfig<RpcMiddleware> {
+impl RpcServerConfig {
     /// Configure rpc middleware
-    pub fn set_rpc_middleware<T>(
-        self, rpc_middleware: RpcServiceBuilder<T>,
-    ) -> RpcServerConfig<T> {
-        RpcServerConfig {
-            http_server_config: self.http_server_config,
-            http_cors_domains: self.http_cors_domains,
-            http_addr: self.http_addr,
-            ws_server_config: self.ws_server_config,
-            ws_cors_domains: self.ws_cors_domains,
-            ws_addr: self.ws_addr,
-            rpc_middleware,
-        }
-    }
+    // pub fn set_rpc_middleware<T>(
+    //     self, rpc_middleware: RpcServiceBuilder<T>,
+    // ) -> RpcServerConfig<T> {
+    //     RpcServerConfig {
+    //         http_server_config: self.http_server_config,
+    //         http_cors_domains: self.http_cors_domains,
+    //         http_addr: self.http_addr,
+    //         ws_server_config: self.ws_server_config,
+    //         ws_cors_domains: self.ws_cors_domains,
+    //         ws_addr: self.ws_addr,
+    //         rpc_middleware,
+    //     }
+    // }
 
     /// Configure the cors domains for http _and_ ws
     pub fn with_cors(self, cors_domain: Option<String>) -> Self {
@@ -418,9 +451,20 @@ impl<RpcMiddleware> RpcServerConfig<RpcMiddleware> {
     // Returns the [`RpcServerHandle`] with the handle to the started servers.
     pub async fn start(
         self, modules: &TransportRpcModules,
+        throttling_conf_file: Option<String>, enable_metrics: bool,
     ) -> Result<RpcServerHandle, RpcError> {
-        let mut http_handle = None;
-        let mut ws_handle = None;
+        // TODO: handle enable metrics
+        debug!("enable metrics: {}", enable_metrics);
+
+        let rpc_middleware = RpcServiceBuilder::new()
+            .layer_fn(move |s| {
+                Throttle::new(
+                    throttling_conf_file.as_ref().map(|s| s.as_str()),
+                    "rpc",
+                    s,
+                )
+            })
+            .layer_fn(|s| Metrics::new(s));
 
         let http_socket_addr =
             self.http_addr.unwrap_or(SocketAddr::V4(SocketAddrV4::new(
@@ -460,21 +504,7 @@ impl<RpcMiddleware> RpcServerConfig<RpcMiddleware> {
 
             if let Some(builder) = self.http_server_config {
                 let server = builder
-                    // .set_http_middleware(
-                    //     tower::ServiceBuilder::new()
-                    //         .option_layer(Self::maybe_cors_layer(cors)?)
-                    //         .option_layer(Self::maybe_jwt_layer(self.
-                    // jwt_secret)), )
-                    // .set_rpc_middleware(
-                    //     self.rpc_middleware.clone().layer(
-                    //         modules
-                    //             .http
-                    //             .as_ref()
-                    //             .or(modules.ws.as_ref())
-                    //             .map(RpcRequestMetrics::same_port)
-                    //             .unwrap_or_default(),
-                    //     ),
-                    // )
+                    .set_rpc_middleware(rpc_middleware)
                     .build(http_socket_addr)
                     .await
                     .map_err(|err| {
@@ -493,38 +523,33 @@ impl<RpcMiddleware> RpcServerConfig<RpcMiddleware> {
                     modules.http.as_ref().or(modules.ws.as_ref())
                 {
                     let handle = server.start(module.clone());
-                    http_handle = Some(handle.clone());
-                    ws_handle = Some(handle);
+                    let http_handle = Some(handle.clone());
+                    let ws_handle = Some(handle);
+
+                    return Ok(RpcServerHandle {
+                        http_local_addr: Some(addr),
+                        ws_local_addr: Some(addr),
+                        http: http_handle,
+                        ws: ws_handle,
+                    });
                 }
-                return Ok(RpcServerHandle {
-                    http_local_addr: Some(addr),
-                    ws_local_addr: Some(addr),
-                    http: http_handle,
-                    ws: ws_handle,
-                });
+
+                return Err(RpcError::Custom(
+                    "No valid RpcModule found from modules".to_string(),
+                ));
             }
         }
 
-        let mut ws_local_addr = None;
-        let mut ws_server = None;
-        let mut http_local_addr = None;
-        let mut http_server = None;
-
+        let mut result = RpcServerHandle {
+            http_local_addr: None,
+            ws_local_addr: None,
+            http: None,
+            ws: None,
+        };
         if let Some(builder) = self.ws_server_config {
             let server = builder
                 .ws_only()
-                // .set_http_middleware(
-                //     tower::ServiceBuilder::new()
-                //         .option_layer(Self::maybe_cors_layer(self.
-                // ws_cors_domains.clone())?)
-                //         .option_layer(Self::maybe_jwt_layer(self.
-                // jwt_secret)), )
-                // .set_rpc_middleware(
-                //     self.rpc_middleware
-                //         .clone()
-                //         .layer(modules.ws.as_ref().
-                // map(RpcRequestMetrics::ws).unwrap_or_default()),
-                // )
+                .set_rpc_middleware(rpc_middleware.clone())
                 .build(ws_socket_addr)
                 .await
                 .map_err(|err| {
@@ -535,24 +560,20 @@ impl<RpcMiddleware> RpcServerConfig<RpcMiddleware> {
                 RpcError::server_error(err, ServerKind::WS(ws_socket_addr))
             })?;
 
-            ws_local_addr = Some(addr);
-            ws_server = Some(server);
+            let ws_local_addr = Some(addr);
+            let ws_server = Some(server);
+            let ws_handle = ws_server.map(|ws_server| {
+                ws_server.start(modules.ws.clone().expect("ws server error"))
+            });
+
+            result.ws = ws_handle;
+            result.ws_local_addr = ws_local_addr;
         }
 
         if let Some(builder) = self.http_server_config {
             let server = builder
                 .http_only()
-                // .set_http_middleware(
-                //     tower::ServiceBuilder::new()
-                //         .option_layer(Self::maybe_cors_layer(self.
-                // http_cors_domains.clone())?)
-                //         .option_layer(Self::maybe_jwt_layer(self.
-                // jwt_secret)), )
-                // .set_rpc_middleware(
-                //     self.rpc_middleware.clone().layer(
-                //         modules.http.as_ref().map(RpcRequestMetrics::http).
-                // unwrap_or_default(),     ),
-                // )
+                .set_rpc_middleware(rpc_middleware)
                 .build(http_socket_addr)
                 .await
                 .map_err(|err| {
@@ -564,22 +585,18 @@ impl<RpcMiddleware> RpcServerConfig<RpcMiddleware> {
             let local_addr = server.local_addr().map_err(|err| {
                 RpcError::server_error(err, ServerKind::Http(http_socket_addr))
             })?;
-            http_local_addr = Some(local_addr);
-            http_server = Some(server);
+            let http_local_addr = Some(local_addr);
+            let http_server = Some(server);
+            let http_handle = http_server.map(|http_server| {
+                http_server
+                    .start(modules.http.clone().expect("http server error"))
+            });
+
+            result.http = http_handle;
+            result.http_local_addr = http_local_addr;
         }
 
-        http_handle = http_server.map(|http_server| {
-            http_server.start(modules.http.clone().expect("http server error"))
-        });
-        ws_handle = ws_server.map(|ws_server| {
-            ws_server.start(modules.ws.clone().expect("ws server error"))
-        });
-        Ok(RpcServerHandle {
-            http_local_addr,
-            ws_local_addr,
-            http: http_handle,
-            ws: ws_handle,
-        })
+        Ok(result)
     }
 }
 

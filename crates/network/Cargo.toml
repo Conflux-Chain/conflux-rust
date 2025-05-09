@@ -2,6 +2,7 @@
 name = "network"
 version = "0.1.0"
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 cfx-addr = { workspace = true }
@@ -16,27 +17,26 @@ io = { workspace = true }
 bytes = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
-ipnetwork = "0.12.6"
+ipnetwork = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_derive = { workspace = true }
-igd = "0.10"
+igd = { workspace = true }
 libc = { workspace = true }
 rand = { workspace = true }
 parity-path = { workspace = true }
 keccak-hash = { workspace = true }
-enum-map = "0.4.0"
-enum-map-derive = "0.4.0"
+enum-map = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 lazy_static = { workspace = true }
-byte-unit = "1.1.0"
+byte-unit = { workspace = true }
 priority-send-queue = { workspace = true }
 metrics = { workspace = true }
 throttling = { workspace = true }
-natpmp = "0.2"
+natpmp = { workspace = true }
 malloc_size_of = { workspace = true }
-diem-crypto = { path = "../cfxcore/core/src/pos/crypto/crypto" }
-diem-types = { path = "../cfxcore/core/src/pos/types" }
+diem-crypto = { workspace = true }
+diem-types = { workspace = true }
 cfx-util-macros = { workspace = true }
 thiserror = { workspace = true }

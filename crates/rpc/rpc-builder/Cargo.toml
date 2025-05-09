@@ -21,14 +21,14 @@ thiserror = { workspace = true }
 jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server"] }
-# tower-http = { workspace = true, features = ["full"] }
 tower = { workspace = true, features = ["full"] }
-http.workspace = true
-pin-project = { workspace = true }
 rand = { workspace = true }
 cfx-rpc = { workspace = true }
 cfx-rpc-eth-api = { workspace = true }
 cfxcore = { workspace = true }
-cfx-types = { workspace = true }
-cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
+log = { workspace = true }
+cfx-rpc-middlewares = { workspace = true }
+cfx-tasks = { workspace = true }
+
+[dev-dependencies]

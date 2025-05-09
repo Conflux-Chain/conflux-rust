@@ -17,12 +17,12 @@ class Issue2483(ConfluxTestFramework):
         self.num_nodes = 1
         self.gasPrice = 1
         self.conf_parameters["executive_trace"] = "true"
+        self.conf_parameters["cip645_transition_height"] = str(99999999)
 
     def setup_network(self):
         self.setup_nodes()
 
     def run_test(self):
-        self.w3 = web3.Web3()
         self.rpc = RpcClient(self.nodes[0])
         priv_key = default_config["GENESIS_PRI_KEY"]
         sender = eth_utils.encode_hex(priv_to_addr(priv_key))
@@ -38,7 +38,7 @@ class Issue2483(ConfluxTestFramework):
         receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
         contract_address = receipt["contractCreated"]
 
-        contract = self.w3.eth.contract(abi=abi)
+        contract = web3.Web3().eth.contract(abi=abi)
         call_data = contract.encode_abi("setFresh")
 
         tx = self.rpc.new_contract_tx(receiver=contract_address, data_hex=call_data)

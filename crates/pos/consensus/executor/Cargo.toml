@@ -1,0 +1,37 @@
+[package]
+name = "executor"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem executor"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = { workspace = true }
+fail = { workspace = true }
+itertools = { workspace = true }
+once_cell = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+consensus-types = { workspace = true }
+executor-types = { workspace = true }
+bcs = "0.1.2"
+diem-crypto = { workspace = true }
+diem-logger = { workspace = true }
+diem-metrics = { workspace = true }
+diem-state-view = { workspace = true }
+cached-pos-ledger-db = { workspace = true }
+diem-types = { workspace = true }
+move-core-types = { workspace = true }
+storage-interface = { workspace = true }
+
+pow-types = { workspace = true }
+cfx-types = { workspace = true }
+
+[dev-dependencies]
+
+[features]
+default = []

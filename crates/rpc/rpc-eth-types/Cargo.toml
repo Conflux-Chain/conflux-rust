@@ -13,20 +13,22 @@ license-file.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rustc-hex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 cfx-types = { workspace = true }
+cfx-bytes = { workspace = true }
 thiserror = { workspace = true }
 jsonrpc-core = { workspace = true }
 primitives = { workspace = true }
 rlp = { workspace = true }
 cfx-parameters = { workspace = true }
 alloy-rpc-types = { workspace = true }
-serde-utils = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
-cfx-vm-types = { workspace = true }
 cfx-rpc-cfx-types = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
-cfx-util-macros = { workspace = true }
+similar-asserts = { workspace = true }
+
+[features]
+default = ["serde"]
+serde = []

@@ -5,12 +5,11 @@
 
 #[macro_use]
 extern crate log;
-extern crate substrate_bn as bn;
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
 extern crate cfx_util_macros;
-extern crate sha3_macro;
+use substrate_bn as bn;
 
 /// Ethereum Builtins: Implements Ethereum's builtin contracts, ranging from
 /// address `0x1` to `0x9`.
@@ -62,3 +61,14 @@ pub mod state;
 
 pub use internal_contract::{InternalContractMap, InternalContractTrait};
 pub use observer as executive_observer;
+
+/// Common tools for test
+#[cfg(test)]
+mod tests {
+    use cfx_types::H256;
+    use hex_literal::hex;
+    // Mock transaction hash for tests not contruct an actual transaction.
+    pub const MOCK_TX_HASH: H256 = H256(hex!(
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    ));
+}

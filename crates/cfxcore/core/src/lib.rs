@@ -2,22 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate cfx_bytes as bytes;
-#[macro_use]
-extern crate cfx_internal_common;
-extern crate cfxkey as keylib;
-extern crate keccak_hash as hash;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate cfx_util_macros;
-extern crate db as ext_db;
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
-extern crate static_assertions;
-extern crate sha3_macro;
-extern crate substrate_bn as bn;
+
+use cfxkey as keylib;
+use keccak_hash as hash;
 
 #[macro_use]
 pub mod message;
@@ -46,10 +39,7 @@ pub mod verification;
 pub use crate::{
     block_data_manager::BlockDataManager,
     channel::Notifications,
-    consensus::{
-        BestInformation, ConsensusGraph, ConsensusGraphTrait,
-        SharedConsensusGraph,
-    },
+    consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
     light_protocol::{
         Handler as LightHandler, Provider as LightProvider,
         QueryService as LightQueryService,

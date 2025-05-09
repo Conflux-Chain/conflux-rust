@@ -45,10 +45,12 @@ mod storage;
 
 mod checkpoints;
 
+mod state_override;
+
 #[cfg(test)]
 mod tests;
 
-pub use account_entry::AccountEntry;
+pub use account_entry::{AccountEntry, AccountEntryWithWarm};
 pub use ext_fields::RequireFields;
 
 use crate::substate::Substate;
@@ -58,8 +60,8 @@ use cfx_types::{
 use keccak_hash::KECCAK_EMPTY;
 use parking_lot::RwLock;
 use primitives::{
-    is_default::IsDefault, CodeInfo, DepositList, SponsorInfo, StorageLayout,
-    StorageValue, VoteStakeList,
+    is_default::IsDefault, storage::WriteCacheItem, CodeInfo, DepositList,
+    SponsorInfo, StorageLayout, StorageValue, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -69,7 +71,6 @@ use cfx_types::AddressSpaceUtil;
 use self::checkpoints::WriteCheckpointLayer;
 
 #[derive(Debug)]
-#[cfg_attr(test, derive(Clone))]
 /// The access and manipulation object during execution, which includes both
 /// database-stored information and in-execution data of an account. It is a
 /// basic unit of state caching map and the checkpoint layers (more
@@ -131,15 +132,19 @@ pub struct OverlayAccount {
     /// Storage layout change of the account
     storage_layout_change: Option<StorageLayout>,
 
-    /// Read cache for the storage entries of this account for recording
-    /// unchanged values.
+    /// Read cache of database for the storage entries of this account for
+    /// recording unchanged values.
     storage_read_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
+
+    /// Committed storage after a transaction for the storage entries of this
+    /// account for recording unchanged values.
+    storage_committed_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
 
     /// Write cache for the storage entries of this account for recording
     /// changed values.
-    storage_write_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
+    storage_write_cache: Arc<RwLock<HashMap<Vec<u8>, WriteCacheItem>>>,
     storage_write_checkpoint:
-        Option<WriteCheckpointLayer<Vec<u8>, StorageValue>>,
+        Option<RwLock<WriteCheckpointLayer<Vec<u8>, WriteCacheItem>>>,
 
     /// Transient storage from CIP-142
     transient_storage_cache: Arc<RwLock<HashMap<Vec<u8>, U256>>>,
@@ -156,6 +161,21 @@ pub struct OverlayAccount {
     /// cleared later. It will be set when such a contract has been killed
     /// since last commit.
     pending_db_clear: bool,
+
+    /// Indicates whether the storage cache entries of this account have been
+    /// overrided by the passed-in storage entries.
+    /// When this flag is set, the storage entries will only be read from the
+    /// cache
+    storage_overrided: bool,
+
+    /* ---------------
+    -  Helper fields -
+    --------------- */
+    /// For CIP-151, `None` indicates that this is either a non-contract, a
+    /// contract in the process of being created, or a contract not created
+    /// in the current epoch. A `Some(_)` value indicates that this is a
+    /// contract created by a specific transaction.
+    create_transaction_hash: Option<H256>,
 }
 
 impl OverlayAccount {
@@ -183,6 +203,7 @@ impl OverlayAccount {
             && self.address.address.is_builtin_address();
         (self.is_newly_created_contract && !builtin_address)
             || self.pending_db_clear
+            || self.storage_overrided
     }
 }
 
@@ -194,6 +215,44 @@ impl OverlayAccount {
 
     #[cfg(test)]
     pub fn is_basic(&self) -> bool { self.code_hash == KECCAK_EMPTY }
+}
+
+#[cfg(test)]
+impl Clone for OverlayAccount {
+    fn clone(&self) -> Self {
+        Self {
+            address: self.address.clone(),
+            balance: self.balance.clone(),
+            nonce: self.nonce.clone(),
+            code_hash: self.code_hash.clone(),
+            staking_balance: self.staking_balance.clone(),
+            collateral_for_storage: self.collateral_for_storage.clone(),
+            accumulated_interest_return: self
+                .accumulated_interest_return
+                .clone(),
+            admin: self.admin.clone(),
+            sponsor_info: self.sponsor_info.clone(),
+            deposit_list: self.deposit_list.clone(),
+            vote_stake_list: self.vote_stake_list.clone(),
+            code: self.code.clone(),
+            storage_layout_change: self.storage_layout_change.clone(),
+            storage_read_cache: self.storage_read_cache.clone(),
+            storage_committed_cache: self.storage_committed_cache.clone(),
+            storage_write_cache: self.storage_write_cache.clone(),
+            storage_write_checkpoint: self
+                .storage_write_checkpoint
+                .as_ref()
+                .map(|x| RwLock::new(x.read().clone())),
+            transient_storage_cache: self.transient_storage_cache.clone(),
+            transient_storage_checkpoint: self
+                .transient_storage_checkpoint
+                .clone(),
+            is_newly_created_contract: self.is_newly_created_contract.clone(),
+            pending_db_clear: self.pending_db_clear.clone(),
+            storage_overrided: self.storage_overrided.clone(),
+            create_transaction_hash: self.create_transaction_hash.clone(),
+        }
+    }
 }
 
 #[cfg(test)]

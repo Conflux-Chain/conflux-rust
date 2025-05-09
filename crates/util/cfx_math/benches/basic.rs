@@ -1,8 +1,3 @@
-extern crate cfx_types;
-extern crate criterion;
-extern crate rand;
-extern crate rand_xorshift;
-
 use cfx_types::U256;
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::{Rng, SeedableRng};

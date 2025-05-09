@@ -10,4 +10,7 @@ pub struct AddressWithSpace {
 impl AddressWithSpace {
     #[inline]
     pub fn assert_native(&self) { assert_eq!(self.space, Space::Native) }
+
+    #[inline]
+    pub fn assert_ethereum(&self) { assert_eq!(self.space, Space::Ethereum) }
 }

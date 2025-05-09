@@ -24,6 +24,7 @@ use crate::{
 };
 use crossbeam_deque;
 use lazy_static::lazy_static;
+use log::{debug, error, trace, warn};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use mio::{
     deprecated::{EventLoop, EventLoopBuilder, Handler, Sender},
@@ -755,7 +756,7 @@ where Message: Send + Sync + 'static
         *self.network_poll_thread.lock() = Some(thread);
     }
 
-    /// Regiter an IO handler with the event loop.
+    /// Register an IO handler with the event loop.
     pub fn register_handler(
         &self, handler: Arc<dyn IoHandler<Message> + Send>,
     ) -> Result<(), IoError> {

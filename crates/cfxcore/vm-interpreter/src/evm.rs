@@ -88,6 +88,8 @@ pub trait CostType:
     + ops::Sub<Output = Self>
     + ops::Shr<usize, Output = Self>
     + ops::Shl<usize, Output = Self>
+    + ops::AddAssign
+    + ops::SubAssign
     + cmp::Ord
     + fmt::Debug
 {

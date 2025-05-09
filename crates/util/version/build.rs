@@ -1,9 +1,10 @@
 use anyhow::Result;
-use vergen::{vergen, Config, ShaKind, TimestampKind};
-
+use vergen::EmitBuilder;
 fn main() -> Result<()> {
-    let mut config = Config::default();
-    *config.git_mut().commit_timestamp_kind_mut() = TimestampKind::DateOnly;
-    *config.git_mut().sha_kind_mut() = ShaKind::Short;
-    vergen(config)
+    EmitBuilder::builder()
+        .git_sha(true)
+        .git_commit_date()
+        .rustc_semver()
+        .emit()?;
+    Ok(())
 }

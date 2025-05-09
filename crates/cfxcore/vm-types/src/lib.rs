@@ -30,7 +30,10 @@ pub use self::{
     instruction_result::InstructionResult,
     interpreter_info::InterpreterInfo,
     return_data::{GasLeft, ReturnData},
-    spec::{CleanDustMode, Spec, WasmCosts},
+    spec::{
+        extract_7702_payload, CIP645Spec, ConsensusGasSpec, Spec,
+        CODE_PREFIX_7702,
+    },
 };
 
 /// Virtual Machine interface

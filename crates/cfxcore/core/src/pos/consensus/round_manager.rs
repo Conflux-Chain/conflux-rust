@@ -469,6 +469,11 @@ impl RoundManager {
             );
         } else {
             diem_debug!("Skip election for elected");
+            if let Some(node_data) = pos_state.account_node_data(author) {
+                if node_data.lock_status().force_retired().is_some() {
+                    warn!("The node stops elections for force retire!");
+                }
+            }
         }
         Ok(())
     }

@@ -538,20 +538,24 @@ impl<
             debug_assert!(i > 0);
             unsafe {
                 let pos = i - 1;
-                std::ptr::copy(
-                    self.ordered_iter_ids.get_unchecked(1),
-                    self.ordered_iter_ids.get_unchecked_mut(0),
-                    pos,
-                );
+                if pos > 0 {
+                    std::ptr::copy(
+                        self.ordered_iter_ids.get_unchecked(1),
+                        self.ordered_iter_ids.get_unchecked_mut(0),
+                        pos,
+                    );
+                }
                 std::ptr::write(
                     self.ordered_iter_ids.get_unchecked_mut(pos),
                     iter_id,
                 );
-                std::ptr::copy(
-                    self.ordered_key_prefixes_to_map.get_unchecked(1),
-                    self.ordered_key_prefixes_to_map.get_unchecked_mut(0),
-                    pos,
-                );
+                if pos > 0 {
+                    std::ptr::copy(
+                        self.ordered_key_prefixes_to_map.get_unchecked(1),
+                        self.ordered_key_prefixes_to_map.get_unchecked_mut(0),
+                        pos,
+                    );
+                }
                 std::ptr::write(
                     self.ordered_key_prefixes_to_map.get_unchecked_mut(pos),
                     this_key_prefix_to_map,
@@ -559,11 +563,13 @@ impl<
                 let popped = Ok(std::ptr::read(
                     self.maybe_next_key_values.get_unchecked(0),
                 ));
-                std::ptr::copy(
-                    self.maybe_next_key_values.get_unchecked(1),
-                    self.maybe_next_key_values.get_unchecked_mut(0),
-                    pos,
-                );
+                if pos > 0 {
+                    std::ptr::copy(
+                        self.maybe_next_key_values.get_unchecked(1),
+                        self.maybe_next_key_values.get_unchecked_mut(0),
+                        pos,
+                    );
+                }
                 std::ptr::write(
                     self.maybe_next_key_values.get_unchecked_mut(pos),
                     kv,

@@ -2,13 +2,13 @@
 name = "primitives"
 version = "0.2.0"
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 byteorder = { workspace = true }
 cfx-types = { workspace = true }
 cfx-bytes = { workspace = true }
 cfxkey = { workspace = true }
-fixed-hash = { workspace = true }
 keccak-hash = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
@@ -18,13 +18,13 @@ rlp = { workspace = true }
 rlp_derive = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_derive = { workspace = true }
-siphasher = "0.3"
+siphasher = { workspace = true }
 unexpected = { workspace = true }
 once_cell = { workspace = true }
 cfx-parameters = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { workspace = true }
 serde_json = { workspace = true }
 itertools = { workspace = true }
 

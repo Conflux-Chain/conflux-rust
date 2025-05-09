@@ -1,0 +1,39 @@
+[package]
+name = "diem-genesis-tool"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "A tool to manage genesis"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+rand = "0.8.3"
+serde = { version = "1.0.124", features = ["rc"], default-features = false }
+structopt = "0.3.21"
+thiserror = "1.0.24"
+toml = { version = "0.5.8", default-features = false }
+
+consensus-types = { workspace = true }
+executor = { workspace = true }    
+generate-key = { workspace = true }
+bcs = "0.1.2"
+diem-config = { workspace = true }
+diem-crypto = { workspace = true }
+diem-global-constants = { workspace = true }
+diem-management = { path = "../"}
+diem-network-address-encryption = { workspace = true }
+diem-secure-storage = { workspace = true }
+diem-types = { workspace = true }
+diem-temppath = { workspace = true }
+pos-ledger-db = { workspace = true }
+storage-interface = { workspace = true }
+[dev-dependencies]
+diem-config = { workspace = true, features = ["fuzzing"] }
+
+[features]
+testing = []
+fuzzing = ["diem-config/fuzzing"]

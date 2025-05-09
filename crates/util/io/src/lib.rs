@@ -23,16 +23,6 @@
 //TODO: use Poll from mio
 #![allow(deprecated)]
 
-extern crate mio;
-#[macro_use]
-extern crate log as rlog;
-extern crate fnv;
-extern crate num_cpus;
-extern crate parking_lot;
-extern crate slab;
-extern crate time;
-extern crate timer;
-
 mod service_mio;
 mod worker;
 

@@ -4,10 +4,11 @@ use crate::{
     TransactionWithSignatureSerializePart,
 };
 use cfx_types::{AddressWithSpace, H256, U256};
+use cfxkey::Address;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
 
-use super::AccessList;
+use super::{AccessList, AuthorizationListItem};
 
 #[derive(
     Default,
@@ -88,7 +89,6 @@ pub struct Cip2930Transaction {
     pub epoch_height: u64,
     pub chain_id: u32,
     pub data: Bytes,
-    // We do not use `AccessList` here because we need `Vec` for rlp derive.
     pub access_list: Vec<AccessListItem>,
 }
 
@@ -114,8 +114,33 @@ pub struct Cip1559Transaction {
     pub epoch_height: u64,
     pub chain_id: u32,
     pub data: Bytes,
-    // We do not use `AccessList` here because we need `Vec` for rlp derive.
     pub access_list: Vec<AccessListItem>,
+}
+
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    RlpEncodable,
+    RlpDecodable,
+    Serialize,
+    Deserialize,
+)]
+pub struct Cip7702Transaction {
+    pub nonce: U256,
+    pub max_priority_fee_per_gas: U256,
+    pub max_fee_per_gas: U256,
+    pub gas: U256,
+    pub destination: Address,
+    pub value: U256,
+    pub storage_limit: u64,
+    pub epoch_height: u64,
+    pub chain_id: u32,
+    pub data: Bytes,
+    pub access_list: Vec<AccessListItem>,
+    pub authorization_list: Vec<AuthorizationListItem>,
 }
 
 macro_rules! access_common_ref {
@@ -137,8 +162,6 @@ impl TypedNativeTransaction {
 
     access_common_ref!(nonce, U256);
 
-    access_common_ref!(action, Action);
-
     access_common_ref!(value, U256);
 
     access_common_ref!(chain_id, u32);
@@ -147,19 +170,27 @@ impl TypedNativeTransaction {
 
     access_common_ref!(storage_limit, u64);
 
+    pub fn action(&self) -> Action {
+        match self {
+            TypedNativeTransaction::Cip155(tx) => tx.action,
+            TypedNativeTransaction::Cip2930(tx) => tx.action,
+            TypedNativeTransaction::Cip1559(tx) => tx.action,
+        }
+    }
+
     pub fn gas_price(&self) -> &U256 {
         match self {
             Cip155(tx) => &tx.gas_price,
-            Cip1559(tx) => &tx.max_fee_per_gas,
             Cip2930(tx) => &tx.gas_price,
+            Cip1559(tx) => &tx.max_fee_per_gas,
         }
     }
 
     pub fn max_priority_gas_price(&self) -> &U256 {
         match self {
             Cip155(tx) => &tx.gas_price,
-            Cip1559(tx) => &tx.max_priority_fee_per_gas,
             Cip2930(tx) => &tx.gas_price,
+            Cip1559(tx) => &tx.max_priority_fee_per_gas,
         }
     }
 
@@ -168,6 +199,14 @@ impl TypedNativeTransaction {
             Cip155(tx) => &mut tx.nonce,
             Cip2930(tx) => &mut tx.nonce,
             Cip1559(tx) => &mut tx.nonce,
+        }
+    }
+
+    pub fn data_mut(&mut self) -> &mut Vec<u8> {
+        match self {
+            Cip155(tx) => &mut tx.data,
+            Cip2930(tx) => &mut tx.data,
+            Cip1559(tx) => &mut tx.data,
         }
     }
 

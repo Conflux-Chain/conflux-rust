@@ -168,7 +168,7 @@ mod test {
     }
     struct Test {}
     mod my_vec {
-        pub struct MyVec<T>(pub Vec<T>);
+        pub struct MyVec<T>(#[allow(unused)] pub Vec<T>);
     }
 
     impl TestTrait for Test {}

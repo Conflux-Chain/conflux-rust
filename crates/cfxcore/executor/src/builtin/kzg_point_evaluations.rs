@@ -27,14 +27,14 @@ pub const RETURN_VALUE: &[u8; 64] = &hex!(
 pub fn run(input: &[u8]) -> Result<(), Error> {
     // Verify input length.
     if input.len() != 192 {
-        return Err(Error("Blob invalid input length"));
+        return Err("Blob invalid input length".into());
     }
 
     // Verify commitment matches versioned_hash
     let versioned_hash = &input[..32];
     let commitment = &input[96..144];
     if kzg_to_versioned_hash(commitment) != versioned_hash {
-        return Err(Error("Blob mismatched version"));
+        return Err("Blob mismatched version".into());
     }
 
     // Verify KZG proof with z and y in big endian format
@@ -43,7 +43,7 @@ pub fn run(input: &[u8]) -> Result<(), Error> {
     let y = as_bytes32(&input[64..96]);
     let proof = as_bytes48(&input[144..192]);
     if !verify_kzg_proof(commitment, z, y, proof, default_kzg_settings()) {
-        return Err(Error("Blob verify kzg proof failed"));
+        return Err("Blob verify kzg proof failed".into());
     }
     Ok(())
 }

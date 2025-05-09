@@ -2,8 +2,9 @@
 name = "db"
 version = "0.1.0"
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 log = { workspace = true }
 kvdb-rocksdb = { workspace = true }
-kvdb = "0.4"
+kvdb = { workspace = true }

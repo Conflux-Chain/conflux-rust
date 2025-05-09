@@ -18,25 +18,25 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::Error;
+use crate::{Error, SignedAuthorization};
 use alloy_rpc_types::TransactionInput;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_types::{Address, AddressSpaceUtil, H160, U256, U64};
 use primitives::{
     transaction::{
         Action, Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
-        EthereumTransaction::*, SignedTransaction, EIP1559_TYPE, EIP2930_TYPE,
-        LEGACY_TX_TYPE,
+        Eip7702Transaction, EthereumTransaction::*, SignedTransaction,
+        EIP1559_TYPE, EIP2930_TYPE, EIP7702_TYPE, LEGACY_TX_TYPE,
     },
     AccessList,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_ETH_GAS_CALL_REQUEST: u64 =
     DEFAULT_TARGET_BLOCK_GAS_LIMIT * 5 / 10;
 
 /// Call request
-#[derive(Debug, Default, PartialEq, Deserialize)]
+#[derive(Debug, Default, PartialEq, Eq, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionRequest {
     /// From
@@ -64,6 +64,8 @@ pub struct TransactionRequest {
     pub transaction_type: Option<U64>,
     ///
     pub chain_id: Option<U256>,
+    /// eip7702 authorization list
+    pub authorization_list: Option<Vec<SignedAuthorization>>,
 }
 
 impl TransactionRequest {
@@ -81,7 +83,9 @@ impl TransactionRequest {
         if let Some(tx_type) = self.transaction_type {
             tx_type.as_usize() as u8
         } else {
-            if self.max_fee_per_gas.is_some()
+            if self.authorization_list.is_some() {
+                EIP7702_TYPE
+            } else if self.max_fee_per_gas.is_some()
                 || self.max_priority_fee_per_gas.is_some()
             {
                 EIP1559_TYPE
@@ -167,6 +171,31 @@ impl TransactionRequest {
                 data,
                 access_list,
             }),
+            EIP7702_TYPE => {
+                if request.to.is_none() {
+                    return Err(Error::InvalidParams(
+                        "to".to_string(),
+                        "to is required for EIP7702 transaction".to_string(),
+                    ));
+                }
+                Eip7702(Eip7702Transaction {
+                    chain_id,
+                    nonce,
+                    max_priority_fee_per_gas,
+                    max_fee_per_gas,
+                    gas,
+                    destination: request.to.unwrap(),
+                    value,
+                    data,
+                    access_list,
+                    authorization_list: request
+                        .authorization_list
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|a| a.into())
+                        .collect(),
+                })
+            }
             _ => {
                 return Err(Error::InvalidParams(
                     "type".to_string(),

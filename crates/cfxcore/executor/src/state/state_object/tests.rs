@@ -3,11 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use super::{State, Substate};
-use crate::{
-    internal_contract::{
-        initialize_internal_contract_accounts, InternalContractMap,
-    },
-    state::CleanupMode,
+use crate::internal_contract::{
+    initialize_internal_contract_accounts, InternalContractMap,
 };
 use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP, genesis::DEV_GENESIS_KEY_PAIR, staking::*,
@@ -56,11 +53,7 @@ fn checkpoint_basic() {
     let address_with_space = address.with_native_space();
     state.checkpoint();
     state
-        .add_balance(
-            &address_with_space,
-            &U256::from(1069u64),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&address_with_space, &U256::from(1069u64))
         .unwrap();
     state
         .add_collateral_for_storage(&address, &U256::from(1000))
@@ -81,11 +74,7 @@ fn checkpoint_basic() {
     );
     state.checkpoint();
     state
-        .add_balance(
-            &address_with_space,
-            &U256::from(1u64),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&address_with_space, &U256::from(1u64))
         .unwrap();
     state
         .sub_collateral_for_storage(&address, &U256::from(1000))
@@ -126,11 +115,7 @@ fn checkpoint_nested() {
     state.checkpoint();
     state.checkpoint();
     state
-        .add_balance(
-            &address_with_space,
-            &U256::from(1069u64),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&address_with_space, &U256::from(1069u64))
         .unwrap();
     state
         .add_collateral_for_storage(&address, &U256::from(1000))
@@ -456,11 +441,7 @@ fn checkpoint_get_storage_at() {
     state.checkpoint();
     substates.push(Substate::new());
     state
-        .add_balance(
-            &a_s,
-            &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&a_s, &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)))
         .unwrap();
     assert_eq!(
         state.balance(&a_s).unwrap(),
@@ -814,7 +795,9 @@ fn check_result_of_simple_payment_to_killed_account() {
     state_0.checkpoint();
     let mut substate = Substate::new();
     state_0.new_contract(&a_s, U256::zero()).unwrap();
-    state_0.init_code(&a_s, code, sender_addr).unwrap();
+    state_0
+        .init_code(&a_s, code, sender_addr, crate::tests::MOCK_TX_HASH)
+        .unwrap();
     state_0
         .set_storage(&a_s, k.clone(), U256::one(), a, &mut substate)
         .unwrap();
@@ -839,12 +822,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     // assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     // Transfer balance to the killed account.
     state
-        .transfer_balance(
-            &sender_addr_s,
-            &a_s,
-            &U256::one(),
-            CleanupMode::NoEmpty,
-        )
+        .transfer_balance(&sender_addr_s, &a_s, &U256::one())
         .unwrap();
     let epoch_id = EpochId::from_uint(&U256::from(2));
     // Assert that the account has no storage and no code.
@@ -870,13 +848,9 @@ fn create_contract_fail() {
 
     state.checkpoint(); // c1
     state.new_contract_with_code(&a_s, U256::zero()).unwrap();
-    state
-        .add_balance(&a_s, &U256::from(1), CleanupMode::ForceCreate)
-        .unwrap();
+    state.add_balance(&a_s, &U256::from(1)).unwrap();
     state.checkpoint(); // c2
-    state
-        .add_balance(&a_s, &U256::from(1), CleanupMode::ForceCreate)
-        .unwrap();
+    state.add_balance(&a_s, &U256::from(1)).unwrap();
     state
         .settle_collateral_and_assert(&a, &mut substate, true)
         .unwrap();
@@ -908,11 +882,7 @@ fn create_contract_fail_previous_storage() {
     substates.push(Substate::new());
 
     state
-        .add_balance(
-            &a_s,
-            &COLLATERAL_DRIPS_PER_STORAGE_KEY,
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&a_s, &COLLATERAL_DRIPS_PER_STORAGE_KEY)
         .unwrap();
     assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
@@ -1042,7 +1012,6 @@ fn test_automatic_collateral_normal_account() {
         .add_balance(
             &normal_account_s,
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state

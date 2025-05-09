@@ -438,7 +438,7 @@ impl Provider {
         validate_chain_id(
             &self
                 .consensus
-                .get_config()
+                .config()
                 .chain_id
                 .read()
                 .to_native_space_params(),

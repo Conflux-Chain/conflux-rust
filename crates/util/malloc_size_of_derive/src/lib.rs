@@ -10,11 +10,11 @@
 
 //! A crate for deriving the MallocSizeOf trait.
 
-extern crate proc_macro2;
-#[macro_use]
-extern crate syn;
-#[macro_use]
-extern crate synstructure;
+use syn::parse_quote;
+use synstructure::quote;
+
+#[cfg(not(test))]
+use synstructure::decl_derive;
 
 #[cfg(not(test))]
 decl_derive!([MallocSizeOf, attributes(ignore_malloc_size_of)] => malloc_size_of_derive);
@@ -99,7 +99,7 @@ fn test_struct() {
             assert_eq!(
                 no_space.matches(&$e.replace(" ", "")).count(),
                 $count,
-                "counting occurences of {:?} in {:?} (whitespace-insensitive)",
+                "counting occurrences of {:?} in {:?} (whitespace-insensitive)",
                 $e,
                 expanded
             )

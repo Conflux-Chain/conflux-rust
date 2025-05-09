@@ -4,6 +4,7 @@ name = "cfxkey"
 version = "0.3.0"
 authors = ["Conflux Foundation"]
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 cfx-types = { workspace = true }
@@ -16,12 +17,9 @@ parity-wordlist = { workspace = true }
 rand = { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
-serde_derive = { workspace = true }
 tiny-keccak = { workspace = true }
 zeroize = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 malloc_size_of = { workspace = true }
-panic_hook = { workspace = true }
-threadpool = { workspace = true }
 thiserror = { workspace = true }
 

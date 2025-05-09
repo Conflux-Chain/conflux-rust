@@ -13,6 +13,7 @@ use rustc_hex::FromHex;
 use serde::{Deserialize, Serialize};
 use toml::Value;
 
+use crate::keylib::KeyPair;
 use cfx_executor::internal_contract::initialize_internal_contract_accounts;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -33,7 +34,6 @@ use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
 };
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
-use keylib::KeyPair;
 use primitives::{
     Action, Block, BlockHeaderBuilder, BlockReceipts, SignedTransaction,
 };
@@ -45,7 +45,7 @@ use cfx_executor::{
         contract_address, ExecutionOutcome, ExecutiveContext, TransactOptions,
     },
     machine::Machine,
-    state::{CleanupMode, State},
+    state::State,
 };
 use cfx_vm_types::{CreateContractAddress, Env};
 use diem_types::account_address::AccountAddress;
@@ -138,9 +138,7 @@ pub fn genesis_block(
     .expect("no db error");
     trace!("genesis_accounts: {:?}", genesis_accounts);
     for (addr, balance) in genesis_accounts {
-        state
-            .add_balance(&addr, &balance, CleanupMode::NoEmpty)
-            .unwrap();
+        state.add_balance(&addr, &balance).unwrap();
         state.add_total_issued(balance);
         if addr.space == Space::Ethereum {
             state.add_total_evm_tokens(balance);
@@ -160,12 +158,9 @@ pub fn genesis_block(
     let genesis_account_init_balance =
         U256::from(ONE_CFX_IN_DRIP) * 100 + genesis_token_count;
     state
-        .add_balance(
-            &genesis_account_address,
-            &genesis_account_init_balance,
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&genesis_account_address, &genesis_account_init_balance)
         .unwrap();
+    state.commit_cache(false);
 
     let mut debug_record = Some(ComputeEpochDebugRecord::default());
 
@@ -344,6 +339,7 @@ pub fn genesis_block(
                 contract_name_list[i - 1],
                 contract_address
             );
+            state.commit_cache(false);
         }
     }
 
@@ -356,12 +352,12 @@ pub fn genesis_block(
                     &node.address.with_native_space(),
                     &(stake_balance
                         + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
-                    CleanupMode::NoEmpty,
                 )
                 .unwrap();
             state
                 .deposit(&node.address, &stake_balance, 0, false)
                 .unwrap();
+            state.commit_cache(false);
             let signed_tx = node
                 .register_tx
                 .clone()
@@ -488,7 +484,8 @@ pub fn register_transaction(
 fn execute_genesis_transaction(
     transaction: &SignedTransaction, state: &mut State, machine: Arc<Machine>,
 ) {
-    let env = Env::default();
+    let mut env = Env::default();
+    env.transaction_hash = transaction.hash();
 
     let options = TransactOptions::default();
     let r = {
@@ -501,6 +498,7 @@ fn execute_genesis_transaction(
         .transact(transaction, options)
         .unwrap()
     };
+    state.update_state_post_tx_execution(false);
 
     match &r {
         ExecutionOutcome::Finished(_executed) => {}

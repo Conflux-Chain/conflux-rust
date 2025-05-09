@@ -2,7 +2,8 @@
 name = "dag"
 version = "0.1.0"
 authors = ["Peilun Li <peilun.li@conflux-chain.org>"]
-edition = "2018"
+edition = "2021"
+license-file.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

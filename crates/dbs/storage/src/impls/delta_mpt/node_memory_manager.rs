@@ -237,10 +237,11 @@ impl<
         match cache_mut.node_ref_map.get_cache_info((mpt_id, db_key)) {
             None => {}
             Some(cache_info) => match cache_info.get_cache_info() {
-                TrieCacheSlotOrCacheAlgoData::TrieCacheSlot(_cache_slot) => unsafe {
+                TrieCacheSlotOrCacheAlgoData::TrieCacheSlot(_cache_slot) => {
                     // This should not happen.
-                    unreachable_unchecked();
-                },
+                    unreachable!()
+                }
+
                 TrieCacheSlotOrCacheAlgoData::CacheAlgoData(
                     cache_algo_data,
                 ) => {
@@ -392,7 +393,7 @@ impl<
     ) -> &'a mut MemOptimizedTrieNode<CacheAlgoDataT> {
         match node {
             NodeRefDeltaMpt::Committed { db_key: _ } => {
-                unreachable_unchecked();
+                unreachable!();
             }
             NodeRefDeltaMpt::Dirty { ref index } => NodeMemoryManager::<
                 CacheAlgoDataT,
@@ -501,7 +502,7 @@ impl<
 
                 Ok(GuardedValue::new(cache_manager_mut_wrapped, trie_node))
             }
-            NodeRefDeltaMpt::Dirty { index: _ } => unreachable_unchecked(),
+            NodeRefDeltaMpt::Dirty { index: _ } => unreachable!(),
         }
     }
 
@@ -789,6 +790,5 @@ use rlp::*;
 use std::{
     cell::UnsafeCell,
     convert::TryInto,
-    hint::unreachable_unchecked,
     sync::atomic::{AtomicUsize, Ordering},
 };

@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "An LRU-cache which operates on memory used"
 license = "GPL3"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 malloc_size_of = { workspace = true }
-lru-cache = "0.1"
+lru-cache = { workspace = true }

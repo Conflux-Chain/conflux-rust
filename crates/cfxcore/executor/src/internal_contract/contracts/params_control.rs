@@ -66,7 +66,7 @@ make_solidity_function! {
     struct ReadVote(Address, "readVote(address)", Vec<Vote>);
 }
 
-impl_function_type!(ReadVote, "query", gas: |spec: &Spec| params_index_max(spec) * OPTION_INDEX_MAX * (spec.sload_gas + 2 * spec.sha3_gas));
+impl_function_type!(ReadVote, "query", gas: |spec: &Spec| params_index_max(spec) * OPTION_INDEX_MAX * (spec.cold_sload_gas + 2 * spec.sha3_gas));
 
 impl SimpleExecutionTrait for ReadVote {
     fn execute_inner(
@@ -97,7 +97,7 @@ impl SimpleExecutionTrait for CurrentRound {
 make_solidity_function! {
     struct TotalVotes(u64, "totalVotes(uint64)", Vec<Vote>);
 }
-impl_function_type!(TotalVotes, "query", gas: |spec: &Spec| params_index_max(spec) * OPTION_INDEX_MAX * spec.sload_gas);
+impl_function_type!(TotalVotes, "query", gas: |spec: &Spec| params_index_max(spec) * OPTION_INDEX_MAX * spec.cold_sload_gas);
 
 impl SimpleExecutionTrait for TotalVotes {
     fn execute_inner(
@@ -111,7 +111,7 @@ impl SimpleExecutionTrait for TotalVotes {
 make_solidity_function! {
     struct PosStakeForVotes(u64, "posStakeForVotes(uint64)", U256);
 }
-impl_function_type!(PosStakeForVotes, "query", gas: |spec: &Spec| 2 * spec.sload_gas);
+impl_function_type!(PosStakeForVotes, "query", gas: |spec: &Spec| 2 * spec.cold_sload_gas);
 
 impl SimpleExecutionTrait for PosStakeForVotes {
     fn execute_inner(

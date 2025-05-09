@@ -86,7 +86,6 @@ pub type CaterpillarMinLinkCutTree = MutexLinkCutTree<Caterpillar>;
 
 #[cfg(test)]
 mod tests {
-    extern crate rand;
     use super::{
         CaterpillarMinLinkCutTree, DefaultMinLinkCutTree,
         DeltaAndPreferredChild, Link, MutexLinkCutTree, SizeMinLinkCutTree,

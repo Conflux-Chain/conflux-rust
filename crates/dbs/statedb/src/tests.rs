@@ -142,7 +142,7 @@ impl StorageStateTrait for MockStorage {
 type StateDbTest = StateDbGeneric;
 
 // convert `key` to storage interface format
-fn storage_key(key: &'static [u8]) -> StorageKeyWithSpace {
+fn storage_key(key: &'static [u8]) -> StorageKeyWithSpace<'static> {
     StorageKey::AccountKey(key).with_native_space()
 }
 

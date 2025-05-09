@@ -22,17 +22,15 @@ use cfx_types::{Space, H128, H256};
 use cfx_util_macros::bail;
 use cfxcore::{
     channel::Channel, errors::Error as CfxRpcError, BlockDataManager,
-    ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
-    SharedTransactionPool,
+    ConsensusGraph, SharedConsensusGraph, SharedTransactionPool,
 };
-use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as JsonRpcResult};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,
 };
-use runtime::Executor;
+use tokio::runtime::Runtime;
 
 /// Something which provides data that can be filtered over.
 pub trait Filterable {
@@ -101,7 +99,7 @@ impl CfxFilterClient {
     /// Creates new Cfx filter client.
     pub fn new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Executor,
+        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Arc<Runtime>,
         poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
         network: Network,
     ) -> Self {
@@ -121,7 +119,7 @@ impl CfxFilterClient {
 
     fn start_epochs_loop(
         &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
-        executor: Executor,
+        executor: Arc<Runtime>,
     ) {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();
@@ -165,7 +163,6 @@ impl CfxFilterClient {
             }
         };
 
-        let fut = fut.unit_error().boxed().compat();
         executor.spawn(fut);
     }
 }
@@ -241,12 +238,7 @@ impl Filterable for CfxFilterClient {
     /// Get a reference to the poll manager.
     fn polls(&self) -> &Mutex<PollManager<SyncPollFilter<Log>>> { &self.polls }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn shared_consensus_graph(&self) -> SharedConsensusGraph {
         self.consensus.clone()
@@ -516,8 +508,7 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                         revert_to: epochs.first().unwrap().0.into(),
                     }));
                 }
-                let data_man =
-                    self.consensus_graph().get_data_manager().clone();
+                let data_man = self.consensus_graph().data_manager().clone();
 
                 // logs from new epochs
                 for (num, blocks) in epochs.into_iter() {

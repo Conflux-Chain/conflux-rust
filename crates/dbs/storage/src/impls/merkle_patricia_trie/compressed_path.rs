@@ -290,7 +290,7 @@ impl CompressedPathRaw {
                     let ptr = value_box.as_mut_ptr();
                     // Don't free the buffer since it's stored in the return
                     // value.
-                    Box::into_raw(value_box);
+                    let _ = Box::into_raw(value_box);
                     path = MaybeInPlaceByteArray { ptr };
                     slice = std::slice::from_raw_parts_mut(ptr, size);
                 } else {

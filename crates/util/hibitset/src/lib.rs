@@ -45,13 +45,6 @@
 #![deny(missing_docs)]
 #![allow(clippy::all)]
 
-extern crate atom;
-extern crate malloc_size_of;
-#[cfg(test)]
-extern crate rand;
-#[cfg(feature = "parallel")]
-extern crate rayon;
-
 mod atomic;
 mod iter;
 mod ops;
@@ -445,7 +438,7 @@ impl Eq for BitSet {}
 
 #[cfg(test)]
 mod tests {
-    use super::{BitSet, BitSetAnd, BitSetLike, BitSetNot};
+    use super::{BitSet, BitSetAnd, BitSetLike, BitSetNot, BITS};
 
     #[test]
     fn insert() {
@@ -540,9 +533,9 @@ mod tests {
     fn iter_clusters() {
         let mut set = BitSet::new();
         for x in 0..8 {
-            let x = (x * 3) << (::BITS * 2); // scale to the last slot
+            let x = (x * 3) << (BITS * 2); // scale to the last slot
             for y in 0..8 {
-                let y = (y * 3) << (::BITS);
+                let y = (y * 3) << (BITS);
                 for z in 0..8 {
                     let z = z * 2;
                     set.add(x + y + z);
@@ -569,7 +562,7 @@ mod tests {
 
 #[cfg(all(test, feature = "parallel"))]
 mod test_parallel {
-    use super::{BitSet, BitSetAnd, BitSetLike};
+    use super::{BitSet, BitSetAnd, BitSetLike, BITS};
     use rayon::iter::ParallelIterator;
 
     #[test]
@@ -664,9 +657,9 @@ mod test_parallel {
         let mut set = BitSet::new();
         let mut check_set = HashSet::new();
         for x in 0..8 {
-            let x = (x * 3) << (::BITS * 2); // scale to the last slot
+            let x = (x * 3) << (BITS * 2); // scale to the last slot
             for y in 0..8 {
-                let y = (y * 3) << (::BITS);
+                let y = (y * 3) << (BITS);
                 for z in 0..8 {
                     let z = z * 2;
                     let index = x + y + z;

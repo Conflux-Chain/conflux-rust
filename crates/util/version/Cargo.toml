@@ -5,6 +5,7 @@ version = "3.3.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 edition = "2021"
+license-file.workspace = true
 
 [package.metadata]
 
@@ -13,4 +14,4 @@ target_info = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }
-vergen = { workspace = true }
+vergen = { workspace = true, features = ["git", "rustc", "git2"] }

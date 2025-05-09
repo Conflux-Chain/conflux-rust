@@ -6,11 +6,11 @@ use std::collections::{hash_map::Entry::*, HashMap};
 
 use super::{
     super::checkpoints::CheckpointEntry::{self, Recorded, Unchanged},
-    AccountEntry, GlobalStat, OverlayAccount, State,
+    AccountEntry, AccountEntryWithWarm, GlobalStat, OverlayAccount, State,
 };
 use crate::{state::checkpoints::CheckpointLayerTrait, unwrap_or_return};
 
-pub(super) type AccountCheckpointEntry = CheckpointEntry<AccountEntry>;
+pub(super) type AccountCheckpointEntry = CheckpointEntry<AccountEntryWithWarm>;
 
 /// Represents a recoverable point within a checkpoint. including
 /// and. The addition of account entries to the checkpoint is lazy; they are
@@ -33,7 +33,7 @@ pub(super) struct CheckpointLayer {
 
 impl CheckpointLayerTrait for CheckpointLayer {
     type Key = AddressWithSpace;
-    type Value = AccountEntry;
+    type Value = AccountEntryWithWarm;
 
     fn as_hash_map(&self) -> &HashMap<Self::Key, CheckpointEntry<Self::Value>> {
         &self.entries
@@ -67,8 +67,8 @@ impl State {
         // cleared directly, thus, the accounts in state's cache should
         // all discard all checkpoints
         for addr in cleared_addresses {
-            if let Some(AccountEntry::Cached(ref mut overlay_account, true)) =
-                self.cache.get_mut().get_mut(&addr)
+            if let Some(AccountEntry::Cached(ref mut overlay_account, _dirty)) =
+                self.cache.get_mut().get_mut(&addr).map(|x| &mut x.entry)
             {
                 overlay_account.clear_checkpoint();
             }
@@ -98,7 +98,7 @@ impl State {
         let old_account_entry = self
             .cache
             .get_mut()
-            .insert(address, AccountEntry::new_dirty(account));
+            .insert(address, AccountEntry::new_dirty(account).with_warm(true));
 
         self.checkpoints
             .get_mut()
@@ -111,38 +111,44 @@ impl State {
     /// this function to incoroprates the old version to the checkpoint in
     /// needed.
     pub(super) fn copy_cache_entry_to_checkpoint(
-        &self, address: AddressWithSpace, entry_in_cache: &mut AccountEntry,
+        &self, address: AddressWithSpace,
+        entry_in_cache: &mut AccountEntryWithWarm,
     ) {
         self.checkpoints
             .write()
             .insert_element(address, |checkpoint_id| {
                 let mut new_entry_in_cache = entry_in_cache
-                    .clone_cache_entry_for_checkpoint(checkpoint_id);
+                    .entry
+                    .clone_cache_entry_for_checkpoint(checkpoint_id)
+                    .with_warm(true);
 
                 std::mem::swap(&mut new_entry_in_cache, entry_in_cache);
                 // Rename after memswap
-                let old_entry_in_cache = new_entry_in_cache;
+                let entry_to_checkpoint = new_entry_in_cache;
 
-                Recorded(old_entry_in_cache)
+                Recorded(entry_to_checkpoint)
             });
+        // If there is no checkpoint, the above function will not be executed,
+        // so we need to mark warm bit here.
+        entry_in_cache.warm = true;
     }
 
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn clear(&mut self) {
         assert!(self.no_checkpoint());
         self.cache.get_mut().clear();
+        self.committed_cache.clear();
         self.global_stat = GlobalStat::loaded(&self.db).expect("no db error");
     }
 }
 
 fn apply_checkpoint_layer_to_cache(
     entries: HashMap<AddressWithSpace, AccountCheckpointEntry>,
-    cache: &mut HashMap<AddressWithSpace, AccountEntry>, checkpoint_id: usize,
+    cache: &mut HashMap<AddressWithSpace, AccountEntryWithWarm>,
+    checkpoint_id: usize,
 ) {
     for (k, v) in entries.into_iter() {
-        let mut entry_in_cache = if let Occupied(e) = cache.entry(k) {
-            e
-        } else {
+        let Occupied(mut entry_in_cache) = cache.entry(k) else {
             // All the entries in checkpoint must be copied from cache by the
             // following function `insert_to_cache` and `clone_to_checkpoint`.
             //
@@ -156,17 +162,34 @@ fn apply_checkpoint_layer_to_cache(
         };
         match v {
             Recorded(entry_in_checkpoint) => {
-                if let Some(acc) = entry_in_cache.get_mut().dirty_account_mut()
-                {
+                if let Some(acc) = entry_in_cache.get_mut().account_mut() {
                     acc.revert_checkpoint(checkpoint_id);
                 }
                 *entry_in_cache.get_mut() = entry_in_checkpoint;
             }
+
             Unchanged => {
-                // If the AccountEntry in cache does not have a dirty bit, we
-                // can keep it in cache to avoid an duplicate db load.
-                if entry_in_cache.get().is_dirty() {
+                // Here we have an optimization: if a checkpoint entry was
+                // Unchanged and the corresponding cache entry
+                // was clean (i.e., its dirty bit was not set),
+                // the cache entry would be retained rather than
+                // removed by checkpoint semantics.
+                //
+                // A theoretical concern arose: if a CheckpointEntry is
+                // Unchanged, its cache entry is clean, and the
+                // account is absent from the database (DbAbsent), the output of
+                // `State::code_hash` might differ with and
+                // without this optimization.
+                //
+                // However, this scenario is impossible under the current
+                // implementation. In this system, DbAbsent and
+                // Recorded() are treated as distinct values, and transitioning
+                // from one to the other would require the dirty flag to be set.
+
+                if entry_in_cache.get().entry.is_dirty() {
                     entry_in_cache.remove();
+                } else {
+                    entry_in_cache.get_mut().warm = false;
                 }
             }
         }

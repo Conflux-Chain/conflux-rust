@@ -5,8 +5,9 @@
 use super::*;
 use crate::{
     machine::{Machine, VmFactory},
-    state::{get_state_by_epoch_id, get_state_for_genesis_write, CleanupMode},
+    state::{get_state_by_epoch_id, get_state_for_genesis_write},
     substate::Substate,
+    tests::MOCK_TX_HASH,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -37,12 +38,16 @@ use std::{
 
 #[cfg(test)]
 fn make_byzantium_machine(max_depth: usize) -> Machine {
+    use crate::spec::CommonParams;
+
+    let mut params: CommonParams = Default::default();
+    params.transition_heights.align_evm = u64::MAX;
+
     let mut machine = crate::machine::Machine::new_with_builtin(
-        Default::default(),
+        params,
         VmFactory::new(1024 * 32),
     );
-    machine
-        .set_spec_creation_rules(Box::new(move |s, _| s.max_depth = max_depth));
+    machine.set_max_depth(max_depth);
     machine
 }
 
@@ -92,18 +97,10 @@ fn test_sender_balance() {
     let storage_limit_in_drip = U256::MAX;
     let mut state = get_state_for_genesis_write();
     state
-        .add_balance(
-            &sender_with_space,
-            &COLLATERAL_DRIPS_PER_STORAGE_KEY,
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&sender_with_space, &COLLATERAL_DRIPS_PER_STORAGE_KEY)
         .unwrap();
     state
-        .add_balance(
-            &sender_with_space,
-            &U256::from(0x100u64),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&sender_with_space, &U256::from(0x100u64))
         .unwrap();
     assert_eq!(
         state.balance(&sender_with_space).unwrap(),
@@ -137,7 +134,7 @@ fn test_sender_balance() {
         res
     };
 
-    assert_eq!(gas_left, U256::from(94_595));
+    assert_eq!(gas_left, U256::from(94_895));
     assert_eq!(
         state.storage_at(&address, &vec![0; 32]).unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(0xf9)
@@ -154,7 +151,7 @@ fn test_sender_balance() {
     assert_eq!(state.balance(&address).unwrap(), U256::from(0x7));
     // We create a contract successfully, the substate contracts_created length
     // should be 1?
-    assert_eq!(substate.contracts_created.len(), 1);
+    assert_eq!(substate.contracts_created().len(), 1);
 }
 
 #[test]
@@ -211,7 +208,7 @@ fn test_create_contract_out_of_depth() {
 
     let mut state = get_state_for_genesis_write();
     state
-        .add_balance(&sender_with_space, &U256::from(100), CleanupMode::NoEmpty)
+        .add_balance(&sender_with_space, &U256::from(100))
         .unwrap();
     let mut substate = Substate::new();
 
@@ -223,10 +220,10 @@ fn test_create_contract_out_of_depth() {
             .expect("no vm error")
     };
 
-    assert_eq!(gas_left, U256::from(62_970));
+    assert_eq!(gas_left, U256::from(65_768));
     // We create a contract successfully, the substate contracts_created length
     // should be 1?
-    assert_eq!(substate.contracts_created.len(), 1);
+    assert_eq!(substate.contracts_created().len(), 1);
 }
 
 #[test]
@@ -258,6 +255,7 @@ fn test_suicide_when_creation() {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     params.value = ActionValue::Transfer(U256::from(0));
+    params.create_type = CreateType::CREATE;
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
@@ -265,11 +263,7 @@ fn test_suicide_when_creation() {
 
     let mut state = get_state_for_genesis_write();
     state
-        .add_balance(
-            &sender_with_space,
-            &U256::from(100_000),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&sender_with_space, &U256::from(100_000))
         .unwrap();
     let mut substate = Substate::new();
 
@@ -349,7 +343,8 @@ fn test_call_to_create() {
         * code_collateral_units(code_len)
         + *COLLATERAL_DRIPS_PER_STORAGE_KEY;
 
-    let env = Env::default();
+    let mut env = Env::default();
+    env.transaction_hash = crate::tests::MOCK_TX_HASH;
     let machine = make_byzantium_machine(5);
     let spec = machine.spec_for_test(env.number);
 
@@ -361,7 +356,6 @@ fn test_call_to_create() {
         .add_balance(
             &sender_with_space,
             &(U256::from(100) + storage_limit_in_drip),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     assert_eq!(
@@ -400,7 +394,7 @@ fn test_call_to_create() {
     );
     assert_eq!(state.total_storage_tokens(), storage_limit_in_drip);
 
-    assert_eq!(gas_left, U256::from(59_746));
+    assert_eq!(gas_left, U256::from(59_744));
 }
 
 #[test]
@@ -425,7 +419,6 @@ fn test_revert() {
         .add_balance(
             &sender_with_space,
             &U256::from_str("152d02c7e14af68000000").unwrap(),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
@@ -504,7 +497,6 @@ fn test_keccak() {
         .add_balance(
             &sender_with_space,
             &U256::from_str("152d02c7e14af6800000").unwrap(),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     let mut substate = Substate::new();
@@ -545,9 +537,9 @@ fn test_not_enough_cash() {
     let spec = machine.spec_for_test(env.number);
 
     let mut state = get_state_for_genesis_write();
-    state
-        .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
-        .unwrap();
+
+    state.add_balance(&sender, &U256::from(100_017)).unwrap();
+    state.commit_cache(false);
     let correct_cost = min(t.gas_price() * t.gas(), 100_017.into());
 
     let res = {
@@ -590,7 +582,6 @@ fn test_deposit_withdraw_lock() {
         .add_balance(
             &sender_with_space,
             &U256::from(2_000_000_000_000_000_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state.add_total_issued(U256::from(2_000_000_000_000_000_000u64));
@@ -939,6 +930,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     let machine = make_byzantium_machine(0);
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
+    env.transaction_hash = crate::tests::MOCK_TX_HASH;
     let spec = machine.spec_for_test(env.number);
 
     let sender = Random.generate().unwrap().address();
@@ -963,12 +955,13 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
-    state.init_code(&address, code.clone(), sender).unwrap();
+    state
+        .init_code(&address, code.clone(), sender, env.transaction_hash)
+        .unwrap();
     state
         .add_balance(
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
 
@@ -1043,12 +1036,13 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             false,
         )
         .unwrap();
-    state.init_code(&address, code, sender).unwrap();
+    state
+        .init_code(&address, code, sender, env.transaction_hash)
+        .unwrap();
     state
         .add_balance(
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     let whitelisted_caller = Address::random();
@@ -1146,14 +1140,16 @@ fn test_commission_privilege() {
             false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
-    state.init_code(&address, code, sender).unwrap();
+    state
+        .init_code(&address, code, sender, env.transaction_hash)
+        .unwrap();
     state
         .add_balance(
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
+    state.commit_cache(false);
 
     let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
@@ -1176,7 +1172,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(state.nonce(&sender_with_space).unwrap(), U256::from(1));
     assert_eq!(state.balance(&address).unwrap(), U256::from(1_000_000));
     assert_eq!(
@@ -1188,21 +1184,18 @@ fn test_commission_privilege() {
         .add_balance(
             &caller1.address().with_native_space(),
             &U256::from(100_000),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller2.address().with_native_space(),
             &U256::from(100_000),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller3.address().with_native_space(),
             &U256::from(100_000),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     // add commission privilege to caller1 and caller2
@@ -1268,6 +1261,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1276,7 +1270,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller3.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1285,13 +1279,14 @@ fn test_commission_privilege() {
         state
             .balance(&caller3.address().with_native_space())
             .unwrap(),
-        U256::from(41_970)
+        U256::from(44_768)
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address.address).unwrap(),
         U256::from(110_000)
     );
 
+    state.commit_cache(false);
     // call with commission privilege and enough commission balance
     let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
@@ -1312,6 +1307,8 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
+
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1320,7 +1317,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller1.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1356,6 +1353,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1364,7 +1362,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller2.address().with_native_space()).unwrap(),
         U256::from(1)
@@ -1414,6 +1412,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(25_000)
     );
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1422,7 +1421,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller2.address().with_native_space()).unwrap(),
         U256::from(2)
@@ -1468,8 +1467,9 @@ fn test_commission_privilege() {
         state
             .balance(&caller3.address().with_native_space())
             .unwrap(),
-        U256::from(41_970)
+        U256::from(44_768)
     );
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed { gas_used, .. } =
         ExecutiveContext::new(&mut state, &env, &machine, &spec)
@@ -1478,7 +1478,7 @@ fn test_commission_privilege() {
             .into_success_executed()
             .unwrap();
 
-    assert_eq!(gas_used, U256::from(58_030));
+    assert_eq!(gas_used, U256::from(55_232));
     assert_eq!(
         state.nonce(&caller3.address().with_native_space()).unwrap(),
         U256::from(2)
@@ -1487,7 +1487,7 @@ fn test_commission_privilege() {
         state
             .balance(&caller3.address().with_native_space())
             .unwrap(),
-        U256::from(41_970)
+        U256::from(44_768)
     );
     assert_eq!(
         state.sponsor_balance_for_gas(&address.address).unwrap(),
@@ -1539,15 +1539,17 @@ fn test_storage_commission_privilege() {
             false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
-    state.init_code(&address, code, sender.address()).unwrap();
+    state
+        .init_code(&address, code, sender.address(), env.transaction_hash)
+        .unwrap();
 
     state
         .add_balance(
             &sender_with_space,
             &U256::from(2_000_000_000_000_075_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
+    state.commit_cache(false);
 
     // simple call to create a storage entry
     let tx = Transaction::from(NativeTransaction {
@@ -1618,21 +1620,18 @@ fn test_storage_commission_privilege() {
         .add_balance(
             &caller1.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller2.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller3.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
 
@@ -1722,6 +1721,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed {
         gas_used,
@@ -1806,6 +1806,8 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
+
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed {
         gas_used,
@@ -1911,6 +1913,8 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
+
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed {
         gas_used,
@@ -2050,6 +2054,8 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
+
+    state.commit_cache(false);
     let options = TransactOptions::default();
     let Executed {
         gas_used,
@@ -2239,4 +2245,91 @@ fn test_push0() {
 
         assert!(matches!(error, vm::Error::BadInstruction { .. }));
     }
+}
+
+#[test]
+fn test_tload() {
+    let contract_address =
+        Address::from_str("8d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+    let contract_address_with_space = contract_address.with_evm_space();
+    let sender =
+        Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
+    let sender_with_space = sender.with_evm_space();
+
+    // ```
+    // let value := tload(1)
+    // if iszero(value) {
+    //     tstore(1, 0x1234)
+    //
+    //     // Call this contract statically (recursive call)
+    //     let success := staticcall(
+    //         gas(),       // remaining gas
+    //         address(),   // this contract's address
+    //         0, 0,        // empty memory input offset
+    //         0, 0,        // don't copy output
+    //     )
+    //
+    //     // Store returned value to permanent storage slot 2
+    //     returndatacopy(0, 0, 0x20)
+    //     sstore(2, mload(0))
+    // } else {
+    //     mstore(0, value)
+    //     return(0, 0x20)
+    // }
+    // ```
+    let code: Vec<u8> = "60015c15601358015760015c60005260206000f360225801565b61123460015d6000600060006000305afa6020600060003e6000516002555b".from_hex().unwrap();
+
+    let env = Env::default();
+    let machine = make_byzantium_machine(64);
+    let spec = machine.spec_for_test(env.number);
+    let mut substate = Substate::new();
+
+    let mut state = get_state_for_genesis_write();
+    state
+        .add_balance(
+            &sender_with_space,
+            &U256::from_str("152d02c7e14af68000000").unwrap(),
+        )
+        .unwrap();
+    state
+        .new_contract_with_code(&contract_address_with_space, U256::zero())
+        .unwrap();
+    state
+        .init_code(
+            &contract_address_with_space,
+            code.clone(),
+            Address::zero(),
+            MOCK_TX_HASH,
+        )
+        .unwrap();
+
+    let mut params = ActionParams::default();
+    params.space = Space::Ethereum;
+    params.address = contract_address;
+    params.sender = sender;
+    params.original_sender = sender;
+    params.storage_owner = contract_address;
+    params.gas = U256::from(2000000);
+    params.code = Some(Arc::new(code));
+    params.value = ActionValue::Transfer(U256::zero());
+    params.call_type = CallType::Call;
+
+    let FinalizationResult { apply_state, .. } = {
+        let mut ex = ExecutiveContext::new(&mut state, &env, &machine, &spec);
+        let mut tracer = ();
+        ex.call_for_test(params, &mut substate, &mut tracer)
+            .expect("no db error")
+            .expect("no vm error")
+    };
+
+    assert!(apply_state);
+
+    let mut key = [0u8; 32];
+    U256::from(2).to_big_endian(&mut key);
+    assert_eq!(
+        state
+            .storage_at(&contract_address_with_space, &key)
+            .unwrap(),
+        U256::from(0x1234)
+    );
 }

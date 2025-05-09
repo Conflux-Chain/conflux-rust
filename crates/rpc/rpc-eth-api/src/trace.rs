@@ -6,19 +6,19 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 pub trait TraceApi {
     /// Returns all traces produced at the given block.
     #[method(name = "block")]
-    fn block_traces(
+    async fn block_traces(
         &self, block_number: BlockNumber,
     ) -> RpcResult<Option<Vec<LocalizedTrace>>>;
 
     /// Returns all traces matching the provided filter.
     #[method(name = "filter")]
-    fn filter_traces(
+    async fn filter_traces(
         &self, filter: TraceFilter,
-    ) -> RpcResult<Option<Vec<LocalizedTrace>>>;
+    ) -> RpcResult<Vec<LocalizedTrace>>;
 
     /// Returns all traces produced at the given transaction.
     #[method(name = "transaction")]
-    fn transaction_traces(
+    async fn transaction_traces(
         &self, tx_hash: H256,
     ) -> RpcResult<Option<Vec<LocalizedTrace>>>;
 }

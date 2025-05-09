@@ -20,9 +20,12 @@
 
 use crate::{Bytes, Transaction};
 use cfx_rpc_cfx_types::PhantomBlock;
-use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
+use cfx_types::{
+    hexstr_to_h256, Address, Bloom as H2048, Space, H160, H256, H64, U256,
+};
 use primitives::receipt::EVM_SPACE_SUCCESS;
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
+use std::collections::BTreeMap;
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
     "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
@@ -79,6 +82,9 @@ pub struct Block {
     pub gas_used: U256,
     /// Gas Limit
     pub gas_limit: U256,
+    /// Conflux espace gas limit, this is the real gas limit of the block
+    /// This is a conflux espace custom field
+    pub espace_gas_limit: U256,
     /// Extra data
     pub extra_data: Bytes,
     /// Logs bloom
@@ -216,7 +222,8 @@ impl Block {
                 .last()
                 .map(|r| r.accumulated_gas_used)
                 .unwrap_or_default(),
-            gas_limit: pb.total_gas_limit,
+            gas_limit: pb.pivot_header.espace_gas_limit(true).into(),
+            espace_gas_limit: pb.total_gas_limit,
             extra_data: Default::default(),
             logs_bloom: pb.bloom,
             timestamp: pb.pivot_header.timestamp().into(),
@@ -306,6 +313,68 @@ impl Header {
     //     }
 }
 
+/// BlockOverrides is a set of header fields to override.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct BlockOverrides {
+    /// Overrides the block number.
+    ///
+    /// For `eth_callMany` this will be the block number of the first simulated
+    /// block. Each following block increments its block number by 1
+    // Note: geth uses `number`, erigon uses `blockNumber`
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "blockNumber"
+    )]
+    pub number: Option<U256>,
+    /// Overrides the difficulty of the block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub difficulty: Option<U256>,
+    /// Overrides the timestamp of the block.
+    // Note: geth uses `time`, erigon uses `timestamp`
+    #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            alias = "timestamp",
+            // with = "alloy_serde::quantity::opt"
+        )]
+    pub time: Option<u64>,
+    /// Overrides the gas limit of the block.
+    #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            // with = "alloy_serde::quantity::opt"
+        )
+    ]
+    pub gas_limit: Option<u64>,
+    /// Overrides the coinbase address of the block.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "feeRecipient"
+    )]
+    pub coinbase: Option<Address>,
+    /// Overrides the prevrandao of the block.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "prevRandao"
+    )]
+    pub random: Option<H256>,
+    /// Overrides the basefee of the block.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "baseFeePerGas"
+    )]
+    pub base_fee: Option<U256>,
+    /// A dictionary that maps blockNumber to a user-defined hash. It can be
+    /// queried from the EVM opcode BLOCKHASH.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_hash: Option<BTreeMap<u64, H256>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Block, BlockTransactions};
@@ -326,6 +395,7 @@ mod tests {
             number: U256::default(),
             gas_used: U256::default(),
             gas_limit: U256::default(),
+            espace_gas_limit: U256::default(),
             extra_data: Bytes::default(),
             logs_bloom: H2048::default(),
             timestamp: U256::default(),
@@ -342,7 +412,7 @@ mod tests {
 
         assert_eq!(
             serialized_block,
-            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","sha3Uncles":"0x0000000000000000000000000000000000000000000000000000000000000000","author":"0x0000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","number":"0x0","gasUsed":"0x0","gasLimit":"0x0","extraData":"0x","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","timestamp":"0x0","difficulty":"0x0","totalDifficulty":"0x0","uncles":[],"transactions":[],"size":"0x45","nonce":"0x0000000000000000","mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}"#
+            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","sha3Uncles":"0x0000000000000000000000000000000000000000000000000000000000000000","author":"0x0000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","number":"0x0","gasUsed":"0x0","gasLimit":"0x0","espaceGasLimit":"0x0","extraData":"0x","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","timestamp":"0x0","difficulty":"0x0","totalDifficulty":"0x0","uncles":[],"transactions":[],"size":"0x45","nonce":"0x0000000000000000","mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}"#
         );
     }
 }
