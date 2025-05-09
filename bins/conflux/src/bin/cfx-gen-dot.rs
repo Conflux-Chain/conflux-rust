@@ -88,17 +88,8 @@ struct Config {
     from_block: H256,
     max_depth: u32,
 }
-
-// from /src/main.rs
-fn from_str_validator<T: std::str::FromStr>(arg: String) -> Result<(), String> {
-    match arg.parse::<T>() {
-        Ok(_) => Ok(()),
-        Err(_) => Err(arg),
-    }
-}
-
 fn parse_config() -> Config {
-    let matches = clap::App::new("cfx-gen-dot")
+    let matches = clap4::Command::new("cfx-gen-dot")
         .version("0.1")
         .about(
 "Generate Graphviz dot files from your local blockchain db
@@ -110,41 +101,35 @@ Example usage:
         > graph.dot
     dot -Tsvg graph.dot -o graph.svg")
         .arg(
-            clap::Arg::with_name("db-path")
+            clap4::Arg::new("db-path")
                 .long("db-path")
                 .value_name("PATH")
                 .help("Specifies local blockchain db directory")
-                .takes_value(true)
                 .required(true),
         )
         .arg(
-            clap::Arg::with_name("from-block")
+            clap4::Arg::new("from-block")
                 .long("from-block")
                 .value_name("HASH")
                 .help("Sets starting block of DAG traversal")
-                .takes_value(true)
                 .required(true),
         )
         .arg(
-            clap::Arg::with_name("max-depth")
+            clap4::Arg::new("max-depth")
                 .long("max-depth")
                 .value_name("NUM")
+                .value_parser(clap4::value_parser!(u32))
                 .help("Sets maximum depth for traversal")
-                .takes_value(true)
                 .required(true)
-                .validator(from_str_validator::<u32>),
         )
         .get_matches();
 
-    let db_path = matches.value_of("db-path").unwrap();
-    let max_depth = matches
-        .value_of("max-depth")
-        .unwrap()
-        .parse::<u32>()
-        .unwrap();
+    let db_path = matches.get_one::<String>("db-path").unwrap();
+    let max_depth = matches.get_one::<u32>("max-depth").unwrap().clone();
 
     let from_block = {
-        let mut from = matches.value_of("from-block").unwrap();
+        let mut from =
+            matches.get_one::<String>("from-block").unwrap().as_str();
 
         if from.starts_with("0x") {
             from = &from[2..];
