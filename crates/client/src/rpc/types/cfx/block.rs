@@ -8,8 +8,8 @@ use cfx_types::{Space, H160, H256, U256, U64};
 use cfx_util_macros::bail;
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
-    consensus::{ConsensusConfig, ConsensusGraphInner},
-    pow, ConsensusGraphTrait, SharedConsensusGraph,
+    consensus::ConsensusGraphInner,
+    pow, ConsensusGraph, SharedConsensusGraph,
 };
 use jsonrpc_core::Error as RpcError;
 use primitives::{
@@ -142,8 +142,7 @@ pub struct Block {
 
 impl Block {
     pub fn new(
-        b: &PrimitiveBlock, network: Network,
-        consensus: &dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
+        b: &PrimitiveBlock, network: Network, consensus: &ConsensusGraph,
         consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
         tx_space_filter: Option<Space>,
@@ -456,7 +455,7 @@ impl Header {
 
         let epoch_number = consensus
             .get_block_epoch_number(&hash)
-            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash))
+            .or_else(|| consensus.data_manager().block_epoch_number(&hash))
             .map(Into::into);
 
         let block_number = consensus.get_block_number(&hash)?.map(Into::into);

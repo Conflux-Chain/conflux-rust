@@ -592,24 +592,23 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             }
         };
 
-        let info = instruction.info::<CANCUN>();
+        let info =
+            instruction.info::<CANCUN>(context.spec().cip645.opcode_update);
         self.last_stack_ret_len = info.ret;
         if let Err(e) = self.verify_instruction(context, instruction, info) {
             return Err(InterpreterResult::Done(Err(e)));
         }
 
+        let gasometer = self.gasometer.as_mut().expect(GASOMETER_PROOF);
+
         // Calculate gas cost
-        let requirements = match self
-            .gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .requirements(
-                context,
-                instruction,
-                info,
-                &self.stack,
-                self.mem.size(),
-            ) {
+        let requirements = match gasometer.requirements(
+            context,
+            instruction,
+            info,
+            &self.stack,
+            self.mem.size(),
+        ) {
             Ok(t) => t,
             Err(e) => return Err(InterpreterResult::Done(Err(e))),
         };
@@ -623,36 +622,26 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
         //     );
         // }
 
-        if let Err(e) = self
-            .gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .verify_gas(&requirements.gas_cost)
-        {
+        if let Err(e) = gasometer.verify_gas(&requirements.gas_cost) {
             return Err(InterpreterResult::Done(Err(e)));
         }
         self.mem.expand(requirements.memory_required_size);
-        self.gasometer
-            .as_mut()
-            .expect(GASOMETER_PROOF)
-            .current_mem_gas = requirements.memory_total_gas;
-        self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas =
-            self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas
-                - requirements.gas_cost;
+        gasometer.current_mem_gas = requirements.memory_total_gas;
+        gasometer.current_gas -= requirements.gas_cost;
+        context.refund(requirements.gas_refund);
 
         evm_debug!({
             self.informant.before_instruction(
                 self.reader.position,
                 instruction,
                 info,
-                &self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas,
+                &gasometer.current_gas,
                 &self.stack,
             )
         });
 
         // Execute instruction
-        let current_gas =
-            self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas;
+        let current_gas = gasometer.current_gas;
         let result = match self.exec_instruction_inner(
             current_gas,
             context,
@@ -700,7 +689,11 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     // TLOAD
                     let mut key = vec![0; 32];
                     self.stack.pop_back().to_big_endian(key.as_mut());
-                    let word = context.storage_at(&key)?;
+                    let word = if context.spec().cip154 {
+                        context.transient_storage_at(&key)?
+                    } else {
+                        context.storage_at(&key)?
+                    };
                     self.stack.push(word);
                 }
             }
@@ -748,6 +741,12 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                 let endowment = self.stack.pop_back();
                 let init_off = self.stack.pop_back();
                 let init_size = self.stack.pop_back();
+                let spec = context.spec();
+                if spec.cip645.eip3860
+                    && init_size > U256::from(spec.init_code_data_limit)
+                {
+                    return Err(vm::Error::CreateInitCodeSizeLimit);
+                }
                 let address_scheme = match instruction {
 					instructions::CREATE if context.space() == Space::Native => CreateContractAddress::FromSenderNonceAndCodeHash,
                     instructions::CREATE if context.space() == Space::Ethereum => CreateContractAddress::FromSenderNonce,
@@ -803,9 +802,13 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                                 .expect("Gas left cannot be greater."),
                         ))
                     }
-                    Ok(ContractCreateResult::Failed(_)) => {
+                    Ok(ContractCreateResult::Failed(e)) => {
                         self.stack.push(U256::zero());
-                        Ok(InstructionResult::Ok)
+                        if matches!(e, vm::Error::NonceOverflow(_)) {
+                            Ok(InstructionResult::UnusedGas(create_gas))
+                        } else {
+                            Ok(InstructionResult::Ok)
+                        }
                     }
                     Err(trap) => Ok(InstructionResult::Trap(trap)),
                 };
@@ -1213,6 +1216,16 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             instructions::BASEFEE => {
                 self.stack
                     .push(context.env().base_gas_price[context.space()]);
+            }
+            instructions::BLOBHASH => {
+                self.stack.pop_back();
+                self.stack.push(U256::zero());
+            }
+            Instruction::BLOBBASEFEE => {
+                #[cfg(feature = "align_evm")]
+                self.stack.push(context.env().blob_gas_fee);
+                #[cfg(not(feature = "align_evm"))]
+                self.stack.push(U256::zero());
             }
             instructions::BLOCKHASH => {
                 let block_number = self.stack.pop_back();

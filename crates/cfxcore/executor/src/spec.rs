@@ -18,7 +18,7 @@ use cfx_parameters::{
     },
 };
 use cfx_types::{AllChainID, Space, SpaceMap, U256, U512};
-use cfx_vm_types::Spec;
+use cfx_vm_types::{CIP645Spec, ConsensusGasSpec, Spec};
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
 
@@ -135,7 +135,27 @@ pub struct TransitionsEpochHeight {
     pub cip130: BlockHeight,
     /// CIP-133: Enhanced Block Hash Query
     pub cip133e: BlockHeight,
+    /// CIP-1559: Fee Market Change for Conflux
     pub cip1559: BlockHeight,
+    /// CIP-150: Reject New Contract Code Starting with the 0xEF byte
+    pub cip150: BlockHeight,
+    /// CIP-151: SELFDESTRUCT only in Same Transaction
+    pub cip151: BlockHeight,
+    /// CIP-152: Reject Transactions from Senders with Deployed Code
+    pub cip152: BlockHeight,
+    /// CIP-154: Fix Inconsistent Implementation of TLOAD
+    pub cip154: BlockHeight,
+    /// CIP-7702: Set Code for EOA
+    pub cip7702: BlockHeight,
+    /// CIP-645: Align Conflux Gas Pricing with EVM
+    pub cip645: BlockHeight,
+    pub align_evm: BlockHeight,
+    /// EIP-2935: Serve historical block hashes from state
+    pub eip2935: BlockHeight,
+    /// EIP-2537: Precompile for BLS12-381 curve operations
+    pub eip2537: BlockHeight,
+    /// EIP-7623: Increase calldata cost
+    pub eip7623: BlockHeight,
     pub cip_c2_fix: BlockHeight,
 }
 
@@ -195,11 +215,34 @@ impl CommonParams {
         spec.cip144 = number >= self.transition_numbers.cip144;
         spec.cip145 = number >= self.transition_numbers.cip145;
         spec.cip1559 = height >= self.transition_heights.cip1559;
+        spec.cip150 = height >= self.transition_heights.cip150;
+        spec.cip151 = height >= self.transition_heights.cip151;
+        spec.cip152 = height >= self.transition_heights.cip152;
+        spec.cip154 = height >= self.transition_heights.cip154;
+        spec.cip7702 = height >= self.transition_heights.cip7702;
+        let cip645 = height >= self.transition_heights.cip645;
+        spec.cip645 = CIP645Spec::new(cip645);
+        spec.eip2935 = height >= self.transition_heights.eip2935;
+        spec.eip7623 = height >= self.transition_heights.eip7623;
         spec.cip_c2_fix = number >= self.transition_heights.cip_c2_fix;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
-        if spec.cancun_opcodes {
-            spec.sload_gas = 800;
-        }
+        spec.align_evm = height >= self.transition_heights.align_evm && cip645;
+
+        spec.overwrite_gas_plan_by_cip();
+
+        spec
+    }
+
+    pub fn consensus_spec(&self, height: BlockHeight) -> ConsensusGasSpec {
+        let mut spec = ConsensusGasSpec::genesis_spec();
+        spec.cip1559 = height >= self.transition_heights.cip1559;
+        let cip645 = height >= self.transition_heights.cip645;
+        spec.cip645 = CIP645Spec::new(cip645);
+
+        spec.align_evm = height >= self.transition_heights.align_evm && cip645;
+
+        spec.overwrite_gas_plan_by_cip();
+
         spec
     }
 

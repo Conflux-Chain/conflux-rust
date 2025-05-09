@@ -294,6 +294,7 @@ impl SnapshotDbManagerSqlite {
                     .map_err(|_err| Error::SemaphoreTryAcquireError)?
             } else {
                 executor::block_on(self.open_snapshot_semaphore.acquire())
+                    .map_err(|_err| Error::SemaphoreAcquireError)?
             };
 
             // If it's not in already_open_snapshots, the sqlite db must have
@@ -412,7 +413,8 @@ impl SnapshotDbManagerSqlite {
         }
 
         let semaphore_permit =
-            executor::block_on(self.open_snapshot_semaphore.acquire());
+            executor::block_on(self.open_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)?;
         // When an open happens around the same time, we should make sure that
         // the open returns None.
 
@@ -499,6 +501,7 @@ impl SnapshotDbManagerSqlite {
                     .map_err(|_err| Error::SemaphoreTryAcquireError)?
             } else {
                 executor::block_on(self.mpt_open_snapshot_semaphore.acquire())
+                    .map_err(|_err| Error::SemaphoreAcquireError)?
             };
 
             // If it's not in already_open_snapshots, the sqlite db must have
@@ -573,8 +576,9 @@ impl SnapshotDbManagerSqlite {
             "open mpt snapshot with write {:?}, new epoch height {}",
             snapshot_path, new_epoch_height
         );
-        let latest_mpt_semaphore_permit: tokio02::sync::SemaphorePermit =
-            executor::block_on(self.latest_mpt_snapshot_semaphore.acquire());
+        let latest_mpt_semaphore_permit: tokio::sync::SemaphorePermit =
+            executor::block_on(self.latest_mpt_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)?;
 
         if self
             .mpt_already_open_snapshots
@@ -586,7 +590,8 @@ impl SnapshotDbManagerSqlite {
         }
 
         let semaphore_permit =
-            executor::block_on(self.mpt_open_snapshot_semaphore.acquire());
+            executor::block_on(self.mpt_open_snapshot_semaphore.acquire())
+                .map_err(|_err| Error::SemaphoreAcquireError)?;
 
         let snapshot_db = if create {
             SnapshotMptDbSqlite::create(
@@ -1579,7 +1584,7 @@ use std::{
     thread,
     time::Duration,
 };
-use tokio02::sync::Semaphore;
+use tokio::sync::Semaphore;
 
 use super::{
     kvdb_sqlite_sharded::KvdbSqliteShardedBorrowMut,

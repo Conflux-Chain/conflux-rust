@@ -39,10 +39,7 @@ pub mod verification;
 pub use crate::{
     block_data_manager::BlockDataManager,
     channel::Notifications,
-    consensus::{
-        BestInformation, ConsensusGraph, ConsensusGraphTrait,
-        SharedConsensusGraph,
-    },
+    consensus::{BestInformation, ConsensusGraph, SharedConsensusGraph},
     light_protocol::{
         Handler as LightHandler, Provider as LightProvider,
         QueryService as LightQueryService,

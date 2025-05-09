@@ -57,6 +57,12 @@ pub enum ToRepackError {
         expected: U256,
         got: U256,
     },
+
+    // For align_evm test only
+    NotEnoughBalance {
+        expected: U512,
+        got: U256,
+    },
 }
 
 #[derive(Debug)]
@@ -71,6 +77,9 @@ pub enum TxDropError {
 
     /// Not enough gas limit for large transacton, only for estimation
     NotEnoughGasLimit { expected: U256, got: U256 },
+
+    /// The EOA sender with contract code is forbidded by CIP-152
+    SenderWithCode(Address),
 }
 
 #[derive(Debug, PartialEq)]
@@ -87,6 +96,7 @@ pub enum ExecutionError {
         /// Maximum storage limit cost.
         max_storage_limit_cost: U256,
     },
+    NonceOverflow(Address),
     VmError(vm::Error),
 }
 
@@ -142,6 +152,15 @@ impl ExecutionOutcome {
 
     #[inline]
     pub fn try_as_executed(&self) -> Option<&Executed> {
+        match self {
+            NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => None,
+            ExecutionErrorBumpNonce(_, executed) | Finished(executed) => {
+                Some(executed)
+            }
+        }
+    }
+
+    pub fn try_into_executed(self) -> Option<Executed> {
         match self {
             NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => None,
             ExecutionErrorBumpNonce(_, executed) | Finished(executed) => {

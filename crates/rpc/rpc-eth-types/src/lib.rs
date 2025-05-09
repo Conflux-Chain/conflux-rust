@@ -1,4 +1,5 @@
 mod access_list;
+mod authorization;
 mod block;
 mod block_number;
 mod call;
@@ -17,6 +18,7 @@ mod transaction_request;
 mod tx_pool;
 
 pub use access_list::*;
+pub use authorization::{Authorization, SignedAuthorization};
 pub use block::{Block, BlockOverrides, Header};
 pub use block_number::BlockNumber;
 pub use call::*;

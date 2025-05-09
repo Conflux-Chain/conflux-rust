@@ -166,6 +166,7 @@ pub fn genesis_block(
             CleanupMode::NoEmpty,
         )
         .unwrap();
+    state.commit_cache(false);
 
     let mut debug_record = Some(ComputeEpochDebugRecord::default());
 
@@ -344,6 +345,7 @@ pub fn genesis_block(
                 contract_name_list[i - 1],
                 contract_address
             );
+            state.commit_cache(false);
         }
     }
 
@@ -362,6 +364,7 @@ pub fn genesis_block(
             state
                 .deposit(&node.address, &stake_balance, 0, false)
                 .unwrap();
+            state.commit_cache(false);
             let signed_tx = node
                 .register_tx
                 .clone()
@@ -488,7 +491,8 @@ pub fn register_transaction(
 fn execute_genesis_transaction(
     transaction: &SignedTransaction, state: &mut State, machine: Arc<Machine>,
 ) {
-    let env = Env::default();
+    let mut env = Env::default();
+    env.transaction_hash = transaction.hash();
 
     let options = TransactOptions::default();
     let r = {
@@ -501,6 +505,7 @@ fn execute_genesis_transaction(
         .transact(transaction, options)
         .unwrap()
     };
+    state.update_state_post_tx_execution(false);
 
     match &r {
         ExecutionOutcome::Finished(_executed) => {}

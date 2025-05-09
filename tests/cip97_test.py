@@ -11,6 +11,7 @@ class CIP97Test(ConfluxTestFramework):
         self.conf_parameters["dao_vote_transition_number"] = 100
         self.conf_parameters["hydra_transition_number"] = 90
         self.conf_parameters["cancun_opcodes_transition_number"] = 99999999
+        self.conf_parameters["cip645_transition_height"] = 99999999
 
     def run_test(self):
         priv = default_config["GENESIS_PRI_KEY"]

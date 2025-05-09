@@ -224,7 +224,7 @@ impl SimpleExecutionTrait for GetSponsoredBalanceForCollateral {
 make_solidity_function! {
     struct IsWhitelisted((Address,Address), "isWhitelisted(address,address)", bool);
 }
-impl_function_type!(IsWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
+impl_function_type!(IsWhitelisted, "query", gas: |spec: &Spec| spec.cold_sload_gas);
 
 impl SimpleExecutionTrait for IsWhitelisted {
     fn execute_inner(
@@ -242,7 +242,7 @@ impl SimpleExecutionTrait for IsWhitelisted {
 make_solidity_function! {
     struct IsAllWhitelisted(Address, "isAllWhitelisted(address)", bool);
 }
-impl_function_type!(IsAllWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
+impl_function_type!(IsAllWhitelisted, "query", gas: |spec: &Spec| spec.cold_sload_gas);
 
 impl SimpleExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
@@ -330,7 +330,7 @@ impl SimpleExecutionTrait for RemovePrivilegeByAdmin {
 make_solidity_function! {
     struct AvailableStoragePoints(Address, "getAvailableStoragePoints(address)", U256);
 }
-impl_function_type!(AvailableStoragePoints, "query", gas: |spec: &Spec| spec.sload_gas);
+impl_function_type!(AvailableStoragePoints, "query", gas: |spec: &Spec| spec.cold_sload_gas);
 
 impl SimpleExecutionTrait for AvailableStoragePoints {
     fn execute_inner(

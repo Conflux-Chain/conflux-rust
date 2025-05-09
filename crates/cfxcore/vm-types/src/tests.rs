@@ -101,12 +101,6 @@ impl MockContext {
         context
     }
 
-    /// Alter mock context to allow wasm
-    pub fn with_wasm(mut self) -> Self {
-        self.spec.wasm = Some(Default::default());
-        self
-    }
-
     pub fn with_chain_id(mut self, chain_id: u64) -> Self {
         self.chain_id = chain_id;
         self
@@ -114,8 +108,12 @@ impl MockContext {
 }
 
 impl Context for MockContext {
-    fn storage_at(&self, key: &Vec<u8>) -> Result<U256> {
+    fn storage_at(&self, key: &[u8]) -> Result<U256> {
         Ok(self.store.get(key).unwrap_or(&U256::zero()).clone())
+    }
+
+    fn origin_storage_at(&self, _key: &[u8]) -> Result<Option<U256>> {
+        Ok(None)
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> Result<()> {
@@ -219,6 +217,8 @@ impl Context for MockContext {
         Ok(())
     }
 
+    fn refund(&mut self, _refund_gas: i64) {}
+
     fn ret(
         self, _gas: &U256, _data: &ReturnData, _apply_state: bool,
     ) -> Result<U256> {
@@ -258,4 +258,8 @@ impl Context for MockContext {
     fn space(&self) -> Space { Space::Native }
 
     fn blockhash_source(&self) -> BlockHashSource { BlockHashSource::Env }
+
+    fn is_warm_account(&self, _account: Address) -> bool { false }
+
+    fn is_warm_storage_entry(&self, _key: &H256) -> Result<bool> { Ok(false) }
 }

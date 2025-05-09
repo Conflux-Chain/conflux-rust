@@ -27,8 +27,10 @@ pub struct Substate {
     pub storage_released: HashMap<Address, u64>,
     /// Any logs.
     pub logs: Vec<LogEntry>,
+    /// gas to be refunded
+    pub refund_gas: i128,
     /// Created contracts.
-    pub contracts_created: Vec<AddressWithSpace>,
+    contracts_created: Vec<AddressWithSpace>,
 }
 
 impl Substate {
@@ -43,6 +45,7 @@ impl Substate {
         for (address, amount) in s.storage_released {
             *self.storage_released.entry(address).or_insert(0) += amount;
         }
+        self.refund_gas += s.refund_gas;
     }
 
     pub fn new() -> Self { Substate::default() }
@@ -88,6 +91,14 @@ impl Substate {
             storage_collateralized,
             storage_released,
         }
+    }
+
+    pub fn contracts_created(&self) -> &Vec<AddressWithSpace> {
+        &self.contracts_created
+    }
+
+    pub fn record_contract_create(&mut self, address: AddressWithSpace) {
+        self.contracts_created.push(address);
     }
 
     pub fn record_storage_occupy(

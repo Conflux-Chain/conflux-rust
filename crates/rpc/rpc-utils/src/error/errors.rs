@@ -314,6 +314,12 @@ pub enum RpcInvalidTransactionError {
     /// Blob transaction is a create transaction
     #[error("blob transaction is a create transaction")]
     BlobTransactionIsCreate,
+    /// Empty authorization list (EIP-7702)
+    #[error("empty authorization list")]
+    EmptyAuthorizationList,
+    /// Max priority fee greater than max fee (EIP-1559)
+    #[error("blob transaction is a create transaction")]
+    PriortyGreaterThanMaxFee,
 }
 
 impl RpcInvalidTransactionError {

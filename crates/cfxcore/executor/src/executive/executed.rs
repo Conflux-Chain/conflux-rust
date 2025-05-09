@@ -190,7 +190,7 @@ impl Executed {
             burnt_fee,
             gas_sponsor_paid,
             logs: substate.logs.to_vec(),
-            contracts_created: substate.contracts_created.to_vec(),
+            contracts_created: substate.contracts_created().to_vec(),
             storage_sponsor_paid,
             storage_collateralized,
             storage_released,

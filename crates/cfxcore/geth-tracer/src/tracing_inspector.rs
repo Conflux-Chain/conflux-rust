@@ -423,8 +423,11 @@ impl TracingInspector {
                 self.tx_exec_context.block_number,
                 self.tx_exec_context.block_height,
             );
-            let num_pushed =
-                stack_push_count(step.op.get(), spec.cancun_opcodes);
+            let num_pushed = stack_push_count(
+                step.op.get(),
+                spec.cancun_opcodes,
+                spec.cip645.opcode_update,
+            );
             let start = interp.stack().len() - num_pushed;
             let push_stack = interp.stack()[start..].to_vec();
             step.push_stack = Some(

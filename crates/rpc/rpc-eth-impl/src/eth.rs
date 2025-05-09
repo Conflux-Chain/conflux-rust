@@ -33,8 +33,8 @@ use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
     errors::{Error as CoreError, Result as CoreResult},
-    ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
-    SharedSynchronizationService, SharedTransactionPool,
+    ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::Error as RpcError;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
@@ -78,12 +78,7 @@ impl EthApi {
         }
     }
 
-    pub fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    pub fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     pub fn tx_pool(&self) -> &SharedTransactionPool { &self.tx_pool }
 
@@ -227,6 +222,11 @@ impl EthApi {
             ) => bail!(invalid_input_rpc_err(
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
             )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(invalid_input_rpc_err(
+                format! {"tx sender has contract code: {:?}", address}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
@@ -236,6 +236,15 @@ impl EthApi {
             ) => {
                 bail!(RpcError::from(
                     RpcInvalidTransactionError::InsufficientFunds
+                ))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::NonceOverflow(addr),
+                _executed,
+            ) => {
+                bail!(geth_call_execution_error(
+                    format!("address nonce overflow: {})", addr),
+                    "".into()
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -387,7 +396,7 @@ impl EthApi {
             from: tx.sender().address,
             to: match tx.action() {
                 Action::Create => None,
-                Action::Call(addr) => Some(*addr),
+                Action::Call(addr) => Some(addr),
             },
             block_number: block_height,
             cumulative_gas_used: receipt.accumulated_gas_used,
@@ -838,7 +847,7 @@ impl EthApi {
     ) -> CoreResult<Option<Transaction>> {
         let tx_index = match self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .transaction_index_by_hash(&hash, false /* update_cache */)
         {
             None => return Ok(self.get_tx_from_txpool(hash)),
@@ -892,7 +901,7 @@ impl EthApi {
         &self, tx_hash: H256,
     ) -> CoreResult<Option<Receipt>> {
         let tx_index =
-            match self.consensus.get_data_manager().transaction_index_by_hash(
+            match self.consensus.data_manager().transaction_index_by_hash(
                 &tx_hash, false, /* update_cache */
             ) {
                 None => return Ok(None),

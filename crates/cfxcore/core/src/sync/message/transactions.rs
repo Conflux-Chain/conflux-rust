@@ -87,7 +87,7 @@ impl Handleable for Transactions {
                 .manager
                 .graph
                 .consensus
-                .get_tx_pool()
+                .tx_pool()
                 .insert_new_transactions(transactions);
             if failure.is_empty() {
                 debug!(
@@ -594,7 +594,7 @@ impl Handleable for GetTransactionsResponse {
                 .manager
                 .graph
                 .consensus
-                .get_tx_pool()
+                .tx_pool()
                 .insert_new_transactions(self.transactions);
             if failure.is_empty() {
                 debug!(
@@ -673,7 +673,7 @@ impl Handleable for GetTransactionsFromTxHashesResponse {
                 .manager
                 .graph
                 .consensus
-                .get_tx_pool()
+                .tx_pool()
                 .insert_new_transactions(self.transactions);
             if failure.is_empty() {
                 debug!(

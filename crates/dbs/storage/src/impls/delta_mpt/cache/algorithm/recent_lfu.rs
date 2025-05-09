@@ -187,7 +187,7 @@ impl<
 
     fn get_key_for_comparison<'x>(
         &'x self, value: &'x RecentLFUMetadata<PosT, CacheIndexT>,
-    ) -> &Self::KeyType {
+    ) -> &'x Self::KeyType {
         &value.frequency
     }
 }
@@ -552,7 +552,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
     >(
         &'a mut self, cache_store_util: &'b mut CacheStoreUtilT,
     ) -> (
-        &mut RemovableHeap<PosT, RecentLFUMetadata<PosT, CacheIndexT>>,
+        &'a mut RemovableHeap<PosT, RecentLFUMetadata<PosT, CacheIndexT>>,
         MetadataHeapUtil<'a, 'b, PosT, CacheIndexT, CacheStoreUtilT>,
     ) {
         (

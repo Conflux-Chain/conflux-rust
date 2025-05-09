@@ -45,6 +45,7 @@ once_cell = { workspace = true }
 rayon = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
+blst = { workspace = true }
 
 [dev-dependencies]
 cfx-statedb = { workspace = true, features = ["testonly_code"]}
@@ -53,3 +54,4 @@ cfx-vm-types = { workspace = true, features = ["testonly_code"]}
 
 [features]
 testonly_code = []
+align_evm = ["cfx-vm-interpreter/align_evm"]

@@ -327,7 +327,7 @@ pub struct ChainDataProvider {
 
 impl ChainDataProvider {
     pub fn new(consensus: SharedConsensusGraph) -> ChainDataProvider {
-        let data_man = consensus.get_data_manager().clone();
+        let data_man = consensus.data_manager().clone();
         ChainDataProvider {
             consensus,
             data_man,
@@ -338,12 +338,7 @@ impl ChainDataProvider {
         self.consensus.latest_finalized_epoch_number()
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     async fn get_epoch_logs(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,

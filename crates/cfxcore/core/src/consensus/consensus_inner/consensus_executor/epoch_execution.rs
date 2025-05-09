@@ -9,8 +9,8 @@ use pow_types::StakingEvent;
 use cfx_statedb::{Error as DbErrorKind, Result as DbResult};
 use cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 use primitives::{
-    receipt::BlockReceipts, Action, Block, BlockNumber, Receipt,
-    SignedTransaction, TransactionIndex,
+    receipt::BlockReceipts, AccessListItem, Action, Block, BlockNumber,
+    Receipt, SignedTransaction, TransactionIndex,
 };
 
 use crate::{
@@ -50,7 +50,7 @@ impl ConsensusExecutionHandler {
         start_block_number: u64, on_local_pivot: bool,
         virtual_call: Option<VirtualCall<'a>>,
     ) -> DbResult<Vec<Arc<BlockReceipts>>> {
-        self.prefetch_storage_for_execution(&*state, epoch_blocks);
+        self.prefetch_storage_for_execution(state, epoch_blocks);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
@@ -127,7 +127,7 @@ impl ConsensusExecutionHandler {
     }
 
     fn prefetch_storage_for_execution(
-        &self, state: &State, epoch_blocks: &Vec<Arc<Block>>,
+        &self, state: &mut State, epoch_blocks: &Vec<Arc<Block>>,
     ) {
         // Prefetch accounts for transactions.
         // The return value _prefetch_join_handles is used to join all threads
@@ -147,6 +147,11 @@ impl ConsensusExecutionHandler {
                 accounts.insert(transaction.sender.with_space(space));
                 if let Action::Call(ref address) = transaction.action() {
                     accounts.insert(address.with_space(space));
+                }
+                if let Some(access_list) = transaction.access_list() {
+                    for AccessListItem { address, .. } in access_list.iter() {
+                        accounts.insert(address.with_space(space));
+                    }
                 }
             }
         }
@@ -204,6 +209,10 @@ impl ConsensusExecutionHandler {
                 .transaction_epoch_bound,
             base_gas_price,
             burnt_gas_price,
+            // Temporarily set `transaction_hash` to zero; it will be updated
+            // with the actual transaction hash for each transaction.
+            transaction_hash: H256::zero(),
+            ..Default::default()
         }
     }
 
@@ -278,9 +287,11 @@ impl ConsensusExecutionHandler {
             settings: TransactSettings::all_checks(),
         };
 
+        env.transaction_hash = transaction.hash();
         let execution_outcome =
             ExecutiveContext::new(state, env, machine, &spec)
                 .transact(transaction, options)?;
+        state.update_state_post_tx_execution(!spec.cip645.fix_eip1153);
         execution_outcome.log(transaction, &block_context.block.hash());
 
         if let Some(burnt_fee) = execution_outcome
@@ -402,12 +413,17 @@ impl ConsensusExecutionHandler {
 
         let epoch_number = pivot_block.block_header.height();
         let hash = pivot_block.hash();
+        let parent_hash = pivot_block.block_header.parent_hash();
 
         if epoch_number >= params.transition_heights.cip133e {
             state.set_system_storage(
                 epoch_hash_slot(epoch_number).into(),
                 U256::from_big_endian(&hash.0),
             )?;
+        }
+
+        if epoch_number >= params.transition_heights.eip2935 {
+            state.set_eip2935_storage(epoch_number - 1, *parent_hash)?;
         }
         Ok(())
     }
@@ -462,6 +478,8 @@ impl ConsensusExecutionHandler {
                 .internal_contracts()
                 .initialized_at(block_number),
         )?;
+
+        state.commit_cache(false);
 
         Ok(secondary_reward)
     }

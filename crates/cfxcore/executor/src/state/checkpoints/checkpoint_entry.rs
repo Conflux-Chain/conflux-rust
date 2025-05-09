@@ -1,7 +1,8 @@
 /// An account entry in the checkpoint
 #[derive(Debug, Clone)]
 pub enum CheckpointEntry<T> {
-    /// The account has not been read or modified from the database.
+    /// The account has not been read or modified from the committed state or
+    /// the database.
     Unchanged,
     /// The recorded state of the account at this checkpoint. It may be
     /// modified or unmodified.

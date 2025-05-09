@@ -433,8 +433,8 @@ impl DeferredPool {
         self.packing_pool.in_space(addr.space).contains(addr)
     }
 
-    pub fn ready_transactions_by_address<'a>(
-        &'a self, address: AddressWithSpace,
+    pub fn ready_transactions_by_address(
+        &self, address: AddressWithSpace,
     ) -> Option<&[Arc<SignedTransaction>]> {
         self.packing_pool
             .in_space(address.space)

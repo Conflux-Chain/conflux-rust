@@ -161,9 +161,10 @@ enum_with_from_u8! {
         SELFBALANCE = 0x47,
         #[doc = "base fee for EIP-1559 (EIP-3198)"]
         BASEFEE = 0x48,
-
-        // BLOBHASH=0x49
-        // BLOBBASEFEE=0x4A
+        #[doc = "blob hash for EIP-4844 (dummy)"]
+        BLOBHASH=0x49,
+        #[doc = "blob base fee for EIP-4844 (dummy)"]
+        BLOBBASEFEE=0x4a,
 
         #[doc = "remove item from stack"]
         POP = 0x50,
@@ -425,11 +426,13 @@ impl Instruction {
     }
 
     /// Returns the instruction info.
-    pub fn info<const CANCUN: bool>(&self) -> &InstructionInfo {
+    pub fn info<const CANCUN: bool>(&self, cip645: bool) -> &InstructionInfo {
         let instrs = if !CANCUN {
             &*INSTRUCTIONS
-        } else {
+        } else if !cip645 {
             &*INSTRUCTIONS_CANCUN
+        } else {
+            &*INSTRUCTIONS_CIP645
         };
 
         instrs[*self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")
@@ -458,7 +461,7 @@ pub enum GasPriceTier {
 
 impl GasPriceTier {
     /// Returns the index in schedule for specific `GasPriceTier`
-    pub fn idx(&self) -> usize {
+    pub const fn idx(&self) -> usize {
         match self {
             &GasPriceTier::Zero => 0,
             &GasPriceTier::Base => 1,
@@ -657,6 +660,16 @@ lazy_static! {
         arr[BEGINSUB_TLOAD as usize] = Some(InstructionInfo::new("TLOAD", 1, 1, GasPriceTier::Special));
         arr[JUMPSUB_MCOPY as usize] = Some(InstructionInfo::new("MCOPY", 3, 0, GasPriceTier::Special));
         arr[RETURNSUB_TSTORE as usize] = Some(InstructionInfo::new("TSTORE", 2, 0, GasPriceTier::Special));
+        arr
+    };
+
+    pub static ref INSTRUCTIONS_CIP645: [Option<InstructionInfo>; 0x100] = {
+        let mut arr = *INSTRUCTIONS_CANCUN;
+        arr[BASEFEE as usize] = Some(InstructionInfo::new("BASEFEE", 0, 1, GasPriceTier::Base));
+        arr[BLOBHASH as usize] = Some(InstructionInfo::new("BLOBHASH", 1, 1, GasPriceTier::VeryLow));
+        arr[BLOBBASEFEE as usize] = Some(InstructionInfo::new("BLOBBASEFEE", 0, 1, GasPriceTier::Base));
+        arr[JUMPSUB_MCOPY as usize] = Some(InstructionInfo::new("MCOPY", 3, 0, GasPriceTier::VeryLow));
+
         arr
     };
 }

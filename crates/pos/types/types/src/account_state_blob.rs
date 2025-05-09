@@ -225,6 +225,6 @@ mod tests {
 
     #[test]
     fn test_debug_does_not_panic() {
-        format!("{:#?}", AccountStateBlob::from(vec![1u8, 2u8, 3u8]));
+        let _ = format!("{:#?}", AccountStateBlob::from(vec![1u8, 2u8, 3u8]));
     }
 }

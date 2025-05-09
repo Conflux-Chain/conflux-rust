@@ -10,8 +10,7 @@ use cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 use cfx_types::{AddressSpaceUtil, Space, H256, U256};
 use cfxcore::{
-    errors::Error as CoreError, ConsensusGraph, ConsensusGraphTrait,
-    SharedConsensusGraph,
+    errors::Error as CoreError, ConsensusGraph, SharedConsensusGraph,
 };
 use geth_tracer::to_alloy_h256;
 use jsonrpsee::core::RpcResult;
@@ -35,12 +34,7 @@ impl DebugApi {
         }
     }
 
-    pub fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    pub fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     pub fn get_block_epoch_num(
         &self, block: BlockNumber,
@@ -221,7 +215,7 @@ impl DebugApi {
 
         let tx_index = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .transaction_index_by_hash(&hash, false /* update_cache */)
             .ok_or(CoreError::Msg("invalid tx hash".to_string()))?;
 
