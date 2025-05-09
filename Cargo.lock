@@ -289,7 +289,7 @@ checksum = "1c7a679ac01774ab7e00a567a918d4231ae692c5c8cedaf4e16956c3116d7896"
 dependencies = [
  "alloy-sol-macro-input",
  "const-hex",
- "heck 0.5.0",
+ "heck",
  "indexmap 2.8.0",
  "proc-macro-error",
  "proc-macro2",
@@ -307,7 +307,7 @@ checksum = "356da0c2228aa6675a5faaa08a3e4061b967f924753983d72b9a18d9a3fad44e"
 dependencies = [
  "const-hex",
  "dunce",
- "heck 0.5.0",
+ "heck",
  "proc-macro2",
  "quote",
  "syn 2.0.96",
@@ -2004,7 +2004,7 @@ version = "4.5.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09176aae279615badda0765c0c0b3f6ed53f4709118af73cf4655d85d1530cd7"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro2",
  "quote",
  "syn 2.0.96",
@@ -3413,7 +3413,6 @@ dependencies = [
  "primitives",
  "rlp 0.4.6",
  "serde_json",
- "structopt",
  "thiserror 2.0.11",
  "walkdir",
 ]
@@ -4065,15 +4064,6 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "heck"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d621efb26863f0e9924c6ac577e8275e5e6b77455db64ffa6c65c904e9e132c"
-dependencies = [
- "unicode-segmentation",
 ]
 
 [[package]]
@@ -5062,7 +5052,7 @@ version = "0.24.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0d4c6bec4909c966f59f52db3655c0e9d4685faae8b49185973d9d7389bb884"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro-crate 3.2.0",
  "proc-macro2",
  "quote",
@@ -8421,30 +8411,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
-name = "structopt"
-version = "0.3.26"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c6b5c64445ba8094a6ab0c3cd2ad323e07171012d9c98b0b15651daf1787a10"
-dependencies = [
- "clap 2.34.0",
- "lazy_static",
- "structopt-derive",
-]
-
-[[package]]
-name = "structopt-derive"
-version = "0.4.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcb5ae327f9cc13b68763b5749770cb9e048a99bd9dfdfa58d0cf05d5f64afe0"
-dependencies = [
- "heck 0.3.3",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "strum"
 version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8459,7 +8425,7 @@ version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
 dependencies = [
- "heck 0.5.0",
+ "heck",
  "proc-macro2",
  "quote",
  "rustversion",

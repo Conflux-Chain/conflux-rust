@@ -34,7 +34,6 @@ hex-literal = { workspace = true }
 
 log = { workspace = true }
 
-structopt = { workspace = true }
 env_logger = { workspace = true }
 itertools = { workspace = true }
 
