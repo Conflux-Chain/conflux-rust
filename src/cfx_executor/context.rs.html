@@ -1069,6 +1069,12 @@
 <a href="#1069" id="1069">1069</a>
 <a href="#1070" id="1070">1070</a>
 <a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1475,7 +1481,13 @@
         {
             <span class="prelude-val">Ok</span>(contract.code_hash())
         } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(<span class="self">self</span>.state.code_hash(<span class="kw-2">&amp;</span>address)<span class="question-mark">?</span>)
+            <span class="kw">if </span><span class="self">self</span>.spec.cip645.fix_extcodehash
+                &amp;&amp; <span class="self">self</span>.state.is_eip158_empty(<span class="kw-2">&amp;</span>address)<span class="question-mark">?
+            </span>{
+                <span class="prelude-val">Ok</span>(H256::zero())
+            } <span class="kw">else </span>{
+                <span class="prelude-val">Ok</span>(<span class="self">self</span>.state.code_hash(<span class="kw-2">&amp;</span>address)<span class="question-mark">?</span>)
+            }
         }
     }
 
