@@ -488,7 +488,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
                 };
             }
         }
-        unsafe { unreachable_unchecked() }
+        unreachable!()
     }
 
     pub unsafe fn set_first_child_unchecked(
@@ -645,7 +645,6 @@ use primitives::{MerkleHash, MptValue};
 use rlp::*;
 use std::{
     fmt::{Debug, Formatter},
-    hint::unreachable_unchecked,
     marker::{Send, Sync},
     vec::Vec,
 };

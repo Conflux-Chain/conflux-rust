@@ -1291,11 +1291,8 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     // This should not happen because Conflux always write on a
                     // snapshot db under a temporary name. All completed
                     // snapshots are readonly.
-                    if cfg!(debug_assertions) {
-                        unreachable!("Try to destroy a snapshot being open exclusively for write.")
-                    } else {
-                        unsafe { unreachable_unchecked() }
-                    }
+
+                    unreachable!("Try to destroy a snapshot being open exclusively for write.")
                 }
                 None => break None,
             };
@@ -1331,11 +1328,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                         Some(snapshot) => break Some(snapshot),
                     },
                     Some(None) => {
-                        if cfg!(debug_assertions) {
-                            unreachable!("Try to destroy a snapshot being open exclusively for write.")
-                        } else {
-                            unsafe { unreachable_unchecked() }
-                        }
+                        unreachable!("Try to destroy a snapshot being open exclusively for write.")
                     }
                     None => break None,
                 };
@@ -1576,7 +1569,6 @@ use rustc_hex::ToHex;
 use std::{
     collections::HashMap,
     fs,
-    hint::unreachable_unchecked,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
