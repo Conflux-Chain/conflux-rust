@@ -146,15 +146,6 @@
 <a href="#146" id="146">146</a>
 <a href="#147" id="147">147</a>
 <a href="#148" id="148">148</a>
-<a href="#149" id="149">149</a>
-<a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -163,7 +154,7 @@
     executive_observer::{AddressPocket, TracerTrait},
     stack::CallStackInfo,
     state::State,
-    substate::{cleanup_mode, Substate},
+    substate::Substate,
 };
 <span class="kw">use </span>cfx_vm_types::{<span class="self">self </span><span class="kw">as </span>vm, ActionParams, Spec};
 
@@ -221,11 +212,7 @@
             balance,
         );
         <span class="comment">// When destroying, the balance will be burnt.
-        </span>state.sub_balance(
-            contract_address,
-            <span class="kw-2">&amp;</span>balance,
-            <span class="kw-2">&amp;mut </span>cleanup_mode(substate, spec),
-        )<span class="question-mark">?</span>;
+        </span>state.sub_balance(contract_address, <span class="kw-2">&amp;</span>balance)<span class="question-mark">?</span>;
         state.sub_total_issued(balance);
         <span class="kw">if </span>contract_address.space == Space::Ethereum {
             state.sub_total_evm_tokens(balance);
@@ -237,12 +224,7 @@
             AddressPocket::Balance(<span class="kw-2">*</span>refund_address),
             balance,
         );
-        state.transfer_balance(
-            contract_address,
-            refund_address,
-            <span class="kw-2">&amp;</span>balance,
-            cleanup_mode(substate, spec),
-        )<span class="question-mark">?</span>;
+        state.transfer_balance(contract_address, refund_address, <span class="kw-2">&amp;</span>balance)<span class="question-mark">?</span>;
     }
 
     <span class="prelude-val">Ok</span>(())

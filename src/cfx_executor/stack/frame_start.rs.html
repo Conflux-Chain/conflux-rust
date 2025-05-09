@@ -161,34 +161,11 @@
 <a href="#161" id="161">161</a>
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     <span class="kw">super</span>::context::OriginInfo, executable::make_executable, run_executable,
     FrameLocal, FrameStackAction, RuntimeRes,
 };
-<span class="kw">use crate</span>::{
-    machine::Machine,
-    state::State,
-    substate::{cleanup_mode, Substate},
-};
+<span class="kw">use crate</span>::{machine::Machine, state::State, substate::Substate};
 
 <span class="kw">use </span>cfx_statedb::Result <span class="kw">as </span>DbResult;
 <span class="kw">use </span>cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space};
@@ -251,7 +228,7 @@
         <span class="self">self</span>, resources: <span class="kw-2">&amp;mut </span>RuntimeRes&lt;<span class="lifetime">'a</span>&gt;,
     ) -&gt; DbResult&lt;FrameStackAction&lt;<span class="lifetime">'a</span>&gt;&gt; {
         <span class="kw">let </span>FreshFrame {
-            <span class="kw-2">mut </span>frame_local,
+            frame_local,
             params,
         } = <span class="self">self</span>;
         <span class="kw">let </span>is_create = frame_local.create_address.is_some();
@@ -282,17 +259,10 @@
                 <span class="kw-2">&amp;</span>params,
                 spec,
                 resources.state,
-                <span class="comment">// It is a bug in the Parity version.
-                </span><span class="kw-2">&amp;mut </span>frame_local.substate,
                 <span class="prelude-val">Some</span>(STORAGE_LAYOUT_REGULAR_V0),
             )<span class="question-mark">?
         </span>} <span class="kw">else </span>{
-            transfer_balance(
-                <span class="kw-2">&amp;</span>params,
-                spec,
-                resources.state,
-                <span class="kw-2">&amp;mut </span>frame_local.substate,
-            )<span class="question-mark">?
+            transfer_balance(<span class="kw-2">&amp;</span>params, resources.state)<span class="question-mark">?
         </span>};
 
         <span class="kw">let </span>executable =
@@ -301,10 +271,7 @@
     }
 }
 
-<span class="kw">fn </span>transfer_balance(
-    params: <span class="kw-2">&amp;</span>ActionParams, spec: <span class="kw-2">&amp;</span>Spec, state: <span class="kw-2">&amp;mut </span>State,
-    substate: <span class="kw-2">&amp;mut </span>Substate,
-) -&gt; DbResult&lt;()&gt; {
+<span class="kw">fn </span>transfer_balance(params: <span class="kw-2">&amp;</span>ActionParams, state: <span class="kw-2">&amp;mut </span>State) -&gt; DbResult&lt;()&gt; {
     <span class="kw">let </span>sender = AddressWithSpace {
         address: params.sender,
         space: params.space,
@@ -314,12 +281,7 @@
         space: params.space,
     };
     <span class="kw">if let </span>ActionValue::Transfer(val) = params.value {
-        state.transfer_balance(
-            <span class="kw-2">&amp;</span>sender,
-            <span class="kw-2">&amp;</span>receiver,
-            <span class="kw-2">&amp;</span>val,
-            cleanup_mode(substate, <span class="kw-2">&amp;</span>spec),
-        )<span class="question-mark">?</span>;
+        state.transfer_balance(<span class="kw-2">&amp;</span>sender, <span class="kw-2">&amp;</span>receiver, <span class="kw-2">&amp;</span>val)<span class="question-mark">?</span>;
     }
 
     <span class="prelude-val">Ok</span>(())
@@ -327,7 +289,7 @@
 
 <span class="kw">fn </span>transfer_exec_balance_and_init_contract(
     params: <span class="kw-2">&amp;</span>ActionParams, spec: <span class="kw-2">&amp;</span>Spec, state: <span class="kw-2">&amp;mut </span>State,
-    substate: <span class="kw-2">&amp;mut </span>Substate, storage_layout: <span class="prelude-ty">Option</span>&lt;StorageLayout&gt;,
+    storage_layout: <span class="prelude-ty">Option</span>&lt;StorageLayout&gt;,
 ) -&gt; DbResult&lt;()&gt; {
     <span class="kw">let </span>sender = AddressWithSpace {
         address: params.sender,
@@ -341,7 +303,7 @@
         <span class="comment">// It is possible to first send money to a pre-calculated
         // contract address.
         </span><span class="kw">let </span>prev_balance = state.balance(<span class="kw-2">&amp;</span>receiver)<span class="question-mark">?</span>;
-        state.sub_balance(<span class="kw-2">&amp;</span>sender, <span class="kw-2">&amp;</span>val, <span class="kw-2">&amp;mut </span>cleanup_mode(substate, <span class="kw-2">&amp;</span>spec))<span class="question-mark">?</span>;
+        state.sub_balance(<span class="kw-2">&amp;</span>sender, <span class="kw-2">&amp;</span>val)<span class="question-mark">?</span>;
         <span class="kw">let </span>admin = <span class="kw">if </span>params.space == Space::Native {
             params.original_sender
         } <span class="kw">else </span>{

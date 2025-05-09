@@ -1775,11 +1775,6 @@
 <a href="#1775" id="1775">1775</a>
 <a href="#1776" id="1776">1776</a>
 <a href="#1777" id="1777">1777</a>
-<a href="#1778" id="1778">1778</a>
-<a href="#1779" id="1779">1779</a>
-<a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
-<a href="#1782" id="1782">1782</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1847,8 +1842,7 @@
     executive::{ExecutionOutcome, ExecutiveContext},
     machine::Machine,
     state::{
-        distribute_pos_interest, update_pos_status, CleanupMode, State,
-        StateCommitResult,
+        distribute_pos_interest, update_pos_status, State, StateCommitResult,
     },
 };
 <span class="kw">use </span>cfx_vm_types::{Env, Spec};
@@ -3312,11 +3306,7 @@
         <span class="kw">for </span>(address, reward) <span class="kw">in </span>merged_rewards {
             <span class="kw">if </span>spec.is_valid_address(<span class="kw-2">&amp;</span>address) {
                 state
-                    .add_balance(
-                        <span class="kw-2">&amp;</span>address.with_native_space(),
-                        <span class="kw-2">&amp;</span>reward,
-                        CleanupMode::ForceCreate,
-                    )
+                    .add_balance(<span class="kw-2">&amp;</span>address.with_native_space(), <span class="kw-2">&amp;</span>reward)
                     .unwrap();
             }
 

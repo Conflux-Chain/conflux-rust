@@ -806,19 +806,6 @@
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
 <a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     contract_address,
     executed::make_ext_result,
@@ -835,7 +822,7 @@
         FrameReturn, FreshFrame, RuntimeRes,
     },
     state::settle_collateral_for_all,
-    substate::{cleanup_mode, Substate},
+    substate::Substate,
 };
 <span class="kw">use </span>cfx_parameters::staking::code_collateral_units;
 <span class="kw">use </span>cfx_vm_types::{
@@ -928,9 +915,6 @@
 
     <span class="kw">fn </span>charge_gas(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; DbResult&lt;(U256, bool)&gt; {
         <span class="kw">let </span>sender = <span class="self">self</span>.tx.sender();
-        <span class="kw">let </span>spec = <span class="self">self</span>.context.spec;
-        <span class="kw">let </span>substate = <span class="kw-2">&amp;mut </span><span class="self">self</span>.substate;
-        <span class="kw">let </span>cleanup_mode = <span class="kw-2">&amp;mut </span>cleanup_mode(substate, spec);
         <span class="kw">let </span><span class="kw-2">mut </span>tracer = <span class="self">self</span>.observer.as_tracer();
 
         <span class="kw">let </span>CostInfo {
@@ -963,11 +947,7 @@
                 AddressPocket::GasPayment,
                 actual_gas_cost,
             );
-            <span class="self">self</span>.context.state.sub_balance(
-                <span class="kw-2">&amp;</span>sender,
-                <span class="kw-2">&amp;</span>actual_gas_cost,
-                cleanup_mode,
-            )<span class="question-mark">?</span>;
+            <span class="self">self</span>.context.state.sub_balance(<span class="kw-2">&amp;</span>sender, <span class="kw-2">&amp;</span>actual_gas_cost)<span class="question-mark">?</span>;
         } <span class="kw">else </span>{
             <span class="kw">let </span>code_address = <span class="kw">match </span><span class="self">self</span>.tx.action() {
                 Action::Create =&gt; Address::zero(),
@@ -1273,7 +1253,6 @@
                 state.add_balance(
                     <span class="kw-2">&amp;</span>sponsor_address.with_native_space(),
                     <span class="kw-2">&amp;</span>sponsor_balance_for_gas,
-                    cleanup_mode(<span class="kw-2">&amp;mut </span>substate, spec),
                 )<span class="question-mark">?</span>;
                 state.sub_sponsor_balance_for_gas(
                     contract_address,
@@ -1290,7 +1269,6 @@
                 state.add_balance(
                     <span class="kw-2">&amp;</span>sponsor_address.with_native_space(),
                     <span class="kw-2">&amp;</span>sponsor_balance_for_collateral,
-                    cleanup_mode(<span class="kw-2">&amp;mut </span>substate, spec),
                 )<span class="question-mark">?</span>;
                 state.sub_sponsor_balance_for_collateral(
                     contract_address,
@@ -1417,11 +1395,7 @@
                 AddressPocket::Balance(<span class="self">self</span>.tx.sender()),
                 refund_value.clone(),
             );
-            state.add_balance(
-                <span class="kw-2">&amp;</span><span class="self">self</span>.tx.sender(),
-                <span class="kw-2">&amp;</span>refund_value,
-                cleanup_mode(<span class="kw-2">&amp;mut </span><span class="self">self</span>.substate, context.spec),
-            )<span class="question-mark">?</span>;
+            state.add_balance(<span class="kw-2">&amp;</span><span class="self">self</span>.tx.sender(), <span class="kw-2">&amp;</span>refund_value)<span class="question-mark">?</span>;
         };
 
         <span class="prelude-val">Ok</span>(())

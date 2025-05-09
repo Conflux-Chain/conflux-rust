@@ -258,25 +258,13 @@
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">use crate</span>::{
-    executive_observer::AddressPocket,
-    internal_bail,
-    state::State,
-    substate::{cleanup_mode, Substate},
+    executive_observer::AddressPocket, internal_bail, state::State,
+    substate::Substate,
 };
 <span class="kw">use </span>cfx_types::{Address, AddressSpaceUtil, U256};
 <span class="kw">use </span>cfx_vm_types::{<span class="self">self </span><span class="kw">as </span>vm, ActionParams, Spec};
@@ -301,8 +289,7 @@
         <span class="macro">internal_bail!</span>(<span class="string">"not allowed to sponsor non-contract account"</span>);
     }
 
-    <span class="kw">let </span>(spec, state, substate): (<span class="kw-2">&amp;</span>Spec, <span class="kw-2">&amp;mut </span>State, <span class="kw-2">&amp;mut </span>Substate) =
-        (context.spec, context.state, context.substate);
+    <span class="kw">let </span>state = <span class="kw-2">&amp;mut </span>context.state;
 
     <span class="kw">let </span>sponsor_balance = state.balance(<span class="kw-2">&amp;</span>params.address.with_native_space())<span class="question-mark">?</span>;
 
@@ -346,7 +333,6 @@
             state.add_balance(
                 <span class="kw-2">&amp;</span>prev_sponsor.as_ref().unwrap().with_native_space(),
                 <span class="kw-2">&amp;</span>prev_sponsor_balance,
-                cleanup_mode(substate, <span class="kw-2">&amp;</span>spec),
             )<span class="question-mark">?</span>;
         }
         context.tracer.trace_internal_transfer(
@@ -357,7 +343,6 @@
         state.sub_balance(
             <span class="kw-2">&amp;</span>params.address.with_native_space(),
             <span class="kw-2">&amp;</span>sponsor_balance,
-            <span class="kw-2">&amp;mut </span>cleanup_mode(substate, <span class="kw-2">&amp;</span>spec),
         )<span class="question-mark">?</span>;
         state.set_sponsor_for_gas(
             <span class="kw-2">&amp;</span>contract_address,
@@ -383,7 +368,6 @@
         state.sub_balance(
             <span class="kw-2">&amp;</span>params.address.with_native_space(),
             <span class="kw-2">&amp;</span>sponsor_balance,
-            <span class="kw-2">&amp;mut </span>cleanup_mode(substate, <span class="kw-2">&amp;</span>spec),
         )<span class="question-mark">?</span>;
         state.set_sponsor_for_gas(
             <span class="kw-2">&amp;</span>contract_address,
@@ -414,8 +398,7 @@
         <span class="macro">internal_bail!</span>(<span class="string">"not allowed to sponsor non-contract account"</span>);
     }
 
-    <span class="kw">let </span>(spec, state, substate): (<span class="kw-2">&amp;</span>Spec, <span class="kw-2">&amp;mut </span>State, <span class="kw-2">&amp;mut </span>Substate) =
-        (context.spec, context.state, context.substate);
+    <span class="kw">let </span>(spec, state): (<span class="kw-2">&amp;</span>Spec, <span class="kw-2">&amp;mut </span>State) = (context.spec, context.state);
 
     <span class="kw">let </span>sponsor_balance = state.balance(<span class="kw-2">&amp;</span>params.address.with_native_space())<span class="question-mark">?</span>;
 
@@ -455,7 +438,6 @@
             state.add_balance(
                 <span class="kw-2">&amp;</span>prev_sponsor.with_native_space(),
                 <span class="kw-2">&amp;</span>(prev_sponsor_balance + collateral_for_storage),
-                cleanup_mode(substate, <span class="kw-2">&amp;</span>spec),
             )<span class="question-mark">?</span>;
         } <span class="kw">else </span>{
             <span class="macro">assert_eq!</span>(collateral_for_storage, U256::zero());
@@ -468,7 +450,6 @@
         state.sub_balance(
             <span class="kw-2">&amp;</span>params.address.with_native_space(),
             <span class="kw-2">&amp;</span>sponsor_balance,
-            <span class="kw-2">&amp;mut </span>cleanup_mode(substate, <span class="kw-2">&amp;</span>spec),
         )<span class="question-mark">?</span>;
         state.set_sponsor_for_collateral(
             <span class="kw-2">&amp;</span>contract_address,
@@ -485,7 +466,6 @@
         state.sub_balance(
             <span class="kw-2">&amp;</span>params.address.with_native_space(),
             <span class="kw-2">&amp;</span>sponsor_balance,
-            <span class="kw-2">&amp;mut </span>cleanup_mode(substate, <span class="kw-2">&amp;</span>spec),
         )<span class="question-mark">?</span>;
         state.set_sponsor_for_collateral(
             <span class="kw-2">&amp;</span>contract_address,

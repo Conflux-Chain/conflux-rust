@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["cleanup_mode"],"struct":["Substate"]};
+window.SIDEBAR_ITEMS = {"struct":["Substate"]};

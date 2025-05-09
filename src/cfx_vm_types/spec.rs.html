@@ -514,34 +514,6 @@
 <a href="#514" id="514">514</a>
 <a href="#515" id="515">515</a>
 <a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a>
-<a href="#518" id="518">518</a>
-<a href="#519" id="519">519</a>
-<a href="#520" id="520">520</a>
-<a href="#521" id="521">521</a>
-<a href="#522" id="522">522</a>
-<a href="#523" id="523">523</a>
-<a href="#524" id="524">524</a>
-<a href="#525" id="525">525</a>
-<a href="#526" id="526">526</a>
-<a href="#527" id="527">527</a>
-<a href="#528" id="528">528</a>
-<a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
-<a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a>
-<a href="#534" id="534">534</a>
-<a href="#535" id="535">535</a>
-<a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a>
-<a href="#539" id="539">539</a>
-<a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
@@ -571,8 +543,6 @@
 <span class="doccomment">/// Definition of the cost spec and other parameterisations for the VM.
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>Spec {
-    <span class="doccomment">/// Does it support exceptional failed code deposit
-    </span><span class="kw">pub </span>exceptional_failed_code_deposit: bool,
     <span class="doccomment">/// VM stack limit
     </span><span class="kw">pub </span>stack_limit: usize,
     <span class="doccomment">/// Max number of nested calls/creates
@@ -671,18 +641,8 @@
     ///     let CALL's gas = (requested &gt; GAS ? \[OOG\] : GAS);
     ///     let CREATE's gas = GAS;
     </span><span class="kw">pub </span>sub_gas_cap_divisor: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-    <span class="doccomment">/// Don't ever make empty accounts; contracts start with nonce=1. Also,
-    /// don't charge 25k when sending/suicide zero-value.
-    </span><span class="kw">pub </span>no_empty: bool,
-    <span class="doccomment">/// Kill empty accounts if touched.
-    </span><span class="kw">pub </span>kill_empty: bool,
     <span class="doccomment">/// Blockhash instruction gas cost.
     </span><span class="kw">pub </span>blockhash_gas: usize,
-    <span class="doccomment">/// Kill basic accounts below this balance if touched.
-    </span><span class="kw">pub </span>kill_dust: CleanDustMode,
-    <span class="doccomment">/// VM execution does not increase null signed address nonce if this field
-    /// is true.
-    </span><span class="kw">pub </span>keep_unsigned_nonce: bool,
     <span class="doccomment">/// The magnification of gas storage occupying related operaions.
     </span><span class="kw">pub </span>evm_gas_ratio: usize,
     <span class="doccomment">/// `PER_AUTH_BASE_COST` in CIP-7702
@@ -871,23 +831,11 @@
     <span class="kw">pub </span>align_evm: bool,
 }
 
-<span class="doccomment">/// Dust accounts cleanup mode.
-</span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq)]
-</span><span class="kw">pub enum </span>CleanDustMode {
-    <span class="doccomment">/// Dust cleanup is disabled.
-    </span>Off,
-    <span class="doccomment">/// Basic dust accounts will be removed.
-    </span>BasicOnly,
-    <span class="doccomment">/// Basic and contract dust accounts will be removed.
-    </span>WithCodeAndStorage,
-}
-
 <span class="kw">impl </span>Spec {
     <span class="doccomment">/// The spec when Conflux launches the mainnet. It should never changed
     /// since the mainnet has launched.
     </span><span class="kw">pub const fn </span>genesis_spec() -&gt; Spec {
         Spec {
-            exceptional_failed_code_deposit: <span class="bool-val">true</span>,
             stack_limit: <span class="number">1024</span>,
             max_depth: <span class="number">1024</span>,
             tier_step_gas: [<span class="number">0</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">5</span>, <span class="number">8</span>, <span class="number">10</span>, <span class="number">20</span>, <span class="number">0</span>],
@@ -938,11 +886,7 @@
             per_auth_base_cost: <span class="number">17000</span>,
             per_empty_account_cost: <span class="number">25000</span>,
             sub_gas_cap_divisor: <span class="prelude-val">Some</span>(<span class="number">64</span>),
-            no_empty: <span class="bool-val">true</span>,
-            kill_empty: <span class="bool-val">true</span>,
             blockhash_gas: <span class="number">20</span>,
-            kill_dust: CleanDustMode::Off,
-            keep_unsigned_nonce: <span class="bool-val">false</span>,
             cip43_init: <span class="bool-val">false</span>,
             cip43_contract: <span class="bool-val">false</span>,
             cip62: <span class="bool-val">false</span>,

@@ -165,35 +165,12 @@
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
 <a href="#167" id="167">167</a>
-<a href="#168" id="168">168</a>
-<a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-</span><span class="kw">use </span><span class="kw">crate</span>::state::CleanupMode;
-<span class="kw">use </span>cfx_types::{Address, AddressWithSpace};
-<span class="kw">use </span>cfx_vm_types::{CleanDustMode, Spec};
+</span><span class="kw">use </span>cfx_types::{Address, AddressWithSpace};
+
 <span class="kw">use </span>primitives::{
     receipt::{SortedStorageChanges, StorageChange},
     LogEntry,
@@ -207,9 +184,6 @@
 </span><span class="kw">pub struct </span>Substate {
     <span class="doccomment">/// Any accounts that have suicided.
     </span><span class="kw">pub </span>suicides: HashSet&lt;AddressWithSpace&gt;,
-    <span class="doccomment">/// Any accounts that are touched.
-    </span><span class="comment">// touched is never used and it is not maintained properly.
-    </span><span class="kw">pub </span>touched: HashSet&lt;AddressWithSpace&gt;,
     <span class="doccomment">/// Any accounts that occupy some storage.
     </span><span class="kw">pub </span>storage_collateralized: HashMap&lt;Address, u64&gt;,
     <span class="doccomment">/// Any accounts that release some storage.
@@ -225,7 +199,6 @@
 <span class="kw">impl </span>Substate {
     <span class="kw">pub fn </span>accrue(<span class="kw-2">&amp;mut </span><span class="self">self</span>, s: <span class="self">Self</span>) {
         <span class="self">self</span>.suicides.extend(s.suicides);
-        <span class="self">self</span>.touched.extend(s.touched);
         <span class="self">self</span>.logs.extend(s.logs);
         <span class="self">self</span>.contracts_created.extend(s.contracts_created);
         <span class="kw">for </span>(address, amount) <span class="kw">in </span>s.storage_collateralized {
@@ -312,23 +285,6 @@
             .union(<span class="kw-2">&amp;</span>affected_address2)
             .cloned()
             .collect()
-    }
-}
-
-<span class="doccomment">/// Get the cleanup mode object from this.
-</span><span class="kw">pub fn </span>cleanup_mode&lt;<span class="lifetime">'a</span>&gt;(
-    substate: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>Substate, spec: <span class="kw-2">&amp;</span>Spec,
-) -&gt; CleanupMode&lt;<span class="lifetime">'a</span>&gt; {
-    <span class="kw">match </span>(
-        spec.kill_dust != CleanDustMode::Off,
-        spec.no_empty,
-        spec.kill_empty,
-    ) {
-        (<span class="bool-val">false</span>, <span class="bool-val">false</span>, <span class="kw">_</span>) =&gt; CleanupMode::ForceCreate,
-        (<span class="bool-val">false</span>, <span class="bool-val">true</span>, <span class="bool-val">false</span>) =&gt; CleanupMode::NoEmpty,
-        (<span class="bool-val">false</span>, <span class="bool-val">true</span>, <span class="bool-val">true</span>) | (<span class="bool-val">true</span>, <span class="kw">_</span>, <span class="kw">_</span>) =&gt; {
-            CleanupMode::TrackTouched(<span class="kw-2">&amp;mut </span>substate.touched)
-        }
     }
 }
 

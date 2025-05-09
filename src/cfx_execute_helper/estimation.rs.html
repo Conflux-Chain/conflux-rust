@@ -494,14 +494,13 @@
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
 <a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_executor::{
     executive::{
         ChargeCollateral, Executed, ExecutionError, ExecutionOutcome,
         ExecutiveContext, TransactOptions, TransactSettings,
     },
     machine::Machine,
-    state::{CleanupMode, State},
+    state::State,
 };
 <span class="kw">use </span>solidity_abi::string_revert_reason_decode;
 
@@ -579,7 +578,6 @@
             <span class="self">self</span>.state.add_balance(
                 <span class="kw-2">&amp;</span>random_hex.with_space(tx.space()),
                 <span class="kw-2">&amp;</span>balance_inc,
-                CleanupMode::NoEmpty,
             )<span class="question-mark">?</span>;
             <span class="comment">// Make sure statistics are also correct and will not violate any
             // underlying assumptions.

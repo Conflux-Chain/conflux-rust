@@ -570,13 +570,6 @@
 <a href="#570" id="570">570</a>
 <a href="#571" id="571">571</a>
 <a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a>
-<a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a>
-<a href="#577" id="577">577</a>
-<a href="#578" id="578">578</a>
-<a href="#579" id="579">579</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -624,7 +617,7 @@
         contract_address, ExecutionOutcome, ExecutiveContext, TransactOptions,
     },
     machine::Machine,
-    state::{CleanupMode, State},
+    state::State,
 };
 <span class="kw">use </span>cfx_vm_types::{CreateContractAddress, Env};
 <span class="kw">use </span>diem_types::account_address::AccountAddress;
@@ -717,9 +710,7 @@
     .expect(<span class="string">"no db error"</span>);
     <span class="macro">trace!</span>(<span class="string">"genesis_accounts: {:?}"</span>, genesis_accounts);
     <span class="kw">for </span>(addr, balance) <span class="kw">in </span>genesis_accounts {
-        state
-            .add_balance(<span class="kw-2">&amp;</span>addr, <span class="kw-2">&amp;</span>balance, CleanupMode::NoEmpty)
-            .unwrap();
+        state.add_balance(<span class="kw-2">&amp;</span>addr, <span class="kw-2">&amp;</span>balance).unwrap();
         state.add_total_issued(balance);
         <span class="kw">if </span>addr.space == Space::Ethereum {
             state.add_total_evm_tokens(balance);
@@ -739,11 +730,7 @@
     <span class="kw">let </span>genesis_account_init_balance =
         U256::from(ONE_CFX_IN_DRIP) * <span class="number">100 </span>+ genesis_token_count;
     state
-        .add_balance(
-            <span class="kw-2">&amp;</span>genesis_account_address,
-            <span class="kw-2">&amp;</span>genesis_account_init_balance,
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(<span class="kw-2">&amp;</span>genesis_account_address, <span class="kw-2">&amp;</span>genesis_account_init_balance)
         .unwrap();
     state.commit_cache(<span class="bool-val">false</span>);
 
@@ -937,7 +924,6 @@
                     <span class="kw-2">&amp;</span>node.address.with_native_space(),
                     <span class="kw-2">&amp;</span>(stake_balance
                         + U256::from(ONE_CFX_IN_DRIP) * U256::from(<span class="number">20</span>)),
-                    CleanupMode::NoEmpty,
                 )
                 .unwrap();
             state

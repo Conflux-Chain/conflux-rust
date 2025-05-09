@@ -243,15 +243,13 @@
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::error::{StateMismatch, TestErrorKind};
 <span class="kw">use </span>cfx_executor::{
     executive::{
         execution_outcome::ToRepackError, Executed, ExecutionError,
         ExecutionOutcome, TxDropError,
     },
-    state::{CleanupMode, State},
+    state::State,
 };
 <span class="kw">use </span>cfx_types::{AddressSpaceUtil, AddressWithSpace, Space, U256};
 <span class="kw">use </span>cfxkey::Address;
@@ -488,8 +486,6 @@
         address: miner.clone(),
         space: Space::Ethereum,
     };
-    state
-        .add_balance(<span class="kw-2">&amp;</span>miner, <span class="kw-2">&amp;</span>to_add, CleanupMode::NoEmpty)
-        .expect(<span class="string">"should success"</span>);
+    state.add_balance(<span class="kw-2">&amp;</span>miner, <span class="kw-2">&amp;</span>to_add).expect(<span class="string">"should success"</span>);
 }
 </code></pre></div></section></main></body></html>

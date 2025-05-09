@@ -132,13 +132,6 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -147,7 +140,6 @@
 <span class="kw">use crate</span>::{
     internal_contract::{pos_internal_entries, IndexStatus},
     return_if,
-    state::CleanupMode,
 };
 <span class="kw">use </span>cfx_math::sqrt_u256;
 <span class="kw">use </span>cfx_parameters::{
@@ -212,11 +204,10 @@
 
     <span class="kw">pub fn </span>add_pos_interest(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address, interest: <span class="kw-2">&amp;</span>U256,
-        cleanup_mode: CleanupMode,
     ) -&gt; DbResult&lt;()&gt; {
         <span class="kw">let </span>address = address.with_native_space();
         <span class="self">self</span>.add_total_issued(<span class="kw-2">*</span>interest);
-        <span class="self">self</span>.add_balance(<span class="kw-2">&amp;</span>address, interest, cleanup_mode)<span class="question-mark">?</span>;
+        <span class="self">self</span>.add_balance(<span class="kw-2">&amp;</span>address, interest)<span class="question-mark">?</span>;
         <span class="self">self</span>.write_account_or_new_lock(<span class="kw-2">&amp;</span>address)<span class="question-mark">?
             </span>.record_interest_receive(interest);
         <span class="prelude-val">Ok</span>(())
@@ -243,12 +234,7 @@
         <span class="kw">let </span>address = Address::from(H256::from_uint(<span class="kw-2">&amp;</span>address_value));
         <span class="kw">let </span>interest = distributable_pos_interest * points / MAX_TERM_POINTS;
         account_rewards.push((address, <span class="kw-2">*</span>identifier, interest));
-        state.add_pos_interest(
-            <span class="kw-2">&amp;</span>address,
-            <span class="kw-2">&amp;</span>interest,
-            CleanupMode::ForceCreate, <span class="comment">/* Same as distributing block
-                                       * reward. */
-        </span>)<span class="question-mark">?</span>;
+        state.add_pos_interest(<span class="kw-2">&amp;</span>address, <span class="kw-2">&amp;</span>interest)<span class="question-mark">?</span>;
     }
     state.reset_pos_distribute_info(current_block_number);
 

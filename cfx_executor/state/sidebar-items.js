@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CleanupMode"],"fn":["distribute_pos_interest","initialize_cip107","initialize_cip137","initialize_or_update_dao_voted_params","settle_collateral_for_all","update_pos_status"],"struct":["COMMISSION_PRIVILEGE_SPECIAL_KEY","State","StateCommitResult"]};
+window.SIDEBAR_ITEMS = {"fn":["distribute_pos_interest","initialize_cip107","initialize_cip137","initialize_or_update_dao_voted_params","settle_collateral_for_all","update_pos_status"],"struct":["COMMISSION_PRIVILEGE_SPECIAL_KEY","State","StateCommitResult"]};

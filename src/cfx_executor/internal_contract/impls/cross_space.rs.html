@@ -445,10 +445,6 @@
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
 <a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
     executive::{contract_address, gas_required_for},
     executive_observer::AddressPocket,
@@ -457,7 +453,6 @@
         Context, Executable, ExecutableOutcome, FrameResult, FrameReturn,
         Resumable,
     },
-    substate::cleanup_mode,
 };
 
 <span class="kw">use </span>cfx_parameters::block::CROSS_SPACE_GAS_RATIO;
@@ -711,7 +706,6 @@
         <span class="kw-2">&amp;</span>params.address.with_native_space(),
         <span class="kw-2">&amp;</span>mapped_sender,
         <span class="kw-2">&amp;</span>value,
-        cleanup_mode(context.substate, context.spec),
     )<span class="question-mark">?</span>;
     context.state.add_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(
@@ -791,7 +785,6 @@
         <span class="kw-2">&amp;</span>params.address.with_native_space(),
         <span class="kw-2">&amp;</span>mapped_sender,
         <span class="kw-2">&amp;</span>value,
-        cleanup_mode(context.substate, context.spec),
     )<span class="question-mark">?</span>;
     context.state.add_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(
@@ -868,7 +861,6 @@
         <span class="kw-2">&amp;</span>mapped_address,
         <span class="kw-2">&amp;</span>sender.with_native_space(),
         <span class="kw-2">&amp;</span>value,
-        cleanup_mode(context.substate, context.spec),
     )<span class="question-mark">?</span>;
     context.state.sub_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(

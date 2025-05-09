@@ -229,21 +229,8 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
-<a href="#237" id="237">237</a>
-<a href="#238" id="238">238</a>
-<a href="#239" id="239">239</a>
-<a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{RequireFields, State};
-<span class="kw">use crate</span>::{state::CleanupMode, try_loaded};
+<span class="kw">use </span><span class="kw">crate</span>::try_loaded;
 <span class="kw">use </span>cfx_bytes::Bytes;
 <span class="kw">use </span>cfx_statedb::Result <span class="kw">as </span>DbResult;
 <span class="kw">use </span>cfx_types::{
@@ -281,49 +268,36 @@
 
     <span class="kw">pub fn </span>add_balance(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, by: <span class="kw-2">&amp;</span>U256,
-        cleanup_mode: CleanupMode,
     ) -&gt; DbResult&lt;()&gt; {
-        <span class="kw">let </span>exists = <span class="self">self</span>.exists(address)<span class="question-mark">?</span>;
+        <span class="comment">// Mark address as warm.
+        </span><span class="self">self</span>.touch(address)<span class="question-mark">?</span>;
 
         <span class="comment">// The caller should guarantee the validity of address.
 
-        </span><span class="kw">if </span>!by.is_zero()
-            || (cleanup_mode == CleanupMode::ForceCreate &amp;&amp; !exists)
-        {
+        </span><span class="kw">if </span>!by.is_zero() {
             <span class="self">self</span>.write_account_or_new_lock(address)<span class="question-mark">?</span>.add_balance(by);
         }
 
-        <span class="comment">// TODO: consider remove touched
-        </span><span class="kw">if let </span>CleanupMode::TrackTouched(set) = cleanup_mode {
-            <span class="kw">if </span>exists {
-                set.insert(<span class="kw-2">*</span>address);
-            }
-        }
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub fn </span>sub_balance(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, by: <span class="kw-2">&amp;</span>U256,
-        cleanup_mode: <span class="kw-2">&amp;mut </span>CleanupMode,
     ) -&gt; DbResult&lt;()&gt; {
+        <span class="comment">// Mark address as warm.
+        </span><span class="self">self</span>.touch(address)<span class="question-mark">?</span>;
+
         <span class="kw">if </span>!by.is_zero() {
             <span class="self">self</span>.write_account_lock(address)<span class="question-mark">?</span>.sub_balance(by);
-        }
-
-        <span class="kw">if let </span>CleanupMode::TrackTouched(<span class="kw-2">ref mut </span>set) = <span class="kw-2">*</span>cleanup_mode {
-            <span class="kw">if </span><span class="self">self</span>.exists(address)<span class="question-mark">? </span>{
-                set.insert(<span class="kw-2">*</span>address);
-            }
         }
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub fn </span>transfer_balance(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, from: <span class="kw-2">&amp;</span>AddressWithSpace, to: <span class="kw-2">&amp;</span>AddressWithSpace, by: <span class="kw-2">&amp;</span>U256,
-        <span class="kw-2">mut </span>cleanup_mode: CleanupMode,
     ) -&gt; DbResult&lt;()&gt; {
-        <span class="self">self</span>.sub_balance(from, by, <span class="kw-2">&amp;mut </span>cleanup_mode)<span class="question-mark">?</span>;
-        <span class="self">self</span>.add_balance(to, by, cleanup_mode)<span class="question-mark">?</span>;
+        <span class="self">self</span>.sub_balance(from, by)<span class="question-mark">?</span>;
+        <span class="self">self</span>.add_balance(to, by)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
