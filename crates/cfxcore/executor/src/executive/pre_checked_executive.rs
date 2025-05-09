@@ -14,7 +14,7 @@ use crate::{
         FrameReturn, FreshFrame, RuntimeRes,
     },
     state::settle_collateral_for_all,
-    substate::{cleanup_mode, Substate},
+    substate::Substate,
 };
 use cfx_parameters::staking::code_collateral_units;
 use cfx_vm_types::{
@@ -107,9 +107,6 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
 
     fn charge_gas(&mut self) -> DbResult<(U256, bool)> {
         let sender = self.tx.sender();
-        let spec = self.context.spec;
-        let substate = &mut self.substate;
-        let cleanup_mode = &mut cleanup_mode(substate, spec);
         let mut tracer = self.observer.as_tracer();
 
         let CostInfo {
@@ -142,11 +139,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 AddressPocket::GasPayment,
                 actual_gas_cost,
             );
-            self.context.state.sub_balance(
-                &sender,
-                &actual_gas_cost,
-                cleanup_mode,
-            )?;
+            self.context.state.sub_balance(&sender, &actual_gas_cost)?;
         } else {
             let code_address = match self.tx.action() {
                 Action::Create => Address::zero(),
@@ -452,7 +445,6 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 state.add_balance(
                     &sponsor_address.with_native_space(),
                     &sponsor_balance_for_gas,
-                    cleanup_mode(&mut substate, spec),
                 )?;
                 state.sub_sponsor_balance_for_gas(
                     contract_address,
@@ -469,7 +461,6 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 state.add_balance(
                     &sponsor_address.with_native_space(),
                     &sponsor_balance_for_collateral,
-                    cleanup_mode(&mut substate, spec),
                 )?;
                 state.sub_sponsor_balance_for_collateral(
                     contract_address,
@@ -596,11 +587,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 AddressPocket::Balance(self.tx.sender()),
                 refund_value.clone(),
             );
-            state.add_balance(
-                &self.tx.sender(),
-                &refund_value,
-                cleanup_mode(&mut self.substate, context.spec),
-            )?;
+            state.add_balance(&self.tx.sender(), &refund_value)?;
         };
 
         Ok(())

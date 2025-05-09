@@ -6,7 +6,6 @@ use super::State;
 use crate::{
     internal_contract::{pos_internal_entries, IndexStatus},
     return_if,
-    state::CleanupMode,
 };
 use cfx_math::sqrt_u256;
 use cfx_parameters::{
@@ -71,11 +70,10 @@ impl State {
 
     pub fn add_pos_interest(
         &mut self, address: &Address, interest: &U256,
-        cleanup_mode: CleanupMode,
     ) -> DbResult<()> {
         let address = address.with_native_space();
         self.add_total_issued(*interest);
-        self.add_balance(&address, interest, cleanup_mode)?;
+        self.add_balance(&address, interest)?;
         self.write_account_or_new_lock(&address)?
             .record_interest_receive(interest);
         Ok(())
@@ -102,12 +100,7 @@ where I: Iterator<Item = (&'a H256, u64)> + 'a {
         let address = Address::from(H256::from_uint(&address_value));
         let interest = distributable_pos_interest * points / MAX_TERM_POINTS;
         account_rewards.push((address, *identifier, interest));
-        state.add_pos_interest(
-            &address,
-            &interest,
-            CleanupMode::ForceCreate, /* Same as distributing block
-                                       * reward. */
-        )?;
+        state.add_pos_interest(&address, &interest)?;
     }
     state.reset_pos_distribute_info(current_block_number);
 

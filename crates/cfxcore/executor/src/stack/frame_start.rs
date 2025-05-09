@@ -2,11 +2,7 @@ use super::{
     super::context::OriginInfo, executable::make_executable, run_executable,
     FrameLocal, FrameStackAction, RuntimeRes,
 };
-use crate::{
-    machine::Machine,
-    state::State,
-    substate::{cleanup_mode, Substate},
-};
+use crate::{machine::Machine, state::State, substate::Substate};
 
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space};
@@ -69,7 +65,7 @@ impl<'a> FreshFrame<'a> {
         self, resources: &mut RuntimeRes<'a>,
     ) -> DbResult<FrameStackAction<'a>> {
         let FreshFrame {
-            mut frame_local,
+            frame_local,
             params,
         } = self;
         let is_create = frame_local.create_address.is_some();
@@ -100,17 +96,10 @@ impl<'a> FreshFrame<'a> {
                 &params,
                 spec,
                 resources.state,
-                // It is a bug in the Parity version.
-                &mut frame_local.substate,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
             )?
         } else {
-            transfer_balance(
-                &params,
-                spec,
-                resources.state,
-                &mut frame_local.substate,
-            )?
+            transfer_balance(&params, resources.state)?
         };
 
         let executable =
@@ -119,10 +108,7 @@ impl<'a> FreshFrame<'a> {
     }
 }
 
-fn transfer_balance(
-    params: &ActionParams, spec: &Spec, state: &mut State,
-    substate: &mut Substate,
-) -> DbResult<()> {
+fn transfer_balance(params: &ActionParams, state: &mut State) -> DbResult<()> {
     let sender = AddressWithSpace {
         address: params.sender,
         space: params.space,
@@ -132,12 +118,7 @@ fn transfer_balance(
         space: params.space,
     };
     if let ActionValue::Transfer(val) = params.value {
-        state.transfer_balance(
-            &sender,
-            &receiver,
-            &val,
-            cleanup_mode(substate, &spec),
-        )?;
+        state.transfer_balance(&sender, &receiver, &val)?;
     }
 
     Ok(())
@@ -145,7 +126,7 @@ fn transfer_balance(
 
 fn transfer_exec_balance_and_init_contract(
     params: &ActionParams, spec: &Spec, state: &mut State,
-    substate: &mut Substate, storage_layout: Option<StorageLayout>,
+    storage_layout: Option<StorageLayout>,
 ) -> DbResult<()> {
     let sender = AddressWithSpace {
         address: params.sender,
@@ -159,7 +140,7 @@ fn transfer_exec_balance_and_init_contract(
         // It is possible to first send money to a pre-calculated
         // contract address.
         let prev_balance = state.balance(&receiver)?;
-        state.sub_balance(&sender, &val, &mut cleanup_mode(substate, &spec))?;
+        state.sub_balance(&sender, &val)?;
         let admin = if params.space == Space::Native {
             params.original_sender
         } else {

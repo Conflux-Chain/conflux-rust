@@ -65,8 +65,7 @@ use cfx_executor::{
     executive::{ExecutionOutcome, ExecutiveContext},
     machine::Machine,
     state::{
-        distribute_pos_interest, update_pos_status, CleanupMode, State,
-        StateCommitResult,
+        distribute_pos_interest, update_pos_status, State, StateCommitResult,
     },
 };
 use cfx_vm_types::{Env, Spec};
@@ -1530,11 +1529,7 @@ impl ConsensusExecutionHandler {
         for (address, reward) in merged_rewards {
             if spec.is_valid_address(&address) {
                 state
-                    .add_balance(
-                        &address.with_native_space(),
-                        &reward,
-                        CleanupMode::ForceCreate,
-                    )
+                    .add_balance(&address.with_native_space(), &reward)
                     .unwrap();
             }
 

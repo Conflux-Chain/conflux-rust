@@ -27,8 +27,6 @@ pub const CODE_PREFIX_7702: &'static [u8] = b"\xef\x01\x00";
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
 pub struct Spec {
-    /// Does it support exceptional failed code deposit
-    pub exceptional_failed_code_deposit: bool,
     /// VM stack limit
     pub stack_limit: usize,
     /// Max number of nested calls/creates
@@ -127,18 +125,8 @@ pub struct Spec {
     ///     let CALL's gas = (requested > GAS ? \[OOG\] : GAS);
     ///     let CREATE's gas = GAS;
     pub sub_gas_cap_divisor: Option<usize>,
-    /// Don't ever make empty accounts; contracts start with nonce=1. Also,
-    /// don't charge 25k when sending/suicide zero-value.
-    pub no_empty: bool,
-    /// Kill empty accounts if touched.
-    pub kill_empty: bool,
     /// Blockhash instruction gas cost.
     pub blockhash_gas: usize,
-    /// Kill basic accounts below this balance if touched.
-    pub kill_dust: CleanDustMode,
-    /// VM execution does not increase null signed address nonce if this field
-    /// is true.
-    pub keep_unsigned_nonce: bool,
     /// The magnification of gas storage occupying related operaions.
     pub evm_gas_ratio: usize,
     /// `PER_AUTH_BASE_COST` in CIP-7702
@@ -327,23 +315,11 @@ pub struct ConsensusGasSpec {
     pub align_evm: bool,
 }
 
-/// Dust accounts cleanup mode.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CleanDustMode {
-    /// Dust cleanup is disabled.
-    Off,
-    /// Basic dust accounts will be removed.
-    BasicOnly,
-    /// Basic and contract dust accounts will be removed.
-    WithCodeAndStorage,
-}
-
 impl Spec {
     /// The spec when Conflux launches the mainnet. It should never changed
     /// since the mainnet has launched.
     pub const fn genesis_spec() -> Spec {
         Spec {
-            exceptional_failed_code_deposit: true,
             stack_limit: 1024,
             max_depth: 1024,
             tier_step_gas: [0, 2, 3, 5, 8, 10, 20, 0],
@@ -394,11 +370,7 @@ impl Spec {
             per_auth_base_cost: 17000,
             per_empty_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
-            no_empty: true,
-            kill_empty: true,
             blockhash_gas: 20,
-            kill_dust: CleanDustMode::Off,
-            keep_unsigned_nonce: false,
             cip43_init: false,
             cip43_contract: false,
             cip62: false,

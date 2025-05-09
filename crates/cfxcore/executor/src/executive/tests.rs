@@ -5,7 +5,7 @@
 use super::*;
 use crate::{
     machine::{Machine, VmFactory},
-    state::{get_state_by_epoch_id, get_state_for_genesis_write, CleanupMode},
+    state::{get_state_by_epoch_id, get_state_for_genesis_write},
     substate::Substate,
     tests::MOCK_TX_HASH,
 };
@@ -97,18 +97,10 @@ fn test_sender_balance() {
     let storage_limit_in_drip = U256::MAX;
     let mut state = get_state_for_genesis_write();
     state
-        .add_balance(
-            &sender_with_space,
-            &COLLATERAL_DRIPS_PER_STORAGE_KEY,
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&sender_with_space, &COLLATERAL_DRIPS_PER_STORAGE_KEY)
         .unwrap();
     state
-        .add_balance(
-            &sender_with_space,
-            &U256::from(0x100u64),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&sender_with_space, &U256::from(0x100u64))
         .unwrap();
     assert_eq!(
         state.balance(&sender_with_space).unwrap(),
@@ -216,7 +208,7 @@ fn test_create_contract_out_of_depth() {
 
     let mut state = get_state_for_genesis_write();
     state
-        .add_balance(&sender_with_space, &U256::from(100), CleanupMode::NoEmpty)
+        .add_balance(&sender_with_space, &U256::from(100))
         .unwrap();
     let mut substate = Substate::new();
 
@@ -271,11 +263,7 @@ fn test_suicide_when_creation() {
 
     let mut state = get_state_for_genesis_write();
     state
-        .add_balance(
-            &sender_with_space,
-            &U256::from(100_000),
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&sender_with_space, &U256::from(100_000))
         .unwrap();
     let mut substate = Substate::new();
 
@@ -368,7 +356,6 @@ fn test_call_to_create() {
         .add_balance(
             &sender_with_space,
             &(U256::from(100) + storage_limit_in_drip),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     assert_eq!(
@@ -432,7 +419,6 @@ fn test_revert() {
         .add_balance(
             &sender_with_space,
             &U256::from_str("152d02c7e14af68000000").unwrap(),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
@@ -511,7 +497,6 @@ fn test_keccak() {
         .add_balance(
             &sender_with_space,
             &U256::from_str("152d02c7e14af6800000").unwrap(),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     let mut substate = Substate::new();
@@ -552,9 +537,8 @@ fn test_not_enough_cash() {
     let spec = machine.spec_for_test(env.number);
 
     let mut state = get_state_for_genesis_write();
-    state
-        .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
-        .unwrap();
+
+    state.add_balance(&sender, &U256::from(100_017)).unwrap();
     state.commit_cache(false);
     let correct_cost = min(t.gas_price() * t.gas(), 100_017.into());
 
@@ -598,7 +582,6 @@ fn test_deposit_withdraw_lock() {
         .add_balance(
             &sender_with_space,
             &U256::from(2_000_000_000_000_000_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state.add_total_issued(U256::from(2_000_000_000_000_000_000u64));
@@ -979,7 +962,6 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         .add_balance(
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
 
@@ -1061,7 +1043,6 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         .add_balance(
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     let whitelisted_caller = Address::random();
@@ -1166,7 +1147,6 @@ fn test_commission_privilege() {
         .add_balance(
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state.commit_cache(false);
@@ -1204,21 +1184,18 @@ fn test_commission_privilege() {
         .add_balance(
             &caller1.address().with_native_space(),
             &U256::from(100_000),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller2.address().with_native_space(),
             &U256::from(100_000),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller3.address().with_native_space(),
             &U256::from(100_000),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     // add commission privilege to caller1 and caller2
@@ -1570,7 +1547,6 @@ fn test_storage_commission_privilege() {
         .add_balance(
             &sender_with_space,
             &U256::from(2_000_000_000_000_075_000u64),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state.commit_cache(false);
@@ -1644,21 +1620,18 @@ fn test_storage_commission_privilege() {
         .add_balance(
             &caller1.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller2.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
         .add_balance(
             &caller3.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
 
@@ -2316,7 +2289,6 @@ fn test_tload() {
         .add_balance(
             &sender_with_space,
             &U256::from_str("152d02c7e14af68000000").unwrap(),
-            CleanupMode::NoEmpty,
         )
         .unwrap();
     state
