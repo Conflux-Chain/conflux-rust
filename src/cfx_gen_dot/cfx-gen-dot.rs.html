@@ -150,21 +150,6 @@
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
-<a href="#155" id="155">155</a>
-<a href="#156" id="156">156</a>
-<a href="#157" id="157">157</a>
-<a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
-<a href="#165" id="165">165</a>
-<a href="#166" id="166">166</a>
-<a href="#167" id="167">167</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -255,17 +240,8 @@
     from_block: H256,
     max_depth: u32,
 }
-
-<span class="comment">// from /src/main.rs
-</span><span class="kw">fn </span>from_str_validator&lt;T: std::str::FromStr&gt;(arg: String) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-    <span class="kw">match </span>arg.parse::&lt;T&gt;() {
-        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(arg),
-    }
-}
-
 <span class="kw">fn </span>parse_config() -&gt; Config {
-    <span class="kw">let </span>matches = clap::App::new(<span class="string">"cfx-gen-dot"</span>)
+    <span class="kw">let </span>matches = clap4::Command::new(<span class="string">"cfx-gen-dot"</span>)
         .version(<span class="string">"0.1"</span>)
         .about(
 <span class="string">"Generate Graphviz dot files from your local blockchain db
@@ -277,41 +253,35 @@ Example usage:
         &gt; graph.dot
     dot -Tsvg graph.dot -o graph.svg"</span>)
         .arg(
-            clap::Arg::with_name(<span class="string">"db-path"</span>)
+            clap4::Arg::new(<span class="string">"db-path"</span>)
                 .long(<span class="string">"db-path"</span>)
                 .value_name(<span class="string">"PATH"</span>)
                 .help(<span class="string">"Specifies local blockchain db directory"</span>)
-                .takes_value(<span class="bool-val">true</span>)
                 .required(<span class="bool-val">true</span>),
         )
         .arg(
-            clap::Arg::with_name(<span class="string">"from-block"</span>)
+            clap4::Arg::new(<span class="string">"from-block"</span>)
                 .long(<span class="string">"from-block"</span>)
                 .value_name(<span class="string">"HASH"</span>)
                 .help(<span class="string">"Sets starting block of DAG traversal"</span>)
-                .takes_value(<span class="bool-val">true</span>)
                 .required(<span class="bool-val">true</span>),
         )
         .arg(
-            clap::Arg::with_name(<span class="string">"max-depth"</span>)
+            clap4::Arg::new(<span class="string">"max-depth"</span>)
                 .long(<span class="string">"max-depth"</span>)
                 .value_name(<span class="string">"NUM"</span>)
+                .value_parser(<span class="macro">clap4::value_parser!</span>(u32))
                 .help(<span class="string">"Sets maximum depth for traversal"</span>)
-                .takes_value(<span class="bool-val">true</span>)
                 .required(<span class="bool-val">true</span>)
-                .validator(from_str_validator::&lt;u32&gt;),
         )
         .get_matches();
 
-    <span class="kw">let </span>db_path = matches.value_of(<span class="string">"db-path"</span>).unwrap();
-    <span class="kw">let </span>max_depth = matches
-        .value_of(<span class="string">"max-depth"</span>)
-        .unwrap()
-        .parse::&lt;u32&gt;()
-        .unwrap();
+    <span class="kw">let </span>db_path = matches.get_one::&lt;String&gt;(<span class="string">"db-path"</span>).unwrap();
+    <span class="kw">let </span>max_depth = matches.get_one::&lt;u32&gt;(<span class="string">"max-depth"</span>).unwrap().clone();
 
     <span class="kw">let </span>from_block = {
-        <span class="kw">let </span><span class="kw-2">mut </span>from = matches.value_of(<span class="string">"from-block"</span>).unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>from =
+            matches.get_one::&lt;String&gt;(<span class="string">"from-block"</span>).unwrap().as_str();
 
         <span class="kw">if </span>from.starts_with(<span class="string">"0x"</span>) {
             from = <span class="kw-2">&amp;</span>from[<span class="number">2</span>..];
