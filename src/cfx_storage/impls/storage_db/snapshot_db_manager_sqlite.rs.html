@@ -1954,17 +1954,17 @@
             <span class="kw">let </span>(mpt_snapshot_path, create_mpt) = <span class="kw">match </span>mpt_snapshot_path {
                 <span class="prelude-val">Some</span>(v) =&gt; (v, <span class="bool-val">true</span>),
                 <span class="kw">_ </span>=&gt; {
+                    <span class="kw">let </span>latest_snapshot_id = <span class="self">self</span>.latest_snapshot_id.read();
                     <span class="macro">debug!</span>(
                         <span class="string">"new_epoch_height {}, latest_snapshot_id {} {}"</span>,
                         new_epoch_height,
-                        <span class="self">self</span>.latest_snapshot_id.read().<span class="number">0</span>,
-                        <span class="self">self</span>.latest_snapshot_id.read().<span class="number">1
+                        latest_snapshot_id.<span class="number">0</span>,
+                        latest_snapshot_id.<span class="number">1
                     </span>);
-                    <span class="kw">if </span>new_epoch_height &lt;= <span class="self">self</span>.latest_snapshot_id.read().<span class="number">1 </span>{
+                    <span class="kw">if </span>new_epoch_height &lt;= latest_snapshot_id.<span class="number">1 </span>{
                         <span class="macro">bail!</span>(<span class="macro">format!</span>(
                             <span class="string">"Try to write an old snapshot {}, {}"</span>,
-                            new_epoch_height,
-                            <span class="self">self</span>.latest_snapshot_id.read().<span class="number">1
+                            new_epoch_height, latest_snapshot_id.<span class="number">1
                         </span>))
                     }
 
