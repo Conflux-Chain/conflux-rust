@@ -12,7 +12,10 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{block_header::compute_next_price, SignedTransaction};
 use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 #[cfg(test)]
 mod tests;
@@ -376,6 +379,43 @@ impl DeferredPool {
                 (pending_txs, pending_reason)
             }
             None => (Vec::new(), None),
+        }
+    }
+
+    pub fn eth_content<F>(
+        &self, space: Option<Space>, get_nonce_and_balance: F,
+    ) -> (
+        BTreeMap<AddressWithSpace, BTreeMap<U256, Arc<SignedTransaction>>>,
+        BTreeMap<AddressWithSpace, BTreeMap<U256, Arc<SignedTransaction>>>,
+    )
+    where F: Fn(&AddressWithSpace) -> (U256, U256) {
+        let mut total_pending = BTreeMap::new();
+        let mut total_queued = BTreeMap::new();
+        for (addr, pool) in self.buckets.iter() {
+            if let Some(addr_space) = space {
+                if addr_space != addr.space {
+                    continue;
+                }
+            }
+            let (nonce, balance) = get_nonce_and_balance(addr);
+            let (pending, queued) = pool.eth_content(nonce, balance);
+            total_pending.insert(*addr, pending);
+            total_queued.insert(*addr, queued);
+        }
+        (total_pending, total_queued)
+    }
+
+    pub fn eth_content_from(
+        &self, address: AddressWithSpace, local_nonce: U256,
+        local_balance: U256,
+    ) -> (
+        BTreeMap<U256, Arc<SignedTransaction>>,
+        BTreeMap<U256, Arc<SignedTransaction>>,
+    ) {
+        if let Some(nonce_pool) = self.buckets.get(&address) {
+            nonce_pool.eth_content(local_nonce, local_balance)
+        } else {
+            (Default::default(), Default::default())
         }
     }
 
