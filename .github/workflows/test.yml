@@ -183,4 +183,4 @@ jobs:
         run: cargo build --release --bin evm-spec-tester
 
       - name: Run EVM spec tests
-        run: cargo run --release --bin evm-spec-tester -- testdata/evm-spec-test
+        run: cargo run --release --bin evm-spec-tester -- statetest testdata/evm-spec-test

@@ -1,28 +1,20 @@
 #[macro_use]
 extern crate log;
 
+mod blocktest;
+mod cmd;
 mod statetest;
+mod util;
 
-use statetest::command::StateTestCmd;
-use structopt::StructOpt;
+use clap::Parser;
+use cmd::MainCmd;
+use log::LevelFilter;
 
-fn init_logger(verbosity: u8) {
-    use log::LevelFilter;
-
-    const BASE_LEVEL: u8 = 2;
-
-    let level = match BASE_LEVEL + verbosity {
-        0 => LevelFilter::Error,
-        1 => LevelFilter::Warn,
-        2 => LevelFilter::Info,
-        3 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
-    };
-
+fn init_logger(level_filter: LevelFilter) {
     env_logger::Builder::new()
         .target(env_logger::Target::Stdout)
         .filter(None, LevelFilter::Off)
-        .filter_module("evm_spec_tester", level)
+        .filter_module("evm_spec_tester", level_filter)
         .format_timestamp(None) // Optional: add timestamp
         // .format_level(true)     // show log level
         // .format_module_path(true)  // show module path
@@ -30,8 +22,8 @@ fn init_logger(verbosity: u8) {
 }
 
 fn main() {
-    let cmd = StateTestCmd::from_args();
-    init_logger(cmd.verbose);
+    let cmd = MainCmd::parse();
+    init_logger(cmd.verbose.log_level_filter());
     let success = cmd.run();
     if !success {
         std::process::exit(1);

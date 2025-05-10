@@ -457,6 +457,7 @@ build_config! {
     }
 }
 
+#[derive(Debug)]
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }

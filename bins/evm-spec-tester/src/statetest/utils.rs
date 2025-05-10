@@ -1,7 +1,6 @@
 use cfx_rpc_eth_types::Bytes;
 use primitives::transaction::eth_transaction::eip155_signature;
-use std::path::{Path, PathBuf};
-use walkdir::{DirEntry, WalkDir};
+use std::path::Path;
 
 pub(crate) fn skip_test(path: &Path) -> bool {
     if contains_meta_dir(path) {
@@ -50,20 +49,6 @@ pub(crate) fn allowed_test(path: &Path, matches: Option<&str>) -> bool {
     }
 
     false
-}
-
-pub(crate) fn find_all_json_tests(path: &Path) -> Vec<PathBuf> {
-    if path.is_file() {
-        vec![path.to_path_buf()]
-    } else {
-        WalkDir::new(path)
-            .follow_links(true)
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|e| e.path().extension() == Some("json".as_ref()))
-            .map(DirEntry::into_path)
-            .collect()
-    }
 }
 
 // 1. Check if the input bytes is a rlp list
