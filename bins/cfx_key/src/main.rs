@@ -200,153 +200,154 @@ fn execute(cli: Cli) -> Result<String, Error> {
     let display_mode = DisplayMode::new(&cli);
     return match &cli.command {
         Commands::Info { secret_or_phrase } => {
-            let result = if cli.brain {
-                let phrase = secret_or_phrase;
-                let phrase_info = validate_phrase(&phrase);
-                let keypair = Brain::new(phrase.clone())
-                    .generate()
-                    .expect("Brain wallet generator is infallible; qed");
-                (keypair, Some(phrase_info))
-            } else {
-                let secret = secret_or_phrase
-                    .parse()
-                    .map_err(|_| EthkeyError::InvalidSecret)?;
-                (KeyPair::from_secret(secret)?, None)
-            };
-            Ok(display(result, display_mode))
+            execute_info(secret_or_phrase, cli.brain, display_mode)
         }
         Commands::Generate { command } => {
-            let result = match &command {
-                GenerateCommands::Random {} => {
-                    if cli.brain {
-                        let mut brain = BrainPrefix::new(
-                            vec![0],
-                            usize::max_value(),
-                            BRAIN_WORDS,
-                        );
-                        let keypair = brain.generate()?;
-                        let phrase =
-                            format!("recovery phrase: {}", brain.phrase());
-                        (keypair, Some(phrase))
-                    } else {
-                        (Random.generate()?, None)
-                    }
-                }
-                GenerateCommands::Prefix { prefix } => {
-                    let prefix: Vec<u8> = prefix.from_hex()?;
-                    let brain = cli.brain;
-                    in_threads(move || {
-                        let iterations = 1024;
-                        let prefix = prefix.clone();
-                        move || {
-                            let prefix = prefix.clone();
-                            let res = if brain {
-                                let mut brain = BrainPrefix::new(
-                                    prefix,
-                                    iterations,
-                                    BRAIN_WORDS,
-                                );
-                                let result = brain.generate();
-                                let phrase = format!(
-                                    "recovery phrase: {}",
-                                    brain.phrase()
-                                );
-                                result.map(|keypair| (keypair, Some(phrase)))
-                            } else {
-                                let result =
-                                    Prefix::new(prefix, iterations).generate();
-                                result.map(|res| (res, None))
-                            };
-
-                            Ok(res.map(Some).unwrap_or(None))
-                        }
-                    })?
-                }
-            };
-            Ok(display(result, display_mode))
+            execute_generate(command, cli.brain, display_mode)
         }
         Commands::Sign { secret, message } => {
-            let secret =
-                secret.parse().map_err(|_| EthkeyError::InvalidSecret)?;
-            let message =
-                message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
-            let signature = sign(&secret, &message)?;
-            Ok(format!("{}", signature))
+            execute_sign(secret.clone(), message.clone())
         }
-        Commands::Verify { command } => {
-            let result = match &command {
-                VerifyCommands::Public {
-                    public,
-                    signature,
-                    message,
-                } => {
-                    let signature = signature
-                        .parse()
-                        .map_err(|_| EthkeyError::InvalidSignature)?;
-                    let message = message
-                        .parse()
-                        .map_err(|_| EthkeyError::InvalidMessage)?;
-
-                    let public = public
-                        .parse()
-                        .map_err(|_| EthkeyError::InvalidPublic)?;
-                    verify_public(&public, &signature, &message)?
-                }
-                VerifyCommands::Address {
-                    address,
-                    signature,
-                    message,
-                } => {
-                    let signature = signature
-                        .parse()
-                        .map_err(|_| EthkeyError::InvalidSignature)?;
-                    let message = message
-                        .parse()
-                        .map_err(|_| EthkeyError::InvalidMessage)?;
-                    let address = address
-                        .parse()
-                        .map_err(|_| EthkeyError::InvalidAddress)?;
-                    verify_address(&address, &signature, &message)?
-                }
-            };
-            Ok(format!("{}", result))
-        }
+        Commands::Verify { command } => execute_verify(command),
         Commands::Recover {
             known_phrase,
             address,
-        } => {
-            let known_phrase = known_phrase;
-            let address =
-                address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
-            let (phrase, keypair) = in_threads(move || {
-                let mut it = brain_recover::PhrasesIterator::from_known_phrase(
-                    &known_phrase,
-                    BRAIN_WORDS,
-                )
-                .enumerate();
-                move || {
-                    for (i, phrase) in &mut it {
-                        let keypair =
-                            Brain::new(phrase.clone()).generate().unwrap();
-                        if keypair.address() == address {
-                            return Ok(Some((phrase, keypair)));
-                        }
-
-                        if i >= 1024 {
-                            return Ok(None);
-                        }
-                    }
-
-                    Err(EthkeyError::Custom(
-                        "Couldn't find any results.".into(),
-                    ))
-                }
-            })?;
-            Ok(display((keypair, Some(phrase)), display_mode))
-        }
+        } => execute_recover(known_phrase, address, display_mode),
     };
 }
 
+fn execute_info(
+    secret_or_phrase: &str, brain: bool, display_mode: DisplayMode,
+) -> Result<String, Error> {
+    let result = if brain {
+        let phrase = secret_or_phrase.to_string();
+        let phrase_info = validate_phrase(&phrase);
+        let keypair = Brain::new(phrase)
+            .generate()
+            .expect("Brain wallet generator is infallible; qed");
+        (keypair, Some(phrase_info))
+    } else {
+        let secret = secret_or_phrase
+            .parse()
+            .map_err(|_| EthkeyError::InvalidSecret)?;
+        (KeyPair::from_secret(secret)?, None)
+    };
+    Ok(display(result, display_mode))
+}
+
+fn execute_generate(
+    command: &GenerateCommands, brain: bool, display_mode: DisplayMode,
+) -> Result<String, Error> {
+    let result = match &command {
+        GenerateCommands::Random {} => {
+            if brain {
+                let mut brain =
+                    BrainPrefix::new(vec![0], usize::max_value(), BRAIN_WORDS);
+                let keypair = brain.generate()?;
+                let phrase = format!("recovery phrase: {}", brain.phrase());
+                (keypair, Some(phrase))
+            } else {
+                (Random.generate()?, None)
+            }
+        }
+        GenerateCommands::Prefix { prefix } => {
+            let prefix: Vec<u8> = prefix.from_hex()?;
+            let brain = brain;
+            in_threads(move || {
+                let iterations = 1024;
+                let prefix = prefix.clone();
+                move || {
+                    let prefix = prefix.clone();
+                    let res = if brain {
+                        let mut brain =
+                            BrainPrefix::new(prefix, iterations, BRAIN_WORDS);
+                        let result = brain.generate();
+                        let phrase =
+                            format!("recovery phrase: {}", brain.phrase());
+                        result.map(|keypair| (keypair, Some(phrase)))
+                    } else {
+                        let result = Prefix::new(prefix, iterations).generate();
+                        result.map(|res| (res, None))
+                    };
+
+                    Ok(res.map(Some).unwrap_or(None))
+                }
+            })?
+        }
+    };
+    Ok(display(result, display_mode))
+}
+
+fn execute_sign(secret: String, message: String) -> Result<String, Error> {
+    let secret = secret.parse().map_err(|_| EthkeyError::InvalidSecret)?;
+    let message = message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
+    let signature = sign(&secret, &message)?;
+    Ok(format!("{}", signature))
+}
+
+fn execute_verify(command: &VerifyCommands) -> Result<String, Error> {
+    let result = match &command {
+        VerifyCommands::Public {
+            public,
+            signature,
+            message,
+        } => {
+            let signature = signature
+                .parse()
+                .map_err(|_| EthkeyError::InvalidSignature)?;
+            let message =
+                message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
+
+            let public =
+                public.parse().map_err(|_| EthkeyError::InvalidPublic)?;
+            verify_public(&public, &signature, &message)?
+        }
+        VerifyCommands::Address {
+            address,
+            signature,
+            message,
+        } => {
+            let signature = signature
+                .parse()
+                .map_err(|_| EthkeyError::InvalidSignature)?;
+            let message =
+                message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
+            let address =
+                address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
+            verify_address(&address, &signature, &message)?
+        }
+    };
+    Ok(format!("{}", result))
+}
+
+fn execute_recover(
+    known_phrase: &str, address: &str, display_mode: DisplayMode,
+) -> Result<String, Error> {
+    let known_phrase = known_phrase;
+    let address = address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
+    let (phrase, keypair) = in_threads(move || {
+        let mut it = brain_recover::PhrasesIterator::from_known_phrase(
+            &known_phrase,
+            BRAIN_WORDS,
+        )
+        .enumerate();
+        move || {
+            for (i, phrase) in &mut it {
+                let keypair = Brain::new(phrase.clone()).generate().unwrap();
+                if keypair.address() == address {
+                    return Ok(Some((phrase, keypair)));
+                }
+
+                if i >= 1024 {
+                    return Ok(None);
+                }
+            }
+
+            Err(EthkeyError::Custom("Couldn't find any results.".into()))
+        }
+    })?;
+    Ok(display((keypair, Some(phrase)), display_mode))
+}
 const BRAIN_WORDS: usize = 12;
 
 fn validate_phrase(phrase: &str) -> String {
