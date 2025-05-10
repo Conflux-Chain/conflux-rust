@@ -252,7 +252,6 @@ fn execute_generate(
         }
         GenerateCommands::Prefix { prefix } => {
             let prefix: Vec<u8> = prefix.from_hex()?;
-            let brain = brain;
             in_threads(move || {
                 let iterations = 1024;
                 let prefix = prefix.clone();
@@ -323,7 +322,6 @@ fn execute_verify(command: &VerifyCommands) -> Result<String, Error> {
 fn execute_recover(
     known_phrase: &str, address: &str, display_mode: DisplayMode,
 ) -> Result<String, Error> {
-    let known_phrase = known_phrase;
     let address = address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
     let (phrase, keypair) = in_threads(move || {
         let mut it = brain_recover::PhrasesIterator::from_known_phrase(
