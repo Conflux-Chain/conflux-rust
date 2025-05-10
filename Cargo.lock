@@ -1972,6 +1972,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eccb054f56cbd38340b380d4a8e69ef1f02f1af43db2f0cc817a4774d80ae071"
 dependencies = [
  "clap_builder",
+ "clap_derive",
 ]
 
 [[package]]
@@ -1984,6 +1985,18 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim 0.11.1",
+]
+
+[[package]]
+name = "clap_derive"
+version = "4.5.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09176aae279615badda0765c0c0b3f6ed53f4709118af73cf4655d85d1530cd7"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -2500,7 +2513,7 @@ name = "ctxkey-cli"
 version = "0.1.0"
 dependencies = [
  "cfxkey",
- "docopt",
+ "clap 4.5.37",
  "env_logger",
  "panic_hook",
  "rustc-hex",
