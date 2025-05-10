@@ -1727,7 +1727,7 @@ dependencies = [
  "cfx-vm-types",
  "cfxkey",
  "channel",
- "clap 2.34.0",
+ "clap 4.5.37",
  "consensus-types",
  "crash-handler",
  "dag",
