@@ -26,109 +26,262 @@ use cfxstore::{
     import_accounts, CfxStore, PresaleWallet, SecretStore, SecretVaultRef,
     SimpleSecretStore, StoreAccountRef,
 };
-use docopt::Docopt;
-use serde::Deserialize;
+
+use clap::{Parser, Subcommand};
 
 mod crack;
 
-pub const USAGE: &'static str = r#"
-Conflux key management tool.
-
-Usage:
-    cfxstore insert <secret> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore change-pwd <address> <old-pwd> <new-pwd> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore list [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore import [<password>] [--src DIR] [--dir DIR]
-    cfxstore import-wallet <path> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore find-wallet-pass <path> <password>
-    cfxstore remove <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore sign <address> <password> <message> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore public <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore list-vaults [--dir DIR]
-    cfxstore create-vault <vault> <password> [--dir DIR]
-    cfxstore change-vault-pwd <vault> <old-pwd> <new-pwd> [--dir DIR]
-    cfxstore move-to-vault <address> <vault> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore move-from-vault <address> <vault> <password> [--dir DIR]
-    cfxstore [-h | --help]
-
-Options:
-    -h, --help               Display this message and exit.
-    --dir DIR                Specify the secret store directory. It may be either
-                             parity, parity-(chain), geth, geth-test
-                             or a path [default: parity].
-    --vault VAULT            Specify vault to use in this operation.
-    --vault-pwd VAULTPWD     Specify vault password to use in this operation. Please note
-                             that this option is required when vault option is set.
-                             Otherwise it is ignored.
-    --src DIR                Specify import source. It may be either
-                             parity, parity-(chain), geth, geth-test
-                             or a path [default: geth].
-
-Commands:
-    insert             Save account with password.
-    change-pwd         Change password.
-    list               List accounts.
-    import             Import accounts from src.
-    import-wallet      Import presale wallet.
-    find-wallet-pass   Tries to open a wallet with list of passwords given.
-    remove             Remove account.
-    sign               Sign message.
-    public             Displays public key for an address.
-    list-vaults        List vaults.
-    create-vault       Create new vault.
-    change-vault-pwd   Change vault password.
-    move-to-vault      Move account to vault from another vault/root directory.
-    move-from-vault    Move account to root directory from given vault.
-"#;
-
-#[derive(Debug, Deserialize)]
-struct Args {
-    cmd_insert: bool,
-    cmd_change_pwd: bool,
-    cmd_list: bool,
-    cmd_import: bool,
-    cmd_import_wallet: bool,
-    cmd_find_wallet_pass: bool,
-    cmd_remove: bool,
-    cmd_sign: bool,
-    cmd_public: bool,
-    cmd_list_vaults: bool,
-    cmd_create_vault: bool,
-    cmd_change_vault_pwd: bool,
-    cmd_move_to_vault: bool,
-    cmd_move_from_vault: bool,
-    arg_secret: String,
-    arg_password: String,
-    arg_old_pwd: String,
-    arg_new_pwd: String,
-    arg_address: String,
-    arg_message: String,
-    arg_path: String,
-    arg_vault: String,
-    flag_src: String,
-    flag_dir: String,
-    flag_vault: String,
-    flag_vault_pwd: String,
+#[derive(Parser, Debug)]
+#[command(
+    version,
+    about("Conflux key management tool. \nCopyright 2020 Conflux Foundation")
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
 }
 
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Save account with password.
+    Insert {
+        #[arg()]
+        secret: String,
+
+        #[arg()]
+        password: String,
+
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+        /// Specify vault to use in this operation.
+        #[arg(long, default_value_t = String::new())]
+        vault: String,
+        /// Specify vault password to use in this operation. Please note that
+        /// this option is required when vault option is set. Otherwise it is
+        /// ignored.
+        #[arg(long("vault-pwd"))]
+        vault_pwd: String,
+    },
+
+    /// Change password.
+    ChangePwd {
+        #[arg()]
+        address: String,
+        #[arg()]
+        old_pwd: String,
+        #[arg()]
+        new_pwd: String,
+
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+        /// Specify vault to use in this operation.
+        #[arg(long, default_value_t = String::new())]
+        vault: String,
+        /// Specify vault password to use in this operation. Please note that
+        /// this option is required when vault option is set. Otherwise it is
+        /// ignored.
+        #[arg(long("vault-pwd"))]
+        vault_pwd: String,
+    },
+    /// List accounts.
+    List {
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+        /// Specify vault to use in this operation.
+        #[arg(long, default_value_t = String::new())]
+        vault: String,
+        /// Specify vault password to use in this operation. Please note that
+        /// this option is required when vault option is set. Otherwise it is
+        /// ignored.
+        #[arg(long("vault-pwd"))]
+        vault_pwd: String,
+    },
+
+    /// Import accounts from src.
+    Import {
+        #[arg(long, default_value_t = String::new())]
+        password: String,
+        /// Specify import source. It may be either  parity, parity-(chain),
+        /// geth, geth-test or a path [default: geth].
+        #[arg(default_value_t = String::from("geth"), long)]
+        src: String,
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+    },
+
+    /// Import presale wallet.
+    ImportWallet {
+        #[arg(long)]
+        path: String,
+        #[arg(long)]
+        password: String,
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+        /// Specify vault to use in this operation.
+        #[arg(long, default_value_t = String::new())]
+        vault: String,
+        /// Specify vault password to use in this operation. Please note that
+        /// this option is required when vault option is set. Otherwise it is
+        /// ignored.
+        #[arg(long("vault-pwd"))]
+        vault_pwd: String,
+    },
+
+    /// Tries to open a wallet with list of passwords given.
+    FindWalletPass {
+        #[arg(long)]
+        path: String,
+        #[arg(long)]
+        password: String,
+    },
+
+    /// Remove account.
+    Remove {
+        #[arg()]
+        address: String,
+        #[arg()]
+        password: String,
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+        /// Specify vault to use in this operation.
+        #[arg(long, default_value_t = String::new())]
+        vault: String,
+        /// Specify vault password to use in this operation. Please note that
+        /// this option is required when vault option is set. Otherwise it is
+        /// ignored.
+        #[arg(long("vault-pwd"))]
+        vault_pwd: String,
+    },
+
+    /// Sign message.
+    Sign {
+        #[arg()]
+        address: String,
+        #[arg()]
+        password: String,
+        #[arg()]
+        message: String,
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+        /// Specify vault to use in this operation.
+        #[arg(long, default_value_t = String::new())]
+        vault: String,
+        /// Specify vault password to use in this operation. Please note that
+        /// this option is required when vault option is set. Otherwise it is
+        /// ignored.
+        #[arg(long("vault-pwd"))]
+        vault_pwd: String,
+    },
+
+    /// Displays public key for an address.
+    Public {
+        #[arg()]
+        address: String,
+        #[arg()]
+        password: String,
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+        /// Specify vault to use in this operation.
+        #[arg(long, default_value_t = String::new())]
+        vault: String,
+        /// Specify vault password to use in this operation. Please note that
+        /// this option is required when vault option is set. Otherwise it is
+        /// ignored.
+        #[arg(long("vault-pwd"))]
+        vault_pwd: String,
+    },
+
+    /// List vaults.
+    ListVaults {
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+    },
+
+    /// Create new vault.
+    CreateVault {
+        #[arg()]
+        vault: String,
+        #[arg()]
+        password: String,
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+    },
+
+    /// Change vault password.
+    ChangeVaultPwd {
+        #[arg()]
+        vault: String,
+        #[arg()]
+        old_pwd: String,
+        #[arg()]
+        new_pwd: String,
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+    },
+    /// Move account to vault from another vault/root directory.
+    MoveToVault {
+        #[arg()]
+        address: String,
+        #[arg()]
+        password: String,
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+        /// Specify vault to use in this operation.
+        #[arg(long, default_value_t = String::new())]
+        vault: String,
+        /// Specify vault password to use in this operation. Please note that
+        /// this option is required when vault option is set. Otherwise it is
+        /// ignored.
+        #[arg(long("vault-pwd"))]
+        vault_pwd: String,
+    },
+
+    /// Move account to root directory from given vault.
+    MoveFromVault {
+        #[arg()]
+        address: String,
+        #[arg()]
+        vault: String,
+        #[arg()]
+        password: String,
+        /// Specify the secret store directory. It may be either  parity,
+        /// parity-(chain), geth, geth-test or a path [default: parity].
+        #[arg(default_value_t = String::from("parity"), long)]
+        dir: String,
+    },
+}
 enum Error {
     Ethstore(cfxstore::Error),
-    Docopt(docopt::Error),
 }
 
 impl From<cfxstore::Error> for Error {
-    fn from(err: cfxstore::Error) -> Self { Error::Ethstore(err) }
-}
-
-impl From<docopt::Error> for Error {
-    fn from(err: docopt::Error) -> Self { Error::Docopt(err) }
+    fn from(err: cfxstore::Error) -> Self {
+        Error::Ethstore(err)
+    }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::Ethstore(ref err) => fmt::Display::fmt(err, f),
-            Error::Docopt(ref err) => fmt::Display::fmt(err, f),
         }
     }
 }
@@ -139,10 +292,10 @@ fn main() {
         env::set_var("RUST_LOG", "warn")
     }
     env_logger::try_init().expect("Logger initialized only once.");
+    let cli = Cli::parse();
 
-    match execute(env::args()) {
+    match execute(cli) {
         Ok(result) => println!("{}", result),
-        Err(Error::Docopt(ref e)) => e.exit(),
         Err(err) => {
             eprintln!("{}", err);
             process::exit(1);
@@ -168,21 +321,21 @@ fn key_dir(
 }
 
 fn open_args_vault(
-    store: &CfxStore, args: &Args,
+    store: &CfxStore, flag_vault: &str, flag_vault_pwd: &str,
 ) -> Result<SecretVaultRef, Error> {
-    if args.flag_vault.is_empty() {
+    if flag_vault.is_empty() {
         return Ok(SecretVaultRef::Root);
     }
 
-    let vault_pwd = load_password(&args.flag_vault_pwd)?;
-    store.open_vault(&args.flag_vault, &vault_pwd)?;
-    Ok(SecretVaultRef::Vault(args.flag_vault.clone()))
+    let vault_pwd = load_password(&flag_vault_pwd)?;
+    store.open_vault(&flag_vault, &vault_pwd)?;
+    Ok(SecretVaultRef::Vault(flag_vault.to_string()))
 }
 
 fn open_args_vault_account(
-    store: &CfxStore, address: Address, args: &Args,
+    store: &CfxStore, address: Address, flag_vault: &str, flag_vault_pwd: &str,
 ) -> Result<StoreAccountRef, Error> {
-    match open_args_vault(store, args)? {
+    match open_args_vault(store, flag_vault, flag_vault_pwd)? {
         SecretVaultRef::Root => Ok(StoreAccountRef::root(address)),
         SecretVaultRef::Vault(name) => {
             Ok(StoreAccountRef::vault(&name, address))
@@ -199,7 +352,9 @@ fn format_accounts(accounts: &[Address]) -> String {
         .join("\n")
 }
 
-fn format_vaults(vaults: &[String]) -> String { vaults.join("\n") }
+fn format_vaults(vaults: &[String]) -> String {
+    vaults.join("\n")
+}
 
 fn load_password(path: &str) -> Result<Password, Error> {
     let mut file = fs::File::open(path).map_err(|e| {
@@ -220,143 +375,224 @@ fn load_password(path: &str) -> Result<Password, Error> {
     Ok(password.into())
 }
 
-fn execute<S, I>(command: I) -> Result<String, Error>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    let args: Args =
-        Docopt::new(USAGE).and_then(|d| d.argv(command).deserialize())?;
+fn execute(cli: Cli) -> Result<String, Error> {
+    return match &cli.command {
+        Commands::Insert {
+            secret,
+            password,
+            dir,
+            vault,
+            vault_pwd,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let secret =
+                secret.parse().map_err(|_| cfxstore::Error::InvalidSecret)?;
+            let password = load_password(&password)?;
+            let vault_ref = open_args_vault(&store, vault, vault_pwd)?;
+            let account_ref =
+                store.insert_account(vault_ref, secret, &password)?;
+            Ok(format!("0x{:x}", account_ref.address))
+        }
+        Commands::ChangePwd {
+            address,
+            old_pwd,
+            new_pwd,
+            dir,
+            vault,
+            vault_pwd,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let address = address
+                .parse()
+                .map_err(|_| cfxstore::Error::InvalidAccount)?;
+            let old_pwd = load_password(old_pwd)?;
+            let new_pwd = load_password(new_pwd)?;
+            let account_ref =
+                open_args_vault_account(&store, address, vault, vault_pwd)?;
+            let ok = store
+                .change_password(&account_ref, &old_pwd, &new_pwd)
+                .is_ok();
+            Ok(format!("{}", ok))
+        }
+        Commands::List {
+            dir,
+            vault,
+            vault_pwd,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let vault_ref = open_args_vault(&store, vault, vault_pwd)?;
+            let accounts = store.accounts()?;
+            let accounts: Vec<_> = accounts
+                .into_iter()
+                .filter(|a| &a.vault == &vault_ref)
+                .map(|a| a.address)
+                .collect();
+            Ok(format_accounts(&accounts))
+        }
 
-    let store = CfxStore::open(key_dir(&args.flag_dir, None)?)?;
+        Commands::Import { password, src, dir } => {
+            let password = match password.as_ref() {
+                "" => None,
+                _ => Some(load_password(&password)?),
+            };
+            let src = key_dir(src, password)?;
+            let dst = key_dir(dir, None)?;
 
-    return if args.cmd_insert {
-        let secret = args
-            .arg_secret
-            .parse()
-            .map_err(|_| cfxstore::Error::InvalidSecret)?;
-        let password = load_password(&args.arg_password)?;
-        let vault_ref = open_args_vault(&store, &args)?;
-        let account_ref = store.insert_account(vault_ref, secret, &password)?;
-        Ok(format!("0x{:x}", account_ref.address))
-    } else if args.cmd_change_pwd {
-        let address = args
-            .arg_address
-            .parse()
-            .map_err(|_| cfxstore::Error::InvalidAccount)?;
-        let old_pwd = load_password(&args.arg_old_pwd)?;
-        let new_pwd = load_password(&args.arg_new_pwd)?;
-        let account_ref = open_args_vault_account(&store, address, &args)?;
-        let ok = store
-            .change_password(&account_ref, &old_pwd, &new_pwd)
-            .is_ok();
-        Ok(format!("{}", ok))
-    } else if args.cmd_list {
-        let vault_ref = open_args_vault(&store, &args)?;
-        let accounts = store.accounts()?;
-        let accounts: Vec<_> = accounts
-            .into_iter()
-            .filter(|a| &a.vault == &vault_ref)
-            .map(|a| a.address)
-            .collect();
-        Ok(format_accounts(&accounts))
-    } else if args.cmd_import {
-        let password = match args.arg_password.as_ref() {
-            "" => None,
-            _ => Some(load_password(&args.arg_password)?),
-        };
-        let src = key_dir(&args.flag_src, password)?;
-        let dst = key_dir(&args.flag_dir, None)?;
+            let accounts = import_accounts(&*src, &*dst)?;
+            Ok(format_accounts(&accounts))
+        }
+        Commands::ImportWallet {
+            path,
+            password,
+            dir,
+            vault,
+            vault_pwd,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let wallet = PresaleWallet::open(path)?;
+            let password = load_password(password)?;
+            let kp = wallet.decrypt(&password)?;
+            let vault_ref = open_args_vault(&store, vault, vault_pwd)?;
+            let secret = Secret::from(kp.secret().to_fixed_bytes());
+            let account_ref =
+                store.insert_account(vault_ref, secret, &password)?;
+            Ok(format!("0x{:x}", account_ref.address))
+        }
+        Commands::FindWalletPass { path, password } => {
+            let passwords = load_password(password)?;
+            let passwords = passwords
+                .as_str()
+                .lines()
+                .map(|line| str::to_owned(line).into())
+                .collect::<VecDeque<_>>();
+            crack::run(passwords, path)?;
+            Ok(format!("Password not found."))
+        }
+        Commands::Remove {
+            address,
+            password,
+            dir,
+            vault,
+            vault_pwd,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
 
-        let accounts = import_accounts(&*src, &*dst)?;
-        Ok(format_accounts(&accounts))
-    } else if args.cmd_import_wallet {
-        let wallet = PresaleWallet::open(&args.arg_path)?;
-        let password = load_password(&args.arg_password)?;
-        let kp = wallet.decrypt(&password)?;
-        let vault_ref = open_args_vault(&store, &args)?;
-        let secret = Secret::from(kp.secret().to_fixed_bytes());
-        let account_ref = store.insert_account(vault_ref, secret, &password)?;
-        Ok(format!("0x{:x}", account_ref.address))
-    } else if args.cmd_find_wallet_pass {
-        let passwords = load_password(&args.arg_password)?;
-        let passwords = passwords
-            .as_str()
-            .lines()
-            .map(|line| str::to_owned(line).into())
-            .collect::<VecDeque<_>>();
-        crack::run(passwords, &args.arg_path)?;
-        Ok(format!("Password not found."))
-    } else if args.cmd_remove {
-        let address = args
-            .arg_address
-            .parse()
-            .map_err(|_| cfxstore::Error::InvalidAccount)?;
-        let password = load_password(&args.arg_password)?;
-        let account_ref = open_args_vault_account(&store, address, &args)?;
-        let ok = store.remove_account(&account_ref, &password).is_ok();
-        Ok(format!("{}", ok))
-    } else if args.cmd_sign {
-        let address = args
-            .arg_address
-            .parse()
-            .map_err(|_| cfxstore::Error::InvalidAccount)?;
-        let message = args
-            .arg_message
-            .parse()
-            .map_err(|_| cfxstore::Error::InvalidMessage)?;
-        let password = load_password(&args.arg_password)?;
-        let account_ref = open_args_vault_account(&store, address, &args)?;
-        let signature = store.sign(&account_ref, &password, &message)?;
-        Ok(format!("0x{}", signature))
-    } else if args.cmd_public {
-        let address = args
-            .arg_address
-            .parse()
-            .map_err(|_| cfxstore::Error::InvalidAccount)?;
-        let password = load_password(&args.arg_password)?;
-        let account_ref = open_args_vault_account(&store, address, &args)?;
-        let public = store.public(&account_ref, &password)?;
-        Ok(format!("0x{:x}", public))
-    } else if args.cmd_list_vaults {
-        let vaults = store.list_vaults()?;
-        Ok(format_vaults(&vaults))
-    } else if args.cmd_create_vault {
-        let password = load_password(&args.arg_password)?;
-        store.create_vault(&args.arg_vault, &password)?;
-        Ok("OK".to_owned())
-    } else if args.cmd_change_vault_pwd {
-        let old_pwd = load_password(&args.arg_old_pwd)?;
-        let new_pwd = load_password(&args.arg_new_pwd)?;
-        store.open_vault(&args.arg_vault, &old_pwd)?;
-        store.change_vault_password(&args.arg_vault, &new_pwd)?;
-        Ok("OK".to_owned())
-    } else if args.cmd_move_to_vault {
-        let address = args
-            .arg_address
-            .parse()
-            .map_err(|_| cfxstore::Error::InvalidAccount)?;
-        let password = load_password(&args.arg_password)?;
-        let account_ref = open_args_vault_account(&store, address, &args)?;
-        store.open_vault(&args.arg_vault, &password)?;
-        store.change_account_vault(
-            SecretVaultRef::Vault(args.arg_vault),
-            account_ref,
-        )?;
-        Ok("OK".to_owned())
-    } else if args.cmd_move_from_vault {
-        let address = args
-            .arg_address
-            .parse()
-            .map_err(|_| cfxstore::Error::InvalidAccount)?;
-        let password = load_password(&args.arg_password)?;
-        store.open_vault(&args.arg_vault, &password)?;
-        store.change_account_vault(
-            SecretVaultRef::Root,
-            StoreAccountRef::vault(&args.arg_vault, address),
-        )?;
-        Ok("OK".to_owned())
-    } else {
-        Ok(format!("{}", USAGE))
+            let address = address
+                .parse()
+                .map_err(|_| cfxstore::Error::InvalidAccount)?;
+            let password = load_password(password)?;
+            let account_ref =
+                open_args_vault_account(&store, address, vault, vault_pwd)?;
+            let ok = store.remove_account(&account_ref, &password).is_ok();
+            Ok(format!("{}", ok))
+        }
+        Commands::Sign {
+            address,
+            password,
+            message,
+            dir,
+            vault,
+            vault_pwd,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let address = address
+                .parse()
+                .map_err(|_| cfxstore::Error::InvalidAccount)?;
+            let message = message
+                .parse()
+                .map_err(|_| cfxstore::Error::InvalidMessage)?;
+            let password = load_password(password)?;
+            let account_ref =
+                open_args_vault_account(&store, address, vault, vault_pwd)?;
+            let signature = store.sign(&account_ref, &password, &message)?;
+            Ok(format!("0x{}", signature))
+        }
+        Commands::Public {
+            address,
+            password,
+            dir,
+            vault,
+            vault_pwd,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let address = address
+                .parse()
+                .map_err(|_| cfxstore::Error::InvalidAccount)?;
+            let password = load_password(password)?;
+            let account_ref =
+                open_args_vault_account(&store, address, vault, vault_pwd)?;
+            let public = store.public(&account_ref, &password)?;
+            Ok(format!("0x{:x}", public))
+        }
+
+        Commands::ListVaults { dir } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let vaults = store.list_vaults()?;
+            Ok(format_vaults(&vaults))
+        }
+        Commands::CreateVault {
+            vault,
+            password,
+            dir,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let password = load_password(password)?;
+            store.create_vault(vault, &password)?;
+            Ok("OK".to_owned())
+        }
+
+        Commands::ChangeVaultPwd {
+            vault,
+            old_pwd,
+            new_pwd,
+            dir,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let old_pwd = load_password(old_pwd)?;
+            let new_pwd = load_password(new_pwd)?;
+            store.open_vault(vault, &old_pwd)?;
+            store.change_vault_password(vault, &new_pwd)?;
+            Ok("OK".to_owned())
+        }
+
+        Commands::MoveToVault {
+            address,
+            password,
+            dir,
+            vault,
+            vault_pwd,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let address = address
+                .parse()
+                .map_err(|_| cfxstore::Error::InvalidAccount)?;
+            let password = load_password(password)?;
+            let account_ref =
+                open_args_vault_account(&store, address, vault, vault_pwd)?;
+            store.open_vault(vault, &password)?;
+            store.change_account_vault(
+                SecretVaultRef::Vault(vault.to_string()),
+                account_ref,
+            )?;
+            Ok("OK".to_owned())
+        }
+        Commands::MoveFromVault {
+            address,
+            vault,
+            password,
+            dir,
+        } => {
+            let store = CfxStore::open(key_dir(dir, None)?)?;
+            let address = address
+                .parse()
+                .map_err(|_| cfxstore::Error::InvalidAccount)?;
+            let password = load_password(password)?;
+            store.open_vault(vault, &password)?;
+            store.change_account_vault(
+                SecretVaultRef::Root,
+                StoreAccountRef::vault(vault, address),
+            )?;
+            Ok("OK".to_owned())
+        }
     };
 }
