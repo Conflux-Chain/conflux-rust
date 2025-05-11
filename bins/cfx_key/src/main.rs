@@ -241,8 +241,11 @@ fn execute_generate(
     let result = match &command {
         GenerateCommands::Random {} => {
             if brain {
-                let mut brain =
-                    BrainPrefix::new(vec![0], usize::max_value(), BRAIN_WORDS);
+                let mut brain = BrainPrefix::new(
+                    vec![0x10],
+                    usize::max_value(),
+                    BRAIN_WORDS,
+                );
                 let keypair = brain.generate()?;
                 let phrase = format!("recovery phrase: {}", brain.phrase());
                 (keypair, Some(phrase))
@@ -436,6 +439,19 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
         assert_eq!(execute(cli).unwrap(), expected);
     }
 
+    #[test]
+    fn test_generate_random_brain() {
+        let cli = Cli::parse_from(["cfxkey", "--brain", "generate", "random"]);
+        let result = execute(cli).unwrap();
+        assert!(result.contains("recovery phrase: "));
+    }
+
+    #[test]
+    fn test_generate_prefix() {
+        let cli = Cli::parse_from(["cfxkey", "generate", "prefix", "10ff"]);
+        let result = execute(cli).unwrap();
+        assert!(result.contains("address: 10ff"));
+    }
     #[test]
     fn secret() {
         let cli = Cli::parse_from([
