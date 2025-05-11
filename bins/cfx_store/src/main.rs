@@ -273,9 +273,7 @@ enum Error {
 }
 
 impl From<cfxstore::Error> for Error {
-    fn from(err: cfxstore::Error) -> Self {
-        Error::Ethstore(err)
-    }
+    fn from(err: cfxstore::Error) -> Self { Error::Ethstore(err) }
 }
 
 impl fmt::Display for Error {
@@ -352,9 +350,7 @@ fn format_accounts(accounts: &[Address]) -> String {
         .join("\n")
 }
 
-fn format_vaults(vaults: &[String]) -> String {
-    vaults.join("\n")
-}
+fn format_vaults(vaults: &[String]) -> String { vaults.join("\n") }
 
 fn load_password(path: &str) -> Result<Password, Error> {
     let mut file = fs::File::open(path).map_err(|e| {
