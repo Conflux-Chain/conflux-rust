@@ -662,7 +662,7 @@ impl CowNodeRef {
 
             let slot = match &self.node_ref {
                 NodeRefDeltaMpt::Dirty { index } => *index,
-                _ => unsafe { unreachable_unchecked() },
+                _ => unreachable!(),
             };
             if let Some(children_merkles) = children_merkle_map.remove(&slot) {
                 commit_transaction.transaction.borrow_mut().put(
@@ -913,6 +913,6 @@ use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
-    borrow::BorrowMut, cell::Cell, convert::TryInto,
-    hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,
+    borrow::BorrowMut, cell::Cell, convert::TryInto, ops::Deref,
+    sync::atomic::Ordering,
 };

@@ -115,7 +115,9 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                 child_index: _,
                 key_remaining: _,
                 child_node: _,
-            } => unsafe { unreachable_unchecked() },
+            } => {
+                unreachable!()
+            }
             // It actually means to descent.
             WalkStop::ChildNotFound {
                 child_index,
@@ -256,9 +258,9 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                         // The scenario of Descent is classified into
                         // ChildNotFound scenario because the checking of
                         // child_index is skipped.
-                        WalkStop::Descent { .. } => unsafe {
-                            unreachable_unchecked()
-                        },
+                        WalkStop::Descent { .. } => {
+                            unreachable!()
+                        }
                         // It actually means to descent.
                         WalkStop::ChildNotFound {
                             child_index: new_child_index,
@@ -501,7 +503,9 @@ impl<Mpt: GetRwMpt, PathNode: RwPathNodeTrait<Mpt>> MptCursorRw<Mpt, PathNode> {
                     }
                 }
             }
-            _ => unsafe { unreachable_unchecked() },
+            _ => {
+                unreachable!()
+            }
         }
 
         Ok(())
@@ -1615,7 +1619,6 @@ use crate::{
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use std::{
     cell::Cell,
-    hint::unreachable_unchecked,
     mem,
     ops::{Deref, DerefMut},
     vec::Vec,

@@ -29,7 +29,6 @@ use cfx_vm_types::{
     ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
     MessageCallResult, ReturnData, Spec, TrapKind,
 };
-use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
 use vm::BlockHashSource;
 
@@ -326,14 +325,10 @@ impl<'a> ContextTrait for Context<'a> {
         };
 
         if !self.is_static_or_reentrancy() {
-            if !self.spec.keep_unsigned_nonce
-                || params.sender != UNSIGNED_SENDER
-            {
-                let nonce_overflow = self.state.inc_nonce(&caller)?;
-                if nonce_overflow {
-                    let err = Error::NonceOverflow(caller.address);
-                    return Ok(Ok(ContractCreateResult::Failed(err)));
-                }
+            let nonce_overflow = self.state.inc_nonce(&caller)?;
+            if nonce_overflow {
+                let err = Error::NonceOverflow(caller.address);
+                return Ok(Ok(ContractCreateResult::Failed(err)));
             }
         }
 
@@ -409,7 +404,13 @@ impl<'a> ContextTrait for Context<'a> {
         {
             Ok(contract.code_hash())
         } else {
-            Ok(self.state.code_hash(&address)?)
+            if self.spec.cip645.fix_extcodehash
+                && self.state.is_eip158_empty(&address)?
+            {
+                Ok(H256::zero())
+            } else {
+                Ok(self.state.code_hash(&address)?)
+            }
         }
     }
 
@@ -474,10 +475,7 @@ impl<'a> ContextTrait for Context<'a> {
             };
         let return_cost = U256::from(data.len()) * create_data_gas;
         if return_cost > *gas || data.len() > self.spec.create_data_limit {
-            return match self.spec.exceptional_failed_code_deposit {
-                true => Err(vm::Error::OutOfGas),
-                false => Ok(*gas),
-            };
+            return Err(vm::Error::OutOfGas);
         }
 
         if self.space == Space::Native {

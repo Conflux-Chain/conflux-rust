@@ -20,7 +20,7 @@ cfx-vm-types = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 channel = { workspace = true }
-clap = { workspace = true }
+clap4 = { workspace = true }
 dag = { workspace = true }
 db = { workspace = true }
 either = { workspace = true }
