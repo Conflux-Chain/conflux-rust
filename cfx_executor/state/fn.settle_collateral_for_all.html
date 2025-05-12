@@ -2,9 +2,9 @@
     state: &amp;mut <a class="struct" href="struct.State.html" title="struct cfx_executor::state::State">State</a>,
     substate: &amp;<a class="struct" href="../substate/struct.Substate.html" title="struct cfx_executor::substate::Substate">Substate</a>,
     tracer: &amp;mut dyn <a class="trait" href="../observer/trait.TracerTrait.html" title="trait cfx_executor::observer::TracerTrait">TracerTrait</a>,
-    spec: &amp;<a class="struct" href="../../cfx_vm_types/spec/struct.Spec.html" title="struct cfx_vm_types::spec::Spec">Spec</a>,
+    spec: &amp;Spec,
     dry_run: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>
-) -&gt; <a class="type" href="../../cfx_db_errors/statedb/type.Result.html" title="type cfx_db_errors::statedb::Result">Result</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, CollateralCheckError&gt;&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Charge and refund all the storage collaterals.
+) -&gt; Result&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, CollateralCheckError&gt;&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Charge and refund all the storage collaterals.
 The suicided addresses are skimmed because their collateral have been
 checked out. This function should only be called in post-processing
 of a transaction.</p>
