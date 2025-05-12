@@ -3,11 +3,13 @@ extern crate log;
 
 mod blocktest;
 mod cmd;
+mod error;
 mod statetest;
 mod util;
 
 use clap::Parser;
 use cmd::MainCmd;
+pub use error::{StateMismatch, TestError, TestErrorKind};
 use log::LevelFilter;
 
 fn init_logger(level_filter: LevelFilter) {

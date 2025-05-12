@@ -36,21 +36,6 @@ fn contains_meta_dir(path: &Path) -> bool {
         .any(|c| c.to_str().map_or(false, |s| s == ".meta"))
 }
 
-#[allow(unused)]
-pub(crate) fn allowed_test(path: &Path, matches: Option<&str>) -> bool {
-    if matches.is_none() {
-        return true;
-    }
-
-    let name = path.file_name().unwrap().to_str().unwrap();
-
-    if name == matches.unwrap() {
-        return true;
-    }
-
-    false
-}
-
 // 1. Check if the input bytes is a rlp list
 // 2. If it is, rlp decode the raw tx
 // 3. Check the v value (the third from the last), if it is bigger than 28, then

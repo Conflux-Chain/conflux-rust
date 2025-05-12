@@ -1,4 +1,4 @@
-use super::super::error::{StateMismatch, TestErrorKind};
+use crate::{StateMismatch, TestErrorKind};
 use cfx_executor::{
     executive::{
         execution_outcome::ToRepackError, Executed, ExecutionError,

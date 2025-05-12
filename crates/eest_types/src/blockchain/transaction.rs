@@ -1,10 +1,22 @@
-use crate::{utils::deserializer::deserialize_maybe_empty, TestAuthorization};
+use crate::{
+    utils::deserializer::deserialize_maybe_empty, SignedAuthorization,
+    TestAuthorization,
+};
 use cfx_rpc_primitives::Bytes;
 use cfx_types::{Address, H256, U256, U64};
-use primitives::transaction::AccessList;
+use primitives::{
+    transaction::{
+        AccessList, Action, AuthorizationListItem, Eip1559Transaction,
+        Eip155Transaction, Eip2930Transaction, Eip7702Transaction,
+        EthereumTransaction,
+    },
+    SignedTransaction, Transaction as PrimitiveTx, TransactionWithSignature,
+    TransactionWithSignatureSerializePart,
+};
+use rlp::Encodable;
 use serde::Deserialize;
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     #[serde(default, rename = "type")]
@@ -28,6 +40,126 @@ pub struct Transaction {
     pub max_fee_per_blob_gas: Option<U256>,
     pub blob_versioned_hashes: Option<Vec<H256>>,
     pub authorization_list: Option<Vec<TestAuthorization>>,
+}
+
+impl TryInto<SignedTransaction> for Transaction {
+    type Error = String;
+
+    fn try_into(self) -> Result<SignedTransaction, Self::Error> {
+        let action = match self.to {
+            Some(target) => Action::Call(target),
+            None => Action::Create,
+        };
+        if self.tx_type.as_u32() > 0 && self.chain_id.is_none() {
+            return Err("chain_id is required".into());
+        }
+        let eth_tx = match self.tx_type.as_u32() {
+            0 => EthereumTransaction::Eip155(Eip155Transaction {
+                nonce: self.nonce,
+                gas_price: self.gas_price.unwrap_or_default(),
+                gas: self.gas_limit,
+                action,
+                value: self.value,
+                chain_id: self.chain_id.map(|chain_id| chain_id.as_u32()),
+                data: self.data.0,
+            }),
+            1 => EthereumTransaction::Eip2930(Eip2930Transaction {
+                nonce: self.nonce,
+                gas_price: self.gas_price.unwrap_or_default(),
+                gas: self.gas_limit,
+                action,
+                value: self.value,
+                chain_id: self
+                    .chain_id
+                    .map(|chain_id| chain_id.as_u32())
+                    .unwrap(),
+                data: self.data.0,
+                access_list: self.access_list.unwrap_or_default(),
+            }),
+            2 => EthereumTransaction::Eip1559(Eip1559Transaction {
+                nonce: self.nonce,
+                max_priority_fee_per_gas: self
+                    .max_priority_fee_per_gas
+                    .unwrap_or_default(),
+                max_fee_per_gas: self.max_fee_per_gas.unwrap_or_default(),
+                gas: self.gas_limit,
+                action,
+                value: self.value,
+                chain_id: self
+                    .chain_id
+                    .map(|chain_id| chain_id.as_u32())
+                    .unwrap(),
+                data: self.data.0,
+                access_list: self.access_list.unwrap_or_default(),
+            }),
+            3 => return Err("conflux does not support 4844 tx".into()),
+            4 => {
+                if self.authorization_list.is_none() {
+                    return Err("7702 tx auth_list is required".into());
+                }
+                EthereumTransaction::Eip7702(Eip7702Transaction {
+                    nonce: self.nonce,
+                    max_priority_fee_per_gas: self
+                        .max_priority_fee_per_gas
+                        .unwrap_or_default(),
+                    max_fee_per_gas: self.max_fee_per_gas.unwrap_or_default(),
+                    gas: self.gas_limit,
+                    destination: self.to.unwrap_or_default(),
+                    value: self.value,
+                    chain_id: self
+                        .chain_id
+                        .map(|chain_id| chain_id.as_u32())
+                        .unwrap(),
+                    data: self.data.0,
+                    access_list: self.access_list.unwrap_or_default(),
+                    authorization_list: self
+                        .authorization_list
+                        .unwrap()
+                        .into_iter()
+                        .map(|item| {
+                            let signed_auth: SignedAuthorization = item.into();
+                            AuthorizationListItem {
+                                chain_id: signed_auth.inner().chain_id,
+                                address: signed_auth.inner().address,
+                                nonce: signed_auth.inner().nonce,
+                                y_parity: signed_auth.y_parity(),
+                                r: signed_auth.r(),
+                                s: signed_auth.s(),
+                            }
+                        })
+                        .collect(),
+                })
+            }
+            _ => return Err("unsupported tx type".into()),
+        };
+
+        let tx = PrimitiveTx::Ethereum(eth_tx);
+        if self.v > U64::from(u8::max_value()) {
+            return Err("incorrect v value".into());
+        }
+        let tx_with_sig = TransactionWithSignatureSerializePart {
+            unsigned: tx,
+            v: self.v.as_u32() as u8,
+            r: self.r,
+            s: self.s,
+        };
+
+        let rlp_bytes = tx_with_sig.rlp_bytes();
+        let rlp_size = rlp_bytes.len();
+        let hash = keccak_hash::keccak(rlp_bytes);
+
+        let signed_tx = TransactionWithSignature {
+            transaction: tx_with_sig,
+            hash,
+            rlp_size: Some(rlp_size),
+        };
+        let public = signed_tx.recover_public();
+        Ok(SignedTransaction {
+            transaction: signed_tx,
+            sender: self.sender.unwrap_or_default(),
+            public: public.ok(),
+        })
+    }
 }
 
 #[cfg(test)]

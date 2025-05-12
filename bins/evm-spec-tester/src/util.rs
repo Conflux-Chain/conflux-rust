@@ -20,6 +20,21 @@ pub(crate) fn find_all_json_tests(path: &Path) -> Vec<PathBuf> {
     }
 }
 
+#[allow(unused)]
+pub(crate) fn allowed_test(path: &Path, matches: Option<&str>) -> bool {
+    if matches.is_none() {
+        return true;
+    }
+
+    let name = path.file_name().unwrap().to_str().unwrap();
+
+    if name == matches.unwrap() {
+        return true;
+    }
+
+    false
+}
+
 pub(crate) fn make_configuration(
     config_file: &str,
 ) -> Result<Arc<Configuration>, String> {

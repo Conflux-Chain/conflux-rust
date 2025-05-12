@@ -7,7 +7,7 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct BlockHeader {
     pub parent_hash: H256,
-    pub uncle_hash: H256,
+    pub uncle_hash: H256, // The SHA3 of the uncles data in the block
     pub coinbase: Address,
     pub state_root: H256,
     pub transactions_trie: H256,
@@ -26,7 +26,7 @@ pub struct BlockHeader {
     pub blob_gas_used: Option<U256>,
     pub excess_blob_gas: Option<U256>,
     pub parent_beacon_block_root: Option<H256>,
-    pub requests_hash: Option<H256>,
+    pub requests_hash: Option<H256>, // EIP-7685
     pub hash: H256,
 }
 

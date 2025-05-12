@@ -1,4 +1,4 @@
-use super::super::error::TestErrorKind;
+use crate::TestErrorKind;
 use cfx_executor::{
     executive::{ChargeCollateral, TransactOptions, TransactSettings},
     machine::Machine,

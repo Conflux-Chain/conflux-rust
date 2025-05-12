@@ -1,12 +1,10 @@
 mod post_transact;
-mod pre_transact;
+pub mod pre_transact;
 
 use self::post_transact::is_unsupport_reason;
 
-use super::{
-    error::{TestError, TestErrorKind},
-    utils::extract_155_chain_id_from_raw_tx,
-};
+use super::utils::extract_155_chain_id_from_raw_tx;
+use crate::{TestError, TestErrorKind};
 use cfx_executor::{
     executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
     machine::Machine,

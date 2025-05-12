@@ -31,6 +31,7 @@ cfx-bytes = { workspace = true }
 rlp = { workspace = true }
 hex = { workspace = true }
 hex-literal = { workspace = true }
+keccak-hash = { workspace = true }
 
 log = { workspace = true }
 

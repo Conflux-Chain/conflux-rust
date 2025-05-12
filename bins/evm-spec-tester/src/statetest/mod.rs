@@ -1,9 +1,6 @@
 pub(crate) mod command;
-mod error;
-mod unit_tester;
+pub mod unit_tester;
 mod utils;
-
-pub use error::TestError;
 
 use cfx_executor::machine::{Machine, VmFactory};
 use cfxcore::verification::VerificationConfig;
@@ -11,7 +8,7 @@ use eest_types::StateTestSuite;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
 
-use crate::util::find_all_json_tests;
+use crate::{util::find_all_json_tests, TestError};
 use command::StateTestCmd;
 use unit_tester::UnitTester;
 use utils::skip_test;
