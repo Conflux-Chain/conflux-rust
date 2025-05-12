@@ -124,27 +124,19 @@ enum Error {
 }
 
 impl From<EthkeyError> for Error {
-    fn from(err: EthkeyError) -> Self {
-        Error::Ethkey(err)
-    }
+    fn from(err: EthkeyError) -> Self { Error::Ethkey(err) }
 }
 
 impl From<FromHexError> for Error {
-    fn from(err: FromHexError) -> Self {
-        Error::FromHex(err)
-    }
+    fn from(err: FromHexError) -> Self { Error::FromHex(err) }
 }
 
 impl From<ParseIntError> for Error {
-    fn from(err: ParseIntError) -> Self {
-        Error::ParseInt(err)
-    }
+    fn from(err: ParseIntError) -> Self { Error::ParseInt(err) }
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::Io(err)
-    }
+    fn from(err: io::Error) -> Self { Error::Io(err) }
 }
 
 impl fmt::Display for Error {
@@ -255,11 +247,8 @@ fn execute_generate(
     let result = match &command {
         GenerateCommands::Random {} => {
             if brain {
-                let mut brain = BrainPrefix::new(
-                    vec![],
-                    usize::max_value(),
-                    BRAIN_WORDS,
-                );
+                let mut brain =
+                    BrainPrefix::new(vec![], usize::max_value(), BRAIN_WORDS);
                 let keypair = brain.generate()?;
                 let phrase = format!("recovery phrase: {}", brain.phrase());
                 (keypair, Some(phrase))

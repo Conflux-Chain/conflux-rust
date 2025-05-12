@@ -35,9 +35,7 @@ impl BrainPrefix {
         }
     }
 
-    pub fn phrase(&self) -> &str {
-        &self.last_phrase
-    }
+    pub fn phrase(&self) -> &str { &self.last_phrase }
 }
 
 impl KeyPairGenerator for BrainPrefix {
@@ -52,7 +50,7 @@ impl KeyPairGenerator for BrainPrefix {
                 self.last_phrase = phrase;
                 return Ok(keypair);
             }
-            
+
             if keypair.address().as_ref().starts_with(&self.prefix) {
                 self.last_phrase = phrase;
                 return Ok(keypair);
