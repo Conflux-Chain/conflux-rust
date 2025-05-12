@@ -1879,8 +1879,8 @@ name = "cfxstore-cli"
 version = "0.1.1"
 dependencies = [
  "cfxstore",
+ "clap 4.5.37",
  "dir",
- "docopt",
  "env_logger",
  "num_cpus",
  "panic_hook",
