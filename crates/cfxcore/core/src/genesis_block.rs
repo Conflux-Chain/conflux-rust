@@ -45,7 +45,7 @@ use cfx_executor::{
         contract_address, ExecutionOutcome, ExecutiveContext, TransactOptions,
     },
     machine::Machine,
-    state::{CleanupMode, State},
+    state::State,
 };
 use cfx_vm_types::{CreateContractAddress, Env};
 use diem_types::account_address::AccountAddress;
@@ -138,9 +138,7 @@ pub fn genesis_block(
     .expect("no db error");
     trace!("genesis_accounts: {:?}", genesis_accounts);
     for (addr, balance) in genesis_accounts {
-        state
-            .add_balance(&addr, &balance, CleanupMode::NoEmpty)
-            .unwrap();
+        state.add_balance(&addr, &balance).unwrap();
         state.add_total_issued(balance);
         if addr.space == Space::Ethereum {
             state.add_total_evm_tokens(balance);
@@ -160,11 +158,7 @@ pub fn genesis_block(
     let genesis_account_init_balance =
         U256::from(ONE_CFX_IN_DRIP) * 100 + genesis_token_count;
     state
-        .add_balance(
-            &genesis_account_address,
-            &genesis_account_init_balance,
-            CleanupMode::NoEmpty,
-        )
+        .add_balance(&genesis_account_address, &genesis_account_init_balance)
         .unwrap();
     state.commit_cache(false);
 
@@ -358,7 +352,6 @@ pub fn genesis_block(
                     &node.address.with_native_space(),
                     &(stake_balance
                         + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
-                    CleanupMode::NoEmpty,
                 )
                 .unwrap();
             state

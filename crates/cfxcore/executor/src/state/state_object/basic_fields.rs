@@ -1,5 +1,5 @@
 use super::{RequireFields, State};
-use crate::{state::CleanupMode, try_loaded};
+use crate::try_loaded;
 use cfx_bytes::Bytes;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
@@ -37,49 +37,36 @@ impl State {
 
     pub fn add_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
-        cleanup_mode: CleanupMode,
     ) -> DbResult<()> {
-        let exists = self.exists(address)?;
+        // Mark address as warm.
+        self.touch(address)?;
 
         // The caller should guarantee the validity of address.
 
-        if !by.is_zero()
-            || (cleanup_mode == CleanupMode::ForceCreate && !exists)
-        {
+        if !by.is_zero() {
             self.write_account_or_new_lock(address)?.add_balance(by);
         }
 
-        // TODO: consider remove touched
-        if let CleanupMode::TrackTouched(set) = cleanup_mode {
-            if exists {
-                set.insert(*address);
-            }
-        }
         Ok(())
     }
 
     pub fn sub_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
-        cleanup_mode: &mut CleanupMode,
     ) -> DbResult<()> {
+        // Mark address as warm.
+        self.touch(address)?;
+
         if !by.is_zero() {
             self.write_account_lock(address)?.sub_balance(by);
-        }
-
-        if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {
-            if self.exists(address)? {
-                set.insert(*address);
-            }
         }
         Ok(())
     }
 
     pub fn transfer_balance(
         &mut self, from: &AddressWithSpace, to: &AddressWithSpace, by: &U256,
-        mut cleanup_mode: CleanupMode,
     ) -> DbResult<()> {
-        self.sub_balance(from, by, &mut cleanup_mode)?;
-        self.add_balance(to, by, cleanup_mode)?;
+        self.sub_balance(from, by)?;
+        self.add_balance(to, by)?;
         Ok(())
     }
 
@@ -119,6 +106,17 @@ impl State {
             return Ok(true);
         };
         Ok(acc.code_hash() == KECCAK_EMPTY && acc.nonce().is_zero())
+    }
+
+    pub fn is_eip158_empty(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<bool> {
+        let Some(acc) = self.read_account_lock(address)? else {
+            return Ok(true);
+        };
+        Ok(acc.code_hash() == KECCAK_EMPTY
+            && acc.nonce().is_zero()
+            && acc.balance().is_zero())
     }
 
     pub fn code_hash(&self, address: &AddressWithSpace) -> DbResult<H256> {

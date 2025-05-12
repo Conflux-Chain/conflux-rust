@@ -28,19 +28,3 @@ pub use state_object::{
 };
 #[cfg(test)]
 pub use state_object::{get_state_by_epoch_id, get_state_for_genesis_write};
-
-use cfx_types::AddressWithSpace;
-use std::collections::HashSet;
-
-/// Mode of dealing with null accounts.
-#[derive(PartialEq)]
-pub enum CleanupMode<'a> {
-    /// Create accounts which would be null.
-    ForceCreate,
-    /// Don't delete null accounts upon touching, but also don't create them.
-    NoEmpty,
-    /// Mark all touched accounts.
-    /// TODO: We have not implemented the correct behavior of TrackTouched for
-    /// internal Contracts.
-    TrackTouched(&'a mut HashSet<AddressWithSpace>),
-}

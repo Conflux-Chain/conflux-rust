@@ -6,7 +6,7 @@ use crate::{
     executive_observer::{AddressPocket, TracerTrait},
     stack::CallStackInfo,
     state::State,
-    substate::{cleanup_mode, Substate},
+    substate::Substate,
 };
 use cfx_vm_types::{self as vm, ActionParams, Spec};
 
@@ -64,11 +64,7 @@ pub fn suicide(
             balance,
         );
         // When destroying, the balance will be burnt.
-        state.sub_balance(
-            contract_address,
-            &balance,
-            &mut cleanup_mode(substate, spec),
-        )?;
+        state.sub_balance(contract_address, &balance)?;
         state.sub_total_issued(balance);
         if contract_address.space == Space::Ethereum {
             state.sub_total_evm_tokens(balance);
@@ -80,12 +76,7 @@ pub fn suicide(
             AddressPocket::Balance(*refund_address),
             balance,
         );
-        state.transfer_balance(
-            contract_address,
-            refund_address,
-            &balance,
-            cleanup_mode(substate, spec),
-        )?;
+        state.transfer_balance(contract_address, refund_address, &balance)?;
     }
 
     Ok(())

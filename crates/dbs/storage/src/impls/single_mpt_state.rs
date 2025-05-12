@@ -10,10 +10,7 @@ use primitives::{
     EpochId, MerkleHash, MptValue, StateRoot, StorageKeyWithSpace,
     MERKLE_NULL_NODE,
 };
-use std::{
-    cell::UnsafeCell, collections::HashSet, hint::unreachable_unchecked,
-    sync::Arc,
-};
+use std::{cell::UnsafeCell, collections::HashSet, sync::Arc};
 
 pub struct SingleMptState {
     trie: Arc<DeltaMpt>,
@@ -219,9 +216,9 @@ impl SingleMptState {
         let db_key = *{
             match &self.trie_root {
                 // Dirty state are committed.
-                NodeRefDeltaMpt::Dirty { index: _ } => unsafe {
-                    unreachable_unchecked();
-                },
+                NodeRefDeltaMpt::Dirty { index: _ } => {
+                    unreachable!()
+                }
                 // Empty block's state root points to its base state.
                 NodeRefDeltaMpt::Committed { db_key } => db_key,
             }

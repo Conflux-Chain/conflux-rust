@@ -4,7 +4,7 @@ use cfx_executor::{
         ExecutiveContext, TransactOptions, TransactSettings,
     },
     machine::Machine,
-    state::{CleanupMode, State},
+    state::State,
 };
 use solidity_abi::string_revert_reason_decode;
 
@@ -82,7 +82,6 @@ impl<'a> EstimationContext<'a> {
             self.state.add_balance(
                 &random_hex.with_space(tx.space()),
                 &balance_inc,
-                CleanupMode::NoEmpty,
             )?;
             // Make sure statistics are also correct and will not violate any
             // underlying assumptions.

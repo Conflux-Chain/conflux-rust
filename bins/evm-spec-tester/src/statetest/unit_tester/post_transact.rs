@@ -4,7 +4,7 @@ use cfx_executor::{
         execution_outcome::ToRepackError, Executed, ExecutionError,
         ExecutionOutcome, TxDropError,
     },
-    state::{CleanupMode, State},
+    state::State,
 };
 use cfx_types::{AddressSpaceUtil, AddressWithSpace, Space, U256};
 use cfxkey::Address;
@@ -241,7 +241,5 @@ pub fn distribute_tx_fee_to_miner(
         address: miner.clone(),
         space: Space::Ethereum,
     };
-    state
-        .add_balance(&miner, &to_add, CleanupMode::NoEmpty)
-        .expect("should success");
+    state.add_balance(&miner, &to_add).expect("should success");
 }
