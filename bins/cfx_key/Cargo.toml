@@ -1,7 +1,7 @@
 [package]
 description = "Conflux Core Space Keys Generator CLI"
 name = "ctxkey-cli"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license-file.workspace = true

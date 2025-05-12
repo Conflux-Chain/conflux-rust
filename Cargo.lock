@@ -2510,7 +2510,7 @@ dependencies = [
 
 [[package]]
 name = "ctxkey-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "cfxkey",
  "clap 4.5.37",

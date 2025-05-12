@@ -119,23 +119,32 @@ enum Error {
     Ethkey(EthkeyError),
     FromHex(FromHexError),
     ParseInt(ParseIntError),
+    InvalidPrefix(String),
     Io(io::Error),
 }
 
 impl From<EthkeyError> for Error {
-    fn from(err: EthkeyError) -> Self { Error::Ethkey(err) }
+    fn from(err: EthkeyError) -> Self {
+        Error::Ethkey(err)
+    }
 }
 
 impl From<FromHexError> for Error {
-    fn from(err: FromHexError) -> Self { Error::FromHex(err) }
+    fn from(err: FromHexError) -> Self {
+        Error::FromHex(err)
+    }
 }
 
 impl From<ParseIntError> for Error {
-    fn from(err: ParseIntError) -> Self { Error::ParseInt(err) }
+    fn from(err: ParseIntError) -> Self {
+        Error::ParseInt(err)
+    }
 }
 
 impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self { Error::Io(err) }
+    fn from(err: io::Error) -> Self {
+        Error::Io(err)
+    }
 }
 
 impl fmt::Display for Error {
@@ -145,6 +154,11 @@ impl fmt::Display for Error {
             Error::FromHex(ref e) => write!(f, "{}", e),
             Error::ParseInt(ref e) => write!(f, "{}", e),
             Error::Io(ref e) => write!(f, "{}", e),
+            Error::InvalidPrefix(ref prefix) => write!(
+                f,
+                "Invalid prefix: {}, address must start with 1",
+                prefix
+            ),
         }
     }
 }
@@ -242,7 +256,7 @@ fn execute_generate(
         GenerateCommands::Random {} => {
             if brain {
                 let mut brain = BrainPrefix::new(
-                    vec![0x10],
+                    vec![],
                     usize::max_value(),
                     BRAIN_WORDS,
                 );
@@ -254,7 +268,15 @@ fn execute_generate(
             }
         }
         GenerateCommands::Prefix { prefix } => {
-            let prefix: Vec<u8> = prefix.from_hex()?;
+            if !prefix.starts_with("1") {
+                return Err(Error::InvalidPrefix(prefix.clone()));
+            }
+            let prefix = if prefix == "1" {
+                vec![]
+            } else {
+                prefix.from_hex()?
+            };
+
             in_threads(move || {
                 let iterations = 1024;
                 let prefix = prefix.clone();
@@ -443,15 +465,36 @@ address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
     fn test_generate_random_brain() {
         let cli = Cli::parse_from(["cfxkey", "--brain", "generate", "random"]);
         let result = execute(cli).unwrap();
-        assert!(result.contains("recovery phrase: "));
+        assert!(result.contains("address: 1"));
     }
 
     #[test]
     fn test_generate_prefix() {
-        let cli = Cli::parse_from(["cfxkey", "generate", "prefix", "10ff"]);
+        let cli = Cli::parse_from(["cfxkey", "generate", "prefix", "1aff"]);
         let result = execute(cli).unwrap();
-        assert!(result.contains("address: 10ff"));
+        assert!(result.contains("address: 1aff"));
+
+        let cli = Cli::parse_from(["cfxkey", "generate", "prefix", "1"]);
+        let result = execute(cli).unwrap();
+        assert!(result.contains("address: 1"));
+
+        let cli =
+            Cli::parse_from(["cfxkey", "--brain", "generate", "prefix", "1"]);
+        let result = execute(cli).unwrap();
+        assert!(result.contains("address: 1"));
     }
+
+    #[test]
+    fn test_generate_prefix_error() {
+        let cli = Cli::parse_from(["cfxkey", "generate", "prefix", "ff"]);
+        let result = execute(cli);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid prefix: ff, address must start with 1"
+        );
+    }
+
     #[test]
     fn secret() {
         let cli = Cli::parse_from([
