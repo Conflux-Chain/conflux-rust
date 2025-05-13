@@ -55,6 +55,12 @@ jobs:
         run: |
           ./dev-support/check-crates.sh
 
+      - name: Check workspace
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo check --all --locked
+
   workspace-tests:
     runs-on: ubuntu-24.04
     steps:
@@ -84,10 +90,14 @@ jobs:
         uses: ./.github/actions/install-dependencies
 
       - name: Run build bench
+        env:
+            RUSTFLAGS: -D warnings
         run: |
           cargo bench --all --no-run
 
       - name: Run workspace tests
+        env:
+          RUSTFLAGS: -D warnings
         run: |
           cargo install cargo-nextest --version "0.9.85" --locked
           cargo nextest run --no-fail-fast --release --workspace
@@ -122,6 +132,8 @@ jobs:
         uses: ./.github/actions/install-dependencies
 
       - name: Run cfx-addr
+        env:
+          RUSTFLAGS: -D warnings
         run: |
           cargo install cargo-nextest --version "0.9.85" --locked
           cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
@@ -180,7 +192,48 @@ jobs:
         run: tar --use-compress-program="zstd --long=31" -xvf evm-spec-test.tar.zst
 
       - name: Build in release mode
-        run: cargo build --release --bin evm-spec-tester
+        working-directory: ./tools/evm-spec-tester
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo build --release --locked
 
       - name: Run EVM spec tests
-        run: cargo run --release --bin evm-spec-tester -- statetest testdata/evm-spec-test
+        working-directory: ./tools/evm-spec-tester
+        run: cargo run --release -- statetest ../../testdata/evm-spec-test
+
+  consensus-bench-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+
+      - name: Cache release artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/release/deps
+            target/release/.fingerprint
+            target/release/build
+            !target/release/build/**/out
+            !target/release/incremental
+            !target/release/.cargo-lock
+          key: ${{ runner.os }}-consensus-bench-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-consensus-bench-test-
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run build
+        working-directory: ./tools/consensus_bench
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo build --release --locked
+          
