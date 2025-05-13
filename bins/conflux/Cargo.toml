@@ -68,6 +68,7 @@ u64-mpt-db-key = ["client/u64_mpt_db_key"]
 # (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification)
 blst-portable = ["bls-signatures/blst-portable"]
 testonly_code = ["cfx-statedb/testonly_code"]
+align_evm = ["cfx-executor/align_evm"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
