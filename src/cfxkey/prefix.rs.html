@@ -56,6 +56,10 @@
 <a href="#56" id="56">56</a>
 <a href="#57" id="57">57</a>
 <a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -92,6 +96,10 @@
     <span class="kw">fn </span>generate(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;KeyPair, Error&gt; {
         <span class="kw">for _ in </span><span class="number">0</span>..<span class="self">self</span>.iterations {
             <span class="kw">let </span>keypair = Random.generate()<span class="question-mark">?</span>;
+
+            <span class="kw">if </span><span class="self">self</span>.prefix.is_empty() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(keypair);
+            }
             <span class="kw">if </span>keypair.address().as_ref().starts_with(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix) {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(keypair);
             }

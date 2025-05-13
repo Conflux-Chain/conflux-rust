@@ -68,6 +68,11 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -115,12 +120,17 @@
         <span class="kw">for _ in </span><span class="number">0</span>..<span class="self">self</span>.iterations {
             <span class="kw">let </span>phrase = wordlist::random_phrase(<span class="self">self</span>.no_of_words);
             <span class="kw">let </span>keypair = Brain::new(phrase.clone()).generate().unwrap();
+
+            <span class="kw">if </span><span class="self">self</span>.prefix.is_empty() {
+                <span class="self">self</span>.last_phrase = phrase;
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(keypair);
+            }
+
             <span class="kw">if </span>keypair.address().as_ref().starts_with(<span class="kw-2">&amp;</span><span class="self">self</span>.prefix) {
                 <span class="self">self</span>.last_phrase = phrase;
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(keypair);
             }
         }
-
         <span class="prelude-val">Err</span>(Error::Custom(<span class="string">"Could not find keypair"</span>.into()))
     }
 }
