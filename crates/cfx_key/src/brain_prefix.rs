@@ -45,12 +45,17 @@ impl KeyPairGenerator for BrainPrefix {
         for _ in 0..self.iterations {
             let phrase = wordlist::random_phrase(self.no_of_words);
             let keypair = Brain::new(phrase.clone()).generate().unwrap();
+
+            if self.prefix.is_empty() {
+                self.last_phrase = phrase;
+                return Ok(keypair);
+            }
+
             if keypair.address().as_ref().starts_with(&self.prefix) {
                 self.last_phrase = phrase;
                 return Ok(keypair);
             }
         }
-
         Err(Error::Custom("Could not find keypair".into()))
     }
 }
