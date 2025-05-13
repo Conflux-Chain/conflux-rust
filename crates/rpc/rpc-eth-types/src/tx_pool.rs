@@ -22,7 +22,7 @@ pub struct TxpoolStatus {
 }
 
 /// Transaction summary as found in the Txpool Inspection property.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct TxpoolInspectSummary {
     /// Recipient (None when contract creation)
     pub to: Option<Address>,
