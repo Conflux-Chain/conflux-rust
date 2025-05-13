@@ -3,7 +3,7 @@
 # A node is identified by cfxnode://NODEID@PUBLICIP:PORT
 # By default, no bootnodes are provided. What's provided here is a list of nodes that Conflux Team maintains across the world.
 
-bootnodes="cfxnode://c3039e5965c6878f2fc3de4e87b486c36e0bd3b10c322733aeb12ea34d885290d9bb336ca98fff5c713a58d0d76844ebe50c1d17d75cdc99ca18a359ee61a78c@101.132.158.162:32323,cfxnode://59ac2d1b7dcbefc511ede938d781b72d5f3fb494bff6281c71f06b02849c8b6da07cdaa4b9ea61d643bc8acfe0a8043815245b551cd2170cd08f2e242e3301fd@39.100.97.209:32323,cfxnode://54b05cc5ba5c354f9c3850b4412712e38c85ceba8485f5e8a50ebe87c635688f394b7297f338f8ecd2963233c8c26b413bc3b7ca07b4df009c76e935530761f1@47.92.105.52:32323,cfxnode://0b0b23bfd5b2f0153e249d2771424133b3312c1a09d69e0dc194cb9d4d2c87c07060d7931eae77d10b72880e07072eaf3bd517e464b8c0e34e7a36f5563c4cff@47.92.7.84:32323"
+# bootnodes="cfxnode://c3039e5965c6878f2fc3de4e87b486c36e0bd3b10c322733aeb12ea34d885290d9bb336ca98fff5c713a58d0d76844ebe50c1d17d75cdc99ca18a359ee61a78c@101.132.158.162:32323,cfxnode://59ac2d1b7dcbefc511ede938d781b72d5f3fb494bff6281c71f06b02849c8b6da07cdaa4b9ea61d643bc8acfe0a8043815245b551cd2170cd08f2e242e3301fd@39.100.97.209:32323,cfxnode://54b05cc5ba5c354f9c3850b4412712e38c85ceba8485f5e8a50ebe87c635688f394b7297f338f8ecd2963233c8c26b413bc3b7ca07b4df009c76e935530761f1@47.92.105.52:32323,cfxnode://0b0b23bfd5b2f0153e249d2771424133b3312c1a09d69e0dc194cb9d4d2c87c07060d7931eae77d10b72880e07072eaf3bd517e464b8c0e34e7a36f5563c4cff@47.92.7.84:32323"
 
 # Set the node type to Full node, Archive node, or Light node.
 # Possible values are "full", "archive", or "light".
@@ -569,9 +569,9 @@ get_logs_filter_max_limit = 5000
 
 node_table_promotion_timeout_s = 9600
 
-chain_id = 8888
+chain_id = 8890
 
 # The EVM chain ID of Conflux Network (EVM space)
 # 1030 for Tethys
 #
-evm_chain_id = 8889
+evm_chain_id = 8891

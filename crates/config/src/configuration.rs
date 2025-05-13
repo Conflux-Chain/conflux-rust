@@ -185,15 +185,15 @@ build_config! {
         (cip118_transition_number, (Option<u64>), Some(3))
         (cip119_transition_number, (Option<u64>), Some(0))
         // V2.4
-        (base_fee_burn_transition_number, (Option<u64>), Some(14400))
-        (base_fee_burn_transition_height, (Option<u64>), Some(7200))
+        (base_fee_burn_transition_number, (Option<u64>), Some(10))
+        (base_fee_burn_transition_height, (Option<u64>), Some(4))
         (cip1559_transition_height, (Option<u64>), None)
         (c2_fix_transition_height, (Option<u64>), None)
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
         // V2.5
-        (eoa_code_transition_height, (Option<u64>), Some(48460000))
+        (eoa_code_transition_height, (Option<u64>), Some(20))
         (cip151_transition_height, (Option<u64>), None)
         (cip645_transition_height, (Option<u64>), None)
 
