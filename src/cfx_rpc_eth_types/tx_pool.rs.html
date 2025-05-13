@@ -525,7 +525,7 @@
 }
 
 <span class="doccomment">/// Transaction summary as found in the Txpool Inspection property.
-</span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+</span><span class="attr">#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 </span><span class="kw">pub struct </span>TxpoolInspectSummary {
     <span class="doccomment">/// Recipient (None when contract creation)
     </span><span class="kw">pub </span>to: <span class="prelude-ty">Option</span>&lt;Address&gt;,

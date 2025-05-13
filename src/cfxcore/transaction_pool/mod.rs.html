@@ -1196,6 +1196,18 @@
 <a href="#1196" id="1196">1196</a>
 <a href="#1197" id="1197">1197</a>
 <a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
+<a href="#1201" id="1201">1201</a>
+<a href="#1202" id="1202">1202</a>
+<a href="#1203" id="1203">1203</a>
+<a href="#1204" id="1204">1204</a>
+<a href="#1205" id="1205">1205</a>
+<a href="#1206" id="1206">1206</a>
+<a href="#1207" id="1207">1207</a>
+<a href="#1208" id="1208">1208</a>
+<a href="#1209" id="1209">1209</a>
+<a href="#1210" id="1210">1210</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1246,7 +1258,7 @@
 <span class="kw">use </span>state_provider::StateProvider;
 <span class="kw">use </span>std::{
     cmp::{max, min},
-    collections::{hash_map::HashMap, BTreeSet},
+    collections::{hash_map::HashMap, BTreeMap, BTreeSet},
     mem,
     ops::DerefMut,
     sync::{
@@ -1529,12 +1541,11 @@
         <span class="comment">// The sponsor status may have changed, check again.
         // This is not applied to the tx pool state because this check is
         // only triggered on the RPC server.
-        </span><span class="kw">let </span>account_cache = <span class="self">self</span>.get_best_state_account_cache();
+        </span><span class="kw">let </span>state = <span class="self">self</span>.get_best_state_provider();
 
         <span class="kw">let </span>(sponsored_gas, sponsored_storage) =
-            inner.get_sponsored_gas_and_storage(<span class="kw-2">&amp;</span>account_cache, <span class="kw-2">&amp;</span>first_tx)<span class="question-mark">?</span>;
-        <span class="kw">let </span>(<span class="kw">_</span>, balance) =
-            account_cache.get_nonce_and_balance(<span class="kw-2">&amp;</span>first_tx.sender())<span class="question-mark">?</span>;
+            inner.get_sponsored_gas_and_storage(<span class="kw-2">&amp;</span>state, <span class="kw-2">&amp;</span>first_tx)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(<span class="kw">_</span>, balance) = state.get_nonce_and_balance(<span class="kw-2">&amp;</span>first_tx.sender())<span class="question-mark">?</span>;
         <span class="kw">let </span>tx_cost = TxWithReadyInfo::new(
             first_tx.clone(),
             <span class="bool-val">false</span>,
@@ -1568,8 +1579,8 @@
     <span class="kw">pub fn </span>get_state_account_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address,
     ) -&gt; StateDbResult&lt;(U256, U256)&gt; {
-        <span class="kw">let </span>account_cache = <span class="self">self</span>.get_best_state_account_cache();
-        account_cache.get_nonce_and_balance(address)
+        <span class="kw">let </span>state = <span class="self">self</span>.get_best_state_provider();
+        state.get_nonce_and_balance(address)
     }
 
     <span class="kw">pub fn </span>calc_half_block_gas_limit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;U256&gt; {
@@ -1644,7 +1655,7 @@
         // key after basic verification.
         </span><span class="kw">match </span><span class="self">self</span>.data_man.recover_unsigned_tx(<span class="kw-2">&amp;</span>transactions) {
             <span class="prelude-val">Ok</span>(signed_trans) =&gt; {
-                <span class="kw">let </span>account_cache = <span class="self">self</span>.get_best_state_account_cache();
+                <span class="kw">let </span>state = <span class="self">self</span>.get_best_state_provider();
                 <span class="kw">let </span><span class="kw-2">mut </span>inner =
                     <span class="self">self</span>.inner.write_with_metric(<span class="kw-2">&amp;</span>INSERT_TXS_ENQUEUE_LOCK);
                 <span class="kw">let </span><span class="kw-2">mut </span>to_prop = <span class="self">self</span>.to_propagate_trans.write();
@@ -1656,7 +1667,7 @@
 
                     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.add_transaction_with_readiness_check(
                         <span class="kw-2">&amp;mut *</span>inner,
-                        <span class="kw-2">&amp;</span>account_cache,
+                        <span class="kw-2">&amp;</span>state,
                         tx.clone(),
                         <span class="bool-val">false</span>,
                         <span class="bool-val">false</span>,
@@ -1774,7 +1785,7 @@
         // already signed.
 
         </span>{
-            <span class="kw">let </span>account_cache = <span class="self">self</span>.get_best_state_account_cache();
+            <span class="kw">let </span>state = <span class="self">self</span>.get_best_state_provider();
             <span class="kw">let </span><span class="kw-2">mut </span>inner =
                 <span class="self">self</span>.inner.write_with_metric(<span class="kw-2">&amp;</span>INSERT_TXS_ENQUEUE_LOCK);
             <span class="kw">let </span><span class="kw-2">mut </span>to_prop = <span class="self">self</span>.to_propagate_trans.write();
@@ -1782,7 +1793,7 @@
             <span class="kw">for </span>tx <span class="kw">in </span>signed_transactions {
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.add_transaction_with_readiness_check(
                     <span class="kw-2">&amp;mut *</span>inner,
-                    <span class="kw-2">&amp;</span>account_cache,
+                    <span class="kw-2">&amp;</span>state,
                     tx.clone(),
                     <span class="bool-val">false</span>,
                     <span class="bool-val">false</span>,
@@ -1853,11 +1864,11 @@
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
     </span><span class="kw">pub fn </span>add_transaction_with_readiness_check(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, inner: <span class="kw-2">&amp;mut </span>TransactionPoolInner, account_cache: <span class="kw-2">&amp;</span>StateProvider,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, inner: <span class="kw-2">&amp;mut </span>TransactionPoolInner, state: <span class="kw-2">&amp;</span>StateProvider,
         transaction: Arc&lt;SignedTransaction&gt;, packed: bool, force: bool,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionPoolError&gt; {
         inner.insert_transaction_with_readiness_check(
-            account_cache,
+            state,
             transaction,
             packed,
             force,
@@ -2095,7 +2106,28 @@
         )
     }
 
-    <span class="doccomment">/// content retrieves the ready and deferred transactions.
+    <span class="kw">pub fn </span>eth_content(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;,
+    ) -&gt; (
+        BTreeMap&lt;Address, BTreeMap&lt;U256, Arc&lt;SignedTransaction&gt;&gt;&gt;,
+        BTreeMap&lt;Address, BTreeMap&lt;U256, Arc&lt;SignedTransaction&gt;&gt;&gt;,
+    ) {
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read();
+        inner.eth_content(space)
+    }
+
+    <span class="kw">pub fn </span>eth_content_from(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, from: Address,
+    ) -&gt; (
+        BTreeMap&lt;U256, Arc&lt;SignedTransaction&gt;&gt;,
+        BTreeMap&lt;U256, Arc&lt;SignedTransaction&gt;&gt;,
+    ) {
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read();
+        inner.eth_content_from(from)
+    }
+
+    <span class="doccomment">/// content retrieves the ready and deferred transactions(all pool
+    /// transactions). deprecated: use eth_content instead
     </span><span class="kw">pub fn </span>content(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="prelude-ty">Option</span>&lt;Address&gt;,
     ) -&gt; (Vec&lt;Arc&lt;SignedTransaction&gt;&gt;, Vec&lt;Arc&lt;SignedTransaction&gt;&gt;) {
@@ -2116,18 +2148,14 @@
             <span class="kw-2">*</span><span class="self">self</span>.config.half_block_gas_limit.write() = half_block_gas_limit;
         }
 
-        <span class="kw">let </span>account_cache = <span class="self">self</span>.get_best_state_account_cache();
+        <span class="kw">let </span>state = <span class="self">self</span>.get_best_state_provider();
         <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.write_with_metric(<span class="kw-2">&amp;</span>NOTIFY_BEST_INFO_LOCK);
         <span class="kw">let </span>inner = inner.deref_mut();
 
         <span class="kw">while let </span><span class="prelude-val">Some</span>(tx) = set_tx_buffer.pop() {
             <span class="kw">let </span>tx_hash = tx.hash();
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.add_transaction_with_readiness_check(
-                inner,
-                <span class="kw-2">&amp;</span>account_cache,
-                tx,
-                <span class="bool-val">true</span>,
-                <span class="bool-val">false</span>,
+                inner, <span class="kw-2">&amp;</span>state, tx, <span class="bool-val">true</span>, <span class="bool-val">false</span>,
             ) {
                 <span class="comment">// TODO: A transaction that is packed multiple times would also
                 // throw an error here, but it should be normal.
@@ -2152,7 +2180,7 @@
                 <span class="string">"should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} ."</span>,
                 <span class="kw-2">&amp;</span>tx.nonce(), <span class="kw-2">&amp;</span>tx.sender(),
-                account_cache.get_nonce(<span class="kw-2">&amp;</span>tx.sender())<span class="question-mark">?</span>, tx.hash);
+                state.get_nonce(<span class="kw-2">&amp;</span>tx.sender())<span class="question-mark">?</span>, tx.hash);
 
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.verify_transaction_tx_pool(
                 <span class="kw-2">&amp;</span>tx,
@@ -2168,11 +2196,7 @@
                 );
             }
             <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.add_transaction_with_readiness_check(
-                inner,
-                <span class="kw-2">&amp;</span>account_cache,
-                tx,
-                <span class="bool-val">false</span>,
-                <span class="bool-val">true</span>,
+                inner, <span class="kw-2">&amp;</span>state, tx, <span class="bool-val">false</span>, <span class="bool-val">true</span>,
             ) {
                 <span class="macro">warn!</span>(<span class="string">"recycle tx err: e={:?}"</span>, e);
             }
@@ -2381,7 +2405,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">fn </span>get_best_state_account_cache(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StateProvider {
+    <span class="kw">fn </span>get_best_state_provider(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StateProvider {
         <span class="kw">let </span>_timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
         StateProvider::new((<span class="self">self</span>.best_executed_state.lock()).clone())
     }

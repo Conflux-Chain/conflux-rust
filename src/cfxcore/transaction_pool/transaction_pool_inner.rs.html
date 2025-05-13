@@ -1256,6 +1256,28 @@
 <a href="#1256" id="1256">1256</a>
 <a href="#1257" id="1257">1257</a>
 <a href="#1258" id="1258">1258</a>
+<a href="#1259" id="1259">1259</a>
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a>
+<a href="#1267" id="1267">1267</a>
+<a href="#1268" id="1268">1268</a>
+<a href="#1269" id="1269">1269</a>
+<a href="#1270" id="1270">1270</a>
+<a href="#1271" id="1271">1271</a>
+<a href="#1272" id="1272">1272</a>
+<a href="#1273" id="1273">1273</a>
+<a href="#1274" id="1274">1274</a>
+<a href="#1275" id="1275">1275</a>
+<a href="#1276" id="1276">1276</a>
+<a href="#1277" id="1277">1277</a>
+<a href="#1278" id="1278">1278</a>
+<a href="#1279" id="1279">1279</a>
+<a href="#1280" id="1280">1280</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     deferred_pool::DeferredPool,
     garbage_collector::GarbageCollector,
@@ -1288,7 +1310,7 @@
 };
 <span class="kw">use </span>rlp::<span class="kw-2">*</span>;
 <span class="kw">use </span>std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -1845,14 +1867,11 @@
     }
 
     <span class="kw">fn </span>recalculate_readiness_with_state(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>, addr: <span class="kw-2">&amp;</span>AddressWithSpace, account_cache: <span class="kw-2">&amp;</span>StateProvider,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, addr: <span class="kw-2">&amp;</span>AddressWithSpace, state: <span class="kw-2">&amp;</span>StateProvider,
     ) -&gt; StateDbResult&lt;()&gt; {
         <span class="kw">let </span>_timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
-        <span class="kw">let </span>(nonce, balance) = <span class="self">self
-            </span>.get_and_update_nonce_and_balance_from_storage(
-                addr,
-                account_cache,
-            )<span class="question-mark">?</span>;
+        <span class="kw">let </span>(nonce, balance) =
+            <span class="self">self</span>.get_and_update_nonce_and_balance_from_storage(addr, state)<span class="question-mark">?</span>;
         <span class="self">self</span>.recalculate_readiness(addr, nonce, balance);
         <span class="prelude-val">Ok</span>(())
     }
@@ -2159,19 +2178,47 @@
         (ready_txs, deferred_txs)
     }
 
+    <span class="kw">pub fn </span>eth_content(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, space: <span class="prelude-ty">Option</span>&lt;Space&gt;,
+    ) -&gt; (
+        BTreeMap&lt;AddressWithSpace, BTreeMap&lt;U256, Arc&lt;SignedTransaction&gt;&gt;&gt;,
+        BTreeMap&lt;AddressWithSpace, BTreeMap&lt;U256, Arc&lt;SignedTransaction&gt;&gt;&gt;,
+    ) {
+        <span class="kw">let </span>get_local_nonce_and_balance = |addr: <span class="kw-2">&amp;</span>AddressWithSpace| {
+            <span class="self">self</span>.ready_nonces_and_balances
+                .get(addr)
+                .map(|x| <span class="kw-2">*</span>x)
+                .unwrap_or_default()
+        };
+        <span class="self">self</span>.deferred_pool
+            .eth_content(space, get_local_nonce_and_balance)
+    }
+
+    <span class="kw">pub fn </span>eth_content_from(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, from: AddressWithSpace,
+    ) -&gt; (
+        BTreeMap&lt;U256, Arc&lt;SignedTransaction&gt;&gt;,
+        BTreeMap&lt;U256, Arc&lt;SignedTransaction&gt;&gt;,
+    ) {
+        <span class="kw">let </span>(local_nonce, local_balance) =
+            <span class="self">self</span>.get_local_nonce_and_balance(<span class="kw-2">&amp;</span>from).unwrap_or_default();
+        <span class="self">self</span>.deferred_pool
+            .eth_content_from(from, local_nonce, local_balance)
+    }
+
     <span class="comment">// Add transaction into deferred pool and maintain its readiness
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
     </span><span class="kw">pub fn </span>insert_transaction_with_readiness_check(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>, account_cache: <span class="kw-2">&amp;</span>StateProvider,
-        transaction: Arc&lt;SignedTransaction&gt;, packed: bool, force: bool,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, state: <span class="kw-2">&amp;</span>StateProvider, transaction: Arc&lt;SignedTransaction&gt;,
+        packed: bool, force: bool,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionPoolError&gt; {
         <span class="kw">let </span>_timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         <span class="kw">let </span>(sponsored_gas, sponsored_storage) =
-            <span class="self">self</span>.get_sponsored_gas_and_storage(account_cache, <span class="kw-2">&amp;</span>transaction)<span class="question-mark">?</span>;
+            <span class="self">self</span>.get_sponsored_gas_and_storage(state, <span class="kw-2">&amp;</span>transaction)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>(state_nonce, state_balance) =
-            account_cache.get_nonce_and_balance(<span class="kw-2">&amp;</span>transaction.sender())<span class="question-mark">?</span>;
+            state.get_nonce_and_balance(<span class="kw-2">&amp;</span>transaction.sender())<span class="question-mark">?</span>;
 
         <span class="kw">if </span>transaction.hash[<span class="number">0</span>] &amp; <span class="number">254 </span>== <span class="number">0 </span>{
             <span class="macro">trace!</span>(
@@ -2255,10 +2302,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(err);
         }
 
-        <span class="self">self</span>.recalculate_readiness_with_state(
-            <span class="kw-2">&amp;</span>transaction.sender(),
-            account_cache,
-        )<span class="question-mark">?</span>;
+        <span class="self">self</span>.recalculate_readiness_with_state(<span class="kw-2">&amp;</span>transaction.sender(), state)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -2276,7 +2320,7 @@
     }
 
     <span class="kw">pub fn </span>get_sponsored_gas_and_storage(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, account_cache: <span class="kw-2">&amp;</span>StateProvider, transaction: <span class="kw-2">&amp;</span>SignedTransaction,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;</span>StateProvider, transaction: <span class="kw-2">&amp;</span>SignedTransaction,
     ) -&gt; StateDbResult&lt;(U256, u64)&gt; {
         <span class="kw">let </span>sender = transaction.sender();
 
@@ -2297,7 +2341,7 @@
 
         <span class="comment">// Get sponsor info
         </span><span class="kw">let </span>sponsor_info = <span class="kw">if let </span><span class="prelude-val">Some</span>(sponsor_info) =
-            account_cache.get_sponsor_info(<span class="kw-2">&amp;</span>contract_address)<span class="question-mark">?
+            state.get_sponsor_info(<span class="kw-2">&amp;</span>contract_address)<span class="question-mark">?
         </span>{
             sponsor_info
         } <span class="kw">else </span>{
@@ -2305,7 +2349,7 @@
         };
 
         <span class="comment">// Check if sender is eligible for sponsor
-        </span><span class="kw">if </span>!account_cache
+        </span><span class="kw">if </span>!state
             .check_commission_privilege(<span class="kw-2">&amp;</span>contract_address, <span class="kw-2">&amp;</span>sender.address)<span class="question-mark">?
         </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(Default::default());
