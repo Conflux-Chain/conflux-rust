@@ -11,9 +11,10 @@ use eest_types::StateTestSuite;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
 
+use crate::util::find_all_json_tests;
 use command::StateTestCmd;
 use unit_tester::UnitTester;
-use utils::{find_all_json_tests, skip_test};
+use utils::skip_test;
 
 impl StateTestCmd {
     /// Runs `statetest` command.
