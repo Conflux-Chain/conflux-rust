@@ -1879,8 +1879,8 @@ name = "cfxstore-cli"
 version = "0.1.1"
 dependencies = [
  "cfxstore",
+ "clap 4.5.37",
  "dir",
- "docopt",
  "env_logger",
  "num_cpus",
  "panic_hook",
@@ -2521,10 +2521,10 @@ dependencies = [
 
 [[package]]
 name = "ctxkey-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "cfxkey",
- "docopt",
+ "clap 4.5.37",
  "env_logger",
  "panic_hook",
  "rustc-hex",

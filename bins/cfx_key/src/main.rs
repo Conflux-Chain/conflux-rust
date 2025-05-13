@@ -18,68 +18,100 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{env, fmt, io, num::ParseIntError, process, sync};
+use std::{fmt, io, num::ParseIntError, process, sync};
 
 use cfxkey::{
     brain_recover, sign, verify_address, verify_public, Brain, BrainPrefix,
     Error as EthkeyError, Generator, KeyPair, Prefix, Random,
 };
-use docopt::Docopt;
+use clap::{Parser, Subcommand};
 use rustc_hex::{FromHex, FromHexError};
-use serde::Deserialize;
 
-const USAGE: &str = r#"
-Conflux keys generator.
+#[derive(Parser)]
+#[command(version, about)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
 
-Usage:
-    cfxkey info <secret-or-phrase> [options]
-    cfxkey generate random [options]
-    cfxkey generate prefix <prefix> [options]
-    cfxkey sign <secret> <message>
-    cfxkey verify public <public> <signature> <message>
-    cfxkey verify address <address> <signature> <message>
-    cfxkey recover <address> <known-phrase>
-    cfxkey [-h | --help]
+    /// Display only the secret key.
+    #[arg(short, long, default_value_t = false)]
+    secret: bool,
+    /// Display only the public key.
+    #[arg(short, long, default_value_t = false)]
+    public: bool,
+    /// Display only the address.
+    #[arg(short, long, default_value_t = false)]
+    address: bool,
+    /// Use parity brain wallet algorithm. Not recommended.
+    #[arg(short, long, default_value_t = false)]
+    brain: bool,
+}
 
-Options:
-    -h, --help         Display this message and exit.
-    -s, --secret       Display only the secret key.
-    -p, --public       Display only the public key.
-    -a, --address      Display only the address.
-    -b, --brain        Use parity brain wallet algorithm. Not recommended.
+#[derive(Subcommand)]
+enum Commands {
+    /// Display public key and address of the secret.
+    Info {
+        #[arg()]
+        secret_or_phrase: String,
+    },
+    Generate {
+        #[command(subcommand)]
+        command: GenerateCommands,
+    },
 
-Commands:
-    info               Display public key and address of the secret.
-    generate random    Generates new random Ethereum key.
-    generate prefix    Random generation, but address must start with a prefix ("vanity address").
-    sign               Sign message using a secret key.
-    verify             Verify signer of the signature by public key or address.
-    recover            Try to find brain phrase matching given address from partial phrase.
-"#;
+    /// Sign message using a secret key.
+    Sign {
+        #[arg()]
+        secret: String,
+        #[arg()]
+        message: String,
+    },
 
-#[derive(Debug, Deserialize)]
-struct Args {
-    cmd_info: bool,
-    cmd_generate: bool,
-    cmd_random: bool,
-    cmd_prefix: bool,
-    cmd_sign: bool,
-    cmd_verify: bool,
-    cmd_public: bool,
-    cmd_address: bool,
-    cmd_recover: bool,
-    arg_prefix: String,
-    arg_secret: String,
-    arg_secret_or_phrase: String,
-    arg_known_phrase: String,
-    arg_message: String,
-    arg_public: String,
-    arg_address: String,
-    arg_signature: String,
-    flag_secret: bool,
-    flag_public: bool,
-    flag_address: bool,
-    flag_brain: bool,
+    /// Verify signer of the signature by public key or address.
+    Verify {
+        #[command(subcommand)]
+        command: VerifyCommands,
+    },
+
+    ///  Try to find brain phrase matching given address from partial phrase.
+    Recover {
+        #[arg()]
+        known_phrase: String,
+        #[arg()]
+        address: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum GenerateCommands {
+    /// Generates new random Ethereum key.
+    Random {},
+    /// Random generation, but address must start with a prefix ("vanity
+    /// address").
+    Prefix {
+        #[arg()]
+        prefix: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum VerifyCommands {
+    Public {
+        #[arg()]
+        public: String,
+        #[arg()]
+        signature: String,
+        #[arg()]
+        message: String,
+    },
+    Address {
+        #[arg()]
+        address: String,
+        #[arg()]
+        signature: String,
+        #[arg()]
+        message: String,
+    },
 }
 
 #[derive(Debug)]
@@ -87,7 +119,7 @@ enum Error {
     Ethkey(EthkeyError),
     FromHex(FromHexError),
     ParseInt(ParseIntError),
-    Docopt(docopt::Error),
+    InvalidPrefix(String),
     Io(io::Error),
 }
 
@@ -103,10 +135,6 @@ impl From<ParseIntError> for Error {
     fn from(err: ParseIntError) -> Self { Error::ParseInt(err) }
 }
 
-impl From<docopt::Error> for Error {
-    fn from(err: docopt::Error) -> Self { Error::Docopt(err) }
-}
-
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Self { Error::Io(err) }
 }
@@ -117,8 +145,12 @@ impl fmt::Display for Error {
             Error::Ethkey(ref e) => write!(f, "{}", e),
             Error::FromHex(ref e) => write!(f, "{}", e),
             Error::ParseInt(ref e) => write!(f, "{}", e),
-            Error::Docopt(ref e) => write!(f, "{}", e),
             Error::Io(ref e) => write!(f, "{}", e),
+            Error::InvalidPrefix(ref prefix) => write!(
+                f,
+                "Invalid prefix: {}, address must start with 1",
+                prefix
+            ),
         }
     }
 }
@@ -131,12 +163,12 @@ enum DisplayMode {
 }
 
 impl DisplayMode {
-    fn new(args: &Args) -> Self {
-        if args.flag_secret {
+    fn new(args: &Cli) -> Self {
+        if args.secret {
             DisplayMode::Secret
-        } else if args.flag_public {
+        } else if args.public {
             DisplayMode::Public
-        } else if args.flag_address {
+        } else if args.address {
             DisplayMode::Address
         } else {
             DisplayMode::KeyPair
@@ -147,10 +179,9 @@ impl DisplayMode {
 fn main() {
     panic_hook::set_abort();
     env_logger::try_init().expect("Logger initialized only once.");
-
-    match execute(env::args()) {
+    let cli = Cli::parse();
+    match execute(cli) {
         Ok(ok) => println!("{}", ok),
-        Err(Error::Docopt(ref e)) => e.exit(),
         Err(err) => {
             eprintln!("{}", err);
             process::exit(1);
@@ -171,47 +202,70 @@ fn display(result: (KeyPair, Option<String>), mode: DisplayMode) -> String {
     }
 }
 
-fn execute<S, I>(command: I) -> Result<String, Error>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    let args: Args =
-        Docopt::new(USAGE).and_then(|d| d.argv(command).deserialize())?;
+fn execute(cli: Cli) -> Result<String, Error> {
+    let display_mode = DisplayMode::new(&cli);
+    return match &cli.command {
+        Commands::Info { secret_or_phrase } => {
+            execute_info(secret_or_phrase, cli.brain, display_mode)
+        }
+        Commands::Generate { command } => {
+            execute_generate(command, cli.brain, display_mode)
+        }
+        Commands::Sign { secret, message } => {
+            execute_sign(secret.clone(), message.clone())
+        }
+        Commands::Verify { command } => execute_verify(command),
+        Commands::Recover {
+            known_phrase,
+            address,
+        } => execute_recover(known_phrase, address, display_mode),
+    };
+}
 
-    if args.cmd_info {
-        let display_mode = DisplayMode::new(&args);
+fn execute_info(
+    secret_or_phrase: &str, brain: bool, display_mode: DisplayMode,
+) -> Result<String, Error> {
+    let result = if brain {
+        let phrase = secret_or_phrase.to_string();
+        let phrase_info = validate_phrase(&phrase);
+        let keypair = Brain::new(phrase)
+            .generate()
+            .expect("Brain wallet generator is infallible; qed");
+        (keypair, Some(phrase_info))
+    } else {
+        let secret = secret_or_phrase
+            .parse()
+            .map_err(|_| EthkeyError::InvalidSecret)?;
+        (KeyPair::from_secret(secret)?, None)
+    };
+    Ok(display(result, display_mode))
+}
 
-        let result = if args.flag_brain {
-            let phrase = args.arg_secret_or_phrase;
-            let phrase_info = validate_phrase(&phrase);
-            let keypair = Brain::new(phrase)
-                .generate()
-                .expect("Brain wallet generator is infallible; qed");
-            (keypair, Some(phrase_info))
-        } else {
-            let secret = args
-                .arg_secret_or_phrase
-                .parse()
-                .map_err(|_| EthkeyError::InvalidSecret)?;
-            (KeyPair::from_secret(secret)?, None)
-        };
-        Ok(display(result, display_mode))
-    } else if args.cmd_generate {
-        let display_mode = DisplayMode::new(&args);
-        let result = if args.cmd_random {
-            if args.flag_brain {
+fn execute_generate(
+    command: &GenerateCommands, brain: bool, display_mode: DisplayMode,
+) -> Result<String, Error> {
+    let result = match &command {
+        GenerateCommands::Random {} => {
+            if brain {
                 let mut brain =
-                    BrainPrefix::new(vec![0], usize::max_value(), BRAIN_WORDS);
+                    BrainPrefix::new(vec![], usize::max_value(), BRAIN_WORDS);
                 let keypair = brain.generate()?;
                 let phrase = format!("recovery phrase: {}", brain.phrase());
                 (keypair, Some(phrase))
             } else {
                 (Random.generate()?, None)
             }
-        } else if args.cmd_prefix {
-            let prefix: Vec<u8> = args.arg_prefix.from_hex()?;
-            let brain = args.flag_brain;
+        }
+        GenerateCommands::Prefix { prefix } => {
+            if !prefix.starts_with("1") {
+                return Err(Error::InvalidPrefix(prefix.clone()));
+            }
+            let prefix = if prefix == "1" {
+                vec![]
+            } else {
+                prefix.from_hex()?
+            };
+
             in_threads(move || {
                 let iterations = 1024;
                 let prefix = prefix.clone();
@@ -232,81 +286,80 @@ where
                     Ok(res.map(Some).unwrap_or(None))
                 }
             })?
-        } else {
-            return Ok(USAGE.to_string());
-        };
-        Ok(display(result, display_mode))
-    } else if args.cmd_sign {
-        let secret = args
-            .arg_secret
-            .parse()
-            .map_err(|_| EthkeyError::InvalidSecret)?;
-        let message = args
-            .arg_message
-            .parse()
-            .map_err(|_| EthkeyError::InvalidMessage)?;
-        let signature = sign(&secret, &message)?;
-        Ok(format!("{}", signature))
-    } else if args.cmd_verify {
-        let signature = args
-            .arg_signature
-            .parse()
-            .map_err(|_| EthkeyError::InvalidSignature)?;
-        let message = args
-            .arg_message
-            .parse()
-            .map_err(|_| EthkeyError::InvalidMessage)?;
-        let ok = if args.cmd_public {
-            let public = args
-                .arg_public
-                .parse()
-                .map_err(|_| EthkeyError::InvalidPublic)?;
-            verify_public(&public, &signature, &message)?
-        } else if args.cmd_address {
-            let address = args
-                .arg_address
-                .parse()
-                .map_err(|_| EthkeyError::InvalidAddress)?;
-            verify_address(&address, &signature, &message)?
-        } else {
-            return Ok(USAGE.to_string());
-        };
-        Ok(format!("{}", ok))
-    } else if args.cmd_recover {
-        let display_mode = DisplayMode::new(&args);
-        let known_phrase = args.arg_known_phrase;
-        let address = args
-            .arg_address
-            .parse()
-            .map_err(|_| EthkeyError::InvalidAddress)?;
-        let (phrase, keypair) = in_threads(move || {
-            let mut it = brain_recover::PhrasesIterator::from_known_phrase(
-                &known_phrase,
-                BRAIN_WORDS,
-            )
-            .enumerate();
-            move || {
-                for (i, phrase) in &mut it {
-                    let keypair =
-                        Brain::new(phrase.clone()).generate().unwrap();
-                    if keypair.address() == address {
-                        return Ok(Some((phrase, keypair)));
-                    }
-
-                    if i >= 1024 {
-                        return Ok(None);
-                    }
-                }
-
-                Err(EthkeyError::Custom("Couldn't find any results.".into()))
-            }
-        })?;
-        Ok(display((keypair, Some(phrase)), display_mode))
-    } else {
-        Ok(USAGE.to_string())
-    }
+        }
+    };
+    Ok(display(result, display_mode))
 }
 
+fn execute_sign(secret: String, message: String) -> Result<String, Error> {
+    let secret = secret.parse().map_err(|_| EthkeyError::InvalidSecret)?;
+    let message = message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
+    let signature = sign(&secret, &message)?;
+    Ok(format!("{}", signature))
+}
+
+fn execute_verify(command: &VerifyCommands) -> Result<String, Error> {
+    let result = match &command {
+        VerifyCommands::Public {
+            public,
+            signature,
+            message,
+        } => {
+            let signature = signature
+                .parse()
+                .map_err(|_| EthkeyError::InvalidSignature)?;
+            let message =
+                message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
+
+            let public =
+                public.parse().map_err(|_| EthkeyError::InvalidPublic)?;
+            verify_public(&public, &signature, &message)?
+        }
+        VerifyCommands::Address {
+            address,
+            signature,
+            message,
+        } => {
+            let signature = signature
+                .parse()
+                .map_err(|_| EthkeyError::InvalidSignature)?;
+            let message =
+                message.parse().map_err(|_| EthkeyError::InvalidMessage)?;
+            let address =
+                address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
+            verify_address(&address, &signature, &message)?
+        }
+    };
+    Ok(format!("{}", result))
+}
+
+fn execute_recover(
+    known_phrase: &str, address: &str, display_mode: DisplayMode,
+) -> Result<String, Error> {
+    let address = address.parse().map_err(|_| EthkeyError::InvalidAddress)?;
+    let (phrase, keypair) = in_threads(move || {
+        let mut it = brain_recover::PhrasesIterator::from_known_phrase(
+            &known_phrase,
+            BRAIN_WORDS,
+        )
+        .enumerate();
+        move || {
+            for (i, phrase) in &mut it {
+                let keypair = Brain::new(phrase.clone()).generate().unwrap();
+                if keypair.address() == address {
+                    return Ok(Some((phrase, keypair)));
+                }
+
+                if i >= 1024 {
+                    return Ok(None);
+                }
+            }
+
+            Err(EthkeyError::Custom("Couldn't find any results.".into()))
+        }
+    })?;
+    Ok(display((keypair, Some(phrase)), display_mode))
+}
 const BRAIN_WORDS: usize = 12;
 
 fn validate_phrase(phrase: &str) -> String {
@@ -362,32 +415,31 @@ where
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
+
+    use crate::Cli;
+
     use super::execute;
 
     #[test]
     fn info() {
-        let command = vec![
+        let cli = Cli::parse_from([
             "cfxkey",
             "info",
             "17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55",
-        ]
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<String>>();
+        ]);
 
         let expected =
             "secret:  17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55
 public:  689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124
 address: 16d1ec50b4e62c1d1a40d16e7cacc6a6580757d5".to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
     }
 
     #[test]
     fn brain() {
-        let command = vec!["cfxkey", "info", "--brain", "this is sparta"]
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<String>>();
+        let cli =
+            Cli::parse_from(["cfxkey", "--brain", "info", "this is sparta"]);
 
         let expected =
             "The recover phrase was not generated by Conflux: The word 'this' does not come from the dictionary.
@@ -395,93 +447,121 @@ address: 16d1ec50b4e62c1d1a40d16e7cacc6a6580757d5".to_owned();
 secret:  a6bb621db2721ee05c44de651dde50ef85feefc5e91ae23bedcae69b874a22e7
 public:  756cb3f7ad1516b7c0ee34bd5e8b3a519922d3737192a58115e47df57ff3270873360a61de523ce08c0ebd7d3801bcb1d03c0364431d2b8633067f3d79e1fb25
 address: 10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
+    }
+
+    #[test]
+    fn test_generate_random_brain() {
+        let cli = Cli::parse_from(["cfxkey", "--brain", "generate", "random"]);
+        let result = execute(cli).unwrap();
+        assert!(result.contains("address: 1"));
+    }
+
+    #[test]
+    fn test_generate_prefix() {
+        let cli = Cli::parse_from(["cfxkey", "generate", "prefix", "1aff"]);
+        let result = execute(cli).unwrap();
+        assert!(result.contains("address: 1aff"));
+
+        let cli = Cli::parse_from(["cfxkey", "generate", "prefix", "1"]);
+        let result = execute(cli).unwrap();
+        assert!(result.contains("address: 1"));
+
+        let cli =
+            Cli::parse_from(["cfxkey", "--brain", "generate", "prefix", "1"]);
+        let result = execute(cli).unwrap();
+        assert!(result.contains("address: 1"));
+    }
+
+    #[test]
+    fn test_generate_prefix_error() {
+        let cli = Cli::parse_from(["cfxkey", "generate", "prefix", "ff"]);
+        let result = execute(cli);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Invalid prefix: ff, address must start with 1"
+        );
     }
 
     #[test]
     fn secret() {
-        let command =
-            vec!["cfxkey", "info", "--brain", "this is sparta", "--secret"]
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<String>>();
+        let cli = Cli::parse_from([
+            "cfxkey",
+            "--brain",
+            "--secret",
+            "info",
+            "this is sparta",
+        ]);
 
         let expected =
             "a6bb621db2721ee05c44de651dde50ef85feefc5e91ae23bedcae69b874a22e7"
                 .to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
     }
 
     #[test]
     fn public() {
-        let command =
-            vec!["cfxkey", "info", "--brain", "this is sparta", "--public"]
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<String>>();
+        let cli = Cli::parse_from([
+            "cfxkey",
+            "--brain",
+            "--public",
+            "info",
+            "this is sparta",
+        ]);
 
         let expected = "756cb3f7ad1516b7c0ee34bd5e8b3a519922d3737192a58115e47df57ff3270873360a61de523ce08c0ebd7d3801bcb1d03c0364431d2b8633067f3d79e1fb25".to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
     }
 
     #[test]
     fn address() {
-        let command =
-            vec!["cfxkey", "info", "-b", "this is sparta", "--address"]
-                .into_iter()
-                .map(Into::into)
-                .collect::<Vec<String>>();
+        let cli = Cli::parse_from([
+            "cfxkey",
+            "-b",
+            "--address",
+            "info",
+            "this is sparta",
+        ]);
 
         let expected = "10a33d9f95b22fe53024331c036db6e824a25bab".to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
     }
 
     #[test]
     fn sign() {
-        let command = vec![
+        let cli = Cli::parse_from([
             "cfxkey",
             "sign",
             "17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55",
             "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987",
-        ]
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<String>>();
+        ]);
 
         let expected = "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200".to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
     }
 
     #[test]
     fn verify_valid_public() {
-        let command = vec!["cfxkey", "verify", "public", "689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<String>>();
+        let cli = Cli::parse_from(["cfxkey", "verify", "public", "689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]);
 
         let expected = "true".to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
     }
 
     #[test]
     fn verify_valid_address() {
-        let command = vec!["cfxkey", "verify", "address", "16d1ec50b4e62c1d1a40d16e7cacc6a6580757d5", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<String>>();
+        let cli = Cli::parse_from(["cfxkey", "verify", "address", "16d1ec50b4e62c1d1a40d16e7cacc6a6580757d5", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987"]);
 
         let expected = "true".to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
     }
 
     #[test]
     fn verify_invalid() {
-        let command = vec!["cfxkey", "verify", "public", "689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec986"]
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<String>>();
+        let cli = Cli::parse_from(["cfxkey", "verify", "public", "689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124", "c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200", "bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec986"]);
 
         let expected = "false".to_owned();
-        assert_eq!(execute(command).unwrap(), expected);
+        assert_eq!(execute(cli).unwrap(), expected);
     }
 }
