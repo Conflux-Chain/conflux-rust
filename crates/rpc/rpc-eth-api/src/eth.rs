@@ -1,6 +1,9 @@
 use cfx_rpc_eth_types::{
-    Block, BlockNumber as BlockId, EthRpcLogFilter as Filter, FeeHistory,
-    Header, Log, Receipt, SyncStatus, Transaction, TransactionRequest,
+    AccessListResult, AccountPendingTransactions, Block,
+    BlockNumber as BlockId, BlockOverrides, Bundle, EthCallResponse,
+    EthRpcLogFilter as Filter, FeeHistory, Header, Log, Receipt,
+    RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext,
+    SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index};
 use cfx_types::{Address, H256, H64, U256, U64};
@@ -188,33 +191,27 @@ pub trait EthApi {
     /// `eth_simulateV1` executes an arbitrary number of transactions on top of
     /// the requested state. The transactions are packed into individual
     /// blocks. Overrides can be provided.
-    // #[method(name = "simulateV1")]
-    // async fn simulate_v1(
-    //     &self,
-    //     opts: SimBlock,
-    //     block_number: Option<BlockId>,
-    // ) -> RpcResult<Vec<SimulatedBlock>>;
+    #[method(name = "simulateV1")]
+    async fn simulate_v1(
+        &self, opts: SimulatePayload, block_number: Option<BlockId>,
+    ) -> RpcResult<Vec<SimulatedBlock>>;
 
     /// Executes a new message call immediately without creating a transaction
     /// on the block chain.
     #[method(name = "call")]
     async fn call(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_overrides: Option<StateOverride>,
-        // block_overrides: Option<Box<BlockOverrides>>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
+        block_overrides: Option<Box<BlockOverrides>>,
     ) -> RpcResult<Bytes>;
 
     /// Simulate arbitrary number of transactions at an arbitrary blockchain
     /// index, with the optionality of state overrides
-    // #[method(name = "callMany")]
-    // async fn call_many(
-    //     &self,
-    //     bundle: Bundle,
-    //     state_context: Option<StateContext>,
-    //     state_override: Option<StateOverride>,
-    // ) -> RpcResult<Vec<EthCallResponse>>;
+    #[method(name = "callMany")]
+    async fn call_many(
+        &self, bundle: Bundle, state_context: Option<StateContext>,
+        state_override: Option<RpcStateOverride>,
+    ) -> RpcResult<Vec<EthCallResponse>>;
 
     /// Generates an access list for a transaction.
     ///
@@ -232,21 +229,17 @@ pub trait EthApi {
     /// could change when the transaction is actually mined. Adding an
     /// accessList to your transaction does not necessary result in lower
     /// gas usage compared to a transaction without an access list.
-    // #[method(name = "createAccessList")]
-    // async fn create_access_list(
-    //     &self,
-    //     request: TransactionRequest,
-    //     block_number: Option<BlockId>,
-    // ) -> RpcResult<AccessListResult>;
+    #[method(name = "createAccessList")]
+    async fn create_access_list(
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+    ) -> RpcResult<AccessListResult>;
 
     /// Generates and returns an estimate of how much gas is necessary to allow
     /// the transaction to complete.
     #[method(name = "estimateGas")]
     async fn estimate_gas(
-        &self,
-        request: TransactionRequest,
-        block_number: Option<BlockId>,
-        // state_override: Option<StateOverride>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_override: Option<RpcStateOverride>,
     ) -> RpcResult<U256>;
 
     /// Returns the current price per gas in wei.
@@ -327,6 +320,10 @@ pub trait EthApi {
     #[method(name = "sendRawTransaction")]
     async fn send_raw_transaction(&self, bytes: Bytes) -> RpcResult<H256>;
 
+    /// @alias of `eth_sendRawTransaction`.
+    #[method(name = "submitTransaction")]
+    async fn submit_transaction(&self, transaction: Bytes) -> RpcResult<H256>;
+
     /// Returns an Ethereum specific signature with:
     /// sign(keccak256("\x19Ethereum Signed Message:\n"
     /// + len(message) + message))).
@@ -360,4 +357,10 @@ pub trait EthApi {
     /// Returns logs matching given filter object.
     #[method(name = "getLogs")]
     async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>>;
+
+    #[method(name = "getAccountPendingTransactions")]
+    async fn account_pending_transactions(
+        &self, address: Address, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> RpcResult<AccountPendingTransactions>;
 }

@@ -26,6 +26,8 @@ impl Registry {
     }
 
     pub fn get_all(&self) -> &HashMap<String, Arc<dyn Metric>> { &self.metrics }
+
+    pub fn clear(&mut self) { self.metrics.clear(); }
 }
 
 #[derive(Default)]
@@ -40,7 +42,11 @@ impl GroupingRegistry {
     ) {
         let group_entry =
             self.groups.entry(group_name).or_insert_with(HashMap::new);
-        assert!(!group_entry.contains_key(&metric_name));
+        assert!(
+            !group_entry.contains_key(&metric_name),
+            "Metric name {:?} already exists in the group ",
+            &metric_name
+        );
         group_entry.insert(metric_name, metric);
     }
 
@@ -49,4 +55,6 @@ impl GroupingRegistry {
     ) -> &HashMap<String, HashMap<String, Arc<dyn Metric>>> {
         &self.groups
     }
+
+    pub fn clear(&mut self) { self.groups.clear(); }
 }

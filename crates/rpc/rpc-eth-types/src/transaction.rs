@@ -18,7 +18,7 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::Bytes;
+use crate::{Bytes, SignedAuthorization};
 use cfx_types::{
     cal_contract_address, CreateContractAddressType, H160, H256, H512, U256,
     U64,
@@ -28,10 +28,10 @@ use primitives::{
     SignedTransaction,
 };
 use rlp::Encodable;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Transaction
-#[derive(Debug, Default, Clone, PartialEq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     /// transaction type
@@ -54,7 +54,7 @@ pub struct Transaction {
     /// Transfered value
     pub value: U256,
     /// Gas Price
-    pub gas_price: U256,
+    pub gas_price: Option<U256>,
     /// Max fee per gas
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_fee_per_gas: Option<U256>,
@@ -65,7 +65,7 @@ pub struct Transaction {
     /// Creates contract
     pub creates: Option<H160>,
     /// Raw transaction data
-    pub raw: Bytes,
+    pub raw: Option<Bytes>,
     /// Public key of the signer.
     pub public_key: Option<H512>,
     /// The network id of the transaction, if any.
@@ -75,7 +75,7 @@ pub struct Transaction {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub standard_v: Option<U256>,
     /// The standardised V field of the signature.
-    pub v: U256,
+    pub v: U64,
     /// The R field of the signature.
     pub r: U256,
     /// The S field of the signature.
@@ -92,6 +92,9 @@ pub struct Transaction {
     pub y_parity: Option<U64>,
     /* /// Transaction activates at specified block.
      * pub condition: Option<TransactionCondition>, */
+    /// eip7702 authorization list
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authorization_list: Option<Vec<SignedAuthorization>>,
 }
 
 impl Transaction {
@@ -105,7 +108,7 @@ impl Transaction {
 
         // for 2718 tx, the v should be equal to the signature.v and y_parity
         let (v, y_parity) = if t.is_2718() {
-            (U256::from(signature.v()), Some(U64::from(signature.v())))
+            (U64::from(signature.v()), Some(U64::from(signature.v())))
         } else {
             (
                 eip155_signature::add_chain_replay_protection(
@@ -143,11 +146,11 @@ impl Transaction {
                 Action::Call(ref address) => Some(*address),
             },
             value: *t.value(),
-            gas_price: *t.gas_price(),
+            gas_price: Some(*t.gas_price()),
             gas: *t.gas(),
             input: Bytes::new(t.data().clone()),
             creates: exec_info.1,
-            raw: Bytes::new(t.transaction.transaction.rlp_bytes()),
+            raw: Some(Bytes::new(t.transaction.transaction.rlp_bytes())),
             public_key: t.public().map(Into::into),
             chain_id: t.chain_id().map(|x| U64::from(x as u64)),
             standard_v: Some(signature.v().into()),
@@ -162,6 +165,11 @@ impl Transaction {
                 .then_some(*t.max_priority_gas_price()),
             y_parity,
             transaction_type: Some(U64::from(t.type_id())),
+            authorization_list: t.authorization_list().map(|list| {
+                list.iter()
+                    .map(|item| SignedAuthorization::from(item.clone()))
+                    .collect()
+            }),
         }
     }
 

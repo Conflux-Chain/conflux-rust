@@ -738,7 +738,7 @@ impl<T> MovableWrapper<T> {
 ///     [ protocol_id (3 bytes)]
 ///
 /// The extensions format is:
-/// [ extention data (0 to more bytes)
+/// [ extension data (0 to more bytes)
 ///   || extension data length (7 bit) | has_next_extension (1 bit)
 /// ]
 #[derive(Eq, PartialEq)]

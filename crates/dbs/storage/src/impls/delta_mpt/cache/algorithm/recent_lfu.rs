@@ -11,7 +11,6 @@ use super::{
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use std::hint;
 
 /// In RecentLFU we keep an LRU to maintain frequency for alpha * cache_slots
 /// recently visited elements. When inserting the most recent element, evict the
@@ -187,7 +186,7 @@ impl<
 
     fn get_key_for_comparison<'x>(
         &'x self, value: &'x RecentLFUMetadata<PosT, CacheIndexT>,
-    ) -> &Self::KeyType {
+    ) -> &'x Self::KeyType {
         &value.frequency
     }
 }
@@ -492,7 +491,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
                             }
                         }
                     }
-                    _ => unsafe { hint::unreachable_unchecked() },
+                    _ => unreachable!(),
                 }
             }
         }
@@ -552,7 +551,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
     >(
         &'a mut self, cache_store_util: &'b mut CacheStoreUtilT,
     ) -> (
-        &mut RemovableHeap<PosT, RecentLFUMetadata<PosT, CacheIndexT>>,
+        &'a mut RemovableHeap<PosT, RecentLFUMetadata<PosT, CacheIndexT>>,
         MetadataHeapUtil<'a, 'b, PosT, CacheIndexT, CacheStoreUtilT>,
     ) {
         (

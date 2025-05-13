@@ -2,7 +2,10 @@ use super::Builtin;
 use cfx_bytes::BytesRef;
 use cfx_statedb::Result as DbResult;
 use cfx_vm_interpreter::Finalize;
-use cfx_vm_types::{ActionParams, Error as VmError, GasLeft, ReturnData};
+use cfx_vm_types::{
+    ActionParams, Context as ContextTrait, Error as VmError, GasLeft,
+    ReturnData,
+};
 
 use crate::{
     context::Context,
@@ -25,7 +28,7 @@ impl<'a> Executable for BuiltinExec<'a> {
             &default as &[u8]
         };
 
-        let cost = self.builtin.cost(data);
+        let cost = self.builtin.cost(data, &context.spec());
         let output = if cost <= self.params.gas {
             let mut builtin_out_buffer = Vec::new();
             let result = {

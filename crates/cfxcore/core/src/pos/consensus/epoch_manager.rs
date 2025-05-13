@@ -415,39 +415,31 @@ impl EpochManager {
         // TODO(lpl): Decide key management.
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
-        let proposal_generator = match epoch_state
-            .verifier()
-            .get_public_key(&self.author)
-        {
-            Some(public_key) => {
-                // TODO(lpl): Handle no vrf.
-                let vrf_key =
-                    self.config.safety_rules.vrf_private_key.as_ref().unwrap();
-                let private_key = self
-                    .config
-                    .safety_rules
-                    .test
-                    .as_ref()
-                    .expect("test config set")
-                    .consensus_key
-                    .as_ref()
-                    .expect("private key set in pos")
-                    .private_key();
-                Some(ProposalGenerator::new(
-                    self.author,
-                    block_store.clone(),
-                    self.txn_manager.clone(),
-                    self.time_service.clone(),
-                    self.config.max_block_size,
-                    self.pow_handler.clone(),
-                    private_key,
-                    public_key,
-                    vrf_key.private_key(),
-                    vrf_key.public_key(),
-                ))
-            }
-            None => None,
-        };
+        let proposal_generator =
+            match epoch_state.verifier().get_public_key(&self.author) {
+                Some(_public_key) => {
+                    let private_key = self
+                        .config
+                        .safety_rules
+                        .test
+                        .as_ref()
+                        .expect("test config set")
+                        .consensus_key
+                        .as_ref()
+                        .expect("private key set in pos")
+                        .private_key();
+                    Some(ProposalGenerator::new(
+                        self.author,
+                        block_store.clone(),
+                        self.txn_manager.clone(),
+                        self.time_service.clone(),
+                        self.config.max_block_size,
+                        self.pow_handler.clone(),
+                        private_key,
+                    ))
+                }
+                None => None,
+            };
 
         diem_info!(epoch = epoch, "Create RoundState");
         let round_state = self.create_round_state(

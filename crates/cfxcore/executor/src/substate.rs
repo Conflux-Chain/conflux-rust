@@ -2,9 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::state::CleanupMode;
 use cfx_types::{Address, AddressWithSpace};
-use cfx_vm_types::{CleanDustMode, Spec};
+
 use primitives::{
     receipt::{SortedStorageChanges, StorageChange},
     LogEntry,
@@ -18,23 +17,21 @@ use std::collections::{HashMap, HashSet};
 pub struct Substate {
     /// Any accounts that have suicided.
     pub suicides: HashSet<AddressWithSpace>,
-    /// Any accounts that are touched.
-    // touched is never used and it is not maintained properly.
-    pub touched: HashSet<AddressWithSpace>,
     /// Any accounts that occupy some storage.
     pub storage_collateralized: HashMap<Address, u64>,
     /// Any accounts that release some storage.
     pub storage_released: HashMap<Address, u64>,
     /// Any logs.
     pub logs: Vec<LogEntry>,
+    /// gas to be refunded
+    pub refund_gas: i128,
     /// Created contracts.
-    pub contracts_created: Vec<AddressWithSpace>,
+    contracts_created: Vec<AddressWithSpace>,
 }
 
 impl Substate {
     pub fn accrue(&mut self, s: Self) {
         self.suicides.extend(s.suicides);
-        self.touched.extend(s.touched);
         self.logs.extend(s.logs);
         self.contracts_created.extend(s.contracts_created);
         for (address, amount) in s.storage_collateralized {
@@ -43,6 +40,7 @@ impl Substate {
         for (address, amount) in s.storage_released {
             *self.storage_released.entry(address).or_insert(0) += amount;
         }
+        self.refund_gas += s.refund_gas;
     }
 
     pub fn new() -> Self { Substate::default() }
@@ -90,6 +88,14 @@ impl Substate {
         }
     }
 
+    pub fn contracts_created(&self) -> &Vec<AddressWithSpace> {
+        &self.contracts_created
+    }
+
+    pub fn record_contract_create(&mut self, address: AddressWithSpace) {
+        self.contracts_created.push(address);
+    }
+
     pub fn record_storage_occupy(
         &mut self, address: &Address, collaterals: u64,
     ) {
@@ -112,23 +118,6 @@ impl Substate {
             .union(&affected_address2)
             .cloned()
             .collect()
-    }
-}
-
-/// Get the cleanup mode object from this.
-pub fn cleanup_mode<'a>(
-    substate: &'a mut Substate, spec: &Spec,
-) -> CleanupMode<'a> {
-    match (
-        spec.kill_dust != CleanDustMode::Off,
-        spec.no_empty,
-        spec.kill_empty,
-    ) {
-        (false, false, _) => CleanupMode::ForceCreate,
-        (false, true, false) => CleanupMode::NoEmpty,
-        (false, true, true) | (true, _, _) => {
-            CleanupMode::TrackTouched(&mut substate.touched)
-        }
     }
 }
 

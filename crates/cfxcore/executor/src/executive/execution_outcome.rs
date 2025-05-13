@@ -1,4 +1,4 @@
-use super::executed::{string_revert_reason_decode, Executed};
+use super::executed::Executed;
 use crate::unwrap_or_return;
 use cfx_types::{Address, H256, U256, U512};
 use cfx_vm_types as vm;
@@ -6,6 +6,7 @@ use primitives::{
     log_entry::build_bloom, receipt::StorageChange, LogEntry, Receipt,
     SignedTransaction, TransactionStatus,
 };
+use solidity_abi::string_revert_reason_decode;
 
 #[derive(Debug)]
 pub enum ExecutionOutcome {
@@ -56,6 +57,12 @@ pub enum ToRepackError {
         expected: U256,
         got: U256,
     },
+
+    // For align_evm test only
+    NotEnoughBalance {
+        expected: U512,
+        got: U256,
+    },
 }
 
 #[derive(Debug)]
@@ -70,6 +77,9 @@ pub enum TxDropError {
 
     /// Not enough gas limit for large transacton, only for estimation
     NotEnoughGasLimit { expected: U256, got: U256 },
+
+    /// The EOA sender with contract code is forbidded by CIP-152
+    SenderWithCode(Address),
 }
 
 #[derive(Debug, PartialEq)]
@@ -86,6 +96,7 @@ pub enum ExecutionError {
         /// Maximum storage limit cost.
         max_storage_limit_cost: U256,
     },
+    NonceOverflow(Address),
     VmError(vm::Error),
 }
 
@@ -141,6 +152,15 @@ impl ExecutionOutcome {
 
     #[inline]
     pub fn try_as_executed(&self) -> Option<&Executed> {
+        match self {
+            NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => None,
+            ExecutionErrorBumpNonce(_, executed) | Finished(executed) => {
+                Some(executed)
+            }
+        }
+    }
+
+    pub fn try_into_executed(self) -> Option<Executed> {
         match self {
             NotExecutedDrop(_) | NotExecutedToReconsiderPacking(_) => None,
             ExecutionErrorBumpNonce(_, executed) | Finished(executed) => {

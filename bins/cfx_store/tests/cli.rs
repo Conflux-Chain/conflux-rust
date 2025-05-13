@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{fs::File, io::Write, process::Command};
-use tempdir::TempDir;
+use tempfile::Builder;
 
 fn run(args: &[&str]) -> String {
     let output = Command::new("cargo")
@@ -30,8 +30,7 @@ fn run(args: &[&str]) -> String {
 #[test]
 fn cli_cmd() {
     Command::new("cargo").arg("build").output().unwrap();
-
-    let dir = TempDir::new("test-vault").unwrap();
+    let dir = Builder::new().prefix("test-vault").tempdir().unwrap();
 
     let mut passwd = File::create(dir.path().join("test-password")).unwrap();
     writeln!(passwd, "password").unwrap();

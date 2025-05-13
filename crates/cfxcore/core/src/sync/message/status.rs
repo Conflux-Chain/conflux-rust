@@ -148,7 +148,7 @@ impl Handleable for StatusV3 {
             .manager
             .graph
             .consensus
-            .get_config()
+            .config()
             .chain_id
             .read()
             .to_native_space_params();

@@ -4,9 +4,11 @@
 
 use crate::consensus::{
     consensus_inner::{NULL, NULLU64},
-    ConsensusGraphInner, DEFERRED_STATE_EPOCH_COUNT,
+    ConsensusGraphInner,
 };
-use cfx_parameters::consensus_internal::*;
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT, consensus_internal::*,
+};
 use cfx_types::H256;
 use parking_lot::RwLock;
 use std::{cmp::max, collections::VecDeque, convert::TryFrom};

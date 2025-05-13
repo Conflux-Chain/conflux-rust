@@ -7,7 +7,6 @@ use std::{
     collections::HashMap,
     fs::create_dir_all,
     path::Path,
-    str::FromStr,
     sync::{Arc, Weak},
     thread,
     time::{Duration, Instant},
@@ -25,8 +24,11 @@ use threadpool::ThreadPool;
 use crate::keylib::KeyPair;
 use blockgen::BlockGenerator;
 use cfx_executor::machine::{Machine, VmFactory};
-use cfx_parameters::genesis::DEV_GENESIS_KEY_PAIR_2;
+use cfx_parameters::genesis::{
+    DEV_GENESIS_KEY_PAIR_2, GENESIS_ACCOUNT_ADDRESS,
+};
 use cfx_storage::StorageManager;
+use cfx_tasks::TaskManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
 pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
@@ -55,15 +57,14 @@ use diem_types::validator_config::{
 };
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::NetworkService;
-use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use tokio::runtime::Runtime as TokioRuntime;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
-pub use crate::configuration::Configuration;
+use cfx_config::{parse_config_address_string, Configuration};
+
 use crate::{
     accounts::{account_provider, keys_path},
-    configuration::parse_config_address_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -73,7 +74,6 @@ use crate::{
         launch_async_rpc_servers, setup_debug_rpc_apis,
         setup_public_eth_rpc_apis, setup_public_rpc_apis,
     },
-    GENESIS_VERSION,
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 use std::net::SocketAddr;
@@ -155,8 +155,8 @@ pub fn initialize_common_modules(
         Arc<AccountProvider>,
         Arc<Notifications>,
         PubSubClient,
-        Runtime,
         EthPubSubClient,
+        Arc<TokioRuntime>,
     ),
     String,
 > {
@@ -214,8 +214,6 @@ pub fn initialize_common_modules(
             (ConfigKey::new(private_key), ConfigKey::new(vrf_private_key))
         }
     };
-
-    metrics::initialize(conf.metrics_config());
 
     let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
         "Tx Recover".into(),
@@ -320,7 +318,7 @@ pub fn initialize_common_modules(
     let genesis_block = genesis_block(
         &storage_manager,
         genesis_accounts.clone(),
-        Address::from_str(GENESIS_VERSION).unwrap(),
+        GENESIS_ACCOUNT_ADDRESS,
         U256::zero(),
         machine.clone(),
         conf.raw_conf.execute_genesis, /* need_to_execute */
@@ -382,8 +380,7 @@ pub fn initialize_common_modules(
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
-    let verification_config =
-        conf.verification_config(machine.clone(), pos_verifier.clone());
+    let verification_config = conf.verification_config(machine.clone());
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
         verification_config.clone(),
@@ -402,7 +399,7 @@ pub fn initialize_common_modules(
     let consensus = Arc::new(ConsensusGraph::new(
         consensus_conf,
         txpool.clone(),
-        statistics,
+        statistics.clone(),
         data_man.clone(),
         pow_config.clone(),
         pow.clone(),
@@ -431,6 +428,8 @@ pub fn initialize_common_modules(
 
     let sync_graph = Arc::new(SynchronizationGraph::new(
         consensus.clone(),
+        data_man.clone(),
+        statistics.clone(),
         verification_config,
         pow_config,
         pow.clone(),
@@ -459,17 +458,18 @@ pub fn initialize_common_modules(
         accounts.clone(),
         pos_verifier.clone(),
     ));
+    let tokio_runtime =
+        Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
 
-    let runtime = Runtime::with_default_thread_count();
     let pubsub = PubSubClient::new(
-        runtime.executor(),
+        tokio_runtime.clone(),
         consensus.clone(),
         notifications.clone(),
         *network.get_network_type(),
     );
 
     let eth_pubsub = EthPubSubClient::new(
-        runtime.executor(),
+        tokio_runtime.clone(),
         consensus.clone(),
         notifications.clone(),
     );
@@ -489,8 +489,8 @@ pub fn initialize_common_modules(
         accounts,
         notifications,
         pubsub,
-        runtime,
         eth_pubsub,
+        tokio_runtime,
     ))
 }
 
@@ -512,11 +512,11 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Option<WSServer>,
         Arc<PosVerifier>,
-        Runtime,
         Option<HttpServer>,
         Option<WSServer>,
-        TokioRuntime,
+        Arc<TokioRuntime>,
         Option<RpcServerHandle>,
+        TaskManager,
     ),
     String,
 > {
@@ -535,8 +535,8 @@ pub fn initialize_not_light_node_modules(
         accounts,
         _notifications,
         pubsub,
-        runtime,
         eth_pubsub,
+        tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
@@ -668,6 +668,9 @@ pub fn initialize_not_light_node_modules(
         accounts,
     ));
 
+    let task_manager = TaskManager::new(tokio_runtime.handle().clone());
+    let task_executor = task_manager.executor();
+
     let debug_rpc_http_server = super::rpc::start_http(
         conf.local_http_config(),
         setup_debug_rpc_apis(
@@ -730,22 +733,20 @@ pub fn initialize_not_light_node_modules(
     let eth_rpc_http_server = super::rpc::start_http(
         conf.eth_http_config(),
         setup_public_eth_rpc_apis(
-            common_impl.clone(),
             rpc_impl.clone(),
-            pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
     )?;
 
     let eth_rpc_ws_server = super::rpc::start_ws(
         conf.eth_ws_config(),
         setup_public_eth_rpc_apis(
-            common_impl.clone(),
             rpc_impl.clone(),
-            pubsub.clone(),
             eth_pubsub.clone(),
             &conf,
+            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
@@ -763,9 +764,6 @@ pub fn initialize_not_light_node_modules(
 
     network.start();
 
-    let tokio_runtime =
-        tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-
     let eth_rpc_http_server_addr =
         conf.raw_conf.jsonrpc_http_eth_port_v2.map(|port| {
             format!("0.0.0.0:{}", port)
@@ -775,11 +773,16 @@ pub fn initialize_not_light_node_modules(
     let async_eth_rpc_http_server =
         tokio_runtime.block_on(launch_async_rpc_servers(
             conf.rpc_impl_config(),
+            conf.raw_conf.throttling_conf.clone(),
+            conf.raw_conf.public_evm_rpc_async_apis.clone(),
             consensus.clone(),
             sync.clone(),
             txpool.clone(),
             eth_rpc_http_server_addr,
+            task_executor.clone(),
         ))?;
+
+    metrics::initialize(conf.metrics_config(), task_executor.clone());
 
     Ok((
         data_man,
@@ -795,11 +798,11 @@ pub fn initialize_not_light_node_modules(
         debug_rpc_ws_server,
         rpc_ws_server,
         pos_verifier,
-        runtime,
         eth_rpc_http_server,
         eth_rpc_ws_server,
         tokio_runtime,
         async_eth_rpc_http_server,
+        task_manager,
     ))
 }
 

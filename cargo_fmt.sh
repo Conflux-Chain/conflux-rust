@@ -6,5 +6,6 @@ then
     rustup component add rustfmt --toolchain nightly-2024-02-04
     rustup component add clippy
     shift
+else
+    cargo +nightly-2024-02-04 fmt --all $@
 fi
-cargo +nightly-2024-02-04 fmt --all $@

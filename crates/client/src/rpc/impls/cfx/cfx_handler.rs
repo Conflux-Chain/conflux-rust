@@ -43,7 +43,7 @@ use cfxcore::{
     state_exposer::STATE_EXPOSER,
     transaction_pool::TransactionPoolError,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
-    ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
+    ConsensusGraph, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
@@ -59,7 +59,7 @@ use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block, BlockHeader,
     BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
-    StorageValue, Transaction, TransactionIndex, TransactionStatus,
+    StorageValue, TransactionIndex, TransactionStatus,
     TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
@@ -113,10 +113,6 @@ use cfxcore::{
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
 };
 use diem_types::account_address::AccountAddress;
-use primitives::transaction::{
-    eth_transaction::EthereumTransaction,
-    native_transaction::TypedNativeTransaction,
-};
 use serde::Serialize;
 
 #[derive(Debug)]
@@ -159,12 +155,7 @@ impl RpcImpl {
         }
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn check_address_network(&self, network: Network) -> CoreResult<()> {
         invalid_params_check(
@@ -575,7 +566,7 @@ impl RpcImpl {
             (1, 0) => {
                 let tx_hash = signed_trans[0].hash();
                 self.sync.append_received_transactions(signed_trans);
-                Ok(tx_hash.into())
+                Ok(tx_hash)
             }
             _ => {
                 // This should never happen
@@ -737,14 +728,14 @@ impl RpcImpl {
 
                     let maybe_state_root = self
                         .consensus
-                        .get_data_manager()
+                        .data_manager()
                         .get_executed_state_root(&tx_index.block_hash);
 
                     // Acutally, the return value of `block_header_by_hash`
                     // should not be none.
                     let maybe_base_price = self
                         .consensus
-                        .get_data_manager()
+                        .data_manager()
                         .block_header_by_hash(&tx_index.block_hash)
                         .and_then(|x| x.base_price());
 
@@ -804,7 +795,7 @@ impl RpcImpl {
 
         let epoch_number = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(&pivot_hash)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?
@@ -817,7 +808,7 @@ impl RpcImpl {
 
         let block = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_by_hash(&block_hash, false /* update_cache */)
             // FIXME: server error, client should request another server.
             .ok_or("Inconsistent state")?;
@@ -828,7 +819,7 @@ impl RpcImpl {
 
         let pivot_header = if let Some(x) = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_header_by_hash(&pivot_hash)
         {
             x
@@ -906,7 +897,7 @@ impl RpcImpl {
         // None. If the tx was re-executed in another block on the new pivot
         // chain, `transaction_index_by_hash` will return the updated result.
         let tx_index =
-            match self.consensus.get_data_manager().transaction_index_by_hash(
+            match self.consensus.data_manager().transaction_index_by_hash(
                 &tx_hash, false, /* update_cache */
             ) {
                 None => return Ok(None),
@@ -1133,39 +1124,10 @@ impl RpcImpl {
             let mut signed_tx = SignedTransaction::new(public, tx);
 
             // set fake data for latency tests
-            match signed_tx.transaction.transaction.unsigned {
-                Transaction::Native(TypedNativeTransaction::Cip155(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Native(TypedNativeTransaction::Cip1559(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Native(TypedNativeTransaction::Cip2930(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip155(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip1559(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                Transaction::Ethereum(EthereumTransaction::Eip2930(
-                    ref mut unsigned,
-                )) if tx_data_len > 0 => {
-                    unsigned.data = vec![0; tx_data_len];
-                }
-                _ => {}
-            };
+            if tx_data_len > 0 {
+                *signed_tx.transaction.transaction.unsigned.data_mut() =
+                    vec![0; tx_data_len];
+            }
 
             transactions.push(Arc::new(signed_tx));
         }
@@ -1269,7 +1231,7 @@ impl RpcImpl {
         for b in blocks {
             if let Some(reward_result) = self
                 .consensus
-                .get_data_manager()
+                .data_manager()
                 .block_reward_result_by_hash_with_epoch(
                     &b,
                     &epoch_later,
@@ -1278,7 +1240,7 @@ impl RpcImpl {
                 )
             {
                 if let Some(block_header) =
-                    self.consensus.get_data_manager().block_header_by_hash(&b)
+                    self.consensus.data_manager().block_header_by_hash(&b)
                 {
                     let author = RpcAddress::try_from_h160(
                         *block_header.author(),
@@ -1320,6 +1282,12 @@ impl RpcImpl {
             ) => bail!(call_execution_error(
                 "Transaction can not be executed".into(),
                 format! {"not enough gas limit with respected to tx size: expected {:?} got {:?}", expected, got}
+            )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(call_execution_error(
+                "Transaction can not be executed".into(),
+                format! {"tx sender has contract code: {:?}", address}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
@@ -1365,6 +1333,12 @@ impl RpcImpl {
             ) => bail!(call_execution_error(
                 "Can not estimate: transaction can not be executed".into(),
                 format! {"invalid recipient address {:?}", recipient}
+            )),
+            ExecutionOutcome::NotExecutedDrop(TxDropError::SenderWithCode(
+                address,
+            )) => bail!(call_execution_error(
+                "Can not estimate: transaction sender has code".into(),
+                format! {"transaction sender has code {:?}", address}
             )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
@@ -1504,7 +1478,12 @@ impl RpcImpl {
         )?;
         trace!("call tx {:?}", signed_tx);
 
-        consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
+        consensus_graph.call_virtual(
+            &signed_tx,
+            epoch.into(),
+            estimate_request,
+            Default::default(),
+        )
     }
 
     fn current_sync_phase(&self) -> CoreResult<String> {
@@ -1529,7 +1508,7 @@ impl RpcImpl {
     fn get_executed_info(&self, block_hash: H256) -> CoreResult<(H256, H256)> {
         let commitment = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .get_epoch_execution_commitment(&block_hash)
             .ok_or(JsonRpcError::invalid_params(
                 "No receipts root. Possibly never pivot?".to_owned(),
@@ -1712,7 +1691,7 @@ impl RpcImpl {
         }
 
         // try to get from db
-        self.consensus.get_data_manager().block_epoch_number(h)
+        self.consensus.data_manager().block_epoch_number(h)
     }
 
     fn epoch_receipts(
@@ -1730,7 +1709,7 @@ impl RpcImpl {
             } => {
                 if self
                     .consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_header_by_hash(&h)
                     .is_none()
                 {
@@ -1851,7 +1830,7 @@ impl RpcImpl {
             .into_iter()
             .map(|h| {
                 self.consensus
-                    .get_data_manager()
+                    .data_manager()
                     .block_execution_result_by_hash_with_epoch(
                         &h, &pivot, false, /* update_pivot_assumption */
                         false, /* update_cache */
@@ -1934,7 +1913,7 @@ impl RpcImpl {
                 primitives::EpochNumber::Number(epoch_number),
             )?;
             let blocks = consensus
-                .get_data_manager()
+                .data_manager()
                 .blocks_by_hash_list(&block_hashes, false)
                 .ok_or_else(block_not_found_error)?;
             let pivot_block = blocks
@@ -2028,7 +2007,7 @@ impl RpcImpl {
 
         let blocks = match self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
             None => {
@@ -2079,7 +2058,7 @@ impl RpcImpl {
 
         let blocks = match self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
             None => {
@@ -2131,7 +2110,7 @@ impl RpcImpl {
     ) -> Result<Vec<WrapTransaction>, String> {
         let exec_info = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .block_execution_result_by_hash_with_epoch(
                 &b.hash(),
                 &pivot.hash(),
@@ -2193,7 +2172,7 @@ impl RpcImpl {
         let network = *self.sync.network.get_network_type();
         let maybe_state_root = self
             .consensus
-            .get_data_manager()
+            .data_manager()
             .get_executed_state_root(&b.hash());
         let block_receipts = &execution_result.block_receipts.receipts;
 
@@ -2299,46 +2278,46 @@ impl Cfx for CfxHandler {
         to self.common {
             fn best_block_hash(&self) -> JsonRpcResult<H256>;
             fn block_by_epoch_number(
-                &self, epoch_num: EpochNumber, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
+                &self, epoch_num: EpochNumber, include_txs: bool) -> BoxFuture<JsonRpcResult<Option<RpcBlock>>>;
             fn block_by_hash_with_pivot_assumption(
                 &self, block_hash: H256, pivot_hash: H256, epoch_number: U64)
-                -> BoxFuture<RpcBlock>;
+                -> BoxFuture<JsonRpcResult<RpcBlock>>;
             fn block_by_hash(&self, hash: H256, include_txs: bool)
-                -> BoxFuture<Option<RpcBlock>>;
-            fn block_by_block_number(&self, block_number: U64, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
+                -> BoxFuture<JsonRpcResult<Option<RpcBlock>>>;
+            fn block_by_block_number(&self, block_number: U64, include_txs: bool) -> BoxFuture<JsonRpcResult<Option<RpcBlock>>>;
             fn confirmation_risk_by_hash(&self, block_hash: H256) -> JsonRpcResult<Option<U256>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
-            fn gas_price(&self) -> BoxFuture<U256>;
+            fn gas_price(&self) -> BoxFuture<JsonRpcResult<U256>>;
             fn next_nonce(&self, address: RpcAddress, num: Option<BlockHashOrEpochNumber>)
-                -> BoxFuture<U256>;
+                -> BoxFuture<JsonRpcResult<U256>>;
             fn get_status(&self) -> JsonRpcResult<RpcStatus>;
             fn get_client_version(&self) -> JsonRpcResult<String>;
-            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
-            fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
+            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<JsonRpcResult<Option<AccountPendingInfo>>>;
+            fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<JsonRpcResult<AccountPendingTransactions>>;
             fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
-            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Option<Vec<f64>>) -> BoxFuture<CfxFeeHistory>;
-            fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
+            fn fee_history(&self, block_count: HexU64, newest_block: EpochNumber, reward_percentiles: Option<Vec<f64>>) -> BoxFuture<JsonRpcResult<CfxFeeHistory>>;
+            fn max_priority_fee_per_gas(&self) -> BoxFuture<JsonRpcResult<U256>>;
         }
 
         to self.rpc_impl {
-            fn code(&self, addr: RpcAddress, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<Bytes>;
-            fn account(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
-            fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn pos_economics(&self, num: Option<EpochNumber>) -> BoxFuture<PoSEconomics>;
+            fn code(&self, addr: RpcAddress, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<JsonRpcResult<Bytes>>;
+            fn account(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<JsonRpcResult<RpcAccount>>;
+            fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<JsonRpcResult<U256>>;
+            fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<JsonRpcResult<U256>>;
+            fn pos_economics(&self, num: Option<EpochNumber>) -> BoxFuture<JsonRpcResult<PoSEconomics>>;
             fn admin(&self, address: RpcAddress, num: Option<EpochNumber>)
-                -> BoxFuture<Option<RpcAddress>>;
+                -> BoxFuture<JsonRpcResult<Option<RpcAddress>>>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>)
-                -> BoxFuture<SponsorInfo>;
-            fn balance(&self, address: RpcAddress, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
+                -> BoxFuture<JsonRpcResult<SponsorInfo>>;
+            fn balance(&self, address: RpcAddress, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<JsonRpcResult<U256>>;
             fn staking_balance(&self, address: RpcAddress, num: Option<EpochNumber>)
-                -> BoxFuture<U256>;
-            fn deposit_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
-            fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
+                -> BoxFuture<JsonRpcResult<U256>>;
+            fn deposit_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<JsonRpcResult<Vec<DepositInfo>>>;
+            fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<JsonRpcResult<Vec<VoteStakeInfo>>>;
             fn collateral_for_storage(&self, address: RpcAddress, num: Option<EpochNumber>)
-                -> BoxFuture<U256>;
+                -> BoxFuture<JsonRpcResult<U256>>;
             fn call(&self, request: TransactionRequest, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>)
                 -> JsonRpcResult<Bytes>;
             fn estimate_gas_and_collateral(
@@ -2346,15 +2325,15 @@ impl Cfx for CfxHandler {
                 -> JsonRpcResult<EstimateGasAndCollateralResponse>;
             fn check_balance_against_transaction(
                 &self, account_addr: RpcAddress, contract_addr: RpcAddress, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
-            ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
-            fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
+            ) -> BoxFuture<JsonRpcResult<CheckBalanceAgainstTransactionResponse>>;
+            fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<JsonRpcResult<Vec<RpcLog>>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn storage_at(&self, addr: RpcAddress, pos: U256, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>)
-                -> BoxFuture<Option<H256>>;
-            fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
-            fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
-            fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
+                -> BoxFuture<JsonRpcResult<Option<H256>>>;
+            fn transaction_by_hash(&self, hash: H256) -> BoxFuture<JsonRpcResult<Option<RpcTransaction>>>;
+            fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<JsonRpcResult<Option<RpcReceipt>>>;
+            fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<JsonRpcResult<Option<StorageRoot>>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
             fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
             fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
@@ -2479,7 +2458,7 @@ impl LocalRpc for LocalRpcImpl {
             fn stat_on_gas_load(&self, last_epoch: EpochNumber, time_window: U64) -> JsonRpcResult<Option<StatOnGasLoad>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
-                &self, tx: TransactionRequest, password: Option<String>) -> BoxFuture<H256>;
+                &self, tx: TransactionRequest, password: Option<String>) -> BoxFuture<JsonRpcResult<H256>>;
             fn sign_transaction(&self, tx: TransactionRequest, password: Option<String>) -> JsonRpcResult<String>;
             fn transactions_by_epoch(&self, epoch_number: U64) -> JsonRpcResult<Vec<WrapTransaction>>;
             fn transactions_by_block(&self, block_hash: H256) -> JsonRpcResult<Vec<WrapTransaction>>;

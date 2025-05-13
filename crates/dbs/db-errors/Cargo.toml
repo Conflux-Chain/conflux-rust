@@ -10,7 +10,6 @@ edition = "2021"
 primitives = { workspace = true }
 cfx-types = { workspace = true }
 rlp = { workspace = true }
-sqlite = "0.25"
-strfmt = "0.1"
+sqlite = { workspace = true }
+strfmt = { workspace = true }
 thiserror ={ workspace = true }
-cfx-util-macros ={ workspace = true}

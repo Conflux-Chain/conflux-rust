@@ -6,20 +6,18 @@ use crate::{
         Context, Executable, ExecutableOutcome, FrameResult, FrameReturn,
         Resumable,
     },
-    substate::cleanup_mode,
 };
 
 use cfx_parameters::block::CROSS_SPACE_GAS_RATIO;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, Space, H256, U256,
 };
 use cfx_vm_interpreter::Finalize;
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, Context as _,
     CreateContractAddress, CreateType, GasLeft, ParamsType, Spec,
 };
-use keccak_hash::keccak;
 use solidity_abi::ABIEncodable;
 use std::{marker::PhantomData, sync::Arc};
 
@@ -33,9 +31,13 @@ use super::super::{
 pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
     let code_length = code.len();
 
-    let transaction_gas =
-        gas_required_for(/* is_create */ true, code, None, context.spec)
-            + context.spec.tx_gas as u64;
+    let transaction_gas = gas_required_for(
+        /* is_create */ true,
+        code,
+        None,
+        0,
+        &context.spec.to_consensus_spec(),
+    ) + context.spec.tx_gas as u64;
 
     let create_gas = U256::from(context.spec.create_gas);
 
@@ -69,9 +71,13 @@ pub fn call_gas(
 ) -> DbResult<U256> {
     let data_length = data.len();
 
-    let transaction_gas =
-        gas_required_for(/* is_create */ false, data, None, context.spec)
-            + context.spec.tx_gas as u64;
+    let transaction_gas = gas_required_for(
+        /* is_create */ false,
+        data,
+        None,
+        0,
+        &context.spec.to_consensus_spec(),
+    ) + context.spec.tx_gas as u64;
 
     let new_account = !context
         .state
@@ -218,10 +224,6 @@ impl Executable for PassResult {
     }
 }
 
-pub fn evm_map(address: Address) -> AddressWithSpace {
-    Address::from(keccak(&address)).with_evm_space()
-}
-
 pub fn process_trap<T>(
     result: vm::Result<(ActionParams, Box<dyn Resumable>)>,
     _phantom: PhantomData<T>,
@@ -250,14 +252,13 @@ pub fn call_to_evmcore(
         };
     let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
-    let mapped_sender = evm_map(params.sender);
-    let mapped_origin = evm_map(params.original_sender);
+    let mapped_sender = params.sender.evm_map();
+    let mapped_origin = params.original_sender.evm_map();
 
     context.state.transfer_balance(
         &params.address.with_native_space(),
         &mapped_sender,
         &value,
-        cleanup_mode(context.substate, context.spec),
     )?;
     context.state.add_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(
@@ -329,15 +330,14 @@ pub fn create_to_evmcore(
         };
     let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
-    let mapped_sender = evm_map(params.sender);
-    let mapped_origin = evm_map(params.original_sender);
+    let mapped_sender = params.sender.evm_map();
+    let mapped_origin = params.original_sender.evm_map();
 
     let value = params.value.value();
     context.state.transfer_balance(
         &params.address.with_native_space(),
         &mapped_sender,
         &value,
-        cleanup_mode(context.substate, context.spec),
     )?;
     context.state.add_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(
@@ -403,7 +403,7 @@ pub fn withdraw_from_evmcore(
     sender: Address, value: U256, params: &ActionParams,
     context: &mut InternalRefContext,
 ) -> vm::Result<()> {
-    let mapped_address = evm_map(sender);
+    let mapped_address = sender.evm_map();
     let balance = context.state.balance(&mapped_address)?;
     if balance < value {
         internal_bail!(
@@ -414,7 +414,6 @@ pub fn withdraw_from_evmcore(
         &mapped_address,
         &sender.with_native_space(),
         &value,
-        cleanup_mode(context.substate, context.spec),
     )?;
     context.state.sub_total_evm_tokens(value);
     context.tracer.trace_internal_transfer(
@@ -438,11 +437,11 @@ pub fn withdraw_from_evmcore(
 pub fn mapped_balance(
     address: Address, context: &mut InternalRefContext,
 ) -> vm::Result<U256> {
-    Ok(context.state.balance(&evm_map(address))?)
+    Ok(context.state.balance(&address.evm_map())?)
 }
 
 pub fn mapped_nonce(
     address: Address, context: &mut InternalRefContext,
 ) -> vm::Result<U256> {
-    Ok(context.state.nonce(&evm_map(address))?)
+    Ok(context.state.nonce(&address.evm_map())?)
 }

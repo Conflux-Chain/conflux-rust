@@ -4,16 +4,15 @@ name = "ctxkey-cli"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 docopt = { workspace = true }
 env_logger = { workspace = true }
 cfxkey = { workspace = true }
 panic_hook = { workspace = true }
-parity-wordlist= { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
-serde_derive = { workspace = true }
 threadpool = { workspace = true }
 
 [[bin]]

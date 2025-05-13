@@ -11,7 +11,7 @@ from conflux.utils import *
 from conflux.rpc import RpcClient
 from trie import HexaryTrie
 import time
-import jsonrpcclient
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
 
 TEST_DIFFICULTY = 4
 HASH_MAX = 1 << 256
@@ -117,7 +117,7 @@ def wait_for_initial_nonce_for_address(node, addr, timeout=10):
                                  .format(addr, timeout, last_exception))
         try:
             nonce = RpcClient(node).get_nonce(addr)
-        except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+        except ReceivedErrorResponseError as e:
             # It's possible that
             last_exception = e
             pass

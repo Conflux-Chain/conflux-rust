@@ -179,7 +179,7 @@ class PhantomTransactionTest(Web3Base):
                 "output": number_to_topic(0),
             },
             "subtraces": 0,
-            "traceAddress": [],
+            "traceAddress": [0],
             "blockHash": block["hash"],
             "blockNumber": int(block["number"], 16),
             "transactionHash": phantom_txs[1]["hash"],

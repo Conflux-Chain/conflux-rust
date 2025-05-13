@@ -27,6 +27,8 @@ mod commit;
 /// Implements access functions global statistic variables of `State`.
 mod global_statistics;
 
+mod warm;
+
 /// Implements functions for the PoS rewarding of `State`.
 mod pos;
 
@@ -42,6 +44,8 @@ mod staking;
 mod storage_entry;
 
 mod reward;
+
+mod state_override;
 
 #[cfg(test)]
 mod tests;
@@ -61,13 +65,15 @@ use self::checkpoints::CheckpointLayer;
 use super::{
     checkpoints::LazyDiscardedVec,
     global_stat::GlobalStat,
-    overlay_account::{AccountEntry, OverlayAccount, RequireFields},
+    overlay_account::{
+        AccountEntry, AccountEntryWithWarm, OverlayAccount, RequireFields,
+    },
 };
 use crate::substate::Substate;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
-use cfx_types::AddressWithSpace;
+use cfx_types::{AddressWithSpace, H256};
 use parking_lot::RwLock;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// A caching and checkpoint layer built upon semantically meaningful database
 /// interfaces, providing interfaces and logics for managing accounts and global
@@ -80,13 +86,18 @@ pub struct State {
     ///
     /// WARNING: Don't delete cache entries outside of `State::commit`, unless
     /// you are familiar with checkpoint maintenance.
-    cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
+    pub cache: RwLock<HashMap<AddressWithSpace, AccountEntryWithWarm>>,
+
+    pub committed_cache: HashMap<AddressWithSpace, AccountEntry>,
+    tx_access_list: Option<HashMap<AddressWithSpace, HashSet<H256>>>,
 
     /// In-memory global statistic variables.
     // TODO: try not to make it special?
     global_stat: GlobalStat,
 
     /// Checkpoint layers for the account entries
+    // TODO: it seems `RwLock` is not necessary here. But we need to change the
+    // signature of `write_account` from `&self` to `&mut self` first
     checkpoints: RwLock<LazyDiscardedVec<CheckpointLayer>>,
 }
 
@@ -104,20 +115,28 @@ impl State {
         Ok(State {
             db,
             cache: Default::default(),
+            committed_cache: Default::default(),
             checkpoints: Default::default(),
+            tx_access_list: None,
             global_stat: world_stat,
         })
     }
 
     pub fn prefetch_accounts(
-        &self, addresses: BTreeSet<AddressWithSpace>, pool: &rayon::ThreadPool,
+        &mut self, addresses: BTreeSet<AddressWithSpace>,
+        pool: &rayon::ThreadPool,
     ) -> DbResult<()> {
         use rayon::prelude::*;
+
         pool.install(|| {
             addresses
                 .into_par_iter()
                 .map(|addr| self.prefetch(&addr, RequireFields::Code))
         })
-        .collect::<DbResult<()>>()
+        .collect::<DbResult<()>>()?;
+
+        assert!(self.committed_cache.is_empty());
+        self.commit_cache(false);
+        Ok(())
     }
 }

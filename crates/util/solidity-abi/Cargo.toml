@@ -1,11 +1,12 @@
 [package]
 name = "solidity-abi"
 version = "0.1.0"
-edition = "2018"
-
+edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 cfx-types = { workspace = true }
+cfx-bytes = { workspace = true }
 keccak-hash = { workspace = true }
 solidity-abi-derive = { workspace = true }
 

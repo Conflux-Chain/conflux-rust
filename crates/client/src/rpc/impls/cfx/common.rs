@@ -13,7 +13,7 @@ use std::{
 use crate::rpc::{
     errors::invalid_params_check,
     helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
-    impls::pos::hash_value_to_h256,
+    impls::pos::{convert_to_pos_epoch_reward, hash_value_to_h256},
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
@@ -39,13 +39,14 @@ use cfx_addr::Network;
 use cfx_parameters::{
     rpc::GAS_PRICE_DEFAULT_VALUE, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
+use cfx_rpc_utils::error::jsonrpc_error_helpers::internal_rpc_err;
 use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
     consensus::pos_handler::PosVerifier, errors::Error as CoreError,
     genesis_block::register_transaction, BlockDataManager, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -169,7 +170,7 @@ impl RpcImpl {
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
     ) -> Self {
-        let data_man = consensus.get_data_manager().clone();
+        let data_man = consensus.data_manager().clone();
 
         RpcImpl {
             exit,
@@ -182,12 +183,7 @@ impl RpcImpl {
         }
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     fn check_address_network(&self, network: Network) -> CoreResult<()> {
         invalid_params_check(
@@ -327,7 +323,7 @@ impl RpcImpl {
                 {
                     return Ok(None);
                 }
-                let reward_info: PoSEpochReward = PoSEpochReward::try_from(
+                let reward_info: PoSEpochReward = convert_to_pos_epoch_reward(
                     epoch_rewards,
                     *self.network.get_network_type(),
                 )
@@ -406,7 +402,7 @@ impl RpcImpl {
             block_hash, pivot_hash, epoch_number
         );
 
-        let genesis = self.consensus.get_data_manager().true_genesis.hash();
+        let genesis = self.consensus.data_manager().true_genesis.hash();
 
         // for genesis, check criteria directly
         if block_hash == genesis && (pivot_hash != genesis || epoch_number != 0)
@@ -572,9 +568,7 @@ impl RpcImpl {
                 // inconsistent block height
                 Ok(block)
             } else {
-                Err(RpcError::invalid_params(
-                    "Specified block header does not exist",
-                ))
+                Err(internal_rpc_err("Specified block header does not exist"))
             }
         };
 
@@ -935,8 +929,7 @@ impl RpcImpl {
     }
 
     pub fn pos_start(&self) -> CoreResult<()> {
-        self.pos_handler
-            .initialize(self.consensus.clone().to_arc_consensus())?;
+        self.pos_handler.initialize(self.consensus.clone())?;
         Ok(())
     }
 

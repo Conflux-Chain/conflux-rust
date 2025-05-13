@@ -7,34 +7,17 @@ version = "2.0.2"
 edition = "2021"
 
 [dependencies]
-cfx-bytes = { workspace = true }
-cfx-internal-common = { workspace = true }
 cfx-parameters = { workspace = true }
 cfx-statedb = { workspace = true }
 cfx-vm-tracer-derive = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
-cfx-vm-interpreter = { workspace = true }
 cfx-executor = { workspace = true }
 log = { workspace = true }
-malloc_size_of = { workspace = true }
-malloc_size_of_derive = { workspace = true }
 primitives = { workspace = true }
-rlp = { workspace = true }
-rlp_derive = { workspace = true }
-serde = { workspace = true, features = ["rc"] }
-serde_derive = { workspace = true }
-serde_json = { workspace = true, default-features = false, features = [
-    "alloc",
-]}
 solidity-abi = { workspace = true }
-strum_macros = { workspace = true }
-pow-types = { path = "../core/src/pos/types/pow-types" }
-typemap = { package = "typemap-ors", version = "1.0"}
-
-alloy-primitives = { workspace = true }
-alloy-sol-types = "0.7.1"
-revm = { version = "8.0", default-features = false, features = ["std"] }
+pow-types = { workspace = true }
+typemap = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
 geth-tracer = { workspace = true }
 cfx-parity-trace-types = { workspace = true }

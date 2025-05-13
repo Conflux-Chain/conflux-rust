@@ -21,9 +21,17 @@ cfx-vm-types = { workspace = true }
 primitives = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_derive = { workspace = true }
 strum_macros = { workspace = true }
 jsonrpc-core = { workspace = true }
 cfx-util-macros = { workspace = true }
 log = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 parity-version = { workspace = true }
+rand = { workspace = true }
+diem-crypto = { workspace = true }
+diem-types = { workspace = true }
+rustc-hex = { workspace = true }
+bls-signatures = { workspace = true }
+
+[dev-dependencies]

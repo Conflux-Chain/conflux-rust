@@ -1,4 +1,4 @@
-use ethereum_types::{Address, H256};
+use ethereum_types::{Address, H256, U256};
 use std::str::FromStr;
 
 pub fn maybe_address(address: &Address) -> Option<Address> {
@@ -31,4 +31,14 @@ pub fn option_vec_to_hex(data: Option<&Vec<u8>>) -> String {
 
 pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
     hex_str.strip_prefix("0x").unwrap_or(hex_str).parse()
+}
+
+pub fn u256_to_h256_be(value: U256) -> H256 {
+    let mut buf = [0u8; 32];
+    value.to_big_endian(&mut buf);
+    H256::from(buf)
+}
+
+pub fn h256_to_u256_be(value: H256) -> U256 {
+    U256::from_big_endian(value.as_bytes())
 }

@@ -4,14 +4,13 @@ name = "cfxstore-cli"
 version = "0.1.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
+license-file.workspace = true
 
 [dependencies]
-docopt = "1.0"
+docopt = { workspace = true }
 env_logger = { workspace = true }
-num_cpus = "1.6"
-rustc-hex = { workspace = true }
+num_cpus = { workspace = true }
 serde = { workspace = true }
-serde_derive = { workspace = true }
 parking_lot = { workspace = true }
 cfxstore = { workspace = true }
 panic_hook = { workspace = true }
@@ -23,4 +22,4 @@ path = "src/main.rs"
 doc = false
 
 [dev-dependencies]
-tempdir = { workspace = true }
+tempfile = { workspace = true }

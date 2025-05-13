@@ -15,7 +15,6 @@ pub mod status;
 pub mod storage_collateral_info;
 pub mod sync_graph_states;
 pub mod token_supply_info;
-pub mod trace;
 pub mod transaction;
 pub mod transaction_request;
 pub mod tx_pool;

@@ -1,0 +1,17 @@
+[package]
+name = "cached-pos-ledger-db"
+version = "0.1.0"
+edition = "2018"
+license-file.workspace = true
+
+[dependencies]
+anyhow = "1.0.38"
+serde = { version = "1.0.124", features = ["derive"] }
+
+consensus-types = { workspace = true }
+diem-crypto = { workspace = true }
+diem-infallible = { workspace = true }
+diem-logger = { workspace = true }
+diem-types = { workspace = true }
+executor-types = { workspace = true }
+storage-interface = { workspace = true }

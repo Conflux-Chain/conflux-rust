@@ -714,9 +714,9 @@ impl State {
                 let db_key = *{
                     match self.delta_trie_root.as_ref().unwrap() {
                         // Dirty state are committed.
-                        NodeRefDeltaMpt::Dirty { index: _ } => unsafe {
-                            unreachable_unchecked();
-                        },
+                        NodeRefDeltaMpt::Dirty { index: _ } => {
+                            unreachable!();
+                        }
                         // Empty block's state root points to its base state.
                         NodeRefDeltaMpt::Committed { db_key } => db_key,
                     }
@@ -988,6 +988,5 @@ use rustc_hex::ToHex;
 use std::{
     cell::UnsafeCell,
     collections::{BTreeMap, HashSet},
-    hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };

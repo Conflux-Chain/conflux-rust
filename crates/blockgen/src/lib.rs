@@ -16,8 +16,8 @@ use cfxcore::{
     consensus::{consensus_inner::StateBlameInfo, pos_handler::PosVerifier},
     pow::*,
     verification::compute_transaction_root,
-    ConsensusGraph, ConsensusGraphTrait, SharedSynchronizationGraph,
-    SharedSynchronizationService, SharedTransactionPool, Stopable,
+    ConsensusGraph, SharedSynchronizationGraph, SharedSynchronizationService,
+    SharedTransactionPool, Stopable,
 };
 use lazy_static::lazy_static;
 use log::{debug, trace, warn};
@@ -165,13 +165,7 @@ impl BlockGenerator {
         }
     }
 
-    fn consensus_graph(&self) -> &ConsensusGraph {
-        self.graph
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-    }
+    fn consensus_graph(&self) -> &ConsensusGraph { &self.graph.consensus }
 
     /// Stop mining
     pub fn stop(&self) {

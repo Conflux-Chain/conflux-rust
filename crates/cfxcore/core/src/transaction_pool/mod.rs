@@ -2,24 +2,22 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod account_cache;
+mod deferred_pool;
 mod error;
 mod garbage_collector;
 mod nonce_pool;
+mod pool_metrics;
+mod state_provider;
 mod transaction_pool_inner;
 
-extern crate rand;
+pub use error::TransactionPoolError;
 
-pub use self::transaction_pool_inner::TransactionStatus;
 use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
-    transaction_pool::{
-        nonce_pool::TxWithReadyInfo, transaction_pool_inner::PendingReason,
-    },
+    transaction_pool::{nonce_pool::TxWithReadyInfo, pool_metrics::*},
     verification::{VerificationConfig, VerifyTxLocalMode, VerifyTxMode},
 };
-use account_cache::AccountCache;
 use cfx_executor::{
     machine::Machine, spec::TransitionsEpochHeight, state::State,
 };
@@ -31,24 +29,23 @@ use cfx_parameters::{
     },
     consensus_internal::ELASTICITY_MULTIPLIER,
 };
+use cfx_rpc_cfx_types::{PendingReason, TransactionStatus};
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::{
     AddressWithSpace as Address, AllChainID, Space, SpaceMap, H256, U256,
 };
 use cfx_vm_types::Spec;
-pub use error::TransactionPoolError;
+
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use metrics::{
-    register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
-    RwLockExtensions,
-};
+use metrics::{MeterTimer, RwLockExtensions};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     block::BlockHeight,
     block_header::{compute_next_price, compute_next_price_tuple},
     Account, SignedTransaction, Transaction, TransactionWithSignature,
 };
+use state_provider::StateProvider;
 use std::{
     cmp::{max, min},
     collections::{hash_map::HashMap, BTreeSet},
@@ -60,39 +57,6 @@ use std::{
     },
 };
 use transaction_pool_inner::TransactionPoolInner;
-
-lazy_static! {
-    static ref TX_POOL_DEFERRED_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "stat_deferred_txs");
-    static ref TX_POOL_UNPACKED_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "stat_unpacked_txs");
-    static ref TX_POOL_READY_GAUGE: Arc<dyn Gauge<usize>> =
-        GaugeUsize::register_with_group("txpool", "stat_ready_accounts");
-    static ref INSERT_TPS: Arc<dyn Meter> =
-        register_meter_with_group("txpool", "insert_tps");
-    static ref INSERT_TXS_TPS: Arc<dyn Meter> =
-        register_meter_with_group("txpool", "insert_txs_tps");
-    static ref INSERT_TXS_SUCCESS_TPS: Arc<dyn Meter> =
-        register_meter_with_group("txpool", "insert_txs_success_tps");
-    static ref INSERT_TXS_FAILURE_TPS: Arc<dyn Meter> =
-        register_meter_with_group("txpool", "insert_txs_failure_tps");
-    static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
-        register_meter_with_group("timer", "tx_pool::insert_new_tx");
-    static ref TX_POOL_VERIFY_TIMER: Arc<dyn Meter> =
-        register_meter_with_group("timer", "tx_pool::verify");
-    static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
-        register_meter_with_group("timer", "tx_pool::get_state");
-    static ref INSERT_TXS_QUOTA_LOCK: Lock =
-        Lock::register("txpool_insert_txs_quota_lock");
-    static ref INSERT_TXS_ENQUEUE_LOCK: Lock =
-        Lock::register("txpool_insert_txs_enqueue_lock");
-    static ref PACK_TRANSACTION_LOCK: Lock =
-        Lock::register("txpool_pack_transactions");
-    static ref NOTIFY_BEST_INFO_LOCK: Lock =
-        Lock::register("txpool_notify_best_info");
-    static ref NOTIFY_MODIFIED_LOCK: Lock =
-        Lock::register("txpool_notify_modified_info");
-}
 
 pub struct TxPoolConfig {
     pub capacity: usize,
@@ -257,7 +221,7 @@ impl TransactionPool {
             config.packing_pool_degree,
         );
         let best_executed_state = Mutex::new(
-            Self::best_executed_state(
+            Self::get_best_executed_state_by_epoch(
                 &data_man,
                 StateIndex::new_for_readonly(
                     &genesis_hash,
@@ -379,7 +343,7 @@ impl TransactionPool {
             sponsored_gas,
             sponsored_storage,
         )
-        .calc_tx_cost();
+        .get_tx_cost();
 
         let outdated = match (tx_cost <= balance, &first_tx_status) {
             (true, Some(Pending(PendingReason::NotEnoughCash)))
@@ -691,7 +655,7 @@ impl TransactionPool {
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
     pub fn add_transaction_with_readiness_check(
-        &self, inner: &mut TransactionPoolInner, account_cache: &AccountCache,
+        &self, inner: &mut TransactionPoolInner, account_cache: &StateProvider,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), TransactionPoolError> {
         inner.insert_transaction_with_readiness_check(
@@ -904,7 +868,22 @@ impl TransactionPool {
 
     pub fn total_unpacked(&self) -> usize {
         let inner = self.inner.read();
-        inner.total_unpacked()
+        inner.total_unpacked(None)
+    }
+
+    // The total pending transactions in the pool
+    // Pending transactions are transactions that are ready to be packed
+    pub fn total_pending(&self, space: Option<Space>) -> u64 {
+        let inner = self.inner.read();
+        inner.total_pending(space)
+    }
+
+    // The total queued transactions in the pool
+    // Queued transactions are transactions that are not ready to be packed
+    // e.g. due to nonce gap or not enough balance
+    pub fn total_queued(&self, space: Option<Space>) -> u64 {
+        let inner = self.inner.read();
+        inner.total_queued(space)
     }
 
     /// stats retrieves the length of ready and deferred pool.
@@ -914,7 +893,7 @@ impl TransactionPool {
             inner.total_ready_accounts(),
             inner.total_deferred(None),
             inner.total_received(),
-            inner.total_unpacked(),
+            inner.total_unpacked(None),
         )
     }
 
@@ -1175,7 +1154,7 @@ impl TransactionPool {
         )
     }
 
-    fn best_executed_state(
+    fn get_best_executed_state_by_epoch(
         data_man: &BlockDataManager, best_executed_epoch: StateIndex,
     ) -> StateDbResult<Arc<State>> {
         let storage = data_man
@@ -1192,25 +1171,28 @@ impl TransactionPool {
         Ok(Arc::new(state))
     }
 
-    pub fn set_best_executed_epoch(
+    pub fn set_best_executed_state_by_epoch(
         &self, best_executed_epoch: StateIndex,
     ) -> StateDbResult<()> {
         *self.best_executed_state.lock() =
-            Self::best_executed_state(&self.data_man, best_executed_epoch)?;
+            Self::get_best_executed_state_by_epoch(
+                &self.data_man,
+                best_executed_epoch,
+            )?;
 
         Ok(())
     }
 
-    fn get_best_state_account_cache(&self) -> AccountCache {
+    fn get_best_state_account_cache(&self) -> StateProvider {
         let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
-        AccountCache::new((&*self.best_executed_state.lock()).clone())
+        StateProvider::new((self.best_executed_state.lock()).clone())
     }
 
     pub fn ready_for_mining(&self) -> bool {
         self.ready_for_mining.load(Ordering::SeqCst)
     }
 
-    pub fn set_ready(&self) {
+    pub fn set_ready_for_mining(&self) {
         self.ready_for_mining.store(true, Ordering::SeqCst);
     }
 }

@@ -3,10 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    executive_observer::AddressPocket,
-    internal_bail,
-    state::State,
-    substate::{cleanup_mode, Substate},
+    executive_observer::AddressPocket, internal_bail, state::State,
+    substate::Substate,
 };
 use cfx_types::{Address, AddressSpaceUtil, U256};
 use cfx_vm_types::{self as vm, ActionParams, Spec};
@@ -31,8 +29,7 @@ pub fn set_sponsor_for_gas(
         internal_bail!("not allowed to sponsor non-contract account");
     }
 
-    let (spec, state, substate): (&Spec, &mut State, &mut Substate) =
-        (context.spec, context.state, context.substate);
+    let state = &mut context.state;
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
@@ -76,7 +73,6 @@ pub fn set_sponsor_for_gas(
             state.add_balance(
                 &prev_sponsor.as_ref().unwrap().with_native_space(),
                 &prev_sponsor_balance,
-                cleanup_mode(substate, &spec),
             )?;
         }
         context.tracer.trace_internal_transfer(
@@ -87,7 +83,6 @@ pub fn set_sponsor_for_gas(
         state.sub_balance(
             &params.address.with_native_space(),
             &sponsor_balance,
-            &mut cleanup_mode(substate, &spec),
         )?;
         state.set_sponsor_for_gas(
             &contract_address,
@@ -113,7 +108,6 @@ pub fn set_sponsor_for_gas(
         state.sub_balance(
             &params.address.with_native_space(),
             &sponsor_balance,
-            &mut cleanup_mode(substate, &spec),
         )?;
         state.set_sponsor_for_gas(
             &contract_address,
@@ -144,8 +138,7 @@ pub fn set_sponsor_for_collateral(
         internal_bail!("not allowed to sponsor non-contract account");
     }
 
-    let (spec, state, substate): (&Spec, &mut State, &mut Substate) =
-        (context.spec, context.state, context.substate);
+    let (spec, state): (&Spec, &mut State) = (context.spec, context.state);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
@@ -185,7 +178,6 @@ pub fn set_sponsor_for_collateral(
             state.add_balance(
                 &prev_sponsor.with_native_space(),
                 &(prev_sponsor_balance + collateral_for_storage),
-                cleanup_mode(substate, &spec),
             )?;
         } else {
             assert_eq!(collateral_for_storage, U256::zero());
@@ -198,7 +190,6 @@ pub fn set_sponsor_for_collateral(
         state.sub_balance(
             &params.address.with_native_space(),
             &sponsor_balance,
-            &mut cleanup_mode(substate, &spec),
         )?;
         state.set_sponsor_for_collateral(
             &contract_address,
@@ -215,7 +206,6 @@ pub fn set_sponsor_for_collateral(
         state.sub_balance(
             &params.address.with_native_space(),
             &sponsor_balance,
-            &mut cleanup_mode(substate, &spec),
         )?;
         state.set_sponsor_for_collateral(
             &contract_address,

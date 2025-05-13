@@ -19,7 +19,7 @@
 //! * `page_interval`: Number of consecutive blocks in each page
 //! * Each page contains:
 //!   - Major section: Full hashes for blocks every `major_interval` heights
-//!   - Minor section: Hash prefixes (in length of `minor_hash_length``) for
+//!   - Minor section: Hash prefixes (in length of `minor_hash_length`) for
 //!     blocks every `minor_interval` heights
 //!
 //! # Parameter Constraints
@@ -70,7 +70,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use hash::{keccak, H256};
+use crate::hash::{keccak, H256};
 use lru_time_cache::LruCache;
 use parking_lot::RwLock;
 

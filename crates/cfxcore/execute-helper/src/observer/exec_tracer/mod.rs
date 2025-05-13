@@ -8,16 +8,13 @@ pub use phantom_traces::{
 };
 
 pub use cfx_parity_trace_types::{
-    action_types,
     action_types::{
-        Action, ActionType, Call, CallResult, Create, CreateResult,
+        self, Action, ActionType, Call, CallResult, Create, CreateResult,
         InternalTransferAction, Outcome,
     },
-    filter,
-    filter::TraceFilter,
-    trace_types,
+    filter::{self, TraceFilter},
     trace_types::{
-        BlockExecTraces, ExecTrace, LocalizedTrace, TransactionExecTraces,
+        self, BlockExecTraces, ExecTrace, LocalizedTrace, TransactionExecTraces,
     },
 };
 

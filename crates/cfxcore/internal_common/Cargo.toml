@@ -10,9 +10,7 @@ edition = "2021"
 cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
 cfx-parameters = { workspace = true }
-cfx-vm-types = { workspace = true }
-derivative = "2.0.2"
-lazy_static = { workspace = true }
+derivative = { workspace = true }
 log = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }

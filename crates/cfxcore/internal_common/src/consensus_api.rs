@@ -13,6 +13,4 @@ pub trait StateMaintenanceTrait {
     fn get_epoch_execution_commitment_with_db(
         &self, block_hash: &EpochId,
     ) -> Option<EpochExecutionCommitment>;
-
-    fn remove_epoch_execution_commitment_from_db(&self, block_hash: &EpochId);
 }
