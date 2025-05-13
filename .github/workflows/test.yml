@@ -1,5 +1,8 @@
 name: Tests
 
+env:
+  RUST_VERSION: 1.77.2
+
 on:
   push:
     branches: [master]
@@ -45,12 +48,9 @@ jobs:
             target/debug/.fingerprint
             target/debug/build
             !target/debug/build/**/out
-            !target/debug/deps/librust_verify*
-            !target/debug/incremental
-            !target/debug/.cargo-lock
-          key: ${{ runner.os }}-build-crates-debug-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-conflux-debug-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-crates-debug-
+            ${{ runner.os }}-conflux-debug-${{ env.RUST_VERSION }}-
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
@@ -84,11 +84,9 @@ jobs:
             target/release/.fingerprint
             target/release/build
             !target/release/build/**/out
-            !target/release/incremental
-            !target/release/.cargo-lock
-          key: ${{ runner.os }}-build-workspace-release-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-conflux-release-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-workspace-release-
+            ${{ runner.os }}-conflux-release-${{ env.RUST_VERSION }}-
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
@@ -125,12 +123,9 @@ jobs:
             target/debug/.fingerprint
             target/debug/build
             !target/debug/build/**/out
-            !target/debug/deps/librust_verify*
-            !target/debug/incremental
-            !target/debug/.cargo-lock
-          key: ${{ runner.os }}-build-addr-debug-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cfx-addr-debug-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-addr-debug-
+            ${{ runner.os }}-cfx-addr-debug-${{ env.RUST_VERSION }}-
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
@@ -179,11 +174,9 @@ jobs:
             tools/evm-spec-tester/target/release/.fingerprint
             tools/evm-spec-tester/target/release/build
             !tools/evm-spec-tester/target/release/build/**/out
-            !tools/evm-spec-tester/target/release/incremental
-            !tools/evm-spec-tester/target/release/.cargo-lock
-          key: ${{ runner.os }}-build-evm-spec-tester-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-evm-spec-tester-release-${{ env.RUST_VERSION }}-${{ hashFiles('tools/evm-spec-tester/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-build-evm-spec-tester-
+            ${{ runner.os }}-evm-spec-tester-release-${{ env.RUST_VERSION }}-
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
@@ -199,11 +192,8 @@ jobs:
         working-directory: ./tools/evm-spec-tester
         env:
           RUSTFLAGS: -D warnings
-        run: cargo build --release --locked
+        run: cargo run --release --locked -- statetest ../../testdata/evm-spec-test
 
-      - name: Run EVM spec tests
-        working-directory: ./tools/evm-spec-tester
-        run: cargo run --release -- statetest ../../testdata/evm-spec-test
 
   consensus-bench-test:
     runs-on: ubuntu-24.04
@@ -225,11 +215,9 @@ jobs:
             tools/consensus_bench/target/debug/.fingerprint
             tools/consensus_bench/target/debug/build
             !tools/consensus_bench/target/debug/build/**/out
-            !tools/consensus_bench/target/debug/incremental
-            !tools/consensus_bench/target/debug/.cargo-lock
-          key: ${{ runner.os }}-consensus-bench-test-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-consensus-bench-debug-${{ env.RUST_VERSION }}-${{ hashFiles('tools/consensus_bench/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-consensus-bench-test-
+            ${{ runner.os }}-consensus-bench-debug-${{ env.RUST_VERSION }}-
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
