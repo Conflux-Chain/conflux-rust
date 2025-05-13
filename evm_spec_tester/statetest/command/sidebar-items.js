@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["default_raw_configuration","make_configuration"],"struct":["StateTestCmd"]};
+window.SIDEBAR_ITEMS = {"struct":["StateTestCmd"]};

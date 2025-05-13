@@ -1620,6 +1620,7 @@
 <a href="#1620" id="1620">1620</a>
 <a href="#1621" id="1621">1621</a>
 <a href="#1622" id="1622">1622</a>
+<a href="#1623" id="1623">1623</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2079,7 +2080,8 @@
     }
 }
 
-<span class="kw">pub struct </span>Configuration {
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">pub struct </span>Configuration {
     <span class="kw">pub </span>raw_conf: RawConfiguration,
 }
 
