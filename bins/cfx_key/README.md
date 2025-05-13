@@ -6,33 +6,25 @@ address scheme is different from Ethereum. You cannot directly import Ethereum k
 ### Usage
 
 ```
-Conflux Keys Generator.
-  Copyright 2020 Conflux Foundation
+Conflux Core Space Keys Generator CLI
 
-Usage:
-    cfxkey info <secret-or-phrase> [options]
-    cfxkey generate random [options]
-    cfxkey generate prefix <prefix> [options]
-    cfxkey sign <secret> <message>
-    cfxkey verify public <public> <signature> <message>
-    cfxkey verify address <address> <signature> <message>
-    cfxkey recover <address> <known-phrase>
-    cfxkey [-h | --help]
-
-Options:
-    -h, --help         Display this message and exit.
-    -s, --secret       Display only the secret key.
-    -p, --public       Display only the public key.
-    -a, --address      Display only the address.
-    -b, --brain        Use parity brain wallet algorithm. Not recommended.
+Usage: cfxkey [OPTIONS] <COMMAND>
 
 Commands:
-    info               Display public key and address of the secret.
-    generate random    Generates new random Ethereum key.
-    generate prefix    Random generation, but address must start with a prefix ("vanity address").
-    sign               Sign message using a secret key.
-    verify             Verify signer of the signature by public key or address.
-    recover            Try to find brain phrase matching given address from partial phrase.
+  info      Display public key and address of the secret
+  generate  
+  sign      Sign message using a secret key
+  verify    Verify signer of the signature by public key or address
+  recover   Try to find brain phrase matching given address from partial phrase
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -s, --secret   Display only the secret key
+  -p, --public   Display only the public key
+  -a, --address  Display only the address
+  -b, --brain    Use parity brain wallet algorithm. Not recommended
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
 ### Examples
@@ -49,7 +41,7 @@ cfxkey info 17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55
 ```
 secret:  17d08f5fe8c77af811caa0c9a187e668ce3b74a99acc3f6d976f075fa8e0be55
 public:  689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124
-address: 26d1ec50b4e62c1d1a40d16e7cacc6a6580757d5
+address: 16d1ec50b4e62c1d1a40d16e7cacc6a6580757d5
 ```
 
 --
@@ -61,7 +53,7 @@ address: 26d1ec50b4e62c1d1a40d16e7cacc6a6580757d5
 - `<phrase>` - Parity recovery phrase, 12 words
 
 ```
-cfxkey info --brain "this is sparta"
+cfxkey  --brain info  "this is sparta"
 ```
 
 ```
@@ -93,14 +85,14 @@ address: a8fa5dd30a87bb9e3288d604eb74949c515ab66e
 *Generate new keypair with recovery phrase randomly.*
 
 ```
-cfxkey generate random --brain
+cfxkey --brain generate random
 ```
 
 ```
-recovery phrase: thwarting scandal creamer nuzzle asparagus blast crouch trusting anytime elixir frenzied octagon
-secret:  001ce488d50d2f7579dc190c4655f32918d505cee3de63bddc7101bc91c0c2f0
-public:  4e19a5fdae82596e1485c69b687c9cc52b5078e5b0668ef3ce8543cd90e712cb00df822489bc1f1dcb3623538a54476c7b3def44e1a51dc174e86448b63f42d0
-address: 00cf3711cbd3a1512570639280758118ba0b2bcb
+recovery phrase: enhance ascent acts riveter frugality python prude overpass elusive smilingly unleash aspirin
+secret:  90110fa58d0967f924a23df60150cf39e738643e6115d3400615e3a6ff3d6b43
+public:  6981b523e989eeffa059d76c88211c20580034bfa6a1fd69b5d978197690ac679fee15dc276cbda59ec3acd769ebdf5b3fe4fe3614a851aced3b771cd25692fb
+address: 10bab0da50e5c72939048dfacc700d5902769284
 ```
 
 
@@ -112,13 +104,13 @@ address: 00cf3711cbd3a1512570639280758118ba0b2bcb
 - `<prefix>` - desired address prefix, 0 - 32 bytes long.
 
 ```
-cfxkey generate prefix ff
+cfxkey generate prefix 10ff
 ```
 
 ```
-secret:  2075b1d9c124ea673de7273758ed6de14802a9da8a73ceb74533d7c312ff6acd
-public:  48dbce4508566a05509980a5dd1335599fcdac6f9858ba67018cecb9f09b8c4066dc4c18ae2722112fd4d9ac36d626793fffffb26071dfeb0c2300df994bd173
-address: fff7e25dff2aa60f61f9d98130c8646a01f31649
+secret:  0c566d692da1331ce6be334520aa216c35e40deefd494943e39a6d5ff6be357c
+public:  035eeb11e020c3461f13b4e9e302a710e18cbdf484ca9f503f3cba6c792e02ca8a1405f1bf269010878499614c45e111efc56fb506da181dda95bfd09c32d68a
+address: 10fff9140be305f1e07f64e5343b99f951386267
 ```
 
 --
@@ -129,14 +121,14 @@ address: fff7e25dff2aa60f61f9d98130c8646a01f31649
 - `<prefix>` - desired address prefix, 0 - 32 bytes long.
 
 ```
-cfxkey generate prefix --brain 00cf
+cfxkey --brain  generate prefix 10ff
 ```
 
 ```
-recovery phrase: thwarting scandal creamer nuzzle asparagus blast crouch trusting anytime elixir frenzied octagon
-secret:  001ce488d50d2f7579dc190c4655f32918d505cee3de63bddc7101bc91c0c2f0
-public:  4e19a5fdae82596e1485c69b687c9cc52b5078e5b0668ef3ce8543cd90e712cb00df822489bc1f1dcb3623538a54476c7b3def44e1a51dc174e86448b63f42d0
-address: 00cf3711cbd3a1512570639280758118ba0b2bcb
+recovery phrase: coat elixir gander deferral strut voter postwar huddle tigress scarecrow kabob cuddle
+secret:  e2b820b59fe47738e81db5e1396c4e907e21a83de67fd855abea120673242d66
+public:  61cb56efbd05c66e4b6412dcbc1b577b1df1ca04c3ac00d79f71be4e173faacb937477b1e8dab365bb5ea6b5fb4844a33dd42d8b0531dbdbe2211cca0bb8ebdd
+address: 10ff239b0f55ac54566ac1155f00ccc76aaf2c0b
 ```
 
 --
@@ -182,7 +174,7 @@ true
 - `<message>` - message, 32 bytes long
 
 ```
-cfxkey verify address 689268c0ff57a20cd299fa60d3fb374862aff565b20b5f1767906a99e6e09f3ff04ca2b2a5cd22f62941db103c0356df1a8ed20ce322cab2483db67685afd124 c1878cf60417151c766a712653d26ef350c8c75393458b7a9be715f053215af63dfd3b02c2ae65a8677917a8efa3172acb71cb90196e42106953ea0363c5aaf200 bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987
+cfxkey verify address 131568754ef57c9a7e9e83a3b3d705ece01ab1f8 72b02a550f2fb4c20d6dff069c9fa2a4350081e147c04a2ab2283ab0c896db1f77bf1c366eb60df4bd7d2544d5f0f30606fe477c6c1c8385e48dccfc28e7a6ac00 bd50b7370c3f96733b31744c6c45079e7ae6c8d299613246d28ebcef507ec987
 ```
 
 ```

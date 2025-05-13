@@ -2511,10 +2511,10 @@ dependencies = [
 
 [[package]]
 name = "ctxkey-cli"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "cfxkey",
- "docopt",
+ "clap 4.5.37",
  "env_logger",
  "panic_hook",
  "rustc-hex",
