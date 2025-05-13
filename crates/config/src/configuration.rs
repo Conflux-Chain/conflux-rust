@@ -193,7 +193,7 @@ build_config! {
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
         // V2.5
-        (eoa_code_transition_height, (Option<u64>), None)
+        (eoa_code_transition_height, (Option<u64>), Some(48460000))
         (cip151_transition_height, (Option<u64>), None)
         (cip645_transition_height, (Option<u64>), None)
 

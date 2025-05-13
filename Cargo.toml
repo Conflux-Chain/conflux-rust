@@ -115,7 +115,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "2.4.1-net8888"
+version = "2.6.0-alpha-net8888"
 authors = ["peilun-conflux", "ChenxingLi"]
 description = "A rust implementation of the Conflux-Protocol"
 documentation = "https://doc.confluxnetwork.org"
