@@ -171,12 +171,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            target/release/deps
-            target/release/.fingerprint
-            target/release/build
-            !target/release/build/**/out
-            !target/release/incremental
-            !target/release/.cargo-lock
+            tools/evm-spec-tester/target/release/deps
+            tools/evm-spec-tester/target/release/.fingerprint
+            tools/evm-spec-tester/target/release/build
+            !tools/evm-spec-tester/target/release/build/**/out
+            !tools/evm-spec-tester/target/release/incremental
+            !tools/evm-spec-tester/target/release/.cargo-lock
           key: ${{ runner.os }}-build-evm-spec-tester-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-build-evm-spec-tester-
@@ -217,12 +217,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            target/release/deps
-            target/release/.fingerprint
-            target/release/build
-            !target/release/build/**/out
-            !target/release/incremental
-            !target/release/.cargo-lock
+            tools/consensus_bench/target/debug/deps
+            tools/consensus_bench/target/debug/.fingerprint
+            tools/consensus_bench/target/debug/build
+            !tools/consensus_bench/target/debug/build/**/out
+            !tools/consensus_bench/target/debug/incremental
+            !tools/consensus_bench/target/debug/.cargo-lock
           key: ${{ runner.os }}-consensus-bench-test-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-consensus-bench-test-
@@ -235,5 +235,5 @@ jobs:
         env:
           RUSTFLAGS: -D warnings
         run: |
-          cargo build --release --locked
+          cargo check --locked
           

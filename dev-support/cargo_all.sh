@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # Get the parent directory of the current directory as BASE_PATH
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 BASE_PATH=$(dirname "$SCRIPT_DIR")

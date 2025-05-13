@@ -42,6 +42,30 @@ function check_build {
     inner_result=($exit_code "$result")
 }
 
+function check_build_consensus_bench {
+    local -n inner_result=$1
+
+    #rm -rf $ROOT_DIR/build && mkdir -p $ROOT_DIR/build
+    pushd $ROOT_DIR/tools/consensus_bench > /dev/null
+
+    local result
+
+    result=$(
+        cargo build --release| tee /dev/stderr
+    )
+
+    local exit_code=$?
+
+    popd > /dev/null
+
+    if [[ $exit_code -ne 0 ]]; then
+        result="Build failed."$'\n'"$result"
+    else
+        result="Build succeeded."
+    fi
+    inner_result=($exit_code "$result")
+}
+
 function check_integration_tests {
     local -n inner_result=$1
 
@@ -99,6 +123,7 @@ mkdir -p $ROOT_DIR/build
 
 # Build
 declare -a test_result; check_build test_result; save_test_result test_result $CHECK_BUILD
+declare -a test_result; check_build_consensus_bench test_result; save_test_result test_result $CHECK_BUILD
 # Integration test
 declare -a test_result; check_integration_tests test_result; save_test_result test_result $CHECK_INT_TEST
 # Pytest
