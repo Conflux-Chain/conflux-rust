@@ -29,7 +29,6 @@ rlp = { workspace = true }
 rand_08 = { workspace = true }
 client = { workspace = true }
 cfx-types = { workspace = true }
-docopt = { workspace = true }
 cfxkey = { workspace = true }
 rustc-hex = { workspace = true }
 env_logger = { workspace = true }
