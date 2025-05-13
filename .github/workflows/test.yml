@@ -33,6 +33,10 @@ jobs:
       - name: Setup Cargo Cache
         uses: ./.github/actions/setup-cargo-cache
 
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+
       - name: Cache debug build artifacts
         uses: actions/cache@v4
         with:
