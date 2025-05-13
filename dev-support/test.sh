@@ -12,7 +12,7 @@ TEST_MAX_NODES="${3-24}"
 
 export PYTHONUNBUFFERED=1
 export CARGO_TARGET_DIR=$ROOT_DIR/build
-export CONFLUX_BENCH=$CARGO_TARGET_DIR
+export CONFLUX_BENCH=$CARGO_TARGET_DIR/release/consensus_bench
 export RUSTFLAGS="-g -D warnings"
 
 CHECK_BUILD=1
