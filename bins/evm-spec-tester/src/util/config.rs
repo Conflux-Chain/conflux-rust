@@ -1,41 +1,8 @@
 use cfx_config::{Configuration, RawConfiguration};
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use walkdir::{DirEntry, WalkDir};
+use std::sync::Arc;
 
-pub(crate) fn find_all_json_tests(path: &Path) -> Vec<PathBuf> {
-    if path.is_file() {
-        vec![path.to_path_buf()]
-    } else {
-        WalkDir::new(path)
-            .follow_links(true)
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|e| e.path().extension() == Some("json".as_ref()))
-            .map(DirEntry::into_path)
-            .collect()
-    }
-}
-
-#[allow(unused)]
-pub(crate) fn allowed_test(path: &Path, matches: Option<&str>) -> bool {
-    if matches.is_none() {
-        return true;
-    }
-
-    let name = path.file_name().unwrap().to_str().unwrap();
-
-    if name == matches.unwrap() {
-        return true;
-    }
-
-    false
-}
-
-pub(crate) fn make_configuration(
+pub fn make_configuration(
     config_file: &str,
 ) -> Result<Arc<Configuration>, String> {
     let mut config = Configuration::default();
@@ -62,7 +29,7 @@ pub(crate) fn make_configuration(
     Ok(Arc::new(config))
 }
 
-pub(crate) fn default_raw_configuration() -> RawConfiguration {
+pub fn default_raw_configuration() -> RawConfiguration {
     let mut config = RawConfiguration::default();
     config.mode = Some("dev".to_string());
     config.default_transition_time = Some(1);

@@ -1,4 +1,4 @@
-use crate::{StateMismatch, TestErrorKind};
+use crate::{bail, StateMismatch, TestErrorKind};
 use cfx_executor::{
     executive::{
         execution_outcome::ToRepackError, Executed, ExecutionError,
@@ -11,12 +11,6 @@ use cfxkey::Address;
 use eest_types::{AccountInfo, StateTestUnit};
 use primitives::{transaction::TransactionError, SignedTransaction};
 use std::collections::HashMap;
-
-macro_rules! bail {
-    ($e:expr) => {
-        return Err($e.into())
-    };
-}
 
 #[derive(Clone, Copy)]
 pub enum TestOutcome<'a> {

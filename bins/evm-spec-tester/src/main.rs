@@ -5,6 +5,7 @@ mod blocktest;
 mod cmd;
 mod error;
 mod statetest;
+#[macro_use]
 mod util;
 
 use clap::Parser;

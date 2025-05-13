@@ -1,3 +1,4 @@
+use crate::util::contains_meta_dir;
 use cfx_rpc_eth_types::Bytes;
 use primitives::transaction::eth_transaction::eip155_signature;
 use std::path::Path;
@@ -28,12 +29,6 @@ pub(crate) fn skip_test(path: &Path) -> bool {
         | "loopMul.json"
         | "CALLBlake2f_MaxRounds.json"
     )
-}
-
-/// Check if the path matches `.meta/**`.
-fn contains_meta_dir(path: &Path) -> bool {
-    path.iter()
-        .any(|c| c.to_str().map_or(false, |s| s == ".meta"))
 }
 
 // 1. Check if the input bytes is a rlp list

@@ -4,7 +4,7 @@ mod transaction;
 use crate::{AccountInfo, Config, SpecName};
 pub use block::*;
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{Address, H256};
+use cfx_types::{Address, H256, U256};
 use serde::{de, Deserialize, Deserializer};
 use std::collections::{BTreeMap, HashMap};
 pub use transaction::*;
@@ -36,6 +36,15 @@ pub struct BlockchainTestUnit {
 pub enum TestBlock {
     Block(Block),
     InvalidBlock(InvalidBlock),
+}
+
+impl TestBlock {
+    pub fn get_excess_blog_gas(&self) -> Option<U256> {
+        match self {
+            TestBlock::Block(block) => block.block_header.excess_blob_gas,
+            TestBlock::InvalidBlock(_block) => None,
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for TestBlock {

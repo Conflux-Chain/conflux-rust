@@ -4,7 +4,10 @@ pub mod pre_transact;
 use self::post_transact::is_unsupport_reason;
 
 use super::utils::extract_155_chain_id_from_raw_tx;
-use crate::{TestError, TestErrorKind};
+use crate::{
+    util::{make_state, make_transact_options},
+    TestError, TestErrorKind,
+};
 use cfx_executor::{
     executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
     machine::Machine,
@@ -78,7 +81,7 @@ impl UnitTester {
         &self, test: &StateTest, machine: &Machine,
         verification: &VerificationConfig,
     ) -> Result<(), TestError> {
-        let mut state = pre_transact::make_state(&self.unit.pre);
+        let mut state = make_state(&self.unit.pre);
 
         let Some(tx) = pre_transact::make_tx(
             &self.unit.transaction,
@@ -112,7 +115,7 @@ impl UnitTester {
             .map_err(|kind| self.err(kind));
         }
 
-        let transact_options = pre_transact::make_transact_options(true);
+        let transact_options = make_transact_options(true);
 
         let outcome =
             self.transact(machine, &env, &mut state, &tx, transact_options);

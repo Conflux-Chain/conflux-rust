@@ -1,5 +1,4 @@
 mod unit_tester;
-mod util;
 
 use crate::{
     util::{find_all_json_tests, make_configuration},
@@ -53,7 +52,6 @@ impl BlockchainTestCmd {
                 Err(_) => {
                     success = false;
                     warn!("Failed to run tests in directory: {:?}", path);
-                    continue;
                 }
             }
         }
