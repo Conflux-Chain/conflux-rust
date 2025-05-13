@@ -24,17 +24,17 @@ members = [
     "crates/secret_store",
     "crates/transactiongen",
     "crates/cfxcore/core",
-    "crates/cfxcore/execute-helper",
-    "crates/cfxcore/executor",
+    "crates/execution/execute-helper",
+    "crates/execution/executor",
     "crates/cfxcore/internal_common",
     "crates/cfxcore/packing-pool",
     "crates/parameters",
     "crates/dbs/statedb",
     "crates/dbs/storage",
-    "crates/cfxcore/vm-interpreter",
-    "crates/cfxcore/vm-types",
+    "crates/execution/vm-interpreter",
+    "crates/execution/vm-types",
     "crates/util/cfx_math",
-    "crates/util/cfx-vm-tracer-derive",
+    "crates/execution/cfx-vm-tracer-derive",
     "crates/util/dag",
     "crates/util/delegate",
     "crates/util/heap-map",
@@ -49,13 +49,13 @@ members = [
     "crates/util/priority-send-queue",
     "crates/util/random_crash",
     "crates/util/sha3-macro",
-    "crates/util/solidity-abi",
-    "crates/util/solidity-abi-derive",
+    "crates/execution/solidity-abi",
+    "crates/execution/solidity-abi-derive",
     "crates/util/throttling",
     "crates/util/treap-map",
     "crates/util/version",
     "crates/util/serde_utils",
-    "crates/cfxcore/geth-tracer",
+    "crates/execution/geth-tracer",
     "crates/rpc/rpc-eth-types",
     "crates/rpc/rpc-primitives",
     "crates/rpc/rpc-cfx-types",
@@ -142,7 +142,7 @@ debug-assertions = true
 [workspace.dependencies]
 cfxkey = { path = "./crates/cfx_key" }
 cfx-math = { path = "./crates/util/cfx_math" }
-solidity-abi = { path = "./crates/util/solidity-abi" }
+solidity-abi = { path = "./crates/execution/solidity-abi" }
 random-crash = { path = "./crates/util/random_crash" }
 memory-cache = { path = "./crates/util/memory-cache" }
 priority-send-queue = { path = "./crates/util/priority-send-queue" }
@@ -156,10 +156,10 @@ malloc_size_of_derive = { path = "./crates/util/malloc_size_of_derive" }
 link-cut-tree = { path = "./crates/util/link-cut-tree" }
 sha3-macro = { path = "./crates/util/sha3-macro" }
 dag = { path = "./crates/util/dag" }
-cfx-vm-tracer-derive = { path = "./crates/util/cfx-vm-tracer-derive" }
+cfx-vm-tracer-derive = { path = "./crates/execution/cfx-vm-tracer-derive" }
 parity-version = { path = "./crates/util/version" }
 #log-device = { path = "./crates/util/log_device" }
-solidity-abi-derive = { path = "./crates/util/solidity-abi-derive" }
+solidity-abi-derive = { path = "./crates/execution/solidity-abi-derive" }
 io = { path = "./crates/util/io" }
 metrics = { path = "./crates/util/metrics" }
 cfx-bytes = { path = "./crates/cfx_bytes" }
@@ -182,12 +182,12 @@ cfxstore = { path = "./crates/cfx_store" }
 network = { path = "./crates/network" }
 cfxcore = { path = "./crates/cfxcore/core" }
 cfx-parameters = { path = "./crates/parameters" }
-cfx-execute-helper = { path = "./crates/cfxcore/execute-helper" }
-cfx-executor = { path = "./crates/cfxcore/executor" }
+cfx-execute-helper = { path = "./crates/execution/execute-helper" }
+cfx-executor = { path = "./crates/execution/executor" }
 cfx-packing-pool = { path = "./crates/cfxcore/packing-pool" }
-cfx-vm-interpreter = { path = "./crates/cfxcore/vm-interpreter" }
-geth-tracer = { path = "./crates/cfxcore/geth-tracer" }
-cfx-vm-types = { path = "./crates/cfxcore/vm-types" }
+cfx-vm-interpreter = { path = "./crates/execution/vm-interpreter" }
+geth-tracer = { path = "./crates/execution/geth-tracer" }
+cfx-vm-types = { path = "./crates/execution/vm-types" }
 cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
 cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
 cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
