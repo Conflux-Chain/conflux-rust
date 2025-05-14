@@ -380,27 +380,19 @@
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-</span><span class="kw">use </span>std::{
-    env, fmt,
-    fs::File,
-    io::{<span class="self">self</span>, Read, Write},
-    num::ParseIntError,
-    path::PathBuf,
-    process,
-    result::Result,
-};
-
-<span class="kw">use </span>docopt::Docopt;
-<span class="kw">use </span>log::<span class="kw-2">*</span>;
-<span class="kw">use </span>rand_08::{rngs::StdRng, SeedableRng};
-<span class="kw">use </span>rustc_hex::FromHexError;
-<span class="kw">use </span>serde::Deserialize;
-<span class="kw">use </span>tempfile::Builder;
-
-<span class="kw">use </span>cfx_types::H256;
+</span><span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>cfxcore::{
     consensus::pos_handler::save_initial_nodes_to_file,
     genesis_block::{
@@ -408,6 +400,7 @@
     },
 };
 <span class="kw">use </span>cfxkey::{Error <span class="kw">as </span>EthkeyError, Generator, KeyPair, Random};
+<span class="kw">use </span>clap4;
 <span class="kw">use </span>diem_crypto::{
     key_file::save_pri_key, HashValue, Uniform, ValidCryptoMaterialStringExt,
 };
@@ -430,46 +423,26 @@
 };
 <span class="kw">use </span>executor::{db_bootstrapper::generate_waypoint, vm::PosVM};
 <span class="kw">use </span>pos_ledger_db::PosLedgerDB;
+<span class="kw">use </span>rand_08::{rngs::StdRng, SeedableRng};
+<span class="kw">use </span>rustc_hex::FromHexError;
 <span class="kw">use </span>std::{
     collections::{BTreeMap, BinaryHeap, HashMap},
-    path::Path,
+    fmt,
+    fs::File,
+    io::{<span class="self">self</span>, Read, Write},
+    num::ParseIntError,
+    path::{Path, PathBuf},
+    process,
+    result::Result,
 };
 <span class="kw">use </span>storage_interface::DbReaderWriter;
-
-<span class="kw">const </span>USAGE: <span class="kw-2">&amp;</span>str = <span class="string">r#"
-Usage:
-    tgconfig random --initial-seed &lt;seed&gt; [--num-validator=&lt;nv&gt; --num-genesis-validator=&lt;ng&gt; --chain-id=&lt;id&gt;]
-    tgconfig frompub --initial-seed &lt;seed&gt; &lt;pkfile&gt;
-
-Options:
-    -h, --help              Display this message and exit.
-    --num-validator=&lt;nv&gt;    The number of validators.
-    --num-genesis-validator=&lt;ng&gt;    The number of validators included in the genesis.
-    --chain-id=&lt;id&gt;         The chain id of the PoW chain.
-    --initial-seed=&lt;seed&gt;   The 32-byte hex string of the initial seed hash.
-
-Commands:
-    random                  Generate random key pairs for validators.
-    frompub                 Generate config file from pubkey file.
-"#</span>;
-
-<span class="attr">#[derive(Debug, Deserialize)]
-</span><span class="kw">struct </span>Args {
-    cmd_random: bool,
-    cmd_frompub: bool,
-    arg_pkfile: String,
-    flag_num_validator: usize,
-    flag_num_genesis_validator: usize,
-    flag_chain_id: u32,
-    flag_initial_seed: String,
-}
+<span class="kw">use </span>tempfile::Builder;
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">enum </span>Error {
     Ethkey(EthkeyError),
     FromHex(FromHexError),
     ParseInt(ParseIntError),
-    Docopt(docopt::Error),
     Io(io::Error),
     Fmt(fmt::Error),
 }
@@ -486,10 +459,6 @@ Commands:
     <span class="kw">fn </span>from(err: ParseIntError) -&gt; <span class="self">Self </span>{ Error::ParseInt(err) }
 }
 
-<span class="kw">impl </span>From&lt;docopt::Error&gt; <span class="kw">for </span>Error {
-    <span class="kw">fn </span>from(err: docopt::Error) -&gt; <span class="self">Self </span>{ Error::Docopt(err) }
-}
-
 <span class="kw">impl </span>From&lt;io::Error&gt; <span class="kw">for </span>Error {
     <span class="kw">fn </span>from(err: io::Error) -&gt; <span class="self">Self </span>{ Error::Io(err) }
 }
@@ -504,7 +473,6 @@ Commands:
             Error::Ethkey(<span class="kw-2">ref </span>e) =&gt; <span class="macro">write!</span>(f, <span class="string">"{}"</span>, e),
             Error::FromHex(<span class="kw-2">ref </span>e) =&gt; <span class="macro">write!</span>(f, <span class="string">"{}"</span>, e),
             Error::ParseInt(<span class="kw-2">ref </span>e) =&gt; <span class="macro">write!</span>(f, <span class="string">"{}"</span>, e),
-            Error::Docopt(<span class="kw-2">ref </span>e) =&gt; <span class="macro">write!</span>(f, <span class="string">"{}"</span>, e),
             Error::Io(<span class="kw-2">ref </span>e) =&gt; <span class="macro">write!</span>(f, <span class="string">"{}"</span>, e),
             Error::Fmt(<span class="kw-2">ref </span>e) =&gt; <span class="macro">write!</span>(f, <span class="string">"{}"</span>, e),
         }
@@ -515,9 +483,45 @@ Commands:
     env_logger::try_init().expect(<span class="string">"Logger initialized only once."</span>);
     POS_STATE_CONFIG.set(Default::default()).unwrap();
 
-    <span class="kw">match </span>execute(env::args()) {
+    <span class="kw">let </span>cli = clap4::Command::new(<span class="string">"pos-genesis-tool"</span>)
+        .subcommand_required(<span class="bool-val">true</span>)
+        .subcommands([
+            clap4::Command::new(<span class="string">"random"</span>)
+                .arg(
+                    clap4::Arg::new(<span class="string">"initial-seed"</span>)
+                        .long(<span class="string">"initial-seed"</span>)
+                        .required(<span class="bool-val">true</span>),
+                )
+                .arg(
+                    clap4::Arg::new(<span class="string">"num-validator"</span>)
+                        .long(<span class="string">"num-validator"</span>)
+                        .value_parser(<span class="macro">clap4::value_parser!</span>(usize)),
+                )
+                .arg(
+                    clap4::Arg::new(<span class="string">"num-genesis-validator"</span>)
+                        .long(<span class="string">"num-genesis-validator"</span>)
+                        .value_parser(<span class="macro">clap4::value_parser!</span>(usize)),
+                )
+                .arg(
+                    clap4::Arg::new(<span class="string">"chain-id"</span>)
+                        .long(<span class="string">"chain-id"</span>)
+                        .value_parser(<span class="macro">clap4::value_parser!</span>(u32)),
+                ),
+            clap4::Command::new(<span class="string">"frompub"</span>)
+                .arg(
+                    clap4::Arg::new(<span class="string">"initial-seed"</span>)
+                        .long(<span class="string">"initial-seed"</span>)
+                        .required(<span class="bool-val">true</span>),
+                )
+                .arg(
+                    clap4::Arg::new(<span class="string">"pkfile"</span>)
+                        .value_parser(<span class="macro">clap4::value_parser!</span>(PathBuf))
+                        .required(<span class="bool-val">true</span>),
+                ),
+        ]);
+
+    <span class="kw">match </span>execute(cli) {
         <span class="prelude-val">Ok</span>(ok) =&gt; <span class="macro">println!</span>(<span class="string">"{}"</span>, ok),
-        <span class="prelude-val">Err</span>(Error::Docopt(<span class="kw-2">ref </span>e)) =&gt; e.exit(),
         <span class="prelude-val">Err</span>(err) =&gt; {
             <span class="macro">eprintln!</span>(<span class="string">"{}"</span>, err);
             process::exit(<span class="number">1</span>);
@@ -611,155 +615,169 @@ Commands:
     elected
 }
 
-<span class="kw">fn </span>execute&lt;S, I&gt;(command: I) -&gt; <span class="prelude-ty">Result</span>&lt;String, Error&gt;
-<span class="kw">where
-    </span>I: IntoIterator&lt;Item = S&gt;,
-    S: AsRef&lt;str&gt;,
-{
-    <span class="kw">let </span>args: Args =
-        Docopt::new(USAGE).and_then(|d| d.argv(command).deserialize())<span class="question-mark">?</span>;
+<span class="kw">fn </span>execute(command: clap4::Command) -&gt; <span class="prelude-ty">Result</span>&lt;String, Error&gt; {
+    <span class="kw">let </span>matches = command.get_matches();
+    <span class="kw">return match </span>matches.subcommand() {
+        <span class="prelude-val">Some</span>((<span class="string">"random"</span>, sub_matches)) =&gt; {
+            <span class="kw">let </span>initial_seed: H256 = sub_matches
+                .get_one::&lt;String&gt;(<span class="string">"initial-seed"</span>)
+                .expect(<span class="string">"initial-seed is required"</span>)
+                .clone()
+                .parse()
+                .expect(<span class="string">"invalid initial seed"</span>);
+            <span class="kw">let </span>num_validator = sub_matches
+                .get_one::&lt;usize&gt;(<span class="string">"num-validator"</span>)
+                .unwrap_or(<span class="kw-2">&amp;</span><span class="number">1</span>)
+                .clone();
+            <span class="kw">let </span>num_genesis_validator = sub_matches
+                .get_one::&lt;usize&gt;(<span class="string">"num-genesis-validator"</span>)
+                .unwrap_or(<span class="kw-2">&amp;</span><span class="number">1</span>)
+                .clone();
+            <span class="kw">let </span>chain_id =
+                sub_matches.get_one::&lt;u32&gt;(<span class="string">"chain-id"</span>).unwrap_or(<span class="kw-2">&amp;</span><span class="number">0</span>).clone();
 
-    <span class="macro">info!</span>(<span class="string">"args {:?}"</span>, args);
-    <span class="kw">let </span>initial_seed: H256 = args
-        .flag_initial_seed
-        .parse()
-        .expect(<span class="string">"invalid initial seed"</span>);
+            <span class="kw">if </span>num_genesis_validator &gt; num_validator {
+                <span class="macro">panic!</span>(<span class="string">"The number of genesis validators cannot be more than the total number of \
+            validators: {} &gt; {}"</span>, num_genesis_validator, num_validator);
+            }
 
-    <span class="kw">if </span>args.cmd_random {
-        <span class="kw">let </span>num_validator = <span class="kw">if </span>args.flag_num_validator == <span class="number">0 </span>{
-            <span class="number">1
-        </span>} <span class="kw">else </span>{
-            args.flag_num_validator
-        };
+            <span class="kw">let </span>private_key_dir = PathBuf::from(<span class="string">"./private_keys"</span>);
+            std::fs::create_dir(<span class="kw-2">&amp;</span>private_key_dir)<span class="question-mark">?</span>;
+            <span class="kw">let </span>public_key_path = PathBuf::from(<span class="string">"./public_key"</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>public_key_file = File::create(<span class="kw-2">&amp;</span>public_key_path)<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>rng = StdRng::from_seed([<span class="number">0u8</span>; <span class="number">32</span>]);
+            <span class="kw">let </span><span class="kw-2">mut </span>genesis_nodes = Vec::new();
 
-        <span class="kw">let </span>num_genesis_validator = <span class="kw">if </span>args.flag_num_genesis_validator == <span class="number">0 </span>{
-            num_validator
-        } <span class="kw">else if </span>args.flag_num_genesis_validator &gt; num_validator {
-            <span class="macro">panic!</span>(<span class="string">"The number of genesis validators cannot be more than the total number of \
-            validators: {} &gt; {}"</span>, args.flag_num_genesis_validator, num_validator);
-        } <span class="kw">else </span>{
-            args.flag_num_genesis_validator
-        };
+            <span class="kw">let </span>voting_power = <span class="number">2_000</span>;
+            <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..num_validator {
+                <span class="kw">let </span>pow_keypair: KeyPair = Random.generate().unwrap();
+                <span class="kw">let </span>private_key = ConsensusPrivateKey::generate(<span class="kw-2">&amp;mut </span>rng);
+                <span class="kw">let </span>vrf_private_key =
+                    ConsensusVRFPrivateKey::generate(<span class="kw-2">&amp;mut </span>rng);
+                save_pri_key(
+                    private_key_dir.join(PathBuf::from(i.to_string())),
+                    <span class="kw-2">&amp;</span>[],
+                    <span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>private_key, <span class="kw-2">&amp;</span>vrf_private_key),
+                )
+                .expect(<span class="string">"Error saving private keys"</span>);
+                File::create(
+                    private_key_dir.join(Path::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"pow_sk{}"</span>, i))),
+                )<span class="question-mark">?
+                </span>.write_all(pow_keypair.secret().as_bytes())<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>chain_id = args.flag_chain_id;
-
-        <span class="kw">let </span>private_key_dir = PathBuf::from(<span class="string">"./private_keys"</span>);
-        std::fs::create_dir(<span class="kw-2">&amp;</span>private_key_dir)<span class="question-mark">?</span>;
-        <span class="kw">let </span>public_key_path = PathBuf::from(<span class="string">"./public_key"</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>public_key_file = File::create(<span class="kw-2">&amp;</span>public_key_path)<span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = StdRng::from_seed([<span class="number">0u8</span>; <span class="number">32</span>]);
-        <span class="kw">let </span><span class="kw-2">mut </span>genesis_nodes = Vec::new();
-
-        <span class="kw">let </span>voting_power = <span class="number">2_000</span>;
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..num_validator {
-            <span class="kw">let </span>pow_keypair: KeyPair = Random.generate().unwrap();
-            <span class="kw">let </span>private_key = ConsensusPrivateKey::generate(<span class="kw-2">&amp;mut </span>rng);
-            <span class="kw">let </span>vrf_private_key = ConsensusVRFPrivateKey::generate(<span class="kw-2">&amp;mut </span>rng);
-            save_pri_key(
-                private_key_dir.join(PathBuf::from(i.to_string())),
-                <span class="kw-2">&amp;</span>[],
-                <span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>private_key, <span class="kw-2">&amp;</span>vrf_private_key),
-            )
-            .expect(<span class="string">"Error saving private keys"</span>);
-            File::create(
-                private_key_dir.join(Path::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"pow_sk{}"</span>, i))),
-            )<span class="question-mark">?
-            </span>.write_all(pow_keypair.secret().as_bytes())<span class="question-mark">?</span>;
-
-            <span class="kw">let </span>public_key = ConsensusPublicKey::from(<span class="kw-2">&amp;</span>private_key);
-            <span class="kw">let </span>vrf_public_key = ConsensusVRFPublicKey::from(<span class="kw-2">&amp;</span>vrf_private_key);
-            <span class="kw">let </span>register_tx = register_transaction(
-                private_key,
-                vrf_public_key.clone(),
-                voting_power,
-                chain_id,
-                <span class="bool-val">false</span>,
+                <span class="kw">let </span>public_key = ConsensusPublicKey::from(<span class="kw-2">&amp;</span>private_key);
+                <span class="kw">let </span>vrf_public_key =
+                    ConsensusVRFPublicKey::from(<span class="kw-2">&amp;</span>vrf_private_key);
+                <span class="kw">let </span>register_tx = register_transaction(
+                    private_key,
+                    vrf_public_key.clone(),
+                    voting_power,
+                    chain_id,
+                    <span class="bool-val">false</span>,
+                );
+                <span class="kw">let </span>public_key_str = public_key.to_encoded_string().unwrap();
+                <span class="kw">let </span>vrf_public_key_str =
+                    vrf_public_key.to_encoded_string().unwrap();
+                <span class="kw">let </span>public_key_str = <span class="macro">format!</span>(
+                    <span class="string">"{},{},{}\n"</span>,
+                    public_key_str, vrf_public_key_str, voting_power
+                );
+                public_key_file.write_all(public_key_str.as_bytes())<span class="question-mark">?</span>;
+                genesis_nodes.push(GenesisPosNodeInfo {
+                    address: pow_keypair.address(),
+                    bls_key: public_key,
+                    vrf_key: vrf_public_key,
+                    voting_power,
+                    register_tx,
+                });
+            }
+            <span class="kw">let </span>initial_nodes = genesis_nodes[..num_genesis_validator].to_vec();
+            <span class="kw">let </span>initial_committee = elect_genesis_committee(
+                <span class="kw-2">&amp;</span>initial_nodes,
+                initial_seed.as_bytes(),
             );
-            <span class="kw">let </span>public_key_str = public_key.to_encoded_string().unwrap();
-            <span class="kw">let </span>vrf_public_key_str =
-                vrf_public_key.to_encoded_string().unwrap();
-            <span class="kw">let </span>public_key_str = <span class="macro">format!</span>(
-                <span class="string">"{},{},{}\n"</span>,
-                public_key_str, vrf_public_key_str, voting_power
+            save_initial_nodes_to_file(
+                <span class="string">"./initial_nodes.json"</span>,
+                GenesisPosState {
+                    initial_nodes,
+                    initial_committee: initial_committee
+                        .iter()
+                        .map(|(node_id, voting_power)| {
+                            (node_id.addr, <span class="kw-2">*</span>voting_power)
+                        })
+                        .collect(),
+                    initial_seed,
+                },
             );
-            public_key_file.write_all(public_key_str.as_bytes())<span class="question-mark">?</span>;
-            genesis_nodes.push(GenesisPosNodeInfo {
-                address: pow_keypair.address(),
-                bls_key: public_key,
-                vrf_key: vrf_public_key,
-                voting_power,
-                register_tx,
-            });
+            generate_genesis_from_public_keys(initial_committee);
+            <span class="prelude-val">Ok</span>(<span class="string">"Ok"</span>.into())
         }
-        <span class="kw">let </span>initial_nodes = genesis_nodes[..num_genesis_validator].to_vec();
-        <span class="kw">let </span>initial_committee =
-            elect_genesis_committee(<span class="kw-2">&amp;</span>initial_nodes, initial_seed.as_bytes());
-        save_initial_nodes_to_file(
-            <span class="string">"./initial_nodes.json"</span>,
-            GenesisPosState {
-                initial_nodes,
-                initial_committee: initial_committee
-                    .iter()
-                    .map(|(node_id, voting_power)| {
-                        (node_id.addr, <span class="kw-2">*</span>voting_power)
-                    })
-                    .collect(),
-                initial_seed,
-            },
-        );
-        generate_genesis_from_public_keys(initial_committee);
-        <span class="prelude-val">Ok</span>(<span class="string">"Ok"</span>.into())
-    } <span class="kw">else if </span>args.cmd_frompub {
-        <span class="kw">let </span>public_key_path = PathBuf::from(args.arg_pkfile.as_str());
-        <span class="kw">let </span><span class="kw-2">mut </span>public_key_file = File::open(<span class="kw-2">&amp;</span>public_key_path)<span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>contents = String::new();
-        public_key_file.read_to_string(<span class="kw-2">&amp;mut </span>contents)<span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>lines = contents.as_str().lines();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>public_keys = Vec::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>genesis_nodes = Vec::new();
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(key_str) = lines.next() {
-            <span class="kw">let </span>key_array: Vec&lt;<span class="kw">_</span>&gt; = key_str.split(<span class="string">","</span>).collect();
-            <span class="kw">let </span>public_key =
-                ConsensusPublicKey::from_encoded_string(key_array[<span class="number">0</span>]).unwrap();
-            <span class="kw">let </span>vrf_public_key =
-                ConsensusVRFPublicKey::from_encoded_string(key_array[<span class="number">1</span>])
-                    .unwrap();
-            <span class="kw">let </span>voting_power: u64 = key_array[<span class="number">2</span>].parse().unwrap();
-            public_keys.push((
-                public_key.clone(),
-                vrf_public_key.clone(),
-                voting_power,
-            ));
-            genesis_nodes.push(GenesisPosNodeInfo {
-                <span class="comment">// Not used in PoS genesis.
-                </span>address: Default::default(),
-                bls_key: public_key,
-                vrf_key: vrf_public_key,
-                voting_power,
-                <span class="comment">// Not used in PoS genesis.
-                </span>register_tx: Default::default(),
-            });
+        <span class="prelude-val">Some</span>((<span class="string">"frompub"</span>, sub_matches)) =&gt; {
+            <span class="kw">let </span>initial_seed: H256 = sub_matches
+                .get_one::&lt;String&gt;(<span class="string">"initial-seed"</span>)
+                .expect(<span class="string">"initial-seed is required"</span>)
+                .clone()
+                .parse()
+                .expect(<span class="string">"invalid initial seed"</span>);
+            <span class="kw">let </span>public_key_path = sub_matches
+                .get_one::&lt;PathBuf&gt;(<span class="string">"pkfile"</span>)
+                .expect(<span class="string">"pkfile is required"</span>)
+                .clone();
+
+            <span class="kw">let </span><span class="kw-2">mut </span>public_key_file = File::open(<span class="kw-2">&amp;</span>public_key_path)<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>contents = String::new();
+            public_key_file.read_to_string(<span class="kw-2">&amp;mut </span>contents)<span class="question-mark">?</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>lines = contents.as_str().lines();
+
+            <span class="kw">let </span><span class="kw-2">mut </span>public_keys = Vec::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>genesis_nodes = Vec::new();
+            <span class="kw">while let </span><span class="prelude-val">Some</span>(key_str) = lines.next() {
+                <span class="kw">let </span>key_array: Vec&lt;<span class="kw">_</span>&gt; = key_str.split(<span class="string">","</span>).collect();
+                <span class="kw">let </span>public_key =
+                    ConsensusPublicKey::from_encoded_string(key_array[<span class="number">0</span>])
+                        .unwrap();
+                <span class="kw">let </span>vrf_public_key =
+                    ConsensusVRFPublicKey::from_encoded_string(key_array[<span class="number">1</span>])
+                        .unwrap();
+                <span class="kw">let </span>voting_power: u64 = key_array[<span class="number">2</span>].parse().unwrap();
+                public_keys.push((
+                    public_key.clone(),
+                    vrf_public_key.clone(),
+                    voting_power,
+                ));
+                genesis_nodes.push(GenesisPosNodeInfo {
+                    <span class="comment">// Not used in PoS genesis.
+                    </span>address: Default::default(),
+                    bls_key: public_key,
+                    vrf_key: vrf_public_key,
+                    voting_power,
+                    <span class="comment">// Not used in PoS genesis.
+                    </span>register_tx: Default::default(),
+                });
+            }
+            <span class="kw">let </span>initial_committee = elect_genesis_committee(
+                <span class="kw-2">&amp;</span>genesis_nodes,
+                initial_seed.as_bytes(),
+            );
+            save_initial_nodes_to_file(
+                <span class="string">"./initial_nodes.json"</span>,
+                GenesisPosState {
+                    initial_nodes: genesis_nodes,
+                    initial_committee: initial_committee
+                        .iter()
+                        .map(|(node_id, voting_power)| {
+                            (node_id.addr, <span class="kw-2">*</span>voting_power)
+                        })
+                        .collect(),
+                    initial_seed,
+                },
+            );
+            generate_genesis_from_public_keys(initial_committee);
+            <span class="prelude-val">Ok</span>(<span class="string">"Ok"</span>.into())
         }
-        <span class="kw">let </span>initial_committee =
-            elect_genesis_committee(<span class="kw-2">&amp;</span>genesis_nodes, initial_seed.as_bytes());
-        save_initial_nodes_to_file(
-            <span class="string">"./initial_nodes.json"</span>,
-            GenesisPosState {
-                initial_nodes: genesis_nodes,
-                initial_committee: initial_committee
-                    .iter()
-                    .map(|(node_id, voting_power)| {
-                        (node_id.addr, <span class="kw-2">*</span>voting_power)
-                    })
-                    .collect(),
-                initial_seed,
-            },
-        );
-        generate_genesis_from_public_keys(initial_committee);
-        <span class="prelude-val">Ok</span>(<span class="string">"Ok"</span>.into())
-    } <span class="kw">else </span>{
-        <span class="prelude-val">Ok</span>(USAGE.to_string())
-    }
+
+        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"clap should ensure we don't get here"</span>),
+    };
 }
 </code></pre></div></section></main></body></html>

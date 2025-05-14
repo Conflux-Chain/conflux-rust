@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["USAGE"],"enum":["Error"],"fn":["elect_genesis_committee","execute","execute_genesis_transaction","generate_genesis_from_public_keys","main"],"struct":["Args"]};
+window.SIDEBAR_ITEMS = {"enum":["Error"],"fn":["elect_genesis_committee","execute","execute_genesis_transaction","generate_genesis_from_public_keys","main"]};
