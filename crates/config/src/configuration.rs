@@ -471,15 +471,15 @@ impl Default for Configuration {
 }
 
 impl Configuration {
-    pub fn parse(matches: &clap::ArgMatches) -> Result<Configuration, String> {
+    pub fn parse(matches: &clap4::ArgMatches) -> Result<Configuration, String> {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
 
-        if matches.is_present("archive") {
+        if matches.get_flag("archive") {
             config.raw_conf.node_type = Some(NodeType::Archive);
-        } else if matches.is_present("full") {
+        } else if matches.get_flag("full") {
             config.raw_conf.node_type = Some(NodeType::Full);
-        } else if matches.is_present("light") {
+        } else if matches.get_flag("light") {
             config.raw_conf.node_type = Some(NodeType::Light);
         }
 
@@ -488,6 +488,12 @@ impl Configuration {
             .expect("called once");
 
         Ok(config)
+    }
+
+    pub fn from_file(config_path: &str) -> Result<Configuration, String> {
+        Ok(Configuration {
+            raw_conf: RawConfiguration::from_file(config_path)?,
+        })
     }
 
     fn network_id(&self) -> u64 {
@@ -1253,7 +1259,9 @@ impl Configuration {
         }
     }
 
-    pub fn is_consortium(&self) -> bool { self.raw_conf.is_consortium }
+    pub fn is_consortium(&self) -> bool {
+        self.raw_conf.is_consortium
+    }
 
     pub fn light_node_config(&self) -> LightNodeConfiguration {
         LightNodeConfiguration {
@@ -1398,14 +1406,14 @@ impl Configuration {
             self.raw_conf.hydra_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip76, cip86 }
         );
-        params.transition_numbers.cip43b =
-            self.raw_conf.cip43_init_end_number.unwrap_or(
-                if self.is_test_or_dev_mode() {
-                    u64::MAX
-                } else {
-                    params.transition_numbers.cip43a
-                },
-            );
+        params.transition_numbers.cip43b = self
+            .raw_conf
+            .cip43_init_end_number
+            .unwrap_or(if self.is_test_or_dev_mode() {
+                u64::MAX
+            } else {
+                params.transition_numbers.cip43a
+            });
         params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
             0u64
         } else {
@@ -1582,8 +1590,9 @@ pub fn parse_config_address_string(
 #[cfg(test)]
 mod tests {
     use cfx_addr::Network;
+    use cfxcore::NodeType;
 
-    use crate::configuration::parse_config_address_string;
+    use crate::{configuration::parse_config_address_string, Configuration};
 
     #[test]
     fn test_config_address_string() {

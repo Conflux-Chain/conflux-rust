@@ -1182,7 +1182,7 @@ dependencies = [
  "cfx-storage",
  "cfx-types",
  "cfxcore",
- "clap 2.34.0",
+ "clap 4.5.37",
  "db",
  "diem-types",
  "jsonrpc-http-server",
