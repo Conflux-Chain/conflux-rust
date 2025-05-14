@@ -96,27 +96,32 @@ fn main() {
         .subcommand_required(true)
         .subcommands([
             clap4::Command::new("random")
-                .arg(clap4::Arg::new("initial-seed").required(true))
+                .arg(
+                    clap4::Arg::new("initial-seed")
+                        .long("initial-seed")
+                        .required(true),
+                )
                 .arg(
                     clap4::Arg::new("num-validator")
-                        .short('n')
                         .long("num-validator")
                         .value_parser(clap4::value_parser!(usize)),
                 )
                 .arg(
                     clap4::Arg::new("num-genesis-validator")
-                        .short('g')
                         .long("num-genesis-validator")
                         .value_parser(clap4::value_parser!(usize)),
                 )
                 .arg(
                     clap4::Arg::new("chain-id")
-                        .short('c')
                         .long("chain-id")
                         .value_parser(clap4::value_parser!(u32)),
                 ),
             clap4::Command::new("frompub")
-                .arg(clap4::Arg::new("initial-seed").required(true))
+                .arg(
+                    clap4::Arg::new("initial-seed")
+                        .long("initial-seed")
+                        .required(true),
+                )
                 .arg(
                     clap4::Arg::new("pkfile")
                         .value_parser(clap4::value_parser!(PathBuf))
