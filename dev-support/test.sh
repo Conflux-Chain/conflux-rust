@@ -12,6 +12,7 @@ TEST_MAX_NODES="${3-24}"
 
 export PYTHONUNBUFFERED=1
 export CARGO_TARGET_DIR=$ROOT_DIR/build
+export CONFLUX_BENCH=$CARGO_TARGET_DIR/release/consensus_bench
 export RUSTFLAGS="-g -D warnings"
 
 CHECK_BUILD=1
@@ -23,6 +24,30 @@ function check_build {
 
     #rm -rf $ROOT_DIR/build && mkdir -p $ROOT_DIR/build
     pushd $ROOT_DIR > /dev/null
+
+    local result
+
+    result=$(
+        cargo build --release| tee /dev/stderr
+    )
+
+    local exit_code=$?
+
+    popd > /dev/null
+
+    if [[ $exit_code -ne 0 ]]; then
+        result="Build failed."$'\n'"$result"
+    else
+        result="Build succeeded."
+    fi
+    inner_result=($exit_code "$result")
+}
+
+function check_build_consensus_bench {
+    local -n inner_result=$1
+
+    #rm -rf $ROOT_DIR/build && mkdir -p $ROOT_DIR/build
+    pushd $ROOT_DIR/tools/consensus_bench > /dev/null
 
     local result
 
@@ -99,6 +124,7 @@ mkdir -p $ROOT_DIR/build
 
 # Build
 declare -a test_result; check_build test_result; save_test_result test_result $CHECK_BUILD
+declare -a test_result; check_build_consensus_bench test_result; save_test_result test_result $CHECK_BUILD
 # Integration test
 declare -a test_result; check_integration_tests test_result; save_test_result test_result $CHECK_INT_TEST
 # Pytest

@@ -19,14 +19,13 @@ use log4rs::{
     append::console::ConsoleAppender,
     config::{Appender, Config, Root},
 };
-use move_core_types::value;
 use primitives::{
     Account, MerkleHash, StateRoot, StorageKey, StorageKeyWithSpace,
     MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::{
-    cmp::min, collections::HashMap, fmt::Debug, fs::remove_dir_all,
-    path::PathBuf, str::FromStr, sync::Arc, time::Instant,
+    cmp::min, collections::HashMap, fs::remove_dir_all, path::PathBuf,
+    str::FromStr, sync::Arc, time::Instant,
 };
 
 // cargo run --release -p cfxcore --example snapshot_merge_test

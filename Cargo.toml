@@ -1,12 +1,11 @@
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
+exclude = ["tools"]
 members = [
     # bins
     "bins/cfx_store",
     "bins/cfx_key",
     "bins/conflux",
-    "bins/evm-spec-tester",
-    "bins/consensus_bench",
     # libs
     "crates/cfx_bytes",
     "crates/cfx_types",
@@ -335,7 +334,6 @@ hashbrown = "0.7.1"
 # cli arg parsing
 clap = "2" # outdated, need to migrate to clap 4
 clap4 = { version = "4", package = "clap" }
-docopt = "1.0"
 clap-verbosity-flag = "3"
 
 # rand & rng
