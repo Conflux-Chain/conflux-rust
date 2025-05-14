@@ -14,6 +14,9 @@ debug_invalid_state_root=true
 
 node_type = "archive"
 
+pivot_hint_path="mainnet-107000000-bd0b857b.cphb"
+pivot_hint_checksum="bd0b857b6a78dbe5df45c61868df13675c27116721246b96f48ecb835d0915da"
+
 # Some preset develepment configurations.
 # It should not be set in production environment.
 #
