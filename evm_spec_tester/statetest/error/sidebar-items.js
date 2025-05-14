@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["StateMismatch","TestErrorKind"],"struct":["TestError"]};
