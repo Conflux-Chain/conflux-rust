@@ -52,7 +52,7 @@ jobs:
 
       - name: Check format and run clippy
         run: |
-          ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings
+          ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && ./dev-support/cargo_all.sh clippy --release --all -- -A warnings
           
   cargo-deny:
     runs-on: ubuntu-24.04
@@ -62,4 +62,4 @@ jobs:
       - name: cargo-deny
         run: |
           cargo install --locked cargo-deny --version 0.15.1
-          cargo deny check
+          ./dev-support/cargo_all.sh deny check
