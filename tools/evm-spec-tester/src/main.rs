@@ -5,6 +5,8 @@ mod blocktest;
 mod cmd;
 mod error;
 mod statetest;
+mod suite_tester;
+mod test_cmd_runner;
 #[macro_use]
 mod util;
 

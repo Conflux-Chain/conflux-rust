@@ -1,6 +1,11 @@
-use crate::{blocktest::BlockchainTestCmd, statetest::command::StateTestCmd};
+use crate::{
+    blocktest::{BlockchainTestCmd, BlockchainUnitTester},
+    statetest::{StateTestCmd, StateUnitTester},
+    test_cmd_runner::EestTestCmdRunner,
+};
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
+use eest_types::{BlockchainTestUnit, StateTestUnit};
 
 /// A command line tool for running Ethereum spec tests
 #[derive(Parser, Debug)]
@@ -29,8 +34,16 @@ pub enum Commands {
 impl MainCmd {
     pub fn run(self) -> bool {
         match self.command {
-            Commands::Statetest(cmd) => cmd.run(),
-            Commands::Blocktest(cmd) => cmd.run(),
+            Commands::Statetest(cmd) => EestTestCmdRunner::<
+                StateTestUnit,
+                StateUnitTester,
+                StateTestCmd,
+            >::run(cmd),
+            Commands::Blocktest(cmd) => EestTestCmdRunner::<
+                BlockchainTestUnit,
+                BlockchainUnitTester,
+                BlockchainTestCmd,
+            >::run(cmd),
         }
     }
 }

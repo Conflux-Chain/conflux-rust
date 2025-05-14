@@ -2759,6 +2759,7 @@ dependencies = [
  "log",
  "primitives",
  "rlp 0.4.6",
+ "serde",
  "serde_json",
  "thiserror 2.0.11",
  "walkdir",

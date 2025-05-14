@@ -1,6 +1,7 @@
 mod post_block_execution;
 
 use crate::{
+    suite_tester::UnitTester,
     util::{calc_blob_gasprice, make_state, make_transact_options},
     TestError, TestErrorKind,
 };
@@ -18,90 +19,19 @@ use post_block_execution::check_expected_state;
 use primitives::{Block, BlockHeaderBuilder, SignedTransaction};
 use std::{collections::BTreeMap, sync::Arc};
 
-pub struct UnitTester {
+pub struct BlockchainUnitTester {
     path: String,
     name: String,
     unit: BlockchainTestUnit,
 }
 
-impl UnitTester {
-    pub fn new(path: &String, name: String, unit: BlockchainTestUnit) -> Self {
-        UnitTester {
-            path: path.clone(),
-            name,
-            unit,
-        }
-    }
-
+impl BlockchainUnitTester {
     fn err(&self, kind: TestErrorKind) -> TestError {
         TestError {
             name: self.name.clone(),
             path: self.path.clone(),
             kind,
         }
-    }
-
-    pub fn run(
-        &self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>,
-    ) -> Result<usize, TestError> {
-        if !matches.map_or(true, |pat| {
-            format!("{}::{}", &self.path, &self.name).contains(pat)
-        }) {
-            return Ok(0);
-        }
-
-        if matches.is_some() {
-            info!("Running TestUnit: {}", self.name);
-        } else {
-            trace!("Running TestUnit: {}", self.name);
-        }
-
-        let mut state = make_state(&self.unit.pre);
-
-        let blocks = self.primitive_blocks();
-
-        if blocks.iter().any(|block| block.is_err()) {
-            // if there are any invalid blocks, we temp skip this test
-            return Ok(0);
-            // return Err(self.err(TestErrorKind::Internal(
-            //     "There are some invalid block in this test".into(),
-            // )));
-        }
-
-        let epochs: Vec<Vec<Arc<Block>>> = blocks
-            .into_iter()
-            .map(|b| vec![Arc::new(b.unwrap())])
-            .collect();
-
-        let mut transact_cnt = 0;
-
-        for (i, epoch) in epochs.iter().enumerate() {
-            // every epoch should have exactly one block
-            if epoch.is_empty() || epoch.len() > 1 {
-                continue;
-            }
-            let epoch_res = self.process_epoch(
-                &mut state,
-                machine,
-                verification,
-                i,
-                &epoch,
-                epoch[0].block_header.height(),
-            );
-
-            match epoch_res {
-                Ok(cnt) => transact_cnt += cnt,
-                Err(e) => {
-                    return Err(self.err(TestErrorKind::Internal(e)));
-                }
-            }
-        }
-
-        check_expected_state(&state, &self.unit.post_state)
-            .map_err(|e| self.err(e))?;
-
-        Ok(transact_cnt)
     }
 
     fn process_epoch(
@@ -305,4 +235,79 @@ struct EpochContext {
     chain_id: BTreeMap<Space, u32>,
     base_gas_price: SpaceMap<U256>,
     burnt_gas_price: SpaceMap<U256>,
+}
+
+impl UnitTester for BlockchainUnitTester {
+    type TestUnit = BlockchainTestUnit;
+
+    fn new(path: &String, name: String, unit: BlockchainTestUnit) -> Self {
+        BlockchainUnitTester {
+            path: path.clone(),
+            name,
+            unit,
+        }
+    }
+
+    fn run(
+        &self, machine: &Machine, verification: &VerificationConfig,
+        matches: Option<&str>,
+    ) -> Result<usize, TestError> {
+        if !matches.map_or(true, |pat| {
+            format!("{}::{}", &self.path, &self.name).contains(pat)
+        }) {
+            return Ok(0);
+        }
+
+        if matches.is_some() {
+            info!("Running TestUnit: {}", self.name);
+        } else {
+            trace!("Running TestUnit: {}", self.name);
+        }
+
+        let mut state = make_state(&self.unit.pre);
+
+        let blocks = self.primitive_blocks();
+
+        if blocks.iter().any(|block| block.is_err()) {
+            // if there are any invalid blocks, we temp skip this test
+            return Ok(0);
+            // return Err(self.err(TestErrorKind::Internal(
+            //     "There are some invalid block in this test".into(),
+            // )));
+        }
+
+        let epochs: Vec<Vec<Arc<Block>>> = blocks
+            .into_iter()
+            .map(|b| vec![Arc::new(b.unwrap())])
+            .collect();
+
+        let mut transact_cnt = 0;
+
+        for (i, epoch) in epochs.iter().enumerate() {
+            // every epoch should have exactly one block
+            if epoch.is_empty() || epoch.len() > 1 {
+                continue;
+            }
+            let epoch_res = self.process_epoch(
+                &mut state,
+                machine,
+                verification,
+                i,
+                &epoch,
+                epoch[0].block_header.height(),
+            );
+
+            match epoch_res {
+                Ok(cnt) => transact_cnt += cnt,
+                Err(e) => {
+                    return Err(self.err(TestErrorKind::Internal(e)));
+                }
+            }
+        }
+
+        check_expected_state(&state, &self.unit.post_state)
+            .map_err(|e| self.err(e))?;
+
+        Ok(transact_cnt)
+    }
 }

@@ -1,11 +1,13 @@
 mod post_transact;
-pub mod pre_transact;
+mod pre_transact;
 
-use self::post_transact::is_unsupport_reason;
+use post_transact::is_unsupport_reason;
 
-use super::utils::extract_155_chain_id_from_raw_tx;
 use crate::{
-    util::{make_state, make_transact_options},
+    suite_tester::UnitTester,
+    util::{
+        extract_155_chain_id_from_raw_tx, make_state, make_transact_options,
+    },
     TestError, TestErrorKind,
 };
 use cfx_executor::{
@@ -18,63 +20,19 @@ use cfxcore::verification::VerificationConfig;
 use eest_types::{SpecId, SpecName, StateTest, StateTestUnit};
 use primitives::SignedTransaction;
 
-pub struct UnitTester {
+pub struct StateUnitTester {
     path: String,
     name: String,
     unit: StateTestUnit,
 }
 
-impl UnitTester {
-    pub fn new(path: &String, name: String, unit: StateTestUnit) -> Self {
-        UnitTester {
-            path: path.clone(),
-            name,
-            unit,
-        }
-    }
-
+impl StateUnitTester {
     fn err(&self, kind: TestErrorKind) -> TestError {
         TestError {
             name: self.name.clone(),
             path: self.path.clone(),
             kind,
         }
-    }
-
-    pub fn run(
-        &self, machine: &Machine, verification: &VerificationConfig,
-        matches: Option<&str>,
-    ) -> Result<usize, TestError> {
-        if !matches.map_or(true, |pat| {
-            format!("{}::{}", &self.path, &self.name).contains(pat)
-        }) {
-            return Ok(0);
-        }
-
-        if matches.is_some() {
-            info!("Running TestUnit: {}", self.name);
-        } else {
-            trace!("Running TestUnit: {}", self.name);
-        }
-
-        let Some((spec, tests)) = pick_spec(self.unit.post.iter()) else {
-            return Ok(0);
-        };
-
-        let mut transact_cnt = 0;
-        // running each test
-        for single_test in tests.iter() {
-            if is_unsupport_reason(&single_test.expect_exception) {
-                continue;
-            }
-            if matches.is_some() {
-                info!("Running item with spec {:?}", spec);
-            }
-            self.execute_single_test(single_test, machine, verification)?;
-            transact_cnt += 1;
-        }
-
-        Ok(transact_cnt)
     }
 
     fn execute_single_test(
@@ -160,6 +118,54 @@ impl UnitTester {
         let outcome = evm.transact(transaction, options).expect("db error");
         state.update_state_post_tx_execution(false);
         outcome
+    }
+}
+
+impl UnitTester for StateUnitTester {
+    type TestUnit = StateTestUnit;
+
+    fn new(path: &String, name: String, unit: Self::TestUnit) -> Self {
+        StateUnitTester {
+            path: path.clone(),
+            name,
+            unit,
+        }
+    }
+
+    fn run(
+        &self, machine: &Machine, verification: &VerificationConfig,
+        matches: Option<&str>,
+    ) -> Result<usize, TestError> {
+        if !matches.map_or(true, |pat| {
+            format!("{}::{}", &self.path, &self.name).contains(pat)
+        }) {
+            return Ok(0);
+        }
+
+        if matches.is_some() {
+            info!("Running TestUnit: {}", self.name);
+        } else {
+            trace!("Running TestUnit: {}", self.name);
+        }
+
+        let Some((spec, tests)) = pick_spec(self.unit.post.iter()) else {
+            return Ok(0);
+        };
+
+        let mut transact_cnt = 0;
+        // running each test
+        for single_test in tests.iter() {
+            if is_unsupport_reason(&single_test.expect_exception) {
+                continue;
+            }
+            if matches.is_some() {
+                info!("Running item with spec {:?}", spec);
+            }
+            self.execute_single_test(single_test, machine, verification)?;
+            transact_cnt += 1;
+        }
+
+        Ok(transact_cnt)
     }
 }
 

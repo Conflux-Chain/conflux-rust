@@ -19,6 +19,7 @@ primitives = { path = "../../crates/primitives" }
 eest_types = { path = "../../crates/eest_types" }
 cfx-bytes = { path = "../../crates/cfx_bytes" }
 
+serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 walkdir = "2.5"
 thiserror = "2.0.11"

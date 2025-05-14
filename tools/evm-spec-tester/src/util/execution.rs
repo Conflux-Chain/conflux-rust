@@ -3,11 +3,12 @@ use cfx_executor::{
     state::State,
 };
 use cfx_rpc_eth_types::{
-    AccountOverride, AccountStateOverrideMode, StateOverride,
+    AccountOverride, AccountStateOverrideMode, Bytes, StateOverride,
 };
 use cfx_statedb::StateDb;
 use cfx_types::{u256_to_h256_be, Address, Space, H256, U256, U64};
 use eest_types::AccountInfo;
+use primitives::transaction::eth_transaction::eip155_signature;
 use std::collections::HashMap;
 
 pub fn make_transact_options(check_base_price: bool) -> TransactOptions<()> {
@@ -85,3 +86,26 @@ pub fn calc_blob_gasprice(excess_blob_gas: u64) -> U256 {
     )
     .into()
 }
+
+// 1. Check if the input bytes is a rlp list
+// 2. If it is, rlp decode the raw tx
+// 3. Check the v value (the third from the last), if it is bigger than 28, then
+//    it include the chainId info
+pub(crate) fn extract_155_chain_id_from_raw_tx(
+    raw_tx: &Option<Bytes>,
+) -> Option<u64> {
+    match raw_tx {
+        Some(raw_tx) => match is_rlp_list(&raw_tx.0) {
+            true => {
+                let rlp_list = rlp::Rlp::new(&raw_tx.0);
+                let item_count = rlp_list.item_count().ok()?;
+                let v = rlp_list.val_at::<u64>(item_count - 3).ok()?;
+                eip155_signature::extract_chain_id_from_legacy_v(v)
+            }
+            false => None, // not a 155 tx
+        },
+        None => None,
+    }
+}
+
+fn is_rlp_list(raw: &[u8]) -> bool { !raw.is_empty() && raw[0] >= 0xc0 }
