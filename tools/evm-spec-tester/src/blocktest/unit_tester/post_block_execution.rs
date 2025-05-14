@@ -53,6 +53,7 @@ pub fn check_expected_state(
                 state.storage_at(&user_addr, &key_bytes).unwrap_or_default();
             if curr_value != value {
                 bail!(StateMismatch::StorageMismatch {
+                    address: addr,
                     key,
                     got: curr_value,
                     expected: value,

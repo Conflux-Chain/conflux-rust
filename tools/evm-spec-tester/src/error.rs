@@ -88,8 +88,9 @@ pub enum StateMismatch {
     },
     #[error("code mismatch: got {got}, expected {expected}")]
     CodeMismatch { got: String, expected: String },
-    #[error("storage mismatch (key {key}): got {got}, expected {expected}")]
+    #[error("storage mismatch (address {address:?} key {key}): got {got}, expected {expected}")]
     StorageMismatch {
+        address: Address,
         key: U256,
         got: U256,
         expected: U256,
