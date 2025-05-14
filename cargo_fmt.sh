@@ -1,5 +1,8 @@
 #!/bin/bash
 set -e
+
+BASE_PATH=$(dirname "$(realpath "$0")")
+
 if [[ "$1" == "--install" ]]
 then
     rustup toolchain add nightly-2024-02-04
@@ -7,5 +10,5 @@ then
     rustup component add clippy
     shift
 else
-    cargo +nightly-2024-02-04 fmt --all $@
+    "$BASE_PATH/dev-support/cargo_all.sh" +nightly-2024-02-04 fmt --all $@
 fi
