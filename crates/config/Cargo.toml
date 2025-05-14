@@ -32,7 +32,7 @@ primitives = { workspace = true }
 txgen = { workspace = true }
 cfx-executor = { workspace = true }
 db = { workspace = true }
-clap4 = { workspace = true }
+clap = { workspace = true }
 kvdb-rocksdb = { workspace = true }
 toml = { workspace = true }
 jsonrpc-http-server = { workspace = true }

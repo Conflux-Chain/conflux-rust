@@ -1956,14 +1956,9 @@ version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
 dependencies = [
- "ansi_term",
- "atty",
  "bitflags 1.3.2",
- "strsim 0.8.0",
  "textwrap",
  "unicode-width",
- "vec_map",
- "yaml-rust 0.3.5",
 ]
 
 [[package]]
@@ -1985,7 +1980,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap_lex",
- "strsim 0.11.1",
+ "strsim",
 ]
 
 [[package]]
@@ -2042,7 +2037,7 @@ dependencies = [
  "cfxcore-accounts",
  "cfxkey",
  "cfxstore",
- "clap 2.34.0",
+ "clap 4.5.37",
  "consensus-types",
  "criterion",
  "ctrlc",
@@ -2161,7 +2156,6 @@ dependencies = [
  "cfxcore",
  "cfxkey",
  "cfxstore",
- "clap 2.34.0",
  "clap 4.5.37",
  "client",
  "db",
@@ -7950,7 +7944,7 @@ dependencies = [
  "indexmap 1.9.2",
  "ryu",
  "serde",
- "yaml-rust 0.4.5",
+ "yaml-rust",
 ]
 
 [[package]]
@@ -8319,12 +8313,6 @@ name = "strfmt"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b278b244ef7aa5852b277f52dd0c6cac3a109919e1f6d699adde63251227a30f"
-
-[[package]]
-name = "strsim"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "strsim"
@@ -9181,12 +9169,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
-name = "vec_map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
-
-[[package]]
 name = "vergen"
 version = "8.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9726,12 +9708,6 @@ checksum = "d7d8a75eaf6557bb84a65ace8609883db44a29951042ada9b393151532e41fcb"
 dependencies = [
  "xml-rs",
 ]
-
-[[package]]
-name = "yaml-rust"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e66366e18dc58b46801afbf2ca7661a9f59cc8c5962c29892b6039b4f86fa992"
 
 [[package]]
 name = "yaml-rust"

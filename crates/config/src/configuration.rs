@@ -471,7 +471,7 @@ impl Default for Configuration {
 }
 
 impl Configuration {
-    pub fn parse(matches: &clap4::ArgMatches) -> Result<Configuration, String> {
+    pub fn parse(matches: &clap::ArgMatches) -> Result<Configuration, String> {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
 

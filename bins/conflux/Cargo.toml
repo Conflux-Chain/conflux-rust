@@ -9,8 +9,8 @@ documentation.workspace = true
 license-file.workspace = true
 
 [dependencies]
-clap = { workspace = true, features = ["yaml"] }
-clap4 = { workspace = true }
+
+clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 parking_lot = { workspace = true }

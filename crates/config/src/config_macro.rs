@@ -30,7 +30,7 @@ macro_rules! build_config{
         use cfxcore::pow::ProofOfWorkConfig;
         use cfxcore::verification::VerificationConfig;
         use cfxcore::cache_config::CacheConfig;
-        use clap4;
+        use clap;
         use cfxcore::db::NUM_COLUMNS;
         use db;
         use kvdb_rocksdb::DatabaseConfig;
@@ -65,7 +65,7 @@ macro_rules! build_config{
             // and then parse them from commandline.
             // Replace the ones from config file with the ones
             // from commandline if duplicates.
-            pub fn parse(matches: &clap4::ArgMatches) -> Result<RawConfiguration, String> {
+            pub fn parse(matches: &clap::ArgMatches) -> Result<RawConfiguration, String> {
                 let mut config = if let Some(config_filename) = matches.get_one::<String>("config")  {
                     RawConfiguration::from_file(config_filename)?
 
