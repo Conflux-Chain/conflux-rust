@@ -1,0 +1,38 @@
+[package]
+name = "evm-spec-tester"
+edition = "2021"
+version = "0.1.0"
+license = "GPL-3.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfxcore = { path = "../../crates/cfxcore/core" }
+cfx-executor = { path = "../../crates/execution/executor" }
+cfx-rpc-eth-types = { path = "../../crates/rpc/rpc-eth-types" }
+cfx-statedb = { path = "../../crates/dbs/statedb" }
+cfx-types = { path = "../../crates/cfx_types" }
+cfx-vm-types = { path = "../../crates/execution/vm-types" }
+cfxkey = { path = "../../crates/cfx_key" }
+cfx-config = { path = "../../crates/config" }
+primitives = { path = "../../crates/primitives" }
+eest_types = { path = "../../crates/eest_types" }
+cfx-bytes = { path = "../../crates/cfx_bytes" }
+
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+walkdir = "2.5"
+thiserror = "2.0.11"
+rlp = "0.4.0"
+hex = "0.4.3"
+hex-literal = "0.4.1"
+keccak-hash = "0.5"
+
+log = "0.4"
+
+env_logger = "0.11"
+itertools = "0.14"
+clap = { version = "4.5", features = ["derive"] }
+clap-verbosity-flag = "3"
+
+[features]
+default = ["cfx-executor/align_evm", "cfx-statedb/testonly_code"]
