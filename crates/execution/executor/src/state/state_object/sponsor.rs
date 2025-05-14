@@ -178,6 +178,11 @@ impl State {
             contract_address, user
         );
 
+        info!("[Exec inspect] add_whitelist: contrat {:?}, user: {:?}",
+            contract_address, user
+        );
+        
+
         self.set_storage(
             &sponsor_address(),
             sponsor_key(&contract_address, &user),

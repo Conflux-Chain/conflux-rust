@@ -391,6 +391,10 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             .iter()
             .filter(|x| x.space == Space::Native)
         {
+            if address.space == Space::Native {
+                info!("[Exec inspect] suicide: {:?}", address.address);
+            }
+
             let code_size = state.code_size(address)?;
             if code_size > 0 {
                 // Only refund the code collateral when code exists.
