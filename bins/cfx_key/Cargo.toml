@@ -1,19 +1,20 @@
 [package]
 description = "Conflux Core Space Keys Generator CLI"
 name = "ctxkey-cli"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 edition = "2021"
 license-file.workspace = true
 
 [dependencies]
-docopt = { workspace = true }
 env_logger = { workspace = true }
 cfxkey = { workspace = true }
 panic_hook = { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
 threadpool = { workspace = true }
+# todo use workspace version
+clap = { version = "4", features = ["derive"] }
 
 [[bin]]
 name = "cfxkey"

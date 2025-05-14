@@ -369,17 +369,17 @@ impl SnapshotDbManagerSqlite {
             let (mpt_snapshot_path, create_mpt) = match mpt_snapshot_path {
                 Some(v) => (v, true),
                 _ => {
+                    let latest_snapshot_id = self.latest_snapshot_id.read();
                     debug!(
                         "new_epoch_height {}, latest_snapshot_id {} {}",
                         new_epoch_height,
-                        self.latest_snapshot_id.read().0,
-                        self.latest_snapshot_id.read().1
+                        latest_snapshot_id.0,
+                        latest_snapshot_id.1
                     );
-                    if new_epoch_height <= self.latest_snapshot_id.read().1 {
+                    if new_epoch_height <= latest_snapshot_id.1 {
                         bail!(format!(
                             "Try to write an old snapshot {}, {}",
-                            new_epoch_height,
-                            self.latest_snapshot_id.read().1
+                            new_epoch_height, latest_snapshot_id.1
                         ))
                     }
 

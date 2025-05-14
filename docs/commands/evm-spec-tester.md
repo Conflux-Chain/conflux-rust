@@ -2,7 +2,10 @@
 
 The `evm-spec-tester` command is primarily used to run tests related to the Ethereum Virtual Machine (EVM), in order to verify the compatibility of the Conflux eSpace VM.
 
-Currently, it supports one type of tests: `statetest`.
+Currently, it supports: 
+
+- `statetest`
+- `blocktest`
 
 ## statetest
 
@@ -33,12 +36,22 @@ The `tests` repository is another Ethereum testing repo that also includes state
 
 Alternatively, you can clone the repository locally. The `GeneralStateTests` directory in the project contains the state test cases. Additionally, the `legacytests/Constantinople/GeneralStateTests` directory also includes some legacy state test cases.
 
+#### included tests
+
+One copy of the state test cases is included in the `testdata` directory. Which is a zstd compressed file. You can decompress it using the following command:
+
+```bash
+cd testdata
+# make sure you have zstd installed
+tar --use-compress-program="zstd --long=31" -xvf evm-spec-test.tar.zst
+```
+
 ### How to run the statetest
 
 You can run the evm statetest command and specify the directory containing the state test cases to execute the tests:
 
 ```bash
-evm-spec-tester -c ./evm-config.toml /data/test-fixtures/develop/state_tests/prague
+evm-spec-tester statetest /data/test-fixtures/develop/state_tests/prague
 ```
 
 #### run single test
@@ -46,7 +59,7 @@ evm-spec-tester -c ./evm-config.toml /data/test-fixtures/develop/state_tests/pra
 If you only want to run a single test file, you can use the --match parameter to specify the name of the test file:
 
 ```bash
-evm-spec-tester -c ./evm-config.toml /data/test-fixtures/develop/state_tests/prague --matches the-test-file-name.json
+evm-spec-tester statetest /data/test-fixtures/develop/state_tests/prague --matches the-test-file-name.json
 ```
 
 #### verbose mode
@@ -54,7 +67,7 @@ evm-spec-tester -c ./evm-config.toml /data/test-fixtures/develop/state_tests/pra
 You can enable verbose mode by using -v or -vv. In this mode, more debug information will be printed, such as:
 
 ```bash
-evm-spec-tester -c ./evm-config.toml /data/test-fixtures/develop/state_tests/prague --matches the-test-file-name.json -vv
+evm-spec-tester statetest /data/test-fixtures/develop/state_tests/prague --matches the-test-file-name.json -vv
 ```
 
 #### configuration
@@ -75,7 +88,11 @@ chain_id=2
 evm_chain_id=1
 ```
 
-If no configuration file is specified, the default activation settings (same as the mainnet) will be used.
+```sh
+evm-spec-tester statetest --config evm-config.toml /data/test-fixtures/develop/state_tests/prague
+```
+
+If no configuration file is specified, all cips will be enabled.
 
 ### Skiped tests
 

@@ -1,30 +1,28 @@
 use cfx_config::{Configuration, RawConfiguration};
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
-use std::path::PathBuf;
-use structopt::StructOpt;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use walkdir::{DirEntry, WalkDir};
 
-/// ethereum statetest doc: https://eest.ethereum.org/main/consuming_tests/state_test/
-#[derive(StructOpt)]
-#[structopt(name = "statetest", about = "State test command")]
-pub struct StateTestCmd {
-    /// Paths to test files or directories
-    #[structopt(parse(from_os_str), required = true)]
-    pub(super) paths: Vec<PathBuf>,
-
-    /// Configuration
-    #[structopt(short, long, parse(try_from_str = make_configuration), required = true, default_value = "", help = "Path to the configuration file")]
-    pub(super) config: Configuration,
-
-    /// Only run tests matching this string
-    #[structopt(short, long)]
-    pub(super) matches: Option<String>,
-
-    /// Verbosity level (can be used multiple times)
-    #[structopt(short, long, parse(from_occurrences))]
-    pub verbose: u8,
+pub(crate) fn find_all_json_tests(path: &Path) -> Vec<PathBuf> {
+    if path.is_file() {
+        vec![path.to_path_buf()]
+    } else {
+        WalkDir::new(path)
+            .follow_links(true)
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|e| e.path().extension() == Some("json".as_ref()))
+            .map(DirEntry::into_path)
+            .collect()
+    }
 }
 
-fn make_configuration(config_file: &str) -> Result<Configuration, String> {
+pub(crate) fn make_configuration(
+    config_file: &str,
+) -> Result<Arc<Configuration>, String> {
     let mut config = Configuration::default();
     config.raw_conf = if config_file.is_empty() {
         default_raw_configuration()
@@ -46,10 +44,10 @@ fn make_configuration(config_file: &str) -> Result<Configuration, String> {
         _ => {}
     }
 
-    Ok(config)
+    Ok(Arc::new(config))
 }
 
-fn default_raw_configuration() -> RawConfiguration {
+pub(crate) fn default_raw_configuration() -> RawConfiguration {
     let mut config = RawConfiguration::default();
     config.mode = Some("dev".to_string());
     config.default_transition_time = Some(1);
