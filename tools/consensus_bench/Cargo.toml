@@ -1,0 +1,17 @@
+[package]
+description = "Conflux consensus benchmark"
+homepage = "https://www.confluxnetwork.org"
+license = "GPL-3.0"
+name = "consensus_bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cfxcore = { path = "../../crates/cfxcore/core", features = ["consensus_bench"]}
+cfx-types = { path = "../../crates/cfx_types" }
+primitives = { path = "../../crates/primitives" }
+db = { path = "../../crates/dbs/db" }
+threadpool = "1.7"
+parking_lot = "0.12"
+log4rs = { version = "1.3.0", features = ["background_rotation", "gzip"] }
+log = "0.4"
