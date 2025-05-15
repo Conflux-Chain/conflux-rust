@@ -198,6 +198,7 @@ pub fn check_execution_outcome(
         let expected_code = account_info.code.0.clone();
         if got_code != expected_code {
             bail!(StateMismatch::CodeMismatch {
+                address: addr,
                 got: hex::encode(got_code),
                 expected: hex::encode(expected_code),
             });

@@ -34,6 +34,24 @@ impl BlockchainUnitTester {
         }
     }
 
+    // eip2935
+    fn before_epoch_execution(
+        &self, state: &mut State, machine: &Machine, pivot_block: &Block,
+    ) -> Result<(), String> {
+        let params = machine.params();
+
+        let epoch_number = pivot_block.block_header.height();
+        let parent_hash = pivot_block.block_header.parent_hash();
+
+        if epoch_number >= params.transition_heights.eip2935 {
+            state
+                .set_eip2935_storage(epoch_number - 1, *parent_hash)
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+
     fn process_epoch(
         &self, state: &mut State, machine: &Machine,
         verification: &VerificationConfig, block_index: usize,
@@ -51,10 +69,12 @@ impl BlockchainUnitTester {
 
         let mut transact_cnt = 0;
 
-        // TODO: do the before_epoch_execution handling
+        self.before_epoch_execution(state, machine, &pivot_block)?;
 
         for (i, block) in epoch_blocks.iter().enumerate() {
-            // TODO: do the before_block_execution handling
+            // do the before_block_execution handling
+            state.commit_cache(false);
+
             let block_number = start_block_number + i as u64;
             let blob_gas_fee = calc_blob_gasprice(
                 self.unit.blocks[block_index]
@@ -126,7 +146,6 @@ impl BlockchainUnitTester {
             state
                 .add_balance(&miner, &miner_reward)
                 .expect("should success");
-            state.commit_cache(false);
         }
 
         Ok(transact_cnt)

@@ -27,11 +27,10 @@ rlp = "0.4.0"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 keccak-hash = "0.5"
-
-log = "0.4"
-
-env_logger = "0.11"
+lazy_static = "1.5.0"
 itertools = "0.14"
+log = "0.4"
+env_logger = "0.11"
 clap = { version = "4.5", features = ["derive"] }
 clap-verbosity-flag = "3"
 

@@ -69,7 +69,7 @@ pub enum StateMismatch {
     #[error("state root mismatch: got {got}, expected {expected}")]
     StateRootMismatch { got: H256, expected: H256 },
     #[error(
-        "balance mismatch: address {address}, got {got}, expected {expected}"
+        "balance mismatch: address {address:?}, got {got}, expected {expected}"
     )]
     BalanceMismatch {
         address: Address,
@@ -79,15 +79,21 @@ pub enum StateMismatch {
     #[error("gas mismatch: got {got}, expected {expected}")]
     GasMismatch { got: U256, expected: U256 },
     #[error(
-        "nonce mismatch: address {address}, got {got}, expected {expected}"
+        "nonce mismatch: address {address:?}, got {got}, expected {expected}"
     )]
     NonceMismatch {
         address: Address,
         got: U256,
         expected: U256,
     },
-    #[error("code mismatch: got {got}, expected {expected}")]
-    CodeMismatch { got: String, expected: String },
+    #[error(
+        "code mismatch: address {address:?} got {got}, expected {expected}"
+    )]
+    CodeMismatch {
+        address: Address,
+        got: String,
+        expected: String,
+    },
     #[error("storage mismatch (address {address:?} key {key}): got {got}, expected {expected}")]
     StorageMismatch {
         address: Address,
