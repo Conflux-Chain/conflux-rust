@@ -257,6 +257,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
                 force_recompute_height_during_construct_pivot: None,
                 recovery_latest_mpt_snapshot: false,
                 use_isolated_db_for_mpt_table: false,
+                backup_mpt_snapshot: false,
             },
             bench_mode: true, /* Set bench_mode to true so that we skip
                                * execution */

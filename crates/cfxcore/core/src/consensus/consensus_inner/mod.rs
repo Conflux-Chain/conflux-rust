@@ -96,6 +96,7 @@ pub struct ConsensusInnerConfig {
     pub force_recompute_height_during_construct_pivot: Option<u64>,
     pub recovery_latest_mpt_snapshot: bool,
     pub use_isolated_db_for_mpt_table: bool,
+    pub backup_mpt_snapshot: bool,
 }
 
 impl ConsensusInnerConfig {

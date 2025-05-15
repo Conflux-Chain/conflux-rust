@@ -2257,7 +2257,7 @@ impl ConsensusNewBlockHandler {
         end_index: usize, need_set_intermediate_trie_root_merkle: &mut bool,
         snapshot_epoch_count: u64,
     ) -> Option<usize> {
-        if !self.conf.inner_conf.use_isolated_db_for_mpt_table {
+        if !self.conf.inner_conf.use_isolated_db_for_mpt_table || self.conf.inner_conf.backup_mpt_snapshot {
             return Some(end_index);
         }
 

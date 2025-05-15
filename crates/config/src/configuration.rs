@@ -694,6 +694,7 @@ impl Configuration {
                 force_recompute_height_during_construct_pivot: self.raw_conf.force_recompute_height_during_construct_pivot,
                 recovery_latest_mpt_snapshot: self.raw_conf.recovery_latest_mpt_snapshot,
                 use_isolated_db_for_mpt_table: self.raw_conf.use_isolated_db_for_mpt_table,
+                backup_mpt_snapshot: self.raw_conf.backup_mpt_snapshot,
             },
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
