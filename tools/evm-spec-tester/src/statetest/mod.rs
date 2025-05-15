@@ -11,7 +11,7 @@ use crate::{
     test_cmd_runner::EestTestCmdTrait,
     util::{contains_meta_dir, make_configuration},
 };
-pub use unit_tester::StateUnitTester;
+pub use unit_tester::{match_fail_single_reason, StateUnitTester, TestOutcome};
 
 /// ethereum statetest doc: https://eest.ethereum.org/main/consuming_tests/state_test/
 #[derive(Args, Debug, Clone)]

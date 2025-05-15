@@ -37,7 +37,7 @@ pub struct Block {
     pub transactions: Vec<Transaction>,
     pub uncle_headers: Vec<BlockHeader>,
     pub withdrawals: Option<Vec<Withdrawal>>,
-    pub rlp: Bytes,
+    pub rlp: Option<Bytes>,
     pub blocknumber: Option<String>, // TODO deserialize to u64
 }
 
@@ -55,6 +55,7 @@ pub struct Withdrawal {
 pub struct InvalidBlock {
     pub rlp: Bytes,
     pub expect_exception: String,
+    #[serde(default, rename = "rlp_decoded")]
     pub rlp_decoded: Option<Block>,
 }
 

@@ -91,7 +91,9 @@ pub fn is_unsupport_reason(expected_reason: &Option<String>) -> bool {
     }
 }
 
-fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
+pub fn match_fail_single_reason(
+    reason: &str, outcome: TestOutcome<'_>,
+) -> bool {
     use ExecutionOutcome::*;
     use TestOutcome::*;
     match reason {

@@ -1,8 +1,11 @@
 mod post_block_execution;
 
 use crate::{
+    statetest::{match_fail_single_reason, TestOutcome},
     suite_tester::UnitTester,
-    util::{calc_blob_gasprice, make_state, make_transact_options},
+    util::{
+        calc_blob_gasprice, check_tx_common, make_state, make_transact_options,
+    },
     TestError, TestErrorKind,
 };
 use cfx_executor::{
@@ -13,11 +16,14 @@ use cfx_executor::{
 use cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
-use eest_types::{BlockchainTestUnit, TestBlock};
+use eest_types::{Block as EestBlock, BlockchainTestUnit, TestBlock};
 use log::trace;
 use post_block_execution::check_expected_state;
-use primitives::{Block, BlockHeaderBuilder, SignedTransaction};
+use primitives::{
+    transaction::TransactionError, Block, BlockHeaderBuilder, SignedTransaction,
+};
 use std::{collections::BTreeMap, sync::Arc};
+use thiserror::Error;
 
 pub struct BlockchainUnitTester {
     path: String,
@@ -56,7 +62,7 @@ impl BlockchainUnitTester {
         &self, state: &mut State, machine: &Machine,
         verification: &VerificationConfig, block_index: usize,
         epoch_blocks: &Vec<Arc<Block>>, start_block_number: u64,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, EpochProcessError> {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
         let base_gas_price =
@@ -69,7 +75,8 @@ impl BlockchainUnitTester {
 
         let mut transact_cnt = 0;
 
-        self.before_epoch_execution(state, machine, &pivot_block)?;
+        self.before_epoch_execution(state, machine, &pivot_block)
+            .map_err(|e| EpochProcessError::Internal(e))?;
 
         for (i, block) in epoch_blocks.iter().enumerate() {
             // do the before_block_execution handling
@@ -93,14 +100,20 @@ impl BlockchainUnitTester {
                 blob_gas_fee,
             };
             let mut env = self.make_block_env(epoch_context, block);
+            let spec = machine.spec(env.number, env.epoch_height);
+
+            // pre check common
+            for transaction in &block.transactions {
+                env.transaction_hash = transaction.hash();
+                check_tx_common(machine, &env, &transaction, verification)?;
+            }
 
             let mut miner_reward = U256::zero();
-
             for (idx, transaction) in block.transactions.iter().enumerate() {
-                let spec = machine.spec(env.number, env.epoch_height);
+                env.transaction_hash = transaction.hash();
+
                 let check_base_price = true;
                 let options = make_transact_options(check_base_price);
-                env.transaction_hash = transaction.hash();
 
                 let executive_context =
                     ExecutiveContext::new(state, &env, machine, &spec);
@@ -186,63 +199,80 @@ impl BlockchainUnitTester {
         }
     }
 
-    fn primitive_blocks(&self) -> Vec<Result<Block, String>> {
+    fn to_primitive_block(b: &EestBlock) -> Result<Block, String> {
+        let txs: Vec<Result<SignedTransaction, String>> = b
+            .transactions
+            .iter()
+            .map(|tx| tx.clone().try_into())
+            .collect();
+        if txs.iter().any(|tx| tx.is_err()) {
+            return Err("block have unsupported tx".into());
+        }
+        let txs = txs.into_iter().map(|tx| Arc::new(tx.unwrap())).collect();
+        let mut builder = BlockHeaderBuilder::new();
+        builder
+            .with_parent_hash(b.block_header.parent_hash)
+            .with_height(b.block_header.number.as_u64())
+            .with_timestamp(b.block_header.timestamp.as_u64())
+            .with_author(b.block_header.coinbase)
+            .with_transactions_root(b.block_header.transactions_trie)
+            .with_deferred_state_root(b.block_header.state_root)
+            .with_deferred_receipts_root(b.block_header.receipt_trie)
+            .with_deferred_logs_bloom_hash(keccak_hash::keccak(
+                b.block_header.bloom.data(),
+            ))
+            .with_difficulty(b.block_header.difficulty)
+            .with_gas_limit(b.block_header.gas_limit)
+            // use uncle_hashes as referee_hashes
+            .with_referee_hashes(
+                b.uncle_headers.iter().map(|h| h.hash).collect(),
+            )
+            .with_nonce(U256::from(b.block_header.nonce.as_u64()))
+            // todo: set pos_reference, blame, adaptive, custom
+            .with_base_price(
+                b.block_header.base_fee_per_gas.map(|x| SpaceMap::new(x, x)),
+            );
+        let header = builder.build();
+        let block = Block::new(header, txs);
+        Ok(block)
+    }
+
+    fn primitive_blocks(&self) -> Vec<Result<BlockWithException, String>> {
         self.unit
             .blocks
             .iter()
             .map(|block| match block {
                 TestBlock::Block(b) => {
-                    let txs: Vec<Result<SignedTransaction, String>> = b
-                        .transactions
-                        .iter()
-                        .map(|tx| tx.clone().try_into())
-                        .collect();
-                    if txs.iter().any(|tx| tx.is_err()) {
-                        return Err("block have invalid tx".into());
-                    }
-                    let txs = txs
-                        .into_iter()
-                        .map(|tx| Arc::new(tx.unwrap()))
-                        .collect();
-                    let mut builder = BlockHeaderBuilder::new();
-                    builder
-                        .with_parent_hash(b.block_header.parent_hash)
-                        .with_height(b.block_header.number.as_u64())
-                        .with_timestamp(b.block_header.timestamp.as_u64())
-                        .with_author(b.block_header.coinbase)
-                        .with_transactions_root(
-                            b.block_header.transactions_trie,
-                        )
-                        .with_deferred_state_root(b.block_header.state_root)
-                        .with_deferred_receipts_root(
-                            b.block_header.receipt_trie,
-                        )
-                        .with_deferred_logs_bloom_hash(keccak_hash::keccak(
-                            b.block_header.bloom.data(),
-                        ))
-                        .with_difficulty(b.block_header.difficulty)
-                        .with_gas_limit(b.block_header.gas_limit)
-                        // use uncle_hashes as referee_hashes
-                        .with_referee_hashes(
-                            b.uncle_headers.iter().map(|h| h.hash).collect(),
-                        )
-                        .with_nonce(U256::from(b.block_header.nonce.as_u64()))
-                        // todo: set pos_reference, blame, adaptive, custom
-                        .with_base_price(
-                            b.block_header
-                                .base_fee_per_gas
-                                .map(|x| SpaceMap::new(x, x)),
-                        );
-                    let header = builder.build();
-                    let block = Block::new(header, txs);
-                    Ok(block)
+                    Self::to_primitive_block(b).map(|b| BlockWithException {
+                        block: b,
+                        exception: None,
+                    })
                 }
-                TestBlock::InvalidBlock(_invalid) => {
-                    Err("invalid block".into())
-                }
+                TestBlock::InvalidBlock(invalid) => match invalid.rlp_decoded {
+                    Some(ref b) => Self::to_primitive_block(b).map(|pb| {
+                        BlockWithException {
+                            block: pb,
+                            exception: Some(invalid.expect_exception.clone()),
+                        }
+                    }),
+                    None => Err("none block".into()),
+                },
             })
             .collect()
     }
+}
+
+struct BlockWithException {
+    block: Block,
+    exception: Option<String>,
+}
+
+#[derive(Debug, Error)]
+pub enum EpochProcessError {
+    #[error("state mismatch: {0}")]
+    TransactionError(#[from] TransactionError),
+    #[error("internal error: {0}")]
+    Internal(String),
 }
 
 struct EpochContext {
@@ -288,38 +318,52 @@ impl UnitTester for BlockchainUnitTester {
         let blocks = self.primitive_blocks();
 
         if blocks.iter().any(|block| block.is_err()) {
-            // if there are any invalid blocks, we temp skip this test
+            // if block is error, means it contain unsupported tx, we skip this
+            // test
             return Ok(0);
-            // return Err(self.err(TestErrorKind::Internal(
-            //     "There are some invalid block in this test".into(),
-            // )));
         }
 
-        let epochs: Vec<Vec<Arc<Block>>> = blocks
-            .into_iter()
-            .map(|b| vec![Arc::new(b.unwrap())])
-            .collect();
+        let epochs: Vec<Vec<BlockWithException>> =
+            blocks.into_iter().map(|b| vec![b.unwrap()]).collect();
 
         let mut transact_cnt = 0;
 
         for (i, epoch) in epochs.iter().enumerate() {
-            // every epoch should have exactly one block
-            if epoch.is_empty() || epoch.len() > 1 {
+            if skip_test_according_to_exception(&epoch[0].exception) {
                 continue;
             }
+
+            let epoch_blocks =
+                epoch.iter().map(|b| Arc::new(b.block.clone())).collect();
             let epoch_res = self.process_epoch(
                 &mut state,
                 machine,
                 verification,
                 i,
-                &epoch,
-                epoch[0].block_header.height(),
+                &epoch_blocks,
+                epoch[0].block.block_header.height(),
             );
+
+            if epoch_res.is_ok() && epoch[0].exception.is_some() {
+                trace!(
+                    "execution should fail, but it is ok, exception: {:?}",
+                    epoch[0].exception
+                );
+            }
 
             match epoch_res {
                 Ok(cnt) => transact_cnt += cnt,
                 Err(e) => {
-                    return Err(self.err(TestErrorKind::Internal(e)));
+                    if !match_expect_exception(&epoch[0].exception, &e) {
+                        trace!(
+                            "error mismatch: expected: {:?}, actual: {:?}",
+                            epoch[0].exception,
+                            e
+                        );
+                        return Err(
+                            self.err(TestErrorKind::Internal(e.to_string()))
+                        );
+                    }
                 }
             }
         }
@@ -329,4 +373,50 @@ impl UnitTester for BlockchainUnitTester {
 
         Ok(transact_cnt)
     }
+}
+
+fn match_expect_exception(
+    expect: &Option<String>, epoch_process_error: &EpochProcessError,
+) -> bool {
+    if expect.is_none() {
+        return false;
+    }
+    match epoch_process_error {
+        EpochProcessError::TransactionError(e) => match_fail_single_reason(
+            expect.as_ref().unwrap(),
+            TestOutcome::Consensus(e),
+        ),
+        EpochProcessError::Internal(_e) => false,
+    }
+}
+
+fn skip_test_according_to_exception(exception: &Option<String>) -> bool {
+    if exception.is_none() {
+        return false;
+    }
+
+    matches!(
+        exception.as_ref().unwrap().as_str(),
+        "BlockException.INVALID_REQUESTS"
+            | "TransactionException.PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS"
+            | "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+            | "TransactionException.NONCE_MISMATCH_TOO_LOW"
+            | "BlockException.INCORRECT_BLOB_GAS_USED"
+            | "BlockException.INCORRECT_BLOCK_FORMAT"
+            | "TransactionException.INVALID_DEPOSIT_EVENT_LAYOUT"
+            | "TransactionException.TYPE_4_TX_PRE_FORK" // type 4 tx before fork
+            | "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST"
+            | "TransactionException.TYPE_4_TX_CONTRACT_CREATION" // empty to
+            // we don't support type 3 (4844)tx
+            | "TransactionException.TYPE_3_TX_PRE_FORK"
+            | "TransactionException.TYPE_3_TX_ZERO_BLOBS_PRE_FORK"
+            | "TransactionException.TYPE_3_TX_INVALID_BLOB_VERSIONED_HASH"
+            | "TransactionException.TYPE_3_TX_WITH_FULL_BLOBS"
+            | "TransactionException.TYPE_3_TX_BLOB_COUNT_EXCEEDED"
+            | "TransactionException.TYPE_3_TX_CONTRACT_CREATION"
+            | "TransactionException.TYPE_3_TX_MAX_BLOB_GAS_ALLOWANCE_EXCEEDED"
+            | "TransactionException.TYPE_3_TX_ZERO_BLOBS"
+            // consensus level error
+            | "TransactionException.GAS_ALLOWANCE_EXCEEDED"
+    )
 }

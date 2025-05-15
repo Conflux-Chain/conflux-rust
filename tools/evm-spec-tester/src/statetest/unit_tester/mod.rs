@@ -2,6 +2,7 @@ mod post_transact;
 mod pre_transact;
 
 use post_transact::is_unsupport_reason;
+pub use post_transact::{match_fail_single_reason, TestOutcome};
 
 use crate::{
     suite_tester::UnitTester,

@@ -1,14 +1,20 @@
 use cfx_executor::{
     executive::{ChargeCollateral, TransactOptions, TransactSettings},
+    machine::Machine,
     state::State,
 };
 use cfx_rpc_eth_types::{
     AccountOverride, AccountStateOverrideMode, Bytes, StateOverride,
 };
 use cfx_statedb::StateDb;
-use cfx_types::{u256_to_h256_be, Address, Space, H256, U256, U64};
+use cfx_types::{u256_to_h256_be, Address, AllChainID, Space, H256, U256, U64};
+use cfx_vm_types::Env;
+use cfxcore::verification::{VerificationConfig, VerifyTxMode};
 use eest_types::AccountInfo;
-use primitives::transaction::eth_transaction::eip155_signature;
+use primitives::{
+    transaction::{eth_transaction::eip155_signature, TransactionError},
+    SignedTransaction,
+};
 use std::collections::HashMap;
 
 pub fn make_transact_options(check_base_price: bool) -> TransactOptions<()> {
@@ -109,3 +115,26 @@ pub(crate) fn extract_155_chain_id_from_raw_tx(
 }
 
 fn is_rlp_list(raw: &[u8]) -> bool { !raw.is_empty() && raw[0] >= 0xc0 }
+
+pub fn check_tx_common(
+    machine: &Machine, env: &Env, transaction: &SignedTransaction,
+    verification: &VerificationConfig,
+) -> Result<(), TransactionError> {
+    let spec = machine
+        .spec(env.number, env.epoch_height)
+        .to_consensus_spec();
+    let verify_mode = VerifyTxMode::Remote(&spec);
+
+    let chain_id = AllChainID::new(
+        env.chain_id[&Space::Native],
+        env.chain_id[&Space::Ethereum],
+    );
+
+    verification.verify_transaction_common(
+        &transaction.transaction,
+        chain_id,
+        env.epoch_height,
+        &machine.params().transition_heights,
+        verify_mode,
+    )
+}
