@@ -141,6 +141,10 @@ pub fn match_fail_single_reason(
             outcome,
             Execution(NotExecutedDrop(TxDropError::SenderWithCode { .. }))
         ),
+        "TransactionException.NONCE_MISMATCH_TOO_LOW" => matches!(
+            outcome,
+            Execution(NotExecutedDrop(TxDropError::OldNonce { .. }))
+        ),
         "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST" => matches!(
             outcome,
             Consensus(TransactionError::EmptyAuthorizationList)

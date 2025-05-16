@@ -9,7 +9,7 @@ use crate::{
     TestError, TestErrorKind,
 };
 use cfx_executor::{
-    executive::{ExecutionOutcome, ExecutiveContext},
+    executive::{ExecutionOutcome, ExecutiveContext, TxDropError},
     machine::Machine,
     state::State,
 };
@@ -127,6 +127,14 @@ impl BlockchainUnitTester {
                     );
                     continue;
                 };
+
+                if let ExecutionOutcome::NotExecutedDrop(tx_drop_err) =
+                    &execution_outcome
+                {
+                    return Err(EpochProcessError::NotExecutedDrop(
+                        tx_drop_err.clone(),
+                    ));
+                }
 
                 transact_cnt += 1;
 
@@ -271,6 +279,8 @@ struct BlockWithException {
 pub enum EpochProcessError {
     #[error("state mismatch: {0}")]
     TransactionError(#[from] TransactionError),
+    #[error("execution error: NotExecutedDrop {0:?}")]
+    NotExecutedDrop(TxDropError),
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -363,6 +373,8 @@ impl UnitTester for BlockchainUnitTester {
                         return Err(
                             self.err(TestErrorKind::Internal(e.to_string()))
                         );
+                    } else {
+                        return Ok(transact_cnt);
                     }
                 }
             }
@@ -386,6 +398,12 @@ fn match_expect_exception(
             expect.as_ref().unwrap(),
             TestOutcome::Consensus(e),
         ),
+        EpochProcessError::NotExecutedDrop(e) => match_fail_single_reason(
+            expect.as_ref().unwrap(),
+            TestOutcome::Execution(&ExecutionOutcome::NotExecutedDrop(
+                e.clone(),
+            )),
+        ),
         EpochProcessError::Internal(_e) => false,
     }
 }
@@ -398,14 +416,10 @@ fn skip_test_according_to_exception(exception: &Option<String>) -> bool {
     matches!(
         exception.as_ref().unwrap().as_str(),
         "BlockException.INVALID_REQUESTS"
-            | "TransactionException.PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS"
-            | "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
-            | "TransactionException.NONCE_MISMATCH_TOO_LOW"
             | "BlockException.INCORRECT_BLOB_GAS_USED"
             | "BlockException.INCORRECT_BLOCK_FORMAT"
             | "TransactionException.INVALID_DEPOSIT_EVENT_LAYOUT"
-            | "TransactionException.TYPE_4_TX_PRE_FORK" // type 4 tx before fork
-            | "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST"
+            // | "TransactionException.TYPE_4_TX_PRE_FORK" // type 4 tx before fork
             | "TransactionException.TYPE_4_TX_CONTRACT_CREATION" // empty to
             // we don't support type 3 (4844)tx
             | "TransactionException.TYPE_3_TX_PRE_FORK"

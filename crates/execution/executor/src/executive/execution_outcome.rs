@@ -65,7 +65,7 @@ pub enum ToRepackError {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TxDropError {
     /// The account nonce in world-state is larger than tx nonce
     OldNonce(U256, U256),

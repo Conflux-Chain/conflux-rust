@@ -60,7 +60,13 @@ impl TryInto<SignedTransaction> for Transaction {
                 gas: self.gas_limit,
                 action,
                 value: self.value,
-                chain_id: self.chain_id.map(|chain_id| chain_id.as_u32()),
+                chain_id: match self.chain_id {
+                    Some(chain_id) => match chain_id.as_u32() {
+                        0 => None,
+                        _ => Some(chain_id.as_u32()),
+                    },
+                    None => None,
+                },
                 data: self.data.0,
             }),
             1 => EthereumTransaction::Eip2930(Eip2930Transaction {
