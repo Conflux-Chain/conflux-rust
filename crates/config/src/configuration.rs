@@ -1259,9 +1259,7 @@ impl Configuration {
         }
     }
 
-    pub fn is_consortium(&self) -> bool {
-        self.raw_conf.is_consortium
-    }
+    pub fn is_consortium(&self) -> bool { self.raw_conf.is_consortium }
 
     pub fn light_node_config(&self) -> LightNodeConfiguration {
         LightNodeConfiguration {
@@ -1406,14 +1404,14 @@ impl Configuration {
             self.raw_conf.hydra_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip76, cip86 }
         );
-        params.transition_numbers.cip43b = self
-            .raw_conf
-            .cip43_init_end_number
-            .unwrap_or(if self.is_test_or_dev_mode() {
-                u64::MAX
-            } else {
-                params.transition_numbers.cip43a
-            });
+        params.transition_numbers.cip43b =
+            self.raw_conf.cip43_init_end_number.unwrap_or(
+                if self.is_test_or_dev_mode() {
+                    u64::MAX
+                } else {
+                    params.transition_numbers.cip43a
+                },
+            );
         params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
             0u64
         } else {
