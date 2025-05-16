@@ -1,0 +1,10 @@
+[package]
+name = "dir"
+version = "0.1.2"
+authors = ["Parity Technologies <admin@parity.io>"]
+license = "GPL3"
+
+[dependencies]
+ethereum-types = { workspace = true }
+app_dirs = { workspace = true }
+home = { workspace = true }
