@@ -1484,10 +1484,6 @@ impl Configuration {
             self.raw_conf.base_fee_burn_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip130, cip133e }
         );
-        params.transition_heights.cip_c2_fix = self
-            .raw_conf
-            .c2_fix_transition_height
-            .unwrap_or(default_transition_time);
         // TODO: disable 1559 test during dev
         params.transition_heights.cip1559 = self
             .raw_conf
@@ -1507,7 +1503,15 @@ impl Configuration {
         }
 
         //
-        // 7702 hardfork (V2.5)
+        // hardfork (V2.5)
+        //
+        params.transition_heights.cip_c2_fix = self
+            .raw_conf
+            .c2_fix_transition_height
+            .unwrap_or(default_transition_time);
+
+        //
+        // 7702 hardfork (V2.6)
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
