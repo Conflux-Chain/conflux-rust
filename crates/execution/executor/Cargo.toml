@@ -46,6 +46,8 @@ rayon = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 blst = { workspace = true }
+revm-interpreter = { workspace = true }
+alloy-type-conversions = { workspace = true }
 
 [dev-dependencies]
 cfx-statedb = { workspace = true, features = ["testonly_code"]}
