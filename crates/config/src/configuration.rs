@@ -1588,9 +1588,8 @@ pub fn parse_config_address_string(
 #[cfg(test)]
 mod tests {
     use cfx_addr::Network;
-    use cfxcore::NodeType;
 
-    use crate::{configuration::parse_config_address_string, Configuration};
+    use crate::configuration::parse_config_address_string;
 
     #[test]
     fn test_config_address_string() {
