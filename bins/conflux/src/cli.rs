@@ -1,11 +1,5 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-#[derive(ValueEnum, Clone, Debug)]
-pub enum Mode {
-    Dev,
-    Test,
-}
-
 /// Conflux client
 #[derive(Parser, Debug)]
 #[clap(
@@ -15,17 +9,17 @@ pub enum Mode {
     version
 )]
 pub struct Cli {
-    /// Use the preset testing configurations.
+    /// Use the preset testing configurations. dev or test.
     #[arg(long, value_name = "MODE", value_enum)]
-    pub mode: Option<Mode>,
+    pub mode: Option<String>,
 
     /// Specify the port for P2P connections.
     #[arg(long, short = 'p', value_name = "PORT")]
-    pub port: Option<u16>,
+    pub port: Option<String>,
 
     /// Specify the UDP port for peer discovery.
     #[arg(id = "udp-port", long = "udp-port", value_name = "PORT")]
-    pub udp_port: Option<u16>,
+    pub udp_port: Option<String>,
 
     /// Specify the port for the WebSocket JSON-RPC API server.
     #[arg(
@@ -33,7 +27,7 @@ pub struct Cli {
         long = "jsonrpc-ws-port",
         value_name = "PORT"
     )]
-    pub jsonrpc_ws_port: Option<u16>,
+    pub jsonrpc_ws_port: Option<String>,
 
     /// Specify the port for the TCP JSON-RPC API server.
     #[arg(
@@ -41,7 +35,7 @@ pub struct Cli {
         long = "jsonrpc-tcp-port",
         value_name = "PORT"
     )]
-    pub jsonrpc_tcp_port: Option<u16>,
+    pub jsonrpc_tcp_port: Option<String>,
 
     /// Specify the port for the HTTP JSON-RPC API server.
     #[arg(
@@ -49,15 +43,19 @@ pub struct Cli {
         long = "jsonrpc-http-port",
         value_name = "PORT"
     )]
-    pub jsonrpc_http_port: Option<u16>,
+    pub jsonrpc_http_port: Option<String>,
 
     /// Specify CORS header for HTTP JSON-RPC API responses.
     #[arg(id = "jsonrpc-cors", long = "jsonrpc-cors", value_name = "URL")]
     pub jsonrpc_cors: Option<String>,
 
     /// Enable HTTP/1.1 keep alive header.
-    #[arg(id = "jsonrpc-http-keep-alive", long = "jsonrpc-http-keep-alive", value_name = "BOOL", value_parser = clap::value_parser!(bool))]
-    pub jsonrpc_http_keep_alive: Option<bool>,
+    #[arg(
+        id = "jsonrpc-http-keep-alive",
+        long = "jsonrpc-http-keep-alive",
+        value_name = "BOOL"
+    )]
+    pub jsonrpc_http_keep_alive: Option<String>,
 
     /// Specify the filename for the log. Stdout will be used by default if
     /// omitted.
@@ -98,8 +96,8 @@ pub struct Cli {
     pub net_key: Option<String>,
 
     /// Start mining if set to true. Ensure that mining-author is set.
-    #[arg(id = "start-mining", long = "start-mining", value_name = "BOOL", value_parser = clap::value_parser!(bool))]
-    pub start_mining: Option<bool>,
+    #[arg(id = "start-mining", long = "start-mining", value_name = "BOOL")]
+    pub start_mining: Option<String>,
 
     /// Set the address to receive mining rewards.
     #[arg(
@@ -122,8 +120,12 @@ pub struct Cli {
     pub db_cache_size: Option<String>,
 
     /// Enable discovery protocol.
-    #[arg(id = "enable-discovery", long = "enable-discovery", value_name = "BOOL", value_parser = clap::value_parser!(bool))]
-    pub enable_discovery: Option<bool>,
+    #[arg(
+        id = "enable-discovery",
+        long = "enable-discovery",
+        value_name = "BOOL"
+    )]
+    pub enable_discovery: Option<String>,
 
     /// How often Conflux updates its peer table (default 300).
     #[arg(
@@ -131,7 +133,7 @@ pub struct Cli {
         long = "node-table-timeout-s",
         value_name = "SEC"
     )]
-    pub node_table_timeout_s: Option<u64>,
+    pub node_table_timeout_s: Option<String>,
 
     /// How long Conflux waits for promoting a peer to trustworthy (default 3 *
     /// 24 * 3600).
@@ -140,11 +142,11 @@ pub struct Cli {
         long = "node-table-promotion-timeout-s",
         value_name = "SEC"
     )]
-    pub node_table_promotion_timeout_s: Option<u64>,
+    pub node_table_promotion_timeout_s: Option<String>,
 
     /// Sets test mode for adding latency
-    #[arg(id = "test-mode", long = "test-mode", value_name = "BOOL", value_parser = clap::value_parser!(bool))]
-    pub test_mode: Option<bool>,
+    #[arg(id = "test-mode", long = "test-mode", value_name = "BOOL")]
+    pub test_mode: Option<String>,
 
     /// Sets the compaction profile of RocksDB.
     #[arg(
@@ -196,7 +198,7 @@ pub struct Cli {
         long = "get-logs-epoch-batch-size",
         value_name = "SIZE"
     )]
-    pub get_logs_epoch_batch_size: Option<u64>,
+    pub get_logs_epoch_batch_size: Option<String>,
 
     /// Sets the maximum number of allowed epochs during log filtering.
     #[arg(
@@ -204,7 +206,7 @@ pub struct Cli {
         long = "get-logs-filter-max-epoch-range",
         value_name = "SIZE"
     )]
-    pub get_logs_filter_max_epoch_range: Option<u64>,
+    pub get_logs_filter_max_epoch_range: Option<String>,
 
     /// Sets the maximum number of log entries returned during log filtering.
     #[arg(
@@ -212,7 +214,7 @@ pub struct Cli {
         long = "get-logs-filter-max-limit",
         value_name = "SIZE"
     )]
-    pub get_logs_filter_max_limit: Option<u64>,
+    pub get_logs_filter_max_limit: Option<String>,
 
     /// Sets the maximum number of allowed blocks during log filtering.
     #[arg(
@@ -220,7 +222,7 @@ pub struct Cli {
         long = "get-logs-filter-max-block-number-range",
         value_name = "SIZE"
     )]
-    pub get_logs_filter_max_block_number_range: Option<u64>,
+    pub get_logs_filter_max_block_number_range: Option<String>,
 
     /// Sets the time after which accounts are re-read from disk.
     #[arg(
@@ -228,7 +230,7 @@ pub struct Cli {
         long = "account-provider-refresh-time-ms",
         value_name = "MS"
     )]
-    pub account_provider_refresh_time_ms: Option<u64>,
+    pub account_provider_refresh_time_ms: Option<String>,
 
     ///  Sets the encryption password for the pos private key file. It's used
     /// to encrypt a new generated key or to decrypt an existing key file.
@@ -240,18 +242,22 @@ pub struct Cli {
     pub dev_pos_private_key_encryption_password: Option<String>,
 
     /// If true, the node will start PoS election and voting if it's available.
-    #[arg(id = "pos-started-as-voter", long = "pos-started-as-voter", value_name = "BOOL", value_parser = clap::value_parser!(bool))]
-    pub pos_started_as_voter: Option<bool>,
+    #[arg(
+        id = "pos-started-as-voter",
+        long = "pos-started-as-voter",
+        value_name = "BOOL"
+    )]
+    pub pos_started_as_voter: Option<String>,
 
     #[arg(long)]
     pub light: bool,
     #[arg(long)]
     pub archive: bool,
-
     #[arg(long)]
     pub tg_archive: bool,
     #[arg(long)]
     pub full: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
