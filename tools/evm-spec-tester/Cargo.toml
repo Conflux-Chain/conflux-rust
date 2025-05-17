@@ -19,18 +19,18 @@ primitives = { path = "../../crates/primitives" }
 eest_types = { path = "../../crates/eest_types" }
 cfx-bytes = { path = "../../crates/cfx_bytes" }
 
+serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 walkdir = "2.5"
 thiserror = "2.0.11"
 rlp = "0.4.0"
 hex = "0.4.3"
 hex-literal = "0.4.1"
-
-log = "0.4"
-
-structopt = { version = "0.3", default-features = false }
-env_logger = "0.11"
+keccak-hash = "0.5"
+lazy_static = "1.5.0"
 itertools = "0.14"
+log = "0.4"
+env_logger = "0.11"
 clap = { version = "4.5", features = ["derive"] }
 clap-verbosity-flag = "3"
 

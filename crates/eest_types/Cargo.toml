@@ -19,6 +19,8 @@ cfx-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 enumn = { workspace = true }
 primitives = { workspace = true }
+keccak-hash = { workspace = true }
+rlp = { workspace = true }
 
 [features]
 default = ["serde"]
