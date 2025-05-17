@@ -475,11 +475,11 @@ impl Configuration {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
 
-        if matches.is_present("archive") {
+        if matches.get_flag("archive") {
             config.raw_conf.node_type = Some(NodeType::Archive);
-        } else if matches.is_present("full") {
+        } else if matches.get_flag("full") {
             config.raw_conf.node_type = Some(NodeType::Full);
-        } else if matches.is_present("light") {
+        } else if matches.get_flag("light") {
             config.raw_conf.node_type = Some(NodeType::Light);
         }
 
@@ -488,6 +488,12 @@ impl Configuration {
             .expect("called once");
 
         Ok(config)
+    }
+
+    pub fn from_file(config_path: &str) -> Result<Configuration, String> {
+        Ok(Configuration {
+            raw_conf: RawConfiguration::from_file(config_path)?,
+        })
     }
 
     fn network_id(&self) -> u64 {
