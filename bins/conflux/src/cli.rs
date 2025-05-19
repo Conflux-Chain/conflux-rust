@@ -267,11 +267,6 @@ pub enum Commands {
     /// Manage accounts
     #[command(subcommand_required = true, arg_required_else_help = true)]
     Account(AccountSubcommands),
-
-    /// EVM related subcommands
-    #[command(subcommand_required = true, arg_required_else_help = true)]
-    Evm(EvmSubcommands),
-
     /// RPC based subcommands to query blockchain information and send
     /// transactions
     #[command(subcommand_required = true, arg_required_else_help = true)]
@@ -321,37 +316,6 @@ pub struct AccountImportArgs {
     /// A list of file paths to import.
     #[arg(id = "import-path", long = "import-path", value_name = "PATH", required = true, num_args = 1..)]
     pub import_path: Vec<String>,
-}
-
-/**
- * --------------- EVM Subcommands ---------------
- */
-
-// EVM Subcommands
-#[derive(Args, Debug)]
-pub struct EvmSubcommands {
-    #[command(subcommand)]
-    pub command: EvmCommand,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum EvmCommand {
-    /// Execute Ethereum state tests
-    Statetest(EvmStatetestArgs),
-}
-
-#[derive(Args, Debug)]
-pub struct EvmStatetestArgs {
-    /// Path to the statetest files
-    #[arg(short = 'p', long = "path", value_name = "PATH", required = true, num_args = 1..)]
-    pub json_path: Vec<String>,
-    /// The statetest fixture file to run if passing only the specified fixture
-    /// will be run
-    #[arg(long = "match", value_name = "JSON_FILE")]
-    pub match_path: Option<String>,
-    /// Verbose mode
-    #[arg(short = 'v', long, action = clap::ArgAction::Count)]
-    pub verbose: u8,
 }
 
 /**
