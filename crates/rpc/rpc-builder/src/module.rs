@@ -41,14 +41,19 @@ pub enum RpcModuleSelection {
     /// The default modules `eth`, `net`, `web3`
     #[default]
     Standard,
-    /// eth, ethpubsub(not implemented)
+    /// eth, pubsub
     Evm,
     /// Only use the configured modules.
     Selection(HashSet<EthRpcModule>),
 }
 
 impl RpcModuleSelection {
-    pub const EVM_MODULES: [EthRpcModule; 1] = [EthRpcModule::Eth];
+    pub const EVM_MODULES: [EthRpcModule; 4] = [
+        EthRpcModule::Eth,
+        EthRpcModule::PubSub,
+        EthRpcModule::Net,
+        EthRpcModule::Web3,
+    ];
     /// The standard modules to instantiate by default `eth`, `net`, `web3`
     pub const STANDARD_MODULES: [EthRpcModule; 3] =
         [EthRpcModule::Eth, EthRpcModule::Net, EthRpcModule::Web3];
@@ -268,7 +273,7 @@ pub enum EthRpcModule {
     /// `parity_` module
     Parity,
     /// pubsub
-    Pubsub,
+    PubSub,
 }
 
 impl EthRpcModule {
@@ -312,7 +317,7 @@ impl FromStr for EthRpcModule {
             "web3" => Self::Web3,
             "rpc" => Self::Rpc,
             "parity" => Self::Parity,
-            "pubsub" | "ethpubsub" => Self::Pubsub,
+            "pubsub" | "ethpubsub" => Self::PubSub,
             _ => return Err(ParseError::VariantNotFound),
         })
     }

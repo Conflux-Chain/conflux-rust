@@ -41,7 +41,8 @@ use cfx_rpc::{helpers::ChainInfo, *};
 use cfx_rpc_cfx_types::RpcImplConfiguration;
 use cfx_rpc_eth_api::*;
 use cfxcore::{
-    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+    Notifications, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 pub use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::{
@@ -58,11 +59,13 @@ use jsonrpsee::{
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    sync::Arc,
     /* time::{Duration, SystemTime, UNIX_EPOCH}, */
 };
 pub use tower::layer::util::{Identity, Stack};
 // use tower::Layer;
 use cfx_tasks::TaskExecutor;
+use tokio::runtime::Runtime;
 
 /// A builder type to configure the RPC module: See [`RpcModule`]
 ///
@@ -74,13 +77,16 @@ pub struct RpcModuleBuilder {
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     executor: TaskExecutor,
+    runtime: Arc<Runtime>,
+    notifications: Arc<Notifications>,
 }
 
 impl RpcModuleBuilder {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor,
+        executor: TaskExecutor, runtime: Arc<Runtime>,
+        notifications: Arc<Notifications>,
     ) -> Self {
         Self {
             config,
@@ -88,6 +94,8 @@ impl RpcModuleBuilder {
             sync,
             tx_pool,
             executor,
+            runtime,
+            notifications,
         }
     }
 
@@ -108,10 +116,18 @@ impl RpcModuleBuilder {
                 sync,
                 tx_pool,
                 executor,
+                runtime,
+                notifications,
             } = self;
 
             let mut registry = RpcRegistryInner::new(
-                config, consensus, sync, tx_pool, executor,
+                config,
+                consensus,
+                sync,
+                tx_pool,
+                executor,
+                runtime,
+                notifications,
             );
 
             modules.config = module_config;
@@ -132,13 +148,16 @@ pub struct RpcRegistryInner {
     tx_pool: SharedTransactionPool,
     modules: HashMap<EthRpcModule, Methods>,
     executor: TaskExecutor,
+    runtime: Arc<Runtime>,
+    notifications: Arc<Notifications>,
 }
 
 impl RpcRegistryInner {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor,
+        executor: TaskExecutor, runtime: Arc<Runtime>,
+        notifications: Arc<Notifications>,
     ) -> Self {
         Self {
             consensus,
@@ -147,6 +166,8 @@ impl RpcRegistryInner {
             tx_pool,
             modules: Default::default(),
             executor,
+            runtime,
+            notifications,
         }
     }
 
@@ -230,15 +251,29 @@ impl RpcRegistryInner {
                     )
                     .into_rpc()
                     .into(),
-                    EthRpcModule::Eth => EthApi::new(
-                        self.config.clone(),
-                        self.consensus.clone(),
-                        self.sync.clone(),
-                        self.tx_pool.clone(),
-                        self.executor.clone(),
-                    )
-                    .into_rpc()
-                    .into(),
+                    EthRpcModule::Eth => {
+                        let mut module = EthApi::new(
+                            self.config.clone(),
+                            self.consensus.clone(),
+                            self.sync.clone(),
+                            self.tx_pool.clone(),
+                            self.executor.clone(),
+                        )
+                        .into_rpc();
+                        if self.config.poll_lifetime_in_seconds.is_some() {
+                            let filter_module = EthFilterApi::new(
+                                self.consensus.clone(),
+                                self.tx_pool.clone(),
+                                self.notifications.epochs_ordered.clone(),
+                                self.runtime.clone(),
+                                self.config.poll_lifetime_in_seconds.unwrap(),
+                                self.config.get_logs_filter_max_limit,
+                            )
+                            .into_rpc();
+                            module.merge(filter_module).expect("No conflicts");
+                        }
+                        module.into()
+                    }
                     EthRpcModule::Net => NetApi::new(Box::new(ChainInfo::new(
                         self.consensus.clone(),
                     )))
@@ -267,9 +302,13 @@ impl RpcRegistryInner {
                     EthRpcModule::Txpool => {
                         TxPoolApi::new(self.tx_pool.clone()).into_rpc().into()
                     }
-                    EthRpcModule::Pubsub => {
-                        todo!()
-                    }
+                    EthRpcModule::PubSub => PubSubApi::new(
+                        self.consensus.clone(),
+                        self.notifications.clone(),
+                        self.runtime.clone(),
+                    )
+                    .into_rpc()
+                    .into(),
                 })
                 .clone()
         };

@@ -18,7 +18,9 @@ use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
 };
 use cfx_types::{Space, H256};
-use cfxcore::{BlockDataManager, Notifications, SharedConsensusGraph, channel::Channel};
+use cfxcore::{
+    channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
+};
 use futures::future::join_all;
 use itertools::zip;
 use jsonrpc_core::Result as RpcResult;

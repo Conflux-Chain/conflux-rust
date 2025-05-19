@@ -75,7 +75,6 @@ use crate::{
     },
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
-use std::net::SocketAddr;
 
 pub mod delegate_convert;
 pub mod shutdown_handler;
@@ -522,7 +521,7 @@ pub fn initialize_not_light_node_modules(
         network,
         common_impl,
         accounts,
-        _notifications,
+        notifications,
         pubsub,
         tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
@@ -715,32 +714,21 @@ pub fn initialize_not_light_node_modules(
 
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
-        setup_public_rpc_apis(
-            common_impl,
-            rpc_impl,
-            pubsub,
-            &conf,
-        ),
+        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
 
     network.start();
 
-    let eth_rpc_http_server_addr =
-        conf.raw_conf.jsonrpc_http_eth_port.map(|port| {
-            format!("0.0.0.0:{}", port)
-                .parse::<SocketAddr>()
-                .expect("Invalid socket port")
-        });
     let eth_rpc_server_handle =
         tokio_runtime.block_on(launch_async_rpc_servers(
-            conf.rpc_impl_config(),
-            conf.raw_conf.throttling_conf.clone(),
-            conf.raw_conf.public_evm_rpc_apis.clone(),
             consensus.clone(),
             sync.clone(),
             txpool.clone(),
-            eth_rpc_http_server_addr,
+            notifications.clone(),
             task_executor.clone(),
+            tokio_runtime.clone(),
+            conf,
+            conf.raw_conf.throttling_conf.clone(),
         ))?;
 
     metrics::initialize(conf.metrics_config(), task_executor.clone());
