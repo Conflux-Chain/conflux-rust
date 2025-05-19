@@ -1552,7 +1552,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpsee",
  "jsonrpsee-core",
- "revm",
+ "revm-primitives",
  "serde_json",
  "thiserror 2.0.11",
  "tokio",
@@ -3801,6 +3801,8 @@ dependencies = [
  "cfx-vm-types",
  "primitives",
  "revm",
+ "revm-interpreter",
+ "revm-primitives",
  "typemap-ors",
 ]
 
@@ -7286,11 +7288,14 @@ dependencies = [
  "auto_impl",
  "bitflags 2.5.0",
  "bitvec 1.0.1",
+ "c-kzg",
  "cfg-if 1.0.0",
+ "derive_more",
  "dyn-clone",
  "enumn",
  "hashbrown 0.14.3",
  "hex",
+ "once_cell",
  "serde",
 ]
 
