@@ -18,7 +18,7 @@ use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
 };
 use cfx_types::{Space, H256};
-use cfxcore::{BlockDataManager, Notifications, SharedConsensusGraph};
+use cfxcore::{BlockDataManager, Notifications, SharedConsensusGraph, channel::Channel};
 use futures::future::join_all;
 use itertools::zip;
 use jsonrpc_core::Result as RpcResult;
@@ -76,6 +76,10 @@ impl PubSubClient {
             notifications,
             executor,
         }
+    }
+
+    pub fn epochs_ordered(&self) -> Arc<Channel<(u64, Vec<H256>)>> {
+        self.notifications.epochs_ordered.clone()
     }
 
     /// Returns a chain notification handler.

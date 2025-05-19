@@ -267,6 +267,9 @@ impl RpcRegistryInner {
                     EthRpcModule::Txpool => {
                         TxPoolApi::new(self.tx_pool.clone()).into_rpc().into()
                     }
+                    EthRpcModule::Pubsub => {
+                        todo!()
+                    }
                 })
                 .clone()
         };
