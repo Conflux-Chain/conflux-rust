@@ -17,9 +17,6 @@ use revm_interpreter::{
 };
 use vm::ReturnData;
 
-const INSTUCTION_TABLE: InstructionTable =
-    make_instruction_table::<LatestSpec>();
-
 impl Executable for Interpreter {
     fn execute<'c>(
         mut self: Box<Self>, context: Context<'c>,
@@ -27,10 +24,10 @@ impl Executable for Interpreter {
         let mut revm_context = EvmHost::new(context);
         let shared_memory = SharedMemory::new();
 
-        let context = &mut revm_context as &mut dyn Host;
+        let table = &make_instruction_table::<_, LatestSpec>();
 
         // TODO: inspect shared_memory
-        let action = self.run(shared_memory, &INSTUCTION_TABLE, context);
+        let action = self.run(shared_memory, table, &mut revm_context);
 
         revm_context.take_db_error()?;
 

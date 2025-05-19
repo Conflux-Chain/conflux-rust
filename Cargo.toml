@@ -292,8 +292,8 @@ alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22
 revm = { version = "8.0", default-features = false }
 # revm-interpreter = "6.0"
 # revm-primitives = "5.0"
-revm-interpreter = { git = "https://github.com/Conflux-Chain/revm.git", branch = "dev"}
-revm-primitives = { git = "https://github.com/Conflux-Chain/revm.git", branch = "dev"}
+revm-interpreter = { git = "https://github.com/Conflux-Chain/revm.git", tag = "v37"}
+revm-primitives = { git = "https://github.com/Conflux-Chain/revm.git", tag = "v37"}
 
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
