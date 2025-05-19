@@ -10,9 +10,13 @@ use crate::{
 };
 use cfx_executor::{
     executive::{ExecutionOutcome, ExecutiveContext, TxDropError},
+    internal_contract::{
+        epoch_hash_slot, initialize_internal_contract_accounts,
+    },
     machine::Machine,
     state::State,
 };
+use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
 use cfx_types::{AddressSpaceUtil, Space, SpaceMap, H256, U256};
 use cfx_vm_types::Env;
 use cfxcore::verification::VerificationConfig;
@@ -40,6 +44,18 @@ impl BlockchainUnitTester {
         }
     }
 
+    fn init_genesis_setting(
+        &self, state: &mut State, hash: &H256,
+    ) -> Result<(), String> {
+        state
+            .set_system_storage(
+                epoch_hash_slot(0).into(),
+                U256::from_big_endian(&hash.0),
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     // eip2935
     fn before_epoch_execution(
         &self, state: &mut State, machine: &Machine, pivot_block: &Block,
@@ -48,6 +64,16 @@ impl BlockchainUnitTester {
 
         let epoch_number = pivot_block.block_header.height();
         let parent_hash = pivot_block.block_header.parent_hash();
+        let hash = pivot_block.hash();
+
+        if epoch_number >= params.transition_heights.cip133e {
+            state
+                .set_system_storage(
+                    epoch_hash_slot(epoch_number).into(),
+                    U256::from_big_endian(&hash.0),
+                )
+                .map_err(|e| e.to_string())?;
+        }
 
         if epoch_number >= params.transition_heights.eip2935 {
             state
@@ -56,6 +82,24 @@ impl BlockchainUnitTester {
         }
 
         Ok(())
+    }
+
+    fn make_state(&self) -> State {
+        let mut state = make_state(&self.unit.pre);
+
+        initialize_internal_contract_accounts(
+            &mut state,
+            &[SYSTEM_STORAGE_ADDRESS],
+        )
+        .expect("should success");
+
+        self.init_genesis_setting(
+            &mut state,
+            &self.unit.genesis_block_header.hash,
+        )
+        .expect("should success");
+
+        state
     }
 
     fn process_epoch(
@@ -323,7 +367,7 @@ impl UnitTester for BlockchainUnitTester {
             trace!("Running TestUnit: {}", self.name);
         }
 
-        let mut state = make_state(&self.unit.pre);
+        let mut state = self.make_state();
 
         let blocks = self.primitive_blocks();
 

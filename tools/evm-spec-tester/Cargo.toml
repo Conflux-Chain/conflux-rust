@@ -18,6 +18,7 @@ cfx-config = { path = "../../crates/config" }
 primitives = { path = "../../crates/primitives" }
 eest_types = { path = "../../crates/eest_types" }
 cfx-bytes = { path = "../../crates/cfx_bytes" }
+cfx-parameters = { path = "../../crates/parameters"}
 
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

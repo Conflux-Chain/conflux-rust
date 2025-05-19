@@ -2742,6 +2742,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-config",
  "cfx-executor",
+ "cfx-parameters",
  "cfx-rpc-eth-types",
  "cfx-statedb",
  "cfx-types",
