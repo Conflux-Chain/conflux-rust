@@ -13,7 +13,7 @@ def verify_erc20_token_transfer_trace(traces: List[FilterTrace], receipt: TxRece
     assert trace0["transactionHash"] == receipt["transactionHash"]
     assert trace0["blockHash"] == receipt["blockHash"]
     assert trace0["blockNumber"] == receipt["blockNumber"]
-    assert trace0["transactionPosition"] == 0
+    assert trace0["transactionPosition"] == "0x0"
     assert trace0["valid"] == True
     assert trace0["result"] != None
 
