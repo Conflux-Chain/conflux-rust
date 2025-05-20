@@ -1006,7 +1006,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-config"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-addr",
  "cfx-executor",
@@ -1170,7 +1170,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1188,7 +1188,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
@@ -1230,7 +1230,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc",
@@ -1269,7 +1269,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1295,7 +1295,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-common-impl"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-addr",
  "cfx-execute-helper",
@@ -1308,7 +1308,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
@@ -1319,7 +1319,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1340,7 +1340,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-middlewares"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "anyhow",
  "cfx-rpc-utils",
@@ -1360,7 +1360,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -1370,7 +1370,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1447,7 +1447,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -1471,7 +1471,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "2.4.0"
+version = "2.6.0"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -1514,7 +1514,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -2542,7 +2542,7 @@ checksum = "bbbaaaf38131deb9ca518a274a45bfdb8771f139517b073b16c2d3d32ae5037b"
 
 [[package]]
 name = "eest_types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
@@ -3127,7 +3127,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -4387,9 +4387,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.1.8"
+version = "1.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
+checksum = "8b70e7a7df205e92a1a4cd9aaae7898dac0aa555503cc0a649494d0d60e7651d"
 dependencies = [
  "cc",
  "libc",
@@ -6549,7 +6549,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
