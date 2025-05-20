@@ -1627,6 +1627,10 @@
 <a href="#1627" id="1627">1627</a>
 <a href="#1628" id="1628">1628</a>
 <a href="#1629" id="1629">1629</a>
+<a href="#1630" id="1630">1630</a>
+<a href="#1631" id="1631">1631</a>
+<a href="#1632" id="1632">1632</a>
+<a href="#1633" id="1633">1633</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -3119,10 +3123,6 @@
             <span class="self">self</span>.raw_conf.base_fee_burn_transition_height.unwrap_or(default_transition_time);
             params.transition_heights =&gt; { cip130, cip133e }
         );
-        params.transition_heights.cip_c2_fix = <span class="self">self
-            </span>.raw_conf
-            .c2_fix_transition_height
-            .unwrap_or(default_transition_time);
         <span class="comment">// TODO: disable 1559 test during dev
         </span>params.transition_heights.cip1559 = <span class="self">self
             </span>.raw_conf
@@ -3142,7 +3142,15 @@
         }
 
         <span class="comment">//
-        // 7702 hardfork (V2.5)
+        // hardfork (V2.5)
+        //
+        </span>params.transition_heights.cip_c2_fix = <span class="self">self
+            </span>.raw_conf
+            .c2_fix_transition_height
+            .unwrap_or(default_transition_time);
+
+        <span class="comment">//
+        // 7702 hardfork (V2.6)
         //
         </span><span class="macro">set_conf!</span>(
             <span class="self">self</span>.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
