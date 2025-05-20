@@ -400,7 +400,7 @@
     },
 };
 <span class="kw">use </span>cfxkey::{Error <span class="kw">as </span>EthkeyError, Generator, KeyPair, Random};
-<span class="kw">use </span>clap4;
+<span class="kw">use </span>clap;
 <span class="kw">use </span>diem_crypto::{
     key_file::save_pri_key, HashValue, Uniform, ValidCryptoMaterialStringExt,
 };
@@ -483,39 +483,39 @@
     env_logger::try_init().expect(<span class="string">"Logger initialized only once."</span>);
     POS_STATE_CONFIG.set(Default::default()).unwrap();
 
-    <span class="kw">let </span>cli = clap4::Command::new(<span class="string">"pos-genesis-tool"</span>)
+    <span class="kw">let </span>cli = clap::Command::new(<span class="string">"pos-genesis-tool"</span>)
         .subcommand_required(<span class="bool-val">true</span>)
         .subcommands([
-            clap4::Command::new(<span class="string">"random"</span>)
+            clap::Command::new(<span class="string">"random"</span>)
                 .arg(
-                    clap4::Arg::new(<span class="string">"initial-seed"</span>)
+                    clap::Arg::new(<span class="string">"initial-seed"</span>)
                         .long(<span class="string">"initial-seed"</span>)
                         .required(<span class="bool-val">true</span>),
                 )
                 .arg(
-                    clap4::Arg::new(<span class="string">"num-validator"</span>)
+                    clap::Arg::new(<span class="string">"num-validator"</span>)
                         .long(<span class="string">"num-validator"</span>)
-                        .value_parser(<span class="macro">clap4::value_parser!</span>(usize)),
+                        .value_parser(<span class="macro">clap::value_parser!</span>(usize)),
                 )
                 .arg(
-                    clap4::Arg::new(<span class="string">"num-genesis-validator"</span>)
+                    clap::Arg::new(<span class="string">"num-genesis-validator"</span>)
                         .long(<span class="string">"num-genesis-validator"</span>)
-                        .value_parser(<span class="macro">clap4::value_parser!</span>(usize)),
+                        .value_parser(<span class="macro">clap::value_parser!</span>(usize)),
                 )
                 .arg(
-                    clap4::Arg::new(<span class="string">"chain-id"</span>)
+                    clap::Arg::new(<span class="string">"chain-id"</span>)
                         .long(<span class="string">"chain-id"</span>)
-                        .value_parser(<span class="macro">clap4::value_parser!</span>(u32)),
+                        .value_parser(<span class="macro">clap::value_parser!</span>(u32)),
                 ),
-            clap4::Command::new(<span class="string">"frompub"</span>)
+            clap::Command::new(<span class="string">"frompub"</span>)
                 .arg(
-                    clap4::Arg::new(<span class="string">"initial-seed"</span>)
+                    clap::Arg::new(<span class="string">"initial-seed"</span>)
                         .long(<span class="string">"initial-seed"</span>)
                         .required(<span class="bool-val">true</span>),
                 )
                 .arg(
-                    clap4::Arg::new(<span class="string">"pkfile"</span>)
-                        .value_parser(<span class="macro">clap4::value_parser!</span>(PathBuf))
+                    clap::Arg::new(<span class="string">"pkfile"</span>)
+                        .value_parser(<span class="macro">clap::value_parser!</span>(PathBuf))
                         .required(<span class="bool-val">true</span>),
                 ),
         ]);
@@ -615,7 +615,7 @@
     elected
 }
 
-<span class="kw">fn </span>execute(command: clap4::Command) -&gt; <span class="prelude-ty">Result</span>&lt;String, Error&gt; {
+<span class="kw">fn </span>execute(command: clap::Command) -&gt; <span class="prelude-ty">Result</span>&lt;String, Error&gt; {
     <span class="kw">let </span>matches = command.get_matches();
     <span class="kw">return match </span>matches.subcommand() {
         <span class="prelude-val">Some</span>((<span class="string">"random"</span>, sub_matches)) =&gt; {

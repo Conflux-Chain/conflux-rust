@@ -222,6 +222,7 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -229,11 +230,13 @@
 </span><span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test;
 
+<span class="kw">mod </span>cli;
 <span class="kw">mod </span>command;
 
 <span class="kw">use </span><span class="kw">crate</span>::command::rpc::RpcCommand;
 <span class="kw">use </span>cfxcore::NodeType;
-<span class="kw">use </span>clap::{crate_version, load_yaml, App, ArgMatches};
+<span class="kw">use </span>clap::{crate_version, ArgMatches, CommandFactory};
+<span class="kw">use </span>cli::Cli;
 <span class="kw">use </span>client::{
     archive::ArchiveClient,
     common::{shutdown_handler, ClientTrait},
@@ -278,9 +281,8 @@
         });
     } <span class="comment">// only for #[cfg]
 
-    </span><span class="kw">let </span>yaml = <span class="macro">load_yaml!</span>(<span class="string">"cli.yaml"</span>);
-    <span class="kw">let </span>version = parity_version::version(<span class="macro">crate_version!</span>());
-    <span class="kw">let </span>matches = App::from_yaml(yaml).version(version.as_str()).get_matches();
+    </span><span class="kw">let </span>version = parity_version::version(<span class="macro">crate_version!</span>());
+    <span class="kw">let </span>matches = Cli::command().get_matches();
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(output) = handle_sub_command(<span class="kw-2">&amp;</span>matches)<span class="question-mark">? </span>{
         <span class="macro">println!</span>(<span class="string">"{}"</span>, output);
@@ -345,15 +347,15 @@ Current Version: {}
     }
 
     <span class="comment">// account sub-commands
-    </span><span class="kw">if let </span>(<span class="string">"account"</span>, <span class="prelude-val">Some</span>(account_matches)) = matches.subcommand() {
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="string">"account"</span>, account_matches)) = matches.subcommand() {
         <span class="kw">let </span>account_cmd = <span class="kw">match </span>account_matches.subcommand() {
-            (<span class="string">"new"</span>, <span class="prelude-val">Some</span>(new_acc_matches)) =&gt; {
+            <span class="prelude-val">Some</span>((<span class="string">"new"</span>, new_acc_matches)) =&gt; {
                 AccountCmd::New(NewAccount::new(new_acc_matches))
             }
-            (<span class="string">"list"</span>, <span class="prelude-val">Some</span>(list_acc_matches)) =&gt; {
+            <span class="prelude-val">Some</span>((<span class="string">"list"</span>, list_acc_matches)) =&gt; {
                 AccountCmd::List(ListAccounts::new(list_acc_matches))
             }
-            (<span class="string">"import"</span>, <span class="prelude-val">Some</span>(import_acc_matches)) =&gt; {
+            <span class="prelude-val">Some</span>((<span class="string">"import"</span>, import_acc_matches)) =&gt; {
                 AccountCmd::Import(ImportAccounts::new(import_acc_matches))
             }
             <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
@@ -364,8 +366,8 @@ Current Version: {}
 
     <span class="comment">// general RPC commands
     </span><span class="kw">let </span><span class="kw-2">mut </span>subcmd_matches = matches;
-    <span class="kw">while let </span><span class="prelude-val">Some</span>(m) = subcmd_matches.subcommand().<span class="number">1 </span>{
-        subcmd_matches = m;
+    <span class="kw">while let </span><span class="prelude-val">Some</span>(m) = subcmd_matches.subcommand() {
+        subcmd_matches = m.<span class="number">1</span>;
     }
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(cmd) = RpcCommand::parse(subcmd_matches)<span class="question-mark">? </span>{

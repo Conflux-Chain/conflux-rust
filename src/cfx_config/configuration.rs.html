@@ -1621,6 +1621,12 @@
 <a href="#1621" id="1621">1621</a>
 <a href="#1622" id="1622">1622</a>
 <a href="#1623" id="1623">1623</a>
+<a href="#1624" id="1624">1624</a>
+<a href="#1625" id="1625">1625</a>
+<a href="#1626" id="1626">1626</a>
+<a href="#1627" id="1627">1627</a>
+<a href="#1628" id="1628">1628</a>
+<a href="#1629" id="1629">1629</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2098,11 +2104,11 @@
         <span class="kw">let </span><span class="kw-2">mut </span>config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>matches.is_present(<span class="string">"archive"</span>) {
+        <span class="kw">if </span>matches.get_flag(<span class="string">"archive"</span>) {
             config.raw_conf.node_type = <span class="prelude-val">Some</span>(NodeType::Archive);
-        } <span class="kw">else if </span>matches.is_present(<span class="string">"full"</span>) {
+        } <span class="kw">else if </span>matches.get_flag(<span class="string">"full"</span>) {
             config.raw_conf.node_type = <span class="prelude-val">Some</span>(NodeType::Full);
-        } <span class="kw">else if </span>matches.is_present(<span class="string">"light"</span>) {
+        } <span class="kw">else if </span>matches.get_flag(<span class="string">"light"</span>) {
             config.raw_conf.node_type = <span class="prelude-val">Some</span>(NodeType::Light);
         }
 
@@ -2111,6 +2117,12 @@
             .expect(<span class="string">"called once"</span>);
 
         <span class="prelude-val">Ok</span>(config)
+    }
+
+    <span class="kw">pub fn </span>from_file(config_path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Configuration, String&gt; {
+        <span class="prelude-val">Ok</span>(Configuration {
+            raw_conf: RawConfiguration::from_file(config_path)<span class="question-mark">?</span>,
+        })
     }
 
     <span class="kw">fn </span>network_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {

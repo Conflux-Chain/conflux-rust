@@ -205,11 +205,11 @@
 <span class="kw">impl </span>NewAccount {
     <span class="kw">pub fn </span>new(matches: <span class="kw-2">&amp;</span>clap::ArgMatches) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>iterations: u32 = matches
-            .value_of(<span class="string">"key-iterations"</span>)
-            .unwrap_or(<span class="string">"0"</span>)
-            .parse()
-            .unwrap();
-        <span class="kw">let </span>password_file = matches.value_of(<span class="string">"password"</span>).map(|x| x.to_string());
+            .get_one::&lt;u32&gt;(<span class="string">"keys-iterations"</span>)
+            .unwrap_or(<span class="kw-2">&amp;</span><span class="number">0</span>)
+            .to_owned();
+        <span class="kw">let </span>password_file =
+            matches.get_one::&lt;String&gt;(<span class="string">"password"</span>).map(|s| s.to_string());
         <span class="self">Self </span>{
             iterations,
             path: <span class="prelude-val">None</span>,
@@ -227,7 +227,7 @@
 <span class="kw">impl </span>ImportAccounts {
     <span class="kw">pub fn </span>new(matches: <span class="kw-2">&amp;</span>clap::ArgMatches) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>from: Vec&lt;<span class="kw">_</span>&gt; = matches
-            .values_of(<span class="string">"import-path"</span>)
+            .get_many::&lt;String&gt;(<span class="string">"import-path"</span>)
             .expect(<span class="string">"CLI argument is required; qed"</span>)
             .map(|s| s.to_string())
             .collect();

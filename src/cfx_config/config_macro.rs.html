@@ -208,14 +208,14 @@
             // Replace the ones from config file with the ones
             // from commandline if duplicates.
             </span><span class="kw">pub fn </span>parse(matches: <span class="kw-2">&amp;</span>clap::ArgMatches) -&gt; <span class="prelude-ty">Result</span>&lt;RawConfiguration, String&gt; {
-                <span class="kw">let </span><span class="kw-2">mut </span>config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config_filename) = matches.value_of(<span class="string">"config"</span>)  {
+                <span class="kw">let </span><span class="kw-2">mut </span>config = <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(config_filename)) = matches.try_get_one::&lt;String&gt;(<span class="string">"config"</span>)  {
                     RawConfiguration::from_file(config_filename)<span class="question-mark">?
 
                 </span>} <span class="kw">else </span>{
                     RawConfiguration::default()
                 };
                 $(
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = matches.value_of(<span class="macro">underscore_to_hyphen!</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))) {
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(value)) = matches.try_get_one::&lt;String&gt;(<span class="macro">underscore_to_hyphen!</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>)).as_str()) {
                         config.<span class="macro-nonterminal">$name </span>= <span class="macro">if_option!</span>(
                                 $(<span class="macro-nonterminal">$</span><span class="kw">type</span>)+,
                                 <span class="macro-nonterminal">THEN</span>{ <span class="prelude-val">Some</span>(value.parse().map_err(|<span class="kw">_</span>| <span class="macro">concat!</span>(<span class="string">"Invalid "</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>)).to_owned())<span class="question-mark">?</span>) }
@@ -224,8 +224,8 @@
                     }
                 )*
                 $(
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = matches.value_of(<span class="macro">underscore_to_hyphen!</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$c_name</span>))) {
-                    config.<span class="macro-nonterminal">$c_name </span>= <span class="macro">if_option!</span>(
+                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(value)) = matches.try_get_one::&lt;String&gt;(<span class="macro">underscore_to_hyphen!</span>(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$c_name</span>)).as_str()) {
+                        config.<span class="macro-nonterminal">$c_name </span>= <span class="macro">if_option!</span>(
                                 $(<span class="macro-nonterminal">$c_type</span>)+,
                                 THEN{ <span class="prelude-val">Some</span>(<span class="macro-nonterminal">$converter</span>(value)<span class="question-mark">?</span>) }
                                 ELSE{ <span class="macro-nonterminal">$converter</span>(value)<span class="question-mark">? </span>}

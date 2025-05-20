@@ -241,7 +241,7 @@
     max_depth: u32,
 }
 <span class="kw">fn </span>parse_config() -&gt; Config {
-    <span class="kw">let </span>matches = clap4::Command::new(<span class="string">"cfx-gen-dot"</span>)
+    <span class="kw">let </span>matches = clap::Command::new(<span class="string">"cfx-gen-dot"</span>)
         .version(<span class="string">"0.1"</span>)
         .about(
 <span class="string">"Generate Graphviz dot files from your local blockchain db
@@ -253,24 +253,24 @@ Example usage:
         &gt; graph.dot
     dot -Tsvg graph.dot -o graph.svg"</span>)
         .arg(
-            clap4::Arg::new(<span class="string">"db-path"</span>)
+            clap::Arg::new(<span class="string">"db-path"</span>)
                 .long(<span class="string">"db-path"</span>)
                 .value_name(<span class="string">"PATH"</span>)
                 .help(<span class="string">"Specifies local blockchain db directory"</span>)
                 .required(<span class="bool-val">true</span>),
         )
         .arg(
-            clap4::Arg::new(<span class="string">"from-block"</span>)
+            clap::Arg::new(<span class="string">"from-block"</span>)
                 .long(<span class="string">"from-block"</span>)
                 .value_name(<span class="string">"HASH"</span>)
                 .help(<span class="string">"Sets starting block of DAG traversal"</span>)
                 .required(<span class="bool-val">true</span>),
         )
         .arg(
-            clap4::Arg::new(<span class="string">"max-depth"</span>)
+            clap::Arg::new(<span class="string">"max-depth"</span>)
                 .long(<span class="string">"max-depth"</span>)
                 .value_name(<span class="string">"NUM"</span>)
-                .value_parser(<span class="macro">clap4::value_parser!</span>(u32))
+                .value_parser(<span class="macro">clap::value_parser!</span>(u32))
                 .help(<span class="string">"Sets maximum depth for traversal"</span>)
                 .required(<span class="bool-val">true</span>)
         )
