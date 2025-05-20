@@ -38,7 +38,6 @@ mod interceptor;
 pub mod metadata;
 mod traits;
 pub mod types;
-use tokio::runtime::Runtime;
 
 pub use cfxcore::errors::{
     BoxFuture as CoreBoxFuture, Error as CoreError, Result as CoreResult,
@@ -408,7 +407,7 @@ where
 pub async fn launch_async_rpc_servers(
     consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool, notifications: Arc<Notifications>,
-    executor: TaskExecutor, runtime: Arc<Runtime>, conf: &Configuration,
+    executor: TaskExecutor, conf: &Configuration,
     throttling_conf_file: Option<String>,
 ) -> Result<Option<RpcServerHandle>, String> {
     let http_config = conf.eth_http_config();
@@ -458,7 +457,6 @@ pub async fn launch_async_rpc_servers(
         sync,
         tx_pool,
         executor,
-        runtime,
         notifications,
     );
 

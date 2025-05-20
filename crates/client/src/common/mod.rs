@@ -726,7 +726,6 @@ pub fn initialize_not_light_node_modules(
             txpool.clone(),
             notifications.clone(),
             task_executor.clone(),
-            tokio_runtime.clone(),
             conf,
             conf.raw_conf.throttling_conf.clone(),
         ))?;

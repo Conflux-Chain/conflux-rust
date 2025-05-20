@@ -65,7 +65,6 @@ use std::{
 pub use tower::layer::util::{Identity, Stack};
 // use tower::Layer;
 use cfx_tasks::TaskExecutor;
-use tokio::runtime::Runtime;
 
 /// A builder type to configure the RPC module: See [`RpcModule`]
 ///
@@ -77,7 +76,6 @@ pub struct RpcModuleBuilder {
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     executor: TaskExecutor,
-    runtime: Arc<Runtime>,
     notifications: Arc<Notifications>,
 }
 
@@ -85,8 +83,7 @@ impl RpcModuleBuilder {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor, runtime: Arc<Runtime>,
-        notifications: Arc<Notifications>,
+        executor: TaskExecutor, notifications: Arc<Notifications>,
     ) -> Self {
         Self {
             config,
@@ -94,7 +91,6 @@ impl RpcModuleBuilder {
             sync,
             tx_pool,
             executor,
-            runtime,
             notifications,
         }
     }
@@ -116,7 +112,6 @@ impl RpcModuleBuilder {
                 sync,
                 tx_pool,
                 executor,
-                runtime,
                 notifications,
             } = self;
 
@@ -126,7 +121,6 @@ impl RpcModuleBuilder {
                 sync,
                 tx_pool,
                 executor,
-                runtime,
                 notifications,
             );
 
@@ -148,7 +142,6 @@ pub struct RpcRegistryInner {
     tx_pool: SharedTransactionPool,
     modules: HashMap<EthRpcModule, Methods>,
     executor: TaskExecutor,
-    runtime: Arc<Runtime>,
     notifications: Arc<Notifications>,
 }
 
@@ -156,8 +149,7 @@ impl RpcRegistryInner {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor, runtime: Arc<Runtime>,
-        notifications: Arc<Notifications>,
+        executor: TaskExecutor, notifications: Arc<Notifications>,
     ) -> Self {
         Self {
             consensus,
@@ -166,7 +158,6 @@ impl RpcRegistryInner {
             tx_pool,
             modules: Default::default(),
             executor,
-            runtime,
             notifications,
         }
     }
@@ -265,7 +256,7 @@ impl RpcRegistryInner {
                                 self.consensus.clone(),
                                 self.tx_pool.clone(),
                                 self.notifications.epochs_ordered.clone(),
-                                self.runtime.clone(),
+                                self.executor.clone(),
                                 self.config.poll_lifetime_in_seconds.unwrap(),
                                 self.config.get_logs_filter_max_limit,
                             )
@@ -305,7 +296,7 @@ impl RpcRegistryInner {
                     EthRpcModule::PubSub => PubSubApi::new(
                         self.consensus.clone(),
                         self.notifications.clone(),
-                        self.runtime.clone(),
+                        self.executor.clone(),
                     )
                     .into_rpc()
                     .into(),
