@@ -13,7 +13,7 @@ use cfx_storage::{
 };
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, H256};
 use cfxcore::sync::Error;
-use clap4::{value_parser, Arg, ArgMatches, Command};
+use clap::{value_parser, Arg, ArgMatches, Command};
 use log::LevelFilter;
 use log4rs::{
     append::console::ConsoleAppender,

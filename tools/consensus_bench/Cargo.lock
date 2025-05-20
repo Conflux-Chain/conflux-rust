@@ -1124,7 +1124,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1142,7 +1142,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1168,7 +1168,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1189,7 +1189,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -1199,7 +1199,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1210,7 +1210,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpsee",
  "jsonrpsee-core",
- "revm",
+ "revm-primitives",
  "serde_json",
  "thiserror 2.0.11",
  "tokio",
@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -1300,7 +1300,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "2.4.0"
+version = "2.6.0"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -1343,7 +1343,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -2856,7 +2856,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -2867,6 +2867,8 @@ dependencies = [
  "cfx-vm-types",
  "primitives",
  "revm",
+ "revm-interpreter",
+ "revm-primitives",
  "typemap-ors",
 ]
 
@@ -3901,9 +3903,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.1.8"
+version = "1.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
+checksum = "8b70e7a7df205e92a1a4cd9aaae7898dac0aa555503cc0a649494d0d60e7651d"
 dependencies = [
  "cc",
  "libc",
@@ -5554,11 +5556,14 @@ dependencies = [
  "auto_impl",
  "bitflags 2.5.0",
  "bitvec 1.0.1",
+ "c-kzg",
  "cfg-if 1.0.0",
+ "derive_more",
  "dyn-clone",
  "enumn",
  "hashbrown 0.14.3",
  "hex",
+ "once_cell",
  "serde",
 ]
 
@@ -5998,7 +6003,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "cfx-types",

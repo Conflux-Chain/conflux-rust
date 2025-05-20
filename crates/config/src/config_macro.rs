@@ -66,14 +66,14 @@ macro_rules! build_config{
             // Replace the ones from config file with the ones
             // from commandline if duplicates.
             pub fn parse(matches: &clap::ArgMatches) -> Result<RawConfiguration, String> {
-                let mut config = if let Some(config_filename) = matches.value_of("config")  {
+                let mut config = if let Ok(Some(config_filename)) = matches.try_get_one::<String>("config")  {
                     RawConfiguration::from_file(config_filename)?
 
                 } else {
                     RawConfiguration::default()
                 };
                 $(
-                    if let Some(value) = matches.value_of(underscore_to_hyphen!(stringify!($name))) {
+                    if let Ok(Some(value)) = matches.try_get_one::<String>(underscore_to_hyphen!(stringify!($name)).as_str()) {
                         config.$name = if_option!(
                                 $($type)+,
                                 THEN{ Some(value.parse().map_err(|_| concat!("Invalid ", stringify!($name)).to_owned())?) }
@@ -82,8 +82,8 @@ macro_rules! build_config{
                     }
                 )*
                 $(
-                    if let Some(value) = matches.value_of(underscore_to_hyphen!(stringify!($c_name))) {
-                    config.$c_name = if_option!(
+                    if let Ok(Some(value)) = matches.try_get_one::<String>(underscore_to_hyphen!(stringify!($c_name)).as_str()) {
+                        config.$c_name = if_option!(
                                 $($c_type)+,
                                 THEN{ Some($converter(value)?) }
                                 ELSE{ $converter(value)? }

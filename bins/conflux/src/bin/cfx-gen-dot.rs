@@ -89,7 +89,7 @@ struct Config {
     max_depth: u32,
 }
 fn parse_config() -> Config {
-    let matches = clap4::Command::new("cfx-gen-dot")
+    let matches = clap::Command::new("cfx-gen-dot")
         .version("0.1")
         .about(
 "Generate Graphviz dot files from your local blockchain db
@@ -101,24 +101,24 @@ Example usage:
         > graph.dot
     dot -Tsvg graph.dot -o graph.svg")
         .arg(
-            clap4::Arg::new("db-path")
+            clap::Arg::new("db-path")
                 .long("db-path")
                 .value_name("PATH")
                 .help("Specifies local blockchain db directory")
                 .required(true),
         )
         .arg(
-            clap4::Arg::new("from-block")
+            clap::Arg::new("from-block")
                 .long("from-block")
                 .value_name("HASH")
                 .help("Sets starting block of DAG traversal")
                 .required(true),
         )
         .arg(
-            clap4::Arg::new("max-depth")
+            clap::Arg::new("max-depth")
                 .long("max-depth")
                 .value_name("NUM")
-                .value_parser(clap4::value_parser!(u32))
+                .value_parser(clap::value_parser!(u32))
                 .help("Sets maximum depth for traversal")
                 .required(true)
         )
