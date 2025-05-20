@@ -640,6 +640,7 @@
 <a href="#640" id="640">640</a>
 <a href="#641" id="641">641</a>
 <a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
@@ -678,7 +679,8 @@
 <span class="kw">use </span>cfx_types::{Space, H256};
 <span class="kw">use </span>cfx_vm_types::CallType <span class="kw">as </span>CfxCallType;
 <span class="kw">use </span>primitives::{block::BlockHeight, BlockNumber};
-<span class="kw">use </span>revm::interpreter::{
+
+<span class="kw">use </span>revm_interpreter::{
     opcode, CallContext, CallScheme, CreateScheme, InstructionResult, OpCode,
 };
 <span class="kw">use </span>std::collections::VecDeque;
@@ -1278,7 +1280,7 @@
     <span class="kw">where </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt; {
         <span class="kw">let </span>op = u8::deserialize(deserializer)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(OpCode::new(op).unwrap_or_else(|| {
-            OpCode::new(revm::interpreter::opcode::INVALID).unwrap()
+            OpCode::new(revm_interpreter::opcode::INVALID).unwrap()
         }))
     }
 }

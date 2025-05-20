@@ -18,7 +18,7 @@ considered.</p>
     &amp;mut self,
     id: &amp;<a class="type" href="type.NodeId.html" title="type network::node_table::NodeId">NodeId</a>,
     by_connection: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
-    token: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;StreamToken&gt;
+    token: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="../../io/service_mio/type.StreamToken.html" title="type io::service_mio::StreamToken">StreamToken</a>&gt;
 )</h4></section></summary><div class="docblock"><p>Set last contact as success for a node</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.mark_as_useless" class="method"><a class="src rightside" href="../../src/network/node_table.rs.html#832-834">source</a><h4 class="code-header">pub fn <a href="#method.mark_as_useless" class="fn">mark_as_useless</a>(&amp;mut self, id: &amp;<a class="type" href="type.NodeId.html" title="type network::node_table::NodeId">NodeId</a>)</h4></section></summary><div class="docblock"><p>Mark as useless, no further attempts to connect until next call to
 <code>clear_useless</code>.</p>

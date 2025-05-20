@@ -462,7 +462,6 @@
 <a href="#462" id="462">462</a>
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
-<a href="#465" id="465">465</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
     config::TracingInspectorConfig,
     fourbyte::FourByteInspector,
@@ -486,11 +485,10 @@
 };
 <span class="kw">use </span>cfx_types::H160;
 <span class="kw">use </span>cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
-<span class="kw">use </span>revm::{
-    db::InMemoryDB,
-    interpreter::{Gas, InstructionResult, InterpreterResult},
-    primitives::State,
-};
+<span class="kw">use </span>revm::db::InMemoryDB;
+<span class="kw">use </span>revm_interpreter::{Gas, InstructionResult, InterpreterResult};
+<span class="kw">use </span>revm_primitives::State;
+
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">pub struct </span>GethTracer {
