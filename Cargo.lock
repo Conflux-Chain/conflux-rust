@@ -2148,6 +2148,7 @@ dependencies = [
  "bcs",
  "bls-signatures",
  "cfx-bytes",
+ "cfx-execute-helper",
  "cfx-executor",
  "cfx-rpc-eth-types",
  "cfx-statedb",
