@@ -8,7 +8,7 @@ use alloy_rpc_types::error::EthRpcErrorCode;
 use alloy_sol_types::decode_revert_reason;
 use jsonrpc_core::{Error as JsonRpcError, ErrorCode};
 use jsonrpsee::types::ErrorObjectOwned;
-use revm::primitives::{HaltReason, OutOfGasError};
+use revm_primitives::{HaltReason, OutOfGasError};
 use std::time::Duration;
 
 // The key point is the error code and message.

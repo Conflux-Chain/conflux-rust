@@ -1171,7 +1171,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-config"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-addr",
  "cfx-executor",
@@ -1182,7 +1182,7 @@ dependencies = [
  "cfx-storage",
  "cfx-types",
  "cfxcore",
- "clap 2.34.0",
+ "clap 4.5.37",
  "db",
  "diem-types",
  "jsonrpc-http-server",
@@ -1341,7 +1341,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1359,7 +1359,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc",
@@ -1441,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1467,7 +1467,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-common-impl"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-addr",
  "cfx-execute-helper",
@@ -1480,7 +1480,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
@@ -1491,7 +1491,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1512,7 +1512,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-middlewares"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "anyhow",
  "cfx-rpc-utils",
@@ -1532,7 +1532,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -1542,7 +1542,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1553,7 +1553,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpsee",
  "jsonrpsee-core",
- "revm",
+ "revm-primitives",
  "serde_json",
  "thiserror 2.0.11",
  "tokio",
@@ -1633,7 +1633,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -1659,7 +1659,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "2.4.0"
+version = "2.6.0"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -1702,7 +1702,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -1957,14 +1957,9 @@ version = "2.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0610544180c38b88101fecf2dd634b174a62eef6946f84dfc6a7127512b381c"
 dependencies = [
- "ansi_term",
- "atty",
  "bitflags 1.3.2",
- "strsim 0.8.0",
  "textwrap",
  "unicode-width",
- "vec_map",
- "yaml-rust 0.3.5",
 ]
 
 [[package]]
@@ -1986,7 +1981,7 @@ dependencies = [
  "anstream",
  "anstyle",
  "clap_lex",
- "strsim 0.11.1",
+ "strsim",
 ]
 
 [[package]]
@@ -2009,7 +2004,7 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "client"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
@@ -2043,7 +2038,7 @@ dependencies = [
  "cfxcore-accounts",
  "cfxkey",
  "cfxstore",
- "clap 2.34.0",
+ "clap 4.5.37",
  "consensus-types",
  "criterion",
  "ctrlc",
@@ -2149,7 +2144,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "bcs",
  "bls-signatures",
@@ -2162,7 +2157,6 @@ dependencies = [
  "cfxcore",
  "cfxkey",
  "cfxstore",
- "clap 2.34.0",
  "clap 4.5.37",
  "client",
  "db",
@@ -3123,7 +3117,7 @@ checksum = "bbbaaaf38131deb9ca518a274a45bfdb8771f139517b073b16c2d3d32ae5037b"
 
 [[package]]
 name = "eest_types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
@@ -3791,7 +3785,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -3802,6 +3796,8 @@ dependencies = [
  "cfx-vm-types",
  "primitives",
  "revm",
+ "revm-interpreter",
+ "revm-primitives",
  "typemap-ors",
 ]
 
@@ -7287,11 +7283,14 @@ dependencies = [
  "auto_impl",
  "bitflags 2.5.0",
  "bitvec 1.0.1",
+ "c-kzg",
  "cfg-if 1.0.0",
+ "derive_more",
  "dyn-clone",
  "enumn",
  "hashbrown 0.14.3",
  "hex",
+ "once_cell",
  "serde",
 ]
 
@@ -7870,7 +7869,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
@@ -7951,7 +7950,7 @@ dependencies = [
  "indexmap 1.9.2",
  "ryu",
  "serde",
- "yaml-rust 0.4.5",
+ "yaml-rust",
 ]
 
 [[package]]
@@ -8320,12 +8319,6 @@ name = "strfmt"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b278b244ef7aa5852b277f52dd0c6cac3a109919e1f6d699adde63251227a30f"
-
-[[package]]
-name = "strsim"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea5119cdb4c55b55d432abb513a0429384878c15dde60cc77b1c99de1a95a6a"
 
 [[package]]
 name = "strsim"
@@ -9182,12 +9175,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
-name = "vec_map"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
-
-[[package]]
 name = "vergen"
 version = "8.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9727,12 +9714,6 @@ checksum = "d7d8a75eaf6557bb84a65ace8609883db44a29951042ada9b393151532e41fcb"
 dependencies = [
  "xml-rs",
 ]
-
-[[package]]
-name = "yaml-rust"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e66366e18dc58b46801afbf2ca7661a9f59cc8c5962c29892b6039b4f86fa992"
 
 [[package]]
 name = "yaml-rust"
