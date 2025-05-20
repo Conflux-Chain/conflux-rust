@@ -27,7 +27,6 @@ pub use jsonrpsee::server::ServerBuilder;
 use log::{info, warn};
 use std::sync::Arc;
 
-pub mod apis;
 mod authcodes;
 pub mod errors;
 pub mod extractor;
@@ -70,7 +69,6 @@ pub use self::types::{Block as RpcBlock, Origin};
 use crate::{
     configuration::Configuration,
     rpc::{
-        apis::{Api, ApiSet},
         impls::RpcImplConfiguration,
         interceptor::{RpcInterceptor, RpcProxy},
     },
@@ -78,6 +76,7 @@ use crate::{
 pub use cfx_config::rpc_server_config::{
     HttpConfiguration, TcpConfiguration, WsConfiguration,
 };
+use cfx_rpc_cfx_types::apis::{Api, ApiSet};
 use interceptor::{MetricsInterceptor, ThrottleInterceptor};
 pub use metadata::Metadata;
 use std::collections::HashSet;
