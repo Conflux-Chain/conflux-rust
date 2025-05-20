@@ -59,6 +59,8 @@ pub mod spec;
 /// meaningful database interfaces for the execution.
 pub mod state;
 
+pub mod revm_wrapper;
+
 pub use internal_contract::{InternalContractMap, InternalContractTrait};
 pub use observer as executive_observer;
 

@@ -31,5 +31,5 @@ diem-types = { workspace = true, features = ["fuzzing"] }
 default = []
 fuzzing = ["proptest", "diem-types/fuzzing", "diem-crypto/fuzzing"]
 
-# [lints.rust]
-# unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
