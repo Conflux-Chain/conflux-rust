@@ -289,6 +289,10 @@ alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 revm = { version = "8.0", default-features = false }
 
+# revm v8
+revm-primitives = "3.1.1"
+revm-interpreter = "4.0.0"
+
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
 jsonrpc-tcp-server = "18.0.0"
