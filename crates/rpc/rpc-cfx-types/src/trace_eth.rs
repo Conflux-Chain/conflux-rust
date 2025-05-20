@@ -3,9 +3,9 @@ use crate::trace::{
 };
 use cfx_parity_trace_types::Outcome;
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{H160, H256, U256};
+use cfx_types::{H160, H256, U256, U64};
 use cfx_util_macros::bail;
-use cfx_vm_types::{CallType as CfxCallType, CreateType as CfxCreateType};
+use cfx_vm_types::{CallType, CreateType};
 use jsonrpc_core::Error as JsonRpcError;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::{
@@ -27,56 +27,6 @@ pub struct Create {
     init: Bytes,
     /// The create type `CREATE` or `CREATE2`
     create_type: CreateType,
-}
-
-/// The type of the create-like instruction.
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum CreateType {
-    /// Not a create
-    None,
-    /// CREATE
-    CREATE,
-    /// CREATE2
-    CREATE2,
-}
-
-impl From<CfxCreateType> for CreateType {
-    fn from(cfx_create_type: CfxCreateType) -> Self {
-        match cfx_create_type {
-            CfxCreateType::None => CreateType::None,
-            CfxCreateType::CREATE => CreateType::CREATE,
-            CfxCreateType::CREATE2 => CreateType::CREATE2,
-        }
-    }
-}
-
-/// Call type.
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum CallType {
-    /// None
-    None,
-    /// Call
-    Call,
-    /// Call code
-    CallCode,
-    /// Delegate call
-    DelegateCall,
-    /// Static call
-    StaticCall,
-}
-
-impl From<CfxCallType> for CallType {
-    fn from(cfx_call_type: CfxCallType) -> Self {
-        match cfx_call_type {
-            CfxCallType::None => CallType::None,
-            CfxCallType::Call => CallType::Call,
-            CfxCallType::CallCode => CallType::CallCode,
-            CfxCallType::DelegateCall => CallType::DelegateCall,
-            CfxCallType::StaticCall => CallType::StaticCall,
-        }
-    }
 }
 
 /// Call response
@@ -119,14 +69,14 @@ impl TryFrom<RpcCfxAction> for Action {
                 value: call.value,
                 gas: call.gas,
                 input: call.input,
-                call_type: call.call_type.into(),
+                call_type: call.call_type,
             })),
             RpcCfxAction::Create(create) => Ok(Action::Create(Create {
                 from: create.from.hex_address,
                 value: create.value,
                 gas: create.gas,
                 init: create.init,
-                create_type: create.create_type.into(),
+                create_type: create.create_type,
             })),
             action => {
                 bail!("unsupported action in eth space: {:?}", action);
@@ -182,13 +132,13 @@ pub struct LocalizedTrace {
     /// Trace address
     pub trace_address: Vec<usize>,
     /// Subtraces
-    pub subtraces: usize,
+    pub subtraces: U64,
     /// Transaction position
-    pub transaction_position: Option<usize>,
+    pub transaction_position: U64,
     /// Transaction hash
-    pub transaction_hash: Option<H256>,
+    pub transaction_hash: H256,
     /// Block Number
-    pub block_number: u64,
+    pub block_number: U64,
     /// Block Hash
     pub block_hash: H256,
     /// Valid
@@ -245,21 +195,25 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
     type Error = String;
 
     fn try_from(cfx_trace: RpcCfxLocalizedTrace) -> Result<Self, String> {
+        let transaction_position = cfx_trace
+            .transaction_position
+            .ok_or_else(|| "transaction position should exist".to_string())?;
+        let transaction_hash = cfx_trace
+            .transaction_hash
+            .ok_or_else(|| "transaction hash should exist".to_string())?;
         Ok(Self {
             action: cfx_trace.action.try_into()?,
             result: Res::None,
             trace_address: vec![],
-            subtraces: 0,
+            subtraces: U64::zero(),
             // note: `as_usize` will panic on overflow,
             // however, this should not happen for tx position
-            transaction_position: cfx_trace
-                .transaction_position
-                .map(|x| x.as_usize()),
-            transaction_hash: cfx_trace.transaction_hash,
+            transaction_position,
+            transaction_hash,
             block_number: cfx_trace
                 .epoch_number
-                .map(|en| en.as_u64())
-                .unwrap_or(0),
+                .map(|en| U64::from(en.as_u64()))
+                .unwrap_or(U64::zero()),
             block_hash: cfx_trace.epoch_hash.unwrap_or_default(),
             valid: cfx_trace.valid,
         })
