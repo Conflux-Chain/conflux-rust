@@ -22,6 +22,7 @@ class Web3Base(ConfluxTestFramework):
         self.conf_parameters["evm_chain_id"] = str(10)
         self.conf_parameters["evm_transaction_block_ratio"] = str(1)
         self.conf_parameters["executive_trace"] = "true"
+        self.conf_parameters["public_evm_rpc_apis"] = '"all"'
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)

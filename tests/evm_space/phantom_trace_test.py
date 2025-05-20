@@ -225,7 +225,7 @@ class PhantomTransactionTest(Web3Base):
 
         # test trace_filter
         filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
-        assert_equal(filtered, None) # we return `null` instead of `[]`
+        assert_equal(filtered, []) # we return `null` instead of `[]`
 
     def test_createEVM(self):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), EVM_CONTRACT_PATH + ".bytecode")
@@ -575,7 +575,7 @@ class PhantomTransactionTest(Web3Base):
 
         # test trace_filter
         filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
-        assert_equal(filtered, None)
+        assert_equal(filtered, [])
 
         # test insufficient storage (issue #2483)
         data_hex = self.confluxContract.encode_abi(abi_element_identifier="callEVMAndSetStorage", args=[self.evmContractAddr, 1])
@@ -607,7 +607,7 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(len(block_traces), 0)
 
         filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
-        assert_equal(filtered, None)
+        assert_equal(filtered, [])
 
 if __name__ == "__main__":
     PhantomTransactionTest().main()
