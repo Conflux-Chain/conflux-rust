@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 cfx-types = { workspace = true }
-revm-primitives = { workspace = true }
+revm-primitives = { git = "https://github.com/Conflux-Chain/revm.git", tag = "v73"}
 
 [dev-dependencies]
 rand = "0.8"

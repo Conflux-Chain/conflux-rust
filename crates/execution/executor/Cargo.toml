@@ -46,7 +46,9 @@ rayon = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 blst = { workspace = true }
-revm-interpreter = { workspace = true }
+revm-interpreter = { git = "https://github.com/Conflux-Chain/revm.git", tag = "v73"}
+revm-primitives = { git = "https://github.com/Conflux-Chain/revm.git", tag = "v73"}
+revm-context-interface ={ git = "https://github.com/Conflux-Chain/revm.git", tag = "v73" }
 alloy-type-conversions = { workspace = true }
 
 [dev-dependencies]
