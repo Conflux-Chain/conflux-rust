@@ -117,6 +117,10 @@ pub fn build_call_hierarchy<'a>(
                 unclosed_actions.push((action, vec![]));
             }
 
+            Action::SetAuth(_) => {
+                // todo
+            }
+
             // Operation completion - pop stack and build node
             Action::CallResult(_) | Action::CreateResult(_) => {
                 let result = ResultTrace::try_from(trace).unwrap();

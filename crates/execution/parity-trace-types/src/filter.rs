@@ -96,6 +96,10 @@ impl TraceFilter {
                         stack.push(false);
                     }
                 }
+                Action::SetAuth(_) => {
+                    // set_auth do not support filtering
+                    stack.push(false);
+                }
                 Action::CallResult(_) | Action::CreateResult(_) => {
                     if stack
                         .pop()

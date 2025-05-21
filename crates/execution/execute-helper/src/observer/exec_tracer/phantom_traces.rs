@@ -165,6 +165,7 @@ pub fn recover_phantom_trace_for_call(
             Action::InternalTransferAction(InternalTransferAction {
                 ..
             }) => {}
+            Action::SetAuth(_) => {}
         }
 
         phantom_traces.push(trace);

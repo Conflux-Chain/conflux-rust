@@ -124,7 +124,7 @@ impl Decodable for Outcome {
                 2 => Outcome::Fail,
                 _ => {
                     return Err(DecoderError::Custom(
-                        "Invalid value of CallType item",
+                        "Invalid value of Outcome item",
                     ));
                 }
             })
@@ -274,6 +274,74 @@ impl InternalTransferAction {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+pub struct SetAuthAction {
+    pub space: Space,
+    /// The address of the impl.
+    pub address: Address,
+    pub chain_id: U256,
+    pub nonce: U256,
+    /// The address of the author.
+    pub author: Option<Address>,
+    /// The outcome of the create
+    pub outcome: SetAuthOutcome,
+}
+
+impl SetAuthAction {
+    /// Returns bloom create action bloom.
+    /// The bloom contains only impl address.
+    pub fn bloom(&self) -> Bloom {
+        BloomInput::Raw(self.address.as_bytes()).into()
+    }
+}
+
+/// The outcome of the action result.
+#[derive(Debug, PartialEq, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SetAuthOutcome {
+    Success,
+    InvalidChainId,
+    NonceOverflow,
+    AccountCanNotSetAuth, /* Only account is empty or already delegated can
+                           * set auth */
+    InvalidNonce,
+    InvalidSignature,
+}
+
+impl Encodable for SetAuthOutcome {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let v = match *self {
+            SetAuthOutcome::Success => 0u32,
+            SetAuthOutcome::InvalidChainId => 1,
+            SetAuthOutcome::NonceOverflow => 2,
+            SetAuthOutcome::AccountCanNotSetAuth => 3,
+            SetAuthOutcome::InvalidNonce => 4,
+            SetAuthOutcome::InvalidSignature => 5,
+        };
+        Encodable::rlp_append(&v, s);
+    }
+}
+
+impl Decodable for SetAuthOutcome {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        rlp.as_val().and_then(|v| {
+            Ok(match v {
+                0u32 => SetAuthOutcome::Success,
+                1 => SetAuthOutcome::InvalidChainId,
+                2 => SetAuthOutcome::NonceOverflow,
+                3 => SetAuthOutcome::AccountCanNotSetAuth,
+                4 => SetAuthOutcome::InvalidNonce,
+                5 => SetAuthOutcome::InvalidSignature,
+                _ => {
+                    return Err(DecoderError::Custom(
+                        "Invalid value of SetAuthOutcome item",
+                    ));
+                }
+            })
+        })
+    }
+}
+
 /// Description of an action that we trace; will be either a call or a create.
 #[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
 #[strum_discriminants(name(ActionType))]
@@ -288,6 +356,8 @@ pub enum Action {
     CreateResult(CreateResult),
     /// It's an internal transfer action
     InternalTransferAction(InternalTransferAction),
+    /// It's an 7702 set auth action
+    SetAuth(SetAuthAction),
 }
 
 impl Encodable for Action {
@@ -314,6 +384,10 @@ impl Encodable for Action {
                 s.append(&4u8);
                 s.append(internal_action);
             }
+            Action::SetAuth(ref set_auth_action) => {
+                s.append(&5u8);
+                s.append(set_auth_action);
+            }
         }
     }
 }
@@ -327,6 +401,7 @@ impl Decodable for Action {
             2 => rlp.val_at(1).map(Action::CallResult),
             3 => rlp.val_at(1).map(Action::CreateResult),
             4 => rlp.val_at(1).map(Action::InternalTransferAction),
+            5 => rlp.val_at(1).map(Action::SetAuth),
             _ => Err(DecoderError::Custom("Invalid action type.")),
         }
     }
@@ -343,6 +418,7 @@ impl Action {
             Action::InternalTransferAction(ref internal_action) => {
                 internal_action.bloom()
             }
+            Action::SetAuth(ref set_auth_action) => set_auth_action.bloom(),
         }
     }
 }

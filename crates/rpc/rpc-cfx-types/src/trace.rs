@@ -50,6 +50,9 @@ impl Action {
                     InternalTransferAction::try_from(x, network)?,
                 )
             }
+            VmAction::SetAuth(_) => {
+                todo!()
+            }
         })
     }
 }
