@@ -15,7 +15,7 @@ use cfx_executor::{
     machine::Machine,
     observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
-        OpcodeTracer, StorageTracer,
+        OpcodeTracer, SetAuthTracer, StorageTracer,
     },
     stack::{FrameResult, FrameReturn},
 };
@@ -188,6 +188,8 @@ impl CheckpointTracer for GethTracer {}
 impl InternalTransferTracer for GethTracer {}
 
 impl StorageTracer for GethTracer {}
+
+impl SetAuthTracer for GethTracer {}
 
 impl CallTracer for GethTracer {
     fn record_call(&mut self, params: &ActionParams) {

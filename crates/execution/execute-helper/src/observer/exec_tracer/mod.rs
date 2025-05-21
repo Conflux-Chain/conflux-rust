@@ -10,7 +10,7 @@ pub use phantom_traces::{
 pub use cfx_parity_trace_types::{
     action_types::{
         self, Action, ActionType, Call, CallResult, Create, CreateResult,
-        InternalTransferAction, Outcome,
+        InternalTransferAction, Outcome, SetAuthAction,
     },
     filter::{self, TraceFilter},
     trace_types::{
@@ -23,7 +23,7 @@ use super::utils::CheckpointLog;
 use cfx_executor::{
     observer::{
         AddressPocket, CallTracer, CheckpointTracer, DrainTrace,
-        InternalTransferTracer, OpcodeTracer, StorageTracer,
+        InternalTransferTracer, OpcodeTracer, SetAuthTracer, StorageTracer,
     },
     stack::{FrameResult, FrameReturn},
 };
@@ -151,6 +151,14 @@ impl CallTracer for ExecTracer {
 
 impl StorageTracer for ExecTracer {}
 impl OpcodeTracer for ExecTracer {}
+
+impl SetAuthTracer for ExecTracer {
+    fn record_set_auth(&mut self, set_auth_action: SetAuthAction) {
+        let action = Action::SetAuth(set_auth_action);
+        self.valid_indices.push(self.traces.len());
+        self.traces.push(action);
+    }
+}
 
 fn frame_result_to_call_result(r: &FrameResult) -> CallResult {
     match r {

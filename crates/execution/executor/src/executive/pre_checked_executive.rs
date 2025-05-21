@@ -22,6 +22,7 @@ use cfx_vm_types::{
     CreateType,
 };
 
+use cfx_parity_trace_types::{SetAuthAction, SetAuthOutcome};
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, U256, U512,
@@ -709,15 +710,27 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             s,
         } in authorization_list.iter()
         {
+            let mut set_auth_action = SetAuthAction {
+                space: self.tx.space(),
+                chain_id: *chain_id,
+                address: *address,
+                nonce: U256::from(*nonce),
+                author: None,
+                outcome: SetAuthOutcome::Success,
+            };
             // 1. Verify the chain id is either 0 or the chain's current ID.
             if *chain_id != U256::zero()
                 && *chain_id != U256::from(current_chain_id)
             {
+                set_auth_action.outcome = SetAuthOutcome::InvalidChainId;
+                self.observer.as_tracer().record_set_auth(set_auth_action);
                 continue;
             }
 
             // 2. Verify the nonce is less than 2**64 - 1
             if *nonce == u64::MAX {
+                set_auth_action.outcome = SetAuthOutcome::NonceOverflow;
+                self.observer.as_tracer().record_set_auth(set_auth_action);
                 continue;
             }
 
@@ -726,6 +739,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 let s: H256 = BigEndianHash::from_uint(s);
                 let signature = Signature::from_rsv(&r, &s, *y_parity);
                 if !signature.is_low_s() || !signature.is_valid() {
+                    set_auth_action.outcome = SetAuthOutcome::InvalidSignature;
+                    self.observer.as_tracer().record_set_auth(set_auth_action);
                     continue;
                 }
                 signature
@@ -748,8 +763,12 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                 public_to_address(&public, /* type_nibble */ false)
                     .with_evm_space()
             } else {
+                set_auth_action.outcome = SetAuthOutcome::InvalidSignature;
+                self.observer.as_tracer().record_set_auth(set_auth_action);
                 continue;
             };
+
+            set_auth_action.author = Some(authority.address);
 
             // 4. Add authority to accessed_addresses
             // state.code will mark it as warm
@@ -761,6 +780,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
                     && x.starts_with(CODE_PREFIX_7702)
             });
             if !can_set_code {
+                set_auth_action.outcome = SetAuthOutcome::AccountCanNotSetAuth;
+                self.observer.as_tracer().record_set_auth(set_auth_action);
                 continue;
             }
 
@@ -768,6 +789,8 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             //    authority does not exist in the trie, verify that nonce is
             //    equal to 0.
             if state.nonce(&authority)? != (*nonce).into() {
+                set_auth_action.outcome = SetAuthOutcome::InvalidNonce;
+                self.observer.as_tracer().record_set_auth(set_auth_action);
                 continue;
             }
 
@@ -780,6 +803,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             // 8. Set the code of authority to be 0xef0100 || address.
             // 9. Increase the nonce of authority by one
             state.set_authorization(&authority, address)?;
+            self.observer.as_tracer().record_set_auth(set_auth_action);
         }
         let spec = self.context.spec;
         let refund_gas = (spec.per_empty_account_cost * spec.evm_gas_ratio

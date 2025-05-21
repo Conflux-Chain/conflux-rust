@@ -475,7 +475,7 @@ impl BlockDataManager {
 
     /// Get the traces for a single block without checking the assumed pivot
     /// block
-    pub fn block_traces_by_hash(
+    pub fn block_versioned_traces_by_hash(
         &self, hash: &H256,
     ) -> Option<BlockTracesWithEpoch> {
         let maybe_traces_in_mem = self
@@ -506,10 +506,10 @@ impl BlockDataManager {
     }
 
     /// Return `(pivot_hash, tx_traces)`.
-    pub fn transactions_traces_by_block_hash(
+    pub fn block_traces_by_hash(
         &self, hash: &H256,
     ) -> Option<(H256, Vec<TransactionExecTraces>)> {
-        self.block_traces_by_hash(hash).map(
+        self.block_versioned_traces_by_hash(hash).map(
             |DataVersionTuple(pivot_hash, block_trace)| {
                 (pivot_hash, block_trace.into())
             },

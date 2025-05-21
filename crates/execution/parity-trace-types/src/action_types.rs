@@ -281,10 +281,10 @@ pub struct SetAuthAction {
     pub address: Address,
     pub chain_id: U256,
     pub nonce: U256,
-    /// The address of the author.
-    pub author: Option<Address>,
     /// The outcome of the create
     pub outcome: SetAuthOutcome,
+    /// The address of the author.
+    pub author: Option<Address>,
 }
 
 impl SetAuthAction {
@@ -302,8 +302,8 @@ pub enum SetAuthOutcome {
     Success,
     InvalidChainId,
     NonceOverflow,
-    AccountCanNotSetAuth, /* Only account is empty or already delegated can
-                           * set auth */
+    // Only account is empty or already delegated can set auth
+    AccountCanNotSetAuth,
     InvalidNonce,
     InvalidSignature,
 }

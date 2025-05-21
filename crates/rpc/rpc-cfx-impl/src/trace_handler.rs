@@ -52,7 +52,7 @@ impl TraceHandler {
             Some(block) => block,
         };
 
-        match self.data_man.block_traces_by_hash(&block_hash) {
+        match self.data_man.block_versioned_traces_by_hash(&block_hash) {
             None => Ok(None),
             Some(DataVersionTuple(pivot_hash, traces)) => {
                 let traces = traces.filter_space(Space::Native);
@@ -135,9 +135,8 @@ impl TraceHandler {
             return None;
         }
 
-        let (pivot_hash, block_traces) = self
-            .data_man
-            .transactions_traces_by_block_hash(&tx_index.block_hash)?;
+        let (pivot_hash, block_traces) =
+            self.data_man.block_traces_by_hash(&tx_index.block_hash)?;
 
         let epoch_number = self
             .data_man

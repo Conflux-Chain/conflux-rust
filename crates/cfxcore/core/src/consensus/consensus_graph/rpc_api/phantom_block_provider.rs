@@ -173,10 +173,7 @@ impl ConsensusGraph {
             let errors = &exec_info.block_receipts.tx_execution_error_messages;
 
             let block_traces = if include_traces {
-                match self
-                    .data_manager()
-                    .transactions_traces_by_block_hash(&b.hash())
-                {
+                match self.data_manager().block_traces_by_hash(&b.hash()) {
                     None => {
                         return Err("Error while creating phantom block: state is ready but traces not found, did you enable 'executive_trace'?".into());
                     }
