@@ -21,7 +21,6 @@ def framework_class():
             self.num_nodes = 1
             self.conf_parameters["chain_id"] = str(10)
             self.conf_parameters["evm_chain_id"] = str(11)
-            self.conf_parameters["public_evm_rpc_apis"] = '"all"'
             self.conf_parameters["evm_transaction_block_ratio"] = str(1)
 
         def setup_network(self):
