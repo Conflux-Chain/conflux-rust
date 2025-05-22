@@ -59,7 +59,7 @@ members = [
     "crates/rpc/rpc-primitives",
     "crates/rpc/rpc-cfx-types",
     "crates/rpc/rpc-eth-api",
-    "crates/rpc/parity-trace-types",
+    "crates/execution/parity-trace-types",
     "crates/rpc/rpc-eth-impl",
     "crates/rpc/rpc-common-impl",
     "crates/util/util-macros",
@@ -192,7 +192,7 @@ cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
 cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
 cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
 cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
-cfx-parity-trace-types = { path = "./crates/rpc/parity-trace-types" }
+cfx-parity-trace-types = { path = "./crates/execution/parity-trace-types" }
 cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth-api" }
 cfx-util-macros = { path = "./crates/util/util-macros" }
 cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
