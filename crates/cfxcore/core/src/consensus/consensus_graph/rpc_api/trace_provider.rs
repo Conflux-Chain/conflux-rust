@@ -878,7 +878,7 @@ impl ConsensusGraph {
                     .ok_or(FilterError::BlockAlreadyPruned { block_hash: h })?;
 
                 self.data_man
-                    .block_versioned_traces_by_hash(&h)
+                    .block_traces_by_hash(&h)
                     .map(|DataVersionTuple(pivot_hash, trace)| {
                         (pivot_hash, h, trace, block.transactions.clone())
                     })

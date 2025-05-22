@@ -22,7 +22,7 @@ use cfx_vm_types::{
     CreateType,
 };
 
-use cfx_parity_trace_types::{SetAuthAction, SetAuthOutcome};
+use cfx_parity_trace_types::{SetAuth, SetAuthOutcome};
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, U256, U512,
@@ -710,7 +710,7 @@ impl<'a, O: ExecutiveObserver> PreCheckedExecutive<'a, O> {
             s,
         } in authorization_list.iter()
         {
-            let mut set_auth_action = SetAuthAction {
+            let mut set_auth_action = SetAuth {
                 space: self.tx.space(),
                 chain_id: *chain_id,
                 address: *address,

@@ -275,7 +275,7 @@ impl InternalTransferAction {
 }
 
 #[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
-pub struct SetAuthAction {
+pub struct SetAuth {
     pub space: Space,
     /// The address of the impl.
     pub address: Address,
@@ -287,11 +287,17 @@ pub struct SetAuthAction {
     pub author: Option<Address>,
 }
 
-impl SetAuthAction {
-    /// Returns bloom create action bloom.
+impl SetAuth {
     /// The bloom contains only impl address.
     pub fn bloom(&self) -> Bloom {
-        BloomInput::Raw(self.address.as_bytes()).into()
+        let mut bloom = Bloom::default();
+        bloom.accrue(BloomInput::Raw(self.address.as_bytes()));
+        if self.author.is_some() {
+            bloom.accrue(BloomInput::Raw(
+                self.author.as_ref().unwrap().as_bytes(),
+            ));
+        }
+        bloom
     }
 }
 
@@ -357,7 +363,7 @@ pub enum Action {
     /// It's an internal transfer action
     InternalTransferAction(InternalTransferAction),
     /// It's an 7702 set auth action
-    SetAuth(SetAuthAction),
+    SetAuth(SetAuth),
 }
 
 impl Encodable for Action {

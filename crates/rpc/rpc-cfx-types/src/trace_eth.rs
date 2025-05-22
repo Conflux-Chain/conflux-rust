@@ -3,7 +3,7 @@ use crate::trace::{
 };
 use cfx_parity_trace_types::{Outcome, SetAuthOutcome};
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{H160, H256, U256, Address};
+use cfx_types::{Address, H256, U256};
 use cfx_util_macros::bail;
 use cfx_vm_types::{CallType, CreateType};
 use jsonrpc_core::Error as JsonRpcError;
@@ -18,7 +18,7 @@ use std::{
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     /// Sender
-    from: H160,
+    from: Address,
     /// Value
     value: U256,
     /// Gas
@@ -34,9 +34,9 @@ pub struct Create {
 #[serde(rename_all = "camelCase")]
 pub struct Call {
     /// Sender
-    from: H160,
+    from: Address,
     /// Recipient
-    to: H160,
+    to: Address,
     /// Transfered Value
     value: U256,
     /// Gas
@@ -66,8 +66,6 @@ pub enum Action {
     Call(Call),
     /// Create
     Create(Create),
-    /// SetAuth
-    SetAuth(SetAuth),
     /* TODO: Support Suicide
      * TODO: Support Reward */
 }
@@ -118,7 +116,7 @@ pub struct CreateResult {
     /// Code
     code: Bytes,
     /// Assigned address
-    address: H160,
+    address: Address,
 }
 
 /// Response
@@ -171,10 +169,6 @@ impl Serialize for LocalizedTrace {
             Action::Create(ref create) => {
                 struc.serialize_field("type", "create")?;
                 struc.serialize_field("action", create)?;
-            }
-            Action::SetAuth(ref set_auth) => {
-                struc.serialize_field("type", "setAuth")?;
-                struc.serialize_field("action", set_auth)?;
             }
         }
 
@@ -325,10 +319,6 @@ impl Serialize for Trace {
             Action::Create(ref create) => {
                 struc.serialize_field("type", "create")?;
                 struc.serialize_field("action", create)?;
-            }
-            Action::SetAuth(ref set_auth) => {
-                struc.serialize_field("type", "setAuth")?;
-                struc.serialize_field("action", set_auth)?;
             }
         }
 

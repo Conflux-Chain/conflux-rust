@@ -10,7 +10,7 @@ pub use phantom_traces::{
 pub use cfx_parity_trace_types::{
     action_types::{
         self, Action, ActionType, Call, CallResult, Create, CreateResult,
-        InternalTransferAction, Outcome, SetAuthAction,
+        InternalTransferAction, Outcome, SetAuth,
     },
     filter::{self, TraceFilter},
     trace_types::{
@@ -153,7 +153,7 @@ impl StorageTracer for ExecTracer {}
 impl OpcodeTracer for ExecTracer {}
 
 impl SetAuthTracer for ExecTracer {
-    fn record_set_auth(&mut self, set_auth_action: SetAuthAction) {
+    fn record_set_auth(&mut self, set_auth_action: SetAuth) {
         let action = Action::SetAuth(set_auth_action);
         self.valid_indices.push(self.traces.len());
         self.traces.push(action);
