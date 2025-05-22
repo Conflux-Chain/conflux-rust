@@ -23,6 +23,7 @@ use cfx_executor::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     internal_contract::storage_point_prop,
 };
+use cfx_rpc_eth_types::Transaction as EthTransaction;
 use cfx_statedb::{
     global_params::{
         AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
@@ -83,8 +84,7 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            eth::Transaction as EthTransaction, pos::Block as PosBlock,
-            Account as RpcAccount, AccountPendingInfo,
+            pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CfxRpcLogFilter,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,

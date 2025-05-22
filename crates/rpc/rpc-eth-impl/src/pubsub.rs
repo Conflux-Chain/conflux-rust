@@ -10,6 +10,7 @@ use cfx_rpc_eth_types::{
     Header, Log,
 };
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_rpc_err;
+use cfx_tasks::TaskExecutor;
 use cfx_types::{Space, H256};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, Notifications, SharedConsensusGraph,
@@ -31,14 +32,14 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::{runtime::Runtime, sync::broadcast, time::sleep};
+use tokio::{sync::broadcast, time::sleep};
 use tokio_stream::{wrappers::BroadcastStream, Stream};
 
 const BROADCAST_CHANNEL_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct PubSubApi {
-    executor: Arc<Runtime>,
+    executor: TaskExecutor,
     chain_data_provider: Arc<ChainDataProvider>,
     notifications: Arc<Notifications>,
     heads_loop_started: Arc<RwLock<bool>>,
@@ -50,7 +51,7 @@ pub struct PubSubApi {
 impl PubSubApi {
     pub fn new(
         consensus: SharedConsensusGraph, notifications: Arc<Notifications>,
-        executor: Arc<Runtime>,
+        executor: TaskExecutor,
     ) -> PubSubApi {
         let (head_sender, _) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
         let log_senders = Arc::new(RwLock::new(HashMap::new()));

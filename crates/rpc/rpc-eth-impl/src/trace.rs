@@ -1,3 +1,5 @@
+use std::vec;
+
 use cfx_addr::Network;
 use cfx_rpc_cfx_impl::TraceHandler;
 use cfx_rpc_cfx_types::trace_eth::LocalizedTrace as EthLocalizedTrace;
