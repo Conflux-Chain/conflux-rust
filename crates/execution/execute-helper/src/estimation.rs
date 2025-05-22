@@ -133,6 +133,7 @@ impl<'a> EstimationContext<'a> {
     pub fn transact_virtual(
         &mut self, mut tx: SignedTransaction, request: EstimateRequest,
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
+        #[cfg(not(feature = "align_evm"))]
         if let Some(outcome) = self.check_cip130(&tx, &request) {
             return Ok(outcome);
         }
@@ -400,7 +401,11 @@ impl<'a> EstimationContext<'a> {
 }
 
 fn estimated_gas_limit(executed: &Executed, tx: &SignedTransaction) -> U256 {
+    #[cfg(not(feature = "align_evm"))]
     let cip130_min_gas_limit = U256::from(tx.data().len() * 100);
+    #[cfg(feature = "align_evm")]
+    let cip130_min_gas_limit = U256::zero();
+
     let eip7623_gas_limit = 21000
         + tx.data()
             .iter()
