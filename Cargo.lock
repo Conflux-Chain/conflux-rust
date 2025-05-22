@@ -381,6 +381,7 @@ dependencies = [
 name = "alloy-type-conversions"
 version = "0.1.0"
 dependencies = [
+ "cfx-bytes",
  "cfx-types",
  "rand 0.8.5",
  "revm-primitives 19.0.0",

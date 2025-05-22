@@ -37,33 +37,46 @@ fn unwrap_db_error(e: cfx_vm_types::Error) -> cfx_statedb::Error {
 const COLD: bool = true;
 
 impl<'a> revm_interpreter::Host for EvmHost<'a> {
-    fn basefee(&self) -> U256 { todo!() }
+    fn basefee(&self) -> U256 {
+        let basefee = self.context.env.base_gas_price[self.context.space];
+        to_alloy_u256(basefee)
+    }
 
     fn blob_gasprice(&self) -> U256 { todo!() }
 
-    fn gas_limit(&self) -> U256 { todo!() }
+    fn gas_limit(&self) -> U256 { to_alloy_u256(self.context.env.gas_limit) }
 
-    fn difficulty(&self) -> U256 { todo!() }
+    fn difficulty(&self) -> U256 { to_alloy_u256(self.context.env.difficulty) }
 
     fn prevrandao(&self) -> Option<U256> { todo!() }
 
-    fn block_number(&self) -> u64 { todo!() }
+    fn block_number(&self) -> u64 { self.context.env.number }
 
-    fn timestamp(&self) -> U256 { todo!() }
+    fn timestamp(&self) -> U256 {
+        revm_primitives::U256::from(self.context.env.timestamp)
+    }
 
-    fn beneficiary(&self) -> Address { todo!() }
+    fn beneficiary(&self) -> Address {
+        to_alloy_address(self.context.env.author)
+    }
 
-    fn chain_id(&self) -> U256 { todo!() }
+    fn chain_id(&self) -> U256 {
+        revm_primitives::U256::from(self.context.chain_id())
+    }
 
     fn effective_gas_price(&self) -> U256 { todo!() }
 
-    fn caller(&self) -> Address { todo!() }
+    fn caller(&self) -> Address {
+        to_alloy_address(self.context.origin.address)
+    }
 
     fn blob_hash(&self, number: usize) -> Option<U256> { todo!() }
 
     fn initcode_by_hash(&mut self, hash: B256) -> Option<Bytes> { todo!() }
 
-    fn max_initcode_size(&self) -> usize { todo!() }
+    fn max_initcode_size(&self) -> usize {
+        self.context.spec().init_code_data_limit
+    }
 
     fn block_hash(&mut self, number: u64) -> Option<B256> {
         match self.context.blockhash(&cfx_types::U256::from(number)) {
@@ -118,12 +131,37 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     fn load_account_code(
         &mut self, address: Address,
     ) -> Option<StateLoad<Bytes>> {
-        todo!()
+        match self.context.extcode(&from_alloy_address(address)) {
+            Ok(code_option) => {
+                let bytes = code_option
+                    .map(|code| to_alloy_bytes(code.as_ref().clone()))
+                    .unwrap_or_else(|| Bytes::default());
+                let is_cold =
+                    !self.context.is_warm_account(from_alloy_address(address));
+
+                Some(StateLoad::new(bytes, is_cold))
+            }
+            Err(e) => {
+                self.error = Err(unwrap_db_error(e));
+                None
+            }
+        }
     }
 
     fn load_account_code_hash(
         &mut self, address: Address,
     ) -> Option<StateLoad<B256>> {
-        todo!()
+        match self.context.extcodehash(&from_alloy_address(address)) {
+            Ok(hash) => {
+                let is_cold =
+                    !self.context.is_warm_account(from_alloy_address(address));
+
+                Some(StateLoad::new(to_alloy_h256(hash), is_cold))
+            }
+            Err(e) => {
+                self.error = Err(unwrap_db_error(e));
+                None
+            }
+        }
     }
 }
