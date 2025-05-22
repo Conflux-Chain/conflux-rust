@@ -3,7 +3,7 @@ use crate::trace::{
 };
 use cfx_parity_trace_types::Outcome;
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{H160, H256, U256, U64};
+use cfx_types::{H160, H256, U256};
 use cfx_util_macros::bail;
 use cfx_vm_types::{CallType, CreateType};
 use jsonrpc_core::Error as JsonRpcError;
@@ -132,13 +132,13 @@ pub struct LocalizedTrace {
     /// Trace address
     pub trace_address: Vec<usize>,
     /// Subtraces
-    pub subtraces: U64,
+    pub subtraces: usize,
     /// Transaction position
-    pub transaction_position: U64,
+    pub transaction_position: usize,
     /// Transaction hash
     pub transaction_hash: H256,
     /// Block Number
-    pub block_number: U64,
+    pub block_number: u64,
     /// Block Hash
     pub block_hash: H256,
     /// Valid
@@ -197,6 +197,7 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
     fn try_from(cfx_trace: RpcCfxLocalizedTrace) -> Result<Self, String> {
         let transaction_position = cfx_trace
             .transaction_position
+            .map(|pos| pos.as_usize())
             .ok_or_else(|| "transaction position should exist".to_string())?;
         let transaction_hash = cfx_trace
             .transaction_hash
@@ -205,15 +206,15 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
             action: cfx_trace.action.try_into()?,
             result: Res::None,
             trace_address: vec![],
-            subtraces: U64::zero(),
+            subtraces: 0,
             // note: `as_usize` will panic on overflow,
             // however, this should not happen for tx position
             transaction_position,
             transaction_hash,
             block_number: cfx_trace
                 .epoch_number
-                .map(|en| U64::from(en.as_u64()))
-                .unwrap_or(U64::zero()),
+                .map(|en| en.as_u64())
+                .unwrap_or(0),
             block_hash: cfx_trace.epoch_hash.unwrap_or_default(),
             valid: cfx_trace.valid,
         })

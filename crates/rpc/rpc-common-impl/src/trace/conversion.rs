@@ -6,7 +6,7 @@ use cfx_rpc_cfx_types::{
     trace::Action as RpcAction,
     trace_eth::{LocalizedTrace as EthLocalizedTrace, Res as EthRes},
 };
-use cfx_types::{H256, U64};
+use cfx_types::H256;
 
 use super::matcher::{construct_parity_trace, TraceWithPosition};
 
@@ -27,10 +27,10 @@ pub fn into_eth_localized_traces(
                 .try_into()?,
             result: EthRes::None,
             trace_address: trace_path,
-            subtraces: U64::from(child_count),
-            transaction_position: U64::from(tx_idx),
+            subtraces: child_count,
+            transaction_position: tx_idx,
             transaction_hash: tx_hash,
-            block_number: U64::from(block_number),
+            block_number,
             block_hash,
             // action and its result should have the same `valid`.
             valid: action.valid,
