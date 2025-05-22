@@ -186,13 +186,19 @@ jobs:
 
       - name: Extract test data
         working-directory: ./testdata
-        run: tar --use-compress-program="zstd --long=31" -xvf evm-spec-test.tar.zst
+        run: tar --use-compress-program="zstd --long=31" -xvf fixtures.tar.zst
 
-      - name: Build in release mode
+      - name: Run eest statetests
         working-directory: ./tools/evm-spec-tester
         env:
           RUSTFLAGS: -D warnings
-        run: cargo run --release --locked -- statetest ../../testdata/evm-spec-test
+        run: cargo run --release --locked -- statetest ../../testdata/fixtures/state_tests
+
+      - name: Run eest blockchaintests
+        working-directory: ./tools/evm-spec-tester
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo run --release --locked -- blocktest ../../testdata/fixtures/blockchain_tests
 
 
   consensus-bench-test:
