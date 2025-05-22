@@ -727,7 +727,6 @@ pub fn initialize_not_light_node_modules(
             notifications.clone(),
             task_executor.clone(),
             conf,
-            conf.raw_conf.throttling_conf.clone(),
         ))?;
 
     metrics::initialize(conf.metrics_config(), task_executor.clone());

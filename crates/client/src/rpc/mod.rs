@@ -408,7 +408,6 @@ pub async fn launch_async_rpc_servers(
     consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool, notifications: Arc<Notifications>,
     executor: TaskExecutor, conf: &Configuration,
-    throttling_conf_file: Option<String>,
 ) -> Result<Option<RpcServerHandle>, String> {
     let http_config = conf.eth_http_config();
     let ws_config = conf.eth_ws_config();
@@ -463,6 +462,7 @@ pub async fn launch_async_rpc_servers(
     let transport_rpc_modules =
         rpc_module_builder.build(transport_rpc_module_config);
 
+    let throttling_conf_file = conf.raw_conf.throttling_conf.clone();
     let server_handle = server_config
         .start(&transport_rpc_modules, throttling_conf_file, enable_metrics)
         .await

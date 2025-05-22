@@ -363,6 +363,7 @@ class ConfluxTestFramework:
         log = self.log
         self._cw3 = CWeb3(CWeb3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].rpcport}/'))
         self._ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/'))
+        # should be removed
         self._legacy_ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/'))
 
         self.cw3.wallet.add_accounts(self.core_accounts)
