@@ -12,7 +12,7 @@
     transaction_epoch_bound: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
     tx_pool_nonce_bits: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>,
     pos_enable_height: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
-    machine: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;<a class="struct" href="../../cfx_executor/machine/struct.Machine.html" title="struct cfx_executor::machine::Machine">Machine</a>&gt;
+    machine: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;Machine&gt;
 ) -&gt; Self</h4></section><details class="toggle method-toggle" open><summary><section id="method.get_or_fill_header_pow_hash" class="method"><a class="src rightside" href="../../src/cfxcore/verification.rs.html#247-254">source</a><h4 class="code-header">pub fn <a href="#method.get_or_fill_header_pow_hash" class="fn">get_or_fill_header_pow_hash</a>(
     pow: &amp;<a class="struct" href="../pow/struct.PowComputer.html" title="struct cfxcore::pow::PowComputer">PowComputer</a>,
     header: &amp;mut BlockHeader
@@ -62,14 +62,14 @@ should discard this block and all its descendants.</p>
     &amp;self,
     tx: &amp;TransactionWithSignature,
     height: BlockHeight,
-    transitions: &amp;<a class="struct" href="../../cfx_executor/spec/struct.TransitionsEpochHeight.html" title="struct cfx_executor::spec::TransitionsEpochHeight">TransitionsEpochHeight</a>,
+    transitions: &amp;TransitionsEpochHeight,
     spec: &amp;Spec
 ) -&gt; <a class="enum" href="enum.PackingCheckResult.html" title="enum cfxcore::verification::PackingCheckResult">PackingCheckResult</a></h4></section><section id="method.verify_transaction_common" class="method"><a class="src rightside" href="../../src/cfxcore/verification.rs.html#709-802">source</a><h4 class="code-header">pub fn <a href="#method.verify_transaction_common" class="fn">verify_transaction_common</a>(
     &amp;self,
     tx: &amp;TransactionWithSignature,
     chain_id: AllChainID,
     height: BlockHeight,
-    transitions: &amp;<a class="struct" href="../../cfx_executor/spec/struct.TransitionsEpochHeight.html" title="struct cfx_executor::spec::TransitionsEpochHeight">TransitionsEpochHeight</a>,
+    transitions: &amp;TransitionsEpochHeight,
     mode: <a class="enum" href="enum.VerifyTxMode.html" title="enum cfxcore::verification::VerifyTxMode">VerifyTxMode</a>&lt;'_&gt;
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, TransactionError&gt;</h4></section><section id="method.check_tx_size" class="method"><a class="src rightside" href="../../src/cfxcore/verification.rs.html#948-956">source</a><h4 class="code-header">pub fn <a href="#method.check_tx_size" class="fn">check_tx_size</a>(
     &amp;self,
