@@ -9,12 +9,12 @@ use cfx_statedb::Result as DbResult;
 use cfx_types::U256;
 use cfx_vm_interpreter::FinalizationResult;
 use cfx_vm_types::{self as vm, ActionParams};
+use revm_context_interface::result::{HaltReason, SuccessReason};
 use revm_interpreter::{
-    opcode::{make_instruction_table, InstructionTable},
-    primitives::{specification::LatestSpec, HaltReason, SuccessReason},
-    CallInputs, Host, Interpreter, InterpreterAction, InterpreterResult,
-    SharedMemory, SuccessOrHalt,
+    instruction_table, CallInputs, Host, Interpreter, InterpreterAction,
+    InterpreterResult, SharedMemory, SuccessOrHalt,
 };
+
 use vm::ReturnData;
 
 impl Executable for Interpreter {
@@ -24,10 +24,10 @@ impl Executable for Interpreter {
         let mut revm_context = EvmHost::new(context);
         let shared_memory = SharedMemory::new();
 
-        let table = &make_instruction_table::<_, LatestSpec>();
+        let table = &instruction_table();
 
         // TODO: inspect shared_memory
-        let action = self.run(shared_memory, table, &mut revm_context);
+        let action = self.run_plain(table, &mut revm_context);
 
         revm_context.take_db_error()?;
 
@@ -37,9 +37,7 @@ impl Executable for Interpreter {
 
 fn adapt_action(action: InterpreterAction) -> ExecutableOutcome {
     match action {
-        InterpreterAction::Call { inputs } => todo!(),
-        InterpreterAction::Create { inputs } => todo!(),
-        InterpreterAction::EOFCreate { inputs } => todo!(),
+        InterpreterAction::NewFrame(frame_input) => todo!(),
         InterpreterAction::Return { result } => todo!(),
         InterpreterAction::None => todo!("What should I do here"),
     }

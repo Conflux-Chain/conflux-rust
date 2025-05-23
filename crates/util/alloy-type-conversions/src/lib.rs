@@ -31,6 +31,14 @@ pub fn to_alloy_h256(value: cfx_types::H256) -> alloy_types::B256 {
     alloy_types::FixedBytes(value.0)
 }
 
+pub fn to_alloy_bytes(value: cfx_bytes::Bytes) -> alloy_types::Bytes {
+    alloy_types::Bytes::from(value)
+}
+
+pub fn from_alloy_bytes(value: alloy_types::Bytes) -> cfx_bytes::Bytes {
+    cfx_bytes::Bytes::from(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

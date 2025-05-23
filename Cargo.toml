@@ -289,12 +289,7 @@ alloy-sol-types = "0.7.2"
 alloy-primitives = "0.7.2"
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
-
 revm = { version = "8.0", default-features = false }
-# revm-interpreter = "6.0"
-# revm-primitives = "5.0"
-revm-interpreter = { git = "https://github.com/Conflux-Chain/revm.git", tag = "v37"}
-revm-primitives = { git = "https://github.com/Conflux-Chain/revm.git", tag = "v37"}
 
 # revm v8
 revm-primitives = "3.1.1"
