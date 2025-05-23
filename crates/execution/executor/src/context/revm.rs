@@ -91,7 +91,50 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     fn selfdestruct(
         &mut self, address: Address, target: Address,
     ) -> Option<StateLoad<SelfDestructResult>> {
-        todo!()
+        let target_address = from_alloy_address(target);
+
+        if let Err(e) = self.context.suicide(&target_address) {
+            self.error = Err(unwrap_db_error(e));
+            return None;
+        }
+
+        let target_exists = match self
+            .context
+            .state
+            .is_eip158_empty(&target_address.with_evm_space())
+        {
+            Ok(exists) => exists,
+            Err(e) => {
+                self.error = Err(e);
+                return None;
+            }
+        };
+
+        let contract_address_with_space =
+            self.context.origin.address.with_space(self.context.space);
+
+        let had_value =
+            match self.context.state.balance(&contract_address_with_space) {
+                Ok(balance) => !balance.is_zero(),
+                Err(e) => {
+                    self.error = Err(e);
+                    return None;
+                }
+            };
+
+        // TODO: UPDATE THIS.
+        let previously_destroyed = false;
+
+        let is_cold = !self.context.is_warm_account(target_address);
+
+        Some(StateLoad {
+            data: SelfDestructResult {
+                had_value,
+                target_exists,
+                previously_destroyed,
+            },
+            is_cold,
+        })
     }
 
     fn log(&mut self, log: Log) { todo!() }
