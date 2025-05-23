@@ -1,9 +1,11 @@
 use crate::trace::{
     Action as RpcCfxAction, LocalizedTrace as RpcCfxLocalizedTrace,
 };
-use cfx_parity_trace_types::Outcome;
+use cfx_parity_trace_types::{
+    Outcome, SetAuth as VmSetAuth, SetAuthOutcome as VmSetAuthOutcome,
+};
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{H160, H256, U256};
+use cfx_types::{Address, H256, U256};
 use cfx_util_macros::bail;
 use cfx_vm_types::{CallType, CreateType};
 use jsonrpc_core::Error as JsonRpcError;
@@ -18,7 +20,7 @@ use std::{
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     /// Sender
-    from: H160,
+    from: Address,
     /// Value
     value: U256,
     /// Gas
@@ -34,9 +36,9 @@ pub struct Create {
 #[serde(rename_all = "camelCase")]
 pub struct Call {
     /// Sender
-    from: H160,
+    from: Address,
     /// Recipient
-    to: H160,
+    to: Address,
     /// Transfered Value
     value: U256,
     /// Gas
@@ -104,7 +106,7 @@ pub struct CreateResult {
     /// Code
     code: Bytes,
     /// Assigned address
-    address: H160,
+    address: Address,
 }
 
 /// Response
@@ -352,5 +354,55 @@ impl fmt::Display for TraceError {
             }
         };
         message.fmt(f)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAuth {
+    /// The address of the impl.
+    pub address: Address,
+    pub chain_id: U256,
+    pub nonce: U256,
+    pub author: Option<Address>,
+}
+
+/// Trace
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalizedSetAuthTrace {
+    /// Action
+    pub action: SetAuth,
+    /// Result
+    pub result: VmSetAuthOutcome,
+    /// Transaction position
+    pub transaction_position: usize,
+    /// Transaction hash
+    pub transaction_hash: H256,
+    /// Block Number
+    pub block_number: u64,
+    /// Block Hash
+    pub block_hash: H256,
+}
+
+impl LocalizedSetAuthTrace {
+    pub fn new(
+        vm_action: &VmSetAuth, transaction_position: usize,
+        transaction_hash: H256, block_number: u64, block_hash: H256,
+    ) -> Self {
+        let action = SetAuth {
+            address: vm_action.address,
+            chain_id: vm_action.chain_id,
+            nonce: vm_action.nonce,
+            author: vm_action.author,
+        };
+        Self {
+            action,
+            result: vm_action.outcome,
+            transaction_position,
+            transaction_hash,
+            block_number,
+            block_hash,
+        }
     }
 }

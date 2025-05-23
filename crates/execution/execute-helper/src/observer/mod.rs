@@ -17,7 +17,7 @@ use geth_tracer::{GethTracer, TxExecContext};
 
 #[derive(AsTracer, DrainTrace)]
 pub struct Observer {
-    pub tracer: Option<ExecTracer>,
+    pub tracer: Option<ExecTracer>, // parity tracer
     pub gas_man: Option<GasMan>,
     pub geth_tracer: Option<GethTracer>,
 }

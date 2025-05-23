@@ -137,7 +137,7 @@ impl TraceHandler {
 
         let (pivot_hash, block_traces) = self
             .data_man
-            .transactions_traces_by_block_hash(&tx_index.block_hash)?;
+            .block_tx_traces_by_hash(&tx_index.block_hash)?;
 
         let epoch_number = self
             .data_man

@@ -1,7 +1,7 @@
 use cfx_executor::{
     observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
-        OpcodeTracer, StorageTracer,
+        OpcodeTracer, SetAuthTracer, StorageTracer,
     },
     stack::FrameResult,
 };
@@ -129,3 +129,4 @@ impl CheckpointTracer for GasMan {}
 impl InternalTransferTracer for GasMan {}
 impl StorageTracer for GasMan {}
 impl OpcodeTracer for GasMan {}
+impl SetAuthTracer for GasMan {}
