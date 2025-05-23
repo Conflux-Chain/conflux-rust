@@ -21,11 +21,10 @@ use cfx_executor::{
 };
 use cfx_types::H160;
 use cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
-use revm::{
-    db::InMemoryDB,
-    interpreter::{Gas, InstructionResult, InterpreterResult},
-    primitives::State,
-};
+use revm::db::InMemoryDB;
+use revm_interpreter::{Gas, InstructionResult, InterpreterResult};
+use revm_primitives::State;
+
 use std::sync::Arc;
 
 pub struct GethTracer {

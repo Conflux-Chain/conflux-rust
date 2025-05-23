@@ -114,7 +114,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "2.4.0"
+version = "2.6.0"
 authors = ["peilun-conflux", "ChenxingLi"]
 description = "A rust implementation of the Conflux-Protocol"
 documentation = "https://doc.confluxnetwork.org"
@@ -122,6 +122,7 @@ homepage = "https://confluxnetwork.org/"
 keywords = ["Conflux"]
 repository = "https://github.com/conflux-chain/conflux-rust"
 license-file = "LICENSE"
+edition = "2021"
 
 [profile.test]
 debug-assertions = true
@@ -289,6 +290,10 @@ alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 revm = { version = "8.0", default-features = false }
 
+# revm v8
+revm-primitives = "3.1.1"
+revm-interpreter = "4.0.0"
+
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
 jsonrpc-tcp-server = "18.0.0"
@@ -315,8 +320,6 @@ tower = "0.4"
 pin-project = "1.0.12"
 mio = "0.6.8"
 reqwest = "0.12"
-# old version tokio 0.2
-tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
 
 # crypto & hash
 #fixed-hash = "0.5"

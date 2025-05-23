@@ -1171,7 +1171,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-config"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-addr",
  "cfx-executor",
@@ -1341,7 +1341,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1359,7 +1359,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
@@ -1402,7 +1402,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc",
@@ -1441,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1467,7 +1467,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-common-impl"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-addr",
  "cfx-execute-helper",
@@ -1480,7 +1480,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-parity-trace-types",
@@ -1492,7 +1492,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1513,7 +1513,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-middlewares"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "anyhow",
  "cfx-rpc-utils",
@@ -1533,7 +1533,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -1543,7 +1543,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1554,7 +1554,7 @@ dependencies = [
  "jsonrpc-core",
  "jsonrpsee",
  "jsonrpsee-core",
- "revm",
+ "revm-primitives",
  "serde_json",
  "thiserror 2.0.11",
  "tokio",
@@ -1634,7 +1634,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -1660,7 +1660,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "2.4.0"
+version = "2.6.0"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -1703,7 +1703,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -2005,7 +2005,7 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "client"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-rpc-types",
  "alloy-rpc-types-trace",
@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "bcs",
  "bls-signatures",
@@ -3118,7 +3118,7 @@ checksum = "bbbaaaf38131deb9ca518a274a45bfdb8771f139517b073b16c2d3d32ae5037b"
 
 [[package]]
 name = "eest_types"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
@@ -3786,7 +3786,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -3797,6 +3797,8 @@ dependencies = [
  "cfx-vm-types",
  "primitives",
  "revm",
+ "revm-interpreter",
+ "revm-primitives",
  "typemap-ors",
 ]
 
@@ -7282,11 +7284,14 @@ dependencies = [
  "auto_impl",
  "bitflags 2.5.0",
  "bitvec 1.0.1",
+ "c-kzg",
  "cfg-if 1.0.0",
+ "derive_more",
  "dyn-clone",
  "enumn",
  "hashbrown 0.14.3",
  "hex",
+ "once_cell",
  "serde",
 ]
 
@@ -7865,7 +7870,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.4.0"
+version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
