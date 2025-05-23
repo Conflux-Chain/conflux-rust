@@ -1368,6 +1368,7 @@ dependencies = [
  "cfx-execute-helper",
  "cfx-executor",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
  "cfx-rpc-common-impl",
@@ -1482,6 +1483,7 @@ name = "cfx-rpc-eth-api"
 version = "2.4.0"
 dependencies = [
  "alloy-rpc-types-trace",
+ "cfx-parity-trace-types",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
  "cfx-types",

@@ -302,8 +302,8 @@ impl SetAuth {
 }
 
 /// The outcome of the action result.
-#[derive(Debug, PartialEq, Clone, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, PartialEq, Copy, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SetAuthOutcome {
     Success,
     InvalidChainId,
