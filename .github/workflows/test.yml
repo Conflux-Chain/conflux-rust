@@ -29,6 +29,10 @@ on:
       - "cargo_fmt.sh"
       - "CODEOWNERS"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-crates:
     runs-on: ubuntu-24.04
@@ -43,16 +47,14 @@ jobs:
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
-
-      - name: Check individual crates
-        run: |
-          ./dev-support/check-crates.sh
-
       - name: Check workspace
         env:
           RUSTFLAGS: -D warnings
         run: |
           cargo check --all --locked
+      - name: Check individual crates
+        run: |
+          ./dev-support/check-crates.sh
 
   workspace-tests:
     runs-on: ubuntu-24.04
