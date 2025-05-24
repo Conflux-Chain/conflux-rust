@@ -5,6 +5,10 @@ on:
     branches:
       - master
 
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
 jobs:
   deploy:
     permissions:
@@ -12,19 +16,17 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-  
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: "nightly-2024-02-04"
-          
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
+
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
       - name: Generate documentation
         env:
           CMAKE_POLICY_VERSION_MINIMUM: 3.5
-          RUSTDOCFLAGS: '--enable-index-page -Z unstable-options'
+          RUSTDOCFLAGS: "--enable-index-page -Z unstable-options"
         run: |
           rustup default nightly-2024-04-22 && cargo +nightly-2024-04-22 doc --no-deps
 

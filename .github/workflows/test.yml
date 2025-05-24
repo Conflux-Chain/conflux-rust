@@ -2,6 +2,8 @@ name: Tests
 
 env:
   RUST_VERSION: 1.77.2
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
 
 on:
   push:
@@ -32,25 +34,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Cargo Cache
-        uses: ./.github/actions/setup-cargo-cache
-
       - name: Free up space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android
 
-      - name: Cache debug build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/debug/deps
-            target/debug/.fingerprint
-            target/debug/build
-            !target/debug/build/**/out
-          key: ${{ runner.os }}-conflux-debug-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-conflux-debug-${{ env.RUST_VERSION }}-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
@@ -73,27 +62,14 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android
 
-      - name: Setup Cargo Cache
-        uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/release/deps
-            target/release/.fingerprint
-            target/release/build
-            !target/release/build/**/out
-          key: ${{ runner.os }}-conflux-release-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-conflux-release-${{ env.RUST_VERSION }}-
-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
       - name: Run build bench
         env:
-            RUSTFLAGS: -D warnings
+          RUSTFLAGS: -D warnings
         run: |
           cargo bench --all --no-run
 
@@ -112,21 +88,8 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android
 
-      - name: Setup Cargo Cache
-        uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache debug build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/debug/deps
-            target/debug/.fingerprint
-            target/debug/build
-            !target/debug/build/**/out
-          key: ${{ runner.os }}-cfx-addr-debug-${{ env.RUST_VERSION }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cfx-addr-debug-${{ env.RUST_VERSION }}-
-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
@@ -142,8 +105,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Cargo Cache
-        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
@@ -163,21 +126,8 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android
 
-      - name: Setup Cargo Cache
-        uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache release artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            tools/evm-spec-tester/target/release/deps
-            tools/evm-spec-tester/target/release/.fingerprint
-            tools/evm-spec-tester/target/release/build
-            !tools/evm-spec-tester/target/release/build/**/out
-          key: ${{ runner.os }}-evm-spec-tester-release-${{ env.RUST_VERSION }}-${{ hashFiles('tools/evm-spec-tester/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-evm-spec-tester-release-${{ env.RUST_VERSION }}-
-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
@@ -194,7 +144,6 @@ jobs:
           RUSTFLAGS: -D warnings
         run: cargo run --release --locked -- statetest ../../testdata/evm-spec-test
 
-
   consensus-bench-test:
     runs-on: ubuntu-24.04
     steps:
@@ -204,20 +153,8 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android
 
-      - name: Setup Cargo Cache
-        uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache release artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            tools/consensus_bench/target/debug/deps
-            tools/consensus_bench/target/debug/.fingerprint
-            tools/consensus_bench/target/debug/build
-            !tools/consensus_bench/target/debug/build/**/out
-          key: ${{ runner.os }}-consensus-bench-debug-${{ env.RUST_VERSION }}-${{ hashFiles('tools/consensus_bench/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-consensus-bench-debug-${{ env.RUST_VERSION }}-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.8
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
@@ -228,4 +165,3 @@ jobs:
           RUSTFLAGS: -D warnings
         run: |
           cargo check --locked
-          
