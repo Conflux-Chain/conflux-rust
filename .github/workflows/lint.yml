@@ -40,7 +40,8 @@ jobs:
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.9
-
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
@@ -52,6 +53,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # - uses: EmbarkStudios/cargo-deny-action@v2
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.9
       - name: cargo-deny

@@ -26,6 +26,8 @@ jobs:
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
 
       - name: Generate documentation
         env:
