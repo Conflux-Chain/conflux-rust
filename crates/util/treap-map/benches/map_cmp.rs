@@ -41,7 +41,7 @@ fn make_seperate_map(
     for _ in 0..SIZE {
         let key = rng.random_range(0..SIZE * 2);
         btree_map.insert(key, key);
-        treap_map.insert(key, (), rng.gen::<u64>() % u32::MAX as u64);
+        treap_map.insert(key, (), rng.random::<u64>() % u32::MAX as u64);
     }
     (treap_map, btree_map)
 }

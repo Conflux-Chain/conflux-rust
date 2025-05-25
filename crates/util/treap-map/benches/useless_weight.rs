@@ -34,7 +34,7 @@ fn make_small_weight_map(mut rng: impl Rng) -> TreapMap<SmallWeight> {
     let mut treap_map = TreapMap::<SmallWeight>::new();
     for _ in 0..SIZE {
         let key = rng.random_range(0..(SIZE * 2));
-        treap_map.insert(key, key, rng.gen::<u64>() >> 14);
+        treap_map.insert(key, key, rng.random::<u64>() >> 14);
     }
     treap_map
 }
@@ -43,7 +43,7 @@ fn make_large_weight_map(mut rng: impl Rng) -> TreapMap<LargeWeight> {
     let mut treap_map = TreapMap::<LargeWeight>::new();
     for _ in 0..SIZE {
         let key = rng.random_range(0..(SIZE * 2));
-        treap_map.insert(key, key, U512(rng.gen::<[u64; 8]>()) >> 14);
+        treap_map.insert(key, key, U512(rng.random::<[u64; 8]>()) >> 14);
     }
     treap_map
 }
