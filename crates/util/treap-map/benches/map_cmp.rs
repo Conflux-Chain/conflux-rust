@@ -20,8 +20,8 @@ const SIZE: usize = 1 << 20 - 1;
 fn make_combined_map(mut rng: impl Rng) -> TreapMap<CombinedMap> {
     let mut treap_map = TreapMap::<CombinedMap>::new();
     for _ in 0..SIZE {
-        let key = rng.gen::<usize>() % (SIZE * 2);
-        treap_map.insert(key, key, rng.gen::<u64>() % u32::MAX as u64);
+        let key = rng.random_range(0..(SIZE * 2));
+        treap_map.insert(key, key, rng.random_range(0..u32::MAX as u64));
     }
     treap_map
 }
@@ -39,7 +39,7 @@ fn make_seperate_map(
     let mut treap_map = TreapMap::<SepreateMap>::new();
     let mut btree_map: BTreeMap<usize, usize> = BTreeMap::new();
     for _ in 0..SIZE {
-        let key = rng.gen::<usize>() % (SIZE * 2);
+        let key = rng.random_range(0..SIZE * 2);
         btree_map.insert(key, key);
         treap_map.insert(key, (), rng.gen::<u64>() % u32::MAX as u64);
     }
@@ -52,7 +52,7 @@ fn bench_combined_treap_map_query(c: &mut Criterion) {
         let mut key = 0usize;
         b.iter(|| {
             black_box({
-                key = rand::random::<usize>() % (SIZE * 2);
+                key = rand::random_range(0..SIZE * 2);
                 black_box(treap_map.get(&key).unwrap_or(&key));
             })
         });
@@ -63,14 +63,14 @@ fn bench_combined_treap_map_update(c: &mut Criterion) {
     let mut treap_map = make_combined_map(StdRng::from_seed([123; 32]));
     c.bench_function("Combined Treapmap update", move |b| {
         b.iter(|| {
-            let key = rand::random::<usize>() % (SIZE * 2);
+            let key = rand::random_range(0..(SIZE * 2));
             if treap_map.len() > SIZE {
                 treap_map.remove(&key);
             } else {
                 treap_map.insert(
                     key,
-                    rand::random(),
-                    rand::random::<u64>() % u32::MAX as u64,
+                    rand::random_range(0..usize::MAX),
+                    rand::random_range(0..u32::MAX as u64),
                 );
             }
         });
@@ -82,7 +82,7 @@ fn bench_sepreate_treap_map_query(c: &mut Criterion) {
         make_seperate_map(StdRng::from_seed([123; 32]));
     c.bench_function("Seperate Treapmap get", move |b| {
         b.iter(|| {
-            let key = rand::random::<usize>() % (SIZE * 2);
+            let key = rand::random_range(0..(SIZE * 2));
             black_box(btree_map.get(&key));
         })
     });
@@ -94,16 +94,16 @@ fn bench_sepreate_treap_map_update(c: &mut Criterion) {
         make_seperate_map(StdRng::from_seed([123; 32]));
     c.bench_function("Seperate Treapmap update", move |b| {
         b.iter(|| {
-            let key = rand::random::<usize>() % (SIZE * 2);
+            let key = rand::random_range(0..(SIZE * 2));
             if treap_map.len() > SIZE {
                 treap_map.remove(&key);
                 btree_map.remove(&key);
             } else {
-                btree_map.insert(key, rand::random());
+                btree_map.insert(key, rand::random_range(0..usize::MAX));
                 treap_map.insert(
                     key,
                     (),
-                    rand::random::<u64>() % u32::MAX as u64,
+                    rand::random_range(0..u32::MAX as u64),
                 );
             }
         });

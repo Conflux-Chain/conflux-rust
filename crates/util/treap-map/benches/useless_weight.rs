@@ -33,7 +33,7 @@ const SIZE: usize = 1 << 12 - 1;
 fn make_small_weight_map(mut rng: impl Rng) -> TreapMap<SmallWeight> {
     let mut treap_map = TreapMap::<SmallWeight>::new();
     for _ in 0..SIZE {
-        let key = rng.gen::<usize>() % (SIZE * 2);
+        let key = rng.random_range(0..(SIZE * 2));
         treap_map.insert(key, key, rng.gen::<u64>() >> 14);
     }
     treap_map
@@ -42,7 +42,7 @@ fn make_small_weight_map(mut rng: impl Rng) -> TreapMap<SmallWeight> {
 fn make_large_weight_map(mut rng: impl Rng) -> TreapMap<LargeWeight> {
     let mut treap_map = TreapMap::<LargeWeight>::new();
     for _ in 0..SIZE {
-        let key = rng.gen::<usize>() % (SIZE * 2);
+        let key = rng.random_range(0..(SIZE * 2));
         treap_map.insert(key, key, U512(rng.gen::<[u64; 8]>()) >> 14);
     }
     treap_map
@@ -51,7 +51,7 @@ fn make_large_weight_map(mut rng: impl Rng) -> TreapMap<LargeWeight> {
 fn make_no_weight_map(mut rng: impl Rng) -> TreapMap<NoWeight> {
     let mut treap_map = TreapMap::<NoWeight>::new();
     for _ in 0..SIZE {
-        let key = rng.gen::<usize>() % (SIZE * 2);
+        let key = rng.random_range(0..(SIZE * 2));
         treap_map.insert(key, key, treap_map::NoWeight);
     }
     treap_map
@@ -62,7 +62,7 @@ fn bench_small_weight_search(c: &mut Criterion) {
         "Search with u64 Weight (Actual Compute Weight)",
         move |b| {
             let treap_map = make_small_weight_map(StdRng::from_seed([123; 32]));
-            let mut rand = XorShiftRng::from_entropy();
+            let mut rand = XorShiftRng::from_os_rng();
             b.iter(|| {
                 black_box({
                     let key = rand.next_u64() as usize % (SIZE * 2);
@@ -87,7 +87,7 @@ fn bench_large_weight_search(c: &mut Criterion) {
         "Search with U512 Weight (Actual Compute Weight)",
         move |b| {
             let treap_map = make_large_weight_map(StdRng::from_seed([123; 32]));
-            let mut rand = XorShiftRng::from_entropy();
+            let mut rand = XorShiftRng::from_os_rng();
             b.iter(|| {
                 black_box({
                     let key = rand.next_u64() as usize % (SIZE * 2);
@@ -107,7 +107,7 @@ fn bench_large_weight_search(c: &mut Criterion) {
     );
 
     c.bench_function("`search_no_weight` function", move |b| {
-        let mut rand = XorShiftRng::from_entropy();
+        let mut rand = XorShiftRng::from_os_rng();
         let treap_map = make_large_weight_map(StdRng::from_seed([123; 32]));
 
         b.iter(|| {
@@ -128,7 +128,7 @@ fn bench_large_weight_search(c: &mut Criterion) {
 fn bench_no_weight_search(c: &mut Criterion) {
     c.bench_function("Search treap-map without weight", move |b| {
         let treap_map = make_no_weight_map(StdRng::from_seed([123; 32]));
-        let mut rand = XorShiftRng::from_entropy();
+        let mut rand = XorShiftRng::from_os_rng();
         b.iter(|| {
             black_box({
                 let key = rand.next_u64() as usize % (SIZE * 2);

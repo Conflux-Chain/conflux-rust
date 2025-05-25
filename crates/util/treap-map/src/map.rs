@@ -48,7 +48,7 @@ impl<C: TreapMapConfig> TreapMap<C> {
     pub fn new() -> TreapMap<C> {
         TreapMap {
             root: None,
-            rng: XorShiftRng::from_entropy(),
+            rng: XorShiftRng::from_os_rng(),
             ext_map: Default::default(),
         }
     }

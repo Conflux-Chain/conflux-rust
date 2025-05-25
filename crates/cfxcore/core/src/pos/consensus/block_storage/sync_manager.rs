@@ -25,7 +25,7 @@ use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
     ledger_info::LedgerInfoWithSignatures,
 };
-use rand::{prelude::*, Rng};
+use rand::{prelude::*, rng};
 use std::{clone::Clone, sync::Arc, time::Duration};
 
 pub const BLOCK_FETCH_BATCH_MAX_SIZE: u64 = 60;
@@ -354,7 +354,7 @@ impl BlockRetriever {
             return self.preferred_peer;
         }
 
-        let peer_idx = thread_rng().gen_range(0, peers.len());
+        let peer_idx = rng().random_range(0..peers.len());
         peers.remove(peer_idx)
     }
 }

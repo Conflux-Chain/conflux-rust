@@ -338,10 +338,13 @@ clap = "4"
 clap-verbosity-flag = "3"
 
 # rand & rng
-rand = "0.7"
-rand_xorshift = "0.2"
+rand = "0.9"
+rand_xorshift = "0.4"
+rand_chacha = "0.9.0"
+
+# old rand
+rand_07 = { package = "rand", version = "0.7" }
 rand_08 = { package = "rand", version = "0.8" }
-rand_chacha = "0.2.1"
 
 # misc
 log = "0.4"
