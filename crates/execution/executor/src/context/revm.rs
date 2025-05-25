@@ -137,18 +137,81 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
         })
     }
 
-    fn log(&mut self, log: Log) { todo!() }
+    fn log(&mut self, log: Log) {
+        let topics: Vec<cfx_types::H256> = log
+            .data
+            .topics()
+            .iter()
+            .map(|topic| from_alloy_h256(*topic))
+            .collect();
+        let data = log.data.data;
+
+        self.context.log(topics, &data);
+    }
 
     fn sstore(
         &mut self, address: Address, key: U256, value: U256,
     ) -> Option<StateLoad<SStoreResult>> {
-        todo!()
+        let key_vec = key.to_be_bytes_vec();
+        let value_cfx_u256 = from_alloy_u256(value);
+
+        let present = self.sload(address, key)?;
+
+        if self.error.is_err() {
+            return None;
+        }
+
+        let original_value = match self.context.origin_storage_at(&key_vec) {
+            Ok(Some(original_value)) => to_alloy_u256(original_value),
+            Ok(None) => to_alloy_u256(cfx_types::U256::zero()),
+            Err(e) => {
+                self.error = Err(unwrap_db_error(e));
+                return None;
+            }
+        };
+
+        let sstore_result = SStoreResult {
+            original_value,
+            present_value: present.data,
+            new_value: value,
+        };
+
+        if present.data == value {
+            return Some(StateLoad::new(sstore_result, present.is_cold));
+        };
+
+        if let Err(e) = self.context.set_storage(key_vec, value_cfx_u256) {
+            self.error = Err(unwrap_db_error(e));
+            return None;
+        }
+
+        Some(StateLoad::new(sstore_result, present.is_cold))
     }
 
     fn sload(
         &mut self, address: Address, key: U256,
     ) -> Option<StateLoad<U256>> {
-        todo!()
+        let key_bytes = key.to_be_bytes();
+        let key_vec = key_bytes.to_vec();
+        let key_h256 = cfx_types::H256::from(key_bytes);
+
+        let value = match self.context.storage_at(&key_vec) {
+            Ok(current_value) => to_alloy_u256(current_value),
+            Err(e) => {
+                self.error = Err(unwrap_db_error(e));
+                return None;
+            }
+        };
+
+        let is_cold = match self.context.is_warm_storage_entry(&key_h256) {
+            Ok(is_warm) => !is_warm,
+            Err(e) => {
+                self.error = Err(unwrap_db_error(e));
+                return None;
+            }
+        };
+
+        Some(StateLoad::new(value, is_cold))
     }
 
     fn tstore(&mut self, address: Address, key: U256, value: U256) { todo!() }
