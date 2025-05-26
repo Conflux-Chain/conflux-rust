@@ -2,7 +2,7 @@
     state: &amp;mut <a class="struct" href="struct.State.html" title="struct cfx_executor::state::State">State</a>,
     pos_points: I,
     current_block_number: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>
-) -&gt; Result&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;(Address, H256, U256)&gt;&gt;<div class="where">where
+) -&gt; <a class="type" href="../../cfx_db_errors/statedb/type.Result.html" title="type cfx_db_errors::statedb::Result">Result</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;(Address, H256, U256)&gt;&gt;<div class="where">where
     I: <a class="trait" href="https://doc.rust-lang.org/nightly/core/iter/traits/iterator/trait.Iterator.html" title="trait core::iter::traits::iterator::Iterator">Iterator</a>&lt;Item = (&amp;'a H256, <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>)&gt; + 'a,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Distribute PoS interest to the PoS committee according to their reward
 points. Return the rewarded PoW accounts and their rewarded
 interest.</p>
