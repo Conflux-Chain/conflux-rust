@@ -214,9 +214,28 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
         Some(StateLoad::new(value, is_cold))
     }
 
-    fn tstore(&mut self, address: Address, key: U256, value: U256) { todo!() }
+    fn tstore(&mut self, address: Address, key: U256, value: U256) {
+        let key = key.to_be_bytes_vec();
+        let value = from_alloy_u256(value);
 
-    fn tload(&mut self, address: Address, key: U256) -> U256 { todo!() }
+        self.context
+            .transient_set_storage(key, value)
+            .map_err(|e| {
+                self.error = Err(unwrap_db_error(e));
+            })
+            .ok();
+    }
+
+    fn tload(&mut self, address: Address, key: U256) -> U256 {
+        let key = key.to_be_bytes_vec();
+        self.context
+            .transient_storage_at(&key)
+            .map(|value| to_alloy_u256(value))
+            .map_err(|e| {
+                self.error = Err(unwrap_db_error(e));
+            })
+            .unwrap_or_default()
+    }
 
     fn balance(&mut self, address: Address) -> Option<StateLoad<U256>> {
         match self.context.balance(&from_alloy_address(address)) {
@@ -237,14 +256,14 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     fn load_account_code(
         &mut self, address: Address,
     ) -> Option<StateLoad<Bytes>> {
-        match self.context.extcode(&from_alloy_address(address)) {
+        let address = from_alloy_address(address);
+
+        match self.context.extcode(&address) {
             Ok(code_option) => {
                 let bytes = code_option
                     .map(|code| to_alloy_bytes(code.as_ref().clone()))
                     .unwrap_or_else(|| Bytes::default());
-                let is_cold =
-                    !self.context.is_warm_account(from_alloy_address(address));
-
+                let is_cold = !self.context.is_warm_account(address);
                 Some(StateLoad::new(bytes, is_cold))
             }
             Err(e) => {
@@ -257,11 +276,10 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     fn load_account_code_hash(
         &mut self, address: Address,
     ) -> Option<StateLoad<B256>> {
-        match self.context.extcodehash(&from_alloy_address(address)) {
+        let address = from_alloy_address(address);
+        match self.context.extcodehash(&address) {
             Ok(hash) => {
-                let is_cold =
-                    !self.context.is_warm_account(from_alloy_address(address));
-
+                let is_cold = !self.context.is_warm_account(address);
                 Some(StateLoad::new(to_alloy_h256(hash), is_cold))
             }
             Err(e) => {
