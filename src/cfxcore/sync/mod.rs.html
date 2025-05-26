@@ -472,7 +472,7 @@
 
 <span class="kw">pub mod </span>random {
     <span class="kw">use </span>rand;
-    <span class="kw">pub fn </span>new() -&gt; rand::prelude::ThreadRng { rand::thread_rng() }
+    <span class="kw">pub fn </span>new() -&gt; rand::prelude::ThreadRng { rand::rng() }
 }
 
 <span class="kw">pub mod </span>msg_sender {

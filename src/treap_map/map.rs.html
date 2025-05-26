@@ -360,7 +360,7 @@
     <span class="kw">pub fn </span>new() -&gt; TreapMap&lt;C&gt; {
         TreapMap {
             root: <span class="prelude-val">None</span>,
-            rng: XorShiftRng::from_entropy(),
+            rng: XorShiftRng::from_os_rng(),
             ext_map: Default::default(),
         }
     }

@@ -365,6 +365,9 @@
 <a href="#365" id="365">365</a>
 <a href="#366" id="366">366</a>
 <a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(dead_code)]
 
 </span><span class="comment">// Copyright 2015-2019 Parity Technologies (UK) Ltd.
@@ -387,7 +390,7 @@
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>keccak_hash::keccak;
 <span class="kw">use </span>log::{trace, warn};
-<span class="kw">use </span>rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
+<span class="kw">use </span>rand::{distr::Alphanumeric, Rng};
 <span class="kw">use </span>std::{
     fs,
     io::{<span class="self">self</span>, Read, Write},
@@ -553,10 +556,13 @@
 
     <span class="doccomment">/// Generates and returns a new code that can be used by `SignerUIs`
     </span><span class="kw">pub fn </span>generate_new(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; io::Result&lt;String&gt; {
-        <span class="kw">let </span>code = OsRng
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
+
+        <span class="kw">let </span>code: String = (<span class="kw-2">&amp;mut </span>rng)
             .sample_iter(<span class="kw-2">&amp;</span>Alphanumeric)
             .take(TOKEN_LENGTH)
-            .collect::&lt;String&gt;();
+            .map(char::from)
+            .collect();
         <span class="kw">let </span>readable_code = code
             .as_bytes()
             .chunks(<span class="number">4</span>)

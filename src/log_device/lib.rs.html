@@ -1149,7 +1149,7 @@
     ) {
         <span class="kw">for </span>i <span class="kw">in </span>start..end {
             <span class="kw">let </span><span class="kw-2">mut </span>stripe: Vec&lt;u8&gt; = Vec::new();
-            <span class="kw">let </span>stripe_size = rand::thread_rng().gen_range(<span class="number">4</span>, <span class="number">1024 </span>* <span class="number">64</span>);
+            <span class="kw">let </span>stripe_size = rand::rng().random_range(<span class="number">4</span>..<span class="number">1024 </span>* <span class="number">64</span>);
             stripe.resize(stripe_size, i <span class="kw">as </span>u8);
             <span class="kw">let </span>payload_size = stripe_size - <span class="number">4</span>;
             LittleEndian::write_u32(<span class="kw-2">&amp;mut </span>stripe[<span class="number">0</span>..<span class="number">4</span>], payload_size <span class="kw">as </span>u32);

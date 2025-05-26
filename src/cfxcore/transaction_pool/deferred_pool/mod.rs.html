@@ -628,7 +628,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>minimum_unit_gas_limit = U256::from(<span class="number">21000</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>minimum_unit_tx_size = <span class="number">80</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = XorShiftRng::from_entropy();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = XorShiftRng::from_os_rng();
 
         <span class="comment">// When a sampled transaction exceeds the remaining capacity (gas limit
         // or size) in a block, we skip it and look for the next transaction.

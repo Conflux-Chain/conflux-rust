@@ -411,7 +411,7 @@
     node_table::NodeId, service::ProtocolVersion, Error <span class="kw">as </span>NetworkError,
 };
 <span class="kw">use </span>parking_lot::RwLock;
-<span class="kw">use </span>rand::prelude::SliceRandom;
+<span class="kw">use </span>rand::prelude::{IndexedRandom, SliceRandom};
 <span class="kw">use </span>std::{
     collections::{HashMap, HashSet},
     sync::Arc,

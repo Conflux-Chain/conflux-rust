@@ -576,9 +576,9 @@
 
         <span class="comment">// create async sender
         </span><span class="kw">let </span>fut3 = <span class="kw">async move </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
+            <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
             <span class="kw">let </span><span class="kw-2">mut </span>sent = <span class="macro">vec!</span>[];
-            <span class="kw">for </span>t <span class="kw">in </span>(<span class="number">0</span>..<span class="number">100</span>).map(|<span class="kw">_</span>| rng.gen()) {
+            <span class="kw">for </span>t <span class="kw">in </span>(<span class="number">0</span>..<span class="number">100</span>).map(|<span class="kw">_</span>| rng.random()) {
                 chan.send(t);
                 sent.push(t);
             }
@@ -605,9 +605,9 @@
 
         <span class="comment">// create async sender
         </span><span class="kw">let </span>fut_a = <span class="kw">async move </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
+            <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rng();
 
-            <span class="kw">for </span>t <span class="kw">in </span>(<span class="number">0</span>..<span class="number">100</span>).map(|<span class="kw">_</span>| rng.gen()) {
+            <span class="kw">for </span>t <span class="kw">in </span>(<span class="number">0</span>..<span class="number">100</span>).map(|<span class="kw">_</span>| rng.random()) {
                 send_a.send(t);
                 <span class="kw">let </span>t2 = rec_a.recv().<span class="kw">await</span>;
 

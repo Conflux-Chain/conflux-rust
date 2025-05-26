@@ -637,6 +637,8 @@
 <a href="#637" id="637">637</a>
 <a href="#638" id="638">638</a>
 <a href="#639" id="639">639</a>
+<a href="#640" id="640">640</a>
+<a href="#641" id="641">641</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 
 <span class="kw">use crate</span>::{
@@ -1130,7 +1132,7 @@
         <span class="kw">let </span>pool = default_pool(<span class="number">5</span>, <span class="number">100000</span>);
 
         <span class="kw">let </span>pack_txs = || {
-            <span class="kw">let </span><span class="kw-2">mut </span>rng = XorShiftRng::from_entropy();
+            <span class="kw">let </span><span class="kw-2">mut </span>rng = XorShiftRng::from_os_rng();
 
             <span class="kw">let </span><span class="kw-2">mut </span>packed = HashSet::new();
             <span class="kw">for </span>(<span class="kw">_</span>, txs, tag) <span class="kw">in </span>pool.tx_sampler(<span class="kw-2">&amp;mut </span>rng, <span class="number">40000</span>.into()) {
@@ -1171,7 +1173,7 @@
         transaction::PackingPoolTransaction, PackingPool, PackingPoolConfig,
     };
     <span class="kw">use </span>cfx_types::U256;
-    <span class="kw">use </span>rand::{distributions::Uniform, Rng, SeedableRng};
+    <span class="kw">use </span>rand::{distr::Uniform, Rng, SeedableRng};
     <span class="kw">use </span>rand_xorshift::XorShiftRng;
 
     <span class="attr">#[derive(Default)]
@@ -1216,14 +1218,16 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_truncate_price_and_sample() {
-        <span class="kw">let </span><span class="kw-2">mut </span>rand = XorShiftRng::from_entropy();
+        <span class="kw">let </span><span class="kw-2">mut </span>rand = XorShiftRng::from_os_rng();
         <span class="kw">let </span><span class="kw-2">mut </span>pool = PackingPool::new(PackingPoolConfig::new_for_test());
         <span class="kw">let </span><span class="kw-2">mut </span>mock_pool = MockPriceBook::default();
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">1000 </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>gas_limit = <span class="number">1.01f64</span>.powf(<span class="number">2000.0 </span>+ i <span class="kw">as </span>f64) <span class="kw">as </span>u64;
-            gas_limit -= gas_limit / rand.sample(Uniform::new(<span class="number">50</span>, <span class="number">200</span>));
+            gas_limit -=
+                gas_limit / rand.sample(Uniform::new(<span class="number">50</span>, <span class="number">200</span>).unwrap());
             <span class="kw">let </span><span class="kw-2">mut </span>gas_price = <span class="number">1.01f64</span>.powf(<span class="number">3000.0 </span>- i <span class="kw">as </span>f64) <span class="kw">as </span>u64;
-            gas_price -= gas_price / rand.sample(Uniform::new(<span class="number">50</span>, <span class="number">200</span>));
+            gas_price -=
+                gas_price / rand.sample(Uniform::new(<span class="number">50</span>, <span class="number">200</span>).unwrap());
 
             <span class="kw">let </span>tx = default_tx(i, gas_limit, gas_price);
 
@@ -1236,7 +1240,7 @@
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">1900</span>..<span class="number">3500 </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>total_gas_limit = <span class="number">1.01f64</span>.powf(i <span class="kw">as </span>f64) <span class="kw">as </span>u64;
             total_gas_limit -=
-                total_gas_limit / rand.sample(Uniform::new(<span class="number">50</span>, <span class="number">200</span>));
+                total_gas_limit / rand.sample(Uniform::new(<span class="number">50</span>, <span class="number">200</span>).unwrap());
             <span class="macro">assert_eq!</span>(
                 pool.truncate_loss_ratio(total_gas_limit.into()),
                 mock_pool.truncate_loss_ratio(total_gas_limit <span class="kw">as </span>usize)

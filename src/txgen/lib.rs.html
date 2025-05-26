@@ -549,7 +549,7 @@
     transaction::{native_transaction::NativeTransaction, Action},
     Account, SignedTransaction, Transaction,
 };
-<span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
+<span class="kw">use </span>rand::{prelude::<span class="kw-2">*</span>, random_range};
 <span class="kw">use </span>rlp::Encodable;
 <span class="kw">use </span>rustc_hex::{FromHex, ToHex};
 <span class="kw">use </span>secret_store::SharedSecretStore;
@@ -700,11 +700,11 @@
 
             <span class="comment">// Randomly select sender and receiver.
             // Sender and receiver must exist in the account list.
-            </span><span class="kw">let </span><span class="kw-2">mut </span>receiver_index: usize = random();
+            </span><span class="kw">let </span><span class="kw-2">mut </span>receiver_index: usize = random_range(<span class="number">0</span>..usize::MAX);
             receiver_index %= account_count;
             <span class="kw">let </span>receiver_address = addresses[receiver_index];
 
-            <span class="kw">let </span><span class="kw-2">mut </span>sender_index: usize = random();
+            <span class="kw">let </span><span class="kw-2">mut </span>sender_index: usize = random_range(<span class="number">0</span>..usize::MAX);
             sender_index %= account_count;
             <span class="kw">let </span>sender_address = addresses[sender_index];
 
@@ -861,7 +861,7 @@
         </span><span class="kw">while </span>num_txs_simple &gt; <span class="number">0 </span>{
             <span class="kw">let </span>number_of_accounts = <span class="self">self</span>.address_by_index.len();
 
-            <span class="kw">let </span>sender_index: usize = random::&lt;usize&gt;() % number_of_accounts;
+            <span class="kw">let </span>sender_index: usize = random_range(<span class="number">0</span>..number_of_accounts);
             <span class="kw">let </span>sender_address =
                 <span class="self">self</span>.address_by_index.get(sender_index).unwrap().clone();
             <span class="kw">let </span>sender_kp;
@@ -892,11 +892,11 @@
             <span class="kw">let </span>is_send_to_new_address = (number_of_accounts
                 &lt;= <span class="self">Self</span>::MAX_TOTAL_ACCOUNTS)
                 &amp;&amp; ((number_of_accounts &lt; <span class="number">10</span>)
-                    || (rand::thread_rng().gen_range(<span class="number">0</span>, <span class="number">10</span>) == <span class="number">0</span>));
+                    || (rand::thread_rng().random_range(<span class="number">0</span>..<span class="number">10</span>) == <span class="number">0</span>));
 
             <span class="kw">let </span>receiver_address = <span class="kw">match </span>is_send_to_new_address {
                 <span class="bool-val">false </span>=&gt; {
-                    <span class="kw">let </span>index: usize = random::&lt;usize&gt;() % number_of_accounts;
+                    <span class="kw">let </span>index: usize = random_range(<span class="number">0</span>..number_of_accounts);
                     <span class="self">self</span>.address_by_index.get(index).unwrap().clone()
                 }
                 <span class="bool-val">true </span>=&gt; <span class="kw">loop </span>{
@@ -959,7 +959,7 @@
         <span class="kw">while </span>num_txs_erc20 &gt; <span class="number">0 </span>{
             <span class="kw">let </span>number_of_accounts = <span class="self">self</span>.address_by_index.len();
 
-            <span class="kw">let </span>sender_index: usize = random::&lt;usize&gt;() % number_of_accounts;
+            <span class="kw">let </span>sender_index: usize = random_range(<span class="number">0</span>..number_of_accounts);
             <span class="kw">let </span>sender_address =
                 <span class="self">self</span>.address_by_index.get(sender_index).unwrap().clone();
             <span class="kw">let </span>sender_kp;
@@ -994,7 +994,7 @@
                 .unwrap()
             };
 
-            <span class="kw">let </span>receiver_index = random::&lt;usize&gt;() % number_of_accounts;
+            <span class="kw">let </span>receiver_index = random_range(<span class="number">0</span>..number_of_accounts);
             <span class="kw">let </span>receiver_address =
                 <span class="self">self</span>.address_by_index.get(receiver_index).unwrap().clone();
 

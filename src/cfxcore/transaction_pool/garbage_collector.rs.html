@@ -668,7 +668,7 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_correctness() {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = XorShiftRng::from_entropy();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = XorShiftRng::from_os_rng();
         <span class="kw">let </span><span class="kw-2">mut </span>addr = Vec::new();
         <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">10000 </span>{
             addr.push(Address::random().with_native_space());

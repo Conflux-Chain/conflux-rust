@@ -702,6 +702,9 @@
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
 <a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # hibitset
 //!
 //! Provides hierarchical bit sets,
@@ -1142,6 +1145,8 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>rand::rng;
+
     <span class="kw">use super</span>::{BitSet, BitSetAnd, BitSetLike, BitSetNot, BITS};
 
     <span class="attr">#[test]
@@ -1221,11 +1226,11 @@
         <span class="kw">use </span>rand::prelude::<span class="kw-2">*</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>set = BitSet::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rng();
         <span class="kw">let </span>limit = <span class="number">1_048_576</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>added = <span class="number">0</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..(limit / <span class="number">10</span>) {
-            <span class="kw">let </span>index = rng.gen_range(<span class="number">0</span>, limit);
+            <span class="kw">let </span>index = rng.random_range(<span class="number">0</span>..limit);
             <span class="kw">if </span>!set.add(index) {
                 added += <span class="number">1</span>;
             }
@@ -1267,6 +1272,7 @@
 <span class="attr">#[cfg(all(test, feature = <span class="string">"parallel"</span>))]
 </span><span class="kw">mod </span>test_parallel {
     <span class="kw">use super</span>::{BitSet, BitSetAnd, BitSetLike, BITS};
+    <span class="kw">use </span>rand::rng;
     <span class="kw">use </span>rayon::iter::ParallelIterator;
 
     <span class="attr">#[test]
@@ -1294,10 +1300,10 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>set = BitSet::new();
         <span class="kw">let </span><span class="kw-2">mut </span>check_set = HashSet::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rng();
         <span class="kw">let </span>limit = <span class="number">1_048_576</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..(limit / <span class="number">10</span>) {
-            <span class="kw">let </span>index = rng.gen_range(<span class="number">0</span>, limit);
+            <span class="kw">let </span>index = rng.random_range(<span class="number">0</span>..limit);
             set.add(index);
             check_set.insert(index);
         }

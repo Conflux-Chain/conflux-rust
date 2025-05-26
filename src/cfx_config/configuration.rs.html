@@ -2261,7 +2261,7 @@
                     <span class="kw">let </span>chain_id = <span class="self">self
                         </span>.raw_conf
                         .chain_id
-                        .unwrap_or_else(|| rand::thread_rng().gen());
+                        .unwrap_or_else(|| rand::rng().random());
                     <span class="kw">let </span>evm_chain_id =
                         <span class="self">self</span>.raw_conf.evm_chain_id.unwrap_or(chain_id);
                     <span class="kw-2">*</span>to_init = <span class="prelude-val">Some</span>(ChainIdParamsInner::new_simple(

@@ -2022,7 +2022,7 @@
                 <span class="string">"Apply throttling for broadcast, total: {}, allowed: {}"</span>,
                 total, allowed
             );
-            peers.shuffle(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+            peers.shuffle(<span class="kw-2">&amp;mut </span>rand::rng());
             peers.truncate(allowed);
         }
 

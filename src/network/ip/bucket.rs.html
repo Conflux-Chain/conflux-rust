@@ -198,13 +198,13 @@
 
         <span class="comment">// evict out-of-date node with high priority
         </span><span class="kw">if </span>!long_time_nodes.is_empty() {
-            <span class="kw">let </span>index = rng.gen_range(<span class="number">0</span>, long_time_nodes.len());
+            <span class="kw">let </span>index = rng.random_range(<span class="number">0</span>..long_time_nodes.len());
             <span class="kw">return </span><span class="prelude-val">Some</span>(long_time_nodes[index].clone());
         }
 
         <span class="comment">// randomly evict one
         </span><span class="kw">if </span>!evictable_nodes.is_empty() {
-            <span class="kw">let </span>index = rng.gen_range(<span class="number">0</span>, evictable_nodes.len());
+            <span class="kw">let </span>index = rng.random_range(<span class="number">0</span>..evictable_nodes.len());
             <span class="kw">return </span><span class="prelude-val">Some</span>(evictable_nodes[index].clone());
         }
 

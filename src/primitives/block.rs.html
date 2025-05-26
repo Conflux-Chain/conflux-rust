@@ -478,7 +478,7 @@
     /// This block will be relayed with the new compact block to prevent
     /// adversaries to make tx shortId collision
     </span><span class="kw">pub fn </span>to_compact(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompactBlock {
-        <span class="kw">let </span>nonce: u64 = rand::thread_rng().gen();
+        <span class="kw">let </span>nonce: u64 = rand::rng().random();
         <span class="kw">let </span>(k0, k1) =
             CompactBlock::get_shortid_key(<span class="kw-2">&amp;</span><span class="self">self</span>.block_header, <span class="kw-2">&amp;</span>nonce);
         CompactBlock {

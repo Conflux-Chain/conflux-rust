@@ -392,7 +392,7 @@
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 <span class="kw">use </span>parking_lot::RwLock;
-<span class="kw">use </span>rand::{thread_rng, Rng};
+<span class="kw">use </span>rand::{rng, Rng};
 <span class="kw">use </span>std::{
     cmp::Ordering,
     collections::BinaryHeap,
@@ -594,8 +594,8 @@
         <span class="kw">if </span>data.values.len() &lt; <span class="self">self</span>.reservoir_size {
             data.values.push(v);
         } <span class="kw">else </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>rng = thread_rng();
-            <span class="kw">let </span>r = rng.gen_range(<span class="number">0</span>, data.count);
+            <span class="kw">let </span><span class="kw-2">mut </span>rng = rng();
+            <span class="kw">let </span>r = rng.random_range(<span class="number">0</span>..data.count);
 
             <span class="comment">// replace probability is reservoir_size/1+count
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(replaced) = data.values.get_mut(r) {
@@ -708,7 +708,7 @@
         <span class="kw">let </span>k = (now - data.t0).as_nanos() <span class="kw">as </span>f64
             / Duration::from_secs(<span class="number">1</span>).as_nanos() <span class="kw">as </span>f64
             * <span class="self">self</span>.alpha;
-        <span class="kw">let </span>k = k.exp() * rand::thread_rng().gen_range(<span class="number">0.0</span>, <span class="number">1.0</span>);
+        <span class="kw">let </span>k = k.exp() * rand::rng().random_range(<span class="number">0.0</span>..<span class="number">1.0</span>);
         <span class="kw">if </span>k.is_normal() {
             data.values.push(ExpDecaySampleItem { k, v });
         }

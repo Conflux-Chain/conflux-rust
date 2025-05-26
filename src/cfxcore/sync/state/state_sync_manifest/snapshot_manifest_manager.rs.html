@@ -627,6 +627,10 @@
 <a href="#627" id="627">627</a>
 <a href="#628" id="628">628</a>
 <a href="#629" id="629">629</a>
+<a href="#630" id="630">630</a>
+<a href="#631" id="631">631</a>
+<a href="#632" id="632">632</a>
+<a href="#633" id="633">633</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(unused)]
 
 </span><span class="kw">use crate</span>::{
@@ -658,7 +662,11 @@
     BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
     StorageKey, StorageKeyWithSpace, NULL_EPOCH,
 };
-<span class="kw">use </span>rand::{seq::SliceRandom, thread_rng};
+<span class="kw">use </span>rand::{
+    rng,
+    seq::{IndexedRandom, SliceRandom},
+};
+
 <span class="kw">use </span>std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
@@ -876,7 +884,7 @@
         <span class="kw">let </span>available_peers = PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
             .choose_from(<span class="kw-2">&amp;</span><span class="self">self</span>.active_peers)
             .select_all(<span class="kw-2">&amp;</span>sync_handler.syn);
-        <span class="kw">let </span>maybe_peer = available_peers.choose(<span class="kw-2">&amp;mut </span>thread_rng()).map(|p| <span class="kw-2">*</span>p);
+        <span class="kw">let </span>maybe_peer = available_peers.choose(<span class="kw-2">&amp;mut </span>rng()).map(|p| <span class="kw-2">*</span>p);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(peer) = maybe_peer {
             <span class="self">self</span>.manifest_request_status = <span class="prelude-val">Some</span>((Instant::now(), peer));
             sync_handler.request_manager.request_with_delay(

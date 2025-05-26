@@ -398,7 +398,7 @@
     account_address::AccountAddress, epoch_change::EpochChangeProof,
     ledger_info::LedgerInfoWithSignatures,
 };
-<span class="kw">use </span>rand::{prelude::<span class="kw-2">*</span>, Rng};
+<span class="kw">use </span>rand::{prelude::<span class="kw-2">*</span>, rng};
 <span class="kw">use </span>std::{clone::Clone, sync::Arc, time::Duration};
 
 <span class="kw">pub const </span>BLOCK_FETCH_BATCH_MAX_SIZE: u64 = <span class="number">60</span>;
@@ -727,7 +727,7 @@
             <span class="kw">return </span><span class="self">self</span>.preferred_peer;
         }
 
-        <span class="kw">let </span>peer_idx = thread_rng().gen_range(<span class="number">0</span>, peers.len());
+        <span class="kw">let </span>peer_idx = rng().random_range(<span class="number">0</span>..peers.len());
         peers.remove(peer_idx)
     }
 }

@@ -240,7 +240,7 @@
     thread::spawn(<span class="kw">move </span>|| <span class="kw">loop </span>{
         <span class="comment">// sleep random time on different nodes to reduce competition.
         </span>thread::sleep(
-            interval.mul_f64(<span class="number">0.5 </span>+ rand::thread_rng().gen_range(<span class="number">0.0</span>, <span class="number">1.0</span>)),
+            interval.mul_f64(<span class="number">0.5 </span>+ rand::rng().random_range(<span class="number">0.0</span>..<span class="number">1.0</span>)),
         );
 
         <span class="kw">let </span>start = Instant::now();

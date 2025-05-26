@@ -933,7 +933,7 @@
         headers.push(h5.clone());
         headers.push(h6.clone());
 
-        headers.shuffle(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+        headers.shuffle(<span class="kw-2">&amp;mut </span>rand::rng());
         <span class="kw">let </span><span class="kw-2">mut </span>queue = PriorityQueue::new();
         queue.extend(headers);
 
