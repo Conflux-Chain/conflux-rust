@@ -475,11 +475,11 @@ impl Configuration {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
 
-        if matches.is_present("archive") {
+        if matches.get_flag("archive") {
             config.raw_conf.node_type = Some(NodeType::Archive);
-        } else if matches.is_present("full") {
+        } else if matches.get_flag("full") {
             config.raw_conf.node_type = Some(NodeType::Full);
-        } else if matches.is_present("light") {
+        } else if matches.get_flag("light") {
             config.raw_conf.node_type = Some(NodeType::Light);
         }
 
@@ -488,6 +488,12 @@ impl Configuration {
             .expect("called once");
 
         Ok(config)
+    }
+
+    pub fn from_file(config_path: &str) -> Result<Configuration, String> {
+        Ok(Configuration {
+            raw_conf: RawConfiguration::from_file(config_path)?,
+        })
     }
 
     fn network_id(&self) -> u64 {
@@ -622,7 +628,7 @@ impl Configuration {
                     let chain_id = self
                         .raw_conf
                         .chain_id
-                        .unwrap_or_else(|| rand::thread_rng().gen());
+                        .unwrap_or_else(|| rand::rng().random());
                     let evm_chain_id =
                         self.raw_conf.evm_chain_id.unwrap_or(chain_id);
                     *to_init = Some(ChainIdParamsInner::new_simple(
@@ -1484,10 +1490,6 @@ impl Configuration {
             self.raw_conf.base_fee_burn_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip130, cip133e }
         );
-        params.transition_heights.cip_c2_fix = self
-            .raw_conf
-            .c2_fix_transition_height
-            .unwrap_or(default_transition_time);
         // TODO: disable 1559 test during dev
         params.transition_heights.cip1559 = self
             .raw_conf
@@ -1507,7 +1509,15 @@ impl Configuration {
         }
 
         //
-        // 7702 hardfork (V2.5)
+        // hardfork (V2.5)
+        //
+        params.transition_heights.cip_c2_fix = self
+            .raw_conf
+            .c2_fix_transition_height
+            .unwrap_or(default_transition_time);
+
+        //
+        // 7702 hardfork (V2.6)
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);

@@ -39,7 +39,7 @@ fn test_slicing_position() {
                 (
                     k[..].into(),
                     [&k[..], &k[..], &k[..], &k[..]].concat()
-                        [0..(6 + rng.gen::<usize>() % 10)]
+                        [0..(6 + rng.random_range(0..10))]
                         .into(),
                 )
             })

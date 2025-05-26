@@ -13,8 +13,7 @@ panic_hook = { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
 threadpool = { workspace = true }
-# todo use workspace version
-clap = { version = "4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
 
 [[bin]]
 name = "cfxkey"

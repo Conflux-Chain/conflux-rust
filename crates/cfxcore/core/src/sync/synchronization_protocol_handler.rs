@@ -1353,7 +1353,7 @@ impl SynchronizationProtocolHandler {
 
         // 29 since the remaining bytes is 29.
         let mut nonces: Vec<(u64, u64)> = (0..lucky_peers.len())
-            .map(|_| (rand::thread_rng().gen(), rand::thread_rng().gen()))
+            .map(|_| (rand::rng().random(), rand::rng().random()))
             .collect();
 
         let mut short_ids_part: Vec<Vec<u8>> = vec![vec![]; lucky_peers.len()];

@@ -256,9 +256,9 @@ mod tests {
 
         // create async sender
         let fut3 = async move {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let mut sent = vec![];
-            for t in (0..100).map(|_| rng.gen()) {
+            for t in (0..100).map(|_| rng.random()) {
                 chan.send(t);
                 sent.push(t);
             }
@@ -285,9 +285,9 @@ mod tests {
 
         // create async sender
         let fut_a = async move {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
 
-            for t in (0..100).map(|_| rng.gen()) {
+            for t in (0..100).map(|_| rng.random()) {
                 send_a.send(t);
                 let t2 = rec_a.recv().await;
 

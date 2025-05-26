@@ -20,7 +20,7 @@ use cfx_types::H256;
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::{trace, warn};
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
+use rand::{distr::Alphanumeric, Rng};
 use std::{
     fs,
     io::{self, Read, Write},
@@ -186,10 +186,13 @@ impl<T: TimeProvider> AuthCodes<T> {
 
     /// Generates and returns a new code that can be used by `SignerUIs`
     pub fn generate_new(&mut self) -> io::Result<String> {
-        let code = OsRng
+        let mut rng = rand::rng();
+
+        let code: String = (&mut rng)
             .sample_iter(&Alphanumeric)
             .take(TOKEN_LENGTH)
-            .collect::<String>();
+            .map(char::from)
+            .collect();
         let readable_code = code
             .as_bytes()
             .chunks(4)
