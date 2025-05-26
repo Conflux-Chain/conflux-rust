@@ -1028,7 +1028,7 @@ dependencies = [
  "network",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.7.3",
+ "rand 0.9.0",
  "toml",
  "txgen",
 ]
@@ -1150,8 +1150,8 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "primitives",
- "rand 0.7.3",
- "rand_xorshift 0.2.0",
+ "rand 0.9.0",
+ "rand_xorshift 0.4.0",
  "treap-map",
  "typenum",
 ]
@@ -1243,7 +1243,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "log",
- "rand 0.7.3",
+ "rand 0.9.0",
  "serde",
  "strum",
  "thiserror 2.0.11",
@@ -1432,8 +1432,8 @@ dependencies = [
  "parity-util-mem",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.7.3",
- "rand_chacha 0.2.2",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
  "random-crash",
  "rlp 0.4.6",
  "rlp-derive",
@@ -1591,9 +1591,9 @@ dependencies = [
  "primal",
  "primitives",
  "priority-send-queue",
- "rand 0.7.3",
  "rand 0.8.5",
- "rand_xorshift 0.2.0",
+ "rand 0.9.0",
+ "rand_xorshift 0.4.0",
  "rangetools",
  "rayon",
  "rlp 0.4.6",
@@ -4412,7 +4412,7 @@ version = "0.1.0"
 dependencies = [
  "malloc_size_of",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.9.0",
 ]
 
 [[package]]
@@ -4599,7 +4599,7 @@ dependencies = [
  "lazy_static",
  "log",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.9.0",
  "serde",
  "timer",
  "tokio",
@@ -4756,7 +4756,7 @@ dependencies = [
  "parity-path",
  "parking_lot 0.12.1",
  "priority-send-queue",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rlp 0.4.6",
  "rlp-derive",
  "serde",
@@ -5541,7 +5541,7 @@ dependencies = [
  "log",
  "malloc_size_of",
  "once_cell",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rlp 0.4.6",
  "rlp-derive",
  "serde",
@@ -5791,20 +5791,20 @@ dependencies = [
 
 [[package]]
 name = "rand_xorshift"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77d416b86801d23dde1aa643023b775c3a462efc0ed96443add11546cdf1dca8"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_xorshift"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
+dependencies = [
+ "rand_core 0.9.3",
 ]
 
 [[package]]
@@ -5814,7 +5814,7 @@ dependencies = [
  "lazy_static",
  "log",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.9.0",
 ]
 
 [[package]]
@@ -7521,8 +7521,8 @@ version = "0.1.0"
 dependencies = [
  "malloc_size_of",
  "primitives",
- "rand 0.7.3",
- "rand_xorshift 0.2.0",
+ "rand 0.9.0",
+ "rand_xorshift 0.4.0",
 ]
 
 [[package]]
@@ -7545,7 +7545,7 @@ dependencies = [
  "metrics",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rlp 0.4.6",
  "rustc-hex",
  "secret-store",
