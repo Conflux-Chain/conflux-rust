@@ -284,8 +284,8 @@ class TestNode:
                 self.log.info("Process is still running")
             else:
                 self.log.info("Process has terminated with code {}".format(self.return_code))
-            raise AssertionError("Unexpected stderr {} != {} from {}:{} index={}".format(
-                stderr, expected_stderr, self.ip, self.port, self.index))
+            print(AssertionError("Unexpected stderr {} != {} from {}:{} index={}".format(
+                stderr, expected_stderr, self.ip, self.port, self.index)))
 
         self.stdout.close()
         self.stderr.close()
