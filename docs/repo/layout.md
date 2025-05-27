@@ -5,7 +5,7 @@ This repository contains several Rust crates that implement the different buildi
 - [bins](../../bins): All binary crates located in this folder
 - [crates](../../crates): All crates library
 - [internal_contract](../../internal_contract): Internal contracts's abi and interface
-- [tests](../../tests): The python integration tests
+- [integration_tests] and [tests](../../tests): The python integration tests
 - [run](../../run): Node run misc, include default config file and start scripts
 - [dev-support](../../dev-support): Dev support scripts
 - [docs](../../docs): Documentation
@@ -34,7 +34,27 @@ The [primitives crate](../../crates/primitives) contains the core data structure
 
 ### cfxcore
 
-The Conflux Protocol's core code located at [cfxcore](../../crates/cfxcore) directory. Including `consensus`, `EVM machine` etc.
+The Conflux Protocol's core code located at [cfxcore](../../crates/cfxcore) directory. Including `consensus`, `pow`, `transaction pool` etc.
+
+### execution
+
+The [execution](../../crates/execution) directory contains the execution engine, which is responsible for executing transactions and managing the state of the blockchain. It includes the following core crates:
+
+- [vm-types](../../crates/execution/vm-types/)
+- [vm-interpreter](../../crates/execution/vm-interpreter/)
+- [executor](../../crates/execution/executor/)
+- [execute-helper](../../crates/execution/execute-helper/)
+
+And tracer crates:
+
+- [parity-trace-types](../../crates/execution/parity-trace-types/)
+- [geth-tracer](../../crates/execution/geth-tracer/)
+
+Other utility crates:
+
+- [cfx-vm-tracer-derive](../../crates/execution/cfx-vm-tracer-derive/)
+- [solidity-abi](../../crates/execution/solidity-abi/)
+- [solidity-abi-derive](../../crates/execution/solidity-abi-derive/)
 
 ### dbs
 
