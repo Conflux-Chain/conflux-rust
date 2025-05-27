@@ -68,6 +68,11 @@ class TestScheduler:
             # Collect completed task results and add them to the queue
             for future, i, script in tasks:
                 result = future.result()
+                if result > self.available_nodes:
+                    raise RuntimeError(f"Cannot run {script} because it requires {result} nodes, "
+                                       f"but only max to {self.available_nodes} nodes are available"
+                                       f"Please specify --max-nodes to run the test")
+
                 task_queue.put((script, result, i))
         print(" Done")
         return task_queue
