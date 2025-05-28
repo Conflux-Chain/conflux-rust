@@ -62,11 +62,11 @@ class TestScheduler:
             self._collect_results()
         return self.failed_tests
 
-    def _prepare_task_queue(self, test_scripts: list[str]) -> queue.Queue[tuple[str, int, int]]:
+    def _prepare_task_queue(self, test_scripts: list[str]) -> list[tuple[str, int, int]]:
         """Prepares a task queue with scripts and resource requirements"""
         
-        task_queue = queue.Queue()
-        print("Scanning num_nodes requirement for each task.", end = "")
+        task_queue = []
+        print("Scanning num_nodes requirement for each task")
         with ThreadPoolExecutor() as executor:
             tasks = [(executor.submit(
                       get_num_test_nodes, 
@@ -82,38 +82,37 @@ class TestScheduler:
                                        f"but only max to {self.available_nodes} nodes are available"
                                        f"Please specify --max-nodes to run the test")
 
-                task_queue.put((script, result, i))
-        print(" Done")
+                task_queue.append((script, result, i))
+        task_queue.sort(key=lambda x: x[1], reverse=True)
+        for script, nodes_needed, index in task_queue:
+            print(f"Task {index}: {script} requires {nodes_needed} nodes")
+        print("Scanning done")
         return task_queue
+    
+    def _pop_next_task(self, task_queue: list[tuple[str, int, int]]) -> tuple[str, int, int]:
+        """Selects the next task to process"""
+        if not task_queue:
+            raise RuntimeError("No tasks to process")
+        while True:
+            for i, (script, nodes_needed, index) in enumerate(task_queue):
+                if self._try_acquire_resources(nodes_needed):
+                    task_queue.pop(i)
+                    return script, nodes_needed, index
+            self.resource_event.wait(timeout=10)
+            self.resource_event.clear()
 
-    def _process_task_queue(self, executor: ThreadPoolExecutor, task_queue: queue.Queue[tuple[str, int, int]]):
+    def _process_task_queue(self, executor: ThreadPoolExecutor, task_queue: list[tuple[str, int, int]]):
         """Processes the task queue, scheduling tests based on resource availability"""
         
-        while not task_queue.empty():
-            try:
-                # Retrieve task
-                script, nodes_needed, index = task_queue.get(block=False)
-                
-                # Attempt to allocate resources
-                if self._try_acquire_resources(nodes_needed):
-                    # Enough resources available, execute test
-                    future = executor.submit(
-                        self._run_test_with_cleanup,
-                        script,
-                        index,
-                        nodes_needed
-                    )
-                    self.results.append((script, future))
-                    
-                    # Wait for at least 1 second to avoid launch a lot of tasks
-                    time.sleep(1)
-                else:
-                    # Insufficient resources, re-add to queue and wait
-                    task_queue.put((script, nodes_needed, index))
-                    self.resource_event.wait(timeout=0.2)
-                    self.resource_event.clear()
-            except queue.Empty:
-                break
+        while task_queue:
+            script, nodes_needed, index = self._pop_next_task(task_queue)
+            future = executor.submit(
+                self._run_test_with_cleanup,
+                script,
+                index,
+                nodes_needed
+            )
+            self.results.append((script, future))
 
     def _try_acquire_resources(self, nodes_needed: int) -> bool:
         """Attempts to acquire required resources, returns True if successful"""
