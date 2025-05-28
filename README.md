@@ -20,11 +20,13 @@ on how to submit issues and pull requests. Note that if you want to propose
 significant changes to the Conflux protocol, please submit a
 [CIP](https://github.com/Conflux-Chain/CIPs).
 
-### Building and testing
+### Building
 
 The Minimum Supported Rust Version (MSRV) of this project is 1.77.2
 
 See the doc for detailed instructions on how to [build from source](./docs/build-from-source.md).
+
+If you have modified any Rust code, please run the cargo_fmt.sh script before committing to format the code and ensure consistent code style.
 
 ### Unit Tests
 
