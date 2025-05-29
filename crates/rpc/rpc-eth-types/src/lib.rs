@@ -23,7 +23,7 @@ pub use block::{Block, BlockOverrides, Header};
 pub use block_number::BlockNumber;
 pub use call::*;
 pub use cfx_rpc_cfx_types::trace_eth::*;
-pub use cfx_rpc_primitives::{Bytes, U64};
+pub use cfx_rpc_primitives::{Bytes, Index, U64};
 pub use errors::Error;
 pub use eth_pubsub::*;
 pub use fee_history::FeeHistory;
