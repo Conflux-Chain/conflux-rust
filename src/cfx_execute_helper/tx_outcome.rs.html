@@ -87,7 +87,7 @@
     <span class="kw">pub </span>geth_trace: <span class="prelude-ty">Option</span>&lt;GethTrace&gt;,
 }
 
-<span class="kw">fn </span>tx_traces(outcome: <span class="kw-2">&amp;</span>ExecutionOutcome) -&gt; Vec&lt;ExecTrace&gt; {
+<span class="kw">fn </span>parity_traces(outcome: <span class="kw-2">&amp;</span>ExecutionOutcome) -&gt; Vec&lt;ExecTrace&gt; {
     outcome
         .try_as_executed()
         .and_then(|executed| executed.ext_result.get::&lt;ExecTraceKey&gt;().cloned())
@@ -104,7 +104,7 @@
     outcome: ExecutionOutcome, accumulated_gas_used: <span class="kw-2">&amp;mut </span>U256, tx_hash: H256,
     spec: <span class="kw-2">&amp;</span>Spec,
 ) -&gt; ProcessTxOutcome {
-    <span class="kw">let </span>tx_traces = tx_traces(<span class="kw-2">&amp;</span>outcome);
+    <span class="kw">let </span>tx_traces = parity_traces(<span class="kw-2">&amp;</span>outcome);
     <span class="kw">let </span>geth_trace = geth_traces(<span class="kw-2">&amp;</span>outcome);
     <span class="kw">let </span>tx_exec_error_msg = outcome.error_message();
     <span class="kw">let </span>consider_repacked = outcome.consider_repacked();

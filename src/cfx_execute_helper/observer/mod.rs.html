@@ -77,8 +77,8 @@
 
 <span class="attr">#[derive(AsTracer, DrainTrace)]
 </span><span class="kw">pub struct </span>Observer {
-    <span class="kw">pub </span>tracer: <span class="prelude-ty">Option</span>&lt;ExecTracer&gt;,
-    <span class="kw">pub </span>gas_man: <span class="prelude-ty">Option</span>&lt;GasMan&gt;,
+    <span class="kw">pub </span>tracer: <span class="prelude-ty">Option</span>&lt;ExecTracer&gt;, <span class="comment">// parity tracer
+    </span><span class="kw">pub </span>gas_man: <span class="prelude-ty">Option</span>&lt;GasMan&gt;,
     <span class="kw">pub </span>geth_tracer: <span class="prelude-ty">Option</span>&lt;GethTracer&gt;,
 }
 

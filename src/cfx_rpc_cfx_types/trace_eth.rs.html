@@ -354,12 +354,66 @@
 <a href="#354" id="354">354</a>
 <a href="#355" id="355">355</a>
 <a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::trace::{
     Action <span class="kw">as </span>RpcCfxAction, LocalizedTrace <span class="kw">as </span>RpcCfxLocalizedTrace,
 };
-<span class="kw">use </span>cfx_parity_trace_types::Outcome;
+<span class="kw">use </span>cfx_parity_trace_types::{
+    Outcome, SetAuth <span class="kw">as </span>VmSetAuth, SetAuthOutcome <span class="kw">as </span>VmSetAuthOutcome,
+};
 <span class="kw">use </span>cfx_rpc_primitives::Bytes;
-<span class="kw">use </span>cfx_types::{H160, H256, U256};
+<span class="kw">use </span>cfx_types::{Address, H256, U256};
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>cfx_vm_types::{CallType, CreateType};
 <span class="kw">use </span>jsonrpc_core::Error <span class="kw">as </span>JsonRpcError;
@@ -374,7 +428,7 @@
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>Create {
     <span class="doccomment">/// Sender
-    </span>from: H160,
+    </span>from: Address,
     <span class="doccomment">/// Value
     </span>value: U256,
     <span class="doccomment">/// Gas
@@ -390,9 +444,9 @@
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>Call {
     <span class="doccomment">/// Sender
-    </span>from: H160,
+    </span>from: Address,
     <span class="doccomment">/// Recipient
-    </span>to: H160,
+    </span>to: Address,
     <span class="doccomment">/// Transfered Value
     </span>value: U256,
     <span class="doccomment">/// Gas
@@ -460,7 +514,7 @@
     <span class="doccomment">/// Code
     </span>code: Bytes,
     <span class="doccomment">/// Assigned address
-    </span>address: H160,
+    </span>address: Address,
 }
 
 <span class="doccomment">/// Response
@@ -708,6 +762,56 @@
             </span>}
         };
         message.fmt(f)
+    }
+}
+
+<span class="attr">#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = <span class="string">"camelCase"</span>)]
+</span><span class="kw">pub struct </span>SetAuth {
+    <span class="doccomment">/// The address of the impl.
+    </span><span class="kw">pub </span>address: Address,
+    <span class="kw">pub </span>chain_id: U256,
+    <span class="kw">pub </span>nonce: U256,
+    <span class="kw">pub </span>author: <span class="prelude-ty">Option</span>&lt;Address&gt;,
+}
+
+<span class="doccomment">/// Trace
+</span><span class="attr">#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = <span class="string">"camelCase"</span>)]
+</span><span class="kw">pub struct </span>LocalizedSetAuthTrace {
+    <span class="doccomment">/// Action
+    </span><span class="kw">pub </span>action: SetAuth,
+    <span class="doccomment">/// Result
+    </span><span class="kw">pub </span>result: VmSetAuthOutcome,
+    <span class="doccomment">/// Transaction position
+    </span><span class="kw">pub </span>transaction_position: usize,
+    <span class="doccomment">/// Transaction hash
+    </span><span class="kw">pub </span>transaction_hash: H256,
+    <span class="doccomment">/// Block Number
+    </span><span class="kw">pub </span>block_number: u64,
+    <span class="doccomment">/// Block Hash
+    </span><span class="kw">pub </span>block_hash: H256,
+}
+
+<span class="kw">impl </span>LocalizedSetAuthTrace {
+    <span class="kw">pub fn </span>new(
+        vm_action: <span class="kw-2">&amp;</span>VmSetAuth, transaction_position: usize,
+        transaction_hash: H256, block_number: u64, block_hash: H256,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>action = SetAuth {
+            address: vm_action.address,
+            chain_id: vm_action.chain_id,
+            nonce: vm_action.nonce,
+            author: vm_action.author,
+        };
+        <span class="self">Self </span>{
+            action,
+            result: vm_action.outcome,
+            transaction_position,
+            transaction_hash,
+            block_number,
+            block_hash,
+        }
     }
 }
 </code></pre></div></section></main></body></html>

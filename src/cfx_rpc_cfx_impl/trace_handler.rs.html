@@ -360,7 +360,7 @@
 
         <span class="kw">let </span>(pivot_hash, block_traces) = <span class="self">self
             </span>.data_man
-            .transactions_traces_by_block_hash(<span class="kw-2">&amp;</span>tx_index.block_hash)<span class="question-mark">?</span>;
+            .block_tx_traces_by_hash(<span class="kw-2">&amp;</span>tx_index.block_hash)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>epoch_number = <span class="self">self
             </span>.data_man

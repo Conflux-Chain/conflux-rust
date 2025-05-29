@@ -105,6 +105,7 @@
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     action_types::{Action, Call, CallResult, Create, CreateResult, Outcome},
     trace_types::ExecTrace,
@@ -144,6 +145,7 @@
                     errors.accept_create_result(result)
                 }
                 Action::InternalTransferAction(<span class="kw">_</span>) =&gt; {}
+                Action::SetAuth(<span class="kw">_</span>) =&gt; {}
             }
         }
         errors

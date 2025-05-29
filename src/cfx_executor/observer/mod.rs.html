@@ -24,6 +24,8 @@
 <a href="#24" id="24">24</a>
 <a href="#25" id="25">25</a>
 <a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -34,6 +36,7 @@
 <span class="kw">mod </span>drain_trace;
 <span class="kw">mod </span>internal_transfer_tracer;
 <span class="kw">mod </span>opcode_tracer;
+<span class="kw">mod </span>set_auth_tracer;
 <span class="kw">mod </span>storage_tracer;
 <span class="kw">mod </span>tracer_trait;
 
@@ -44,6 +47,7 @@
 <span class="kw">pub use </span>drain_trace::DrainTrace;
 <span class="kw">pub use </span>internal_transfer_tracer::InternalTransferTracer;
 <span class="kw">pub use </span>opcode_tracer::OpcodeTracer;
+<span class="kw">pub use </span>set_auth_tracer::SetAuthTracer;
 <span class="kw">pub use </span>storage_tracer::StorageTracer;
 <span class="kw">pub use </span>tracer_trait::TracerTrait;
 

@@ -22,7 +22,22 @@
 <a href="#22" id="22">22</a>
 <a href="#23" id="23">23</a>
 <a href="#24" id="24">24</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>cfx_rpc_eth_types::{BlockNumber, LocalizedTrace, TraceFilter};
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>cfx_rpc_eth_types::{
+    BlockNumber, Index, LocalizedSetAuthTrace, LocalizedTrace, TraceFilter,
+};
 <span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
@@ -34,11 +49,22 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
     ) -&gt; RpcResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;LocalizedTrace&gt;&gt;&gt;;
 
+    <span class="doccomment">/// Returns all set auth traces produced at the given block.
+    </span><span class="attr">#[method(name = <span class="string">"blockSetAuth"</span>)]
+    </span><span class="kw">async fn </span>block_set_auth_traces(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
+    ) -&gt; RpcResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;LocalizedSetAuthTrace&gt;&gt;&gt;;
+
     <span class="doccomment">/// Returns all traces matching the provided filter.
     </span><span class="attr">#[method(name = <span class="string">"filter"</span>)]
     </span><span class="kw">async fn </span>filter_traces(
         <span class="kw-2">&amp;</span><span class="self">self</span>, filter: TraceFilter,
     ) -&gt; RpcResult&lt;Vec&lt;LocalizedTrace&gt;&gt;;
+
+    <span class="attr">#[method(name = <span class="string">"get"</span>)]
+    </span><span class="kw">async fn </span>trace_get(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, hash: H256, indices: Vec&lt;Index&gt;,
+    ) -&gt; RpcResult&lt;<span class="prelude-ty">Option</span>&lt;LocalizedTrace&gt;&gt;;
 
     <span class="doccomment">/// Returns all traces produced at the given transaction.
     </span><span class="attr">#[method(name = <span class="string">"transaction"</span>)]

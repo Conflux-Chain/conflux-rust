@@ -21,9 +21,11 @@
 <a href="#21" id="21">21</a>
 <a href="#22" id="22">22</a>
 <a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     CallTracer, CheckpointTracer, InternalTransferTracer, OpcodeTracer,
-    StorageTracer,
+    SetAuthTracer, StorageTracer,
 };
 
 <span class="kw">pub trait </span>TracerTrait:
@@ -32,6 +34,7 @@
     + InternalTransferTracer
     + StorageTracer
     + OpcodeTracer
+    + SetAuthTracer
 {
 }
 
@@ -40,7 +43,8 @@
             + CallTracer
             + InternalTransferTracer
             + OpcodeTracer
-            + StorageTracer,
+            + StorageTracer
+            + SetAuthTracer,
     &gt; TracerTrait <span class="kw">for </span>T
 {
 }

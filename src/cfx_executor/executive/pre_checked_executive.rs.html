@@ -806,6 +806,30 @@
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
 <a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     contract_address,
     executed::make_ext_result,
@@ -830,6 +854,7 @@
     CreateType,
 };
 
+<span class="kw">use </span>cfx_parity_trace_types::{SetAuth, SetAuthOutcome};
 <span class="kw">use </span>cfx_statedb::Result <span class="kw">as </span>DbResult;
 <span class="kw">use </span>cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, U256, U512,
@@ -1517,15 +1542,27 @@
             s,
         } <span class="kw">in </span>authorization_list.iter()
         {
+            <span class="kw">let </span><span class="kw-2">mut </span>set_auth_action = SetAuth {
+                space: <span class="self">self</span>.tx.space(),
+                chain_id: <span class="kw-2">*</span>chain_id,
+                address: <span class="kw-2">*</span>address,
+                nonce: U256::from(<span class="kw-2">*</span>nonce),
+                author: <span class="prelude-val">None</span>,
+                outcome: SetAuthOutcome::Success,
+            };
             <span class="comment">// 1. Verify the chain id is either 0 or the chain's current ID.
             </span><span class="kw">if </span><span class="kw-2">*</span>chain_id != U256::zero()
                 &amp;&amp; <span class="kw-2">*</span>chain_id != U256::from(current_chain_id)
             {
+                set_auth_action.outcome = SetAuthOutcome::InvalidChainId;
+                <span class="self">self</span>.observer.as_tracer().record_set_auth(set_auth_action);
                 <span class="kw">continue</span>;
             }
 
             <span class="comment">// 2. Verify the nonce is less than 2**64 - 1
             </span><span class="kw">if </span><span class="kw-2">*</span>nonce == u64::MAX {
+                set_auth_action.outcome = SetAuthOutcome::NonceOverflow;
+                <span class="self">self</span>.observer.as_tracer().record_set_auth(set_auth_action);
                 <span class="kw">continue</span>;
             }
 
@@ -1534,6 +1571,8 @@
                 <span class="kw">let </span>s: H256 = BigEndianHash::from_uint(s);
                 <span class="kw">let </span>signature = Signature::from_rsv(<span class="kw-2">&amp;</span>r, <span class="kw-2">&amp;</span>s, <span class="kw-2">*</span>y_parity);
                 <span class="kw">if </span>!signature.is_low_s() || !signature.is_valid() {
+                    set_auth_action.outcome = SetAuthOutcome::InvalidSignature;
+                    <span class="self">self</span>.observer.as_tracer().record_set_auth(set_auth_action);
                     <span class="kw">continue</span>;
                 }
                 signature
@@ -1556,8 +1595,12 @@
                 public_to_address(<span class="kw-2">&amp;</span>public, <span class="comment">/* type_nibble */ </span><span class="bool-val">false</span>)
                     .with_evm_space()
             } <span class="kw">else </span>{
+                set_auth_action.outcome = SetAuthOutcome::InvalidSignature;
+                <span class="self">self</span>.observer.as_tracer().record_set_auth(set_auth_action);
                 <span class="kw">continue</span>;
             };
+
+            set_auth_action.author = <span class="prelude-val">Some</span>(authority.address);
 
             <span class="comment">// 4. Add authority to accessed_addresses
             // state.code will mark it as warm
@@ -1569,6 +1612,8 @@
                     &amp;&amp; x.starts_with(CODE_PREFIX_7702)
             });
             <span class="kw">if </span>!can_set_code {
+                set_auth_action.outcome = SetAuthOutcome::AccountCanNotSetAuth;
+                <span class="self">self</span>.observer.as_tracer().record_set_auth(set_auth_action);
                 <span class="kw">continue</span>;
             }
 
@@ -1576,6 +1621,8 @@
             //    authority does not exist in the trie, verify that nonce is
             //    equal to 0.
             </span><span class="kw">if </span>state.nonce(<span class="kw-2">&amp;</span>authority)<span class="question-mark">? </span>!= (<span class="kw-2">*</span>nonce).into() {
+                set_auth_action.outcome = SetAuthOutcome::InvalidNonce;
+                <span class="self">self</span>.observer.as_tracer().record_set_auth(set_auth_action);
                 <span class="kw">continue</span>;
             }
 
@@ -1588,6 +1635,7 @@
             <span class="comment">// 8. Set the code of authority to be 0xef0100 || address.
             // 9. Increase the nonce of authority by one
             </span>state.set_authorization(<span class="kw-2">&amp;</span>authority, address)<span class="question-mark">?</span>;
+            <span class="self">self</span>.observer.as_tracer().record_set_auth(set_auth_action);
         }
         <span class="kw">let </span>spec = <span class="self">self</span>.context.spec;
         <span class="kw">let </span>refund_gas = (spec.per_empty_account_cost * spec.evm_gas_ratio

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["AddressPocket"],"trait":["AsTracer","CallTracer","CheckpointTracer","DrainTrace","ExecutiveObserver","InternalTransferTracer","OpcodeTracer","StorageTracer","TracerTrait"]};
+window.SIDEBAR_ITEMS = {"enum":["AddressPocket"],"trait":["AsTracer","CallTracer","CheckpointTracer","DrainTrace","ExecutiveObserver","InternalTransferTracer","OpcodeTracer","SetAuthTracer","StorageTracer","TracerTrait"]};

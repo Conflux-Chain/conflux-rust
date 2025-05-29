@@ -129,10 +129,11 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_executor::{
     observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
-        OpcodeTracer, StorageTracer,
+        OpcodeTracer, SetAuthTracer, StorageTracer,
     },
     stack::FrameResult,
 };
@@ -260,4 +261,5 @@
 <span class="kw">impl </span>InternalTransferTracer <span class="kw">for </span>GasMan {}
 <span class="kw">impl </span>StorageTracer <span class="kw">for </span>GasMan {}
 <span class="kw">impl </span>OpcodeTracer <span class="kw">for </span>GasMan {}
+<span class="kw">impl </span>SetAuthTracer <span class="kw">for </span>GasMan {}
 </code></pre></div></section></main></body></html>

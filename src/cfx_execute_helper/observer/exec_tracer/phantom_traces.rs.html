@@ -242,6 +242,8 @@
 <a href="#242" id="242">242</a>
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -409,6 +411,8 @@
             Action::InternalTransferAction(InternalTransferAction {
                 ..
             }) =&gt; {}
+            <span class="comment">// phantom tx should not have these actions
+            </span>Action::SetAuth(<span class="kw">_</span>) =&gt; {}
         }
 
         phantom_traces.push(trace);

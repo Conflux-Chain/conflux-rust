@@ -462,6 +462,8 @@
 <a href="#462" id="462">462</a>
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
 </pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
     config::TracingInspectorConfig,
     fourbyte::FourByteInspector,
@@ -479,7 +481,7 @@
     machine::Machine,
     observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
-        OpcodeTracer, StorageTracer,
+        OpcodeTracer, SetAuthTracer, StorageTracer,
     },
     stack::{FrameResult, FrameReturn},
 };
@@ -651,6 +653,8 @@
 <span class="kw">impl </span>InternalTransferTracer <span class="kw">for </span>GethTracer {}
 
 <span class="kw">impl </span>StorageTracer <span class="kw">for </span>GethTracer {}
+
+<span class="kw">impl </span>SetAuthTracer <span class="kw">for </span>GethTracer {}
 
 <span class="kw">impl </span>CallTracer <span class="kw">for </span>GethTracer {
     <span class="kw">fn </span>record_call(<span class="kw-2">&amp;mut </span><span class="self">self</span>, params: <span class="kw-2">&amp;</span>ActionParams) {

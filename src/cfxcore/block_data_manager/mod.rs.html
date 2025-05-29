@@ -1831,6 +1831,7 @@
 <a href="#1831" id="1831">1831</a>
 <a href="#1832" id="1832">1832</a>
 <a href="#1833" id="1833">1833</a>
+<a href="#1834" id="1834">1834</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2308,6 +2309,7 @@
 
     <span class="doccomment">/// Get the traces for a single block without checking the assumed pivot
     /// block
+    /// Return `BlockTracesWithEpoch`.
     </span><span class="kw">pub fn </span>block_traces_by_hash(
         <span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>H256,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;BlockTracesWithEpoch&gt; {
@@ -2339,7 +2341,7 @@
     }
 
     <span class="doccomment">/// Return `(pivot_hash, tx_traces)`.
-    </span><span class="kw">pub fn </span>transactions_traces_by_block_hash(
+    </span><span class="kw">pub fn </span>block_tx_traces_by_hash(
         <span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>H256,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(H256, Vec&lt;TransactionExecTraces&gt;)&gt; {
         <span class="self">self</span>.block_traces_by_hash(hash).map(

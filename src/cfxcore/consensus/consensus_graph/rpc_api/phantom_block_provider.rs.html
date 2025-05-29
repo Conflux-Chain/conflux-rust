@@ -310,9 +310,6 @@
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
 <a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_execute_helper::{
     exec_tracer::recover_phantom_traces,
     phantom_tx::build_bloom_and_recover_phantom,
@@ -488,10 +485,7 @@
             <span class="kw">let </span>errors = <span class="kw-2">&amp;</span>exec_info.block_receipts.tx_execution_error_messages;
 
             <span class="kw">let </span>block_traces = <span class="kw">if </span>include_traces {
-                <span class="kw">match </span><span class="self">self
-                    </span>.data_manager()
-                    .transactions_traces_by_block_hash(<span class="kw-2">&amp;</span>b.hash())
-                {
+                <span class="kw">match </span><span class="self">self</span>.data_manager().block_tx_traces_by_hash(<span class="kw-2">&amp;</span>b.hash()) {
                     <span class="prelude-val">None </span>=&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Error while creating phantom block: state is ready but traces not found, did you enable 'executive_trace'?"</span>.into());
                     }

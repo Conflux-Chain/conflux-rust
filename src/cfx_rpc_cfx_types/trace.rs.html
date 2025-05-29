@@ -399,6 +399,54 @@
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -411,7 +459,8 @@
     Call <span class="kw">as </span>VmCall, CallResult <span class="kw">as </span>VmCallResult, Create <span class="kw">as </span>VmCreate,
     CreateResult <span class="kw">as </span>VmCreateResult, ExecTrace,
     InternalTransferAction <span class="kw">as </span>VmInternalTransferAction,
-    LocalizedTrace <span class="kw">as </span>PrimitiveLocalizedTrace, Outcome, TransactionExecTraces,
+    LocalizedTrace <span class="kw">as </span>PrimitiveLocalizedTrace, Outcome, SetAuth <span class="kw">as </span>VmSetAuth,
+    SetAuthOutcome, TransactionExecTraces,
 };
 <span class="kw">use </span>cfx_rpc_primitives::Bytes;
 <span class="kw">use </span>cfx_types::{address_util::AddressUtil, Space, H160, H256, U256, U64};
@@ -431,6 +480,7 @@
     CallResult(CallResult),
     CreateResult(CreateResult),
     InternalTransferAction(InternalTransferAction),
+    SetAuth(SetAuth),
 }
 
 <span class="kw">impl </span>Action {
@@ -451,6 +501,9 @@
                     InternalTransferAction::try_from(x, network)<span class="question-mark">?</span>,
                 )
             }
+            VmAction::SetAuth(action) =&gt; {
+                Action::SetAuth(SetAuth::try_from(action, network)<span class="question-mark">?</span>)
+            }
         })
     }
 }
@@ -465,6 +518,7 @@
             <span class="self">Self</span>::InternalTransferAction =&gt; {
                 VmActionType::InternalTransferAction
             }
+            <span class="self">Self</span>::SetAuth =&gt; VmActionType::SetAuth,
         }
     }
 }
@@ -593,6 +647,44 @@
     }
 }
 
+<span class="attr">#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = <span class="string">"camelCase"</span>)]
+</span><span class="kw">pub struct </span>SetAuth {
+    <span class="kw">pub </span>space: Space,
+    <span class="doccomment">/// The address of the impl.
+    </span><span class="kw">pub </span>address: RpcAddress,
+    <span class="kw">pub </span>chain_id: U256,
+    <span class="kw">pub </span>nonce: U256,
+    <span class="doccomment">/// The outcome of the create
+    </span><span class="kw">pub </span>outcome: SetAuthOutcome,
+    <span class="doccomment">/// The address of the author.
+    </span><span class="kw">pub </span>author: <span class="prelude-ty">Option</span>&lt;RpcAddress&gt;,
+}
+
+<span class="kw">impl </span>SetAuth {
+    <span class="kw">fn </span>try_from(action: VmSetAuth, network: Network) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, String&gt; {
+        <span class="kw">let </span>VmSetAuth {
+            space,
+            address,
+            chain_id,
+            nonce,
+            outcome,
+            author,
+        } = action;
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            space,
+            address: RpcAddress::try_from_h160(address, network)<span class="question-mark">?</span>,
+            chain_id,
+            nonce,
+            outcome,
+            author: <span class="kw">match </span>author {
+                <span class="prelude-val">Some</span>(a) =&gt; <span class="prelude-val">Some</span>(RpcAddress::try_from_h160(a, network)<span class="question-mark">?</span>),
+                <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+            },
+        })
+    }
+}
+
 <span class="attr">#[derive(Debug, Serialize)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>LocalizedBlockTrace {
@@ -656,6 +748,10 @@
             Action::InternalTransferAction(<span class="kw-2">ref </span>internal_action) =&gt; {
                 struc.serialize_field(<span class="string">"type"</span>, <span class="string">"internal_transfer_action"</span>)<span class="question-mark">?</span>;
                 struc.serialize_field(<span class="string">"action"</span>, internal_action)<span class="question-mark">?</span>;
+            }
+            Action::SetAuth(<span class="kw-2">ref </span>set_auth) =&gt; {
+                struc.serialize_field(<span class="string">"type"</span>, <span class="string">"set_auth"</span>)<span class="question-mark">?</span>;
+                struc.serialize_field(<span class="string">"action"</span>, set_auth)<span class="question-mark">?</span>;
             }
         }
 

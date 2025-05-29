@@ -141,6 +141,14 @@
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
 <a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
 </pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     action_types::{Action, ActionType},
     trace_types::{ExecTrace, TransactionExecTraces},
@@ -237,6 +245,14 @@
                     } <span class="kw">else </span>{
                         <span class="comment">// The corresponding result should be ignored.
                         </span>stack.push(<span class="bool-val">false</span>);
+                    }
+                }
+                Action::SetAuth(set_auth) =&gt; {
+                    <span class="comment">// only apply space and action_types filters
+                    </span><span class="kw">if </span>set_auth.space == <span class="self">self</span>.space
+                        &amp;&amp; <span class="self">self</span>.action_types.matches(<span class="kw-2">&amp;</span>ActionType::SetAuth)
+                    {
+                        traces.push(trace);
                     }
                 }
                 Action::CallResult(<span class="kw">_</span>) | Action::CreateResult(<span class="kw">_</span>) =&gt; {
