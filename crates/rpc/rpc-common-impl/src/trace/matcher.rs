@@ -5,9 +5,12 @@ use cfx_parity_trace_types::{Action, ExecTrace};
 pub fn construct_parity_trace<'a>(
     tx_traces: &'a [ExecTrace],
 ) -> Result<Box<dyn 'a + Iterator<Item = TraceWithPosition<'a>>>, String> {
-    let empty_traces = !tx_traces
-        .iter()
-        .any(|x| !matches!(x.action, Action::InternalTransferAction(_)));
+    let empty_traces = !tx_traces.iter().any(|x| {
+        !matches!(
+            x.action,
+            Action::InternalTransferAction(_) | Action::SetAuth(_)
+        )
+    });
     if empty_traces {
         return Ok(Box::new(std::iter::empty()));
     }
@@ -105,9 +108,12 @@ pub fn build_call_hierarchy<'a>(
         vec![];
 
     // Filter out internal transfer events (handled separately)
-    let mut iter = traces
-        .iter()
-        .filter(|x| !matches!(x.action, Action::InternalTransferAction(_)));
+    let mut iter = traces.iter().filter(|x| {
+        !matches!(
+            x.action,
+            Action::InternalTransferAction(_) | Action::SetAuth(_)
+        )
+    });
 
     while let Some(trace) = iter.next() {
         match trace.action {
@@ -147,7 +153,9 @@ pub fn build_call_hierarchy<'a>(
             }
 
             // Filtered out earlier
-            Action::InternalTransferAction(_) => unreachable!(),
+            Action::InternalTransferAction(_) | Action::SetAuth(_) => {
+                unreachable!()
+            }
         }
     }
     // Loop should only exit when stack is empty

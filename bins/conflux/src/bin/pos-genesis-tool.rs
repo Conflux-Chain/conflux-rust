@@ -9,7 +9,7 @@ use cfxcore::{
     },
 };
 use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
-use clap4;
+use clap;
 use diem_crypto::{
     key_file::save_pri_key, HashValue, Uniform, ValidCryptoMaterialStringExt,
 };
@@ -92,39 +92,39 @@ fn main() {
     env_logger::try_init().expect("Logger initialized only once.");
     POS_STATE_CONFIG.set(Default::default()).unwrap();
 
-    let cli = clap4::Command::new("pos-genesis-tool")
+    let cli = clap::Command::new("pos-genesis-tool")
         .subcommand_required(true)
         .subcommands([
-            clap4::Command::new("random")
+            clap::Command::new("random")
                 .arg(
-                    clap4::Arg::new("initial-seed")
+                    clap::Arg::new("initial-seed")
                         .long("initial-seed")
                         .required(true),
                 )
                 .arg(
-                    clap4::Arg::new("num-validator")
+                    clap::Arg::new("num-validator")
                         .long("num-validator")
-                        .value_parser(clap4::value_parser!(usize)),
+                        .value_parser(clap::value_parser!(usize)),
                 )
                 .arg(
-                    clap4::Arg::new("num-genesis-validator")
+                    clap::Arg::new("num-genesis-validator")
                         .long("num-genesis-validator")
-                        .value_parser(clap4::value_parser!(usize)),
+                        .value_parser(clap::value_parser!(usize)),
                 )
                 .arg(
-                    clap4::Arg::new("chain-id")
+                    clap::Arg::new("chain-id")
                         .long("chain-id")
-                        .value_parser(clap4::value_parser!(u32)),
+                        .value_parser(clap::value_parser!(u32)),
                 ),
-            clap4::Command::new("frompub")
+            clap::Command::new("frompub")
                 .arg(
-                    clap4::Arg::new("initial-seed")
+                    clap::Arg::new("initial-seed")
                         .long("initial-seed")
                         .required(true),
                 )
                 .arg(
-                    clap4::Arg::new("pkfile")
-                        .value_parser(clap4::value_parser!(PathBuf))
+                    clap::Arg::new("pkfile")
+                        .value_parser(clap::value_parser!(PathBuf))
                         .required(true),
                 ),
         ]);
@@ -224,7 +224,7 @@ fn elect_genesis_committee(
     elected
 }
 
-fn execute(command: clap4::Command) -> Result<String, Error> {
+fn execute(command: clap::Command) -> Result<String, Error> {
     let matches = command.get_matches();
     return match matches.subcommand() {
         Some(("random", sub_matches)) => {

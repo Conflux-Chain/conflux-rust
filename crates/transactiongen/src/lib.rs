@@ -23,7 +23,7 @@ use primitives::{
     transaction::{native_transaction::NativeTransaction, Action},
     Account, SignedTransaction, Transaction,
 };
-use rand::prelude::*;
+use rand::{prelude::*, random_range};
 use rlp::Encodable;
 use rustc_hex::{FromHex, ToHex};
 use secret_store::SharedSecretStore;
@@ -174,11 +174,11 @@ impl TransactionGenerator {
 
             // Randomly select sender and receiver.
             // Sender and receiver must exist in the account list.
-            let mut receiver_index: usize = random();
+            let mut receiver_index: usize = random_range(0..usize::MAX);
             receiver_index %= account_count;
             let receiver_address = addresses[receiver_index];
 
-            let mut sender_index: usize = random();
+            let mut sender_index: usize = random_range(0..usize::MAX);
             sender_index %= account_count;
             let sender_address = addresses[sender_index];
 
@@ -335,7 +335,7 @@ impl DirectTransactionGenerator {
         while num_txs_simple > 0 {
             let number_of_accounts = self.address_by_index.len();
 
-            let sender_index: usize = random::<usize>() % number_of_accounts;
+            let sender_index: usize = random_range(0..number_of_accounts);
             let sender_address =
                 self.address_by_index.get(sender_index).unwrap().clone();
             let sender_kp;
@@ -366,11 +366,11 @@ impl DirectTransactionGenerator {
             let is_send_to_new_address = (number_of_accounts
                 <= Self::MAX_TOTAL_ACCOUNTS)
                 && ((number_of_accounts < 10)
-                    || (rand::thread_rng().gen_range(0, 10) == 0));
+                    || (rand::thread_rng().random_range(0..10) == 0));
 
             let receiver_address = match is_send_to_new_address {
                 false => {
-                    let index: usize = random::<usize>() % number_of_accounts;
+                    let index: usize = random_range(0..number_of_accounts);
                     self.address_by_index.get(index).unwrap().clone()
                 }
                 true => loop {
@@ -433,7 +433,7 @@ impl DirectTransactionGenerator {
         while num_txs_erc20 > 0 {
             let number_of_accounts = self.address_by_index.len();
 
-            let sender_index: usize = random::<usize>() % number_of_accounts;
+            let sender_index: usize = random_range(0..number_of_accounts);
             let sender_address =
                 self.address_by_index.get(sender_index).unwrap().clone();
             let sender_kp;
@@ -468,7 +468,7 @@ impl DirectTransactionGenerator {
                 .unwrap()
             };
 
-            let receiver_index = random::<usize>() % number_of_accounts;
+            let receiver_index = random_range(0..number_of_accounts);
             let receiver_address =
                 self.address_by_index.get(receiver_index).unwrap().clone();
 

@@ -5,7 +5,6 @@ In addition to serving as the main node software for running the Conflux network
 Currently Available Subcommands：
 
 - `account`：Account Management
-- `evm`：EVM-related subcommands, such as running statetest and others
 - `rpc`：RPC-based subcommands, used for querying blockchain information and sending transactions
 - `help`：Print help message
 
@@ -33,7 +32,6 @@ OPTIONS:
 
 SUBCOMMANDS:
     account    Manage accounts
-    evm        EVM related subcommands
     help       Prints this message or the help of the given subcommand(s)
     rpc        RPC based subcommands to query blockchain information and send transactions
 ```

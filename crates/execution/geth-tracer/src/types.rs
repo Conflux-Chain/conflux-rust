@@ -36,7 +36,8 @@ use alloy_rpc_types_trace::geth::{
 use cfx_types::{Space, H256};
 use cfx_vm_types::CallType as CfxCallType;
 use primitives::{block::BlockHeight, BlockNumber};
-use revm::interpreter::{
+
+use revm_interpreter::{
     opcode, CallContext, CallScheme, CreateScheme, InstructionResult, OpCode,
 };
 use std::collections::VecDeque;
@@ -636,7 +637,7 @@ mod opcode_serde {
     where D: Deserializer<'de> {
         let op = u8::deserialize(deserializer)?;
         Ok(OpCode::new(op).unwrap_or_else(|| {
-            OpCode::new(revm::interpreter::opcode::INVALID).unwrap()
+            OpCode::new(revm_interpreter::opcode::INVALID).unwrap()
         }))
     }
 }

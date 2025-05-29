@@ -15,17 +15,16 @@ use cfx_executor::{
     machine::Machine,
     observer::{
         CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
-        OpcodeTracer, StorageTracer,
+        OpcodeTracer, SetAuthTracer, StorageTracer,
     },
     stack::{FrameResult, FrameReturn},
 };
 use cfx_types::H160;
 use cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
-use revm::{
-    db::InMemoryDB,
-    interpreter::{Gas, InstructionResult, InterpreterResult},
-    primitives::State,
-};
+use revm::db::InMemoryDB;
+use revm_interpreter::{Gas, InstructionResult, InterpreterResult};
+use revm_primitives::State;
+
 use std::sync::Arc;
 
 pub struct GethTracer {
@@ -188,6 +187,8 @@ impl CheckpointTracer for GethTracer {}
 impl InternalTransferTracer for GethTracer {}
 
 impl StorageTracer for GethTracer {}
+
+impl SetAuthTracer for GethTracer {}
 
 impl CallTracer for GethTracer {
     fn record_call(&mut self, params: &ActionParams) {
