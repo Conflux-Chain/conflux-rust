@@ -2,12 +2,17 @@ use crate::transaction_pool::TransactionPoolError;
 
 use super::{DeferredPool, InsertResult, TxWithReadyInfo};
 use crate::keylib::{Generator, KeyPair, Random};
-use cfx_types::{Address, AddressSpaceUtil, Space, U256};
+use cfx_types::{Address, AddressSpaceUtil, Space, U256,AddressWithSpace};
 use primitives::{
-    transaction::{native_transaction::NativeTransaction, Eip155Transaction},
+    transaction::{native_transaction::NativeTransaction, Eip155Transaction,TypedNativeTransaction},
     Action, SignedTransaction, Transaction,
 };
 use std::sync::Arc;
+use cfxkey::{Secret};
+use std::str::FromStr;
+use crate::verification::PackingCheckResult;
+
+const PRIVATE_KEY: &str = "74806d258099decd5f5bd500f5b318aaaa0a8a289f8dcb10a9609966d8a0e442";
 
 fn new_test_tx(
     sender: &KeyPair, nonce: usize, gas_price: usize, gas: usize, value: usize,
@@ -266,4 +271,229 @@ fn test_deferred_pool_recalculate_readiness() {
         ),
         None
     );
+}
+
+
+
+pub  fn const_account_with_native_space() -> AddressWithSpace {
+    let secret = Secret::from_str(PRIVATE_KEY).unwrap();
+    let key_pair = KeyPair::from_secret(secret).unwrap();
+    // 返回带有Native Space的地址
+    key_pair.address().with_native_space()
+}
+
+pub fn create_signed_transaction(            
+        nonce: U256,
+        gas_limit: U256,
+        gas_price: u64,
+        sender: AddressWithSpace) -> Result<SignedTransaction, Box<dyn std::error::Error>> {
+
+    let secret = Secret::from_str(PRIVATE_KEY).unwrap();
+
+    let receiver = &sender;
+    // 构造交易
+    let typetx = TypedNativeTransaction::Cip155(NativeTransaction {
+        nonce,
+        gas_price: U256::from(gas_price),           
+        gas: U256::from(gas_limit),                           
+        action: Action::Call(receiver.address),
+        value: U256::from(1_000_000_000_000_000_000u64),      
+        storage_limit: 0_u64,
+        epoch_height: 0,
+        chain_id: 1, // Testnet chain ID
+        data: vec![],
+    });
+
+    let transaction = Transaction::Native(typetx);
+    // 对tx签名
+    let signed_tx = transaction.sign(&secret);
+
+    Ok(signed_tx)
+}
+
+
+fn create_tx_with_ready_info(        
+        nonce: U256,
+        gas_limit: U256,
+        gas_price: u64,
+        sender: AddressWithSpace,) -> TxWithReadyInfo {
+    // 1.创建signed_tx
+    let signed_tx = create_signed_transaction(nonce, gas_limit, gas_price,sender).unwrap();
+
+    // 2. 构造 TxWithReadyInfo
+    let transaction = Arc::new(signed_tx);
+    let packed = false;
+    let sponsored_gas = U256::from(0);
+    let sponsored_storage = 0_u64;
+    let tx_with_ready_info = TxWithReadyInfo::new(transaction, packed, sponsored_gas, sponsored_storage);
+    tx_with_ready_info
+}
+
+
+#[test]
+fn test_insert_new_transaction() {
+
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(U256::from(0), U256::from(21000), 100, addr);
+
+    let result = dpool.insert(tx, false);
+    assert!(matches!(result, InsertResult::NewAdded));
+    assert!(dpool.contain_address(&addr));
+    assert!(dpool.check_sender_and_nonce_exists(&addr, &U256::from(0)));
+}
+
+#[test]
+fn test_insert_replace_transaction() {
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx1 = create_tx_with_ready_info(U256::from(0), U256::from(21000), 100, addr);
+    let tx2 = create_tx_with_ready_info(U256::from(0), U256::from(21000), 200, addr); // Higher gas price
+
+    dpool.insert(tx1, false);
+    let result = dpool.insert(tx2, false);
+    assert!(matches!(result, InsertResult::Updated(_)));
+    assert_eq!(dpool.count_less(&addr, &U256::from(1)), 1);
+}
+
+
+#[test]
+fn test_packing_sampler_valid_transaction() {
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx1 = create_tx_with_ready_info(U256::from(6), U256::from(21000), 100, addr);
+    let tx_clone = tx1.clone();
+    dpool.insert(tx1, false);
+    let validity = |_: &SignedTransaction| PackingCheckResult::Pack;
+    let (txs, gas_used, size_used) = dpool.packing_sampler(
+        Space::Native,
+        U256::from(21000),
+        15000000,
+        10,
+        U256::zero(),
+        validity,
+    );
+    
+
+    assert_eq!(gas_used, U256::from(21000));
+    assert!(size_used <= 15000000);
+    assert_eq!(txs[0], tx_clone.transaction);
+    assert_eq!(txs.len(), 1);
+}
+
+
+
+#[test]
+fn test_packing_sampler_empty_limits() {
+    let mut dpool = DeferredPool::new_for_test();
+    let validity = |_: &SignedTransaction| PackingCheckResult::Pack;
+    let (txs, gas_used, size_used) = dpool.packing_sampler(
+        Space::Native,
+        U256::from(0),
+        0,
+        0,
+        U256::from(50),
+        validity,
+    );
+
+    assert!(txs.is_empty());
+    assert_eq!(gas_used, U256::from(0));
+    assert_eq!(size_used, 0);
+}
+
+#[test]
+fn test_estimate_packing_gas_limit() {
+    let dpool = DeferredPool::new_for_test();
+    let (gas_limit, price_limit) = dpool.estimate_packing_gas_limit(
+        Space::Native,
+        U256::from(100_000),
+        U256::from(100),
+        U256::from(50),
+    );
+
+    assert!(gas_limit <= U256::from(200_000)); // gas_target * 2
+    assert!(price_limit >= U256::from(50)); // At least min_base_price
+}
+
+#[test]
+fn test_mark_packed() {
+    let mut dpool = DeferredPool::new_for_test();
+    // 接收方地址 (Core Space)
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(U256::from(0), U256::from(21000), 100, addr);
+
+    dpool.insert(tx, false);
+    let result = dpool.mark_packed(addr, &U256::from(0), true);
+    assert!(result);
+
+    let result = dpool.check_tx_packed(addr, U256::from(0));
+    assert!(result);
+}
+
+#[test]
+fn test_remove_lowest_nonce() {
+    let mut dpool = DeferredPool::new_for_test();
+    // 接收方地址 (Core Space)
+    let addr = const_account_with_native_space();
+    let tx1 = create_tx_with_ready_info(U256::from(0), U256::from(21000), 100, addr);
+    let tx2 = create_tx_with_ready_info(U256::from(1), U256::from(21000), 100, addr);
+
+    dpool.insert(tx1.clone(), false);
+    dpool.insert(tx2, false);
+
+    let removed = dpool.remove_lowest_nonce(&addr).unwrap();
+    assert_eq!(removed.nonce(), &U256::from(0));
+    assert_eq!(dpool.count_less(&addr, &U256::from(2)), 1);
+}
+
+#[test]
+fn test_recalculate_readiness_with_local_info() {
+    let mut dpool = DeferredPool::new_for_test();
+    // 接收方地址 (Core Space)
+    let addr = const_account_with_native_space();
+    let tx1 = create_tx_with_ready_info(U256::from(0), U256::from(21000), 100, addr);
+    let tx2 = create_tx_with_ready_info(U256::from(1), U256::from(21000), 100, addr);
+
+    dpool.insert(tx1, false);
+    dpool.insert(tx2, false);
+
+    let result = dpool.recalculate_readiness_with_local_info(&addr, U256::from(0), U256::from(1_000_000));
+    assert!(result.is_some());
+    assert!(dpool.has_ready_tx(&addr));
+}
+
+
+
+#[test]
+fn test_get_bucket() {
+    let mut dpool = DeferredPool::new_for_test();
+    // 接收方地址 (Core Space)
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(U256::from(0), U256::from(21000), 100, addr);
+
+    dpool.insert(tx, false);
+    println!("address: {}", addr.address.to_string());
+    for (key, value) in dpool.buckets.iter() {
+        println!("Key: {}, Value: {}", key.address.to_string(), value.check_nonce_exists(&U256::from(0)));
+    }
+
+    let result = dpool.get_bucket(&addr).unwrap();
+    let gas_limit = result.get_lowest_nonce_tx().unwrap().gas_limit();
+    println!("Gas limit: {}", gas_limit);
+    assert_eq!(*gas_limit, U256::from(21000));
+
+}
+
+
+#[test]
+fn test_clear_bucket() {
+    let mut dpool = DeferredPool::new_for_test();
+    // 接收方地址 (Core Space)
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(U256::from(0), U256::from(21000), 100, addr);
+    dpool.insert(tx, false);
+    assert!(!dpool.buckets.is_empty());
+    dpool.clear();
+    assert!(dpool.buckets.is_empty());
+
 }
