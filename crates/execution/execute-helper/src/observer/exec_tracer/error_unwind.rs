@@ -37,6 +37,7 @@ impl ErrorUnwind {
                     errors.accept_create_result(result)
                 }
                 Action::InternalTransferAction(_) => {}
+                Action::SetAuth(_) => {}
             }
         }
         errors
