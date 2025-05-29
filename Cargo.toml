@@ -59,7 +59,7 @@ members = [
     "crates/rpc/rpc-primitives",
     "crates/rpc/rpc-cfx-types",
     "crates/rpc/rpc-eth-api",
-    "crates/rpc/parity-trace-types",
+    "crates/execution/parity-trace-types",
     "crates/rpc/rpc-eth-impl",
     "crates/rpc/rpc-common-impl",
     "crates/util/util-macros",
@@ -192,7 +192,7 @@ cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
 cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
 cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
 cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
-cfx-parity-trace-types = { path = "./crates/rpc/parity-trace-types" }
+cfx-parity-trace-types = { path = "./crates/execution/parity-trace-types" }
 cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth-api" }
 cfx-util-macros = { path = "./crates/util/util-macros" }
 cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
@@ -338,10 +338,13 @@ clap = "4"
 clap-verbosity-flag = "3"
 
 # rand & rng
-rand = "0.7"
-rand_xorshift = "0.2"
+rand = "0.9"
+rand_xorshift = "0.4"
+rand_chacha = "0.9.0"
+
+# old rand
+rand_07 = { package = "rand", version = "0.7" }
 rand_08 = { package = "rand", version = "0.8" }
-rand_chacha = "0.2.1"
 
 # misc
 log = "0.4"
@@ -447,7 +450,7 @@ sqlite3-sys = "0.12"
 kvdb = "0.4"
 influx_db_client = "0.5.1"
 # conflux forked crates
-rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "a2ebf4e00f89c70359d9f3996a1390d9c6b55940" }
+rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "7dbd66f507db1d0cfdf5334ad56ca0b24a768740" }
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }

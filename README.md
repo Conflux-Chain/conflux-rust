@@ -1,16 +1,11 @@
 # Conflux-Rust
 
 Conflux-rust is a Rust-based implementation of the Conflux protocol. It is fast and
-reliable. 
+reliable.
 
 ## For Users
 
-Please follow the [Conflux
-Documentation](https://doc.confluxnetwork.org/) to
-[build](https://doc.confluxnetwork.org/docs/general/run-a-node/advanced-topics/compiling-conflux-client)
-and
-[run](https://doc.confluxnetwork.org/docs/general/run-a-node/)
-Conflux.
+Please follow the [Conflux Documentation](https://doc.confluxnetwork.org/docs/category/run-a-node) to [install](https://doc.confluxnetwork.org/docs/general/run-a-node/advanced-topics/downloading-conflux-client) and [run](https://doc.confluxnetwork.org/docs/general/run-a-node/) Conflux.
 
 ## For Developers
 
@@ -25,18 +20,33 @@ on how to submit issues and pull requests. Note that if you want to propose
 significant changes to the Conflux protocol, please submit a
 [CIP](https://github.com/Conflux-Chain/CIPs).
 
-### Unit Tests and Integration Tests
+### Building
+
+The Minimum Supported Rust Version (MSRV) of this project is 1.77.2
+
+See the doc for detailed instructions on how to [build from source](./docs/build-from-source.md).
+
+If you have modified any Rust code, please run the cargo_fmt.sh script before committing to format the code and ensure consistent code style.
+
+### Unit Tests
 
 Unit tests come together with the Rust code. They can be invoked via `cargo test --release --all`. See the
 [Getting Started](https://doc.confluxnetwork.org/docs/general/run-a-node/)
-page for more information. 
+page for more information.
+
+### Integration Tests
 
 Integration tests are Python test scripts with the `_test.py` suffix in the `tests` directory and in the `integration_tests/tests` directory.
-To run these tests, first compile Conflux in _release_ mode using `cargo build --release` and 
-fetch all submodule using `git submodule update --remote --recursive --init`.
+To run these tests:
+
+1. Install Python `3.11` or later.
+2. Install the required Python packages using `bash ./dev-support/dep_pip3.sh` in the root directory.
+3. Compile Conflux in _release_ mode using `cargo build --release`
+4. Fetch all submodule using `git submodule update --remote --recursive --init`.
+
 Then, you can run all integration tests using:
 
-- `tests/test_all.py` for tests in the `tests` directory
+- `python3 tests/test_all.py` for tests in the `tests` directory
 - `pytest ./integration_tests/tests -vv -n 6 --dist loadscope` for tests in the `integration_tests` directory
 
 > As for running tests with coverage, please refer to [Coverage](./docs/coverage.md).

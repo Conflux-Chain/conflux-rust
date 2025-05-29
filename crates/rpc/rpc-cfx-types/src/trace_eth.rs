@@ -1,11 +1,13 @@
 use crate::trace::{
     Action as RpcCfxAction, LocalizedTrace as RpcCfxLocalizedTrace,
 };
-use cfx_parity_trace_types::Outcome;
+use cfx_parity_trace_types::{
+    Outcome, SetAuth as VmSetAuth, SetAuthOutcome as VmSetAuthOutcome,
+};
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{H160, H256, U256};
+use cfx_types::{Address, H256, U256};
 use cfx_util_macros::bail;
-use cfx_vm_types::{CallType as CfxCallType, CreateType as CfxCreateType};
+use cfx_vm_types::{CallType, CreateType};
 use jsonrpc_core::Error as JsonRpcError;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::{
@@ -18,7 +20,7 @@ use std::{
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     /// Sender
-    from: H160,
+    from: Address,
     /// Value
     value: U256,
     /// Gas
@@ -29,64 +31,14 @@ pub struct Create {
     create_type: CreateType,
 }
 
-/// The type of the create-like instruction.
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum CreateType {
-    /// Not a create
-    None,
-    /// CREATE
-    CREATE,
-    /// CREATE2
-    CREATE2,
-}
-
-impl From<CfxCreateType> for CreateType {
-    fn from(cfx_create_type: CfxCreateType) -> Self {
-        match cfx_create_type {
-            CfxCreateType::None => CreateType::None,
-            CfxCreateType::CREATE => CreateType::CREATE,
-            CfxCreateType::CREATE2 => CreateType::CREATE2,
-        }
-    }
-}
-
-/// Call type.
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum CallType {
-    /// None
-    None,
-    /// Call
-    Call,
-    /// Call code
-    CallCode,
-    /// Delegate call
-    DelegateCall,
-    /// Static call
-    StaticCall,
-}
-
-impl From<CfxCallType> for CallType {
-    fn from(cfx_call_type: CfxCallType) -> Self {
-        match cfx_call_type {
-            CfxCallType::None => CallType::None,
-            CfxCallType::Call => CallType::Call,
-            CfxCallType::CallCode => CallType::CallCode,
-            CfxCallType::DelegateCall => CallType::DelegateCall,
-            CfxCallType::StaticCall => CallType::StaticCall,
-        }
-    }
-}
-
 /// Call response
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
     /// Sender
-    from: H160,
+    from: Address,
     /// Recipient
-    to: H160,
+    to: Address,
     /// Transfered Value
     value: U256,
     /// Gas
@@ -119,14 +71,14 @@ impl TryFrom<RpcCfxAction> for Action {
                 value: call.value,
                 gas: call.gas,
                 input: call.input,
-                call_type: call.call_type.into(),
+                call_type: call.call_type,
             })),
             RpcCfxAction::Create(create) => Ok(Action::Create(Create {
                 from: create.from.hex_address,
                 value: create.value,
                 gas: create.gas,
                 init: create.init,
-                create_type: create.create_type.into(),
+                create_type: create.create_type,
             })),
             action => {
                 bail!("unsupported action in eth space: {:?}", action);
@@ -154,7 +106,7 @@ pub struct CreateResult {
     /// Code
     code: Bytes,
     /// Assigned address
-    address: H160,
+    address: Address,
 }
 
 /// Response
@@ -184,9 +136,9 @@ pub struct LocalizedTrace {
     /// Subtraces
     pub subtraces: usize,
     /// Transaction position
-    pub transaction_position: Option<usize>,
+    pub transaction_position: usize,
     /// Transaction hash
-    pub transaction_hash: Option<H256>,
+    pub transaction_hash: H256,
     /// Block Number
     pub block_number: u64,
     /// Block Hash
@@ -245,6 +197,13 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
     type Error = String;
 
     fn try_from(cfx_trace: RpcCfxLocalizedTrace) -> Result<Self, String> {
+        let transaction_position = cfx_trace
+            .transaction_position
+            .map(|pos| pos.as_usize())
+            .ok_or_else(|| "transaction position should exist".to_string())?;
+        let transaction_hash = cfx_trace
+            .transaction_hash
+            .ok_or_else(|| "transaction hash should exist".to_string())?;
         Ok(Self {
             action: cfx_trace.action.try_into()?,
             result: Res::None,
@@ -252,10 +211,8 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
             subtraces: 0,
             // note: `as_usize` will panic on overflow,
             // however, this should not happen for tx position
-            transaction_position: cfx_trace
-                .transaction_position
-                .map(|x| x.as_usize()),
-            transaction_hash: cfx_trace.transaction_hash,
+            transaction_position,
+            transaction_hash,
             block_number: cfx_trace
                 .epoch_number
                 .map(|en| en.as_u64())
@@ -397,5 +354,55 @@ impl fmt::Display for TraceError {
             }
         };
         message.fmt(f)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAuth {
+    /// The address of the impl.
+    pub address: Address,
+    pub chain_id: U256,
+    pub nonce: U256,
+    pub author: Option<Address>,
+}
+
+/// Trace
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalizedSetAuthTrace {
+    /// Action
+    pub action: SetAuth,
+    /// Result
+    pub result: VmSetAuthOutcome,
+    /// Transaction position
+    pub transaction_position: usize,
+    /// Transaction hash
+    pub transaction_hash: H256,
+    /// Block Number
+    pub block_number: u64,
+    /// Block Hash
+    pub block_hash: H256,
+}
+
+impl LocalizedSetAuthTrace {
+    pub fn new(
+        vm_action: &VmSetAuth, transaction_position: usize,
+        transaction_hash: H256, block_number: u64, block_hash: H256,
+    ) -> Self {
+        let action = SetAuth {
+            address: vm_action.address,
+            chain_id: vm_action.chain_id,
+            nonce: vm_action.nonce,
+            author: vm_action.author,
+        };
+        Self {
+            action,
+            result: vm_action.outcome,
+            transaction_position,
+            transaction_hash,
+            block_number,
+            block_hash,
+        }
     }
 }

@@ -935,7 +935,7 @@ dependencies = [
  "metrics",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.7.3",
+ "rand 0.9.0",
  "txgen",
 ]
 
@@ -1193,7 +1193,7 @@ dependencies = [
  "network",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.7.3",
+ "rand 0.9.0",
  "toml",
  "txgen",
 ]
@@ -1321,8 +1321,8 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "primitives",
- "rand 0.7.3",
- "rand_xorshift 0.2.0",
+ "rand 0.9.0",
+ "rand_xorshift 0.4.0",
  "treap-map",
  "typenum",
 ]
@@ -1368,6 +1368,7 @@ dependencies = [
  "cfx-execute-helper",
  "cfx-executor",
  "cfx-parameters",
+ "cfx-parity-trace-types",
  "cfx-rpc-cfx-impl",
  "cfx-rpc-cfx-types",
  "cfx-rpc-common-impl",
@@ -1414,7 +1415,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "log",
- "rand 0.7.3",
+ "rand 0.9.0",
  "serde",
  "strum",
  "thiserror 2.0.11",
@@ -1482,6 +1483,7 @@ name = "cfx-rpc-eth-api"
 version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
+ "cfx-parity-trace-types",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
  "cfx-types",
@@ -1603,8 +1605,8 @@ dependencies = [
  "parity-util-mem",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.7.3",
- "rand_chacha 0.2.2",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
  "random-crash",
  "rlp 0.4.6",
  "rlp-derive",
@@ -1780,9 +1782,9 @@ dependencies = [
  "priority-send-queue",
  "proptest",
  "proptest-derive",
- "rand 0.7.3",
  "rand 0.8.5",
- "rand_xorshift 0.2.0",
+ "rand 0.9.0",
+ "rand_xorshift 0.4.0",
  "rangetools",
  "rayon",
  "rlp 0.4.6",
@@ -1864,7 +1866,7 @@ dependencies = [
  "parity-crypto",
  "parity-wordlist",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rustc-hex",
  "serde",
  "serde_derive",
@@ -2068,8 +2070,8 @@ dependencies = [
  "parity-version",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.7.3",
  "rand 0.8.5",
+ "rand 0.9.0",
  "random-crash",
  "rlp 0.4.6",
  "rpassword",
@@ -4049,7 +4051,7 @@ version = "0.6.0"
 dependencies = [
  "atom",
  "malloc_size_of",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rayon",
 ]
 
@@ -5206,7 +5208,7 @@ checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=a2ebf4e00f89c70359d9f3996a1390d9c6b55940#a2ebf4e00f89c70359d9f3996a1390d9c6b55940"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=7dbd66f507db1d0cfdf5334ad56ca0b24a768740#7dbd66f507db1d0cfdf5334ad56ca0b24a768740"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -5223,7 +5225,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=a2ebf4e00f89c70359d9f3996a1390d9c6b55940#a2ebf4e00f89c70359d9f3996a1390d9c6b55940"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=7dbd66f507db1d0cfdf5334ad56ca0b24a768740#7dbd66f507db1d0cfdf5334ad56ca0b24a768740"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -5263,7 +5265,7 @@ version = "0.1.0"
 dependencies = [
  "malloc_size_of",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.9.0",
 ]
 
 [[package]]
@@ -5311,7 +5313,7 @@ dependencies = [
  "db",
  "kvdb",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rlp 0.4.6",
  "rlp-derive",
 ]
@@ -5471,7 +5473,7 @@ dependencies = [
  "lazy_static",
  "log",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.9.0",
  "reqwest 0.12.9",
  "serde",
  "timer",
@@ -5669,7 +5671,7 @@ dependencies = [
  "parity-path",
  "parking_lot 0.12.1",
  "priority-send-queue",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rlp 0.4.6",
  "rlp-derive",
  "serde",
@@ -6613,7 +6615,7 @@ dependencies = [
  "log",
  "malloc_size_of",
  "once_cell",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rlp 0.4.6",
  "rlp-derive",
  "serde",
@@ -7006,20 +7008,20 @@ dependencies = [
 
 [[package]]
 name = "rand_xorshift"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77d416b86801d23dde1aa643023b775c3a462efc0ed96443add11546cdf1dca8"
-dependencies = [
- "rand_core 0.5.1",
-]
-
-[[package]]
-name = "rand_xorshift"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a"
+dependencies = [
+ "rand_core 0.9.3",
 ]
 
 [[package]]
@@ -7029,7 +7031,7 @@ dependencies = [
  "lazy_static",
  "log",
  "parking_lot 0.12.1",
- "rand 0.7.3",
+ "rand 0.9.0",
 ]
 
 [[package]]
@@ -7377,7 +7379,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=a2ebf4e00f89c70359d9f3996a1390d9c6b55940#a2ebf4e00f89c70359d9f3996a1390d9c6b55940"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=7dbd66f507db1d0cfdf5334ad56ca0b24a768740#7dbd66f507db1d0cfdf5334ad56ca0b24a768740"
 dependencies = [
  "libc",
  "librocksdb_sys",
@@ -8940,9 +8942,9 @@ dependencies = [
  "criterion",
  "malloc_size_of",
  "primitives",
- "rand 0.7.3",
- "rand_chacha 0.2.2",
- "rand_xorshift 0.2.0",
+ "rand 0.9.0",
+ "rand_chacha 0.9.0",
+ "rand_xorshift 0.4.0",
 ]
 
 [[package]]
@@ -8980,7 +8982,7 @@ dependencies = [
  "metrics",
  "parking_lot 0.12.1",
  "primitives",
- "rand 0.7.3",
+ "rand 0.9.0",
  "rlp 0.4.6",
  "rustc-hex",
  "secret-store",

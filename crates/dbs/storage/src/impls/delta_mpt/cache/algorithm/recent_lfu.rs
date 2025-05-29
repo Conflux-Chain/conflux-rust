@@ -537,7 +537,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
             capacity,
             frequency_heap: RemovableHeap::new(lru_capacity),
             frequency_lru: LRU::new(lru_capacity),
-            counter_rng: ChaChaRng::from_entropy(),
+            counter_rng: ChaChaRng::from_os_rng(),
         }
     }
 

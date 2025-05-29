@@ -112,7 +112,7 @@ impl DeferredPool {
         let mut minimum_unit_gas_limit = U256::from(21000);
         let mut minimum_unit_tx_size = 80;
 
-        let mut rng = XorShiftRng::from_entropy();
+        let mut rng = XorShiftRng::from_os_rng();
 
         // When a sampled transaction exceeds the remaining capacity (gas limit
         // or size) in a block, we skip it and look for the next transaction.

@@ -834,7 +834,7 @@ mod nonce_pool_test {
     #[test]
     fn test_correctness() {
         let me = Random.generate().unwrap();
-        let mut rng = XorShiftRng::from_entropy();
+        let mut rng = XorShiftRng::from_os_rng();
         let mut tx = Vec::new();
         let storage_limit = 5000;
         let gas_price = U256::from(10);
