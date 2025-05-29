@@ -91,14 +91,11 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     fn selfdestruct(
         &mut self, address: Address, target: Address,
     ) -> Option<StateLoad<SelfDestructResult>> {
+        let address = from_alloy_address(address);
         let target_address = from_alloy_address(target);
+        let is_cold = !self.context.is_warm_account(target_address);
 
-        if let Err(e) = self.context.suicide(&target_address) {
-            self.error = Err(unwrap_db_error(e));
-            return None;
-        }
-
-        let target_exists = match self
+        let is_empty = match self
             .context
             .state
             .is_eip158_empty(&target_address.with_evm_space())
@@ -113,24 +110,30 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
         let contract_address_with_space =
             self.context.origin.address.with_space(self.context.space);
 
-        let had_value =
+        let balance =
             match self.context.state.balance(&contract_address_with_space) {
-                Ok(balance) => !balance.is_zero(),
+                Ok(balance) => balance,
                 Err(e) => {
                     self.error = Err(e);
                     return None;
                 }
             };
 
-        // TODO: UPDATE THIS.
-        let previously_destroyed = false;
+        let previously_destroyed = self
+            .context
+            .substate
+            .suicides
+            .contains(&address.with_space(self.context.space));
 
-        let is_cold = !self.context.is_warm_account(target_address);
+        if let Err(e) = self.context.suicide(&target_address) {
+            self.error = Err(unwrap_db_error(e));
+            return None;
+        }
 
         Some(StateLoad {
             data: SelfDestructResult {
-                had_value,
-                target_exists,
+                had_value: !balance.is_zero(),
+                target_exists: !is_empty,
                 previously_destroyed,
             },
             is_cold,
@@ -195,16 +198,16 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
         let key_vec = key_bytes.to_vec();
         let key_h256 = cfx_types::H256::from(key_bytes);
 
-        let value = match self.context.storage_at(&key_vec) {
-            Ok(current_value) => to_alloy_u256(current_value),
+        let is_cold = match self.context.is_warm_storage_entry(&key_h256) {
+            Ok(is_warm) => !is_warm,
             Err(e) => {
                 self.error = Err(unwrap_db_error(e));
                 return None;
             }
         };
 
-        let is_cold = match self.context.is_warm_storage_entry(&key_h256) {
-            Ok(is_warm) => !is_warm,
+        let value = match self.context.storage_at(&key_vec) {
+            Ok(current_value) => to_alloy_u256(current_value),
             Err(e) => {
                 self.error = Err(unwrap_db_error(e));
                 return None;
@@ -257,13 +260,13 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
         &mut self, address: Address,
     ) -> Option<StateLoad<Bytes>> {
         let address = from_alloy_address(address);
+        let is_cold = !self.context.is_warm_account(address);
 
         match self.context.extcode(&address) {
             Ok(code_option) => {
                 let bytes = code_option
                     .map(|code| to_alloy_bytes(code.as_ref().clone()))
                     .unwrap_or_else(|| Bytes::default());
-                let is_cold = !self.context.is_warm_account(address);
                 Some(StateLoad::new(bytes, is_cold))
             }
             Err(e) => {
@@ -277,11 +280,9 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
         &mut self, address: Address,
     ) -> Option<StateLoad<B256>> {
         let address = from_alloy_address(address);
+        let is_cold = !self.context.is_warm_account(address);
         match self.context.extcodehash(&address) {
-            Ok(hash) => {
-                let is_cold = !self.context.is_warm_account(address);
-                Some(StateLoad::new(to_alloy_h256(hash), is_cold))
-            }
+            Ok(hash) => Some(StateLoad::new(to_alloy_h256(hash), is_cold)),
             Err(e) => {
                 self.error = Err(unwrap_db_error(e));
                 None
