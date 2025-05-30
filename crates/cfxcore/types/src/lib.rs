@@ -1,4 +1,6 @@
 pub mod block_data_manager;
+pub mod cache_config;
+pub mod cache_manager;
 pub mod channel;
 pub mod core_error;
 pub mod node_type;

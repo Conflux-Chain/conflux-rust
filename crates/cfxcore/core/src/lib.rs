@@ -16,8 +16,6 @@ use keccak_hash as hash;
 pub mod message;
 
 pub mod block_data_manager;
-pub mod cache_config;
-pub mod cache_manager;
 pub mod client;
 pub mod consensus;
 pub mod db;
@@ -32,7 +30,8 @@ pub mod transaction_pool;
 pub mod verification;
 
 pub use cfxcore_types::{
-    channel, core_error, node_type, state_exposer, unique_id,
+    cache_config, cache_manager, channel, core_error, node_type, state_exposer,
+    unique_id,
 };
 
 pub use crate::{
