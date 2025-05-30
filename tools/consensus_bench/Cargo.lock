@@ -1376,7 +1376,6 @@ dependencies = [
  "executor",
  "executor-types",
  "fail",
- "fallible",
  "fallible-iterator",
  "futures 0.3.30",
  "geth-tracer",
@@ -1400,7 +1399,6 @@ dependencies = [
  "mirai-annotations",
  "move-core-types",
  "network",
- "num 0.2.1",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -1866,7 +1864,6 @@ dependencies = [
 name = "db"
 version = "0.1.0"
 dependencies = [
- "kvdb",
  "kvdb-rocksdb",
  "log",
 ]
@@ -2542,13 +2539,6 @@ dependencies = [
  "quote",
  "syn 1.0.109",
  "synstructure 0.12.6",
-]
-
-[[package]]
-name = "fallible"
-version = "0.1.0"
-dependencies = [
- "thiserror 1.0.63",
 ]
 
 [[package]]
