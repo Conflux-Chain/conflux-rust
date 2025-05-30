@@ -2,17 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod consensus_graph_exposer;
 mod network_exposer;
 mod sync_graph_exposer;
 
 pub use self::{
-    consensus_graph_exposer::{
-        ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
-        ConsensusGraphStates,
-    },
     network_exposer::NetworkExposer,
     sync_graph_exposer::{SyncGraphBlockState, SyncGraphStates},
+};
+pub use cfxcore_types::state_exposer::consensus_graph_exposer::{
+    ConsensusGraphBlockExecutionState, ConsensusGraphBlockState,
+    ConsensusGraphStates,
 };
 
 use parking_lot::Mutex;
