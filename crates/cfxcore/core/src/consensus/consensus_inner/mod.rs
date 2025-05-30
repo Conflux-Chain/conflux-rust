@@ -1995,8 +1995,11 @@ impl ConsensusGraphInner {
             if last_period_upper != parent_epoch {
                 self.arena[parent_arena_index].difficulty
             } else {
+                let block_header_by_hash =
+                    |hash: &H256| self.data_man.block_header_by_hash(hash);
                 target_difficulty(
-                    &self.data_man,
+                    block_header_by_hash,
+                    &self.data_man.target_difficulty_manager,
                     &self.pow_config,
                     &self.arena[parent_arena_index].hash,
                     |h| {
@@ -2030,8 +2033,11 @@ impl ConsensusGraphInner {
                 / self.pow_config.difficulty_adjustment_epoch_period(epoch))
                 * self.pow_config.difficulty_adjustment_epoch_period(epoch)
         {
+            let block_header_by_hash =
+                |hash: &H256| self.data_man.block_header_by_hash(hash);
             self.current_difficulty = target_difficulty(
-                &self.data_man,
+                block_header_by_hash,
+                &self.data_man.target_difficulty_manager,
                 &self.pow_config,
                 &new_best_hash,
                 |h| {

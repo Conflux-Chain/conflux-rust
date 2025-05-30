@@ -9,14 +9,14 @@ mod seed_compute;
 mod shared;
 
 pub use self::{cache::CacheBuilder, shared::POW_STAGE_LENGTH};
-use crate::hash::keccak as keccak_hash;
+use keccak_hash::keccak as keccak_hash;
 
-use crate::block_data_manager::BlockDataManager;
 use cfx_parameters::pow::*;
 use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;
+use primitives::BlockHeader;
 use static_assertions::_core::str::FromStr;
 use std::{
     collections::{HashMap, VecDeque},
@@ -326,21 +326,21 @@ pub fn validate(
 /// inserted to BlockDataManager, otherwise the function will panic.
 /// `num_blocks_in_epoch` is a function that returns the epoch size
 /// under the epoch view of a given block.
-pub fn target_difficulty<F>(
-    data_man: &BlockDataManager, pow_config: &ProofOfWorkConfig,
-    cur_hash: &H256, num_blocks_in_epoch: F,
+pub fn target_difficulty<F, M>(
+    block_header_by_hash: M,
+    target_difficulty_manager: &TargetDifficultyManager,
+    pow_config: &ProofOfWorkConfig, cur_hash: &H256, num_blocks_in_epoch: F,
 ) -> U256
 where
     F: Fn(&H256) -> usize,
+    M: Fn(&H256) -> Option<Arc<BlockHeader>>,
 {
-    if let Some(target_diff) = data_man.target_difficulty_manager.get(cur_hash)
-    {
+    if let Some(target_diff) = target_difficulty_manager.get(cur_hash) {
         // The target difficulty of this period is already computed and cached.
         return target_diff;
     }
 
-    let mut cur_header = data_man
-        .block_header_by_hash(cur_hash)
+    let mut cur_header = block_header_by_hash(cur_hash)
         .expect("Must already in BlockDataManager block_header");
     let epoch = cur_header.height();
     assert_ne!(epoch, 0);
@@ -360,7 +360,7 @@ where
     for _ in 0..pow_config.difficulty_adjustment_epoch_period(epoch) {
         block_count += num_blocks_in_epoch(&cur) as u64;
         cur = cur_header.parent_hash().clone();
-        cur_header = data_man.block_header_by_hash(&cur).unwrap();
+        cur_header = block_header_by_hash(&cur).unwrap();
         if cur_header.timestamp() != 0 {
             min_time = cur_header.timestamp();
         }
@@ -390,9 +390,7 @@ where
     }
 
     // Caching the computed target difficulty of this period.
-    data_man
-        .target_difficulty_manager
-        .set(*cur_hash, target_diff);
+    target_difficulty_manager.set(*cur_hash, target_diff);
 
     target_diff
 }
