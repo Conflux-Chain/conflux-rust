@@ -16,3 +16,20 @@ edition.workspace = true
 cfx-types = { workspace = true }
 malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
+cfx-internal-common = { workspace = true }
+parking_lot = { workspace = true }
+lazy_static = { workspace = true }
+primitives = { workspace = true }
+cfx-execute-helper = { workspace = true }
+smart-default = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+futures = { workspace = true, features = ["compat"] }
+log = { workspace = true }
+cfx-bytes = { workspace = true }
+thiserror = { workspace = true }
+unexpected = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }

@@ -4,6 +4,7 @@
 
 use crate::UniqueId;
 use cfx_types::H256;
+use log::warn;
 use parking_lot::RwLock;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio::{runtime, sync::mpsc, time::timeout};

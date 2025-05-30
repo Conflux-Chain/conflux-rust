@@ -3,7 +3,6 @@ use cfx_internal_common::{
     impl_db_encoding_as_rlp, DatabaseDecodable, DatabaseEncodable,
 };
 use cfx_types::{Address, Bloom, H256, U256};
-pub use cfxcore_types::block_data_manager::BlockStatus;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::BlockReceipts;
@@ -50,25 +49,6 @@ impl Decodable for BlockExecutionResult {
             block_receipts: Arc::new(rlp.val_at(0)?),
             bloom: rlp.val_at(1)?,
         })
-    }
-}
-
-#[derive(
-    RlpEncodable, RlpDecodable, Clone, Copy, Debug, DeriveMallocSizeOf,
-)]
-pub struct BlockRewardResult {
-    pub total_reward: U256,
-    pub base_reward: U256,
-    pub tx_fee: U256,
-}
-
-impl Default for BlockRewardResult {
-    fn default() -> Self {
-        BlockRewardResult {
-            total_reward: U256::from(0),
-            base_reward: U256::from(0),
-            tx_fee: U256::from(0),
-        }
     }
 }
 
@@ -339,6 +319,50 @@ impl PosRewardInfo {
     }
 }
 
+/// The validity status of a block. If a block's status among all honest nodes
+/// is guaranteed to have no conflict, which means if some honest nodes think a
+/// block is not `Pending`, their decision will be the same status.
+#[derive(Copy, Clone, PartialEq, DeriveMallocSizeOf)]
+pub enum BlockStatus {
+    Valid = 0,
+    Invalid = 1,
+    PartialInvalid = 2,
+    Pending = 3,
+}
+
+impl BlockStatus {
+    pub fn from_db_status(db_status: u8) -> Self {
+        match db_status {
+            0 => BlockStatus::Valid,
+            1 => BlockStatus::Invalid,
+            2 => BlockStatus::PartialInvalid,
+            3 => BlockStatus::Pending,
+            _ => panic!("Read unknown block status from db"),
+        }
+    }
+
+    pub fn to_db_status(&self) -> u8 { *self as u8 }
+}
+
+#[derive(
+    RlpEncodable, RlpDecodable, Clone, Copy, Debug, DeriveMallocSizeOf,
+)]
+pub struct BlockRewardResult {
+    pub total_reward: U256,
+    pub base_reward: U256,
+    pub tx_fee: U256,
+}
+
+impl Default for BlockRewardResult {
+    fn default() -> Self {
+        BlockRewardResult {
+            total_reward: U256::from(0),
+            base_reward: U256::from(0),
+            tx_fee: U256::from(0),
+        }
+    }
+}
+
 pub fn db_encode_list<T>(list: &[T]) -> Vec<u8>
 where T: DatabaseEncodable {
     let mut rlp_stream = RlpStream::new();
@@ -363,6 +387,6 @@ impl_db_encoding_as_rlp!(BlockExecutionResult);
 impl_db_encoding_as_rlp!(LocalBlockInfo);
 impl_db_encoding_as_rlp!(CheckpointHashes);
 impl_db_encoding_as_rlp!(EpochExecutionContext);
-impl_db_encoding_as_rlp!(BlockRewardResult);
 impl_db_encoding_as_rlp!(BlamedHeaderVerifiedRoots);
 impl_db_encoding_as_rlp!(PosRewardInfo);
+impl_db_encoding_as_rlp!(BlockRewardResult);
