@@ -1361,7 +1361,6 @@ dependencies = [
 name = "cfx-rpc"
 version = "2.6.0"
 dependencies = [
- "alloy-rpc-types",
  "alloy-rpc-types-trace",
  "async-trait",
  "cfx-addr",
@@ -1470,10 +1469,8 @@ name = "cfx-rpc-common-impl"
 version = "2.6.0"
 dependencies = [
  "cfx-addr",
- "cfx-execute-helper",
  "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
- "cfx-rpc-eth-types",
  "cfx-types",
  "slice-group-by",
 ]
@@ -1483,7 +1480,6 @@ name = "cfx-rpc-eth-api"
 version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
- "cfx-parity-trace-types",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
  "cfx-types",
@@ -1747,7 +1743,6 @@ dependencies = [
  "executor",
  "executor-types",
  "fail",
- "fallible",
  "fallible-iterator",
  "futures 0.3.30",
  "geth-tracer",
@@ -1771,7 +1766,6 @@ dependencies = [
  "mirai-annotations",
  "move-core-types",
  "network",
- "num 0.2.1",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -1912,7 +1906,6 @@ dependencies = [
  "num_cpus",
  "panic_hook",
  "parking_lot 0.12.1",
- "serde",
  "tempfile",
 ]
 
@@ -2032,18 +2025,15 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 name = "client"
 version = "2.6.0"
 dependencies = [
- "alloy-rpc-types",
  "alloy-rpc-types-trace",
  "app_dirs",
  "bigdecimal",
  "blockgen",
- "bls-signatures",
  "cfx-addr",
  "cfx-bytes",
  "cfx-config",
  "cfx-execute-helper",
  "cfx-executor",
- "cfx-internal-common",
  "cfx-parameters",
  "cfx-parity-trace-types",
  "cfx-rpc",
@@ -2065,7 +2055,6 @@ dependencies = [
  "cfxcore-types",
  "cfxkey",
  "cfxstore",
- "clap 4.5.37",
  "consensus-types",
  "criterion",
  "ctrlc",
@@ -2085,7 +2074,6 @@ dependencies = [
  "jsonrpc-ws-server",
  "jsonrpsee",
  "keccak-hash",
- "kvdb-rocksdb",
  "lazy_static",
  "log",
  "malloc_size_of",
@@ -2111,7 +2099,6 @@ dependencies = [
  "threadpool",
  "throttling",
  "tokio",
- "toml",
  "txgen",
 ]
 
@@ -2175,12 +2162,8 @@ version = "2.6.0"
 dependencies = [
  "bcs",
  "bls-signatures",
- "cfx-bytes",
  "cfx-executor",
- "cfx-rpc-eth-types",
- "cfx-statedb",
  "cfx-types",
- "cfx-vm-types",
  "cfxcore",
  "cfxkey",
  "cfxstore",
@@ -2191,11 +2174,8 @@ dependencies = [
  "diem-types",
  "env_logger",
  "executor",
- "hex",
  "jemallocator",
- "jsonrpc-core",
  "jsonrpsee",
- "keccak-hash",
  "log",
  "log4rs",
  "malloc_size_of",
@@ -2209,13 +2189,10 @@ dependencies = [
  "rlp 0.4.6",
  "rpassword",
  "rustc-hex",
- "serde",
  "serde_json",
  "storage-interface",
  "tempfile",
- "thiserror 2.0.11",
  "tokio",
- "walkdir",
 ]
 
 [[package]]
@@ -2525,7 +2502,6 @@ dependencies = [
  "env_logger",
  "panic_hook",
  "rustc-hex",
- "serde",
  "threadpool",
 ]
 
@@ -2598,7 +2574,6 @@ dependencies = [
 name = "db"
 version = "0.1.0"
 dependencies = [
- "kvdb",
  "kvdb-rocksdb",
  "log",
 ]

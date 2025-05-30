@@ -1190,7 +1190,6 @@ dependencies = [
 name = "cfx-rpc"
 version = "2.6.0"
 dependencies = [
- "alloy-rpc-types",
  "alloy-rpc-types-trace",
  "async-trait",
  "cfx-addr",
@@ -1299,10 +1298,8 @@ name = "cfx-rpc-common-impl"
 version = "2.6.0"
 dependencies = [
  "cfx-addr",
- "cfx-execute-helper",
  "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
- "cfx-rpc-eth-types",
  "cfx-types",
  "slice-group-by",
 ]
@@ -1312,7 +1309,6 @@ name = "cfx-rpc-eth-api"
 version = "2.6.0"
 dependencies = [
  "alloy-rpc-types-trace",
- "cfx-parity-trace-types",
  "cfx-rpc-eth-types",
  "cfx-rpc-primitives",
  "cfx-types",
@@ -1559,7 +1555,6 @@ dependencies = [
  "executor",
  "executor-types",
  "fail",
- "fallible",
  "fallible-iterator",
  "futures 0.3.30",
  "geth-tracer",
@@ -1583,7 +1578,6 @@ dependencies = [
  "mirai-annotations",
  "move-core-types",
  "network",
- "num 0.2.1",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -2079,7 +2073,6 @@ dependencies = [
 name = "db"
 version = "0.1.0"
 dependencies = [
- "kvdb",
  "kvdb-rocksdb",
  "log",
 ]
@@ -2819,13 +2812,6 @@ dependencies = [
  "quote",
  "syn 1.0.109",
  "synstructure 0.12.6",
-]
-
-[[package]]
-name = "fallible"
-version = "0.1.0"
-dependencies = [
- "thiserror 1.0.63",
 ]
 
 [[package]]
