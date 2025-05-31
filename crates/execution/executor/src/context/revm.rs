@@ -1,10 +1,12 @@
 #![allow(unused, dead_code)]
 
+use crate::try_loaded;
+
 use super::Context;
 use alloy_type_conversions::*;
 use cfx_statedb::Result as DbResult;
 use cfx_types::AddressSpaceUtil;
-use cfx_vm_types::Context as ContextTrait;
+use cfx_vm_types::{extract_7702_payload, Context as ContextTrait};
 use revm_context_interface::journaled_state::AccountLoad;
 use revm_interpreter::{SStoreResult, SelfDestructResult, StateLoad};
 use revm_primitives::{Address, Bytes, Log, B256, U256};
@@ -125,7 +127,57 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     fn load_account_delegated(
         &mut self, address: Address,
     ) -> Option<StateLoad<AccountLoad>> {
-        todo!()
+        let address = from_alloy_address(address);
+
+        let is_cold = !self.context.is_warm_account(address);
+
+        let is_empty = match self
+            .context
+            .state
+            .is_eip158_empty(&address.with_space(self.context.space))
+        {
+            Ok(is_empty) => is_empty,
+            Err(e) => {
+                self.error = Err(e);
+                return None;
+            }
+        };
+
+        let mut account_load = StateLoad::new(
+            AccountLoad {
+                is_delegate_account_cold: None,
+                is_empty,
+            },
+            is_cold,
+        );
+
+        // Core space does not support-7702
+        if self.context.space == cfx_types::Space::Native {
+            return Some(account_load);
+        }
+
+        let account_code = match self
+            .context
+            .state
+            .code(&address.with_space(self.context.space))
+        {
+            Ok(code) => code,
+            Err(e) => {
+                self.error = Err(e);
+                return None;
+            }
+        };
+
+        // check if the account is a 7702 account
+        if let Some(address) = account_code
+            .as_ref()
+            .and_then(|x| extract_7702_payload(&**x))
+        {
+            let is_cold = !self.context.is_warm_account(address);
+            account_load.is_delegate_account_cold = Some(is_cold);
+        }
+
+        Some(account_load)
     }
 
     fn load_account_code(
