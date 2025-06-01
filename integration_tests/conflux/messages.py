@@ -82,9 +82,13 @@ class Boolean:
             return False
         elif serial == b'\x01':
             return True
+        elif serial == b'':
+            # Handle False encoded by newer rust-rlp versions (0.5.0+).
+            # These versions encode False as 0x80 (empty byte string)
+            return False
         else:
             raise DeserializationError(
-                'Invalid serialized boolean.  Must be either 0x01 or 0x00',
+                'Invalid serialized boolean. Must be either 0x01 or 0x00 or empty byte string',
                 serial
             )
 
