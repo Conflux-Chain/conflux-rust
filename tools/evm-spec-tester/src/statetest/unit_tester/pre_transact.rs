@@ -27,11 +27,11 @@ use primitives::{
     },
     SignedTransaction, Transaction,
 };
+use rlp::Encodable;
 use std::{
     collections::{BTreeMap, HashMap},
     u64,
 };
-use rlp::Encodable;
 pub fn make_tx(
     tx_meta: &TransactionParts, tx_part_indices: &TxPartIndices, chain_id: u64,
     unprotected: bool,

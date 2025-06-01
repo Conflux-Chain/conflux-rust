@@ -7,8 +7,7 @@ fn test_node_ref_delta_mpt_compact_encode_decode() {
     let x = NodeRefDeltaMptCompact::new(1234);
     let rlp_bytes = x.rlp_bytes();
     assert_eq!(
-        NodeRefDeltaMptCompact::decode(&Rlp::new(rlp_bytes.as_ref()))
-            .unwrap(),
+        NodeRefDeltaMptCompact::decode(&Rlp::new(rlp_bytes.as_ref())).unwrap(),
         x
     );
 }
