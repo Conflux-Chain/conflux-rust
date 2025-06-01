@@ -95,9 +95,9 @@ impl Message for GetBlockHashesResponse {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Low }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -112,9 +112,9 @@ impl Message for Transactions {
     fn msg_name(&self) -> &'static str { "Transactions" }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -128,9 +128,9 @@ impl Message for GetBlocksResponse {
     fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -148,9 +148,9 @@ impl Message for GetBlocksWithPublicResponse {
     fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -164,9 +164,9 @@ impl Message for GetBlockTxnResponse {
     fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -182,9 +182,9 @@ impl Message for TransactionDigests {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -200,9 +200,9 @@ impl Message for GetTransactionsResponse {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 impl GetMaybeRequestId for GetTransactionsFromTxHashesResponse {}
@@ -223,9 +223,9 @@ impl Message for GetTransactionsFromTxHashesResponse {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 /// handle the RLP encoded message with given context `ctx`.

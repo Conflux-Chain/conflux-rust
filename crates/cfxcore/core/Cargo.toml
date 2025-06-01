@@ -54,6 +54,7 @@ rangetools = { workspace = true }
 rayon = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
+bytes = { workspace = true }
 rustc-hex = { workspace = true }
 secret-store = { workspace = true }
 serde = { workspace = true, features = ["rc"] }

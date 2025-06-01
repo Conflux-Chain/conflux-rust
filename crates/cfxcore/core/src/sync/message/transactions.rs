@@ -313,9 +313,9 @@ impl Message for GetTransactions {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -472,9 +472,9 @@ impl Message for GetTransactionsFromTxHashes {
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
 
     fn encode(&self) -> Vec<u8> {
-        let mut encoded = self.rlp_bytes().into();
+        let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 

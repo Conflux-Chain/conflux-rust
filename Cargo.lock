@@ -1708,6 +1708,7 @@ dependencies = [
  "bls-signatures",
  "bounded-executor",
  "byteorder",
+ "bytes 1.9.0",
  "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
