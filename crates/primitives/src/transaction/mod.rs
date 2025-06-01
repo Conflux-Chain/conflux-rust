@@ -518,8 +518,8 @@ impl Transaction {
         TransactionWithSignature {
             transaction: TransactionWithSignatureSerializePart {
                 unsigned: self,
-                r: sig.r().into(),
-                s: sig.s().into(),
+                r: U256::from_big_endian(sig.r()),
+                s: U256::from_big_endian(sig.s()),
                 v: sig.v(),
             },
             hash: H256::zero(),

@@ -243,7 +243,7 @@ impl LogDevice {
     fn set_stripe_info_to_db(&self, key: &[u8], stripe_info: &StripeInfo) {
         let value = rlp::encode(stripe_info);
         let mut tx = DBTransaction::new();
-        tx.put(COL_DB, key, value.as_slice());
+        tx.put(COL_DB, key, value.as_ref());
         self.db.key_value().write(tx).expect("DB write failed.");
     }
 

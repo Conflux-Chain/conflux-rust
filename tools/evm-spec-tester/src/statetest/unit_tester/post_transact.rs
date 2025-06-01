@@ -212,7 +212,7 @@ pub fn check_execution_outcome(
         // storage check
         for (&key, &value) in &account_info.storage {
             let mut key_bytes = [0u8; 32];
-            key.to_big_endian(&mut key_bytes);
+            key.write_as_big_endian(&mut key_bytes);
             let curr_value =
                 state.storage_at(&user_addr, &key_bytes).unwrap_or_default();
             if curr_value != value {

@@ -83,7 +83,7 @@ fn block_receipts_trie(block_receipts: &Vec<Receipt>) -> SimpleMpt {
     make_simple_mpt(
         block_receipts
             .iter()
-            .map(|receipt| receipt.rlp_bytes().into_boxed_slice())
+            .map(|receipt| receipt.rlp_bytes().to_vec().into_boxed_slice())
             .collect(),
     )
 }

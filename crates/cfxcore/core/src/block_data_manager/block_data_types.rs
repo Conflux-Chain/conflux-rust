@@ -218,7 +218,7 @@ impl<Version: Decodable, T: Decodable> Decodable
 impl<Version: Encodable, T: Encodable> DatabaseEncodable
     for DataVersionTuple<Version, T>
 {
-    fn db_encode(&self) -> Vec<u8> { rlp::encode(self) }
+    fn db_encode(&self) -> Vec<u8> { rlp::encode(self).to_vec() }
 }
 
 impl<Version: Decodable, T: Decodable> DatabaseDecodable
@@ -370,7 +370,7 @@ where T: DatabaseEncodable {
     for e in list {
         rlp_stream.append_raw(&e.db_encode(), 1);
     }
-    rlp_stream.drain()
+    rlp_stream.as_raw().to_vec()
 }
 
 pub fn db_decode_list<T>(bytes: &[u8]) -> Result<Vec<T>, DecoderError>

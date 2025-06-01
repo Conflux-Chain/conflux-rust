@@ -294,7 +294,7 @@ mod derivation {
 
         // 0x00 (padding) -- private_key --  index
         //  0             --    1..33    -- 33..end
-        private.to_big_endian(&mut data[1..33]);
+        private.write_as_big_endian(&mut data[1..33]);
         index.store(&mut data[33..(33 + T::len())]);
 
         hmac_pair(&data, private_key, chain_code)

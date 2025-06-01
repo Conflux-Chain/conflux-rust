@@ -582,7 +582,7 @@ impl Session {
             None,
             ProtocolVersion::default(),
             PACKET_DISCONNECT,
-            packet,
+            packet.to_vec(),
         );
         Error::Disconnect(reason).into()
     }
@@ -607,7 +607,7 @@ impl Session {
             None,
             ProtocolVersion::default(),
             PACKET_HELLO,
-            rlp.drain(),
+            rlp.as_raw().to_vec(),
             SendQueuePriority::High,
         )
         .map(|_| ())

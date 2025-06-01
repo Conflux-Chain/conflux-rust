@@ -14,7 +14,7 @@ pub trait DatabaseDecodable: Sized {
 macro_rules! impl_db_encoding_as_rlp {
     ($type:ty) => {
         impl $crate::DatabaseEncodable for $type {
-            fn db_encode(&self) -> Vec<u8> { rlp::encode(self) }
+            fn db_encode(&self) -> Vec<u8> { rlp::encode(self).to_vec() }
         }
 
         impl $crate::DatabaseDecodable for $type {
@@ -39,7 +39,7 @@ impl DatabaseEncodable for BlockHeader {
     fn db_encode(&self) -> Bytes {
         let mut rlp_stream = RlpStream::new();
         self.stream_rlp_with_pow_hash(&mut rlp_stream);
-        rlp_stream.drain()
+        rlp_stream.as_raw().to_vec()
     }
 }
 
