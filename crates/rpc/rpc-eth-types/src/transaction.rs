@@ -150,9 +150,7 @@ impl Transaction {
             gas: *t.gas(),
             input: Bytes::new(t.data().clone()),
             creates: exec_info.1,
-            raw: Some(Bytes::new(
-                t.transaction.transaction.rlp_bytes().to_vec(),
-            )),
+            raw: Some(Bytes::new(t.transaction.transaction.rlp_bytes().into())),
             public_key: t.public().map(Into::into),
             chain_id: t.chain_id().map(|x| U64::from(x as u64)),
             standard_v: Some(signature.v().into()),

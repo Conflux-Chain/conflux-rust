@@ -185,7 +185,7 @@ macro_rules! build_msg_basic {
             fn msg_name(&self) -> &'static str { $name_str }
 
             fn encode(&self) -> Vec<u8> {
-                let mut encoded = self.rlp_bytes().to_vec();
+                let mut encoded = self.rlp_bytes().into();
                 self.push_msg_id_leb128_encoding(&mut encoded);
                 encoded
             }

@@ -102,7 +102,7 @@ pub trait StateRootWithAuxInfoToFromRlpBytes {
 
 /// Only used by storage benchmark due to incompatibility of rlp crate version.
 impl StateRootWithAuxInfoToFromRlpBytes for StateRootWithAuxInfo {
-    fn to_rlp_bytes(&self) -> Vec<u8> { self.rlp_bytes().as_ref().to_vec() }
+    fn to_rlp_bytes(&self) -> Vec<u8> { self.rlp_bytes().into() }
 
     fn from_rlp_bytes(bytes: &[u8]) -> Result<Self> {
         Ok(Self::decode(&Rlp::new(bytes))?)

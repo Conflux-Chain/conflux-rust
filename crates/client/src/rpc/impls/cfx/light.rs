@@ -562,7 +562,7 @@ impl RpcImpl {
                 accounts,
             )?;
 
-            Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes().to_vec()))
+            Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes().into()))
         };
 
         fut.boxed()

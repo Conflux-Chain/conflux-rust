@@ -178,9 +178,10 @@ impl<
         &mut self, path: &dyn CompressedPathTrait, trie_node: &SnapshotMptNode,
     ) -> Result<()> {
         let key = mpt_node_path_to_db_key(path);
+        let value_vec = Vec::from(trie_node.rlp_bytes());
         self.db
             .borrow_mut()
-            .put(&key, &trie_node.rlp_bytes().to_vec().into_boxed_slice())?;
+            .put(&key, &value_vec.into_boxed_slice())?;
         Ok(())
     }
 }

@@ -270,7 +270,7 @@ pub fn check_tx_bytes(
         return Ok(());
     };
 
-    let raw_tx = rlp::encode(&tx.transaction.transaction.rlp_bytes());
+    let raw_tx = &tx.transaction.transaction.rlp_bytes();
 
     if raw_tx != txbytes {
         // trace!(
