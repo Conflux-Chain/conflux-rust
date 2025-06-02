@@ -64,27 +64,26 @@ from rlp.exceptions import (
 
 # Copied from rlp.sedes.Boolean, but encode False to 0x00, not empty.
 class Boolean:
-    """A sedes for booleans
+    """
+    A sedes for booleans
+    used by newer Rust RLP versions (e.g., rust-rlp 0.5.0+), where:
+    - Python True  <-> RLP 0x01
+    - Python False <-> RLP 0x80 (representing an empty byte string in RLP)
     """
     def serialize(self, obj):
         if not isinstance(obj, bool):
             raise SerializationError('Can only serialize bool', obj)
-
         if obj is False:
-            return b'\x00'
+            return b''
         elif obj is True:
             return b'\x01'
         else:
             raise Exception("Invariant: no other options for boolean values")
 
     def deserialize(self, serial):
-        if serial == b'\x00':
-            return False
-        elif serial == b'\x01':
+        if serial == b'\x01':
             return True
         elif serial == b'':
-            # Handle False encoded by newer rust-rlp versions (0.5.0+).
-            # These versions encode False as 0x80 (empty byte string)
             return False
         else:
             raise DeserializationError(
