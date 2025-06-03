@@ -1,16 +1,16 @@
 # JSON-RPC CHANGELOG
 
-## v2.5.0
+## v2.6.0
 
-EIP-7702 related RPC:
+Below RPC add support for EIP-7702 tx:
 
 1. eth_call & eth_estimateGas
-2. transaction related RPCs: eth_getTransactionByHash, eth_blockByNumber, eth_blockByHash, eth_getBlockReceipts, parity_getBlockReceipts
+2. transaction related RPCs: eth_getTransactionByHash, eth_blockByNumber, eth_blockByHash
 
-## vNext
+Misc changes:
 
 1. Support gasFee in transaction receipt for espace RPC
-2. eSpace block.gasLimit change to half of the consensus gas limit, add block.espaceGasLimit to return the real gas limit for eSpace transactions.
+2. eSpace `block.gasLimit` change to half of the consensus gas limit, add `block.espaceGasLimit` to return the real gas limit for eSpace transactions.
 
 ## v2.4.1
 

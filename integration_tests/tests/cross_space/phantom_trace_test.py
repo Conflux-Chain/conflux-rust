@@ -537,7 +537,6 @@ def test_fail(cw3: CWeb3, ew3, ew3_tracing, conflux_side_contract, evm_side_cont
     block_traces = ew3_tracing.trace_block({"blockHash": receipt["blockHash"]})
     assert len(block_traces) == 0
 
-    # Fixed: filtered should be empty array instead of null, uncomment after conflux_rust modified,
     filtered = ew3_tracing.trace_filter(
         {"fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"]}
     )
@@ -558,7 +557,6 @@ def test_subcallFail(cw3: CWeb3, ew3, ew3_tracing, conflux_side_contract, evm_si
     assert len(block_traces) == 0
     block_traces = ew3_tracing.trace_block({"blockHash": receipt["blockHash"]})
     assert len(block_traces) == 0
-    # Fixed: filtered should be empty array instead of null, uncomment after conflux_rust modified,
     filtered = ew3_tracing.trace_filter(
         {"fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"]}
     )

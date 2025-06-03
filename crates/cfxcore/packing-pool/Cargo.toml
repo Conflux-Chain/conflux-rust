@@ -20,7 +20,7 @@ rand = { workspace = true }
 
 [dev-dependencies]
 treap-map = { workspace = true, features = ["testonly_code"] }
-rand = { workspace = true, features = ["getrandom"] }
+rand = { workspace = true, features = ["os_rng"] }
 criterion = { workspace = true }
 
 [[bench]]
