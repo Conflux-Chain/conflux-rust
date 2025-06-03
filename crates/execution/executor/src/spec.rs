@@ -224,7 +224,7 @@ impl CommonParams {
         spec.cip645 = CIP645Spec::new(cip645);
         spec.eip2935 = height >= self.transition_heights.eip2935;
         spec.eip7623 = height >= self.transition_heights.eip7623;
-        spec.cip_c2_fix = number >= self.transition_heights.cip_c2_fix;
+        spec.cip_c2_fix = height >= self.transition_heights.cip_c2_fix;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         spec.align_evm = height >= self.transition_heights.align_evm && cip645;
 
