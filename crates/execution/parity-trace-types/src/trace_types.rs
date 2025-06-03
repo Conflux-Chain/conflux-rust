@@ -9,7 +9,7 @@ use cfx_types::{Bloom, Space, H256, U256, U64};
 use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-
+use serde_utils::rlp_decode_bool_compat;
 /// Trace localized in vector of traces produced by a single transaction.
 ///
 /// Parent and children indexes refer to positions in this vector.
@@ -43,7 +43,7 @@ impl Decodable for ExecTrace {
             }),
             2 => Ok(ExecTrace {
                 action: d.val_at(0)?,
-                valid: d.val_at(1)?,
+                valid: rlp_decode_bool_compat(&d.at(1)?)?,
             }),
             _ => Err(DecoderError::RlpInvalidLength),
         }

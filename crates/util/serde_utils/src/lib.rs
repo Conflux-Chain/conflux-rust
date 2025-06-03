@@ -1,6 +1,7 @@
 pub mod num;
-
+pub mod rlp_compat;
 pub use num::*;
+pub use rlp_compat::rlp_decode_bool_compat;
 
 use serde::Serializer;
 

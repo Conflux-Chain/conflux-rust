@@ -1167,6 +1167,7 @@ dependencies = [
  "rlp 0.6.1",
  "rlp-derive",
  "serde",
+ "serde-utils",
  "strum_macros",
 ]
 
@@ -1421,6 +1422,7 @@ dependencies = [
  "rlp-derive",
  "rustc-hex",
  "serde",
+ "serde-utils",
  "sqlite",
  "sqlite3-sys",
  "strfmt",
@@ -1584,6 +1586,7 @@ dependencies = [
  "schemadb",
  "secret-store",
  "serde",
+ "serde-utils",
  "serde_derive",
  "serde_json",
  "short-hex-str",
@@ -5516,6 +5519,7 @@ dependencies = [
  "rlp 0.6.1",
  "rlp-derive",
  "serde",
+ "serde-utils",
  "serde_derive",
  "siphasher",
  "unexpected",
@@ -6510,6 +6514,7 @@ version = "2.6.0"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
+ "rlp 0.6.1",
  "serde",
  "serde_json",
 ]

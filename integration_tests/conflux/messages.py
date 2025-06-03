@@ -62,7 +62,6 @@ from rlp.exceptions import (
     SerializationError,
 )
 
-# Copied from rlp.sedes.Boolean, but encode False to 0x00, not empty.
 class Boolean:
     """
     A sedes for booleans

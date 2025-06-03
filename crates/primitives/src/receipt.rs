@@ -7,7 +7,7 @@ use cfx_types::{Address, Bloom, Space, U256, U64};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-
+use serde_utils::rlp_decode_bool_compat;
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING: u8 = 1; // gas fee charged
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas fee charged
@@ -141,11 +141,11 @@ impl Decodable for Receipt {
         Ok(Receipt {
             accumulated_gas_used: rlp.val_at(0)?,
             gas_fee: rlp.val_at(1)?,
-            gas_sponsor_paid: rlp.val_at(2)?,
+            gas_sponsor_paid: rlp_decode_bool_compat(&rlp.at(2)?)?,
             log_bloom: rlp.val_at(3)?,
             logs: rlp.list_at(4)?,
             outcome_status: rlp.val_at(5)?,
-            storage_sponsor_paid: rlp.val_at(6)?,
+            storage_sponsor_paid: rlp_decode_bool_compat(&rlp.at(6)?)?,
             storage_collateralized: rlp.list_at(7)?,
             storage_released: rlp.list_at(8)?,
             burnt_gas_fee: if item_count == 9 {

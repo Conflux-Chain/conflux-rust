@@ -26,9 +26,7 @@ impl Decodable for SnapshotKeptToProvideSyncStatus {
     }
 }
 
-#[derive(
-    Clone, Default, Derivative, DeriveMallocSizeOf, RlpEncodable, RlpDecodable,
-)]
+#[derive(Clone, Default, Derivative, DeriveMallocSizeOf)]
 #[derivative(Debug)]
 pub struct SnapshotInfo {
     /// This field is true when the snapshot info is kept but the snapshot
@@ -45,6 +43,46 @@ pub struct SnapshotInfo {
     // itself.
     #[derivative(Debug = "ignore")]
     pub pivot_chain_parts: Vec<EpochId>,
+}
+impl Encodable for SnapshotInfo {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(7);
+        s.append(&self.snapshot_info_kept_to_provide_sync);
+        s.append(&self.serve_one_step_sync);
+        s.append(&self.merkle_root);
+        s.append(&self.parent_snapshot_height);
+        s.append(&self.height);
+        s.append(&self.parent_snapshot_epoch_id);
+        s.append_list(&self.pivot_chain_parts);
+    }
+}
+
+impl Decodable for SnapshotInfo {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if !rlp.is_list() {
+            return Err(DecoderError::RlpExpectedToBeList);
+        }
+        if rlp.item_count()? != 7 {
+            return Err(DecoderError::RlpIncorrectListLen);
+        }
+        let snapshot_info_kept_to_provide_sync: SnapshotKeptToProvideSyncStatus = rlp.val_at(0)?;
+
+        let serve_one_step_sync = rlp_decode_bool_compat(&rlp.at(1)?)?;
+        let merkle_root: MerkleHash = rlp.val_at(2)?;
+        let parent_snapshot_height: u64 = rlp.val_at(3)?;
+        let height: u64 = rlp.val_at(4)?;
+        let parent_snapshot_epoch_id: EpochId = rlp.val_at(5)?;
+        let pivot_chain_parts: Vec<EpochId> = rlp.list_at(6)?;
+        Ok(SnapshotInfo {
+            snapshot_info_kept_to_provide_sync,
+            serve_one_step_sync,
+            merkle_root,
+            parent_snapshot_height,
+            height,
+            parent_snapshot_epoch_id,
+            pivot_chain_parts,
+        })
+    }
 }
 
 impl SnapshotInfo {
@@ -189,5 +227,6 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde_utils::rlp_decode_bool_compat;
 use std::{path::Path, sync::Arc};
 use tokio::sync::Semaphore;
