@@ -36,7 +36,7 @@ class Issue2159Test(ConfluxTestFramework):
         
     async def setup_ws(self):
         url = pubsub_url(self.nodes[FULLNODE].index, False, self.nodes[FULLNODE].rpchost, self.nodes[FULLNODE].pubsubport)
-        self.ws = await websockets.connect(url)
+        self.ws = await websockets.connect(url, proxy=None)
         
     def run_test(self):
         asyncio.get_event_loop().run_until_complete(self.run_async_test())

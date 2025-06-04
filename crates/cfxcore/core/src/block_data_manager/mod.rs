@@ -14,6 +14,7 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{Bloom, Space, H256};
+pub use cfxcore_types::block_data_manager::block_data_types;
 use db::SystemDB;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -30,7 +31,6 @@ use std::{
     sync::Arc,
 };
 use threadpool::ThreadPool;
-pub mod block_data_types;
 pub mod db_gc_manager;
 pub mod db_manager;
 pub mod tx_data_manager;
@@ -475,6 +475,7 @@ impl BlockDataManager {
 
     /// Get the traces for a single block without checking the assumed pivot
     /// block
+    /// Return `BlockTracesWithEpoch`.
     pub fn block_traces_by_hash(
         &self, hash: &H256,
     ) -> Option<BlockTracesWithEpoch> {
@@ -506,7 +507,7 @@ impl BlockDataManager {
     }
 
     /// Return `(pivot_hash, tx_traces)`.
-    pub fn transactions_traces_by_block_hash(
+    pub fn block_tx_traces_by_hash(
         &self, hash: &H256,
     ) -> Option<(H256, Vec<TransactionExecTraces>)> {
         self.block_traces_by_hash(hash).map(

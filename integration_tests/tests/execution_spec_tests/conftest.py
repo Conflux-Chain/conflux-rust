@@ -145,7 +145,12 @@ def web3_setting_pair(network, request, args, port_min):
         p = subprocess.Popen(["anvil", "--port", str(port), "--hardfork", "Prague", "--chain-id", str(EVM_CHAIN_ID), "--steps-tracing", "--block-base-fee-per-gas", "1"], stdout=subprocess.DEVNULL)
         
         w3 = Web3(
-            Web3.HTTPProvider(f"http://localhost:{port}")
+            Web3.HTTPProvider(f"http://localhost:{port}", request_kwargs={
+                "proxies": {
+                    "http": "",
+                    "https": "",
+                }
+            })
         )
         retry = 0
         while not w3.is_connected() and retry < 5:

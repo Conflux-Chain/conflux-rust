@@ -4,7 +4,7 @@
 
 use crate::rpc::{
     errors,
-    helpers::{EpochQueue, SubscriberId, Subscribers},
+    helpers::{build_header, EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::pubsub::PubSub,
     types::{
@@ -302,9 +302,7 @@ pub struct ChainNotificationHandler {
 impl ChainNotificationHandler {
     fn get_header_by_hash(&self, hash: &H256) -> Result<RpcHeader, String> {
         let header = match self.data_man.block_header_by_hash(hash) {
-            Some(h) => {
-                RpcHeader::new(&*h, self.network, self.consensus.clone())
-            }
+            Some(h) => build_header(&*h, self.network, self.consensus.clone()),
             None => return Err("Header not found".to_string()),
         };
 

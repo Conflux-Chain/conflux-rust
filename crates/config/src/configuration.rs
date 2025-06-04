@@ -613,7 +613,7 @@ impl Configuration {
                     let chain_id = self
                         .raw_conf
                         .chain_id
-                        .unwrap_or_else(|| rand::thread_rng().gen());
+                        .unwrap_or_else(|| rand::rng().random());
                     let evm_chain_id =
                         self.raw_conf.evm_chain_id.unwrap_or(chain_id);
                     *to_init = Some(ChainIdParamsInner::new_simple(

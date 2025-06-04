@@ -1,18 +1,22 @@
 use std::vec;
 
 use cfx_addr::Network;
+use cfx_parity_trace_types::Action;
 use cfx_rpc_cfx_impl::TraceHandler;
-use cfx_rpc_cfx_types::trace_eth::LocalizedTrace as EthLocalizedTrace;
+use cfx_rpc_cfx_types::{
+    trace_eth::{LocalizedSetAuthTrace, LocalizedTrace as EthLocalizedTrace},
+    PhantomBlock,
+};
 use cfx_rpc_common_impl::trace::{
     into_eth_localized_traces, primitive_traces_to_eth_localized_traces,
 };
 use cfx_rpc_eth_api::TraceApiServer;
-use cfx_rpc_eth_types::{BlockNumber, LocalizedTrace, TraceFilter};
+use cfx_rpc_eth_types::{BlockNumber, Index, LocalizedTrace, TraceFilter};
 use cfx_types::H256;
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
 use cfxcore::{errors::Result as CoreResult, SharedConsensusGraph};
 use jsonrpc_core::Error as RpcError;
-use jsonrpsee::core::RpcResult;
+use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use log::warn;
 use primitives::EpochNumber;
 pub struct TraceApi {
@@ -25,9 +29,9 @@ impl TraceApi {
         TraceApi { trace_handler }
     }
 
-    pub fn block_traces(
+    pub fn get_block(
         &self, block_number: BlockNumber,
-    ) -> CoreResult<Option<Vec<LocalizedTrace>>> {
+    ) -> CoreResult<Option<PhantomBlock>> {
         let phantom_block = match block_number {
             BlockNumber::Hash { hash, .. } => self
                 .trace_handler
@@ -47,6 +51,14 @@ impl TraceApi {
                 )
                 .map_err(RpcError::invalid_params)?,
         };
+
+        Ok(phantom_block)
+    }
+
+    pub fn block_traces(
+        &self, block_number: BlockNumber,
+    ) -> CoreResult<Option<Vec<LocalizedTrace>>> {
+        let phantom_block = self.get_block(block_number)?;
 
         unwrap_or_return!(phantom_block);
 
@@ -69,6 +81,43 @@ impl TraceApi {
                 warn!("Internal error on trace reconstruction: {}", e);
                 RpcError::internal_error()
             })?;
+            eth_traces.extend(tx_eth_traces);
+        }
+
+        Ok(Some(eth_traces))
+    }
+
+    pub fn block_set_auth_traces(
+        &self, block_number: BlockNumber,
+    ) -> CoreResult<Option<Vec<LocalizedSetAuthTrace>>> {
+        let phantom_block = self.get_block(block_number)?;
+
+        unwrap_or_return!(phantom_block);
+
+        let mut eth_traces = Vec::new();
+        let block_number = phantom_block.pivot_header.height();
+        let block_hash = phantom_block.pivot_header.hash();
+
+        for (idx, tx_traces) in phantom_block.traces.into_iter().enumerate() {
+            let tx_hash = phantom_block.transactions[idx].hash();
+
+            let tx_eth_traces: Vec<LocalizedSetAuthTrace> = tx_traces
+                .0
+                .iter()
+                .filter_map(|trace| match trace.action {
+                    Action::SetAuth(ref set_auth) => {
+                        Some(LocalizedSetAuthTrace::new(
+                            set_auth,
+                            idx,
+                            tx_hash,
+                            block_number,
+                            block_hash,
+                        ))
+                    }
+                    _ => None,
+                })
+                .collect();
+
             eth_traces.extend(tx_eth_traces);
         }
 
@@ -175,5 +224,28 @@ impl TraceApiServer for TraceApi {
         &self, tx_hash: H256,
     ) -> RpcResult<Option<Vec<EthLocalizedTrace>>> {
         self.transaction_traces(tx_hash).map_err(|err| err.into())
+    }
+
+    async fn block_set_auth_traces(
+        &self, block_number: BlockNumber,
+    ) -> RpcResult<Option<Vec<LocalizedSetAuthTrace>>> {
+        self.block_set_auth_traces(block_number)
+            .map_err(|err| err.into())
+    }
+
+    async fn trace_get(
+        &self, tx_hash: H256, indices: Vec<Index>,
+    ) -> RpcResult<Option<LocalizedTrace>> {
+        if indices.is_empty() {
+            return Ok(None);
+        }
+        let Some(traces) = self
+            .transaction_traces(tx_hash)
+            .map_err(|err| ErrorObjectOwned::from(err))?
+        else {
+            return Ok(None);
+        };
+        let index = indices[0].value();
+        Ok(traces.get(index).cloned())
     }
 }

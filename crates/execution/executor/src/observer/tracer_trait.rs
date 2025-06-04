@@ -1,6 +1,6 @@
 use super::{
     CallTracer, CheckpointTracer, InternalTransferTracer, OpcodeTracer,
-    StorageTracer,
+    SetAuthTracer, StorageTracer,
 };
 
 pub trait TracerTrait:
@@ -9,6 +9,7 @@ pub trait TracerTrait:
     + InternalTransferTracer
     + StorageTracer
     + OpcodeTracer
+    + SetAuthTracer
 {
 }
 
@@ -17,7 +18,8 @@ impl<
             + CallTracer
             + InternalTransferTracer
             + OpcodeTracer
-            + StorageTracer,
+            + StorageTracer
+            + SetAuthTracer,
     > TracerTrait for T
 {
 }

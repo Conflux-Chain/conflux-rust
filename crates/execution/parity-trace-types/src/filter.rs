@@ -96,6 +96,14 @@ impl TraceFilter {
                         stack.push(false);
                     }
                 }
+                Action::SetAuth(set_auth) => {
+                    // only apply space and action_types filters
+                    if set_auth.space == self.space
+                        && self.action_types.matches(&ActionType::SetAuth)
+                    {
+                        traces.push(trace);
+                    }
+                }
                 Action::CallResult(_) | Action::CreateResult(_) => {
                     if stack
                         .pop()

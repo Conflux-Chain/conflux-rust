@@ -118,7 +118,7 @@ impl Block {
     /// This block will be relayed with the new compact block to prevent
     /// adversaries to make tx shortId collision
     pub fn to_compact(&self) -> CompactBlock {
-        let nonce: u64 = rand::thread_rng().gen();
+        let nonce: u64 = rand::rng().random();
         let (k0, k1) =
             CompactBlock::get_shortid_key(&self.block_header, &nonce);
         CompactBlock {

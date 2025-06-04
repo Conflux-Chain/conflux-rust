@@ -110,6 +110,8 @@ impl<T: BitSetLike> BitIter<T> {
 
 #[cfg(test)]
 mod tests {
+    use rand::rng;
+
     use crate::{BitSet, BitSetLike};
 
     #[test]
@@ -117,10 +119,10 @@ mod tests {
         use rand::prelude::*;
 
         let mut set = BitSet::new();
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let limit = 1_048_576;
         for _ in 0..(limit / 10) {
-            set.add(rng.gen_range(0, limit));
+            set.add(rng.random_range(0..limit));
         }
         (&mut set).iter().clear();
         assert_eq!(0, set.layer3);
