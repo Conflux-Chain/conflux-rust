@@ -1358,6 +1358,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "cfxcore-pow",
  "cfxcore-types",
  "cfxkey",
  "channel",
@@ -1442,6 +1443,21 @@ dependencies = [
  "toml",
  "treap-map",
  "unexpected",
+]
+
+[[package]]
+name = "cfxcore-pow"
+version = "2.6.0"
+dependencies = [
+ "cfx-parameters",
+ "cfx-types",
+ "keccak-hash",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "parking_lot 0.12.3",
+ "primal",
+ "primitives",
+ "static_assertions",
 ]
 
 [[package]]
