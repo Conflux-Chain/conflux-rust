@@ -191,7 +191,7 @@ def test_cip137(network: ConfluxTestFramework):
     epoch = int(focusing_block["epochNumber"], 16)
 
     network.log.info(f"epoch of block b: {epoch}")
-    network.log.info(f"heigth of block b: {int(focusing_block['height'], 16)}")
+    network.log.info(f"height of block b: {int(focusing_block['height'], 16)}")
     network.log.info(
         f"base_fee_per_gas for epoch {epoch}: {network.rpc.base_fee_per_gas(epoch)}"
     )
