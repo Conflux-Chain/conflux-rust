@@ -7,7 +7,7 @@ from integration_tests.test_framework.test_framework import ConfluxTestFramework
 from integration_tests.conflux.rpc import RpcClient
 from integration_tests.test_framework.test_framework import FrameworkOptions
 from web3.tracing import Tracing
-
+from integration_tests.test_framework.framework_templates import DefaultFramework
 TMP_DIR = None
 
 PORT_MIN = 11000
@@ -137,16 +137,6 @@ def args(request: pytest.FixtureRequest) -> FrameworkOptions:
 
 @pytest.fixture(scope="module")
 def framework_class() -> Type[ConfluxTestFramework]:
-    class DefaultFramework(ConfluxTestFramework):
-        def set_test_params(self):
-            self.num_nodes = 1
-            self.conf_parameters["min_native_base_price"] = 10000
-            self.conf_parameters["base_fee_burn_transition_height"] = 1
-            self.conf_parameters["base_fee_burn_transition_number"] = 1
-
-        def setup_network(self):
-            self.setup_nodes()
-            self.rpc = RpcClient(self.nodes[0])
     return DefaultFramework
 
 @pytest.fixture(scope="module")

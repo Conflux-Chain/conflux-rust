@@ -20,8 +20,6 @@ from ethereum_test_base_types import StorageRootType
 from integration_tests.test_framework.util.eip7702.eip7702 import (
     sign_authorization,
     send_eip7702_transaction,
-    sign_eip7702_transaction_with_default_fields,
-    Authorization,
 )
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
