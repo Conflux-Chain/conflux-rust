@@ -576,15 +576,13 @@
 <a href="#576" id="576">576</a>
 <a href="#577" id="577">577</a>
 <a href="#578" id="578">578</a>
-<a href="#579" id="579">579</a>
-<a href="#580" id="580">580</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">use </span><span class="kw">crate</span>::rpc::{
     errors,
-    helpers::{EpochQueue, SubscriberId, Subscribers},
+    helpers::{build_header, EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::pubsub::PubSub,
     types::{
@@ -876,9 +874,7 @@
 <span class="kw">impl </span>ChainNotificationHandler {
     <span class="kw">fn </span>get_header_by_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>H256) -&gt; <span class="prelude-ty">Result</span>&lt;RpcHeader, String&gt; {
         <span class="kw">let </span>header = <span class="kw">match </span><span class="self">self</span>.data_man.block_header_by_hash(hash) {
-            <span class="prelude-val">Some</span>(h) =&gt; {
-                RpcHeader::new(<span class="kw-2">&amp;*</span>h, <span class="self">self</span>.network, <span class="self">self</span>.consensus.clone())
-            }
+            <span class="prelude-val">Some</span>(h) =&gt; build_header(<span class="kw-2">&amp;*</span>h, <span class="self">self</span>.network, <span class="self">self</span>.consensus.clone()),
             <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Header not found"</span>.to_string()),
         };
 

@@ -1379,7 +1379,7 @@
     common::delegate_convert,
     rpc::{
         errors::{<span class="self">self</span>, invalid_params_check},
-        helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+        helpers::{build_block, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT},
         impls::common::{<span class="self">self</span>, RpcImpl <span class="kw">as </span>CommonImpl},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
@@ -2142,7 +2142,7 @@
 
             <span class="kw">let </span>inner = consensus_graph.inner.read();
 
-            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(RpcBlock::new(
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(build_block(
                 <span class="kw-2">&amp;</span>block,
                 <span class="kw-2">*</span>light.get_network_type(),
                 <span class="kw-2">&amp;*</span>consensus_graph,
@@ -2190,7 +2190,7 @@
 
             <span class="kw">let </span>inner = consensus_graph.inner.read();
 
-            <span class="prelude-val">Ok</span>(RpcBlock::new(
+            <span class="prelude-val">Ok</span>(build_block(
                 <span class="kw-2">&amp;</span>block,
                 <span class="kw-2">*</span>light.get_network_type(),
                 <span class="kw-2">&amp;*</span>consensus_graph,
@@ -2238,7 +2238,7 @@
 
             <span class="kw">let </span>inner = consensus_graph.inner.read();
 
-            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(RpcBlock::new(
+            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(build_block(
                 <span class="kw-2">&amp;</span>block,
                 <span class="kw-2">*</span>light.get_network_type(),
                 <span class="kw-2">&amp;*</span>consensus_graph,

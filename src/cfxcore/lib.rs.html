@@ -60,8 +60,6 @@
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -80,25 +78,23 @@
 </span><span class="kw">pub mod </span>message;
 
 <span class="kw">pub mod </span>block_data_manager;
-<span class="kw">pub mod </span>cache_config;
-<span class="kw">pub mod </span>cache_manager;
-<span class="kw">pub mod </span>channel;
 <span class="kw">pub mod </span>client;
 <span class="kw">pub mod </span>consensus;
-<span class="kw">mod </span>core_error;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>errors;
 <span class="kw">pub mod </span>genesis_block;
 <span class="kw">pub mod </span>light_protocol;
-<span class="kw">pub mod </span>node_type;
 <span class="kw">pub mod </span>pos;
 <span class="kw">pub mod </span>pow;
-<span class="kw">pub mod </span>state_exposer;
 <span class="kw">pub mod </span>statistics;
 <span class="kw">pub mod </span>sync;
 <span class="kw">pub mod </span>transaction_pool;
-<span class="kw">pub mod </span>unique_id;
 <span class="kw">pub mod </span>verification;
+
+<span class="kw">pub use </span>cfxcore_types::{
+    cache_config, cache_manager, channel, core_error, node_type, state_exposer,
+    unique_id,
+};
 
 <span class="kw">pub use crate</span>::{
     block_data_manager::BlockDataManager,

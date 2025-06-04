@@ -27,7 +27,7 @@
     &amp;self,
     pow: &amp;<a class="struct" href="../pow/struct.PowComputer.html" title="struct cfxcore::pow::PowComputer">PowComputer</a>,
     header: &amp;mut <a class="struct" href="../../primitives/block_header/struct.BlockHeader.html" title="struct primitives::block_header::BlockHeader">BlockHeader</a>
-) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, Error&gt;</h4></section><section id="method.validate_header_timestamp" class="method"><a class="src rightside" href="../../src/cfxcore/verification.rs.html#321-330">source</a><h4 class="code-header">pub fn <a href="#method.validate_header_timestamp" class="fn">validate_header_timestamp</a>(
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="enum" href="../core_error/enum.CoreError.html" title="enum cfxcore::core_error::CoreError">Error</a>&gt;</h4></section><section id="method.validate_header_timestamp" class="method"><a class="src rightside" href="../../src/cfxcore/verification.rs.html#321-330">source</a><h4 class="code-header">pub fn <a href="#method.validate_header_timestamp" class="fn">validate_header_timestamp</a>(
     &amp;self,
     header: &amp;<a class="struct" href="../../primitives/block_header/struct.BlockHeader.html" title="struct primitives::block_header::BlockHeader">BlockHeader</a>,
     now: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>
@@ -35,13 +35,13 @@
     &amp;self,
     pow: &amp;<a class="struct" href="../pow/struct.PowComputer.html" title="struct cfxcore::pow::PowComputer">PowComputer</a>,
     header: &amp;mut <a class="struct" href="../../primitives/block_header/struct.BlockHeader.html" title="struct primitives::block_header::BlockHeader">BlockHeader</a>
-) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Check basic header parameters.
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="enum" href="../core_error/enum.CoreError.html" title="enum cfxcore::core_error::CoreError">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Check basic header parameters.
 This does not require header to be graph or parental tree ready.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.verify_sync_graph_block_basic" class="method"><a class="src rightside" href="../../src/cfxcore/verification.rs.html#459-492">source</a><h4 class="code-header">pub fn <a href="#method.verify_sync_graph_block_basic" class="fn">verify_sync_graph_block_basic</a>(
     &amp;self,
     block: &amp;<a class="struct" href="../../primitives/block/struct.Block.html" title="struct primitives::block::Block">Block</a>,
     chain_id: <a class="struct" href="../../cfx_types/all_chainid/struct.AllChainID.html" title="struct cfx_types::all_chainid::AllChainID">AllChainID</a>
-) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Phase 1 quick block verification. Only does checks that are cheap.
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="enum" href="../core_error/enum.CoreError.html" title="enum cfxcore::core_error::CoreError">Error</a>&gt;</h4></section></summary><div class="docblock"><p>Phase 1 quick block verification. Only does checks that are cheap.
 Operates on a single block.
 Note that we should first check whether the block body matches its
 header, e.g., check transaction root correctness, and then check the
@@ -54,7 +54,7 @@ should discard this block and all its descendants.</p>
     &amp;self,
     block: &amp;<a class="struct" href="../../primitives/block/struct.Block.html" title="struct primitives::block::Block">Block</a>,
     parent: &amp;<a class="struct" href="../../primitives/block_header/struct.BlockHeader.html" title="struct primitives::block_header::BlockHeader">BlockHeader</a>
-) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, Error&gt;</h4></section><section id="method.check_transaction_epoch_bound" class="method"><a class="src rightside" href="../../src/cfxcore/verification.rs.html#617-630">source</a><h4 class="code-header">pub fn <a href="#method.check_transaction_epoch_bound" class="fn">check_transaction_epoch_bound</a>(
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>, <a class="enum" href="../core_error/enum.CoreError.html" title="enum cfxcore::core_error::CoreError">Error</a>&gt;</h4></section><section id="method.check_transaction_epoch_bound" class="method"><a class="src rightside" href="../../src/cfxcore/verification.rs.html#617-630">source</a><h4 class="code-header">pub fn <a href="#method.check_transaction_epoch_bound" class="fn">check_transaction_epoch_bound</a>(
     tx: &amp;<a class="enum" href="../../primitives/transaction/native_transaction/enum.TypedNativeTransaction.html" title="enum primitives::transaction::native_transaction::TypedNativeTransaction">TypedNativeTransaction</a>,
     block_height: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
     transaction_epoch_bound: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>

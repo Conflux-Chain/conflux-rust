@@ -40,7 +40,7 @@ add the request to waiting queue to resend later.</p>
     hashes: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;H256&gt;,
     with_public: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
     delay: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>&gt;,
-    preferred_node_type: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../../node_type/enum.NodeType.html" title="enum cfxcore::node_type::NodeType">NodeType</a>&gt;
+    preferred_node_type: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../../enum.NodeType.html" title="enum cfxcore::NodeType">NodeType</a>&gt;
 )</h4></section><section id="method.request_transactions_from_digest" class="method"><a class="src rightside" href="../../../src/cfxcore/sync/request_manager/mod.rs.html#309-455">source</a><h4 class="code-header">pub fn <a href="#method.request_transactions_from_digest" class="fn">request_transactions_from_digest</a>(
     &amp;self,
     io: &amp;dyn <a class="trait" href="../../message/trait.NetworkContext.html" title="trait cfxcore::message::NetworkContext">NetworkContext</a>,
@@ -100,7 +100,7 @@ received or will be requested by the caller again.</p>
     peer: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="type" href="../../../network/node_table/type.NodeId.html" title="type network::node_table::NodeId">NodeId</a>&gt;,
     with_public: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
     delay: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/core/time/struct.Duration.html" title="struct core::time::Duration">Duration</a>&gt;,
-    preferred_node_type_for_block_request: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../../node_type/enum.NodeType.html" title="enum cfxcore::node_type::NodeType">NodeType</a>&gt;
+    preferred_node_type_for_block_request: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../../enum.NodeType.html" title="enum cfxcore::NodeType">NodeType</a>&gt;
 )</h4></section></summary><div class="docblock"><p>Remove from inflight keys when a block is received.</p>
 <p>If a request is removed from <code>req_hashes</code>, it’s the caller’s
 responsibility to ensure that the removed request either has already
