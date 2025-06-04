@@ -39,8 +39,15 @@ class RpcCaller:
             response = self.session.post(
                 url=self.url,
                 json=request(self.method, params=args),
-                timeout=self.timeout
+                timeout=self.timeout,
+                proxies={
+                    "http": "",
+                    "https": "",
+                }
             )
+            
+            if response.status_code != 200:
+                raise Exception(f"status code: {response.status_code}, content: {response.content}")
             
             parsed = parse(response.json())
             if isinstance(parsed, Ok):

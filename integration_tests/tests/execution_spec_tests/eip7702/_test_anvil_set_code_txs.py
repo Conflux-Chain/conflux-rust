@@ -89,7 +89,12 @@ def assert_account_code_set_to_contract(
 # anvil --hardfork prague
 @pytest.fixture(scope="module")
 def ew3(evm_accounts):
-    w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+    w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545", request_kwargs={
+        "proxies": {
+            "http": "",
+            "https": "",
+        }
+    }))
     w3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(evm_accounts))
     w3.eth.default_account = evm_accounts[0].address
     return w3
