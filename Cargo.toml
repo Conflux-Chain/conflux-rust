@@ -248,7 +248,7 @@ pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
-eest_types = { path = "./crates/eest_types" }
+# eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }
 
 # basics
@@ -339,7 +339,6 @@ blst = "0.3"
 hashbrown = "0.7.1"
 
 clap = "4"
-clap-verbosity-flag = "3"
 
 # rand & rng
 rand = "0.9"
