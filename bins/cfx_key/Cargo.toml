@@ -11,7 +11,6 @@ env_logger = { workspace = true }
 cfxkey = { workspace = true }
 panic_hook = { workspace = true }
 rustc-hex = { workspace = true }
-serde = { workspace = true }
 threadpool = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 

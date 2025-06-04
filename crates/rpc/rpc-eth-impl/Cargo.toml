@@ -20,8 +20,7 @@ cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-rpc-cfx-impl = { workspace = true }
 async-trait = { workspace = true }
-keccak-hash = { workspace = true}
-alloy-rpc-types = { workspace = true }
+keccak-hash = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }
 cfxcore = { workspace = true }
 primitives = { workspace = true }
