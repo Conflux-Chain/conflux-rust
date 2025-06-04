@@ -9,7 +9,7 @@ use cfx_types::{Address, H256, U256};
 use cfx_util_macros::bail;
 use cfx_vm_types::{CallType, CreateType};
 use jsonrpc_core::Error as JsonRpcError;
-use serde::{ser::SerializeStruct, Serialize, Serializer};
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use std::{
     convert::{TryFrom, TryInto},
     fmt,
@@ -49,6 +49,18 @@ pub struct Call {
     call_type: CallType,
 }
 
+/// Represents a _selfdestruct_ action fka `suicide`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelfdestructAction {
+    /// destroyed/suicided address.
+    pub address: Address,
+    /// Balance of the contract just before it was destroyed.
+    pub balance: U256,
+    /// destroyed contract heir.
+    pub refund_address: Address,
+}
+
 /// Action
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -56,6 +68,8 @@ pub enum Action {
     Call(Call),
     /// Create
     Create(Create),
+    // #[serde(rename = "suicide", alias = "selfdestruct")]
+    Selfdestruct(SelfdestructAction),
     /* TODO: Support Suicide
      * TODO: Support Reward */
 }
@@ -111,7 +125,7 @@ pub struct CreateResult {
 
 /// Response
 #[derive(Debug, Clone)]
-pub enum Res {
+pub enum ActionResult {
     /// Call
     Call(CallResult),
     /// Create
@@ -130,7 +144,7 @@ pub struct LocalizedTrace {
     /// Action
     pub action: Action,
     /// Result
-    pub result: Res,
+    pub result: ActionResult,
     /// Trace address
     pub trace_address: Vec<usize>,
     /// Subtraces
@@ -160,20 +174,26 @@ impl Serialize for LocalizedTrace {
                 struc.serialize_field("type", "create")?;
                 struc.serialize_field("action", create)?;
             }
+            Action::Selfdestruct(ref selfdestruct) => {
+                struc.serialize_field("type", "suicide")?;
+                struc.serialize_field("action", selfdestruct)?;
+            }
         }
 
         match self.result {
-            Res::Call(ref call) => struc.serialize_field("result", call)?,
-            Res::Create(ref create) => {
+            ActionResult::Call(ref call) => {
+                struc.serialize_field("result", call)?
+            }
+            ActionResult::Create(ref create) => {
                 struc.serialize_field("result", create)?
             }
-            Res::FailedCall(ref error) => {
+            ActionResult::FailedCall(ref error) => {
                 struc.serialize_field("error", &error.to_string())?
             }
-            Res::FailedCreate(ref error) => {
+            ActionResult::FailedCreate(ref error) => {
                 struc.serialize_field("error", &error.to_string())?
             }
-            Res::None => {
+            ActionResult::None => {
                 struc.serialize_field("result", &None as &Option<u8>)?
             }
         }
@@ -206,7 +226,7 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
             .ok_or_else(|| "transaction hash should exist".to_string())?;
         Ok(Self {
             action: cfx_trace.action.try_into()?,
-            result: Res::None,
+            result: ActionResult::None,
             trace_address: vec![],
             subtraces: 0,
             // note: `as_usize` will panic on overflow,
@@ -227,7 +247,7 @@ impl LocalizedTrace {
     pub fn set_result(
         &mut self, result: RpcCfxAction,
     ) -> Result<(), JsonRpcError> {
-        if !matches!(self.result, Res::None) {
+        if !matches!(self.result, ActionResult::None) {
             // One action matches exactly one result.
             bail!(JsonRpcError::internal_error());
         }
@@ -239,18 +259,19 @@ impl LocalizedTrace {
                 match call_result.outcome {
                     Outcome::Success => {
                         // FIXME(lpl): Convert gas_left to gas_used.
-                        self.result = Res::Call(CallResult {
+                        self.result = ActionResult::Call(CallResult {
                             gas_used: call_result.gas_left,
                             output: call_result.return_data,
                         })
                     }
                     Outcome::Reverted => {
-                        self.result = Res::FailedCall(TraceError::Reverted);
+                        self.result =
+                            ActionResult::FailedCall(TraceError::Reverted);
                     }
                     Outcome::Fail => {
-                        self.result = Res::FailedCall(TraceError::Error(
-                            call_result.return_data,
-                        ));
+                        self.result = ActionResult::FailedCall(
+                            TraceError::Error(call_result.return_data),
+                        );
                     }
                 }
             }
@@ -262,19 +283,20 @@ impl LocalizedTrace {
                     Outcome::Success => {
                         // FIXME(lpl): Convert gas_left to gas_used.
                         // FIXME(lpl): Check if `return_data` is `code`.
-                        self.result = Res::Create(CreateResult {
+                        self.result = ActionResult::Create(CreateResult {
                             gas_used: create_result.gas_left,
                             code: create_result.return_data,
                             address: create_result.addr.hex_address,
                         })
                     }
                     Outcome::Reverted => {
-                        self.result = Res::FailedCreate(TraceError::Reverted);
+                        self.result =
+                            ActionResult::FailedCreate(TraceError::Reverted);
                     }
                     Outcome::Fail => {
-                        self.result = Res::FailedCreate(TraceError::Error(
-                            create_result.return_data,
-                        ));
+                        self.result = ActionResult::FailedCreate(
+                            TraceError::Error(create_result.return_data),
+                        );
                     }
                 }
             }
@@ -294,7 +316,7 @@ pub struct Trace {
     /// Action
     action: Action,
     /// Result
-    result: Res,
+    result: ActionResult,
 }
 
 impl Serialize for Trace {
@@ -310,20 +332,26 @@ impl Serialize for Trace {
                 struc.serialize_field("type", "create")?;
                 struc.serialize_field("action", create)?;
             }
+            Action::Selfdestruct(ref selfdestruct) => {
+                struc.serialize_field("type", "suicide")?;
+                struc.serialize_field("action", selfdestruct)?;
+            }
         }
 
         match self.result {
-            Res::Call(ref call) => struc.serialize_field("result", call)?,
-            Res::Create(ref create) => {
+            ActionResult::Call(ref call) => {
+                struc.serialize_field("result", call)?
+            }
+            ActionResult::Create(ref create) => {
                 struc.serialize_field("result", create)?
             }
-            Res::FailedCall(ref error) => {
+            ActionResult::FailedCall(ref error) => {
                 struc.serialize_field("error", &error.to_string())?
             }
-            Res::FailedCreate(ref error) => {
+            ActionResult::FailedCreate(ref error) => {
                 struc.serialize_field("error", &error.to_string())?
             }
-            Res::None => {
+            ActionResult::None => {
                 struc.serialize_field("result", &None as &Option<u8>)?
             }
         }

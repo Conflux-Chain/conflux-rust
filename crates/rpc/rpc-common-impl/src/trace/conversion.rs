@@ -4,7 +4,7 @@ use cfx_parity_trace_types::{
 };
 use cfx_rpc_cfx_types::{
     trace::Action as RpcAction,
-    trace_eth::{LocalizedTrace as EthLocalizedTrace, Res as EthRes},
+    trace_eth::{ActionResult as EthRes, LocalizedTrace as EthLocalizedTrace},
 };
 use cfx_types::H256;
 

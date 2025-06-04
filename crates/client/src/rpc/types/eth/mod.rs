@@ -9,4 +9,4 @@ pub use cfx_rpc_eth_types::{
     RpcStateOverride, SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 
-pub use cfx_rpc_cfx_types::trace_eth::{LocalizedTrace, Res};
+pub use cfx_rpc_cfx_types::trace_eth::{ActionResult, LocalizedTrace};
