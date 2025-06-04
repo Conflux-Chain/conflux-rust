@@ -38,6 +38,7 @@ serde = { workspace = true, features = ["rc"] }
 sqlite = { workspace = true }
 sqlite3-sys = { workspace = true }
 strfmt = { workspace = true }
+serde-utils = { workspace = true }
 
 tokio = { workspace = true, features = ["sync"] }
 parity-util-mem = { workspace = true, default-features = false }

@@ -22,7 +22,7 @@ siphasher = { workspace = true }
 unexpected = { workspace = true }
 once_cell = { workspace = true }
 cfx-parameters = { workspace = true }
-
+serde-utils = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 serde_json = { workspace = true }

@@ -12,7 +12,7 @@ use crate::{
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, NetworkContext};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-
+use serde_utils::rlp_decode_bool_compat;
 #[derive(Debug, Eq, PartialEq, Clone, Copy, DeriveMallocSizeOf)]
 pub enum DynamicCapability {
     NormalPhase(bool),  // provide tx relay
@@ -65,8 +65,12 @@ impl Decodable for DynamicCapability {
         }
 
         match rlp.val_at::<u8>(0)? {
-            0 => Ok(DynamicCapability::NormalPhase(rlp.val_at(1)?)),
-            1 => Ok(DynamicCapability::ServeHeaders(rlp.val_at(1)?)),
+            0 => Ok(DynamicCapability::NormalPhase(rlp_decode_bool_compat(
+                &rlp.at(1)?,
+            )?)),
+            1 => Ok(DynamicCapability::ServeHeaders(rlp_decode_bool_compat(
+                &rlp.at(1)?,
+            )?)),
             _ => Err(DecoderError::Custom("invalid capability code")),
         }
     }

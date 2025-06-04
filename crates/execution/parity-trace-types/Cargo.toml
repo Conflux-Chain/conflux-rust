@@ -25,3 +25,4 @@ cfx-vm-types = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
 strum_macros = { workspace = true }
 cfx-util-macros = { workspace = true }
+serde-utils = { workspace = true }

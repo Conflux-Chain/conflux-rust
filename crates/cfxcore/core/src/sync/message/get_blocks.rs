@@ -19,6 +19,7 @@ use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde_utils::rlp_decode_bool_compat;
 use std::{any::Any, time::Duration};
 
 #[derive(Debug, PartialEq, Default, Clone, DeriveMallocSizeOf)]
@@ -44,7 +45,7 @@ impl Decodable for GetBlocks {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         Ok(GetBlocks {
             request_id: rlp.val_at(0)?,
-            with_public: rlp.val_at(1)?,
+            with_public: rlp_decode_bool_compat(&rlp.at(1)?)?,
             hashes: rlp.list_at(2)?,
             preferred_node_type: None,
         })

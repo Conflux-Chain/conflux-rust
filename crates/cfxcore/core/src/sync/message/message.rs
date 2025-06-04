@@ -97,7 +97,7 @@ impl Message for GetBlockHashesResponse {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -114,7 +114,7 @@ impl Message for Transactions {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -130,7 +130,7 @@ impl Message for GetBlocksResponse {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -150,7 +150,7 @@ impl Message for GetBlocksWithPublicResponse {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -166,7 +166,7 @@ impl Message for GetBlockTxnResponse {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -184,7 +184,7 @@ impl Message for TransactionDigests {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -202,7 +202,7 @@ impl Message for GetTransactionsResponse {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 impl GetMaybeRequestId for GetTransactionsFromTxHashesResponse {}
@@ -225,7 +225,7 @@ impl Message for GetTransactionsFromTxHashesResponse {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 /// handle the RLP encoded message with given context `ctx`.

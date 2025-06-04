@@ -39,7 +39,7 @@ impl VrfProposer {
         proposal_threshold_u256: U256, epoch_state: EpochState,
     ) -> Self {
         let mut proposal_threshold = [0 as u8; HashValue::LENGTH];
-        proposal_threshold_u256.to_big_endian(&mut proposal_threshold);
+        proposal_threshold_u256.write_as_big_endian(&mut proposal_threshold);
         Self {
             author,
             vrf_private_key,
