@@ -122,54 +122,45 @@ impl U8 {
 }
 
 #[cfg(test)]
-mod tests_basic{
-    use super::U8;
-    use super::*;
-    use crate::ABIVariable; // 根据实际路径调整
+mod tests_basic {
+    use super::{U8, *};
+    use crate::ABIVariable;
 
     #[test]
     fn test_packed_encoding() {
         let num = 0xDEADBEEFu32;
         let packed = num.to_packed_abi().to_vec();
-        let expected = num.to_be_bytes().to_vec();  // 直接使用类型的原生字节长度:ml-citation{ref="8" data="citationList"}
+        let expected = num.to_be_bytes().to_vec();
         assert_eq!(packed, expected);
     }
 
-
     #[test]
     fn test_u256_abi_basic() {
-        // 测试常量声明
-        assert!(U256::BASIC_TYPE);  // 验证 BASIC_TYPE 是否为 true:ml-citation{ref="3" data="citationList"}
-        assert_eq!(U256::STATIC_LENGTH, Some(32));  // 确认长度固定为 32 字节:ml-citation{ref="8" data="citationList"}
+        assert!(U256::BASIC_TYPE);
+        assert_eq!(U256::STATIC_LENGTH, Some(32));
     }
 
-  
     #[test]
     fn test_u256_packed_abi_consistency() {
-        // 验证 to_packed_abi 与 to_abi 结果一致
         let num = U256::max_value();
         let abi = num.to_abi();
         let packed_abi = num.to_packed_abi();
-        assert_eq!(abi.to_vec(), packed_abi.to_vec());  // 对比两种编码方式:ml-citation{ref="8" data="citationList"}
+        assert_eq!(abi.to_vec(), packed_abi.to_vec());
     }
 
     #[test]
     fn test_u256_zero_value() {
-        // 边界值测试：零值编码
         let zero = U256::zero();
         let encoded = zero.to_abi().to_vec();
-        assert_eq!(encoded, vec![0u8; 32]);  // 全零字节数组验证
+        assert_eq!(encoded, vec![0u8; 32]);
     }
 
-
-    // 测试类型常量是否与底层类型 [u8; 32] 一致
     #[test]
     fn test_h256_type_constants() {
         assert_eq!(H256::BASIC_TYPE, <[u8; 32]>::BASIC_TYPE);
         assert_eq!(H256::STATIC_LENGTH, <[u8; 32]>::STATIC_LENGTH);
     }
 
-    // 测试成功解码 32 字节数据
     #[test]
     fn test_h256_from_abi_valid() {
         let input = [42u8; 32];
@@ -177,7 +168,6 @@ mod tests_basic{
         assert_eq!(h256.0, input);
     }
 
-    // 测试打包编码生成的字节与底层类型一致
     #[test]
     fn test_h256_to_packed_abi() {
         let h256 = H256([0xBB; 32]);
@@ -185,28 +175,23 @@ mod tests_basic{
         assert_eq!(packed_bytes.to_vec(), &[0xBB; 32]);
     }
 
-
-    // 测试常量 BITS 是否正确
     #[test]
     fn test_u8_bits() {
         assert_eq!(U8::BITS, 8);
     }
 
-    // 验证 to_be_bytes 转换正确性
     #[test]
     fn test_u8_to_be_bytes() {
         let val = U8::from_be_bytes([123]);
         assert_eq!(val.to_be_bytes(), [123]);
     }
 
-    // 验证 from_be_bytes 构造正确性
     #[test]
     fn test_u8_from_be_bytes() {
         let u = U8::from_be_bytes([255]);
         assert_eq!(u.to_be_bytes(), [255]);
     }
 
-    // 测试 Eq/PartialEq 特性
     #[test]
     fn test_u8_eq() {
         let a = U8::from_be_bytes([100]);
@@ -216,7 +201,6 @@ mod tests_basic{
         assert!(a != c);
     }
 
-    // 边界值测试（最小值 0 和最大值 255）
     #[test]
     fn test_u8_boundaries() {
         let min = U8::from_be_bytes([0]);
@@ -225,11 +209,10 @@ mod tests_basic{
         assert_eq!(max.to_be_bytes(), [255]);
     }
 
-    // 测试字节序方法名实际行为（单字节无影响）
     #[test]
     fn test_u8_byte_order_consistency() {
         let input = [128];
         let u = U8::from_be_bytes(input);
-        assert_eq!(u.to_be_bytes(), input);  // 确保往返一致性
+        assert_eq!(u.to_be_bytes(), input);
     }
 }
