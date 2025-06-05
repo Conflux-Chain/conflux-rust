@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::message::Bytes;
+use cfx_bytes::Bytes;
 use cfx_types::{Address, SpaceMap, H256, U256};
 use primitives::{filter::FilterError, transaction::TransactionError};
 use std::{error, fmt, time::SystemTime};
