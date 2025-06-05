@@ -3,12 +3,13 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_rpc_builder::{
-    RpcModuleBuilder, RpcModuleSelection, RpcServerConfig, RpcServerHandle,
+    RpcModuleBuilder, RpcServerConfig, RpcServerHandle,
     TransportRpcModuleConfig,
 };
 use cfx_tasks::TaskExecutor;
 use cfxcore::{
-    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+    Notifications, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 use jsonrpc_core::{MetaIoHandler, RemoteProcedure, Value};
 use jsonrpc_http_server::{
@@ -24,9 +25,8 @@ use jsonrpc_ws_server::{
 };
 pub use jsonrpsee::server::ServerBuilder;
 use log::{info, warn};
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
-pub mod apis;
 mod authcodes;
 pub mod errors;
 pub mod extractor;
@@ -49,7 +49,6 @@ use self::{
         cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl, TraceHandler},
         cfx_filter::CfxFilterClient,
         common::RpcImpl as CommonImpl,
-        eth_pubsub::PubSubClient as EthPubSubClient,
         light::{
             CfxHandler as LightCfxHandler, DebugRpcImpl as LightDebugRpcImpl,
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
@@ -59,17 +58,8 @@ use self::{
         pubsub::PubSubClient,
     },
     traits::{
-        cfx::Cfx,
-        cfx_filter::CfxFilter,
-        debug::LocalRpc,
-        eth_space::{
-            eth::Eth, eth_filter::EthFilter, eth_pubsub::EthPubSub,
-            trace::Trace as EthTrace,
-        },
-        pool::TransactionPool,
-        pos::Pos,
-        pubsub::PubSub,
-        test::TestRpc,
+        cfx::Cfx, cfx_filter::CfxFilter, debug::LocalRpc,
+        pool::TransactionPool, pos::Pos, pubsub::PubSub, test::TestRpc,
         trace::Trace,
     },
 };
@@ -78,61 +68,40 @@ pub use self::types::{Block as RpcBlock, Origin};
 use crate::{
     configuration::Configuration,
     rpc::{
-        apis::{Api, ApiSet, EthApi},
-        impls::{
-            eth::{EthHandler, EthTraceHandler, GethDebugHandler},
-            eth_filter::EthFilterHelper as EthFilterClient,
-            RpcImplConfiguration,
-        },
+        impls::RpcImplConfiguration,
         interceptor::{RpcInterceptor, RpcProxy},
-        traits::eth_space::debug::Debug,
     },
 };
 pub use cfx_config::rpc_server_config::{
     HttpConfiguration, TcpConfiguration, WsConfiguration,
 };
+use cfx_rpc_cfx_types::apis::{Api, ApiSet};
 use interceptor::{MetricsInterceptor, ThrottleInterceptor};
 pub use metadata::Metadata;
 use std::collections::HashSet;
 
 pub fn setup_public_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: &Configuration,
+    conf: &Configuration,
 ) -> MetaIoHandler<Metadata> {
     setup_rpc_apis(
         common,
         rpc,
         pubsub,
-        eth_pubsub,
         &conf.raw_conf.throttling_conf,
         "rpc",
         conf.raw_conf.public_rpc_apis.list_apis(),
     )
 }
 
-pub fn setup_public_eth_rpc_apis(
-    rpc: Arc<RpcImpl>, eth_pubsub: EthPubSubClient, conf: &Configuration,
-    executor: TaskExecutor,
-) -> MetaIoHandler<Metadata> {
-    setup_evm_rpc_apis(
-        rpc,
-        eth_pubsub,
-        &conf.raw_conf.throttling_conf,
-        "rpc",
-        conf.raw_conf.public_evm_rpc_apis.list_apis(),
-        executor,
-    )
-}
-
 pub fn setup_debug_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, conf: &Configuration,
+    conf: &Configuration,
 ) -> MetaIoHandler<Metadata> {
     setup_rpc_apis(
         common,
         rpc,
         pubsub,
-        eth_pubsub,
         &conf.raw_conf.throttling_conf,
         "rpc_local",
         ApiSet::All.list_apis(),
@@ -141,8 +110,8 @@ pub fn setup_debug_rpc_apis(
 
 fn setup_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClient, throttling_conf: &Option<String>,
-    throttling_section: &str, apis: HashSet<Api>,
+    throttling_conf: &Option<String>, throttling_section: &str,
+    apis: HashSet<Api>,
 ) -> MetaIoHandler<Metadata> {
     let mut handler = MetaIoHandler::default();
     for api in &apis {
@@ -164,7 +133,7 @@ fn setup_rpc_apis(
                         let filter_client = CfxFilterClient::new(
                             rpc.consensus.clone(),
                             rpc.tx_pool.clone(),
-                            eth_pubsub.epochs_ordered(),
+                            pubsub.epochs_ordered(),
                             pubsub.executor.clone(),
                             poll_lifetime,
                             rpc.config.get_logs_filter_max_limit,
@@ -243,91 +212,6 @@ fn setup_rpc_apis(
     }
 
     add_meta_rpc_methods(handler, apis)
-}
-
-fn setup_evm_rpc_apis(
-    rpc: Arc<RpcImpl>, eth_pubsub: EthPubSubClient,
-    throttling_conf: &Option<String>, throttling_section: &str,
-    apis: HashSet<EthApi>, executor: TaskExecutor,
-) -> MetaIoHandler<Metadata> {
-    let mut handler = MetaIoHandler::default();
-    for api in &apis {
-        match api {
-            EthApi::Eth => {
-                info!("Add EVM RPC");
-                let evm = EthHandler::new(
-                    rpc.config.clone(),
-                    rpc.consensus.clone(),
-                    rpc.sync.clone(),
-                    rpc.tx_pool.clone(),
-                    executor.clone(),
-                )
-                .to_delegate();
-                let evm_trace_handler = EthTraceHandler {
-                    trace_handler: TraceHandler::new(
-                        *rpc.sync.network.get_network_type(),
-                        rpc.consensus.clone(),
-                    ),
-                }
-                .to_delegate();
-                extend_with_interceptor(
-                    &mut handler,
-                    &rpc.config,
-                    evm,
-                    throttling_conf,
-                    throttling_section,
-                );
-                handler.extend_with(evm_trace_handler);
-
-                if let Some(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
-                {
-                    let filter_client = EthFilterClient::new(
-                        rpc.consensus.clone(),
-                        rpc.tx_pool.clone(),
-                        eth_pubsub.epochs_ordered(),
-                        eth_pubsub.executor.clone(),
-                        poll_lifetime,
-                        rpc.config.get_logs_filter_max_limit,
-                    )
-                    .to_delegate();
-
-                    extend_with_interceptor(
-                        &mut handler,
-                        &rpc.config,
-                        filter_client,
-                        throttling_conf,
-                        throttling_section,
-                    );
-                }
-            }
-            EthApi::Pubsub => {
-                info!("Add EVM pubsub");
-                extend_with_interceptor(
-                    &mut handler,
-                    &rpc.config,
-                    eth_pubsub.clone().to_delegate(),
-                    throttling_conf,
-                    throttling_section,
-                );
-            }
-            EthApi::Debug => {
-                info!("Add geth debug method");
-                let geth_debug = GethDebugHandler::new(
-                    rpc.consensus.clone(),
-                    rpc.config.max_estimation_gas_limit,
-                );
-                extend_with_interceptor(
-                    &mut handler,
-                    &rpc.config,
-                    geth_debug.to_delegate(),
-                    throttling_conf,
-                    throttling_section,
-                );
-            }
-        }
-    }
-
-    handler
 }
 
 pub fn extend_with_interceptor<
@@ -521,35 +405,64 @@ where
 
 // start espace rpc server v2(async)
 pub async fn launch_async_rpc_servers(
-    rpc_conf: RpcImplConfiguration, throttling_conf_file: Option<String>,
-    apis: RpcModuleSelection, consensus: SharedConsensusGraph,
-    sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-    addr: Option<SocketAddr>, executor: TaskExecutor,
+    consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
+    tx_pool: SharedTransactionPool, notifications: Arc<Notifications>,
+    executor: TaskExecutor, conf: &Configuration,
 ) -> Result<Option<RpcServerHandle>, String> {
-    if addr.is_none() {
-        return Ok(None);
-    }
+    let http_config = conf.eth_http_config();
+    let ws_config = conf.eth_ws_config();
+    let apis = conf.raw_conf.public_evm_rpc_apis.clone();
 
+    let (transport_rpc_module_config, server_config) =
+        match (http_config.enabled, ws_config.enabled) {
+            (true, true) => {
+                let transport_rpc_module_config =
+                    TransportRpcModuleConfig::set_http(apis.clone())
+                        .with_ws(apis.clone());
+
+                let server_config =
+                    RpcServerConfig::http(ServerBuilder::default())
+                        .with_ws(ServerBuilder::default())
+                        .with_http_address(http_config.address)
+                        .with_ws_address(ws_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            (true, false) => {
+                let transport_rpc_module_config =
+                    TransportRpcModuleConfig::set_http(apis.clone());
+                let server_config =
+                    RpcServerConfig::http(ServerBuilder::default())
+                        .with_http_address(ws_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            (false, true) => {
+                let transport_rpc_module_config =
+                    TransportRpcModuleConfig::set_ws(apis.clone());
+                let server_config =
+                    RpcServerConfig::ws(ServerBuilder::default())
+                        .with_ws_address(ws_config.address);
+                (transport_rpc_module_config, server_config)
+            }
+            _ => return Ok(None),
+        };
+
+    info!("Enabled evm async rpc modules: {:?}", apis.into_selection());
+    let rpc_conf = conf.rpc_impl_config();
     let enable_metrics = rpc_conf.enable_metrics;
 
-    let rpc_module_builder =
-        RpcModuleBuilder::new(rpc_conf, consensus, sync, tx_pool, executor);
-
-    info!(
-        "Enabled evm async rpc modules: {:?}",
-        apis.clone().into_selection()
+    let rpc_module_builder = RpcModuleBuilder::new(
+        rpc_conf,
+        consensus,
+        sync,
+        tx_pool,
+        executor,
+        notifications,
     );
-
-    let transport_rpc_module_config = TransportRpcModuleConfig::set_http(apis);
 
     let transport_rpc_modules =
         rpc_module_builder.build(transport_rpc_module_config);
 
-    // TODO: set server config according to config
-    let http_server_builder = ServerBuilder::default();
-    let server_config = RpcServerConfig::http(http_server_builder)
-        .with_http_address(addr.unwrap());
-
+    let throttling_conf_file = conf.raw_conf.throttling_conf.clone();
     let server_handle = server_config
         .start(&transport_rpc_modules, throttling_conf_file, enable_metrics)
         .await

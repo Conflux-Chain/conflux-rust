@@ -18,9 +18,7 @@ use cfx_internal_common::{
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
-use cfx_rpc_cfx_types::{
-    apis::ApiSet, eth_apis::EthApiSet, RpcImplConfiguration,
-};
+use cfx_rpc_cfx_types::{apis::ApiSet, RpcImplConfiguration};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -222,7 +220,6 @@ build_config! {
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
         (jsonrpc_http_eth_port, (Option<u16>), None)
         (jsonrpc_ws_eth_port, (Option<u16>), None)
-        (jsonrpc_http_eth_port_v2, (Option<u16>), None)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -422,15 +419,8 @@ build_config! {
         // Development related section.
         (
             log_level, (LevelFilter), LevelFilter::Info, |l| {
-                match l {
-                    "off" => Ok(LevelFilter::Off),
-                    "error" => Ok(LevelFilter::Error),
-                    "warn" => Ok(LevelFilter::Warn),
-                    "info" => Ok(LevelFilter::Info),
-                    "debug" => Ok(LevelFilter::Debug),
-                    "trace" => Ok(LevelFilter::Trace),
-                    _ => Err("Invalid log_level".to_owned()),
-                }
+                LevelFilter::from_str(l)
+                    .map_err(|_| format!("Invalid log level: {}", l))
             }
         )
 
@@ -447,13 +437,8 @@ build_config! {
             ProvideExtraSnapshotSyncConfig::parse_config_list)
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
-        (public_evm_rpc_apis, (EthApiSet), EthApiSet::Evm, EthApiSet::from_str)
-        (public_evm_rpc_async_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
-        (single_mpt_space, (Option<Space>), None, |s| match s {
-            "native" => Ok(Space::Native),
-            "evm" => Ok(Space::Ethereum),
-            _ =>  Err("Invalid single_mpt_space".to_owned()),
-        })
+        (public_evm_rpc_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
+        (single_mpt_space, (Option<Space>), None, Space::from_str)
     }
 }
 

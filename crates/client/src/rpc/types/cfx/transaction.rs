@@ -4,10 +4,10 @@
 
 use crate::rpc::types::{
     cfx::{from_primitive_access_list, receipt::Receipt, CfxAccessList},
-    eth::Transaction as ETHTransaction,
     Bytes, RpcAddress,
 };
 use cfx_addr::Network;
+use cfx_rpc_eth_types::Transaction as ETHTransaction;
 use cfx_types::{Space, H256, U256, U64};
 use cfxkey::Error;
 use primitives::{
