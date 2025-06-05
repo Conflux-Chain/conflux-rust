@@ -83,7 +83,6 @@ class TestScheduler:
                                        f"Please specify --max-nodes to run the test")
 
                 task_queue.append((script, result, i))
-        task_queue.sort(key=lambda x: x[1], reverse=True)
         for script, nodes_needed, index in task_queue:
             print(f"Task {index}: {script} requires {nodes_needed} nodes")
         print("Scanning done")
