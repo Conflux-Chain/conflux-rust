@@ -494,6 +494,11 @@
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
 <a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>cfx_executor::{
     executive::{
         ChargeCollateral, Executed, ExecutionError, ExecutionOutcome,
@@ -629,7 +634,8 @@
     <span class="kw">pub fn </span>transact_virtual(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>tx: SignedTransaction, request: EstimateRequest,
     ) -&gt; DbResult&lt;(ExecutionOutcome, EstimateExt)&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(outcome) = <span class="self">self</span>.check_cip130(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>request) {
+        <span class="attr">#[cfg(not(feature = <span class="string">"align_evm"</span>))]
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(outcome) = <span class="self">self</span>.check_cip130(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>request) {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(outcome);
         }
 
@@ -896,7 +902,11 @@
 }
 
 <span class="kw">fn </span>estimated_gas_limit(executed: <span class="kw-2">&amp;</span>Executed, tx: <span class="kw-2">&amp;</span>SignedTransaction) -&gt; U256 {
-    <span class="kw">let </span>cip130_min_gas_limit = U256::from(tx.data().len() * <span class="number">100</span>);
+    <span class="attr">#[cfg(not(feature = <span class="string">"align_evm"</span>))]
+    </span><span class="kw">let </span>cip130_min_gas_limit = U256::from(tx.data().len() * <span class="number">100</span>);
+    <span class="attr">#[cfg(feature = <span class="string">"align_evm"</span>)]
+    </span><span class="kw">let </span>cip130_min_gas_limit = U256::zero();
+
     <span class="kw">let </span>eip7623_gas_limit = <span class="number">21000
         </span>+ tx.data()
             .iter()
