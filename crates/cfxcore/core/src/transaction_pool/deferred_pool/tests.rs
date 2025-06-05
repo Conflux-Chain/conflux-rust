@@ -16,7 +16,6 @@ use primitives::{
 };
 use std::{str::FromStr, sync::Arc};
 
-
 const PRIVATE_KEY: &str =
     "74806d258099decd5f5bd500f5b318aaaa0a8a289f8dcb10a9609966d8a0e442";
 
