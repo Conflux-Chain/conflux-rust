@@ -40,13 +40,17 @@ use cfx_parameters::{
     rpc::GAS_PRICE_DEFAULT_VALUE, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_rpc_utils::error::jsonrpc_error_helpers::internal_rpc_err;
+use cfx_storage::TrieProof;
 use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, errors::Error as CoreError,
-    genesis_block::register_transaction, BlockDataManager, ConsensusGraph,
-    PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    consensus::pos_handler::PosVerifier,
+    errors::Error as CoreError,
+    genesis_block::register_transaction,
+    verification::{compute_transaction_proof, is_valid_tx_inclusion_proof},
+    BlockDataManager, ConsensusGraph, PeerInfo, SharedConsensusGraph,
+    SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -1042,6 +1046,41 @@ impl RpcImpl {
                     })
             });
         Ok(maybe_block)
+    }
+
+    pub fn check_transaction_in_block(
+        &self, tx_hash: H256, block_hash: H256, proof: TrieProof,
+        tx_index: usize,
+    ) -> CoreResult<bool> {
+        let header = self
+            .data_man
+            .block_header_by_hash(&block_hash)
+            .ok_or_else(|| RpcError::internal_error())?;
+        Ok(is_valid_tx_inclusion_proof(
+            *header.transactions_root(),
+            tx_index,
+            proof.number_leaf_nodes() as usize,
+            tx_hash,
+            &proof,
+        ))
+    }
+
+    pub fn get_transaction_in_block_proof(
+        &self, tx_hash: H256, block_hash: H256,
+    ) -> JsonRpcResult<(TrieProof, usize)> {
+        let block = self
+            .data_man
+            .block_by_hash(&block_hash, false)
+            .ok_or_else(|| RpcError::internal_error())?;
+        let tx_index = block
+            .transactions
+            .iter()
+            .position(|tx| tx.hash() == tx_hash)
+            .ok_or_else(|| RpcError::internal_error())?;
+        Ok((
+            compute_transaction_proof(&block.transactions, tx_index),
+            tx_index,
+        ))
     }
 }
 

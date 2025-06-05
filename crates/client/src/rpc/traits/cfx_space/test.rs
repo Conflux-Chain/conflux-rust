@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{pos::Block as PosBlock, BlameInfo, Block, Bytes};
+use cfx_storage::TrieProof;
 use cfx_types::{H256, U256, U64};
 use cfxcore::PeerInfo;
 use diem_types::{
@@ -159,4 +160,14 @@ pub trait TestRpc {
 
     #[rpc(name = "test_posGetChosenProposal")]
     fn pos_get_chosen_proposal(&self) -> RpcResult<Option<PosBlock>>;
+
+    #[rpc(name = "test_checkTransactionInBlock")]
+    fn check_transaction_in_block(
+        &self, tx_hash: H256, block_hash: H256, proof: TrieProof, tx_index: usize,
+    ) -> RpcResult<bool>;
+
+    #[rpc(name = "test_getTransactionInBlockProof")]
+    fn get_transaction_in_block_proof(
+        &self, tx_hash: H256, block_hash: H256,
+    ) -> RpcResult<(TrieProof, usize)>;
 }

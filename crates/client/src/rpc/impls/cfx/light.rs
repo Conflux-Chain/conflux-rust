@@ -55,6 +55,7 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
+use cfx_storage::TrieProof;
 use cfxcore::{errors::Error::LightProtocol, light_protocol::QueryService};
 use diem_types::account_address::AccountAddress;
 
@@ -1275,6 +1276,8 @@ impl TestRpc for TestRpcImpl {
             fn pos_trigger_timeout(&self, timeout_type: String) -> JsonRpcResult<()>;
             fn pos_force_sign_pivot_decision(&self, block_hash: H256, height: U64) -> JsonRpcResult<()>;
             fn pos_get_chosen_proposal(&self) -> JsonRpcResult<Option<PosBlock>>;
+            fn check_transaction_in_block(&self, tx_hash: H256, block_hash: H256, proof: TrieProof, tx_index: usize) -> JsonRpcResult<bool>;
+            fn get_transaction_in_block_proof(&self, tx_hash: H256, block_hash: H256) -> JsonRpcResult<(TrieProof, usize)>;
         }
     }
 

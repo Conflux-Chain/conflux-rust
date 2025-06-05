@@ -107,7 +107,7 @@ use cfx_parameters::{
     },
     staking::{BLOCKS_PER_YEAR, DRIPS_PER_STORAGE_COLLATERAL_UNIT},
 };
-use cfx_storage::state::StateDbGetOriginalMethods;
+use cfx_storage::{state::StateDbGetOriginalMethods, TrieProof};
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
@@ -2382,6 +2382,8 @@ impl TestRpc for TestRpcImpl {
             fn pos_trigger_timeout(&self, timeout_type: String) -> JsonRpcResult<()>;
             fn pos_force_sign_pivot_decision(&self, block_hash: H256, height: U64) -> JsonRpcResult<()>;
             fn pos_get_chosen_proposal(&self) -> JsonRpcResult<Option<PosBlock>>;
+            fn check_transaction_in_block(&self, tx_hash: H256, block_hash: H256, proof: TrieProof, tx_index: usize) -> JsonRpcResult<bool>;
+            fn get_transaction_in_block_proof(&self, tx_hash: H256, block_hash: H256) -> JsonRpcResult<(TrieProof, usize)>;
         }
 
         to self.rpc_impl {
