@@ -155,7 +155,6 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     fn sstore(
         &mut self, address: Address, key: U256, value: U256,
     ) -> Option<StateLoad<SStoreResult>> {
-        let key_vec = key.to_be_bytes_vec();
         let value_cfx_u256 = from_alloy_u256(value);
 
         let present = self.sload(address, key)?;
@@ -164,9 +163,11 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
             return None;
         }
 
-        let original_value = match self.context.origin_storage_at(&key_vec) {
+        let key_bytes: [u8; 32] = key.to_be_bytes();
+
+        let original_value = match self.context.origin_storage_at(&key_bytes) {
             Ok(Some(original_value)) => to_alloy_u256(original_value),
-            Ok(None) => to_alloy_u256(cfx_types::U256::zero()),
+            Ok(None) => U256::ZERO,
             Err(e) => {
                 self.error = Err(unwrap_db_error(e));
                 return None;
@@ -183,7 +184,9 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
             return Some(StateLoad::new(sstore_result, present.is_cold));
         };
 
-        if let Err(e) = self.context.set_storage(key_vec, value_cfx_u256) {
+        if let Err(e) =
+            self.context.set_storage(key_bytes.to_vec(), value_cfx_u256)
+        {
             self.error = Err(unwrap_db_error(e));
             return None;
         }
@@ -195,7 +198,7 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
         &mut self, address: Address, key: U256,
     ) -> Option<StateLoad<U256>> {
         let key_bytes = key.to_be_bytes();
-        let key_vec = key_bytes.to_vec();
+
         let key_h256 = cfx_types::H256::from(key_bytes);
 
         let is_cold = match self.context.is_warm_storage_entry(&key_h256) {
@@ -206,7 +209,7 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
             }
         };
 
-        let value = match self.context.storage_at(&key_vec) {
+        let value = match self.context.storage_at(&key_bytes.to_vec()) {
             Ok(current_value) => to_alloy_u256(current_value),
             Err(e) => {
                 self.error = Err(unwrap_db_error(e));
@@ -231,13 +234,13 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
 
     fn tload(&mut self, address: Address, key: U256) -> U256 {
         let key = key.to_be_bytes_vec();
-        self.context
-            .transient_storage_at(&key)
-            .map(|value| to_alloy_u256(value))
-            .map_err(|e| {
+        match self.context.transient_storage_at(&key) {
+            Ok(value) => to_alloy_u256(value),
+            Err(e) => {
                 self.error = Err(unwrap_db_error(e));
-            })
-            .unwrap_or_default()
+                U256::ZERO
+            }
+        }
     }
 
     fn balance(&mut self, address: Address) -> Option<StateLoad<U256>> {
