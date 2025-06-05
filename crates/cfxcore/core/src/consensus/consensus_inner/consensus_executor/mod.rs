@@ -505,7 +505,13 @@ impl ConsensusExecutor {
         // the lock, there might be a checkpoint coming in to break
         // index
         for state_block_hash in waiting_blocks {
-            self.wait_for_result(state_block_hash)?;
+            let commitment = self.wait_for_result(state_block_hash)?;
+            self.handler.data_man.insert_epoch_execution_commitment(
+                state_block_hash,
+                commitment.state_root_with_aux_info,
+                commitment.receipts_root,
+                commitment.logs_bloom_hash,
+            );
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
