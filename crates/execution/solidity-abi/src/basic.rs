@@ -120,3 +120,99 @@ impl U8 {
 
     fn from_be_bytes(input: [u8; 1]) -> Self { U8(input[0]) }
 }
+
+#[cfg(test)]
+mod tests_basic {
+    use super::{U8, *};
+    use crate::ABIVariable;
+
+    #[test]
+    fn test_packed_encoding() {
+        let num = 0xDEADBEEFu32;
+        let packed = num.to_packed_abi().to_vec();
+        let expected = num.to_be_bytes().to_vec();
+        assert_eq!(packed, expected);
+    }
+
+    #[test]
+    fn test_u256_abi_basic() {
+        assert!(U256::BASIC_TYPE);
+        assert_eq!(U256::STATIC_LENGTH, Some(32));
+    }
+
+    #[test]
+    fn test_u256_packed_abi_consistency() {
+        let num = U256::max_value();
+        let abi = num.to_abi();
+        let packed_abi = num.to_packed_abi();
+        assert_eq!(abi.to_vec(), packed_abi.to_vec());
+    }
+
+    #[test]
+    fn test_u256_zero_value() {
+        let zero = U256::zero();
+        let encoded = zero.to_abi().to_vec();
+        assert_eq!(encoded, vec![0u8; 32]);
+    }
+
+    #[test]
+    fn test_h256_type_constants() {
+        assert_eq!(H256::BASIC_TYPE, <[u8; 32]>::BASIC_TYPE);
+        assert_eq!(H256::STATIC_LENGTH, <[u8; 32]>::STATIC_LENGTH);
+    }
+
+    #[test]
+    fn test_h256_from_abi_valid() {
+        let input = [42u8; 32];
+        let h256 = H256::from_abi(&input).unwrap();
+        assert_eq!(h256.0, input);
+    }
+
+    #[test]
+    fn test_h256_to_packed_abi() {
+        let h256 = H256([0xBB; 32]);
+        let packed_bytes = h256.to_packed_abi();
+        assert_eq!(packed_bytes.to_vec(), &[0xBB; 32]);
+    }
+
+    #[test]
+    fn test_u8_bits() {
+        assert_eq!(U8::BITS, 8);
+    }
+
+    #[test]
+    fn test_u8_to_be_bytes() {
+        let val = U8::from_be_bytes([123]);
+        assert_eq!(val.to_be_bytes(), [123]);
+    }
+
+    #[test]
+    fn test_u8_from_be_bytes() {
+        let u = U8::from_be_bytes([255]);
+        assert_eq!(u.to_be_bytes(), [255]);
+    }
+
+    #[test]
+    fn test_u8_eq() {
+        let a = U8::from_be_bytes([100]);
+        let b = U8::from_be_bytes([100]);
+        let c = U8::from_be_bytes([200]);
+        assert!(a == b);
+        assert!(a != c);
+    }
+
+    #[test]
+    fn test_u8_boundaries() {
+        let min = U8::from_be_bytes([0]);
+        let max = U8::from_be_bytes([255]);
+        assert_eq!(min.to_be_bytes(), [0]);
+        assert_eq!(max.to_be_bytes(), [255]);
+    }
+
+    #[test]
+    fn test_u8_byte_order_consistency() {
+        let input = [128];
+        let u = U8::from_be_bytes(input);
+        assert_eq!(u.to_be_bytes(), input);
+    }
+}
