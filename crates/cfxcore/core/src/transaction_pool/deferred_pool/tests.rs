@@ -15,7 +15,7 @@ use primitives::{
     Action, SignedTransaction, Transaction,
 };
 use std::{str::FromStr, sync::Arc};
-// use rand::{rngs::OsRng, TryRngCore};
+
 
 const PRIVATE_KEY: &str =
     "74806d258099decd5f5bd500f5b318aaaa0a8a289f8dcb10a9609966d8a0e442";
@@ -278,32 +278,6 @@ fn test_deferred_pool_recalculate_readiness() {
         None
     );
 }
-
-// pub struct TestAccount {
-//     pub private_key: String,
-//     pub account: AddressWithSpace,
-// }
-
-// pub fn random_account_with_native_space() -> TestAccount {
-//     let secret = generate_conflux_private_key().unwrap();
-//     let key_pair = KeyPair::from_secret(secret).unwrap();
-//     // return a Native Space address and private key
-//     // Note: This is a random key pair, not the one from PRIVATE_KEY
-//     assert!(1==1);
-//     TestAccount {
-//         private_key: key_pair.secret().to_string(),
-//         account: key_pair.address().with_native_space(),
-//     }
-// }
-
-// fn generate_conflux_private_key() -> Option<Secret> {
-//     let mut private_key = [0u8; 32];
-//     let mut rng = OsRng;
-//     match rng.try_fill_bytes(&mut private_key) {
-//         Ok(()) => Secret::from_slice(&private_key),
-//         Err(_) => None,
-//     }
-// }
 
 pub fn const_account_with_native_space() -> AddressWithSpace {
     let secret = Secret::from_str(&PRIVATE_KEY).unwrap();
@@ -596,25 +570,3 @@ fn test_clear_bucket() {
     assert!(dpool.buckets.is_empty());
     assert!(dpool.packing_pool.in_space(Space::Native).len() == 0);
 }
-
-// #[test]
-// fn test_300k_tx_packing() {
-//     use std::fs;
-//     let mut dpool = DeferredPool::new_for_test();
-//     for i in 0..3 {
-
-//         let  test_account = random_account_with_native_space();
-//         let addr = test_account.account;
-//         let pky = test_account.private_key;
-//         fs::write("output.txt", pky.to_string());
-//         fs::write("output.txt", addr.address.to_string());
-//         println!("Inserting transaction {} with address: {}", i,
-// addr.address.to_string());         println!("Private key: {}", pky);
-//         let tx = create_tx_with_ready_info(U256::from(i), U256::from(21000),
-// 100, addr,&pky);         dpool.insert(tx, false);
-
-//     }
-
-//     println!("Total transactions inserted: {}", dpool.buckets.len());
-//     assert_eq!(dpool.buckets.len(),300000);
-// }
