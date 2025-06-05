@@ -1775,6 +1775,12 @@
 <a href="#1775" id="1775">1775</a>
 <a href="#1776" id="1776">1776</a>
 <a href="#1777" id="1777">1777</a>
+<a href="#1778" id="1778">1778</a>
+<a href="#1779" id="1779">1779</a>
+<a href="#1780" id="1780">1780</a>
+<a href="#1781" id="1781">1781</a>
+<a href="#1782" id="1782">1782</a>
+<a href="#1783" id="1783">1783</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2282,7 +2288,13 @@
         // the lock, there might be a checkpoint coming in to break
         // index
         </span><span class="kw">for </span>state_block_hash <span class="kw">in </span>waiting_blocks {
-            <span class="self">self</span>.wait_for_result(state_block_hash)<span class="question-mark">?</span>;
+            <span class="kw">let </span>commitment = <span class="self">self</span>.wait_for_result(state_block_hash)<span class="question-mark">?</span>;
+            <span class="self">self</span>.handler.data_man.insert_epoch_execution_commitment(
+                state_block_hash,
+                commitment.state_root_with_aux_info,
+                commitment.receipts_root,
+                commitment.logs_bloom_hash,
+            );
         }
         <span class="comment">// Now we need to wait for the execution information of all missing
         // blocks to come back
