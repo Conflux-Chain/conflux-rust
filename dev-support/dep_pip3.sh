@@ -18,7 +18,7 @@ pip3 install \
     jsonrpcclient==4.0.3 \
     requests \
     asyncio \
-    websockets \
+    "websockets>=15.0.1" \
     pyyaml \
     numpy \
     pytest \

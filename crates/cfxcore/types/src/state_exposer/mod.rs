@@ -15,6 +15,7 @@ pub use self::{
     sync_graph_exposer::{SyncGraphBlockState, SyncGraphStates},
 };
 
+use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
