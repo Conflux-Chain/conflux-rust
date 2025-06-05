@@ -19,6 +19,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::H256;
+use log::debug;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::{

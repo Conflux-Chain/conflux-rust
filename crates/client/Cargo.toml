@@ -78,6 +78,7 @@ cfx-rpc-common-impl = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
 cfx-tasks = { workspace = true }
 cfx-config = { workspace = true }
+cfxcore-types = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

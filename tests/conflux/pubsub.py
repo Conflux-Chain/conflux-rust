@@ -20,7 +20,7 @@ class PubSubClient:
     async def subscribe(self, topic, *args):
         # connect if necessary
         if self.ws == None:
-            self.ws = await websockets.connect(self.url)
+            self.ws = await websockets.connect(self.url, proxy=None)
 
         # subscribe
         method = "eth_subscribe" if self.evm else "cfx_subscribe"
