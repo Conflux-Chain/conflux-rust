@@ -1,10 +1,8 @@
-use cfx_addr::Network;
 use cfx_parity_trace_types::{
     ExecTrace, LocalizedTrace as PrimitiveLocalizedTrace,
 };
-use cfx_rpc_cfx_types::{
-    trace::Action as RpcAction,
-    trace_eth::{ActionResult as EthRes, LocalizedTrace as EthLocalizedTrace},
+use cfx_rpc_eth_types::trace::{
+    Action, ActionResult as EthRes, LocalizedTrace as EthLocalizedTrace,
 };
 use cfx_types::H256;
 
@@ -12,7 +10,7 @@ use super::matcher::{construct_parity_trace, TraceWithPosition};
 
 pub fn into_eth_localized_traces(
     tx_traces: &[ExecTrace], block_number: u64, block_hash: H256,
-    tx_hash: H256, tx_idx: usize, network: Network,
+    tx_hash: H256, tx_idx: usize,
 ) -> Result<Vec<EthLocalizedTrace>, String> {
     let mut eth_traces = vec![];
     for TraceWithPosition {
@@ -23,8 +21,7 @@ pub fn into_eth_localized_traces(
     } in construct_parity_trace(&tx_traces)?
     {
         let mut eth_trace = EthLocalizedTrace {
-            action: RpcAction::try_from(action.action.clone(), network)?
-                .try_into()?,
+            action: Action::try_from(action.action.clone())?,
             result: EthRes::None,
             trace_address: trace_path,
             subtraces: child_count,
@@ -37,7 +34,7 @@ pub fn into_eth_localized_traces(
         };
 
         eth_trace
-            .set_result(RpcAction::try_from(result.action.clone(), network)?)
+            .set_result(result.map(|e| e.action.clone()))
             .expect("`construct_parity_trace` has guarantee the consistency");
 
         eth_traces.push(eth_trace);
@@ -47,7 +44,7 @@ pub fn into_eth_localized_traces(
 }
 
 pub fn primitive_traces_to_eth_localized_traces(
-    primitive_traces: &[PrimitiveLocalizedTrace], network: Network,
+    primitive_traces: &[PrimitiveLocalizedTrace],
 ) -> Result<Vec<EthLocalizedTrace>, String> {
     use slice_group_by::GroupBy;
 
@@ -69,7 +66,6 @@ pub fn primitive_traces_to_eth_localized_traces(
             first_tx.epoch_hash,
             first_tx.transaction_hash,
             first_tx.transaction_position.as_usize(),
-            network,
         )?;
         traces.extend(eth_traces);
     }

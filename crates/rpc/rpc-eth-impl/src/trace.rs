@@ -1,15 +1,15 @@
 use cfx_addr::Network;
 use cfx_parity_trace_types::Action;
 use cfx_rpc_cfx_impl::TraceHandler;
-use cfx_rpc_cfx_types::{
-    trace_eth::{LocalizedSetAuthTrace, LocalizedTrace as EthLocalizedTrace},
-    PhantomBlock,
-};
+use cfx_rpc_cfx_types::PhantomBlock;
 use cfx_rpc_common_impl::trace::{
     into_eth_localized_traces, primitive_traces_to_eth_localized_traces,
 };
 use cfx_rpc_eth_api::TraceApiServer;
-use cfx_rpc_eth_types::{BlockNumber, Index, LocalizedTrace, TraceFilter};
+use cfx_rpc_eth_types::{
+    trace::{LocalizedSetAuthTrace, LocalizedTrace as EthLocalizedTrace},
+    BlockNumber, Index, LocalizedTrace, TraceFilter,
+};
 use cfx_types::H256;
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
 use cfxcore::{errors::Result as CoreResult, SharedConsensusGraph};
@@ -63,7 +63,6 @@ impl TraceApi {
         let mut eth_traces = Vec::new();
         let block_number = phantom_block.pivot_header.height();
         let block_hash = phantom_block.pivot_header.hash();
-        let network = self.trace_handler.network;
 
         for (idx, tx_traces) in phantom_block.traces.into_iter().enumerate() {
             let tx_hash = phantom_block.transactions[idx].hash();
@@ -73,7 +72,6 @@ impl TraceApi {
                 block_hash,
                 tx_hash,
                 idx,
-                network,
             )
             .map_err(|e| {
                 warn!("Internal error on trace reconstruction: {}", e);
@@ -134,14 +132,12 @@ impl TraceApi {
             return Ok(vec![]);
         };
 
-        let traces = primitive_traces_to_eth_localized_traces(
-            &primitive_traces,
-            self.trace_handler.network,
-        )
-        .map_err(|e| {
-            warn!("Internal error on trace reconstruction: {}", e);
-            RpcError::internal_error()
-        })?;
+        let traces =
+            primitive_traces_to_eth_localized_traces(&primitive_traces)
+                .map_err(|e| {
+                    warn!("Internal error on trace reconstruction: {}", e);
+                    RpcError::internal_error()
+                })?;
         Ok(traces)
     }
 
@@ -185,15 +181,12 @@ impl TraceApi {
         let tx = &phantom_block.transactions[id];
         let tx_traces = phantom_block.traces[id].clone();
 
-        let network = self.trace_handler.network;
-
         let eth_traces = into_eth_localized_traces(
             &tx_traces.0,
             epoch_num,
             phantom_block.pivot_header.hash(),
             tx.hash(),
             id,
-            network,
         )
         .map_err(|e| {
             warn!("Internal error on trace reconstruction: {}", e);
