@@ -167,6 +167,9 @@ pub fn recover_phantom_trace_for_call(
             }) => {}
             // phantom tx should not have these actions
             Action::SetAuth(_) => {}
+            Action::SelfDestruct(_) => {
+                todo!()
+            }
         }
 
         phantom_traces.push(trace);

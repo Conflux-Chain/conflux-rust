@@ -1,4 +1,4 @@
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, Space, H256, U256};
 use cfx_vm_types::InterpreterInfo;
 
 use impl_tools::autoimpl;
@@ -34,8 +34,10 @@ pub trait OpcodeTracer {
     /// to target.
     #[inline]
     fn selfdestruct(
-        &mut self, contract: &Address, target: &Address, value: U256,
+        &mut self, space: Space, contract: &Address, target: &Address,
+        value: U256,
     ) {
+        let _ = space;
         let _ = contract;
         let _ = target;
         let _ = value;

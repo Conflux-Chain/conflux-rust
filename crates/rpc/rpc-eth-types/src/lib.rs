@@ -12,6 +12,7 @@ mod receipt;
 mod simulate;
 mod state;
 mod sync;
+pub mod trace;
 pub mod trace_filter;
 mod transaction;
 mod transaction_request;
@@ -22,7 +23,6 @@ pub use authorization::{Authorization, SignedAuthorization};
 pub use block::{Block, BlockOverrides, Header};
 pub use block_number::BlockNumber;
 pub use call::*;
-pub use cfx_rpc_cfx_types::trace_eth::*;
 pub use cfx_rpc_primitives::{Bytes, Index, U64};
 pub use errors::Error;
 pub use eth_pubsub::*;
@@ -36,6 +36,7 @@ pub use state::{
     RpcAccountOverride, RpcStateOverride, StateOverride,
 };
 pub use sync::{SyncInfo, SyncStatus};
+pub use trace::*;
 pub use trace_filter::TraceFilter;
 pub use transaction::Transaction;
 pub use transaction_request::{

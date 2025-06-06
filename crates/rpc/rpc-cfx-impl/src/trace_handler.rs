@@ -17,10 +17,11 @@ use std::sync::Arc;
 
 use cfx_parity_trace_types::LocalizedTrace as PrimitiveLocalizedTrace;
 use cfx_rpc_cfx_types::trace::{
-    Action as RpcAction, EpochTrace, LocalizedBlockTrace,
+    Action as RpcAction, LocalizedBlockTrace,
     LocalizedTrace as RpcLocalizedTrace,
 };
 use cfx_rpc_common_impl::trace::primitive_traces_to_eth_localized_traces;
+use cfx_rpc_eth_types::EpochTrace;
 
 #[derive(Clone)]
 pub struct TraceHandler {
@@ -189,14 +190,12 @@ impl TraceHandler {
 
         let primitive_eth_traces =
             self.space_epoch_traces(Space::Ethereum, epoch_hash)?;
-        let eth_traces = primitive_traces_to_eth_localized_traces(
-            &primitive_eth_traces,
-            self.network,
-        )
-        .map_err(|e| {
-            warn!("Internal error on trace reconstruction: {}", e);
-            JsonRpcError::internal_error()
-        })?;
+        let eth_traces =
+            primitive_traces_to_eth_localized_traces(&primitive_eth_traces)
+                .map_err(|e| {
+                    warn!("Internal error on trace reconstruction: {}", e);
+                    JsonRpcError::internal_error()
+                })?;
 
         Ok(EpochTrace::new(cfx_traces, eth_traces))
     }

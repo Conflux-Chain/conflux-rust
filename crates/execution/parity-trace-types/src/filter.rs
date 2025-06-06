@@ -118,6 +118,14 @@ impl TraceFilter {
                 Action::InternalTransferAction(_) => {
                     traces.push(trace);
                 }
+                Action::SelfDestruct(selfdestruction) => {
+                    // only apply space and action_types filters
+                    if selfdestruction.space == self.space
+                        && self.action_types.matches(&ActionType::SelfDestruct)
+                    {
+                        traces.push(trace);
+                    }
+                }
             }
         }
         if !stack.is_empty() {

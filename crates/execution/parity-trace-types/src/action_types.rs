@@ -348,6 +348,32 @@ impl Decodable for SetAuthOutcome {
     }
 }
 
+/// Represents a _selfdestruct_ action fka `suicide`.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, Serialize, RlpEncodable, RlpDecodable,
+)]
+#[serde(rename_all = "camelCase")]
+pub struct SelfDestructAction {
+    // / The space of the contract.
+    pub space: Space,
+    /// destroyed/suicided address.
+    pub address: Address,
+    /// Balance of the contract just before it was destroyed.
+    pub balance: U256,
+    /// destroyed contract heir.
+    pub refund_address: Address,
+}
+
+impl SelfDestructAction {
+    /// Returns call action bloom.
+    /// The bloom contains contract address.
+    pub fn bloom(&self) -> Bloom {
+        let mut bloom = Bloom::default();
+        bloom.accrue(BloomInput::Raw(self.address.as_bytes()));
+        bloom
+    }
+}
+
 /// Description of an action that we trace; will be either a call or a create.
 #[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
 #[strum_discriminants(name(ActionType))]
@@ -364,6 +390,8 @@ pub enum Action {
     InternalTransferAction(InternalTransferAction),
     /// It's an 7702 set auth action
     SetAuth(SetAuth),
+    /// It's a selfdestruct action
+    SelfDestruct(SelfDestructAction),
 }
 
 impl Encodable for Action {
@@ -394,6 +422,10 @@ impl Encodable for Action {
                 s.append(&5u8);
                 s.append(set_auth_action);
             }
+            Action::SelfDestruct(ref selfdestruct_action) => {
+                s.append(&6u8);
+                s.append(selfdestruct_action);
+            }
         }
     }
 }
@@ -408,6 +440,7 @@ impl Decodable for Action {
             3 => rlp.val_at(1).map(Action::CreateResult),
             4 => rlp.val_at(1).map(Action::InternalTransferAction),
             5 => rlp.val_at(1).map(Action::SetAuth),
+            6 => rlp.val_at(1).map(Action::SelfDestruct),
             _ => Err(DecoderError::Custom("Invalid action type.")),
         }
     }
@@ -425,6 +458,9 @@ impl Action {
                 internal_action.bloom()
             }
             Action::SetAuth(ref set_auth_action) => set_auth_action.bloom(),
+            Action::SelfDestruct(ref selfdestruct_action) => {
+                selfdestruct_action.bloom()
+            }
         }
     }
 }

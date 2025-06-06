@@ -11,6 +11,7 @@ Misc changes:
 
 1. Support gasFee in transaction receipt for espace RPC
 2. eSpace `block.gasLimit` change to half of the consensus gas limit, add `block.espaceGasLimit` to return the real gas limit for eSpace transactions.
+3. eSpace parity style trace RPCs now compatible with parity and erigon(a API breaking change), including `trace_block`, `trace_transaction`, `trace_filter`; two new RPCs `trace_get` and `trace_blockSetAuth` are added; these trace methods now support `SelfDestruct` trace, to access historical selfdestruct transaction data, a resync of the data is required.
 
 ## v2.4.1
 
