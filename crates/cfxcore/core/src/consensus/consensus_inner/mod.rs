@@ -6,6 +6,9 @@ mod blame_verifier;
 pub mod confirmation_meter;
 pub mod consensus_executor;
 pub mod consensus_new_block_handler;
+use cfxcore_pow as pow;
+
+use pow::{PowComputer, ProofOfWorkConfig};
 
 use crate::{
     block_data_manager::{
@@ -19,7 +22,6 @@ use crate::{
         pos_handler::PosVerifier,
     },
     pos::pow_handler::POS_TERM_EPOCHS,
-    pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
     verification::VerificationConfig,
 };
@@ -1995,20 +1997,11 @@ impl ConsensusGraphInner {
             if last_period_upper != parent_epoch {
                 self.arena[parent_arena_index].difficulty
             } else {
-                let block_header_by_hash =
-                    |hash: &H256| self.data_man.block_header_by_hash(hash);
-                target_difficulty(
-                    block_header_by_hash,
-                    &self.data_man.target_difficulty_manager,
+                self.data_man.target_difficulty_manager.target_difficulty(
+                    self,
+                    // &self.data_man.target_difficulty_manager,
                     &self.pow_config,
                     &self.arena[parent_arena_index].hash,
-                    |h| {
-                        let index = self.hash_to_arena_indices.get(h).unwrap();
-                        let parent = self.arena[*index].parent;
-                        (self.arena[*index].past_num_blocks
-                            - self.arena[parent].past_num_blocks)
-                            as usize
-                    },
                 )
             }
         }
@@ -2033,21 +2026,11 @@ impl ConsensusGraphInner {
                 / self.pow_config.difficulty_adjustment_epoch_period(epoch))
                 * self.pow_config.difficulty_adjustment_epoch_period(epoch)
         {
-            let block_header_by_hash =
-                |hash: &H256| self.data_man.block_header_by_hash(hash);
-            self.current_difficulty = target_difficulty(
-                block_header_by_hash,
-                &self.data_man.target_difficulty_manager,
-                &self.pow_config,
-                &new_best_hash,
-                |h| {
-                    let index = self.hash_to_arena_indices.get(h).unwrap();
-                    let parent = self.arena[*index].parent;
-                    (self.arena[*index].past_num_blocks
-                        - self.arena[parent].past_num_blocks)
-                        as usize
-                },
-            );
+            let this: &ConsensusGraphInner = self;
+            self.current_difficulty = self
+                .data_man
+                .target_difficulty_manager
+                .target_difficulty(this, &self.pow_config, &new_best_hash);
         } else {
             self.current_difficulty = new_best_difficulty;
         }
@@ -4108,6 +4091,19 @@ impl ConsensusGraphInner {
     /// Return the latest PoS pivot decision processed in ConsensusGraph.
     pub fn latest_epoch_confirmed_by_pos(&self) -> &(H256, u64) {
         &self.best_pos_pivot_decision
+    }
+}
+
+impl pow::ConsensusProvider for &ConsensusGraphInner {
+    fn num_blocks_in_epoch(&self, h: &H256) -> u64 {
+        let index = self.hash_to_arena_indices.get(h).unwrap(); // TODO handle None
+        let parent = self.arena[*index].parent;
+        (self.arena[*index].past_num_blocks
+            - self.arena[parent].past_num_blocks) as u64
+    }
+
+    fn block_header_by_hash(&self, hash: &H256) -> Option<Arc<BlockHeader>> {
+        self.data_man.block_header_by_hash(hash)
     }
 }
 
