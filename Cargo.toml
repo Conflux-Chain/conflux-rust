@@ -110,6 +110,7 @@ members = [
     "crates/eest_types",
     "crates/config",
     "crates/cfxcore/types",
+    "crates/cfxcore/pow",
 ]
 
 resolver = "2"
@@ -183,6 +184,7 @@ cfxstore = { path = "./crates/cfx_store" }
 network = { path = "./crates/network" }
 cfxcore = { path = "./crates/cfxcore/core" }
 cfxcore-types = { path = "./crates/cfxcore/types" }
+cfxcore-pow = { path = "./crates/cfxcore/pow" }
 cfx-parameters = { path = "./crates/parameters" }
 cfx-execute-helper = { path = "./crates/execution/execute-helper" }
 cfx-executor = { path = "./crates/execution/executor" }
