@@ -7,9 +7,7 @@ This project uses Github Action to automatically run linting processes. The goal
 The automated workflow includes two main tasks: `lint` (for formatting and static analysis) and `cargo-deny` (for dependency checks).
 
 
-This document explains how to run these checks manually on your local machine. This helps you fund and fix issues before committing your code.
-
-
+This document explains how to run these checks manually on your local machine. This helps you find and fix issues before committing your code.
 
 ## Lint Job (Formatting & Clipy Checks)
 

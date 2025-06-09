@@ -23,7 +23,7 @@ source .venv/bin/activate
 Use `conda` to create a virtual environment:
 
 ```bash
-conda create -n conflux_test python=3.10
+conda create -n conflux_test python=3.11
 conda activate conflux_test
 ```
 
