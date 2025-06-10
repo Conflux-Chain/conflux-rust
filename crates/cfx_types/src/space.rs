@@ -48,7 +48,7 @@ impl FromStr for Space {
         match s {
             "native" => Ok(Space::Native),
             "evm" => Ok(Space::Ethereum),
-            _ => Err("Invalid space str".to_owned()),
+            _ => Err(format!("Unrecognized space: {}", s)),
         }
     }
 }
