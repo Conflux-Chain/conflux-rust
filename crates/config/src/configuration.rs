@@ -422,15 +422,7 @@ build_config! {
         // Development related section.
         (
             log_level, (LevelFilter), LevelFilter::Info, |l| {
-                match l {
-                    "off" => Ok(LevelFilter::Off),
-                    "error" => Ok(LevelFilter::Error),
-                    "warn" => Ok(LevelFilter::Warn),
-                    "info" => Ok(LevelFilter::Info),
-                    "debug" => Ok(LevelFilter::Debug),
-                    "trace" => Ok(LevelFilter::Trace),
-                    _ => Err("Invalid log_level".to_owned()),
-                }
+                LevelFilter::from_str(l).map_err(|e| e.to_string())
             }
         )
 
@@ -449,11 +441,7 @@ build_config! {
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
         (public_evm_rpc_apis, (EthApiSet), EthApiSet::Evm, EthApiSet::from_str)
         (public_evm_rpc_async_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
-        (single_mpt_space, (Option<Space>), None, |s| match s {
-            "native" => Ok(Space::Native),
-            "evm" => Ok(Space::Ethereum),
-            _ =>  Err("Invalid single_mpt_space".to_owned()),
-        })
+        (single_mpt_space, (Option<Space>), None, Space::from_str)
     }
 }
 
