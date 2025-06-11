@@ -42,3 +42,23 @@ pub fn u256_to_h256_be(value: U256) -> H256 {
 pub fn h256_to_u256_be(value: H256) -> U256 {
     U256::from_big_endian(value.as_bytes())
 }
+
+#[cfg(test)]
+mod tests {
+    use hex;
+    #[test]
+    fn test_legacy_bool_encode() {
+        // by now we need use the legacy bool encoding
+        // which is 0x00 for false and 0x01 for true
+        // the newer encoding is 0x80 for false and 0x01 for true
+
+        let false_bytes = hex::decode("00").unwrap();
+        let true_bytes = hex::decode("01").unwrap();
+
+        assert_eq!(rlp::encode(&false).as_ref(), false_bytes);
+        assert_eq!(rlp::encode(&true).as_ref(), true_bytes);
+
+        assert_eq!(rlp::decode::<bool>(&false_bytes), Ok(false));
+        assert_eq!(rlp::decode::<bool>(&true_bytes), Ok(true));
+    }
+}

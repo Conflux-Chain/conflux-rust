@@ -36,3 +36,6 @@ clap-verbosity-flag = "3"
 
 [features]
 default = ["cfx-executor/align_evm", "cfx-statedb/testonly_code"]
+
+[patch.crates-io]
+rlp = { git = "https://github.com/Conflux-Chain/parity-common-rocksdb.git", rev = "b28832745c952c8bcac88348276b283c26de776a", package = "rlp" }

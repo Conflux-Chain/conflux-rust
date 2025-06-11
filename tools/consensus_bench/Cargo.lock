@@ -1444,7 +1444,7 @@ dependencies = [
  "malloc_size_of_derive",
  "parking_lot 0.12.3",
  "primitives",
- "rlp 0.4.6",
+ "rlp 0.6.1",
  "rlp-derive",
  "smart-default",
  "thiserror 2.0.11",
@@ -5535,8 +5535,7 @@ dependencies = [
 [[package]]
 name = "rlp"
 version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa24e92bb2a83198bb76d661a71df9f7076b8c420b8696e4d3d97d50d94479e3"
+source = "git+https://github.com/Conflux-Chain/parity-common-rocksdb.git?rev=b28832745c952c8bcac88348276b283c26de776a#b28832745c952c8bcac88348276b283c26de776a"
 dependencies = [
  "bytes",
  "rustc-hex",
