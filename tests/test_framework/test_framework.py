@@ -476,8 +476,12 @@ class ConfluxTestFramework:
         """
         client = RpcClient(self.nodes[0])
         log = self.log
-        self._cw3 = CWeb3(CWeb3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].rpcport}/'))
-        self._ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/'))
+        proxies = {
+            "http": "",
+            "https": "",
+        }
+        self._cw3 = CWeb3(CWeb3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].rpcport}/', request_kwargs={"proxies": proxies}))
+        self._ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/', request_kwargs={"proxies": proxies}))
         self.cw3.wallet.add_accounts(self.core_accounts)
         self.cw3.cfx.default_account = self.core_accounts[0].address
         

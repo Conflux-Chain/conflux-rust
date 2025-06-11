@@ -40,6 +40,7 @@ parity-version = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 bls-signatures = { workspace = true }
 cfx-executor = { workspace = true }
+cfx-execute-helper = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
 version = "0.3.2"
@@ -54,7 +55,7 @@ u64-mpt-db-key = ["client/u64_mpt_db_key"]
 # it will be enabled across all paths depending on that package. 
 # (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification)
 blst-portable = ["bls-signatures/blst-portable"]
-align_evm = ["cfx-executor/align_evm"]
+align_evm = ["cfx-executor/align_evm", "cfx-execute-helper/align_evm"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

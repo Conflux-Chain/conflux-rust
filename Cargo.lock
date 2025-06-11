@@ -1725,6 +1725,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "cfxcore-types",
  "cfxkey",
  "channel",
  "clap 4.5.37",
@@ -1825,6 +1826,30 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "cfxcore-types"
+version = "2.6.0"
+dependencies = [
+ "cfx-bytes",
+ "cfx-execute-helper",
+ "cfx-internal-common",
+ "cfx-types",
+ "futures 0.3.30",
+ "lazy_static",
+ "log",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "parking_lot 0.12.1",
+ "primitives",
+ "rand 0.9.0",
+ "rlp 0.4.6",
+ "rlp-derive",
+ "smart-default",
+ "thiserror 2.0.11",
+ "tokio",
+ "unexpected",
 ]
 
 [[package]]
@@ -2028,6 +2053,7 @@ dependencies = [
  "cfx-vm-types",
  "cfxcore",
  "cfxcore-accounts",
+ "cfxcore-types",
  "cfxkey",
  "cfxstore",
  "consensus-types",
@@ -2137,6 +2163,7 @@ version = "2.6.0"
 dependencies = [
  "bcs",
  "bls-signatures",
+ "cfx-execute-helper",
  "cfx-executor",
  "cfx-types",
  "cfxcore",

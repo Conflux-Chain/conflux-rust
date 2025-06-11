@@ -172,7 +172,13 @@ Core Space Fixtures:
 eSpace Fixtures:
 
 1. **`ew3`**: An instance of `web3.py`.  
-2. **`evm_accounts`**: eSpace accounts with a predefined CFX balance, ready for sending transactions.  
+2. **`evm_accounts`**: eSpace accounts with a predefined CFX balance, ready for sending transactions.
+
+You can run `pytest --fixtures [test_file.py]` to check which fixtures are available for a test file, for example,
+
+```bash
+pytest --fixtures integration_tests/tests/internal_contracts/vote_power_test.py 
+```
 
 ### Add tests
 
