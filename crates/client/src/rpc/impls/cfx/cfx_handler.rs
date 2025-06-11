@@ -17,7 +17,7 @@ use crate::rpc::{
         VoteParamsInfo, WrapTransaction, U64 as HexU64,
     },
 };
-use blockgen::BlockGenerator;
+use blockgen::BlockGeneratorTestApi;
 use cfx_execute_helper::estimation::{decode_error, EstimateExt};
 use cfx_executor::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
@@ -128,7 +128,7 @@ pub struct RpcImpl {
     pub config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
     pub sync: SharedSynchronizationService,
-    block_gen: Arc<BlockGenerator>,
+    block_gen: BlockGeneratorTestApi,
     pub tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
@@ -138,7 +138,7 @@ pub struct RpcImpl {
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
+        block_gen: BlockGeneratorTestApi, tx_pool: SharedTransactionPool,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
         config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
@@ -1090,14 +1090,16 @@ impl RpcImpl {
         timestamp: u64, adaptive: bool,
     ) -> CoreResult<H256> {
         let transactions = self.decode_raw_txs(raw, 0)?;
-        Ok(self.block_gen.generate_block_with_nonce_and_timestamp(
+        let hash = self.block_gen.generate_block_with_nonce_and_timestamp(
             parent,
             referees,
             transactions,
             nonce,
             timestamp,
             adaptive,
-        )?)
+        )?;
+        self.consensus_graph().wait_for_generation(&hash);
+        Ok(hash)
     }
 
     fn decode_raw_txs(

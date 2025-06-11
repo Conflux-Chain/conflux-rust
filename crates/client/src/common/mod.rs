@@ -618,12 +618,13 @@ pub fn initialize_not_light_node_modules(
                     panic!("Error parsing mining-author {}", err)
                 })
         });
+    let pow_config = conf.pow_config();
     let blockgen = Arc::new(BlockGenerator::new(
         sync_graph,
         txpool.clone(),
         sync.clone(),
         maybe_txgen.clone(),
-        conf.pow_config(),
+        pow_config.clone(),
         pow.clone(),
         maybe_author.clone().unwrap_or_default(),
         pos_verifier.clone(),
@@ -633,7 +634,7 @@ pub fn initialize_not_light_node_modules(
         // receiving RPC `cfx_sendRawTransaction`.
         if let Some(interval_ms) = conf.raw_conf.dev_block_interval_ms {
             // Automatic block generation with fixed interval.
-            let bg = blockgen.clone();
+            let bg = blockgen.with_test_api();
             info!("Start auto block generation");
             thread::Builder::new()
                 .name("auto_mining".into())
@@ -646,12 +647,12 @@ pub fn initialize_not_light_node_modules(
         if !author.is_genesis_valid_address() || author.is_builtin_address() {
             panic!("mining-author must be user address or contract address, otherwise you will not get mining rewards!!!");
         }
-        if blockgen.pow_config.enable_mining() {
+        if pow_config.enable_mining() {
             let bg = blockgen.clone();
             thread::Builder::new()
                 .name("mining".into())
                 .spawn(move || {
-                    BlockGenerator::start_mining(bg, 0);
+                    bg.mine();
                 })
                 .expect("Mining thread spawn error");
         }
@@ -660,7 +661,7 @@ pub fn initialize_not_light_node_modules(
     let rpc_impl = Arc::new(RpcImpl::new(
         consensus.clone(),
         sync.clone(),
-        blockgen.clone(),
+        blockgen.with_test_api(),
         txpool.clone(),
         maybe_txgen.clone(),
         maybe_direct_txgen,
