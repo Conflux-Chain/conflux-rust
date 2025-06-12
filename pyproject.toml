@@ -1,0 +1,29 @@
+[project]
+name="conflux-rust-tests"
+version="0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "cfx-account",
+    "eth-utils",
+    "py-ecc",
+    "rlp",
+    "trie",
+    "coincurve",
+    "safe-pysha3",
+    "conflux-web3==1.4.4",
+    "web3",
+    "jsonrpcclient==4.0.3",
+    "requests",
+    "asyncio",
+    "websockets>=15.0.1",
+    "pyyaml",
+    "numpy",
+    "pytest",
+    "pytest-xdist",
+    "ethereum-spec-evm-resolver",
+    "ethereum-execution-spec-tests",
+]
+
+[tool.uv.sources]
+ethereum-spec-evm-resolver = { git = "https://github.com/petertdavies/ethereum-spec-evm-resolver.git", rev = "623ac4565025e72b65f45b926da2a3552041b469" }
+ethereum-execution-spec-tests = { git = "https://github.com/ethereum/execution-spec-tests.git", rev = "e04edbe1f9c0b932b628165d12af8d244e4da776" }

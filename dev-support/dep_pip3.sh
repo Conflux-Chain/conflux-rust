@@ -12,7 +12,7 @@ elif [ -n "$ZSH_VERSION" ]; then
 fi
 
 pip install uv
-uv pip install -r "${SCRIPT_DIR}/requirements.txt" --python $(which python3)
+uv sync --project "${SCRIPT_DIR}/.." --python $(which python3)
 # set global solc version which is required by execution-spec-tests
 solc-select use 0.8.24 --always-install
 
