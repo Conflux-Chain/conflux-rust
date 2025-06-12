@@ -4,7 +4,6 @@
 
 pub mod cfx;
 mod constants;
-pub mod eth;
 mod provenance;
 pub use cfx_rpc_cfx_types::pos;
 
