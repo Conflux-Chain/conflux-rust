@@ -806,61 +806,6 @@
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
 <a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
-<a href="#823" id="823">823</a>
-<a href="#824" id="824">824</a>
-<a href="#825" id="825">825</a>
-<a href="#826" id="826">826</a>
-<a href="#827" id="827">827</a>
-<a href="#828" id="828">828</a>
-<a href="#829" id="829">829</a>
-<a href="#830" id="830">830</a>
-<a href="#831" id="831">831</a>
-<a href="#832" id="832">832</a>
-<a href="#833" id="833">833</a>
-<a href="#834" id="834">834</a>
-<a href="#835" id="835">835</a>
-<a href="#836" id="836">836</a>
-<a href="#837" id="837">837</a>
-<a href="#838" id="838">838</a>
-<a href="#839" id="839">839</a>
-<a href="#840" id="840">840</a>
-<a href="#841" id="841">841</a>
-<a href="#842" id="842">842</a>
-<a href="#843" id="843">843</a>
-<a href="#844" id="844">844</a>
-<a href="#845" id="845">845</a>
-<a href="#846" id="846">846</a>
-<a href="#847" id="847">847</a>
-<a href="#848" id="848">848</a>
-<a href="#849" id="849">849</a>
-<a href="#850" id="850">850</a>
-<a href="#851" id="851">851</a>
-<a href="#852" id="852">852</a>
-<a href="#853" id="853">853</a>
-<a href="#854" id="854">854</a>
-<a href="#855" id="855">855</a>
-<a href="#856" id="856">856</a>
-<a href="#857" id="857">857</a>
-<a href="#858" id="858">858</a>
-<a href="#859" id="859">859</a>
-<a href="#860" id="860">860</a>
-<a href="#861" id="861">861</a>
-<a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -932,14 +877,12 @@
         extractor::RpcExtractor,
         impls::{
             cfx::RpcImpl, common::RpcImpl <span class="kw">as </span>CommonRpcImpl,
-            eth_pubsub::PubSubClient <span class="kw">as </span>EthPubSubClient, pubsub::PubSubClient,
+            pubsub::PubSubClient,
         },
-        launch_async_rpc_servers, setup_debug_rpc_apis,
-        setup_public_eth_rpc_apis, setup_public_rpc_apis,
+        launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
 <span class="kw">use </span>cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
-<span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">pub mod </span>delegate_convert;
 <span class="kw">pub mod </span>shutdown_handler;
@@ -1018,7 +961,6 @@
         Arc&lt;AccountProvider&gt;,
         Arc&lt;Notifications&gt;,
         PubSubClient,
-        EthPubSubClient,
         Arc&lt;TokioRuntime&gt;,
     ),
     String,
@@ -1331,12 +1273,6 @@
         <span class="kw-2">*</span>network.get_network_type(),
     );
 
-    <span class="kw">let </span>eth_pubsub = EthPubSubClient::new(
-        tokio_runtime.clone(),
-        consensus.clone(),
-        notifications.clone(),
-    );
-
     <span class="prelude-val">Ok</span>((
         machine,
         secret_store,
@@ -1352,7 +1288,6 @@
         accounts,
         notifications,
         pubsub,
-        eth_pubsub,
         tokio_runtime,
     ))
 }
@@ -1375,8 +1310,6 @@
         <span class="prelude-ty">Option</span>&lt;WSServer&gt;,
         <span class="prelude-ty">Option</span>&lt;WSServer&gt;,
         Arc&lt;PosVerifier&gt;,
-        <span class="prelude-ty">Option</span>&lt;HttpServer&gt;,
-        <span class="prelude-ty">Option</span>&lt;WSServer&gt;,
         Arc&lt;TokioRuntime&gt;,
         <span class="prelude-ty">Option</span>&lt;RpcServerHandle&gt;,
         TaskManager,
@@ -1396,9 +1329,8 @@
         network,
         common_impl,
         accounts,
-        _notifications,
+        notifications,
         pubsub,
-        eth_pubsub,
         tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)<span class="question-mark">?</span>;
 
@@ -1540,7 +1472,6 @@
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
         ),
     )<span class="question-mark">?</span>;
@@ -1551,7 +1482,6 @@
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
         ),
         RpcExtractor,
@@ -1563,7 +1493,6 @@
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
         ),
         RpcExtractor,
@@ -1575,7 +1504,6 @@
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
         ),
         RpcExtractor,
@@ -1587,62 +1515,26 @@
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             <span class="kw-2">&amp;</span>conf,
-        ),
-        RpcExtractor,
-    )<span class="question-mark">?</span>;
-
-    <span class="kw">let </span>eth_rpc_http_server = <span class="kw">super</span>::rpc::start_http(
-        conf.eth_http_config(),
-        setup_public_eth_rpc_apis(
-            rpc_impl.clone(),
-            eth_pubsub.clone(),
-            <span class="kw-2">&amp;</span>conf,
-            task_executor.clone(),
-        ),
-    )<span class="question-mark">?</span>;
-
-    <span class="kw">let </span>eth_rpc_ws_server = <span class="kw">super</span>::rpc::start_ws(
-        conf.eth_ws_config(),
-        setup_public_eth_rpc_apis(
-            rpc_impl.clone(),
-            eth_pubsub.clone(),
-            <span class="kw-2">&amp;</span>conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )<span class="question-mark">?</span>;
 
     <span class="kw">let </span>rpc_http_server = <span class="kw">super</span>::rpc::start_http(
         conf.http_config(),
-        setup_public_rpc_apis(
-            common_impl,
-            rpc_impl,
-            pubsub,
-            eth_pubsub.clone(),
-            <span class="kw-2">&amp;</span>conf,
-        ),
+        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, <span class="kw-2">&amp;</span>conf),
     )<span class="question-mark">?</span>;
 
     network.start();
 
-    <span class="kw">let </span>eth_rpc_http_server_addr =
-        conf.raw_conf.jsonrpc_http_eth_port_v2.map(|port| {
-            <span class="macro">format!</span>(<span class="string">"0.0.0.0:{}"</span>, port)
-                .parse::&lt;SocketAddr&gt;()
-                .expect(<span class="string">"Invalid socket port"</span>)
-        });
-    <span class="kw">let </span>async_eth_rpc_http_server =
+    <span class="kw">let </span>eth_rpc_server_handle =
         tokio_runtime.block_on(launch_async_rpc_servers(
-            conf.rpc_impl_config(),
-            conf.raw_conf.throttling_conf.clone(),
-            conf.raw_conf.public_evm_rpc_async_apis.clone(),
             consensus.clone(),
             sync.clone(),
             txpool.clone(),
-            eth_rpc_http_server_addr,
+            notifications.clone(),
             task_executor.clone(),
+            conf,
         ))<span class="question-mark">?</span>;
 
     metrics::initialize(conf.metrics_config(), task_executor.clone());
@@ -1661,10 +1553,8 @@
         debug_rpc_ws_server,
         rpc_ws_server,
         pos_verifier,
-        eth_rpc_http_server,
-        eth_rpc_ws_server,
         tokio_runtime,
-        async_eth_rpc_http_server,
+        eth_rpc_server_handle,
         task_manager,
     ))
 }

@@ -232,10 +232,10 @@
 
 </span><span class="kw">use </span><span class="kw">crate</span>::rpc::types::{
     cfx::{from_primitive_access_list, receipt::Receipt, CfxAccessList},
-    eth::Transaction <span class="kw">as </span>ETHTransaction,
     Bytes, RpcAddress,
 };
 <span class="kw">use </span>cfx_addr::Network;
+<span class="kw">use </span>cfx_rpc_eth_types::Transaction <span class="kw">as </span>ETHTransaction;
 <span class="kw">use </span>cfx_types::{Space, H256, U256, U64};
 <span class="kw">use </span>cfxkey::Error;
 <span class="kw">use </span>primitives::{

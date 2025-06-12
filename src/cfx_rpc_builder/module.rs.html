@@ -335,6 +335,16 @@
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
@@ -378,14 +388,21 @@
     <span class="doccomment">/// The default modules `eth`, `net`, `web3`
     </span><span class="attr">#[default]
     </span>Standard,
-    <span class="doccomment">/// eth, ethpubsub(not implemented)
+    <span class="doccomment">/// eth, pubsub, net, web3, parity, trace
     </span>Evm,
     <span class="doccomment">/// Only use the configured modules.
     </span>Selection(HashSet&lt;EthRpcModule&gt;),
 }
 
 <span class="kw">impl </span>RpcModuleSelection {
-    <span class="kw">pub const </span>EVM_MODULES: [EthRpcModule; <span class="number">1</span>] = [EthRpcModule::Eth];
+    <span class="kw">pub const </span>EVM_MODULES: [EthRpcModule; <span class="number">6</span>] = [
+        EthRpcModule::Eth,
+        EthRpcModule::PubSub,
+        EthRpcModule::Net,
+        EthRpcModule::Web3,
+        EthRpcModule::Parity,
+        EthRpcModule::Trace,
+    ];
     <span class="doccomment">/// The standard modules to instantiate by default `eth`, `net`, `web3`
     </span><span class="kw">pub const </span>STANDARD_MODULES: [EthRpcModule; <span class="number">3</span>] =
         [EthRpcModule::Eth, EthRpcModule::Net, EthRpcModule::Web3];
@@ -604,6 +621,8 @@
     </span>Rpc,
     <span class="doccomment">/// `parity_` module
     </span>Parity,
+    <span class="doccomment">/// pubsub
+    </span>PubSub,
 }
 
 <span class="kw">impl </span>EthRpcModule {
@@ -639,7 +658,7 @@
     <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>s {
             <span class="comment">// "admin" =&gt; Self::Admin,
-            </span><span class="string">"debug" </span>=&gt; <span class="self">Self</span>::Debug,
+            </span><span class="string">"debug" </span>| <span class="string">"ethdebug" </span>=&gt; <span class="self">Self</span>::Debug,
             <span class="string">"eth" </span>=&gt; <span class="self">Self</span>::Eth,
             <span class="string">"net" </span>=&gt; <span class="self">Self</span>::Net,
             <span class="string">"trace" </span>=&gt; <span class="self">Self</span>::Trace,
@@ -647,6 +666,7 @@
             <span class="string">"web3" </span>=&gt; <span class="self">Self</span>::Web3,
             <span class="string">"rpc" </span>=&gt; <span class="self">Self</span>::Rpc,
             <span class="string">"parity" </span>=&gt; <span class="self">Self</span>::Parity,
+            <span class="string">"pubsub" </span>| <span class="string">"ethpubsub" </span>=&gt; <span class="self">Self</span>::PubSub,
             <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ParseError::VariantNotFound),
         })
     }

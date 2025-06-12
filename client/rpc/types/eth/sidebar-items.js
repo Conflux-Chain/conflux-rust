@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["BlockNumber","FilterChanges","Res","SyncStatus"],"mod":["eth_pubsub"],"struct":["AccountOverride","AccountPendingTransactions","Block","BlockOverrides","EthRpcLogFilter","EvmOverrides","Header","LocalizedTrace","Log","Receipt","SyncInfo","TraceFilter","Transaction","TransactionRequest"],"type":["RpcStateOverride"]};

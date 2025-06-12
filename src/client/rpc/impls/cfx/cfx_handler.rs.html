@@ -2490,6 +2490,7 @@
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     internal_contract::storage_point_prop,
 };
+<span class="kw">use </span>cfx_rpc_eth_types::Transaction <span class="kw">as </span>EthTransaction;
 <span class="kw">use </span>cfx_statedb::{
     global_params::{
         AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
@@ -2550,8 +2551,7 @@
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            eth::Transaction <span class="kw">as </span>EthTransaction, pos::Block <span class="kw">as </span>PosBlock,
-            Account <span class="kw">as </span>RpcAccount, AccountPendingInfo,
+            pos::Block <span class="kw">as </span>PosBlock, Account <span class="kw">as </span>RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block <span class="kw">as </span>RpcBlock,
             BlockHashOrEpochNumber, Bytes, CfxRpcLogFilter,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,

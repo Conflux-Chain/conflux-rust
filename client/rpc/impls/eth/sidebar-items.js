@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["debug","eth_filter","eth_handler","eth_pubsub","eth_trace"]};

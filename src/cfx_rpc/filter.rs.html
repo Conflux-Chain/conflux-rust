@@ -277,13 +277,13 @@
 <span class="kw">use </span>cfx_rpc_utils::error::jsonrpsee_error_helpers::{
     invalid_request_msg, jsonrpc_error_to_error_object_owned,
 };
+<span class="kw">use </span>cfx_tasks::TaskExecutor;
 <span class="kw">use </span>cfx_types::{H128 <span class="kw">as </span>FilterId, H256};
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>cfxcore::{channel::Channel, SharedConsensusGraph, SharedTransactionPool};
 <span class="kw">use </span>jsonrpsee::core::RpcResult;
 <span class="kw">use </span>primitives::filter::LogFilter;
 <span class="kw">use </span>std::{collections::VecDeque, sync::Arc};
-<span class="kw">use </span>tokio::runtime::Runtime;
 
 <span class="kw">type </span>PendingTransactionFilterKind = ();
 
@@ -294,7 +294,7 @@
 <span class="kw">impl </span>EthFilterApi {
     <span class="kw">pub fn </span>new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;, executor: Arc&lt;Runtime&gt;,
+        epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;, executor: TaskExecutor,
         poll_lifetime: u32, logs_filter_max_limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     ) -&gt; EthFilterApi {
         <span class="kw">let </span>eth_filter = EthFilterHelper::new(

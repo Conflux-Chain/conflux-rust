@@ -576,6 +576,12 @@
 <a href="#576" id="576">576</a>
 <a href="#577" id="577">577</a>
 <a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -596,7 +602,9 @@
     consensus_internal::REWARD_EPOCH_COUNT,
 };
 <span class="kw">use </span>cfx_types::{Space, H256};
-<span class="kw">use </span>cfxcore::{BlockDataManager, Notifications, SharedConsensusGraph};
+<span class="kw">use </span>cfxcore::{
+    channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
+};
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>itertools::zip;
 <span class="kw">use </span>jsonrpc_core::Result <span class="kw">as </span>RpcResult;
@@ -654,6 +662,10 @@
             notifications,
             executor,
         }
+    }
+
+    <span class="kw">pub fn </span>epochs_ordered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt; {
+        <span class="self">self</span>.notifications.epochs_ordered.clone()
     }
 
     <span class="doccomment">/// Returns a chain notification handler.

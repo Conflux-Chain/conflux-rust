@@ -842,6 +842,39 @@
 <a href="#842" id="842">842</a>
 <a href="#843" id="843">843</a>
 <a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
@@ -885,7 +918,8 @@
 <span class="kw">use </span>cfx_rpc_cfx_types::RpcImplConfiguration;
 <span class="kw">use </span>cfx_rpc_eth_api::<span class="kw-2">*</span>;
 <span class="kw">use </span>cfxcore::{
-    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+    Notifications, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 <span class="kw">pub use </span>jsonrpsee::server::ServerBuilder;
 <span class="kw">use </span>jsonrpsee::{
@@ -902,6 +936,7 @@
 <span class="kw">use </span>std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    sync::Arc,
     <span class="comment">/* time::{Duration, SystemTime, UNIX_EPOCH}, */
 </span>};
 <span class="kw">pub use </span>tower::layer::util::{Identity, Stack};
@@ -918,13 +953,14 @@
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     executor: TaskExecutor,
+    notifications: Arc&lt;Notifications&gt;,
 }
 
 <span class="kw">impl </span>RpcModuleBuilder {
     <span class="kw">pub fn </span>new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor,
+        executor: TaskExecutor, notifications: Arc&lt;Notifications&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             config,
@@ -932,6 +968,7 @@
             sync,
             tx_pool,
             executor,
+            notifications,
         }
     }
 
@@ -952,10 +989,16 @@
                 sync,
                 tx_pool,
                 executor,
+                notifications,
             } = <span class="self">self</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>registry = RpcRegistryInner::new(
-                config, consensus, sync, tx_pool, executor,
+                config,
+                consensus,
+                sync,
+                tx_pool,
+                executor,
+                notifications,
             );
 
             modules.config = module_config;
@@ -976,13 +1019,14 @@
     tx_pool: SharedTransactionPool,
     modules: HashMap&lt;EthRpcModule, Methods&gt;,
     executor: TaskExecutor,
+    notifications: Arc&lt;Notifications&gt;,
 }
 
 <span class="kw">impl </span>RpcRegistryInner {
     <span class="kw">pub fn </span>new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor,
+        executor: TaskExecutor, notifications: Arc&lt;Notifications&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             consensus,
@@ -991,6 +1035,7 @@
             tx_pool,
             modules: Default::default(),
             executor,
+            notifications,
         }
     }
 
@@ -1074,15 +1119,29 @@
                     )
                     .into_rpc()
                     .into(),
-                    EthRpcModule::Eth =&gt; EthApi::new(
-                        <span class="self">self</span>.config.clone(),
-                        <span class="self">self</span>.consensus.clone(),
-                        <span class="self">self</span>.sync.clone(),
-                        <span class="self">self</span>.tx_pool.clone(),
-                        <span class="self">self</span>.executor.clone(),
-                    )
-                    .into_rpc()
-                    .into(),
+                    EthRpcModule::Eth =&gt; {
+                        <span class="kw">let </span><span class="kw-2">mut </span>module = EthApi::new(
+                            <span class="self">self</span>.config.clone(),
+                            <span class="self">self</span>.consensus.clone(),
+                            <span class="self">self</span>.sync.clone(),
+                            <span class="self">self</span>.tx_pool.clone(),
+                            <span class="self">self</span>.executor.clone(),
+                        )
+                        .into_rpc();
+                        <span class="kw">if </span><span class="self">self</span>.config.poll_lifetime_in_seconds.is_some() {
+                            <span class="kw">let </span>filter_module = EthFilterApi::new(
+                                <span class="self">self</span>.consensus.clone(),
+                                <span class="self">self</span>.tx_pool.clone(),
+                                <span class="self">self</span>.notifications.epochs_ordered.clone(),
+                                <span class="self">self</span>.executor.clone(),
+                                <span class="self">self</span>.config.poll_lifetime_in_seconds.unwrap(),
+                                <span class="self">self</span>.config.get_logs_filter_max_limit,
+                            )
+                            .into_rpc();
+                            module.merge(filter_module).expect(<span class="string">"No conflicts"</span>);
+                        }
+                        module.into()
+                    }
                     EthRpcModule::Net =&gt; NetApi::new(Box::new(ChainInfo::new(
                         <span class="self">self</span>.consensus.clone(),
                     )))
@@ -1111,6 +1170,13 @@
                     EthRpcModule::Txpool =&gt; {
                         TxPoolApi::new(<span class="self">self</span>.tx_pool.clone()).into_rpc().into()
                     }
+                    EthRpcModule::PubSub =&gt; PubSubApi::new(
+                        <span class="self">self</span>.consensus.clone(),
+                        <span class="self">self</span>.notifications.clone(),
+                        <span class="self">self</span>.executor.clone(),
+                    )
+                    .into_rpc()
+                    .into(),
                 })
                 .clone()
         };

@@ -19,7 +19,7 @@
 </pre></div><pre class="rust"><code><span class="doccomment">//! `eth_` RPC API for pubsub subscription.
 
 </span><span class="kw">use </span>cfx_rpc_eth_types::eth_pubsub::{Kind <span class="kw">as </span>SubscriptionKind, Params};
-<span class="kw">use </span>jsonrpsee::proc_macros::rpc;
+<span class="kw">use </span>jsonrpsee::{core::SubscriptionResult, proc_macros::rpc};
 
 <span class="doccomment">/// Ethereum pub-sub rpc interface.
 </span><span class="attr">#[rpc(server, namespace = <span class="string">"eth"</span>)]
@@ -32,6 +32,6 @@
     )]
     </span><span class="kw">async fn </span>subscribe(
         <span class="kw-2">&amp;</span><span class="self">self</span>, kind: SubscriptionKind, params: <span class="prelude-ty">Option</span>&lt;Params&gt;,
-    ) -&gt; jsonrpsee::core::SubscriptionResult;
+    ) -&gt; SubscriptionResult;
 }
 </code></pre></div></section></main></body></html>

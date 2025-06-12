@@ -590,6 +590,7 @@
 <a href="#590" id="590">590</a>
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::EpochQueue;
 <span class="kw">use </span>cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
@@ -602,6 +603,7 @@
     Header, Log,
 };
 <span class="kw">use </span>cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_rpc_err;
+<span class="kw">use </span>cfx_tasks::TaskExecutor;
 <span class="kw">use </span>cfx_types::{Space, H256};
 <span class="kw">use </span>cfxcore::{
     BlockDataManager, ConsensusGraph, Notifications, SharedConsensusGraph,
@@ -623,14 +625,14 @@
     sync::Arc,
     time::Duration,
 };
-<span class="kw">use </span>tokio::{runtime::Runtime, sync::broadcast, time::sleep};
+<span class="kw">use </span>tokio::{sync::broadcast, time::sleep};
 <span class="kw">use </span>tokio_stream::{wrappers::BroadcastStream, Stream};
 
 <span class="kw">const </span>BROADCAST_CHANNEL_SIZE: usize = <span class="number">1000</span>;
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>PubSubApi {
-    executor: Arc&lt;Runtime&gt;,
+    executor: TaskExecutor,
     chain_data_provider: Arc&lt;ChainDataProvider&gt;,
     notifications: Arc&lt;Notifications&gt;,
     heads_loop_started: Arc&lt;RwLock&lt;bool&gt;&gt;,
@@ -642,7 +644,7 @@
 <span class="kw">impl </span>PubSubApi {
     <span class="kw">pub fn </span>new(
         consensus: SharedConsensusGraph, notifications: Arc&lt;Notifications&gt;,
-        executor: Arc&lt;Runtime&gt;,
+        executor: TaskExecutor,
     ) -&gt; PubSubApi {
         <span class="kw">let </span>(head_sender, <span class="kw">_</span>) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
         <span class="kw">let </span>log_senders = Arc::new(RwLock::new(HashMap::new()));

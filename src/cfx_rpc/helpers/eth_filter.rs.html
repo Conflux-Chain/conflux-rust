@@ -406,6 +406,7 @@
 <span class="kw">use </span>cfx_rpc_cfx_types::traits::BlockProvider;
 <span class="kw">use </span>cfx_rpc_eth_types::{EthRpcLogFilter, Log};
 <span class="kw">use </span>cfx_rpc_utils::error::error_codes <span class="kw">as </span>codes;
+<span class="kw">use </span>cfx_tasks::TaskExecutor;
 <span class="kw">use </span>cfx_types::{Space, H256};
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>cfxcore::{
@@ -418,7 +419,6 @@
 <span class="kw">use </span>primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,
 };
-<span class="kw">use </span>tokio::runtime::Runtime;
 
 <span class="doccomment">/// Eth filter rpc implementation for a full node.
 </span><span class="kw">pub struct </span>EthFilterHelper {
@@ -447,7 +447,7 @@
     <span class="doccomment">/// Creates new Eth filter client.
     </span><span class="kw">pub fn </span>new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;, executor: Arc&lt;Runtime&gt;,
+        epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;, executor: TaskExecutor,
         poll_lifetime: u32, logs_filter_max_limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>filter_client = EthFilterHelper {
@@ -465,7 +465,7 @@
 
     <span class="kw">fn </span>start_epochs_loop(
         <span class="kw-2">&amp;</span><span class="self">self</span>, epochs_ordered: Arc&lt;Channel&lt;(u64, Vec&lt;H256&gt;)&gt;&gt;,
-        executor: Arc&lt;Runtime&gt;,
+        executor: TaskExecutor,
     ) {
         <span class="comment">// subscribe to the `epochs_ordered` channel
         </span><span class="kw">let </span><span class="kw-2">mut </span>receiver = epochs_ordered.subscribe();

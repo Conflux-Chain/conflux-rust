@@ -111,12 +111,6 @@
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
 <a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
-<a href="#115" id="115">115</a>
-<a href="#116" id="116">116</a>
-<a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -152,8 +146,6 @@
     <span class="kw">pub </span>sync: Arc&lt;SynchronizationService&gt;,
     <span class="kw">pub </span>txpool: Arc&lt;TransactionPool&gt;,
     <span class="kw">pub </span>pow: Arc&lt;PowComputer&gt;,
-    <span class="kw">pub </span>eth_rpc_http_server: <span class="prelude-ty">Option</span>&lt;HttpServer&gt;,
-    <span class="kw">pub </span>eth_rpc_ws_server: <span class="prelude-ty">Option</span>&lt;WsServer&gt;,
     <span class="doccomment">/// Handle to the started ETH RPC server. This is version 2 of the ETH RPC.
     /// Which use Rust async I/O
     </span><span class="kw">pub </span>eth_rpc_server_handle: <span class="prelude-ty">Option</span>&lt;RpcServerHandle&gt;,
@@ -196,8 +188,6 @@
             debug_rpc_ws_server,
             rpc_ws_server,
             pos_handler,
-            eth_rpc_http_server,
-            eth_rpc_ws_server,
             tokio_runtime,
             eth_rpc_server_handle,
             task_manager,
@@ -221,8 +211,6 @@
                 sync,
                 txpool,
                 pow,
-                eth_rpc_http_server,
-                eth_rpc_ws_server,
                 eth_rpc_server_handle,
                 tokio_runtime,
                 task_manager,
