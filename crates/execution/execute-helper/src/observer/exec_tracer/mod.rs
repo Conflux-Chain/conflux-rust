@@ -155,10 +155,6 @@ impl OpcodeTracer for ExecTracer {
         &mut self, space: Space, contract: &Address, target: &Address,
         value: U256,
     ) {
-        if space == Space::Native {
-            // native space can use InternalTransferAction instead
-            return;
-        }
         let self_destruct = SelfDestructAction {
             space,
             address: contract.clone(),

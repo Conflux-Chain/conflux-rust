@@ -31,9 +31,14 @@ pub struct TraceWithPosition<'a> {
 /// and nested child frames (sub-calls).
 pub struct ResolvedTraceNode<'a> {
     action_trace: ActionTrace<'a>,
-    result_trace: Option<ResultTrace<'a>>,
-    child_nodes: Vec<ResolvedTraceNode<'a>>,
+    result_trace: ResultTrace<'a>,
+    child_nodes: Vec<TraceNode<'a>>,
     total_child_count: usize,
+}
+
+enum TraceNode<'a> {
+    CallCreate(ResolvedTraceNode<'a>),
+    Suicide(SelfDestructTrace<'a>),
 }
 
 impl<'a> ResolvedTraceNode<'a> {
@@ -45,27 +50,30 @@ impl<'a> ResolvedTraceNode<'a> {
     /// * `children` - Child nodes from nested operations (contract creation or
     ///   message call)
     fn new(
-        action: ActionTrace<'a>, result: Option<ResultTrace<'a>>,
-        children: Vec<ResolvedTraceNode<'a>>,
+        action: ActionTrace<'a>, result: ResultTrace<'a>,
+        children: Vec<TraceNode<'a>>,
     ) -> Result<Self, String> {
         // Validate action-result type pairing
-        if result.is_some() {
-            match (&action.0.action, &result.as_ref().unwrap().0.action) {
-                (Action::Call(_), Action::CallResult(_))
-                | (Action::Create(_), Action::CreateResult(_)) => {}
-                _ => {
-                    return Err(format!(
-                        "Type mismatch. Action: {:?}, Result: {:?}",
-                        action.0.action,
-                        result.unwrap().0.action
-                    ))
-                }
+        match (&action.0.action, &result.0.action) {
+            (Action::Call(_), Action::CallResult(_))
+            | (Action::Create(_), Action::CreateResult(_)) => {}
+            _ => {
+                return Err(format!(
+                    "Type mismatch. Action: {:?}, Result: {:?}",
+                    action.0.action, result.0.action
+                ))
             }
         }
 
         // Calculate total children count (direct + indirect)
         let total_child_count = children.len()
-            + children.iter().map(|x| x.total_child_count).sum::<usize>();
+            + children
+                .iter()
+                .map(|x| match x {
+                    TraceNode::CallCreate(node) => node.total_child_count,
+                    TraceNode::Suicide(_) => 0,
+                })
+                .sum::<usize>();
 
         Ok(Self {
             action_trace: action,
@@ -83,7 +91,7 @@ impl<'a> ResolvedTraceNode<'a> {
         // Current node's trace entry
         let root_entry = std::iter::once(TraceWithPosition {
             action: self.action_trace.0,
-            result: self.result_trace.map(|r| r.0),
+            result: Some(self.result_trace.0),
             child_count: self.total_child_count,
             trace_path: trace_path.clone(),
         });
@@ -93,7 +101,19 @@ impl<'a> ResolvedTraceNode<'a> {
             move |(idx, child)| {
                 let mut child_path = trace_path.clone();
                 child_path.push(idx);
-                child.flatten_into_traces(child_path)
+                match child {
+                    TraceNode::CallCreate(child) => {
+                        child.flatten_into_traces(child_path)
+                    }
+                    TraceNode::Suicide(suicide) => {
+                        Box::new(std::iter::once(TraceWithPosition {
+                            action: suicide.0,
+                            result: None,
+                            child_count: 0,
+                            trace_path: trace_path.clone(),
+                        }))
+                    }
+                }
             },
         );
 
@@ -107,8 +127,7 @@ pub fn build_call_hierarchy<'a>(
     traces: &'a [ExecTrace],
 ) -> Result<ResolvedTraceNode<'a>, String> {
     // Stack tracks unclosed actions and their collected children
-    let mut unclosed_actions: Vec<(ActionTrace, Vec<ResolvedTraceNode>)> =
-        vec![];
+    let mut unclosed_actions: Vec<(ActionTrace, Vec<TraceNode>)> = vec![];
 
     // Filter out internal transfer and set auth events (handled separately)
     let mut iter = traces.iter().filter(|x| {
@@ -137,13 +156,12 @@ pub fn build_call_hierarchy<'a>(
                     ));
                 };
 
-                let node =
-                    ResolvedTraceNode::new(action, Some(result), children)?;
+                let node = ResolvedTraceNode::new(action, result, children)?;
 
                 // Attach to parent if exists, otherwise return as root
                 if let Some((_, parent_children)) = unclosed_actions.last_mut()
                 {
-                    parent_children.push(node);
+                    parent_children.push(TraceNode::CallCreate(node));
                 } else {
                     return if let Some(trace) = iter.next() {
                         Err(format!(
@@ -156,21 +174,13 @@ pub fn build_call_hierarchy<'a>(
                 }
             }
             Action::SelfDestruct(_) => {
-                let action = ActionTrace::try_from(trace).unwrap();
-                let node = ResolvedTraceNode::new(action, None, vec![])?;
+                let action = SelfDestructTrace::try_from(trace).unwrap();
                 // Attach to parent if exists, otherwise return as root
                 if let Some((_, parent_children)) = unclosed_actions.last_mut()
                 {
-                    parent_children.push(node);
+                    parent_children.push(TraceNode::Suicide(action));
                 } else {
-                    return if let Some(trace) = iter.next() {
-                        Err(format!(
-                            "Trailing traces after root node closure: {:?}",
-                            trace
-                        ))
-                    } else {
-                        Ok(node)
-                    };
+                    return Err("selfdestruct trace should have parent".into());
                 }
             }
             // Filtered out earlier
@@ -194,9 +204,7 @@ impl<'a> TryFrom<&'a ExecTrace> for ActionTrace<'a> {
 
     fn try_from(trace: &'a ExecTrace) -> Result<Self, Self::Error> {
         match trace.action {
-            Action::Call(_) | Action::Create(_) | Action::SelfDestruct(_) => {
-                Ok(Self(trace))
-            }
+            Action::Call(_) | Action::Create(_) => Ok(Self(trace)),
             _ => Err("Not an action trace"),
         }
     }
@@ -209,6 +217,19 @@ impl<'a> TryFrom<&'a ExecTrace> for ResultTrace<'a> {
         match trace.action {
             Action::CallResult(_) | Action::CreateResult(_) => Ok(Self(trace)),
             _ => Err("Not a result trace"),
+        }
+    }
+}
+
+struct SelfDestructTrace<'a>(&'a ExecTrace);
+
+impl<'a> TryFrom<&'a ExecTrace> for SelfDestructTrace<'a> {
+    type Error = &'static str;
+
+    fn try_from(trace: &'a ExecTrace) -> Result<Self, Self::Error> {
+        match trace.action {
+            Action::SelfDestruct(_) => Ok(Self(trace)),
+            _ => Err("Not a self-destruct trace"),
         }
     }
 }

@@ -71,8 +71,10 @@ def test_trace_suicide(ew3, evm_accounts, ew3_tracing):
 
     contract = ew3.eth.contract(address=contract_address, abi=destroyable_contract_meta["abi"])
 
-    tx_hash = contract.destroy(account.address).transact()
+    tx_hash = contract.functions.destroy(account.address).transact()
     ew3.eth.wait_for_transaction_receipt(tx_hash)
 
     traces = ew3_tracing.trace_transaction(tx_hash)
-    assert len(traces) == 1
+    assert len(traces) == 2
+    assert traces[1]["type"] == "suicide"
+    assert traces[1]["action"]["refundAddress"] == account.address
