@@ -7,12 +7,12 @@ use std::{
 use time::Duration;
 
 #[derive(Clone, Debug)]
-pub struct MineJob {
+pub(crate) struct MineJob {
     block: Block,
     problem: ProofOfWorkProblem,
 }
 
-pub struct MineState {
+pub(crate) struct MineState {
     job_history: VecDeque<MineJob>,
     mining_job: Option<MineJob>,
     last_notify_at: Instant,
