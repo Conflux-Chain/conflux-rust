@@ -14,7 +14,7 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_rpc_cfx_impl::TraceHandler as CfxTraceHandler;
-use cfx_rpc_cfx_types::trace::EpochTrace;
+use cfx_rpc_eth_types::trace::EpochTrace;
 use cfx_types::H256;
 
 use cfxcore::SharedConsensusGraph;

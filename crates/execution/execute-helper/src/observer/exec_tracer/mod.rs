@@ -10,7 +10,7 @@ pub use phantom_traces::{
 pub use cfx_parity_trace_types::{
     action_types::{
         self, Action, ActionType, Call, CallResult, Create, CreateResult,
-        InternalTransferAction, Outcome, SetAuth,
+        InternalTransferAction, Outcome, SelfDestructAction, SetAuth,
     },
     filter::{self, TraceFilter},
     trace_types::{
@@ -27,7 +27,7 @@ use cfx_executor::{
     },
     stack::{FrameResult, FrameReturn},
 };
-use cfx_types::{Address, U256};
+use cfx_types::{Address, Space, U256};
 use cfx_vm_types::ActionParams;
 use typemap::ShareDebugMap;
 
@@ -150,7 +150,22 @@ impl CallTracer for ExecTracer {
 }
 
 impl StorageTracer for ExecTracer {}
-impl OpcodeTracer for ExecTracer {}
+impl OpcodeTracer for ExecTracer {
+    fn selfdestruct(
+        &mut self, space: Space, contract: &Address, target: &Address,
+        value: U256,
+    ) {
+        let self_destruct = SelfDestructAction {
+            space,
+            address: contract.clone(),
+            refund_address: *target,
+            balance: value,
+        };
+        let action = Action::SelfDestruct(self_destruct);
+        self.valid_indices.push(self.traces.len());
+        self.traces.push(action);
+    }
+}
 
 impl SetAuthTracer for ExecTracer {
     fn record_set_auth(&mut self, set_auth_action: SetAuth) {

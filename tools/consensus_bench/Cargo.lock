@@ -1167,6 +1167,8 @@ dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-primitives",
  "cfx-types",
+ "cfx-util-macros",
+ "cfx-vm-types",
  "jsonrpc-core",
  "jsonrpsee",
  "primitives",

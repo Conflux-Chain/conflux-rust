@@ -23,7 +23,7 @@ eSpace methods are compatible with [parity](https://openethereum.github.io/JSONR
 | `trace_replayBlockTransactions` |  |
 | `trace_blockSetAuth` | Conflux-specific method | 
 
-Currently, trace data only supports Call and Create types. Support for Selfdestruct will be added in the future. Since Conflux’s block rewards and PoS rewards occur in Core Space, there will be no Reward type trace data in eSpace.
+Currently, trace data only supports Call and Create types. Since Conflux’s block rewards and PoS rewards occur in Core Space, there will be no Reward type trace data in eSpace.
 
 ### Trace SetAuth(7702)
 
