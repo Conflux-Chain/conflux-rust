@@ -23,12 +23,12 @@ pub mod errors;
 pub mod genesis_block;
 pub mod light_protocol;
 pub mod pos;
-pub mod pow;
 pub mod statistics;
 pub mod sync;
 pub mod transaction_pool;
 pub mod verification;
 
+pub use cfxcore_pow as pow;
 pub use cfxcore_types::{
     cache_config, cache_manager, channel, core_error, node_type, state_exposer,
     unique_id,
