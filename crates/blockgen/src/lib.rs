@@ -85,7 +85,7 @@ impl BlockGenerator {
         self.sync.on_mined_block(block).ok();
     }
 
-    pub fn with_test_api(self: &Arc<Self>) -> BlockGeneratorTestApi {
+    pub fn test_api(self: &Arc<Self>) -> BlockGeneratorTestApi {
         BlockGeneratorTestApi::new(self.clone())
     }
 

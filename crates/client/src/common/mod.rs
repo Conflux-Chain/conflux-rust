@@ -634,7 +634,7 @@ pub fn initialize_not_light_node_modules(
         // receiving RPC `cfx_sendRawTransaction`.
         if let Some(interval_ms) = conf.raw_conf.dev_block_interval_ms {
             // Automatic block generation with fixed interval.
-            let bg = blockgen.with_test_api();
+            let bg = blockgen.test_api();
             info!("Start auto block generation");
             thread::Builder::new()
                 .name("auto_mining".into())
@@ -661,7 +661,7 @@ pub fn initialize_not_light_node_modules(
     let rpc_impl = Arc::new(RpcImpl::new(
         consensus.clone(),
         sync.clone(),
-        blockgen.with_test_api(),
+        blockgen.test_api(),
         txpool.clone(),
         maybe_txgen.clone(),
         maybe_direct_txgen,
