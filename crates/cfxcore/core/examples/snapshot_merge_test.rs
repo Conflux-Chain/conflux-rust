@@ -198,7 +198,7 @@ fn main() -> Result<(), Error> {
         assert!(value.is_some(), "Address {:?} does not exist", addr);
         let account_bytes = rlp::encode(account);
         let get_bytes = value.unwrap();
-        assert_eq!(account_bytes.as_slice(), get_bytes.as_ref());
+        assert_eq!(account_bytes.as_ref(), get_bytes.as_ref());
     }
     // TODO Make snapshot3 to compare the snapshot merkle_root
     let state_root_3 = StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);

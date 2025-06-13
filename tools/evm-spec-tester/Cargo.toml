@@ -22,7 +22,7 @@ cfx-bytes = { path = "../../crates/cfx_bytes" }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 walkdir = "2.5"
 thiserror = "2.0.11"
-rlp = "0.4.0"
+rlp = "0.6.1"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 
@@ -36,3 +36,6 @@ clap-verbosity-flag = "3"
 
 [features]
 default = ["cfx-executor/align_evm", "cfx-statedb/testonly_code"]
+
+[patch.crates-io]
+rlp = { git = "https://github.com/Conflux-Chain/parity-common-rocksdb.git", rev = "b28832745c952c8bcac88348276b283c26de776a", package = "rlp" }
