@@ -1418,6 +1418,7 @@ dependencies = [
  "serde",
  "strum",
  "thiserror 2.0.11",
+ "tokio",
  "tower",
 ]
 
@@ -2166,6 +2167,7 @@ version = "2.6.0"
 dependencies = [
  "bcs",
  "bls-signatures",
+ "cfx-execute-helper",
  "cfx-executor",
  "cfx-types",
  "cfxcore",

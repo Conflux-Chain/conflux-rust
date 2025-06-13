@@ -11,6 +11,7 @@ use crate::{
 use cfx_rpc_cfx_types::traits::BlockProvider;
 use cfx_rpc_eth_types::{EthRpcLogFilter, Log};
 use cfx_rpc_utils::error::error_codes as codes;
+use cfx_tasks::TaskExecutor;
 use cfx_types::{Space, H256};
 use cfx_util_macros::bail;
 use cfxcore::{
@@ -23,7 +24,6 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{
     filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,
 };
-use tokio::runtime::Runtime;
 
 /// Eth filter rpc implementation for a full node.
 pub struct EthFilterHelper {
@@ -52,7 +52,7 @@ impl EthFilterHelper {
     /// Creates new Eth filter client.
     pub fn new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Arc<Runtime>,
+        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: TaskExecutor,
         poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
     ) -> Self {
         let filter_client = EthFilterHelper {
@@ -70,7 +70,7 @@ impl EthFilterHelper {
 
     fn start_epochs_loop(
         &self, epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
-        executor: Arc<Runtime>,
+        executor: TaskExecutor,
     ) {
         // subscribe to the `epochs_ordered` channel
         let mut receiver = epochs_ordered.subscribe();

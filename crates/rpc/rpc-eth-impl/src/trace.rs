@@ -1,3 +1,5 @@
+use std::vec;
+
 use cfx_addr::Network;
 use cfx_parity_trace_types::Action;
 use cfx_rpc_cfx_impl::TraceHandler;
