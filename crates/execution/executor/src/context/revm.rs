@@ -61,7 +61,9 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     }
 
     fn chain_id(&self) -> U256 {
-        revm_primitives::U256::from(self.context.chain_id())
+        revm_primitives::U256::from(
+            self.context.env.chain_id[&self.context.space],
+        )
     }
 
     fn effective_gas_price(&self) -> U256 { todo!() }
@@ -141,14 +143,12 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
     }
 
     fn log(&mut self, log: Log) {
-        let topics: Vec<cfx_types::H256> = log
-            .data
-            .topics()
-            .iter()
-            .map(|topic| from_alloy_h256(*topic))
-            .collect();
-        let data = log.data.data;
+        let data_topics = log.data.topics();
+        let mut topics = Vec::with_capacity(data_topics.len());
 
+        topics.extend(data_topics.iter().map(|topic| from_alloy_h256(*topic)));
+
+        let data = log.data.data;
         self.context.log(topics, &data);
     }
 
@@ -209,7 +209,7 @@ impl<'a> revm_interpreter::Host for EvmHost<'a> {
             }
         };
 
-        let value = match self.context.storage_at(&key_bytes.to_vec()) {
+        let value = match self.context.storage_at(&key_bytes) {
             Ok(current_value) => to_alloy_u256(current_value),
             Err(e) => {
                 self.error = Err(unwrap_db_error(e));
