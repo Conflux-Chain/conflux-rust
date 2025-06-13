@@ -17,11 +17,11 @@ use cfx_types::{BigEndianHash, H256, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::RwLock;
+use primitives::BlockHeader;
 use static_assertions::_core::str::FromStr;
 use std::{
     collections::{HashMap, VecDeque},
     convert::TryFrom,
-    sync::Arc,
 };
 
 #[cfg(target_endian = "big")]
@@ -46,6 +46,14 @@ impl ProofOfWorkProblem {
             difficulty,
             boundary,
         }
+    }
+
+    pub fn from_block_header(block_header: &BlockHeader) -> Self {
+        Self::new(
+            block_header.height(),
+            block_header.problem_hash(),
+            *block_header.difficulty(),
+        )
     }
 
     #[inline]
@@ -305,19 +313,19 @@ impl PowComputer {
                 .into()
         }
     }
-}
 
-pub fn validate(
-    pow: Arc<PowComputer>, problem: &ProofOfWorkProblem,
-    solution: &ProofOfWorkSolution,
-) -> bool {
-    let nonce = solution.nonce;
-    let hash = pow.compute(&nonce, &problem.block_hash, problem.block_height);
-    ProofOfWorkProblem::validate_hash_against_boundary(
-        &hash,
-        &nonce,
-        &problem.boundary,
-    )
+    pub fn validate(
+        &self, problem: &ProofOfWorkProblem, solution: &ProofOfWorkSolution,
+    ) -> bool {
+        let nonce = solution.nonce;
+        let hash =
+            self.compute(&nonce, &problem.block_hash, problem.block_height);
+        ProofOfWorkProblem::validate_hash_against_boundary(
+            &hash,
+            &nonce,
+            &problem.boundary,
+        )
+    }
 }
 
 /// This function computes the target difficulty of the next period
