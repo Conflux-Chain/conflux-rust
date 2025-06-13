@@ -1090,16 +1090,16 @@ impl RpcImpl {
         timestamp: u64, adaptive: bool,
     ) -> CoreResult<H256> {
         let transactions = self.decode_raw_txs(raw, 0)?;
-        let hash = self.block_gen.generate_block_with_nonce_and_timestamp(
-            parent,
-            referees,
-            transactions,
-            nonce,
-            timestamp,
-            adaptive,
-        )?;
-        self.consensus_graph().wait_for_generation(&hash);
-        Ok(hash)
+        self.block_gen
+            .generate_block_with_nonce_and_timestamp(
+                parent,
+                referees,
+                transactions,
+                nonce,
+                timestamp,
+                adaptive,
+            )
+            .map_err(Into::into)
     }
 
     fn decode_raw_txs(
