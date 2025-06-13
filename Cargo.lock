@@ -3126,7 +3126,9 @@ dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
  "enumn",
+ "keccak-hash",
  "primitives",
+ "rlp 0.4.6",
  "serde",
  "serde_json",
 ]
