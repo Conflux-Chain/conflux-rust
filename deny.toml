@@ -275,7 +275,7 @@ allow-git = [
     # diem-logger -> pipe-logger-lib
     "https://github.com/aleksuss/pipe-logger-lib.git",
 
-
+    "https://github.com/andrcmdr/vrf-rs.git",
 ]
 
 [sources.allow-org]

@@ -335,6 +335,7 @@ blst = "0.3"
 #secp256k1 = "0.30.0"
 #rustls = "0.21"
 hashbrown = "0.7.1"
+vrf = "0.2"
 
 clap = "4"
 
@@ -454,4 +455,6 @@ influx_db_client = "0.5.1"
 rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "7dbd66f507db1d0cfdf5334ad56ca0b24a768740" }
 
 [patch.crates-io]
+# use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed
+vrf = { git = "https://github.com/andrcmdr/vrf-rs.git", rev = "f7bdb21f7f5d1858a3bb0183f194440f9a4199b3" }
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
