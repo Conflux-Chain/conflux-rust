@@ -15,6 +15,7 @@ use primitives::{
     Action, SignedTransaction, Transaction,
 };
 use std::{str::FromStr, sync::Arc};
+use rand::{RngCore};
 
 const PRIVATE_KEY: &str =
     "74806d258099decd5f5bd500f5b318aaaa0a8a289f8dcb10a9609966d8a0e442";
@@ -568,4 +569,517 @@ fn test_clear_bucket() {
     dpool.clear();
     assert!(dpool.buckets.is_empty());
     assert!(dpool.packing_pool.in_space(Space::Native).len() == 0);
+}
+
+
+
+pub struct TestAccount {
+    pub private_key: String,
+    pub account: AddressWithSpace,
+}
+
+impl  TestAccount {
+    pub fn new(private_key:String, account: AddressWithSpace) -> Self {
+        TestAccount { private_key, account }
+    }
+}
+
+pub fn random_account_with_native_space() -> TestAccount {
+    let secret = generate_conflux_private_key().unwrap();
+    let key_pair = KeyPair::from_secret(secret.clone()).unwrap();
+    // return a Native Space address and private key
+    // Note: This is a random key pair, not the one from PRIVATE_KEY
+    let pk_tmp = String::from(&secret.to_hex());
+    let pk =&pk_tmp[..];
+    TestAccount::new(String::from(pk), key_pair.address().with_native_space())
+}
+
+
+fn generate_conflux_private_key() -> Option<Secret> {
+
+    let mut rng = rand::rng();
+    let mut bytes = [0u8; 32];
+    rng.fill_bytes(&mut bytes);
+    Secret::from_slice(&bytes)
+}
+
+
+#[test]
+fn test_500k_tx_packing() {
+    let mut dpool = DeferredPool::new_for_test();
+    for i in 0..500000 {
+
+        let  test_account = random_account_with_native_space();
+        let addr = test_account.account;
+        let pky = test_account.private_key;
+        let tx = create_tx_with_ready_info(U256::from(i), U256::from(21000),100, addr,&pky);         
+        dpool.insert(tx, false);
+
+    }
+    assert_eq!(dpool.buckets.len(),500000);
+}
+
+#[test]
+fn test_500kp_tx_packing() {
+    let mut dpool = DeferredPool::new_for_test();
+    for i in 0..500200 {
+
+        let  test_account = random_account_with_native_space();
+        let addr = test_account.account;
+        let pky = test_account.private_key;
+        let tx = create_tx_with_ready_info(U256::from(i), U256::from(21000),100, addr,&pky);         
+        dpool.insert(tx, false);
+
+    }
+    assert_eq!(dpool.buckets.len(),500200);
+}
+
+#[test]
+fn test_get_pending_info(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let signtx = create_signed_transaction(U256::from(0), U256::from(21000), 100, addr, PRIVATE_KEY).unwrap();
+
+    dpool.insert(tx, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+    );
+    assert!(!dpool.buckets.is_empty());
+    assert!(dpool.packing_pool.in_space(Space::Native).len() == 1);
+    let pending_info = dpool.get_pending_info(&addr, &U256::from(0)).unwrap();
+    assert!(pending_info.0==1);
+    assert_eq!(pending_info.1, Arc::new(signtx));
+}
+
+
+#[test]
+fn test_get_pending_tx(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+
+    let tx1 = create_tx_with_ready_info(
+        U256::from(1),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx2 = create_tx_with_ready_info(
+        U256::from(2),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx_clone = tx.clone();
+    dpool.insert(tx, false);
+    dpool.insert(tx1, false);
+    dpool.insert(tx2, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+    );
+    assert!(!dpool.buckets.is_empty());
+    assert!(dpool.packing_pool.in_space(Space::Native).len() == 1);
+    let pending_tx = dpool.get_pending_transactions(&addr, &U256::from(0), &U256::from(0), &U256::from(1_000_000_000_000_000u64));
+    assert_eq!(pending_tx.0.len(),3);
+    assert_eq!(pending_tx.0[0],&tx_clone);
+}
+
+
+
+#[test]
+fn test_last_succ_nonce(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx2 = create_tx_with_ready_info(
+        U256::from(1),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    dpool.insert(tx, false);
+    dpool.insert(tx2, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(1),
+        U256::from(1_000_000_000_000_000u64),
+    );
+    let result = dpool.last_succ_nonce(addr, U256::from(0));
+    assert_eq!(result.unwrap(), U256::from(2));
+
+}
+
+#[test]
+fn test_ready_account_number(){
+    let mut dpool = DeferredPool::new_for_test();
+    for _i in 0..200 {
+
+        let  test_account = random_account_with_native_space();
+        let addr = test_account.account;
+        let pky = test_account.private_key;
+        let tx = create_tx_with_ready_info(U256::from(0), U256::from(21000),100, addr,&pky);         
+        dpool.insert(tx, false);
+        
+        dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    }
+
+    let result = dpool.ready_account_number(Space::Native);
+    assert_eq!(result, 200);
+    dpool.clear();
+    let result1 = dpool.ready_account_number(Space::Native);
+    assert_eq!(result1, 0);
+    
+
+}
+
+
+#[test]
+fn test_ready_transaction_hashes(){
+    let mut dpool = DeferredPool::new_for_test();
+    let result0 = dpool.ready_transaction_hashes(Space::Native);
+    assert_eq!(result0.into_iter().count(), 0);
+
+    for _i in 0..10 {
+
+        let  test_account = random_account_with_native_space();
+        let addr = test_account.account;
+        let pky = test_account.private_key;
+        let tx = create_tx_with_ready_info(U256::from(0), U256::from(21000),100, addr,&pky);         
+        dpool.insert(tx, false);
+        
+        dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+        );
+
+    }
+
+    let result1 = dpool.ready_transaction_hashes(Space::Native);
+    assert_eq!(result1.into_iter().count(), 10);
+    dpool.clear();
+    let result2 = dpool.ready_transaction_hashes(Space::Native);
+    assert_eq!(result2.into_iter().count(), 0);
+
+}
+
+#[test]
+fn test_ready_transactions_by_space(){
+    let mut dpool = DeferredPool::new_for_test();
+    let result0 = dpool.ready_transaction_hashes(Space::Native);
+    assert_eq!(result0.into_iter().count(), 0);
+
+    for _i in 0..10 {
+
+        let  test_account = random_account_with_native_space();
+        let addr = test_account.account;
+        let pky = test_account.private_key;
+        let tx = create_tx_with_ready_info(U256::from(0), U256::from(21000),100, addr,&pky);         
+        dpool.insert(tx, false);
+        
+        dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+        );
+
+    }
+
+    let result1 = dpool.ready_transactions_by_space(Space::Native);
+    assert_eq!(result1.into_iter().count(), 10);
+    dpool.clear();
+    let result2 = dpool.ready_transactions_by_space(Space::Native);
+    assert_eq!(result2.into_iter().count(), 0);
+
+}
+
+
+
+#[test]
+fn test_has_ready_tx(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    assert!(!dpool.has_ready_tx(&addr));
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx2 = create_tx_with_ready_info(
+        U256::from(1),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    dpool.insert(tx, false);
+    dpool.insert(tx2, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(1),
+        U256::from(1_000_000_000_000_000u64),
+    );
+    assert!(dpool.has_ready_tx(&addr));
+    dpool.clear();
+    assert!(!dpool.has_ready_tx(&addr));
+
+}
+
+#[test]
+fn test_ready_transactions_by_address(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx2 = create_tx_with_ready_info(
+        U256::from(1),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    dpool.insert(tx, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    dpool.insert(tx2, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(1),
+        U256::from(1_000_000_000_000_000u64),
+    );
+    dpool.mark_packed(addr, &U256::from(0), true);
+    let result  = dpool.ready_transactions_by_address(addr).unwrap();
+    assert!(result.len()==2);
+    let a = &result[1];
+    println!("tx: {:?}", a.sender());
+    println!("tx: {:?}", a.transaction.nonce());
+    // assert_eq!(a.rlp_size.unwrap(), 2);
+    dpool.clear();
+    let result2  = dpool.ready_transactions_by_address(addr);
+    assert!(result2== None);
+
+}
+
+
+
+#[test]
+fn test_all_ready_transactions(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx2 = create_tx_with_ready_info(
+        U256::from(1),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    dpool.insert(tx, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    dpool.insert(tx2, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(1),
+        U256::from(1_000_000_000_000_000u64),
+    );
+    let result  = dpool.all_ready_transactions().count();
+    assert_eq!(result, 2);
+    dpool.clear();
+    let result2  = dpool.ready_transactions_by_address(addr);
+    assert!(result2== None);
+
+}
+
+
+#[test]
+fn test_pending_tx_number(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx2 = create_tx_with_ready_info(
+        U256::from(1),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    dpool.insert(tx, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    dpool.insert(tx2, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(1),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    let get_nonce_and_balance = |addr: &AddressWithSpace| {
+            if addr.space == Space::Native {
+                (U256::from(0), U256::from(1_000_000_000_000_000u64))
+            } else {
+                (U256::from(1), U256::from(1_000_000_000_000_000u64))
+            }
+        };
+    let result  = dpool.pending_tx_number(Some(Space::Native),get_nonce_and_balance);
+    assert_eq!(result, 2);
+    dpool.clear();
+    let result2  = dpool.pending_tx_number(Some(Space::Native), get_nonce_and_balance);
+    assert!(result2== 0);
+
+}
+
+
+#[test]
+fn test_eth_content(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx2 = create_tx_with_ready_info(
+        U256::from(1),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    dpool.insert(tx, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    dpool.insert(tx2, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(1),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    let get_nonce_and_balance = |addr: &AddressWithSpace| {
+            if addr.space == Space::Native {
+                (U256::from(0), U256::from(1_000_000_000_000_000u64))
+            } else {
+                (U256::from(1), U256::from(1_000_000_000_000_000u64))
+            }
+        };
+    let (result1,_result2)  = dpool.eth_content(Some(Space::Native),get_nonce_and_balance);
+    assert_eq!(result1.get(&addr).unwrap().len(), 2);
+    // assert_eq!(result1.get(&addr).unwrap(), &U256::from(0));
+    
+    dpool.clear();
+    let (_result3,result4)  = dpool.eth_content(Some(Space::Native), get_nonce_and_balance);
+    assert!(result4.len()== 0);
+
+}
+
+
+
+#[test]
+fn test_eth_content_from(){
+    let mut dpool = DeferredPool::new_for_test();
+    let addr = const_account_with_native_space();
+    let tx = create_tx_with_ready_info(
+        U256::from(0),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    let tx2 = create_tx_with_ready_info(
+        U256::from(1),
+        U256::from(21000),
+        100,
+        addr,
+        PRIVATE_KEY,
+    );
+    dpool.insert(tx, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(0),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    dpool.insert(tx2, false);
+    dpool.recalculate_readiness_with_local_info(
+        &addr,
+        U256::from(1),
+        U256::from(1_000_000_000_000_000u64),
+    );
+
+    let (result1,_result2)  = dpool.eth_content_from(addr,U256::from(0),U256::from(1_000_000_000_000_000u64));
+    assert_eq!(result1.get(&U256::from(0)).unwrap().nonce(), &U256::from(0));
+    assert_eq!(result1.len(), 2);
+    dpool.clear();
+    let (_result3,result4)  = dpool.eth_content_from(addr,U256::from(0),U256::from(1_000_000_000_000_000u64));
+    assert!(result4.len()== 0);
+
 }
