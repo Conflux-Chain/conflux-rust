@@ -3,6 +3,7 @@
 set -e
 
 # echo python version
+which python3
 python3 --version
 
 if [ -n "$BASH_VERSION" ]; then
