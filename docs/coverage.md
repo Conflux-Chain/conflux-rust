@@ -46,13 +46,18 @@ cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
 
 Run integration tests:
 
+> It should be noted that we compile the binary in debug mode, so the performance is not good.
+> You might need to change parallel parameters if frequent io error or timeout error occurs.
+
 ```bash
 # Run integration tests
+# Change -n to control the number of tests running in parallel.
 pytest integration_tests/tests -vv -n 6 --dist loadscope --conflux-binary $(pwd)/target/debug/conflux
 
 # Set up benchmark binary path before running `python tests/test_all.py`
-export CONFLUX_BENCH=$(pwd)/target/debug/consensus_bench
-# Run additional tests
+export CONFLUX_BENCH=$(pwd)/tools/consensus_bench/target/debug/consensus_bench
+# Run additional tests.
+# Use --max-workers and --max-nodes to control the number of workers and nodes.
 python tests/test_all.py --conflux-binary $(pwd)/target/debug/conflux
 ```
 
