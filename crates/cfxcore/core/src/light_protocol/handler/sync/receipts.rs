@@ -13,7 +13,7 @@ use crate::{
         message::{msgid, GetReceipts, ReceiptsWithEpoch},
     },
     message::{Message, RequestId},
-    verification::compute_receipts_root,
+    verification::compute_epoch_receipts_root,
     UniqueId,
 };
 use cfx_parameters::light::{
@@ -221,7 +221,7 @@ impl Receipts {
             .map(|rs| Arc::new(rs))
             .collect();
 
-        let received = compute_receipts_root(&rs);
+        let received = compute_epoch_receipts_root(&rs);
 
         // retrieve local receipts root
         let expected = self.witnesses.root_hashes_of(epoch)?.receipts_root_hash;

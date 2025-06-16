@@ -1116,6 +1116,10 @@ impl SignedTransaction {
 
     pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price() }
 
+    pub fn max_priority_gas_price(&self) -> &U256 {
+        &self.transaction.max_priority_gas_price()
+    }
+
     pub fn gas_limit(&self) -> &U256 { &self.transaction.gas() }
 
     pub fn storage_limit(&self) -> Option<u64> {

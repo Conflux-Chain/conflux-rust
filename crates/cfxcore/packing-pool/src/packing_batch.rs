@@ -61,8 +61,8 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
     pub fn start_nonce(&self) -> U256 { self.txs.first().unwrap().nonce() }
 
     #[inline]
-    pub fn first_gas_price(&self) -> U256 {
-        self.txs.first().unwrap().gas_price()
+    pub fn first_priority_gas_price(&self) -> U256 {
+        self.txs.first().unwrap().max_priority_gas_price()
     }
 
     #[inline]
@@ -71,7 +71,7 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
     #[inline]
     pub(crate) fn pack_info(&self) -> PackInfo {
         PackInfo {
-            first_gas_price: self.first_gas_price(),
+            first_gas_price: self.first_priority_gas_price(),
             total_gas_limit: self.total_gas_limit(),
         }
     }
@@ -104,14 +104,16 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
         let txs = &mut self.txs;
         if tx.nonce() + 1 < start_nonce
             || (tx.nonce() + 1 == start_nonce
-                && tx.gas_price() > txs[0].gas_price())
+                && tx.max_priority_gas_price()
+                    > txs[0].max_priority_gas_price())
         {
             let old_txs = std::mem::take(txs);
             *self = Self::new(tx);
             return (old_txs, Ok(()));
         }
 
-        if tx.nonce() + 1 == start_nonce && tx.gas_price() <= txs[0].gas_price()
+        if tx.nonce() + 1 == start_nonce
+            && tx.max_priority_gas_price() <= txs[0].max_priority_gas_price()
         {
             txs.insert(0, tx);
             let (truncate_idx, addr_gas_limit) =
@@ -131,7 +133,9 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
                 return (vec![], Err(ExceedAddrTxCount));
             }
 
-            if txs.last().unwrap().gas_price() > tx.gas_price() {
+            if txs.last().unwrap().max_priority_gas_price()
+                > tx.max_priority_gas_price()
+            {
                 return (vec![], Err(DecreasingGasPrice));
             }
             if config.address_gas_limit
@@ -148,7 +152,8 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
             // Replace
             let to_replaced_idx = (tx.nonce() - start_nonce).as_usize();
             if to_replaced_idx > 0
-                && tx.gas_price() < txs[to_replaced_idx - 1].gas_price()
+                && tx.max_priority_gas_price()
+                    < txs[to_replaced_idx - 1].max_priority_gas_price()
             {
                 let old_txs = self.txs.split_off(to_replaced_idx);
                 self.update_total_limit();
@@ -162,7 +167,7 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
                 self.update_total_limit();
                 return (old_txs, Err(ExceedAddrGasLimit));
             }
-            let my_gas_price = tx.gas_price();
+            let my_gas_price = tx.max_priority_gas_price();
 
             std::mem::swap(&mut txs[to_replaced_idx], &mut tx);
 
@@ -170,7 +175,7 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
             let truncated_txs;
             if txs
                 .get(to_replaced_idx + 1)
-                .map_or(false, |tx| tx.gas_price() < my_gas_price)
+                .map_or(false, |tx| tx.max_priority_gas_price() < my_gas_price)
             {
                 truncated_txs = txs.split_off(to_replaced_idx + 1);
                 self.update_total_limit();
@@ -261,12 +266,12 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
         self, config: &PackingPoolConfig, rng: &mut dyn RngCore,
     ) -> treap_map::Node<PackingPoolMap<TX>> {
         let key = self.txs.first().unwrap().sender();
-        let gas_price = self.first_gas_price();
-        let sort_key = gas_price;
+        let priority_gas_price = self.first_priority_gas_price();
+        let sort_key = priority_gas_price;
         let loss_ratio = config.loss_ratio(sort_key);
         let weight = PackingPoolWeight {
             gas_limit: self.total_gas_limit,
-            min_gas_price: gas_price,
+            min_gas_price: priority_gas_price,
             weighted_loss_ratio: loss_ratio * self.total_gas_limit,
             max_loss_ratio: loss_ratio,
         };
@@ -279,7 +284,10 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
         for i in 0..(self.txs.len() - 1) {
             assert_eq!(self.txs[i].sender(), self.txs[i + 1].sender());
             assert_eq!(self.txs[i].nonce() + 1, self.txs[i + 1].nonce());
-            assert!(self.txs[i].gas_price() <= self.txs[i + 1].gas_price());
+            assert!(
+                self.txs[i].max_priority_gas_price()
+                    <= self.txs[i + 1].max_priority_gas_price()
+            );
         }
         assert_eq!(
             self.total_gas_limit.as_u128(),

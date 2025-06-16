@@ -13,6 +13,8 @@ pub trait PackingPoolTransaction: Clone {
     fn gas_price(&self) -> U256;
 
     fn gas_limit(&self) -> U256;
+
+    fn max_priority_gas_price(&self) -> U256;
 }
 
 impl PackingPoolTransaction for Arc<SignedTransaction> {
@@ -26,6 +28,11 @@ impl PackingPoolTransaction for Arc<SignedTransaction> {
 
     #[inline]
     fn gas_price(&self) -> U256 { *SignedTransaction::gas_price(&self) }
+
+    #[inline]
+    fn max_priority_gas_price(&self) -> U256 {
+        *SignedTransaction::max_priority_gas_price(&self)
+    }
 
     #[inline]
     fn gas_limit(&self) -> U256 { *SignedTransaction::gas_limit(&self) }
