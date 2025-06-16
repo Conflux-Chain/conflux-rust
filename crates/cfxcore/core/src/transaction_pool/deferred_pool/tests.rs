@@ -910,8 +910,6 @@ fn test_ready_transactions_by_address() {
     dpool.mark_packed(addr, &U256::from(0), true);
     let result = dpool.ready_transactions_by_address(addr).unwrap();
     assert!(result.len() == 2);
-    let a = &result[1];
-    // assert_eq!(a.rlp_size.unwrap(), 2);
     dpool.clear();
     let result2 = dpool.ready_transactions_by_address(addr);
     assert!(result2 == None);
