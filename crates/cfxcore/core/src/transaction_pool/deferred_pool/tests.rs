@@ -911,8 +911,6 @@ fn test_ready_transactions_by_address() {
     let result = dpool.ready_transactions_by_address(addr).unwrap();
     assert!(result.len() == 2);
     let a = &result[1];
-    println!("tx: {:?}", a.sender());
-    println!("tx: {:?}", a.transaction.nonce());
     // assert_eq!(a.rlp_size.unwrap(), 2);
     dpool.clear();
     let result2 = dpool.ready_transactions_by_address(addr);
@@ -1047,7 +1045,6 @@ fn test_eth_content() {
     let (result1, _result2) =
         dpool.eth_content(Some(Space::Native), get_nonce_and_balance);
     assert_eq!(result1.get(&addr).unwrap().len(), 2);
-    // assert_eq!(result1.get(&addr).unwrap(), &U256::from(0));
 
     dpool.clear();
     let (_result3, result4) =
