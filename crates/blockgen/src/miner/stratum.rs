@@ -24,15 +24,15 @@
 
 //! Client-side stratum job dispatcher and mining notifier handler
 
-use crate::miner::work_notify::NotifyWork;
+use crate::{BlockGenerator, SolutionReceiver};
+
+use super::MineWorker;
 use cfx_stratum::{
     Error as StratumServiceError, JobDispatcher, PushWorkHandler,
     Stratum as StratumService,
 };
 use cfx_types::{H256, U256};
-use cfxcore::pow::{
-    validate, PowComputer, ProofOfWorkProblem, ProofOfWorkSolution,
-};
+use cfxcore::pow::{PowComputer, ProofOfWorkProblem, ProofOfWorkSolution};
 use log::{info, trace, warn};
 use parking_lot::Mutex;
 use std::{
@@ -149,7 +149,7 @@ impl JobDispatcher for StratumJobDispatcher {
                                 sol.nonce, payload.worker_id
                             ).into(),
                         ));
-                    } else if validate(self.pow.clone(), pow_prob, &sol) {
+                    } else if self.pow.validate(pow_prob, &sol) {
                         solved_nonce.insert(sol.nonce);
                         info!(
                             "Stratum worker {} mined a block!",
@@ -249,8 +249,8 @@ impl From<AddrParseError> for Error {
     fn from(err: AddrParseError) -> Error { Error::Address(err) }
 }
 
-impl NotifyWork for Stratum {
-    fn notify(&self, prob: ProofOfWorkProblem) {
+impl MineWorker for Stratum {
+    fn receive_problem(&self, prob: ProofOfWorkProblem) {
         trace!(target: "stratum", "Notify work");
 
         self.dispatcher.notify_new_problem(&prob);
@@ -263,6 +263,24 @@ impl NotifyWork for Stratum {
 }
 
 impl Stratum {
+    pub fn spawn(bg: &BlockGenerator) -> (Self, SolutionReceiver) {
+        let (solution_sender, solution_receiver) = mpsc::channel();
+        let cfg = Options {
+            listen_addr: bg.pow_config.stratum_listen_addr.clone(),
+            port: bg.pow_config.stratum_port,
+            secret: bg.pow_config.stratum_secret,
+        };
+        let stratum = Stratum::start(
+            &cfg,
+            bg.pow.clone(),
+            bg.pow_config.pow_problem_window_size,
+            solution_sender,
+        )
+        .expect("Failed to start Stratum service.");
+
+        (stratum, solution_receiver)
+    }
+
     /// New stratum job dispatcher, given the miner, client and dedicated
     /// stratum service
     pub fn start(
