@@ -20,7 +20,7 @@ cfx-vm-types = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 channel = { workspace = true }
-clap4 = { workspace = true }
+clap = { workspace = true }
 dag = { workspace = true }
 db = { workspace = true }
 either = { workspace = true }
@@ -42,7 +42,6 @@ malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 metrics = { workspace = true }
 network = { workspace = true }
-num = { workspace = true }
 num-traits = { workspace = true, default-features = false }
 parking_lot = { workspace = true }
 primal = { workspace = true }
@@ -79,7 +78,6 @@ bcs = { workspace = true }
 async-trait = { workspace = true }
 num-derive = { workspace = true }
 thiserror = { workspace = true }
-fallible = { workspace = true }
 mirai-annotations = { workspace = true, default-features = false }
 bounded-executor = { workspace = true }
 diem-config = { workspace = true }
@@ -117,6 +115,7 @@ cfx-rpc-eth-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 cfx-rpc-utils = { workspace = true }
 cfx-util-macros = { workspace = true }
+cfxcore-types = { workspace = true }
 
 [dev-dependencies]
 cfx-storage = { workspace = true, features = ["testonly_code"] }

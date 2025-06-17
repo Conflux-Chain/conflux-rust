@@ -5,7 +5,7 @@ license = "GPL-3.0"
 name = "cfxcore-accounts"
 version = "0.1.0"
 authors = ["Conflux Foundation"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
 cfxkey = { workspace = true }

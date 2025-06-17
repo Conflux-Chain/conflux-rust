@@ -4,7 +4,7 @@
 
 use crate::rpc::{
     errors,
-    helpers::{EpochQueue, SubscriberId, Subscribers},
+    helpers::{build_header, EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::pubsub::PubSub,
     types::{
@@ -18,7 +18,9 @@ use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
 };
 use cfx_types::{Space, H256};
-use cfxcore::{BlockDataManager, Notifications, SharedConsensusGraph};
+use cfxcore::{
+    channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
+};
 use futures::future::join_all;
 use itertools::zip;
 use jsonrpc_core::Result as RpcResult;
@@ -76,6 +78,10 @@ impl PubSubClient {
             notifications,
             executor,
         }
+    }
+
+    pub fn epochs_ordered(&self) -> Arc<Channel<(u64, Vec<H256>)>> {
+        self.notifications.epochs_ordered.clone()
     }
 
     /// Returns a chain notification handler.
@@ -296,9 +302,7 @@ pub struct ChainNotificationHandler {
 impl ChainNotificationHandler {
     fn get_header_by_hash(&self, hash: &H256) -> Result<RpcHeader, String> {
         let header = match self.data_man.block_header_by_hash(hash) {
-            Some(h) => {
-                RpcHeader::new(&*h, self.network, self.consensus.clone())
-            }
+            Some(h) => build_header(&*h, self.network, self.consensus.clone()),
             None => return Err("Header not found".to_string()),
         };
 

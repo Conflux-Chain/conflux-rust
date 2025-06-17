@@ -59,7 +59,7 @@ members = [
     "crates/rpc/rpc-primitives",
     "crates/rpc/rpc-cfx-types",
     "crates/rpc/rpc-eth-api",
-    "crates/rpc/parity-trace-types",
+    "crates/execution/parity-trace-types",
     "crates/rpc/rpc-eth-impl",
     "crates/rpc/rpc-common-impl",
     "crates/util/util-macros",
@@ -109,12 +109,13 @@ members = [
     "crates/tasks",
     "crates/eest_types",
     "crates/config",
+    "crates/cfxcore/types",
 ]
 
 resolver = "2"
 
 [workspace.package]
-version = "2.4.0"
+version = "2.6.0"
 authors = ["peilun-conflux", "ChenxingLi"]
 description = "A rust implementation of the Conflux-Protocol"
 documentation = "https://doc.confluxnetwork.org"
@@ -122,6 +123,7 @@ homepage = "https://confluxnetwork.org/"
 keywords = ["Conflux"]
 repository = "https://github.com/conflux-chain/conflux-rust"
 license-file = "LICENSE"
+edition = "2021"
 
 [profile.test]
 debug-assertions = true
@@ -180,6 +182,7 @@ secret-store = { path = "./crates/secret_store" }
 cfxstore = { path = "./crates/cfx_store" }
 network = { path = "./crates/network" }
 cfxcore = { path = "./crates/cfxcore/core" }
+cfxcore-types = { path = "./crates/cfxcore/types" }
 cfx-parameters = { path = "./crates/parameters" }
 cfx-execute-helper = { path = "./crates/execution/execute-helper" }
 cfx-executor = { path = "./crates/execution/executor" }
@@ -191,7 +194,7 @@ cfx-internal-common = { path = "./crates/cfxcore/internal_common" }
 cfx-rpc-eth-types = { path = "./crates/rpc/rpc-eth-types" }
 cfx-rpc-primitives = { path = "./crates/rpc/rpc-primitives" }
 cfx-rpc-cfx-types = { path = "./crates/rpc/rpc-cfx-types" }
-cfx-parity-trace-types = { path = "./crates/rpc/parity-trace-types" }
+cfx-parity-trace-types = { path = "./crates/execution/parity-trace-types" }
 cfx-rpc-eth-api = { path = "./crates/rpc/rpc-eth-api" }
 cfx-util-macros = { path = "./crates/util/util-macros" }
 cfx-rpc = { path = "./crates/rpc/rpc-eth-impl" }
@@ -243,7 +246,7 @@ pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
-eest_types = { path = "./crates/eest_types" }
+# eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }
 
 # basics
@@ -289,6 +292,10 @@ alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
 revm = { version = "8.0", default-features = false }
 
+# revm v8
+revm-primitives = "3.1.1"
+revm-interpreter = "4.0.0"
+
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
 jsonrpc-tcp-server = "18.0.0"
@@ -315,8 +322,6 @@ tower = "0.4"
 pin-project = "1.0.12"
 mio = "0.6.8"
 reqwest = "0.12"
-# old version tokio 0.2
-tokio02 = { version = "0.2", package = "tokio", features = ["full"] }
 
 # crypto & hash
 #fixed-hash = "0.5"
@@ -331,16 +336,16 @@ blst = "0.3"
 #rustls = "0.21"
 hashbrown = "0.7.1"
 
-# cli arg parsing
-clap = "2" # outdated, need to migrate to clap 4
-clap4 = { version = "4", package = "clap" }
-clap-verbosity-flag = "3"
+clap = "4"
 
 # rand & rng
-rand = "0.7"
-rand_xorshift = "0.2"
+rand = "0.9"
+rand_xorshift = "0.4"
+rand_chacha = "0.9.0"
+
+# old rand
+rand_07 = { package = "rand", version = "0.7" }
 rand_08 = { package = "rand", version = "0.8" }
-rand_chacha = "0.2.1"
 
 # misc
 log = "0.4"
@@ -446,7 +451,7 @@ sqlite3-sys = "0.12"
 kvdb = "0.4"
 influx_db_client = "0.5.1"
 # conflux forked crates
-rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "a2ebf4e00f89c70359d9f3996a1390d9c6b55940" }
+rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "7dbd66f507db1d0cfdf5334ad56ca0b24a768740" }
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }

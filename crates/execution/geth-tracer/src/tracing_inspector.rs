@@ -41,9 +41,9 @@ use super::{
 use cfx_types::{Space, H160};
 
 use alloy_primitives::{Address, Bytes, U256};
-use revm::interpreter::{opcode, InstructionResult, InterpreterResult, OpCode};
 
 use cfx_executor::machine::Machine;
+use revm_interpreter::{opcode, InstructionResult, InterpreterResult, OpCode};
 
 use cfx_vm_types::InterpreterInfo;
 

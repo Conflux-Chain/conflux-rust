@@ -5,11 +5,13 @@
 #[cfg(test)]
 mod test;
 
+mod cli;
 mod command;
 
 use crate::command::rpc::RpcCommand;
 use cfxcore::NodeType;
-use clap::{crate_version, load_yaml, App, ArgMatches};
+use clap::{crate_version, ArgMatches, CommandFactory};
+use cli::Cli;
 use client::{
     archive::ArchiveClient,
     common::{shutdown_handler, ClientTrait},
@@ -54,9 +56,8 @@ fn main() -> Result<(), String> {
         });
     } // only for #[cfg]
 
-    let yaml = load_yaml!("cli.yaml");
     let version = parity_version::version(crate_version!());
-    let matches = App::from_yaml(yaml).version(version.as_str()).get_matches();
+    let matches = Cli::command().get_matches();
 
     if let Some(output) = handle_sub_command(&matches)? {
         println!("{}", output);
@@ -121,15 +122,15 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
     }
 
     // account sub-commands
-    if let ("account", Some(account_matches)) = matches.subcommand() {
+    if let Some(("account", account_matches)) = matches.subcommand() {
         let account_cmd = match account_matches.subcommand() {
-            ("new", Some(new_acc_matches)) => {
+            Some(("new", new_acc_matches)) => {
                 AccountCmd::New(NewAccount::new(new_acc_matches))
             }
-            ("list", Some(list_acc_matches)) => {
+            Some(("list", list_acc_matches)) => {
                 AccountCmd::List(ListAccounts::new(list_acc_matches))
             }
-            ("import", Some(import_acc_matches)) => {
+            Some(("import", import_acc_matches)) => {
                 AccountCmd::Import(ImportAccounts::new(import_acc_matches))
             }
             _ => unreachable!(),
@@ -140,8 +141,8 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
 
     // general RPC commands
     let mut subcmd_matches = matches;
-    while let Some(m) = subcmd_matches.subcommand().1 {
-        subcmd_matches = m;
+    while let Some(m) = subcmd_matches.subcommand() {
+        subcmd_matches = m.1;
     }
 
     if let Some(cmd) = RpcCommand::parse(subcmd_matches)? {

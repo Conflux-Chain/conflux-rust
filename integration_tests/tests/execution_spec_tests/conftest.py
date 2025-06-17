@@ -120,7 +120,7 @@ def framework_class():
             self.conf_parameters["evm_transaction_block_ratio"] = str(1)
             self.conf_parameters["align_evm_transition_height"] = 1
             self.conf_parameters["tx_pool_allow_gas_over_half_block"] = "true"
-            self.conf_parameters["public_evm_rpc_async_apis"] = '"all"'
+            self.conf_parameters["public_evm_rpc_apis"] = '"all"'
             self.conf_parameters["executive_trace"] = "true"
 
         def setup_network(self):
@@ -145,7 +145,12 @@ def web3_setting_pair(network, request, args, port_min):
         p = subprocess.Popen(["anvil", "--port", str(port), "--hardfork", "Prague", "--chain-id", str(EVM_CHAIN_ID), "--steps-tracing", "--block-base-fee-per-gas", "1"], stdout=subprocess.DEVNULL)
         
         w3 = Web3(
-            Web3.HTTPProvider(f"http://localhost:{port}")
+            Web3.HTTPProvider(f"http://localhost:{port}", request_kwargs={
+                "proxies": {
+                    "http": "",
+                    "https": "",
+                }
+            })
         )
         retry = 0
         while not w3.is_connected() and retry < 5:
