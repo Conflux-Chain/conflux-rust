@@ -150,7 +150,6 @@
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>state;
 
 <span class="kw">use crate</span>::{BlockGenerator, MineWorker, SolutionReceiver};
@@ -203,10 +202,9 @@
             <span class="kw">if </span><span class="self">self</span>.is_mining_block_outdated() {
                 <span class="comment">// Compute new mining task and send to workers
                 </span><span class="self">self</span>.update_mining_task();
-            } <span class="kw">else </span>{
-                <span class="comment">// Pull the mining solution
-                </span><span class="self">self</span>.process_pending_solutions();
             }
+            <span class="comment">// Pull the mining solution
+            </span><span class="self">self</span>.process_pending_solutions();
         }
     }
 
