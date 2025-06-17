@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from conflux.rpc import RpcClient
 
 CONFLUX_RPC_WAIT_TIMEOUT = 60
-CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
+CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 120
 
 logger = logging.getLogger("TestFramework.utils")
 
