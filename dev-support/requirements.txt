@@ -14,8 +14,6 @@ asyncio==3.4.3
     # via conflux-rust-tests (pyproject.toml)
 attrs==25.3.0
     # via aiohttp
-bidict==0.23.1
-    # via ethereum-execution-spec-tests
 bitarray==3.4.2
     # via eth-account
 certifi==2025.4.26
@@ -56,6 +54,7 @@ cytoolz==1.0.1
 eth-abi==5.2.0
     # via
     #   eth-account
+    #   ethereum-execution-spec-tests
     #   web3
 eth-account==0.13.7
     # via
@@ -97,13 +96,13 @@ eth-utils==5.3.0
     #   web3
 ethereum-execution==1.17.0rc6.dev1
     # via ethereum-execution-spec-tests
-ethereum-execution-spec-tests @ git+https://github.com/ethereum/execution-spec-tests.git@e04edbe1f9c0b932b628165d12af8d244e4da776
+ethereum-execution-spec-tests @ git+https://github.com/ethereum/execution-spec-tests.git@971214c0832f656b7250eb71cf0b7bcba96c3f49
     # via conflux-rust-tests (pyproject.toml)
 ethereum-rlp==0.1.3
     # via
     #   ethereum-execution
     #   ethereum-execution-spec-tests
-ethereum-spec-evm-resolver @ git+https://github.com/petertdavies/ethereum-spec-evm-resolver.git@623ac4565025e72b65f45b926da2a3552041b469
+ethereum-spec-evm-resolver @ git+https://github.com/petertdavies/ethereum-spec-evm-resolver.git@0e5609737ce4f86dc98cca1a5cf0eb64b8cddef2
     # via
     #   conflux-rust-tests (pyproject.toml)
     #   ethereum-execution-spec-tests
@@ -146,6 +145,8 @@ iniconfig==2.1.0
     # via pytest
 jinja2==3.1.6
     # via pytest-html
+joblib==1.5.1
+    # via ethereum-execution-spec-tests
 jsonrpcclient==4.0.3
     # via conflux-rust-tests (pyproject.toml)
 markdown-it-py==3.0.0
@@ -171,9 +172,7 @@ platformdirs==4.3.8
 pluggy==1.6.0
     # via pytest
 prompt-toolkit==3.0.51
-    # via
-    #   ethereum-execution-spec-tests
-    #   questionary
+    # via questionary
 propcache==0.3.2
     # via
     #   aiohttp
@@ -203,10 +202,12 @@ pydantic==2.11.5
 pydantic-core==2.33.2
     # via pydantic
 pygments==2.19.1
-    # via rich
+    # via
+    #   pytest
+    #   rich
 pyjwt==2.10.1
     # via ethereum-execution-spec-tests
-pytest==7.4.4
+pytest==8.4.0
     # via
     #   conflux-rust-tests (pyproject.toml)
     #   ethereum-execution-spec-tests
@@ -239,7 +240,7 @@ pyyaml==6.0.2
     # via
     #   conflux-rust-tests (pyproject.toml)
     #   ethereum-execution-spec-tests
-questionary @ git+https://github.com/tmbo/questionary@ff22aeae1cd9c1c734f14329934e349bec7873bc
+questionary==2.1.0
     # via ethereum-execution-spec-tests
 regex==2024.11.6
     # via parsimonious
@@ -267,9 +268,7 @@ safe-pysha3==1.0.4
 semver==3.0.4
     # via ethereum-execution-spec-tests
 setuptools==80.9.0
-    # via
-    #   conflux-rust-tests (pyproject.toml)
-    #   ethereum-execution-spec-tests
+    # via conflux-rust-tests (pyproject.toml)
 smmap==5.0.2
     # via gitdb
 solc-select==1.1.0
@@ -280,7 +279,7 @@ tenacity==8.5.0
     # via ethereum-execution-spec-tests
 toolz==1.0.0
     # via cytoolz
-trie==2.1.1
+trie==3.1.0
     # via
     #   conflux-rust-tests (pyproject.toml)
     #   ethereum-execution-spec-tests
@@ -288,8 +287,6 @@ types-pyyaml==6.0.12.20250516
     # via ethereum-execution-spec-tests
 types-requests==2.31.0.6
     # via web3
-types-setuptools==80.9.0.20250529
-    # via ethereum-execution-spec-tests
 types-urllib3==1.26.25.14
     # via types-requests
 typing-extensions==4.13.2
