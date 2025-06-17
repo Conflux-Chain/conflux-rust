@@ -11,7 +11,9 @@
 
 ### Python Environment Setup
 
-It is recommended to run tests under a virtual environment. For example, use `venv` or `conda` to create a virtual environment.
+It is recommended to run tests under a virtual environment.
+
+For simplicity, you can run `source ./dev-support/activate_new_venv.sh` to setup and activate a new virtual environment using. This command will remove the current virtual environment if exists and create a new one with Python `3.11` each time you run it. Or you can run `source .venv/bin/activate` to avoid removing the current virtual environment if you have already created one.
 
 Use `venv` to create a virtual environment:
 
@@ -23,15 +25,17 @@ source .venv/bin/activate
 Use `conda` to create a virtual environment:
 
 ```bash
-conda create -n conflux_test python=3.10
+conda create -n conflux_test python=3.11
 conda activate conflux_test
 ```
 
 ### Python Dependencies
 
-Use `dev-support/dep_pip3.sh` to install python dependencies.
+Use `dev-support/dep_pip3.sh` to install python dependencies. Depending on where `python3` points to, the command will install the dependencies into the corresponding virtual environment.
 
 ```bash
+# Install dependencies into where `python3` points to
+# Make sure the virtual environment is activated
 ./dev-support/dep_pip3.sh
 ```
 
