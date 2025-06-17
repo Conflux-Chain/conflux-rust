@@ -109,6 +109,7 @@ members = [
     "crates/tasks",
     "crates/eest_types",
     "crates/config",
+    "crates/cfxcore/types",
 ]
 
 resolver = "2"
@@ -181,6 +182,7 @@ secret-store = { path = "./crates/secret_store" }
 cfxstore = { path = "./crates/cfx_store" }
 network = { path = "./crates/network" }
 cfxcore = { path = "./crates/cfxcore/core" }
+cfxcore-types = { path = "./crates/cfxcore/types" }
 cfx-parameters = { path = "./crates/parameters" }
 cfx-execute-helper = { path = "./crates/execution/execute-helper" }
 cfx-executor = { path = "./crates/execution/executor" }
@@ -244,7 +246,7 @@ pow-types = { path = "./crates/pos/types/pow-types" }
 diem-types = { path = "./crates/pos/types/types" }
 diem-network-address-encryption = { path = "./crates/pos/config/management/network-address-encryption" }
 cfx-tasks = { path = "./crates/tasks" }
-eest_types = { path = "./crates/eest_types" }
+# eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }
 
 # basics
@@ -335,7 +337,6 @@ blst = "0.3"
 hashbrown = "0.7.1"
 
 clap = "4"
-clap-verbosity-flag = "3"
 
 # rand & rng
 rand = "0.9"
@@ -356,13 +357,13 @@ once_cell = "1.17.1"
 byteorder = "1.2.7"
 strum = "0.26"
 strum_macros = "0.26"
-toml = "0.5.8"
+toml = "0.8"
 app_dirs = "1.2.1"
 slab = "0.4"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
 transient-hashmap = "0.4"
-num_cpus = "1.6"
+num_cpus = "1.17"
 tempfile = "3"
 bcs = "0.1.3"
 order-stat = "0.1"
@@ -385,22 +386,22 @@ impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
 derive_more = "0.99"
 c-kzg = { version = "1.0.2", default-features = false }
-strfmt = "0.1"
+strfmt = "0.2"
 smart-default = "0.6.0"
 num-derive = { version = "0.4.2", default-features = false }
 mirai-annotations = { version = "1.10.1", default-features = false }
 rangetools = "0.1.4"
 # prometheus = { version = "0.7.0", default-features = false }
 primal = "0.2.3"
-memoffset = "0.5.1"
-either = "1.5.3"
-fallible-iterator = "0.2"
+memoffset = "0.9"
+either = "1.15"
+fallible-iterator = "0.3"
 fs_extra = "1.1.0"
 fs-swap = "0.2.4"
 regex = "1.3.1"
-cfg-if = "0.1"
+cfg-if = "1"
 unroll = "0.1.5"
-winapi = "0.3.7"
+winapi = "0.3"
 synstructure = "0.12"
 lru-cache = "0.1"
 lru_time_cache = "0.9.0"
@@ -411,9 +412,9 @@ enumn = "0.1.14"
 walkdir = "2.5"
 
 # num misc
-bigdecimal = "0.1.0"
-num-bigint = "0.2.6"
-num = "0.2"
+bigdecimal = "0.1"
+num-bigint = "0.2"
+num = "0.4"
 num-traits = { version = "0.2.8", default-features = false }
 
 # time misc 

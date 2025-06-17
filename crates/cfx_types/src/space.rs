@@ -1,7 +1,10 @@
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::ser::SerializeMap;
 use serde_derive::{Deserialize, Serialize};
-use std::ops::{Add, Index, IndexMut};
+use std::{
+    ops::{Add, Index, IndexMut},
+    str::FromStr,
+};
 
 #[derive(
     Eq,
@@ -34,6 +37,18 @@ impl From<Space> for &'static str {
         match space {
             Space::Native => "native",
             Space::Ethereum => "evm",
+        }
+    }
+}
+
+impl FromStr for Space {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "native" => Ok(Space::Native),
+            "evm" => Ok(Space::Ethereum),
+            _ => Err(format!("Unrecognized space: {}", s)),
         }
     }
 }

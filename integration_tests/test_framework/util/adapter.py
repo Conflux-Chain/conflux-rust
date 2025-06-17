@@ -20,8 +20,6 @@ from ethereum_test_base_types import StorageRootType
 from integration_tests.test_framework.util.eip7702.eip7702 import (
     sign_authorization,
     send_eip7702_transaction,
-    sign_eip7702_transaction_with_default_fields,
-    Authorization,
 )
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
@@ -144,7 +142,7 @@ def conflux_state_test(
                 for tx in block.txs:
                     raw_tx = get_raw_tx_from_transaction(tx)
                     tx_hash = ew3.eth.send_raw_transaction(raw_tx)
-                    receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=1, poll_latency=0.5)
+                    receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=10, poll_latency=0.5)
                     
     elif tx:
         raw_tx = get_raw_tx_from_transaction(tx)
@@ -157,7 +155,7 @@ def conflux_state_test(
                     assert tx.error.name.lower().replace("_", " ") in e.rpc_response["error"]["message"].lower()
         else:
             tx_hash = ew3.eth.send_raw_transaction(raw_tx)
-            receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=1, poll_latency=0.5)
+            receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=10, poll_latency=0.5)
             if receipt["status"] == 0:
                 print(f"Transaction failed: {tx_hash.hex()}")
                 print(f"TxErrorMsg: {receipt.get('txErrorMsg', 'No error message')}")

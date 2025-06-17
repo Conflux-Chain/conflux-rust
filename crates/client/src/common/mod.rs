@@ -69,14 +69,12 @@ use crate::{
         extractor::RpcExtractor,
         impls::{
             cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
-            eth_pubsub::PubSubClient as EthPubSubClient, pubsub::PubSubClient,
+            pubsub::PubSubClient,
         },
-        launch_async_rpc_servers, setup_debug_rpc_apis,
-        setup_public_eth_rpc_apis, setup_public_rpc_apis,
+        launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
-use std::net::SocketAddr;
 
 pub mod delegate_convert;
 pub mod shutdown_handler;
@@ -155,7 +153,6 @@ pub fn initialize_common_modules(
         Arc<AccountProvider>,
         Arc<Notifications>,
         PubSubClient,
-        EthPubSubClient,
         Arc<TokioRuntime>,
     ),
     String,
@@ -468,12 +465,6 @@ pub fn initialize_common_modules(
         *network.get_network_type(),
     );
 
-    let eth_pubsub = EthPubSubClient::new(
-        tokio_runtime.clone(),
-        consensus.clone(),
-        notifications.clone(),
-    );
-
     Ok((
         machine,
         secret_store,
@@ -489,7 +480,6 @@ pub fn initialize_common_modules(
         accounts,
         notifications,
         pubsub,
-        eth_pubsub,
         tokio_runtime,
     ))
 }
@@ -512,8 +502,6 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Option<WSServer>,
         Arc<PosVerifier>,
-        Option<HttpServer>,
-        Option<WSServer>,
         Arc<TokioRuntime>,
         Option<RpcServerHandle>,
         TaskManager,
@@ -533,9 +521,8 @@ pub fn initialize_not_light_node_modules(
         network,
         common_impl,
         accounts,
-        _notifications,
+        notifications,
         pubsub,
-        eth_pubsub,
         tokio_runtime,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
@@ -618,12 +605,13 @@ pub fn initialize_not_light_node_modules(
                     panic!("Error parsing mining-author {}", err)
                 })
         });
+    let pow_config = conf.pow_config();
     let blockgen = Arc::new(BlockGenerator::new(
         sync_graph,
         txpool.clone(),
         sync.clone(),
         maybe_txgen.clone(),
-        conf.pow_config(),
+        pow_config.clone(),
         pow.clone(),
         maybe_author.clone().unwrap_or_default(),
         pos_verifier.clone(),
@@ -633,7 +621,7 @@ pub fn initialize_not_light_node_modules(
         // receiving RPC `cfx_sendRawTransaction`.
         if let Some(interval_ms) = conf.raw_conf.dev_block_interval_ms {
             // Automatic block generation with fixed interval.
-            let bg = blockgen.clone();
+            let bg = blockgen.test_api();
             info!("Start auto block generation");
             thread::Builder::new()
                 .name("auto_mining".into())
@@ -646,12 +634,12 @@ pub fn initialize_not_light_node_modules(
         if !author.is_genesis_valid_address() || author.is_builtin_address() {
             panic!("mining-author must be user address or contract address, otherwise you will not get mining rewards!!!");
         }
-        if blockgen.pow_config.enable_mining() {
+        if pow_config.enable_mining() {
             let bg = blockgen.clone();
             thread::Builder::new()
                 .name("mining".into())
                 .spawn(move || {
-                    BlockGenerator::start_mining(bg, 0);
+                    bg.mine();
                 })
                 .expect("Mining thread spawn error");
         }
@@ -660,7 +648,7 @@ pub fn initialize_not_light_node_modules(
     let rpc_impl = Arc::new(RpcImpl::new(
         consensus.clone(),
         sync.clone(),
-        blockgen.clone(),
+        blockgen.test_api(),
         txpool.clone(),
         maybe_txgen.clone(),
         maybe_direct_txgen,
@@ -677,7 +665,6 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             &conf,
         ),
     )?;
@@ -688,7 +675,6 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -700,7 +686,6 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -712,7 +697,6 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -724,62 +708,26 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
-            eth_pubsub.clone(),
             &conf,
-        ),
-        RpcExtractor,
-    )?;
-
-    let eth_rpc_http_server = super::rpc::start_http(
-        conf.eth_http_config(),
-        setup_public_eth_rpc_apis(
-            rpc_impl.clone(),
-            eth_pubsub.clone(),
-            &conf,
-            task_executor.clone(),
-        ),
-    )?;
-
-    let eth_rpc_ws_server = super::rpc::start_ws(
-        conf.eth_ws_config(),
-        setup_public_eth_rpc_apis(
-            rpc_impl.clone(),
-            eth_pubsub.clone(),
-            &conf,
-            task_executor.clone(),
         ),
         RpcExtractor,
     )?;
 
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
-        setup_public_rpc_apis(
-            common_impl,
-            rpc_impl,
-            pubsub,
-            eth_pubsub.clone(),
-            &conf,
-        ),
+        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
 
     network.start();
 
-    let eth_rpc_http_server_addr =
-        conf.raw_conf.jsonrpc_http_eth_port_v2.map(|port| {
-            format!("0.0.0.0:{}", port)
-                .parse::<SocketAddr>()
-                .expect("Invalid socket port")
-        });
-    let async_eth_rpc_http_server =
+    let eth_rpc_server_handle =
         tokio_runtime.block_on(launch_async_rpc_servers(
-            conf.rpc_impl_config(),
-            conf.raw_conf.throttling_conf.clone(),
-            conf.raw_conf.public_evm_rpc_async_apis.clone(),
             consensus.clone(),
             sync.clone(),
             txpool.clone(),
-            eth_rpc_http_server_addr,
+            notifications.clone(),
             task_executor.clone(),
+            conf,
         ))?;
 
     metrics::initialize(conf.metrics_config(), task_executor.clone());
@@ -798,10 +746,8 @@ pub fn initialize_not_light_node_modules(
         debug_rpc_ws_server,
         rpc_ws_server,
         pos_verifier,
-        eth_rpc_http_server,
-        eth_rpc_ws_server,
         tokio_runtime,
-        async_eth_rpc_http_server,
+        eth_rpc_server_handle,
         task_manager,
     ))
 }
