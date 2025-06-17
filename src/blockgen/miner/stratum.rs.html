@@ -292,6 +292,24 @@
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -318,15 +336,15 @@
 
 </span><span class="doccomment">//! Client-side stratum job dispatcher and mining notifier handler
 
-</span><span class="kw">use </span><span class="kw">crate</span>::miner::work_notify::NotifyWork;
+</span><span class="kw">use crate</span>::{BlockGenerator, SolutionReceiver};
+
+<span class="kw">use </span><span class="kw">super</span>::MineWorker;
 <span class="kw">use </span>cfx_stratum::{
     Error <span class="kw">as </span>StratumServiceError, JobDispatcher, PushWorkHandler,
     Stratum <span class="kw">as </span>StratumService,
 };
 <span class="kw">use </span>cfx_types::{H256, U256};
-<span class="kw">use </span>cfxcore::pow::{
-    validate, PowComputer, ProofOfWorkProblem, ProofOfWorkSolution,
-};
+<span class="kw">use </span>cfxcore::pow::{PowComputer, ProofOfWorkProblem, ProofOfWorkSolution};
 <span class="kw">use </span>log::{info, trace, warn};
 <span class="kw">use </span>parking_lot::Mutex;
 <span class="kw">use </span>std::{
@@ -443,7 +461,7 @@
                                 sol.nonce, payload.worker_id
                             ).into(),
                         ));
-                    } <span class="kw">else if </span>validate(<span class="self">self</span>.pow.clone(), pow_prob, <span class="kw-2">&amp;</span>sol) {
+                    } <span class="kw">else if </span><span class="self">self</span>.pow.validate(pow_prob, <span class="kw-2">&amp;</span>sol) {
                         solved_nonce.insert(sol.nonce);
                         <span class="macro">info!</span>(
                             <span class="string">"Stratum worker {} mined a block!"</span>,
@@ -543,8 +561,8 @@
     <span class="kw">fn </span>from(err: AddrParseError) -&gt; Error { Error::Address(err) }
 }
 
-<span class="kw">impl </span>NotifyWork <span class="kw">for </span>Stratum {
-    <span class="kw">fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, prob: ProofOfWorkProblem) {
+<span class="kw">impl </span>MineWorker <span class="kw">for </span>Stratum {
+    <span class="kw">fn </span>receive_problem(<span class="kw-2">&amp;</span><span class="self">self</span>, prob: ProofOfWorkProblem) {
         <span class="macro">trace!</span>(target: <span class="string">"stratum"</span>, <span class="string">"Notify work"</span>);
 
         <span class="self">self</span>.dispatcher.notify_new_problem(<span class="kw-2">&amp;</span>prob);
@@ -557,6 +575,24 @@
 }
 
 <span class="kw">impl </span>Stratum {
+    <span class="kw">pub fn </span>spawn(bg: <span class="kw-2">&amp;</span>BlockGenerator) -&gt; (<span class="self">Self</span>, SolutionReceiver) {
+        <span class="kw">let </span>(solution_sender, solution_receiver) = mpsc::channel();
+        <span class="kw">let </span>cfg = Options {
+            listen_addr: bg.pow_config.stratum_listen_addr.clone(),
+            port: bg.pow_config.stratum_port,
+            secret: bg.pow_config.stratum_secret,
+        };
+        <span class="kw">let </span>stratum = Stratum::start(
+            <span class="kw-2">&amp;</span>cfg,
+            bg.pow.clone(),
+            bg.pow_config.pow_problem_window_size,
+            solution_sender,
+        )
+        .expect(<span class="string">"Failed to start Stratum service."</span>);
+
+        (stratum, solution_receiver)
+    }
+
     <span class="doccomment">/// New stratum job dispatcher, given the miner, client and dedicated
     /// stratum service
     </span><span class="kw">pub fn </span>start(

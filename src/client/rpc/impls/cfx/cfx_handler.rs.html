@@ -2465,6 +2465,8 @@
 <a href="#2465" id="2465">2465</a>
 <a href="#2466" id="2466">2466</a>
 <a href="#2467" id="2467">2467</a>
+<a href="#2468" id="2468">2468</a>
+<a href="#2469" id="2469">2469</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -2484,7 +2486,7 @@
         VoteParamsInfo, WrapTransaction, U64 <span class="kw">as </span>HexU64,
     },
 };
-<span class="kw">use </span>blockgen::BlockGenerator;
+<span class="kw">use </span>blockgen::BlockGeneratorTestApi;
 <span class="kw">use </span>cfx_execute_helper::estimation::{decode_error, EstimateExt};
 <span class="kw">use </span>cfx_executor::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
@@ -2595,7 +2597,7 @@
     <span class="kw">pub </span>config: RpcImplConfiguration,
     <span class="kw">pub </span>consensus: SharedConsensusGraph,
     <span class="kw">pub </span>sync: SharedSynchronizationService,
-    block_gen: Arc&lt;BlockGenerator&gt;,
+    block_gen: BlockGeneratorTestApi,
     <span class="kw">pub </span>tx_pool: SharedTransactionPool,
     maybe_txgen: <span class="prelude-ty">Option</span>&lt;Arc&lt;TransactionGenerator&gt;&gt;,
     maybe_direct_txgen: <span class="prelude-ty">Option</span>&lt;Arc&lt;Mutex&lt;DirectTransactionGenerator&gt;&gt;&gt;,
@@ -2605,7 +2607,7 @@
 <span class="kw">impl </span>RpcImpl {
     <span class="kw">pub fn </span>new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        block_gen: Arc&lt;BlockGenerator&gt;, tx_pool: SharedTransactionPool,
+        block_gen: BlockGeneratorTestApi, tx_pool: SharedTransactionPool,
         maybe_txgen: <span class="prelude-ty">Option</span>&lt;Arc&lt;TransactionGenerator&gt;&gt;,
         maybe_direct_txgen: <span class="prelude-ty">Option</span>&lt;Arc&lt;Mutex&lt;DirectTransactionGenerator&gt;&gt;&gt;,
         config: RpcImplConfiguration, accounts: Arc&lt;AccountProvider&gt;,
@@ -3557,14 +3559,16 @@
         timestamp: u64, adaptive: bool,
     ) -&gt; CoreResult&lt;H256&gt; {
         <span class="kw">let </span>transactions = <span class="self">self</span>.decode_raw_txs(raw, <span class="number">0</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.block_gen.generate_block_with_nonce_and_timestamp(
-            parent,
-            referees,
-            transactions,
-            nonce,
-            timestamp,
-            adaptive,
-        )<span class="question-mark">?</span>)
+        <span class="self">self</span>.block_gen
+            .generate_block_with_nonce_and_timestamp(
+                parent,
+                referees,
+                transactions,
+                nonce,
+                timestamp,
+                adaptive,
+            )
+            .map_err(Into::into)
     }
 
     <span class="kw">fn </span>decode_raw_txs(

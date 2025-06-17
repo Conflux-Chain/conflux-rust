@@ -806,6 +806,7 @@
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
 <a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -1413,12 +1414,13 @@
                     <span class="macro">panic!</span>(<span class="string">"Error parsing mining-author {}"</span>, err)
                 })
         });
+    <span class="kw">let </span>pow_config = conf.pow_config();
     <span class="kw">let </span>blockgen = Arc::new(BlockGenerator::new(
         sync_graph,
         txpool.clone(),
         sync.clone(),
         maybe_txgen.clone(),
-        conf.pow_config(),
+        pow_config.clone(),
         pow.clone(),
         maybe_author.clone().unwrap_or_default(),
         pos_verifier.clone(),
@@ -1428,7 +1430,7 @@
         // receiving RPC `cfx_sendRawTransaction`.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(interval_ms) = conf.raw_conf.dev_block_interval_ms {
             <span class="comment">// Automatic block generation with fixed interval.
-            </span><span class="kw">let </span>bg = blockgen.clone();
+            </span><span class="kw">let </span>bg = blockgen.test_api();
             <span class="macro">info!</span>(<span class="string">"Start auto block generation"</span>);
             thread::Builder::new()
                 .name(<span class="string">"auto_mining"</span>.into())
@@ -1441,12 +1443,12 @@
         <span class="kw">if </span>!author.is_genesis_valid_address() || author.is_builtin_address() {
             <span class="macro">panic!</span>(<span class="string">"mining-author must be user address or contract address, otherwise you will not get mining rewards!!!"</span>);
         }
-        <span class="kw">if </span>blockgen.pow_config.enable_mining() {
+        <span class="kw">if </span>pow_config.enable_mining() {
             <span class="kw">let </span>bg = blockgen.clone();
             thread::Builder::new()
                 .name(<span class="string">"mining"</span>.into())
                 .spawn(<span class="kw">move </span>|| {
-                    BlockGenerator::start_mining(bg, <span class="number">0</span>);
+                    bg.mine();
                 })
                 .expect(<span class="string">"Mining thread spawn error"</span>);
         }
@@ -1455,7 +1457,7 @@
     <span class="kw">let </span>rpc_impl = Arc::new(RpcImpl::new(
         consensus.clone(),
         sync.clone(),
-        blockgen.clone(),
+        blockgen.test_api(),
         txpool.clone(),
         maybe_txgen.clone(),
         maybe_direct_txgen,

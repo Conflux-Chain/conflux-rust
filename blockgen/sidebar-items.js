@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["BlockGenerator","Worker"]};
+window.SIDEBAR_ITEMS = {"struct":["BlockGenerator","BlockGeneratorTestApi"]};

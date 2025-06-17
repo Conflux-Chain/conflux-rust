@@ -1,6 +1,6 @@
 var srcIndex = new Map(JSON.parse('[\
 ["accumulator",["",[],["lib.rs"]]],\
-["blockgen",["",[["miner",[],["mod.rs","stratum.rs","work_notify.rs"]]],["lib.rs"]]],\
+["blockgen",["",[["mine_session",[],["mod.rs","state.rs"]],["miner",[],["cpu.rs","mod.rs","stratum.rs"]]],["assembler.rs","lib.rs","test_api.rs"]]],\
 ["bounded_executor",["",[],["lib.rs"]]],\
 ["cached_pos_ledger_db",["",[["speculation_cache",[],["mod.rs"]]],["lib.rs","logging.rs"]]],\
 ["cfx_addr",["",[],["consts.rs","lib.rs","types.rs","utils.rs"]]],\

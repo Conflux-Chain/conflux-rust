@@ -494,6 +494,14 @@
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
 <a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a>
+<a href="#503" id="503">503</a>
+<a href="#504" id="504">504</a>
 </pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -513,11 +521,11 @@
 <span class="kw">use </span>malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 <span class="kw">use </span>malloc_size_of_derive::MallocSizeOf <span class="kw">as </span>DeriveMallocSizeOf;
 <span class="kw">use </span>parking_lot::RwLock;
+<span class="kw">use </span>primitives::BlockHeader;
 <span class="kw">use </span>static_assertions::_core::str::FromStr;
 <span class="kw">use </span>std::{
     collections::{HashMap, VecDeque},
     convert::TryFrom,
-    sync::Arc,
 };
 
 <span class="attr">#[cfg(target_endian = <span class="string">"big"</span>)]
@@ -542,6 +550,14 @@
             difficulty,
             boundary,
         }
+    }
+
+    <span class="kw">pub fn </span>from_block_header(block_header: <span class="kw-2">&amp;</span>BlockHeader) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new(
+            block_header.height(),
+            block_header.problem_hash(),
+            <span class="kw-2">*</span>block_header.difficulty(),
+        )
     }
 
     <span class="attr">#[inline]
@@ -801,19 +817,19 @@
                 .into()
         }
     }
-}
 
-<span class="kw">pub fn </span>validate(
-    pow: Arc&lt;PowComputer&gt;, problem: <span class="kw-2">&amp;</span>ProofOfWorkProblem,
-    solution: <span class="kw-2">&amp;</span>ProofOfWorkSolution,
-) -&gt; bool {
-    <span class="kw">let </span>nonce = solution.nonce;
-    <span class="kw">let </span>hash = pow.compute(<span class="kw-2">&amp;</span>nonce, <span class="kw-2">&amp;</span>problem.block_hash, problem.block_height);
-    ProofOfWorkProblem::validate_hash_against_boundary(
-        <span class="kw-2">&amp;</span>hash,
-        <span class="kw-2">&amp;</span>nonce,
-        <span class="kw-2">&amp;</span>problem.boundary,
-    )
+    <span class="kw">pub fn </span>validate(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, problem: <span class="kw-2">&amp;</span>ProofOfWorkProblem, solution: <span class="kw-2">&amp;</span>ProofOfWorkSolution,
+    ) -&gt; bool {
+        <span class="kw">let </span>nonce = solution.nonce;
+        <span class="kw">let </span>hash =
+            <span class="self">self</span>.compute(<span class="kw-2">&amp;</span>nonce, <span class="kw-2">&amp;</span>problem.block_hash, problem.block_height);
+        ProofOfWorkProblem::validate_hash_against_boundary(
+            <span class="kw-2">&amp;</span>hash,
+            <span class="kw-2">&amp;</span>nonce,
+            <span class="kw-2">&amp;</span>problem.boundary,
+        )
+    }
 }
 
 <span class="doccomment">/// This function computes the target difficulty of the next period
