@@ -50,7 +50,6 @@ impl<'a> MiningSession<'a> {
             if self.is_mining_block_outdated() {
                 // Compute new mining task and send to workers
                 self.update_mining_task();
-            } else {
                 // Pull the mining solution
                 self.process_pending_solutions();
             }
