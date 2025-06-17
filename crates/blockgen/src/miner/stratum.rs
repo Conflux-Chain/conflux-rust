@@ -233,8 +233,10 @@ pub struct Stratum {
 #[derive(Debug)]
 /// Stratum error
 pub enum Error {
+    #[allow(unused)]
     /// IPC sockets error
     Service(StratumServiceError),
+    #[allow(unused)]
     /// Invalid network address
     Address(AddrParseError),
 }
