@@ -369,16 +369,12 @@ class ConfluxTestFramework:
         }
         self._cw3 = CWeb3(CWeb3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].rpcport}/'), request_kwargs=http_provider_kwargs)
         self._ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/', request_kwargs=http_provider_kwargs))
-        self._legacy_ew3 = Web3(Web3.HTTPProvider(f'http://{self.nodes[0].ip}:{self.nodes[0].ethrpcport}/', request_kwargs=http_provider_kwargs))
 
         self.cw3.wallet.add_accounts(self.core_accounts)
         self.cw3.cfx.default_account = self.core_accounts[0].address
         
         self.ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(self.evm_secrets)) # type: ignore
         self.eth.default_account = self.evm_accounts[0].address
-        
-        self._legacy_ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(self.evm_secrets)) # type: ignore
-        self._legacy_ew3.eth.default_account = self.evm_accounts[0].address
         
         class TestNodeMiddleware(ConfluxWeb3Middleware):
             def request_processor(self, method: RPCEndpoint, params: Any) -> Any:
@@ -402,7 +398,6 @@ class ConfluxTestFramework:
             
         self.cw3.middleware_onion.add(TestNodeMiddleware)
         self.ew3.middleware_onion.add(TestNodeMiddleware)
-        self._legacy_ew3.middleware_onion.add(TestNodeMiddleware)
 
         if self.options.trace_tx:
             self.cw3.middleware_onion.add(AutoTraceMiddleware)
