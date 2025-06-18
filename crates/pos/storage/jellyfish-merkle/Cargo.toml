@@ -50,5 +50,5 @@ fuzzing = [
     "diem-nibble/fuzzing",
 ]
 
-# [lints.rust]
-# unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
