@@ -67,7 +67,7 @@ def run():
     parser.add_argument(
         "--max-nodes",
         dest="max_nodes",
-        default=24,
+        default=0,
         type=int,
     )
     parser.add_argument(
@@ -96,6 +96,10 @@ def run():
             "../target/release/conflux"),
         type=str)
     options = parser.parse_args()
+    
+    if options.max_nodes == 0:
+        options.max_nodes = os.cpu_count()
+        print(f"Max nodes not specified, using {options.max_nodes} nodes")
 
     all_failed = set()
 

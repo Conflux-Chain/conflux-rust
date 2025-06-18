@@ -22,8 +22,9 @@ use cfx_parameters::pow::*;
 use cfx_types::{BigEndianHash, H256, U256, U512};
 
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
+use primitives::BlockHeader;
 use static_assertions::_core::str::FromStr;
-use std::{convert::TryFrom, sync::Arc};
+use std::convert::TryFrom;
 
 #[cfg(target_endian = "big")]
 compile_error!("The PoW implementation requires little-endian platform");
@@ -47,6 +48,14 @@ impl ProofOfWorkProblem {
             difficulty,
             boundary,
         }
+    }
+
+    pub fn from_block_header(block_header: &BlockHeader) -> Self {
+        Self::new(
+            block_header.height(),
+            block_header.problem_hash(),
+            *block_header.difficulty(),
+        )
     }
 
     #[inline]
@@ -306,19 +315,19 @@ impl PowComputer {
                 .into()
         }
     }
-}
 
-pub fn validate(
-    pow: Arc<PowComputer>, problem: &ProofOfWorkProblem,
-    solution: &ProofOfWorkSolution,
-) -> bool {
-    let nonce = solution.nonce;
-    let hash = pow.compute(&nonce, &problem.block_hash, problem.block_height);
-    ProofOfWorkProblem::validate_hash_against_boundary(
-        &hash,
-        &nonce,
-        &problem.boundary,
-    )
+    pub fn validate(
+        &self, problem: &ProofOfWorkProblem, solution: &ProofOfWorkSolution,
+    ) -> bool {
+        let nonce = solution.nonce;
+        let hash =
+            self.compute(&nonce, &problem.block_hash, problem.block_height);
+        ProofOfWorkProblem::validate_hash_against_boundary(
+            &hash,
+            &nonce,
+            &problem.boundary,
+        )
+    }
 }
 
 #[test]

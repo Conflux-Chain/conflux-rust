@@ -1,10 +1,13 @@
 # Tests With Coverage
 
-We use `cargo-llvm-cov` to generate coverage reports for tests.
+> NOTE: This document is for coverage with nightly rust toolchain which supports branch coverage.
+> If you are using stable rust toolchain, please refer to [coverage.md](coverage.md).
 
 ## Install Dependencies
 
 ```bash
+rustup toolchain install nightly-2025-02-14
+rustup override set nightly-2025-02-14
 cargo +stable install cargo-llvm-cov --locked
 ```
 
@@ -13,7 +16,7 @@ cargo +stable install cargo-llvm-cov --locked
 ```bash
 # Set the environment variables needed to get coverage.
 # This command sets the RUSTFLAGS and other environment variables
-source <(cargo llvm-cov show-env --export-prefix)
+source <(cargo llvm-cov show-env --branch --export-prefix)
 ```
 
 It should note that in certain cases, you might want to add additional flags to the `RUSTFLAGS` environment variable. For example, on certain version of OSX, you might need to add the following flag:
@@ -58,7 +61,7 @@ pytest integration_tests/tests -vv -n 6 --dist loadscope --conflux-binary $(pwd)
 export CONFLUX_BENCH=$(pwd)/tools/consensus_bench/target/debug/consensus_bench
 # Run additional tests.
 # Use --max-workers and --max-nodes to control the number of workers and nodes.
-python tests/test_all.py --conflux-binary $(pwd)/target/debug/conflux
+python tests/test_all.py --max-workers 6 --conflux-binary $(pwd)/target/debug/conflux
 ```
 
 `*.profraw` files will be generated in `./target/`
@@ -66,5 +69,5 @@ python tests/test_all.py --conflux-binary $(pwd)/target/debug/conflux
 ## Generate Coverage Report
 
 ```bash
-cargo llvm-cov report --html --failure-mode=all # Generated report will be in `./target/llvm-cov/html/index.html`
+cargo llvm-cov report --branch --html --failure-mode=all # Generated report will be in `./target/llvm-cov/html/index.html`
 ```
