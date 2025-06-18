@@ -41,7 +41,7 @@ pub enum RemoveError {
 
 #[derive(Debug)]
 pub(crate) struct PackInfo {
-    pub first_gas_price: U256,
+    pub first_priority_gas_price: U256,
     pub total_gas_limit: U256,
 }
 
@@ -66,12 +66,17 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
     }
 
     #[inline]
+    pub fn first_gas_price(&self) -> U256 {
+        self.txs.first().unwrap().gas_price()
+    }
+
+    #[inline]
     pub fn total_gas_limit(&self) -> U256 { self.total_gas_limit }
 
     #[inline]
     pub(crate) fn pack_info(&self) -> PackInfo {
         PackInfo {
-            first_gas_price: self.first_priority_gas_price(),
+            first_priority_gas_price: self.first_priority_gas_price(),
             total_gas_limit: self.total_gas_limit(),
         }
     }
@@ -266,12 +271,13 @@ impl<TX: PackingPoolTransaction> PackingBatch<TX> {
         self, config: &PackingPoolConfig, rng: &mut dyn RngCore,
     ) -> treap_map::Node<PackingPoolMap<TX>> {
         let key = self.txs.first().unwrap().sender();
+        let gas_price = self.first_gas_price();
         let priority_gas_price = self.first_priority_gas_price();
         let sort_key = priority_gas_price;
         let loss_ratio = config.loss_ratio(sort_key);
         let weight = PackingPoolWeight {
             gas_limit: self.total_gas_limit,
-            min_gas_price: priority_gas_price,
+            min_gas_price: gas_price,
             weighted_loss_ratio: loss_ratio * self.total_gas_limit,
             max_loss_ratio: loss_ratio,
         };

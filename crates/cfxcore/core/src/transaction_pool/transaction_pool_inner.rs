@@ -7,11 +7,14 @@ use super::{
     TransactionPoolError,
 };
 
-use crate::verification::{PackingCheckResult, VerificationConfig};
+use crate::verification::PackingCheckResult;
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::PackingPoolConfig;
 use cfx_parameters::{
-    block::cspace_block_gas_limit_after_cip1559,
+    block::{
+        cspace_block_gas_limit_after_cip1559,
+        espace_block_gas_limit_of_enabled_block,
+    },
     consensus_internal::ELASTICITY_MULTIPLIER,
     staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
@@ -643,26 +646,13 @@ impl TransactionPoolInner {
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
         &mut self, num_txs: usize, block_gas_limit: U256, evm_gas_limit: U256,
-        block_size_limit: usize, best_epoch_height: u64,
-        best_block_number: u64, verification_config: &VerificationConfig,
-        machine: &Machine,
+        block_size_limit: usize,
+        validity: impl Fn(&SignedTransaction) -> PackingCheckResult,
     ) -> Vec<Arc<SignedTransaction>> {
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         if num_txs == 0 {
             return packed_transactions;
         }
-
-        let spec = machine.spec(best_block_number, best_epoch_height);
-        let transitions = &machine.params().transition_heights;
-
-        let validity = |tx: &SignedTransaction| {
-            verification_config.fast_recheck(
-                tx,
-                best_epoch_height,
-                transitions,
-                &spec,
-            )
-        };
 
         let (sampled_tx, used_gas, used_size) =
             self.deferred_pool.packing_sampler(
@@ -671,7 +661,7 @@ impl TransactionPoolInner {
                 block_size_limit,
                 num_txs,
                 U256::zero(),
-                validity,
+                &validity,
             );
         packed_transactions.extend_from_slice(&sampled_tx);
 
@@ -681,7 +671,7 @@ impl TransactionPoolInner {
             block_size_limit - used_size,
             num_txs - sampled_tx.len(),
             U256::zero(),
-            validity,
+            &validity,
         );
         packed_transactions.extend_from_slice(&sampled_tx);
 
@@ -722,7 +712,9 @@ impl TransactionPoolInner {
             machine.params().can_pack_evm_transaction(best_epoch_height);
 
         let (evm_packed_tx_num, evm_used_size) = if can_pack_evm {
-            let gas_target = block_gas_limit * 5 / 10 / ELASTICITY_MULTIPLIER;
+            let gas_target =
+                espace_block_gas_limit_of_enabled_block(block_gas_limit)
+                    / ELASTICITY_MULTIPLIER;
             let parent_base_price = parent_base_price[Space::Ethereum];
             let min_base_price =
                 machine.params().min_base_price()[Space::Ethereum];

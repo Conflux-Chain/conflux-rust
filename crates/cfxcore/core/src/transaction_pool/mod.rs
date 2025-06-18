@@ -16,7 +16,9 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::BestInformation,
     transaction_pool::{nonce_pool::TxWithReadyInfo, pool_metrics::*},
-    verification::{VerificationConfig, VerifyTxLocalMode, VerifyTxMode},
+    verification::{
+        PackingCheckResult, VerificationConfig, VerifyTxLocalMode, VerifyTxMode,
+    },
 };
 use cfx_executor::{
     machine::Machine, spec::TransitionsEpochHeight, state::State,
@@ -718,6 +720,21 @@ impl TransactionPool {
         }
     }
 
+    fn check_validity(
+        &self, tx: &SignedTransaction, best_epoch_height: u64,
+        best_block_number: u64,
+    ) -> PackingCheckResult {
+        let spec = self.machine.spec(best_block_number, best_epoch_height);
+        let transitions = &self.machine.params().transition_heights;
+
+        self.verification_config.fast_recheck(
+            tx,
+            best_epoch_height,
+            transitions,
+            &spec,
+        )
+    }
+
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, evm_gas_limit: U256,
         block_size_limit: usize, mut best_epoch_height: u64,
@@ -727,15 +744,17 @@ impl TransactionPool {
         best_epoch_height += 1;
         // The best block number is not necessary an exact number.
         best_block_number += 1;
+
+        let validity = |tx: &SignedTransaction| {
+            self.check_validity(tx, best_epoch_height, best_block_number)
+        };
+
         inner.pack_transactions(
             num_txs,
             block_gas_limit,
             evm_gas_limit,
             block_size_limit,
-            best_epoch_height,
-            best_block_number,
-            &self.verification_config,
-            &self.machine,
+            validity,
         )
     }
 
@@ -749,16 +768,8 @@ impl TransactionPool {
         // The best block number is not necessary an exact number.
         best_block_number += 1;
 
-        let spec = self.machine.spec(best_block_number, best_epoch_height);
-        let transitions = &self.machine.params().transition_heights;
-
         let validity = |tx: &SignedTransaction| {
-            self.verification_config.fast_recheck(
-                tx,
-                best_epoch_height,
-                transitions,
-                &spec,
-            )
+            self.check_validity(tx, best_epoch_height, best_block_number)
         };
 
         inner.pack_transactions_1559(
@@ -800,7 +811,7 @@ impl TransactionPool {
         for tx in txs {
             gas_used[tx.space()] += *tx.gas_limit();
             min_gas_price[tx.space()] =
-                min_gas_price[tx.space()].min(*tx.gas_limit());
+                min_gas_price[tx.space()].min(*tx.gas_price());
         }
 
         let core_gas_limit =

@@ -6,6 +6,7 @@ use primitives::SignedTransaction;
 /// Trait representing a transaction processed by the `PackingPool`.
 pub trait PackingPoolTransaction: Clone {
     type Sender: Default + Ord + Hash + Copy + Debug;
+
     fn sender(&self) -> Self::Sender;
 
     fn nonce(&self) -> U256;
