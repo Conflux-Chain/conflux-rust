@@ -43,7 +43,6 @@ from ethereum_test_tools import (
 )
 from ethereum_test_tools import Macros as Om
 from ethereum_test_tools import Opcodes as Op
-from ethereum_test_tools.eof.v1 import Container, Section
 
 from .helper import (
     Spec,
