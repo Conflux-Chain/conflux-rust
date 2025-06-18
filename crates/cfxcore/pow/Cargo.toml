@@ -1,0 +1,24 @@
+[package]
+name = "cfxcore-pow"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+primitives = { workspace = true }
+cfx-types = { workspace = true }
+parking_lot = { workspace = true }
+static_assertions = { workspace = true }
+cfx-parameters = { workspace = true }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
+keccak-hash = { workspace = true }
+primal = { workspace = true }

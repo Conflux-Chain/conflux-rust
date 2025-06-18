@@ -1734,6 +1734,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "cfxcore-pow",
  "cfxcore-types",
  "cfxkey",
  "channel",
@@ -1835,6 +1836,21 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "cfxcore-pow"
+version = "2.6.0"
+dependencies = [
+ "cfx-parameters",
+ "cfx-types",
+ "keccak-hash",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "parking_lot 0.12.1",
+ "primal",
+ "primitives",
+ "static_assertions",
 ]
 
 [[package]]
