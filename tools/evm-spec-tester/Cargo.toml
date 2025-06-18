@@ -36,3 +36,7 @@ clap-verbosity-flag = "3"
 
 [features]
 default = ["cfx-executor/align_evm", "cfx-statedb/testonly_code"]
+
+[patch.crates-io]
+# use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed
+vrf = { git = "https://github.com/andrcmdr/vrf-rs.git", rev = "f7bdb21f7f5d1858a3bb0183f194440f9a4199b3" }
