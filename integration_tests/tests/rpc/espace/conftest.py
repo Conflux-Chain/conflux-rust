@@ -27,14 +27,6 @@ def framework_class() -> Type[ConfluxTestFramework]:
 
     return DefaultFramework
 
-
-@pytest.fixture(scope="module", params=["ew3_port_v1", "ew3_port_v2"])
-def ew3(network: ConfluxTestFramework, request):
-    if request.param == "ew3_port_v2":
-        return network.ew3
-    else:
-        return network._legacy_ew3
-
 @pytest.fixture(scope="module")
 def erc20_contract(ew3, evm_accounts):
     account = evm_accounts[0]
