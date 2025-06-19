@@ -424,8 +424,10 @@ chrono = "0.4"
 duration-str = "0.17"
 
 # parity crates
-# This is a forked version of rlp, patched for legacy boolean encoding. See [patch.crates-io] below.
-rlp = { version = "0.6.1", features = ["legacy_bool_encoding"] }
+# The fork of the rlp crate adds a legacy v0.4.x boolean encoding to the v0.6.x
+rlp = { git = "https://github.com/Conflux-Chain/parity-common-rocksdb.git", rev = "b28832745c952c8bcac88348276b283c26de776a", package = "rlp", features = [
+    "legacy_bool_encoding",
+] }
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
@@ -456,5 +458,4 @@ rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "7d
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
-# The fork of the rlp crate adds a legacy v0.4.x boolean encoding to the v0.6.x
 rlp = { git = "https://github.com/Conflux-Chain/parity-common-rocksdb.git", rev = "b28832745c952c8bcac88348276b283c26de776a", package = "rlp" }
