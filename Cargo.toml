@@ -264,7 +264,7 @@ proc-macro-crate = "3"
 serde = { version = "1.0", features = [
     "derive",
     "alloc",
-    "rc",
+    "rc"
 ], default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1.0", default-features = false }
@@ -381,7 +381,7 @@ vergen = "8.3.2"
 target_info = "0.1"
 bit-set = "0.4"
 typenum = "1.17.0"
-typemap = { package = "typemap-ors", version = "1.0" }
+typemap = { package = "typemap-ors", version = "1.0"}
 impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
 derive_more = "0.99"
@@ -424,10 +424,7 @@ chrono = "0.4"
 duration-str = "0.17"
 
 # parity crates
-# The fork of the rlp crate adds a legacy v0.4.x boolean encoding to the v0.6.x
-rlp = { git = "https://github.com/Conflux-Chain/parity-common-rocksdb.git", rev = "b28832745c952c8bcac88348276b283c26de776a", package = "rlp", features = [
-    "legacy_bool_encoding",
-] }
+rlp = "0.6.1"
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
@@ -458,4 +455,3 @@ rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "7d
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }
-rlp = { git = "https://github.com/Conflux-Chain/parity-common-rocksdb.git", rev = "b28832745c952c8bcac88348276b283c26de776a", package = "rlp" }
