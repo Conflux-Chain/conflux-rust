@@ -1844,7 +1844,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "primitives",
  "rand 0.9.0",
- "rlp 0.4.6",
+ "rlp 0.6.1",
  "rlp-derive",
  "smart-default",
  "thiserror 2.0.11",
