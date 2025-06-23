@@ -19,17 +19,28 @@ pub fn construct_parity_trace<'a>(
     Ok(call_hierarchy.flatten_into_traces(vec![]))
 }
 
+pub enum TraceWithPosition<'a> {
+    CallCreate(CallCreateTraceWithPosition<'a>),
+    Suicide(SelfDestructTraceWithPosition<'a>),
+}
+
 /// Final trace output with execution position metadata
-pub struct TraceWithPosition<'a> {
+pub struct CallCreateTraceWithPosition<'a> {
     pub action: &'a ExecTrace,
-    pub result: Option<&'a ExecTrace>,
+    pub result: &'a ExecTrace,
+    pub child_count: usize,
+    pub trace_path: Vec<usize>,
+}
+
+pub struct SelfDestructTraceWithPosition<'a> {
+    pub action: &'a ExecTrace,
     pub child_count: usize,
     pub trace_path: Vec<usize>,
 }
 
 /// Represents an EVM execution frame with matched action-result pair
 /// and nested child frames (sub-calls).
-pub struct ResolvedTraceNode<'a> {
+pub struct CallCreateTraceNode<'a> {
     action_trace: ActionTrace<'a>,
     result_trace: ResultTrace<'a>,
     child_nodes: Vec<TraceNode<'a>>,
@@ -37,11 +48,11 @@ pub struct ResolvedTraceNode<'a> {
 }
 
 enum TraceNode<'a> {
-    CallCreate(ResolvedTraceNode<'a>),
+    CallCreate(CallCreateTraceNode<'a>),
     Suicide(SelfDestructTrace<'a>),
 }
 
-impl<'a> ResolvedTraceNode<'a> {
+impl<'a> CallCreateTraceNode<'a> {
     /// Creates a new node after validating action-result type consistency.
     ///
     /// # Arguments
@@ -89,12 +100,14 @@ impl<'a> ResolvedTraceNode<'a> {
         self, trace_path: Vec<usize>,
     ) -> Box<dyn 'a + Iterator<Item = TraceWithPosition<'a>>> {
         // Current node's trace entry
-        let root_entry = std::iter::once(TraceWithPosition {
-            action: self.action_trace.0,
-            result: Some(self.result_trace.0),
-            child_count: self.total_child_count,
-            trace_path: trace_path.clone(),
-        });
+        let root_entry = std::iter::once(TraceWithPosition::CallCreate(
+            CallCreateTraceWithPosition {
+                action: self.action_trace.0,
+                result: self.result_trace.0,
+                child_count: self.total_child_count,
+                trace_path: trace_path.clone(),
+            },
+        ));
 
         // Recursively process child nodes
         let child_entries = self.child_nodes.into_iter().enumerate().flat_map(
@@ -106,12 +119,13 @@ impl<'a> ResolvedTraceNode<'a> {
                         child.flatten_into_traces(child_path)
                     }
                     TraceNode::Suicide(suicide) => {
-                        Box::new(std::iter::once(TraceWithPosition {
-                            action: suicide.0,
-                            result: None,
-                            child_count: 0,
-                            trace_path: trace_path.clone(),
-                        }))
+                        Box::new(std::iter::once(TraceWithPosition::Suicide(
+                            SelfDestructTraceWithPosition {
+                                action: suicide.0,
+                                child_count: 0,
+                                trace_path: trace_path.clone(),
+                            },
+                        )))
                     }
                 }
             },
@@ -125,7 +139,7 @@ impl<'a> ResolvedTraceNode<'a> {
 /// Returns root node of the execution tree.
 pub fn build_call_hierarchy<'a>(
     traces: &'a [ExecTrace],
-) -> Result<ResolvedTraceNode<'a>, String> {
+) -> Result<CallCreateTraceNode<'a>, String> {
     // Stack tracks unclosed actions and their collected children
     let mut unclosed_actions: Vec<(ActionTrace, Vec<TraceNode>)> = vec![];
 
@@ -156,7 +170,7 @@ pub fn build_call_hierarchy<'a>(
                     ));
                 };
 
-                let node = ResolvedTraceNode::new(action, result, children)?;
+                let node = CallCreateTraceNode::new(action, result, children)?;
 
                 // Attach to parent if exists, otherwise return as root
                 if let Some((_, parent_children)) = unclosed_actions.last_mut()
