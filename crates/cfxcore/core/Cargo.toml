@@ -117,6 +117,7 @@ jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 cfx-rpc-utils = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfxcore-types = { workspace = true }
+cfxcore-pow = { workspace = true }
 
 [dev-dependencies]
 cfx-storage = { workspace = true, features = ["testonly_code"] }
@@ -134,5 +135,5 @@ testonly_code = []
 consensus_bench = []
 fuzzing = ["proptest", "proptest-derive"]
 
-# [lints.rust]
-# unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }

@@ -27,6 +27,7 @@ use primitives::{
     block_header::compute_next_price_tuple,
     transaction::{
         native_transaction::TypedNativeTransaction, TransactionError,
+        EIP1559_TYPE, EIP7702_TYPE, LEGACY_TX_TYPE,
     },
     Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
     SignedTransaction, Transaction, TransactionWithSignature,
@@ -780,15 +781,27 @@ impl VerificationConfig {
         }
 
         if !Self::check_eip155_transaction(tx, cip90a, &mode) {
-            bail!(TransactionError::FutureTransactionType);
+            bail!(TransactionError::FutureTransactionType {
+                tx_type: LEGACY_TX_TYPE,
+                current_height: height,
+                enable_height: transitions.cip90a,
+            });
         }
 
         if !Self::check_eip1559_transaction(tx, cip1559, &mode) {
-            bail!(TransactionError::FutureTransactionType)
+            bail!(TransactionError::FutureTransactionType {
+                tx_type: EIP1559_TYPE,
+                current_height: height,
+                enable_height: transitions.cip1559,
+            })
         }
 
         if !Self::check_eip7702_transaction(tx, cip7702, &mode) {
-            bail!(TransactionError::FutureTransactionType)
+            bail!(TransactionError::FutureTransactionType {
+                tx_type: EIP7702_TYPE,
+                current_height: height,
+                enable_height: transitions.cip7702,
+            })
         }
 
         if !Self::check_eip3860(tx, cip645) {

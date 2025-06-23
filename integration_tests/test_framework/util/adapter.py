@@ -115,7 +115,7 @@ def conflux_state_test(
         if tx.sender is not None and tx.secret_key is not None:
             warnings.warn("tx.sender and tx.secret_key are both provided, tx.sender will be used")
             tx.secret_key = tx.sender.key
-        raw_tx = tx.with_signature_and_sender().rlp
+        raw_tx = tx.with_signature_and_sender().rlp()
         return raw_tx
     
     if tx and blocks:
@@ -142,7 +142,7 @@ def conflux_state_test(
                 for tx in block.txs:
                     raw_tx = get_raw_tx_from_transaction(tx)
                     tx_hash = ew3.eth.send_raw_transaction(raw_tx)
-                    receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=1, poll_latency=0.5)
+                    receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=10, poll_latency=0.5)
                     
     elif tx:
         raw_tx = get_raw_tx_from_transaction(tx)
@@ -155,7 +155,7 @@ def conflux_state_test(
                     assert tx.error.name.lower().replace("_", " ") in e.rpc_response["error"]["message"].lower()
         else:
             tx_hash = ew3.eth.send_raw_transaction(raw_tx)
-            receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=1, poll_latency=0.5)
+            receipt = ew3.eth.wait_for_transaction_receipt(tx_hash, timeout=10, poll_latency=0.5)
             if receipt["status"] == 0:
                 print(f"Transaction failed: {tx_hash.hex()}")
                 print(f"TxErrorMsg: {receipt.get('txErrorMsg', 'No error message')}")

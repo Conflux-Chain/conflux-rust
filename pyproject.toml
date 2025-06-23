@@ -20,10 +20,11 @@ dependencies = [
     "numpy",
     "pytest",
     "pytest-xdist",
+    "setuptools", # setuptools is required as uv pip sync will remove packages not listed in the requirements.txt
     "ethereum-spec-evm-resolver",
     "ethereum-execution-spec-tests",
 ]
 
 [tool.uv.sources]
-ethereum-spec-evm-resolver = { git = "https://github.com/petertdavies/ethereum-spec-evm-resolver.git", rev = "623ac4565025e72b65f45b926da2a3552041b469" }
-ethereum-execution-spec-tests = { git = "https://github.com/ethereum/execution-spec-tests.git", rev = "e04edbe1f9c0b932b628165d12af8d244e4da776" }
+ethereum-spec-evm-resolver = { git = "https://github.com/petertdavies/ethereum-spec-evm-resolver.git", rev = "0e5609737ce4f86dc98cca1a5cf0eb64b8cddef2" }
+ethereum-execution-spec-tests = { git = "https://github.com/ethereum/execution-spec-tests.git", rev = "971214c0832f656b7250eb71cf0b7bcba96c3f49" }
