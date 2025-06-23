@@ -116,7 +116,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "2.5.0-testnet"
+version = "3.0.0-testnet"
 authors = ["peilun-conflux", "ChenxingLi"]
 description = "A rust implementation of the Conflux-Protocol"
 documentation = "https://doc.confluxnetwork.org"
