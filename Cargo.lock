@@ -1734,6 +1734,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "cfxcore-pow",
  "cfxcore-types",
  "cfxkey",
  "channel",
@@ -1835,6 +1836,21 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "cfxcore-pow"
+version = "2.6.0"
+dependencies = [
+ "cfx-parameters",
+ "cfx-types",
+ "keccak-hash",
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "parking_lot 0.12.1",
+ "primal",
+ "primitives",
+ "static_assertions",
 ]
 
 [[package]]
@@ -3408,28 +3424,6 @@ dependencies = [
  "log",
  "once_cell",
  "rand 0.8.5",
-]
-
-[[package]]
-name = "failure"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d32e9bd16cc02eae7db7ef620b392808b89f6a5e16bb3497d159c6b92a0f4f86"
-dependencies = [
- "backtrace",
- "failure_derive",
-]
-
-[[package]]
-name = "failure_derive"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4da3c766cd7a0db8242e326e9e4e081edd567072893ed320008189715366a4"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "synstructure 0.12.6",
 ]
 
 [[package]]
@@ -9208,13 +9202,12 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "vrf"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eff9943db5840ba292776c3778fedf9b97e11166d8222eceb2cb330f1ea08945"
+version = "0.2.5"
+source = "git+https://github.com/andrcmdr/vrf-rs.git?rev=f7bdb21f7f5d1858a3bb0183f194440f9a4199b3#f7bdb21f7f5d1858a3bb0183f194440f9a4199b3"
 dependencies = [
- "failure",
  "hmac-sha256",
  "openssl",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
