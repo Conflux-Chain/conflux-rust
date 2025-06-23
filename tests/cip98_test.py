@@ -19,15 +19,20 @@ class CIP98Test(ConfluxTestFramework):
         self.conf_parameters["evm_transaction_block_ratio"] = str(1)
         self.conf_parameters["dao_vote_transition_number"] = "100"
         # Disable CIP-133 on test
-        self.conf_parameters["next_hardfork_transition_number"] = str(9999999)
-        self.conf_parameters["next_hardfork_transition_height"] = str(9999999)
+        self.conf_parameters["base_fee_burn_transition_number"] = str(9999999)
+        self.conf_parameters["base_fee_burn_transition_height"] = str(9999999)
 
     def run_test(self):
         rpc = self.nodes[0].rpc
         client = RpcClient(self.nodes[0])
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
-        w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
+        w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/', request_kwargs={
+            "proxies": {
+                "http": "",
+                "https": "",
+            }
+        }))
         start_p2p_connection(self.nodes)
         priv = default_config["GENESIS_PRI_KEY"]
         account = w3.eth.account.from_key(priv)

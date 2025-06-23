@@ -1,16 +1,15 @@
 [package]
 name = "sha3-macro"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
+license-file.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-syn = {version = "1", features=["parsing"]}
+syn = { workspace = true, features=["parsing"]}
 quote = { workspace = true }
-proc-macro2 = { workspace = true }
 keccak-hash = { workspace = true }
 
 [lib]
-name = "sha3_macro"
 proc-macro = true

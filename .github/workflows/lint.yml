@@ -1,0 +1,63 @@
+name: Lint
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "*.json"
+      - "*.sol"
+      - "docs/**"
+      - ".gitignore"
+      - ".travis.yml"
+      - "cargo_fmt.sh"
+      - "CODEOWNERS"
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "*.json"
+      - "*.sol"
+      - "docs/**"
+      - ".gitignore"
+      - ".travis.yml"
+      - "cargo_fmt.sh"
+      - "CODEOWNERS"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Check format and run clippy
+        run: |
+          ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && ./dev-support/cargo_all.sh clippy --release --all -- -A warnings
+  cargo-deny:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # - uses: EmbarkStudios/cargo-deny-action@v2
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: cargo-deny
+        run: |
+          cargo install --locked cargo-deny --version 0.15.1
+          ./dev-support/cargo_all.sh deny check

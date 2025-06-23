@@ -161,8 +161,10 @@ jsonrpc_local_http_port=12539
 #
 # public_rpc_apis = "safe"
 
-# Possible eSpace names are: eth, ethpubsub, ethdebug.
-# `evm` only includes `eth` and `ethpubsub`
+# Possible eSpace namespace groups are: evm, standard, all
+# Possible RPC namespace are: eth, net, web3, debug, trace, txpool, pubsub, parity, rpc
+# `standard` only includes `eth`, `net`, `web3`
+# `evm` only includes `eth`, `net`, `web3`, `pubsub`, `parity`, `trace`
 #
 # public_evm_rpc_apis = "evm"
 

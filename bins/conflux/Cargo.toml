@@ -6,81 +6,45 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 documentation.workspace = true
+license-file.workspace = true
 
 [dependencies]
-# mio = { workspace = true }
-clap = { workspace = true, features = ["yaml"] }
-textwrap = { workspace = true }
-toml = { workspace = true }
-serde = { workspace = true }
+clap = { workspace = true, features = ["derive", "cargo"] }
 serde_json = { workspace = true }
-serde_derive = { workspace = true }
 parking_lot = { workspace = true }
-panic_hook = { workspace = true }
-app_dirs = { workspace = true }
-dir = { workspace = true }
 cfxstore = { workspace = true }
-cfxcore-accounts = { workspace = true }
-home = "0.5.0"
 rpassword = { workspace = true }
-io = { workspace = true }
-ctrlc = { workspace = true }
-jsonrpc-core = "18.0.0"
-jsonrpc-tcp-server = "18.0.0"
-jsonrpc-http-server = "18.0.0"
-jsonrpc-core-client = { version = "18.0.0", features = ["http"] }
+jsonrpsee = { workspace = true, features = ["http-client"] }
 log = { workspace = true }
-slab = { workspace = true }
 cfxcore = { workspace = true }
 network = { workspace = true }
 db = { workspace = true }
-blockgen = { workspace = true }
-txgen = { workspace = true }
-secret-store = { workspace = true }
 primitives = { workspace = true }
 log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
 rlp = { workspace = true }
-keccak-hash = { workspace = true }
-rand = "0.8.3"
-kvdb-rocksdb = { workspace = true }
+rand_08 = { workspace = true }
 client = { workspace = true }
 cfx-types = { workspace = true }
-threadpool = { workspace = true }
-docopt = { workspace = true }
 cfxkey = { workspace = true }
-parity-wordlist = { workspace = true }
 rustc-hex = { workspace = true }
 env_logger = { workspace = true }
 malloc_size_of = { workspace = true }
-diem-crypto = { path= "../../crates/cfxcore/core/src/pos/crypto/crypto" }
-diem-types = { path= "../../crates/cfxcore/core/src/pos/types" }
-pos-ledger-db = { path = "../../crates/cfxcore/core/src/pos/storage/pos-ledger-db" }
-executor = { path = "../../crates/cfxcore/core/src/pos/consensus/executor" }  # used by pos-genesis-tool
-storage-interface = { path = "../../crates/cfxcore/core/src/pos/storage/storage-interface" }
-move-core-types = { path = "../../crates/cfxcore/core/src/pos/types/move-core-types" }
-bcs = "0.1.3"
-tempdir = { workspace = true }
-hex = { workspace = true }
-base64ct = "=1.1.1"
+diem-crypto = { workspace = true }
+diem-types = { workspace = true }
+pos-ledger-db = { workspace = true }
+executor = { workspace = true }                                           # used by pos-genesis-tool
+storage-interface = { workspace = true }
+bcs = { workspace = true }
+tempfile = { workspace = true }
 parity-version = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 bls-signatures = { workspace = true }
+cfx-executor = { workspace = true }
+cfx-execute-helper = { workspace = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
 version = "0.3.2"
 optional = true
-
-[[bin]]
-name = "consensus_bench"
-path = "../../crates/cfxcore/core/benchmark/consensus/src/main.rs"
-
-[[bin]]
-name = "cfx-gen-dot"
-path = "../cfx-gen-dot/main.rs"
-
-[[bin]]
-name = "pos-genesis-tool"
-path = "../pos-genesis-tool/main.rs"
 
 [features]
 default = ["jemalloc-global"]
@@ -91,3 +55,8 @@ u64-mpt-db-key = ["client/u64_mpt_db_key"]
 # it will be enabled across all paths depending on that package. 
 # (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification)
 blst-portable = ["bls-signatures/blst-portable"]
+align_evm = ["cfx-executor/align_evm", "cfx-execute-helper/align_evm"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+mockito = "1.5.0"

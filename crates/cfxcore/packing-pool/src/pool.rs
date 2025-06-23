@@ -336,12 +336,12 @@ where
 mod pool_tests {
     use std::{collections::HashSet, sync::atomic::AtomicUsize};
 
+    use rand::SeedableRng;
     use rand_xorshift::XorShiftRng;
 
     use crate::{
-        mock_tx::MockTransaction, rand::SeedableRng,
-        transaction::PackingPoolTransaction, PackingBatch, PackingPool,
-        PackingPoolConfig, SampleTag,
+        mock_tx::MockTransaction, transaction::PackingPoolTransaction,
+        PackingBatch, PackingPool, PackingPoolConfig, SampleTag,
     };
 
     fn default_pool(
@@ -491,7 +491,7 @@ mod pool_tests {
         let pool = default_pool(5, 100000);
 
         let pack_txs = || {
-            let mut rng = XorShiftRng::from_entropy();
+            let mut rng = XorShiftRng::from_os_rng();
 
             let mut packed = HashSet::new();
             for (_, txs, tag) in pool.tx_sampler(&mut rng, 40000.into()) {
@@ -532,7 +532,7 @@ mod sample_tests {
         transaction::PackingPoolTransaction, PackingPool, PackingPoolConfig,
     };
     use cfx_types::U256;
-    use rand::{distributions::Uniform, Rng, SeedableRng};
+    use rand::{distr::Uniform, Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
 
     #[derive(Default)]
@@ -577,14 +577,16 @@ mod sample_tests {
 
     #[test]
     fn test_truncate_price_and_sample() {
-        let mut rand = XorShiftRng::from_entropy();
+        let mut rand = XorShiftRng::from_os_rng();
         let mut pool = PackingPool::new(PackingPoolConfig::new_for_test());
         let mut mock_pool = MockPriceBook::default();
         for i in 0..1000 {
             let mut gas_limit = 1.01f64.powf(2000.0 + i as f64) as u64;
-            gas_limit -= gas_limit / rand.sample(Uniform::new(50, 200));
+            gas_limit -=
+                gas_limit / rand.sample(Uniform::new(50, 200).unwrap());
             let mut gas_price = 1.01f64.powf(3000.0 - i as f64) as u64;
-            gas_price -= gas_price / rand.sample(Uniform::new(50, 200));
+            gas_price -=
+                gas_price / rand.sample(Uniform::new(50, 200).unwrap());
 
             let tx = default_tx(i, gas_limit, gas_price);
 
@@ -597,7 +599,7 @@ mod sample_tests {
         for i in 1900..3500 {
             let mut total_gas_limit = 1.01f64.powf(i as f64) as u64;
             total_gas_limit -=
-                total_gas_limit / rand.sample(Uniform::new(50, 200));
+                total_gas_limit / rand.sample(Uniform::new(50, 200).unwrap());
             assert_eq!(
                 pool.truncate_loss_ratio(total_gas_limit.into()),
                 mock_pool.truncate_loss_ratio(total_gas_limit as usize)

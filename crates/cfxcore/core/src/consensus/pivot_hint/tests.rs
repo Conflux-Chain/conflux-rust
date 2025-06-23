@@ -1,4 +1,4 @@
-use rand::{thread_rng, RngCore};
+use rand::{rng, RngCore};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
 };
 
-use hash::H256;
+use crate::hash::H256;
 
 use super::{PivotHint, PivotHintConfig};
 
@@ -53,7 +53,7 @@ fn test_pivot_hint() {
     let pivot_hint = make_test_pivot_hint();
     let mut test_file = TestHashFile::new();
 
-    let mut rng = thread_rng();
+    let mut rng = rng();
     for _ in 0..100_000 {
         let fork_at = rng.next_u64() % 1_500_000;
         if fork_at == 0 {

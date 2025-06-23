@@ -1,0 +1,23 @@
+mod debug;
+mod eth;
+mod filter;
+pub mod helpers;
+mod net;
+mod parity;
+mod pubsub;
+mod rpc;
+mod trace;
+pub mod traits;
+mod txpool;
+mod web3;
+
+pub use debug::DebugApi;
+pub use eth::EthApi;
+pub use filter::EthFilterApi;
+pub use net::NetApi;
+pub use parity::ParityApi;
+pub use pubsub::PubSubApi;
+pub use rpc::RPCApi;
+pub use trace::TraceApi;
+pub use txpool::TxPoolApi;
+pub use web3::Web3Api;

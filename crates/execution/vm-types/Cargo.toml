@@ -1,0 +1,21 @@
+[package]
+description = "Conflux VM Types"
+homepage = "https://www.confluxnetwork.org"
+license = "GPL-3.0"
+name = "cfx-vm-types"
+version = "2.0.2"
+edition = "2021"
+
+[dependencies]
+cfx-bytes = { workspace = true }
+cfx-db-errors = { workspace = true }
+cfx-types = { workspace = true }
+keccak-hash = { workspace = true }
+primitives = { workspace = true }
+rlp = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
+solidity-abi = { workspace = true }
+
+[features]
+testonly_code = []
+align_evm = []

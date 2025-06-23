@@ -9,7 +9,7 @@ import asyncio
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal
-from jsonrpcclient.exceptions import ReceivedErrorResponseError
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
 
 FULLNODE0 = 0
 

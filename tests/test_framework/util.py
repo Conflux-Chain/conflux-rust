@@ -11,11 +11,10 @@ import random
 import re
 from subprocess import CalledProcessError, check_output
 import time
-from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union
+from typing import Optional, Callable, List, TYPE_CHECKING, cast, Tuple, Union, Literal
 import socket
 import threading
-import jsonrpcclient.exceptions
-import solcx
+import conflux_web3 # should be imported before web3
 import web3
 from cfx_account import Account as CfxAccount
 from cfx_account.signers.local import LocalAccount  as CfxLocalAccount
@@ -23,21 +22,22 @@ from sys import platform
 import yaml
 import shutil
 import math
+from os.path import dirname, join
+from pathlib import Path
 
-
-from test_framework.simple_rpc_proxy import SimpleRpcProxy
+from test_framework.simple_rpc_proxy import SimpleRpcProxy, ReceivedErrorResponseError
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
 from conflux.config import default_config
 if TYPE_CHECKING:
     from conflux.rpc import RpcClient
 
-solcx.set_solc_version('v0.5.17')
-
 CONFLUX_RPC_WAIT_TIMEOUT = 60
-CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
+CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 120
 
 logger = logging.getLogger("TestFramework.utils")
+
+ZERO_ADDRESS = f"0x{'0'*40}"
 
 # Assert functions
 ##################
@@ -64,7 +64,13 @@ def assert_storage_occupied(receipt, addr, expected):
 
 
 def assert_storage_released(receipt, addr, expected):
-    assert_equal(receipt["storageReleased"].get(addr.lower(), 0), expected)
+    for storage_change_object in receipt["storageReleased"]:
+        if storage_change_object["address"] == addr:
+            assert_equal(storage_change_object["collaterals"], expected)
+            return
+    # not found in receipt
+    if expected != 0:
+        raise AssertionError(f"Storage released for address {addr} not found in receipt: {receipt['storageReleased']}")
 
 
 def assert_equal(thing1, thing2, *args):
@@ -160,7 +166,7 @@ def try_rpc(code: Optional[int], message: Optional[str], fun: Callable, err_data
     Returns whether a JSONRPCException was raised."""
     try:
         fun(*args, **kwds)
-    except jsonrpcclient.exceptions.ReceivedErrorResponseError as e:
+    except ReceivedErrorResponseError as e:
         error = e.response
         # JSONRPCException was thrown as expected. Check the code and message values are correct.
         if (code is not None) and (code != error.code):
@@ -288,8 +294,11 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000):
-    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000, conflux_binary_path=None):
+    if conflux_binary_path is None:
+        tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
+    else:
+        tg_config_gen = os.path.join(os.path.dirname(conflux_binary_path), "pos-genesis-tool")
     try:
         if pkfile is None:
             check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
@@ -660,7 +669,7 @@ def checktx(node, tx_hash):
     return node.cfx_getTransactionReceipt(tx_hash) is not None
 
 
-def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30):
+def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, timeout=30, max_parallel=500, assert_failure=True):
     """
     Establish connections among nodes with each node having 'sample' outgoing peers.
     It first lets all the nodes link as a loop, then randomly pick 'sample-1'
@@ -668,7 +677,6 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
     """
     peer = [[] for _ in nodes]
     latencies = [{} for _ in nodes]
-    threads = []
     num_nodes = len(nodes)
     sample = min(num_nodes - 1, sample)
 
@@ -690,15 +698,29 @@ def connect_sample_nodes(nodes, log, sample=3, latency_min=0, latency_max=300, t
                     latencies[p][i] = lat
                     break
 
-    for i in range(num_nodes):
-        t = ConnectThread(nodes, i, peer[i], latencies, log, min_peers=sample)
-        t.start()
-        threads.append(t)
+    for i in range(0, num_nodes, max_parallel):
+        batch = range(i, min(i + max_parallel, num_nodes))
+        threads = []
+        for j in batch:
+            t = ConnectThread(nodes, j, peer[j], latencies, log, min_peers=sample)
+            t.start()
+            threads.append(t)
 
-    for t in threads:
-        t.join(timeout)
-        assert not t.is_alive(), "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
-        assert not t.failed, "connect_sample_nodes failed."
+        for t in threads:
+            t.join(timeout)
+            if t.is_alive():
+                msg = "Node[{}] connect to other nodes timeout in {} seconds".format(t.a, timeout)
+                if assert_failure:
+                    assert False, msg
+                else:
+                    log.info(msg)
+                    
+            if t.failed:
+                msg = "connect_sample_nodes failed."
+                if assert_failure:
+                    assert False, msg
+                else:
+                    log.info(msg)
 
 
 def assert_blocks_valid(nodes, blocks):
@@ -748,14 +770,15 @@ def get_contract_instance(contract_dict=None,
     w3 = web3.Web3()
     contract = None
     if source and contract_name:
-        output = solcx.compile_files([source])
-        if platform == "win32":
-            source = os.path.abspath(source).replace("\\","/")
-        contract_dict = output[f"{source}:{contract_name}"]
-        if "bin" in contract_dict:
-            contract_dict["bytecode"] = contract_dict.pop("bin")
-        elif "code" in contract_dict:
-            contract_dict["bytecode"] = contract_dict.pop("code")
+        raise Exception("deprecated")
+        # output = solcx.compile_files([source])
+        # if platform == "win32":
+        #     source = os.path.abspath(source).replace("\\","/")
+        # contract_dict = output[f"{source}:{contract_name}"]
+        # if "bin" in contract_dict:
+        #     contract_dict["bytecode"] = contract_dict.pop("bin")
+        # elif "code" in contract_dict:
+        #     contract_dict["bytecode"] = contract_dict.pop("code")
     if contract_dict:
         contract = w3.eth.contract(
             abi=contract_dict['abi'], bytecode=contract_dict['bytecode'], address=address)
@@ -913,9 +936,7 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
     if receipt["outcomeStatus"] == "0x1": # tx fails because of not enough cash
         assert "NotEnoughCash" in receipt["txExecErrorMsg"]
         # all gas is charged
-        assert_equal(rpc.get_balance(tx_data["from"], receipt["epochNumber"]), 0)
-        # gas fee less than effective gas price
-        assert gas_fee < effective_gas_price*gas_charged
+        assert gas_fee + rpc.get_balance(tx_data["from"], receipt["epochNumber"]) < max_fee_per_gas*int(tx_data["gas"], 16)
     else:
         assert_equal(gas_fee, effective_gas_price*gas_charged)
         # check burnt fee computation
@@ -931,3 +952,21 @@ def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, b
         assert is_in_pivot_block == False, "Transaction should be in non-pivot block"
         assert max_fee_per_gas >= burnt_fee_per_gas
 
+def assert_tx_exec_error(client: "RpcClient", tx_hash: str, err_msg: str):
+    client.wait_for_receipt(tx_hash)
+    receipt = client.get_transaction_receipt(tx_hash)
+    assert_equal(receipt["txExecErrorMsg"], err_msg)    
+
+
+InternalContractName = Literal["AdminControl", "SponsorWhitelistControl",
+                               "Staking", "ConfluxContext", "PoSRegister", "CrossSpaceCall", "ParamsControl"]
+
+
+
+def load_contract_metadata(name: str):
+    path = Path(join(dirname(__file__), "..", "test_contracts", "artifacts"))
+    try:
+        found_file = next(path.rglob(f"{name}.json"))
+        return json.loads(open(found_file, "r").read())
+    except StopIteration:
+        raise Exception(f"Cannot found contract {name}'s metadata")

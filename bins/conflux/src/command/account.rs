@@ -18,8 +18,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-extern crate cfxcore_accounts;
-
 use super::helpers::{password_from_file, password_prompt};
 use cfxstore::{
     accounts_dir::RootDiskDirectory, import_account, import_accounts,
@@ -54,11 +52,11 @@ pub struct NewAccount {
 impl NewAccount {
     pub fn new(matches: &clap::ArgMatches) -> Self {
         let iterations: u32 = matches
-            .value_of("key-iterations")
-            .unwrap_or("0")
-            .parse()
-            .unwrap();
-        let password_file = matches.value_of("password").map(|x| x.to_string());
+            .get_one::<u32>("keys-iterations")
+            .unwrap_or(&0)
+            .to_owned();
+        let password_file =
+            matches.get_one::<String>("password").map(|s| s.to_string());
         Self {
             iterations,
             path: None,
@@ -76,7 +74,7 @@ pub struct ImportAccounts {
 impl ImportAccounts {
     pub fn new(matches: &clap::ArgMatches) -> Self {
         let from: Vec<_> = matches
-            .values_of("import-path")
+            .get_many::<String>("import-path")
             .expect("CLI argument is required; qed")
             .map(|s| s.to_string())
             .collect();

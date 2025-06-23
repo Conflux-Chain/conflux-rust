@@ -161,7 +161,7 @@ impl Handler {
         ));
 
         let snapshot_epoch_count =
-            consensus.get_data_manager().get_snapshot_epoch_count() as u64;
+            consensus.data_manager().get_snapshot_epoch_count() as u64;
 
         let state_roots = Arc::new(StateRoots::new(
             peers.clone(),
@@ -205,7 +205,7 @@ impl Handler {
             notifications,
             witnesses.clone(),
             stopped.clone(),
-            consensus.get_data_manager().clone(),
+            consensus.data_manager().clone(),
         ));
 
         Handler {
@@ -362,7 +362,7 @@ impl Handler {
 
     #[inline]
     fn validate_genesis_hash(&self, genesis: H256) -> Result<()> {
-        let ours = self.consensus.get_data_manager().true_genesis.hash();
+        let ours = self.consensus.data_manager().true_genesis.hash();
         let theirs = genesis;
 
         if ours != theirs {
@@ -486,11 +486,7 @@ impl Handler {
         if peer_protocol_version == LIGHT_PROTO_V1 {
             msg = Box::new(StatusPingDeprecatedV1 {
                 protocol_version: self.protocol_version.0,
-                genesis_hash: self
-                    .consensus
-                    .get_data_manager()
-                    .true_genesis
-                    .hash(),
+                genesis_hash: self.consensus.data_manager().true_genesis.hash(),
                 node_type: NodeType::Light,
             });
         } else {
@@ -498,11 +494,7 @@ impl Handler {
                 chain_id: ChainIdParamsDeprecated {
                     chain_id: self.consensus.best_chain_id().in_native_space(),
                 },
-                genesis_hash: self
-                    .consensus
-                    .get_data_manager()
-                    .true_genesis
-                    .hash(),
+                genesis_hash: self.consensus.data_manager().true_genesis.hash(),
                 node_type: NodeType::Light,
             });
         }
@@ -554,7 +546,7 @@ impl Handler {
         validate_chain_id(
             &self
                 .consensus
-                .get_config()
+                .config()
                 .chain_id
                 .read()
                 .to_native_space_params(),

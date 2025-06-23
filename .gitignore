@@ -1,5 +1,7 @@
 target
+*.profraw
 **/Cargo.lock
+!tools/*/Cargo.lock
 **/target
 **/*.rs.bk
 **/__pycache__
@@ -10,11 +12,17 @@ target
 .phabricator*
 build/
 build_clippy/
-**/blockchain_db/
+**/blockchain_data/
+**/pos_db/
 **/sqlite_db/
 **/net_config/
 **/*.log
+**/stderr.txt
 **/testnet.toml
 *~
 .DS_Store
 tests/artifacts/**/*.dbg.json
+venv
+.venv
+**/node_modules/**
+testdata/evm-spec-test/

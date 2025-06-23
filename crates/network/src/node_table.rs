@@ -119,7 +119,8 @@ impl NodeEndpoint {
                 rlp.append(&(&a.ip().octets()[..]));
             }
             SocketAddr::V6(a) => unsafe {
-                let o: *const u8 = a.ip().segments().as_ptr() as *const u8;
+                let segments = a.ip().segments();
+                let o: *const u8 = segments.as_ptr() as *const u8;
                 rlp.append(&slice::from_raw_parts(o, 16));
             },
         };
@@ -457,11 +458,11 @@ impl NodeTable {
         let mut nodes: Vec<NodeEntry> = Vec::new();
         for _i in 0..count {
             let mut rng = rand::thread_rng();
-            let node_rep_idx = rng.gen::<usize>() % NODE_REPUTATION_LEVEL_COUNT;
+            let node_rep_idx = rng.random_range(0..NODE_REPUTATION_LEVEL_COUNT);
             let node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
             let node_rep_vec = &self.node_reputation_table[node_rep];
             if !node_rep_vec.is_empty() {
-                let idx = rng.gen::<usize>() % node_rep_vec.len();
+                let idx = rng.random_range(0..node_rep_vec.len());
                 let n = &node_rep_vec[idx];
                 nodes.push(NodeEntry {
                     id: n.id,
@@ -487,11 +488,11 @@ impl NodeTable {
         let mut node_id_set: HashSet<NodeId> = HashSet::new();
         let mut rng = rand::thread_rng();
         for _i in 0..count {
-            let node_rep_idx = rng.gen::<usize>() % NODE_REPUTATION_LEVEL_COUNT;
+            let node_rep_idx = rng.random_range(0..NODE_REPUTATION_LEVEL_COUNT);
             let node_rep = NodeReputation::iter().nth(node_rep_idx).unwrap();
             let node_rep_vec = &self.node_reputation_table[node_rep];
             if !node_rep_vec.is_empty() {
-                let idx = rng.gen::<usize>() % node_rep_vec.len();
+                let idx = rng.random_range(0..node_rep_vec.len());
                 let n = &node_rep_vec[idx];
                 if !node_id_set.contains(&n.id) {
                     node_id_set.insert(n.id);

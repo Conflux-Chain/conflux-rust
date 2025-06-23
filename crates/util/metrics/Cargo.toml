@@ -1,25 +1,28 @@
 [package]
 name = "metrics"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
+license-file.workspace = true
 
 [dependencies]
 lazy_static = { workspace = true }
 parking_lot = { workspace = true }
-timer = "0.2.0"
-time = "0.1"
+timer = { workspace = true }
 rand = { workspace = true }
-influx_db_client = "0.5.1"
+influx_db_client = { workspace = true }
 log = { workspace = true }
-log4rs = { workspace = true, features = ["background_rotation", "gzip"] }
-futures = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "macros"] }
 chrono = { workspace = true }
 serde = { workspace = true }
-duration-str = "0.5.1"
+duration-str = { workspace = true }
+hyper = { workspace = true, features = ["http1", "server"] }
+hyper-util = { workspace = true, features = ['tokio', 'client'] }
+cfx-tasks = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = { workspace = true }
+reqwest = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 
 [[bench]]
 name = "benchmark"

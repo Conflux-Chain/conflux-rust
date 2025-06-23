@@ -1,11 +1,12 @@
-## Project Layout
+# Project Layout
 
 This repository contains several Rust crates that implement the different building blocks of an Conflux node. The high-level structure of the repository is as follows:
 
 - [bins](../../bins): All binary crates located in this folder
 - [crates](../../crates): All crates library
+- [tools](../../tools/): Tools for benchmark, testing (These crates are stand-alone and not included in the whole workspace)
 - [internal_contract](../../internal_contract): Internal contracts's abi and interface
-- [tests](../../tests): The python integration tests
+- [integration_tests] and [tests](../../tests): The python integration tests
 - [run](../../run): Node run misc, include default config file and start scripts
 - [dev-support](../../dev-support): Dev support scripts
 - [docs](../../docs): Documentation
@@ -34,7 +35,27 @@ The [primitives crate](../../crates/primitives) contains the core data structure
 
 ### cfxcore
 
-The Conflux Protocol's core code located at [cfxcore](../../crates/cfxcore) directory. Including `consensus`, `EVM machine` etc.
+The Conflux Protocol's core code located at [cfxcore](../../crates/cfxcore) directory. Including `consensus`, `pow`, `transaction pool` etc.
+
+### execution
+
+The [execution](../../crates/execution) directory contains the execution engine, which is responsible for executing transactions and managing the state of the blockchain. It includes the following core crates:
+
+- [vm-types](../../crates/execution/vm-types/)
+- [vm-interpreter](../../crates/execution/vm-interpreter/)
+- [executor](../../crates/execution/executor/)
+- [execute-helper](../../crates/execution/execute-helper/)
+
+And tracer crates:
+
+- [parity-trace-types](../../crates/execution/parity-trace-types/)
+- [geth-tracer](../../crates/execution/geth-tracer/)
+
+Other utility crates:
+
+- [cfx-vm-tracer-derive](../../crates/execution/cfx-vm-tracer-derive/)
+- [solidity-abi](../../crates/execution/solidity-abi/)
+- [solidity-abi-derive](../../crates/execution/solidity-abi-derive/)
 
 ### dbs
 
@@ -58,7 +79,8 @@ The RPC implementation for eSpace is mainly located in the [crates/rpc](crates/r
 - [rpc-cfx-types](../../crates/rpc/rpc-cfx-types/): RPC type definitions for Core Space.
 - [rpc-eth-types](../../crates/rpc/rpc-eth-types/): RPC type definitions for eSpace.
 - [rpc-eth-api](../../crates/rpc/rpc-eth-api/): RPC interface definitions for eSpace, organized by namespace.
-- [rpc](../../crates/rpc/rpc/): RPC interface implementation for eSpace.
+- [rpc-eth-impl](../../crates/rpc/rpc-eth-impl/): RPC interface implementation for eSpace.
+- [rpc-cfx-impl](../../crates/rpc/rpc-cfx-impl/): RPC interface implementation for Core Space.
 - [rpc-builder](../../crates/rpc/rpc-builder/): Logic for RPC interface registration and service startup.
 - [rpc-utils](../../crates/rpc/rpc-utils/): Implementation of common utilities, such as error code definitions.
 

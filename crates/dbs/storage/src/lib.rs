@@ -6,7 +6,6 @@
 #![allow(clippy::mut_from_ref, clippy::cast_ref_to_mut, clippy::drop_ref)]
 #![allow(deprecated)]
 
-//extern crate futures;
 #[macro_use]
 extern crate cfx_util_macros;
 #[macro_use]
@@ -127,6 +126,7 @@ pub struct StorageConfiguration {
     pub use_isolated_db_for_mpt_table: bool,
     pub use_isolated_db_for_mpt_table_height: Option<u64>,
     pub keep_era_genesis_snapshot: bool,
+    pub backup_mpt_snapshot: bool,
 }
 
 impl StorageConfiguration {
@@ -175,6 +175,7 @@ impl StorageConfiguration {
             use_isolated_db_for_mpt_table: false,
             use_isolated_db_for_mpt_table_height: None,
             keep_era_genesis_snapshot: false,
+            backup_mpt_snapshot: true,
         }
     }
 

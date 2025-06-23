@@ -13,7 +13,7 @@ use crate::{
         LIGHT_PROTOCOL_ID, LIGHT_PROTOCOL_VERSION,
     },
     sync::SynchronizationGraph,
-    ConsensusGraph, Notifications,
+    Notifications,
 };
 use cfx_addr::Network;
 use cfx_executor::state::COMMISSION_PRIVILEGE_SPECIAL_KEY;
@@ -34,7 +34,7 @@ use cfx_types::{
 };
 use futures::{
     future::{self, Either},
-    stream, try_join, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+    stream, try_join, StreamExt, TryStreamExt,
 };
 use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
@@ -46,6 +46,7 @@ use primitives::{
 };
 use rlp::Rlp;
 use std::{collections::BTreeSet, future::Future, sync::Arc, time::Duration};
+use tokio::time::timeout;
 
 pub struct TxInfo {
     pub tx: SignedTransaction,
@@ -57,23 +58,11 @@ pub struct TxInfo {
     pub prior_gas_used: U256,
 }
 
-// As of now, the jsonrpc crate uses legacy futures (futures@0.1 and tokio@0.1).
-// Because of this, our RPC runtime cannot handle tokio@0.2 timing primitives.
-// As a temporary workaround, we use the old `tokio_timer::Timeout` instead.
 async fn with_timeout<T>(
     d: Duration, msg: String,
     fut: impl Future<Output = Result<T, LightError>> + Send + Sync,
 ) -> Result<T, LightError> {
-    // convert `fut` into futures@0.1
-    let fut = fut.unit_error().boxed().compat();
-
-    // set timeout
-    let with_timeout = tokio_timer::Timeout::new(fut, d);
-
-    // convert back to std::future
-    use futures::compat::Future01CompatExt;
-    let with_timeout = with_timeout.compat();
-
+    let with_timeout = timeout(d, fut);
     // set error message
     with_timeout
         .await
@@ -239,16 +228,14 @@ impl QueryService {
     pub async fn retrieve_block(
         &self, hash: H256,
     ) -> Result<Option<Block>, LightError> {
-        let genesis = self.consensus.get_data_manager().true_genesis.clone();
+        let genesis = self.consensus.data_manager().true_genesis.clone();
 
         if hash == genesis.hash() {
             return Ok(Some((*genesis).clone()));
         }
 
-        let maybe_block_header = self
-            .consensus
-            .get_data_manager()
-            .block_header_by_hash(&hash);
+        let maybe_block_header =
+            self.consensus.data_manager().block_header_by_hash(&hash);
 
         let block_header = match maybe_block_header {
             None => return Ok(None),
@@ -285,13 +272,7 @@ impl QueryService {
         let mut total_transaction_count_in_processed_blocks = 0;
         let mut processed_block_count = 0;
 
-        let inner = self
-            .consensus
-            .as_any()
-            .downcast_ref::<ConsensusGraph>()
-            .expect("downcast should succeed")
-            .inner
-            .clone();
+        let inner = self.consensus.inner.clone();
 
         loop {
             if hashes.len() >= GAS_PRICE_BLOCK_SAMPLE_SIZE || epoch == 0 {
@@ -791,7 +772,7 @@ impl QueryService {
         let epoch_number = self.get_latest_verifiable_epoch_number()?;
         Ok(self
             .consensus
-            .get_config()
+            .config()
             .chain_id
             .read()
             .get_chain_id(epoch_number))
@@ -1025,7 +1006,7 @@ impl QueryService {
                 log
             })
             // Limit logs can return
-            .take(self.consensus.get_config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
+            .take(self.consensus.config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
             .try_collect();
         // --> TryFuture<Vec<LocalizedLogEntry>>
 

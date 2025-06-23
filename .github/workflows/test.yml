@@ -1,0 +1,190 @@
+name: Tests
+
+env:
+  RUST_VERSION: 1.86.0
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "*.json"
+      - "*.sol"
+      - "docs/**"
+      - ".gitignore"
+      - ".travis.yml"
+      - "cargo_fmt.sh"
+      - "CODEOWNERS"
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "*.json"
+      - "*.sol"
+      - "docs/**"
+      - ".gitignore"
+      - ".travis.yml"
+      - "cargo_fmt.sh"
+      - "CODEOWNERS"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-workspace:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+      - name: Check workspace
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo check --all --locked
+
+  check-individual-crates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+      - name: Check individual crates
+        run: |
+          ./dev-support/check-crates.sh
+
+  workspace-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run build bench
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo bench --all --no-run
+
+      - name: Run workspace tests
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo install cargo-nextest --version "0.9.85" --locked
+          cargo nextest run --no-fail-fast --release --workspace
+
+  cfx-addr-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run cfx-addr
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo install cargo-nextest --version "0.9.85" --locked
+          cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
+
+  build-documentation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run build documentation
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: 3.5
+        run: |
+          cargo doc --document-private-items
+
+  evm-spec-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Install zstd
+        run: sudo apt-get install -y zstd
+
+      - name: Extract test data
+        working-directory: ./testdata
+        run: tar --use-compress-program="zstd --long=31" -xvf evm-spec-test.tar.zst
+
+      - name: Build in release mode
+        working-directory: ./tools/evm-spec-tester
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo run --release --locked -- statetest ../../testdata/evm-spec-test
+
+  consensus-bench-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run build
+        working-directory: ./tools/consensus_bench
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo check --locked

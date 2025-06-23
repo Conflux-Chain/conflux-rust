@@ -2,16 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use lazy_static::lazy_static;
 /// This module can trigger random process crashes during testing.
 /// This is only used to insert crashes before db modifications.
-
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
+use log::info;
 
 use parking_lot::Mutex;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 lazy_static! {
     /// The process exit code set for random crash.
     pub static ref CRASH_EXIT_CODE: Mutex<i32> = Mutex::new(100);
@@ -24,7 +21,7 @@ lazy_static! {
 /// Randomly crash with the probability and exit code already set.
 pub fn random_crash_if_enabled(exit_str: &str) {
     if let Some(p) = *CRASH_EXIT_PROBABILITY.lock() {
-        if thread_rng().gen_bool(p) {
+        if rng().random_bool(p) {
             info!("exit before {}", exit_str);
             std::process::exit(*CRASH_EXIT_CODE.lock());
         }

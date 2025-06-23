@@ -37,8 +37,8 @@ impl TransactionPool for TransactionPoolHandler {
             fn txpool_pending_nonce_range(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingNonceRange>;
             fn txpool_tx_with_pool_info(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
             fn txpool_transaction_by_address_and_nonce(&self, address: RpcAddress, nonce: U256) -> JsonRpcResult<Option<RpcTransaction>>;
-            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
-            fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
+            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<JsonRpcResult<Option<AccountPendingInfo>>>;
+            fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<JsonRpcResult<AccountPendingTransactions>>;
         }
     }
 }

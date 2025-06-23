@@ -86,7 +86,6 @@ pub type CaterpillarMinLinkCutTree = MutexLinkCutTree<Caterpillar>;
 
 #[cfg(test)]
 mod tests {
-    extern crate rand;
     use super::{
         CaterpillarMinLinkCutTree, DefaultMinLinkCutTree,
         DeltaAndPreferredChild, Link, MutexLinkCutTree, SizeMinLinkCutTree,
@@ -416,7 +415,7 @@ mod tests {
         let mut value: Vec<i64> = Vec::new();
         parent.push(NULL);
         for i in 1..n {
-            let p: usize = rand::thread_rng().gen_range(0, i) as usize;
+            let p: usize = rand::rng().random_range(0..i) as usize;
             parent.push(p);
         }
         value.resize(n, 0);
@@ -427,28 +426,28 @@ mod tests {
         }
         assert_eq!(tree.size(), n);
         for _ in 0..80000 {
-            let op: u32 = rand::thread_rng().gen_range(0, 7);
+            let op: u32 = rand::rng().random_range(0..7);
             if op == 0 {
                 // path apply
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: i64 = rand::rng().random_range(-bound..bound);
                 tree.path_apply(u as usize, v as i128);
                 path_apply_brutal(&parent, &mut value, u, v);
             } else if op == 1 {
                 // query min
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 assert_eq!(
                     query_min_brutal(&parent, &value, u),
                     tree.path_aggregate(u) as i64
                 );
             } else if op == 2 {
                 // lca
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: usize = rand::rng().random_range(0..n) as usize;
                 assert_eq!(lca_brutal(&parent, u, v), tree.lca(u, v));
             } else if op == 3 {
                 // query chop
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 let mut p = u;
                 let mut v = value[p];
                 while p != NULL {
@@ -460,16 +459,16 @@ mod tests {
                 }
             } else if op == 4 {
                 // set
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: i64 = rand::rng().random_range(-bound..bound);
                 tree.set(u, v as i128);
                 value[u] = v;
             } else if op == 5 {
                 // get
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 assert_eq!(value[u], tree.get(u) as i64);
             } else if op == 6 {
-                let p: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let p: usize = rand::rng().random_range(0..n) as usize;
                 parent.push(p);
                 value.push(0);
                 tree.make_tree(n);
@@ -487,7 +486,7 @@ mod tests {
         let mut value: Vec<i64> = Vec::new();
         parent.push(NULL);
         for i in 1..n {
-            let p: usize = rand::thread_rng().gen_range(0, i) as usize;
+            let p: usize = rand::rng().random_range(0..i) as usize;
             parent.push(p);
         }
         value.resize(n, 0);
@@ -498,28 +497,28 @@ mod tests {
         }
         assert_eq!(tree.size(), n);
         for _ in 0..80000 {
-            let op: u32 = rand::thread_rng().gen_range(0, 8);
+            let op: u32 = rand::rng().random_range(0..8);
             if op == 0 {
                 // path apply
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: i64 = rand::rng().random_range(-bound..bound);
                 tree.path_apply(u as usize, v as i128);
                 path_apply_brutal(&parent, &mut value, u, v);
             } else if op == 1 {
                 // query min
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 assert_eq!(
                     query_min_brutal(&parent, &value, u),
                     tree.path_aggregate(u) as i64
                 );
             } else if op == 2 {
                 // lca
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: usize = rand::rng().random_range(0..n) as usize;
                 assert_eq!(lca_brutal(&parent, u, v), tree.lca(u, v));
             } else if op == 3 {
                 // query chop
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 let mut p = u;
                 let mut v = value[p];
                 while p != NULL {
@@ -531,24 +530,24 @@ mod tests {
                 }
             } else if op == 4 {
                 // set
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: i64 = rand::rng().random_range(-bound..bound);
                 tree.set(u, v as i128);
                 value[u] = v;
             } else if op == 5 {
                 // ancestor at
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let at: usize = rand::thread_rng().gen_range(0, 100) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let at: usize = rand::rng().random_range(0..100) as usize;
                 assert_eq!(
                     ancestor_at_brutal(&parent, u, at),
                     tree.ancestor_at(u as usize, at)
                 );
             } else if op == 6 {
                 // get
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 assert_eq!(value[u], tree.get(u) as i64);
             } else if op == 7 {
-                let p: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let p: usize = rand::rng().random_range(0..n) as usize;
                 parent.push(p);
                 value.push(0);
                 tree.make_tree(n);
@@ -566,7 +565,7 @@ mod tests {
         let mut value: Vec<i64> = Vec::new();
         parent.push(NULL);
         for i in 1..n {
-            let p: usize = rand::thread_rng().gen_range(0, i) as usize;
+            let p: usize = rand::rng().random_range(0..i) as usize;
             parent.push(p);
         }
         value.resize(n, 0);
@@ -578,29 +577,29 @@ mod tests {
         }
         assert_eq!(tree.size(), n);
         for _ in 0..80000 {
-            let op: u32 = rand::thread_rng().gen_range(0, 9);
+            let op: u32 = rand::rng().random_range(0..9);
             if op == 0 {
                 // path apply
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: i64 = rand::rng().random_range(-bound..bound);
                 tree.path_apply(u as usize, v as i128);
                 path_apply_brutal(&parent, &mut value, u, v);
             } else if op == 1 {
                 // caterpillar apply
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: i64 = rand::rng().random_range(-bound..bound);
                 tree.caterpillar_apply(u, v as i128);
                 caterpillar_apply_brutal(&parent, &mut value, u, v);
             } else if op == 2 {
                 // query min
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 assert_eq!(
                     query_min_brutal(&parent, &value, u),
                     tree.path_aggregate(u) as i64
                 );
             } else if op == 3 {
                 // query chop
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 let mut p = u;
                 let mut v = value[p];
                 while p != NULL {
@@ -612,17 +611,17 @@ mod tests {
                 }
             } else if op == 4 {
                 // set
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
-                let v: i64 = rand::thread_rng().gen_range(-bound, bound);
+                let u: usize = rand::rng().random_range(0..n) as usize;
+                let v: i64 = rand::rng().random_range(-bound..bound);
                 tree.set(u, v as i128);
                 value[u] = v;
             } else if op == 5 {
                 // get
-                let u: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let u: usize = rand::rng().random_range(0..n) as usize;
                 assert_eq!(value[u], tree.get(u) as i64);
             } else if op == 6 {
                 // make tree
-                let p: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let p: usize = rand::rng().random_range(0..n) as usize;
                 parent.push(p);
                 value.push(0);
                 tree.make_tree(n);
@@ -630,7 +629,7 @@ mod tests {
                 n += 1;
             } else if op == 7 {
                 // split root
-                let i: usize = rand::thread_rng().gen_range(0, n) as usize;
+                let i: usize = rand::rng().random_range(0..n) as usize;
                 if parent[i] != NULL {
                     tree.split_root(parent[i], i);
                     parent[i] = NULL;
@@ -645,9 +644,8 @@ mod tests {
                     }
                 }
                 if null_vec.len() != 1 {
-                    let i: usize = rand::thread_rng()
-                        .gen_range(0, null_vec.len())
-                        as usize;
+                    let i: usize =
+                        rand::rng().random_range(0..null_vec.len()) as usize;
                     let i = null_vec[i];
                     let mut can = Vec::new();
                     for v in 0..n {
@@ -656,7 +654,7 @@ mod tests {
                         }
                     }
                     let p: usize =
-                        rand::thread_rng().gen_range(0, can.len()) as usize;
+                        rand::rng().random_range(0..can.len()) as usize;
                     let p = can[p];
                     tree.link(p, i);
                     parent[i] = p;

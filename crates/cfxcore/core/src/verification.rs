@@ -3,13 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus::pos_handler::PosVerifier,
     core_error::{BlockError, CoreError as Error},
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     sync::Error as SyncError,
 };
 use cfx_executor::{
-    executive::gas_required_for, machine::Machine, spec::TransitionsEpochHeight,
+    executive::{eip7623_required_gas, gas_required_for},
+    machine::Machine,
+    spec::TransitionsEpochHeight,
 };
 use cfx_parameters::{block::*, consensus_internal::ELASTICITY_MULTIPLIER};
 use cfx_storage::{
@@ -20,12 +21,13 @@ use cfx_types::{
     address_util::AddressUtil, AllChainID, BigEndianHash, Space, SpaceMap,
     H256, U256,
 };
-use cfx_vm_types::Spec;
+use cfx_vm_types::{ConsensusGasSpec, Spec};
 use primitives::{
     block::BlockHeight,
     block_header::compute_next_price_tuple,
     transaction::{
         native_transaction::TypedNativeTransaction, TransactionError,
+        EIP1559_TYPE, EIP7702_TYPE, LEGACY_TX_TYPE,
     },
     Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
     SignedTransaction, Transaction, TransactionWithSignature,
@@ -44,7 +46,7 @@ pub struct VerificationConfig {
     pub transaction_epoch_bound: u64,
     pub max_nonce: Option<U256>,
     machine: Arc<Machine>,
-    pos_verifier: Arc<PosVerifier>,
+    pos_enable_height: u64,
 }
 
 /// Create an MPT from the ordered list of block transactions.
@@ -223,33 +225,21 @@ impl VerificationConfig {
     pub fn new(
         test_mode: bool, referee_bound: usize, max_block_size_in_bytes: usize,
         transaction_epoch_bound: u64, tx_pool_nonce_bits: usize,
-        machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
+        pos_enable_height: u64, machine: Arc<Machine>,
     ) -> Self {
         let max_nonce = if tx_pool_nonce_bits < 256 {
             Some((U256::one() << tx_pool_nonce_bits) - 1)
         } else {
             None
         };
-        if test_mode {
-            VerificationConfig {
-                verify_timestamp: false,
-                referee_bound,
-                max_block_size_in_bytes,
-                transaction_epoch_bound,
-                machine,
-                pos_verifier,
-                max_nonce,
-            }
-        } else {
-            VerificationConfig {
-                verify_timestamp: true,
-                referee_bound,
-                max_block_size_in_bytes,
-                transaction_epoch_bound,
-                machine,
-                pos_verifier,
-                max_nonce,
-            }
+        VerificationConfig {
+            verify_timestamp: !test_mode,
+            referee_bound,
+            max_block_size_in_bytes,
+            transaction_epoch_bound,
+            machine,
+            pos_enable_height,
+            max_nonce,
         }
     }
 
@@ -340,6 +330,10 @@ impl VerificationConfig {
         Ok(())
     }
 
+    fn is_pos_enabled_at_height(&self, height: u64) -> bool {
+        height >= self.pos_enable_height
+    }
+
     /// Check basic header parameters.
     /// This does not require header to be graph or parental tree ready.
     #[inline]
@@ -358,7 +352,7 @@ impl VerificationConfig {
             )));
         }
 
-        if self.pos_verifier.is_enabled_at_height(header.height()) {
+        if self.is_pos_enabled_at_height(header.height()) {
             if header.pos_reference().is_none() {
                 bail!(BlockError::MissingPosReference);
             }
@@ -472,6 +466,8 @@ impl VerificationConfig {
 
         let mut block_size = 0;
         let transitions = &self.machine.params().transition_heights;
+        let consensus_spec =
+            &self.machine.params().consensus_spec(block_height);
 
         for t in &block.transactions {
             self.verify_transaction_common(
@@ -479,7 +475,7 @@ impl VerificationConfig {
                 chain_id,
                 block_height,
                 transitions,
-                VerifyTxMode::Remote,
+                VerifyTxMode::Remote(consensus_spec),
             )?;
             block_size += t.rlp_size();
         }
@@ -671,10 +667,20 @@ impl VerificationConfig {
     ) -> PackingCheckResult {
         let cip90a = height >= transitions.cip90a;
         let cip1559 = height >= transitions.cip1559;
+        let cip7702 = height >= transitions.cip7702;
+        let cip645 = height >= transitions.cip645;
 
         let (can_pack, later_pack) =
             Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
                 if !Self::check_eip1559_transaction(tx, cip1559, mode) {
+                    return false;
+                }
+
+                if !Self::check_eip7702_transaction(tx, cip7702, mode) {
+                    return false;
+                }
+
+                if !Self::check_eip3860(tx, cip645) {
                     return false;
                 }
 
@@ -755,8 +761,12 @@ impl VerificationConfig {
         // ******************************************
         let cip76 = height >= transitions.cip76;
         let cip90a = height >= transitions.cip90a;
-        let cip130 = height >= transitions.cip130;
+        let cip130 =
+            height >= transitions.cip130 && height < transitions.align_evm;
         let cip1559 = height >= transitions.cip1559;
+        let cip7702 = height >= transitions.cip7702;
+        let cip645 = height >= transitions.cip645;
+        let eip7623 = height >= transitions.eip7623;
 
         if let Transaction::Native(ref tx) = tx.unsigned {
             Self::verify_transaction_epoch_height(
@@ -768,14 +778,37 @@ impl VerificationConfig {
         }
 
         if !Self::check_eip155_transaction(tx, cip90a, &mode) {
-            bail!(TransactionError::FutureTransactionType);
+            bail!(TransactionError::FutureTransactionType {
+                tx_type: LEGACY_TX_TYPE,
+                current_height: height,
+                enable_height: transitions.cip90a,
+            });
         }
 
         if !Self::check_eip1559_transaction(tx, cip1559, &mode) {
-            bail!(TransactionError::FutureTransactionType)
+            bail!(TransactionError::FutureTransactionType {
+                tx_type: EIP1559_TYPE,
+                current_height: height,
+                enable_height: transitions.cip1559,
+            })
         }
 
-        Self::check_gas_limit(tx, cip76, &mode)?;
+        if !Self::check_eip7702_transaction(tx, cip7702, &mode) {
+            bail!(TransactionError::FutureTransactionType {
+                tx_type: EIP7702_TYPE,
+                current_height: height,
+                enable_height: transitions.cip7702,
+            })
+        }
+
+        if !Self::check_eip3860(tx, cip645) {
+            bail!(TransactionError::CreateInitCodeSizeLimit)
+        }
+
+        Self::check_eip1559_validation(tx, cip645)?;
+        Self::check_eip7702_validation(tx)?;
+
+        Self::check_gas_limit(tx, cip76, eip7623, &mode)?;
         Self::check_gas_limit_with_calldata(tx, cip130)?;
 
         Ok(())
@@ -792,7 +825,7 @@ impl VerificationConfig {
         match mode {
             VerifyTxMode::Local(Full, spec) => cip90a && spec.cip90,
             VerifyTxMode::Local(MaybeLater, _spec) => true,
-            VerifyTxMode::Remote => cip90a,
+            VerifyTxMode::Remote(_) => cip90a,
         }
     }
 
@@ -805,37 +838,101 @@ impl VerificationConfig {
 
         use VerifyTxLocalMode::*;
         match mode {
-            VerifyTxMode::Local(Full, _spec) => cip1559,
+            VerifyTxMode::Local(Full, spec) => cip1559 && spec.cip1559,
             VerifyTxMode::Local(MaybeLater, _spec) => true,
-            VerifyTxMode::Remote => cip1559,
+            VerifyTxMode::Remote(_) => cip1559,
         }
     }
 
-    /// Check transaction intrinsic gas. Influenced by CIP-76.
-    fn check_gas_limit(
-        tx: &TransactionWithSignature, cip76: bool, mode: &VerifyTxMode,
+    fn check_eip7702_transaction(
+        tx: &TransactionWithSignature, cip7702: bool, mode: &VerifyTxMode,
+    ) -> bool {
+        if !tx.after_7702() {
+            return true;
+        }
+
+        use VerifyTxLocalMode::*;
+        match mode {
+            VerifyTxMode::Local(Full, spec) => cip7702 && spec.cip7702,
+            VerifyTxMode::Local(MaybeLater, _spec) => true,
+            VerifyTxMode::Remote(_) => cip7702,
+        }
+    }
+
+    fn check_eip7702_validation(
+        tx: &TransactionWithSignature,
     ) -> Result<(), TransactionError> {
-        const GENESIS_SPEC: Spec = Spec::genesis_spec();
-        let maybe_spec = if let VerifyTxMode::Local(_, spec) = mode {
-            // In local mode, we check gas limit as usual.
-            Some(*spec)
-        } else if !cip76 {
-            // In remote mode, we only check gas limit before cip-76 activated.
-            Some(&GENESIS_SPEC)
-        } else {
-            None
+        if let Some(author_list) = tx.authorization_list() {
+            if author_list.is_empty() {
+                return Err(TransactionError::EmptyAuthorizationList);
+            }
+        }
+        Ok(())
+    }
+
+    fn check_eip1559_validation(
+        tx: &TransactionWithSignature, cip645: bool,
+    ) -> Result<(), TransactionError> {
+        if !cip645 || !tx.after_1559() {
+            return Ok(());
+        }
+
+        if tx.max_priority_gas_price() > tx.gas_price() {
+            return Err(TransactionError::PriortyGreaterThanMaxFee);
+        }
+        Ok(())
+    }
+
+    fn check_eip3860(tx: &TransactionWithSignature, cip645: bool) -> bool {
+        // TODO: better way to get the specification
+        const SPEC: Spec = Spec::genesis_spec();
+        if !cip645 {
+            return true;
+        }
+        if tx.action() != Action::Create {
+            return true;
+        }
+
+        tx.data().len() <= SPEC.init_code_data_limit
+    }
+
+    /// Check transaction intrinsic gas. Influenced by CIP-76 and EIP-7623.
+    fn check_gas_limit(
+        tx: &TransactionWithSignature, cip76: bool, eip7623: bool,
+        mode: &VerifyTxMode,
+    ) -> Result<(), TransactionError> {
+        let consensus_spec = match mode {
+            VerifyTxMode::Local(_, spec) => spec.to_consensus_spec(),
+            VerifyTxMode::Remote(spec) => {
+                if !eip7623 && cip76 {
+                    return Ok(());
+                } else {
+                    (*spec).clone()
+                }
+            }
         };
 
-        if let Some(spec) = maybe_spec {
-            let tx_intrinsic_gas = gas_required_for(
-                *tx.action() == Action::Create,
-                &tx.data(),
-                tx.access_list(),
-                &spec,
-            );
-            if *tx.gas() < (tx_intrinsic_gas as usize).into() {
+        let tx_intrinsic_gas = gas_required_for(
+            tx.action() == Action::Create,
+            &tx.data(),
+            tx.access_list(),
+            tx.authorization_len(),
+            &consensus_spec,
+        );
+
+        if *tx.gas() < tx_intrinsic_gas.into() {
+            bail!(TransactionError::NotEnoughBaseGas {
+                required: tx_intrinsic_gas.into(),
+                got: *tx.gas()
+            });
+        }
+
+        if eip7623 {
+            let floor_gas = eip7623_required_gas(&tx.data(), &consensus_spec);
+
+            if *tx.gas() < floor_gas.into() {
                 bail!(TransactionError::NotEnoughBaseGas {
-                    required: tx_intrinsic_gas.into(),
+                    required: floor_gas.into(),
                     got: *tx.gas()
                 });
             }
@@ -887,7 +984,7 @@ pub enum VerifyTxMode<'a> {
     Local(VerifyTxLocalMode, &'a Spec),
     /// Check transactions for received blocks in sync graph, may have less
     /// constraints
-    Remote,
+    Remote(&'a ConsensusGasSpec),
 }
 
 #[derive(Copy, Clone)]

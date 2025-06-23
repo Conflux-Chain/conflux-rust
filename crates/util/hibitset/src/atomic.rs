@@ -7,9 +7,7 @@ use std::{
 
 use atom::AtomSetOnce;
 
-use util::*;
-use BitSetLike;
-use DrainableBitSet;
+use crate::{util::*, BitSetLike, DrainableBitSet};
 
 /// This is similar to a [`BitSet`] but allows setting of value
 /// without unique ownership of the structure
@@ -274,9 +272,7 @@ impl Debug for AtomicBlock {
 
 #[cfg(test)]
 mod atomic_set_test {
-    use AtomicBitSet;
-    use BitSetAnd;
-    use BitSetLike;
+    use crate::{AtomicBitSet, BitSetAnd, BitSetLike};
 
     #[test]
     fn insert() {

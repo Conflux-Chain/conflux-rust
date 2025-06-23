@@ -16,5 +16,4 @@ parking_lot = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
-tokio = "0.1"
-tokio-io = "0.1"
+tokio = { workspace = true, features = ["full"] }

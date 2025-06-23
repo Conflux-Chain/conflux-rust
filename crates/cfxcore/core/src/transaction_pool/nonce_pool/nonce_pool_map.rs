@@ -111,6 +111,7 @@ impl NoncePoolMap {
 
     /// find an unpacked transaction `tx` where `tx.nonce() >= nonce`
     /// and `tx.nonce()` is minimum
+    /// i.e. the first unpacked transaction with nonce >= `nonce`
     pub fn query(&self, nonce: &U256) -> Option<&TxWithReadyInfo> {
         let ret = self.0.search(|left_weight, node| {
             if left_weight.max_unpackd_nonce.map_or(false, |x| x >= *nonce) {

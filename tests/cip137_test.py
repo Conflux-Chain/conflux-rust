@@ -23,8 +23,8 @@ class CIP137Test(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["min_native_base_price"] = MIN_NATIVE_BASE_PRICE
-        self.conf_parameters["next_hardfork_transition_height"] = 1
-        self.conf_parameters["next_hardfork_transition_number"] = 1
+        self.conf_parameters["base_fee_burn_transition_height"] = 1
+        self.conf_parameters["base_fee_burn_transition_number"] = 1
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -181,7 +181,7 @@ class CIP137Test(ConfluxTestFramework):
         epoch = int(focusing_block["epochNumber"],16)
         
         self.log.info(f"epoch of block b: {epoch}")
-        self.log.info(f"heigth of block b: {int(focusing_block['height'], 16)}")
+        self.log.info(f"height of block b: {int(focusing_block['height'], 16)}")
         self.log.info(f"base_fee_per_gas for epoch {epoch}: {self.rpc.base_fee_per_gas(epoch)}")
         self.log.info(f"burnt_fee_per_gas for epoch {epoch}: {self.rpc.base_fee_per_gas(epoch) * 0.5}")
         self.log.info(f"least base fee for epoch {epoch}: {self.rpc.base_fee_per_gas(epoch) * BURNT_RATIO}")

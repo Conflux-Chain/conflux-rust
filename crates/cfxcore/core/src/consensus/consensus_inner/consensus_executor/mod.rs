@@ -17,7 +17,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-use hash::KECCAK_EMPTY_LIST_RLP;
+use crate::hash::KECCAK_EMPTY_LIST_RLP;
 use parking_lot::{Mutex, RwLock};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use rustc_hex::ToHex;
@@ -62,17 +62,17 @@ use cfx_execute_helper::estimation::{
     EstimateExt, EstimateRequest, EstimationContext,
 };
 use cfx_executor::{
-    executive::ExecutionOutcome,
+    executive::{ExecutionOutcome, ExecutiveContext},
     machine::Machine,
     state::{
-        distribute_pos_interest, update_pos_status, CleanupMode, State,
-        StateCommitResult,
+        distribute_pos_interest, update_pos_status, State, StateCommitResult,
     },
 };
 use cfx_vm_types::{Env, Spec};
 use geth_tracer::GethTraceWithHash;
 
 use alloy_rpc_types_trace::geth::GethDebugTracingOptions;
+use cfx_rpc_eth_types::EvmOverrides;
 
 use self::epoch_execution::{GethTask, VirtualCall};
 
@@ -505,7 +505,13 @@ impl ConsensusExecutor {
         // the lock, there might be a checkpoint coming in to break
         // index
         for state_block_hash in waiting_blocks {
-            self.wait_for_result(state_block_hash)?;
+            let commitment = self.wait_for_result(state_block_hash)?;
+            self.handler.data_man.insert_epoch_execution_commitment(
+                state_block_hash,
+                commitment.state_root_with_aux_info,
+                commitment.receipts_root,
+                commitment.logs_bloom_hash,
+            );
         }
         // Now we need to wait for the execution information of all missing
         // blocks to come back
@@ -636,9 +642,15 @@ impl ConsensusExecutor {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-        request: EstimateRequest,
+        request: EstimateRequest, evm_overrides: EvmOverrides,
     ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
-        self.handler.call_virtual(tx, epoch_id, epoch_size, request)
+        self.handler.call_virtual(
+            tx,
+            epoch_id,
+            epoch_size,
+            request,
+            evm_overrides,
+        )
     }
 
     pub fn collect_blocks_geth_trace(
@@ -1135,10 +1147,9 @@ impl ConsensusExecutionHandler {
                 .check_availability(pivot_block_header.height(), epoch_hash)
             {
                 self.tx_pool
-                    .set_best_executed_epoch(StateIndex::new_for_readonly(
-                        epoch_hash,
-                        &state_root,
-                    ))
+                    .set_best_executed_state_by_epoch(
+                        StateIndex::new_for_readonly(epoch_hash, &state_root),
+                    )
                     // FIXME: propogate error.
                     .expect(&concat!(file!(), ":", line!(), ":", column!()));
             }
@@ -1224,7 +1235,7 @@ impl ConsensusExecutionHandler {
         }
 
         self.tx_pool
-            .set_best_executed_epoch(StateIndex::new_for_readonly(
+            .set_best_executed_state_by_epoch(StateIndex::new_for_readonly(
                 epoch_hash,
                 &commit_result.state_root,
             ))
@@ -1524,11 +1535,7 @@ impl ConsensusExecutionHandler {
         for (address, reward) in merged_rewards {
             if spec.is_valid_address(&address) {
                 state
-                    .add_balance(
-                        &address.with_native_space(),
-                        &reward,
-                        CleanupMode::ForceCreate,
-                    )
+                    .add_balance(&address.with_native_space(), &reward)
                     .unwrap();
             }
 
@@ -1578,7 +1585,7 @@ impl ConsensusExecutionHandler {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-        request: EstimateRequest,
+        request: EstimateRequest, evm_overrides: EvmOverrides,
     ) -> CoreResult<(ExecutionOutcome, EstimateExt)> {
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
@@ -1617,11 +1624,20 @@ impl ConsensusExecutionHandler {
             Space::Native => None,
             Space::Ethereum => Some(Space::Ethereum),
         };
-        let mut state = self.get_state_by_epoch_id_and_space(
+        let statedb = self.get_statedb_by_epoch_id_and_space(
             epoch_id,
             best_block_header.height(),
             state_space,
         )?;
+        let mut state = if evm_overrides.has_state() {
+            State::new_with_override(
+                statedb,
+                &evm_overrides.state.as_ref().unwrap(),
+                tx.space(),
+            )?
+        } else {
+            State::new(statedb)?
+        };
 
         let time_stamp = best_block_header.timestamp();
 
@@ -1637,7 +1653,7 @@ impl ConsensusExecutionHandler {
         let burnt_gas_price =
             base_gas_price.map_all(|x| state.burnt_gas_price(x));
 
-        let env = Env {
+        let mut env = Env {
             chain_id: self.machine.params().chain_id_map(block_height),
             number: start_block_number,
             author: miner,
@@ -1654,7 +1670,15 @@ impl ConsensusExecutionHandler {
                 .transaction_epoch_bound,
             base_gas_price,
             burnt_gas_price,
+            transaction_hash: tx.hash(),
+            ..Default::default()
         };
+        if evm_overrides.has_block() {
+            ExecutiveContext::apply_env_overrides(
+                &mut env,
+                evm_overrides.block.unwrap(),
+            );
+        }
         let spec = self.machine.spec(env.number, env.epoch_height);
         let mut ex = EstimationContext::new(
             &mut state,
@@ -1706,6 +1730,19 @@ impl ConsensusExecutionHandler {
     fn get_state_by_epoch_id_and_space(
         &self, epoch_id: &H256, epoch_height: u64, state_space: Option<Space>,
     ) -> DbResult<State> {
+        let state_db = self.get_statedb_by_epoch_id_and_space(
+            epoch_id,
+            epoch_height,
+            state_space,
+        )?;
+        let state = State::new(state_db)?;
+
+        Ok(state)
+    }
+
+    fn get_statedb_by_epoch_id_and_space(
+        &self, epoch_id: &H256, epoch_height: u64, state_space: Option<Space>,
+    ) -> DbResult<StateDb> {
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -1734,11 +1771,10 @@ impl ConsensusExecutionHandler {
                 )?
                 .ok_or("state deleted")?,
         );
-        let state = State::new(state_db)?;
 
         drop(state_availability_boundary);
 
-        Ok(state)
+        Ok(state_db)
     }
 }
 

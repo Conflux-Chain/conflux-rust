@@ -7,7 +7,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { workspace = true }
 cfxcore = { workspace = true }
 cfx-types = { workspace = true }
 cfx-vm-types = { workspace = true }
@@ -18,12 +17,7 @@ rlp = { workspace = true }
 rand = { workspace = true }
 rustc-hex = { workspace = true }
 secret-store = { workspace = true }
-network = { workspace = true }
 cfxkey = { workspace = true }
 log = { workspace = true }
-db = { workspace = true }
-toml = { workspace = true }
-io = { workspace = true }
-priority-send-queue = { workspace = true }
 metrics = { workspace = true }
 lazy_static = { workspace = true }

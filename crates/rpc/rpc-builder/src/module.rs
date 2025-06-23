@@ -41,11 +41,21 @@ pub enum RpcModuleSelection {
     /// The default modules `eth`, `net`, `web3`
     #[default]
     Standard,
+    /// eth, pubsub, net, web3, parity, trace
+    Evm,
     /// Only use the configured modules.
     Selection(HashSet<EthRpcModule>),
 }
 
 impl RpcModuleSelection {
+    pub const EVM_MODULES: [EthRpcModule; 6] = [
+        EthRpcModule::Eth,
+        EthRpcModule::PubSub,
+        EthRpcModule::Net,
+        EthRpcModule::Web3,
+        EthRpcModule::Parity,
+        EthRpcModule::Trace,
+    ];
     /// The standard modules to instantiate by default `eth`, `net`, `web3`
     pub const STANDARD_MODULES: [EthRpcModule; 3] =
         [EthRpcModule::Eth, EthRpcModule::Net, EthRpcModule::Web3];
@@ -59,6 +69,10 @@ impl RpcModuleSelection {
     /// Returns the [`RpcModuleSelection::STANDARD_MODULES`] as a selection.
     pub fn standard_modules() -> HashSet<EthRpcModule> {
         HashSet::from(Self::STANDARD_MODULES)
+    }
+
+    pub fn evm_modules() -> HashSet<EthRpcModule> {
+        HashSet::from(Self::EVM_MODULES)
     }
 
     /// All modules that are available by default on IPC.
@@ -88,6 +102,7 @@ impl RpcModuleSelection {
         match self {
             Self::All => EthRpcModule::variant_count(),
             Self::Standard => Self::STANDARD_MODULES.len(),
+            Self::Evm => Self::EVM_MODULES.len(),
             Self::Selection(s) => s.len(),
         }
     }
@@ -107,6 +122,7 @@ impl RpcModuleSelection {
         match self {
             Self::All => Box::new(EthRpcModule::modules().into_iter()),
             Self::Standard => Box::new(Self::STANDARD_MODULES.iter().copied()),
+            Self::Evm => Box::new(Self::EVM_MODULES.iter().copied()),
             Self::Selection(s) => Box::new(s.iter().copied()),
         }
     }
@@ -116,6 +132,7 @@ impl RpcModuleSelection {
         match self {
             Self::All => Self::all_modules(),
             Self::Standard => Self::standard_modules(),
+            Self::Evm => Self::evm_modules(),
             Self::Selection(s) => s.clone(),
         }
     }
@@ -125,6 +142,7 @@ impl RpcModuleSelection {
         match self {
             Self::All => Self::all_modules(),
             Self::Standard => Self::standard_modules(),
+            Self::Evm => Self::evm_modules(),
             Self::Selection(s) => s,
         }
     }
@@ -187,19 +205,23 @@ impl FromIterator<EthRpcModule> for RpcModuleSelection {
 }
 
 impl FromStr for RpcModuleSelection {
-    type Err = ParseError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.is_empty() {
             return Ok(Self::Selection(Default::default()));
         }
         let mut modules = s.split(',').map(str::trim).peekable();
-        let first =
-            modules.peek().copied().ok_or(ParseError::VariantNotFound)?;
+        let first = modules
+            .peek()
+            .copied()
+            .ok_or(ParseError::VariantNotFound.to_string())?;
         match first {
             "all" | "All" => Ok(Self::All),
             "none" | "None" => Ok(Self::Selection(Default::default())),
-            _ => Self::try_from_selection(modules),
+            "standard" | "Standard" => Ok(Self::Standard),
+            "evm" | "Evm" => Ok(Self::Evm),
+            _ => Self::try_from_selection(modules).map_err(|e| e.to_string()),
         }
     }
 }
@@ -245,11 +267,15 @@ pub enum EthRpcModule {
     /// `trace_` module
     Trace,
     /// `txpool_` module
-    // Txpool,
+    Txpool,
     /// `web3_` module
     Web3,
     /// `rpc_` module
     Rpc,
+    /// `parity_` module
+    Parity,
+    /// pubsub
+    PubSub,
 }
 
 impl EthRpcModule {
@@ -285,13 +311,15 @@ impl FromStr for EthRpcModule {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             // "admin" => Self::Admin,
-            "debug" => Self::Debug,
+            "debug" | "ethdebug" => Self::Debug,
             "eth" => Self::Eth,
             "net" => Self::Net,
             "trace" => Self::Trace,
-            // "txpool" => Self::Txpool,
+            "txpool" => Self::Txpool,
             "web3" => Self::Web3,
             "rpc" => Self::Rpc,
+            "parity" => Self::Parity,
+            "pubsub" | "ethpubsub" => Self::PubSub,
             _ => return Err(ParseError::VariantNotFound),
         })
     }

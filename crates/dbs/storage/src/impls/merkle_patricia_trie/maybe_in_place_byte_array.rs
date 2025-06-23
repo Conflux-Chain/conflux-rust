@@ -199,7 +199,7 @@ impl MaybeInPlaceByteArray {
     pub fn new(mut value: Box<[u8]>, size: usize) -> Self {
         if size > Self::MAX_INPLACE_SIZE {
             let ptr = value.as_mut_ptr();
-            Box::into_raw(value);
+            let _ = Box::into_raw(value);
             Self { ptr }
         } else {
             let mut in_place: [u8; Self::MAX_INPLACE_SIZE] = Default::default();
@@ -216,7 +216,7 @@ impl MaybeInPlaceByteArray {
         if size > Self::MAX_INPLACE_SIZE {
             let mut owned_copy = Box::<[u8]>::from(value);
             let ptr = owned_copy.as_mut_ptr();
-            Box::into_raw(owned_copy);
+            let _ = Box::into_raw(owned_copy);
             Self { ptr }
         } else {
             let mut x: Self = Self {

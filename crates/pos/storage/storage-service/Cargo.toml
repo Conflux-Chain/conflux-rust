@@ -1,0 +1,39 @@
+[package]
+name = "storage-service"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem storage service"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+tokio = { workspace = true, features = ["full"] }
+futures = { workspace = true }
+
+bcs = "0.1.2"
+diem-config = { workspace = true }
+diem-crypto = { workspace = true }
+pos-ledger-db = { workspace = true }
+diem-logger = { workspace = true }
+diem-metrics = { workspace = true }
+diem-secure-net = { workspace = true }
+storage-interface = { workspace = true }
+diem-types = { workspace = true }
+rand = { version = "0.8.3", optional = true }
+storage-client = { workspace = true, optional = true }
+proptest = { version = "1.0.0", optional = true }
+
+[dev-dependencies]
+itertools = { workspace = true }
+pos-ledger-db = { workspace = true, features = ["fuzzing"] }
+diem-temppath = { workspace = true }
+proptest = "1.0.0"
+storage-client = { workspace = true }
+
+[features]
+default = []
+fuzzing = ["proptest", "pos-ledger-db/fuzzing", "rand"]

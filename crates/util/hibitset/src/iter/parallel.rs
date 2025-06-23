@@ -5,8 +5,10 @@ use rayon::iter::{
     ParallelIterator,
 };
 
-use iter::{BitIter, BitSetLike, Index, BITS, LAYERS};
-use util::average_ones;
+use crate::{
+    iter::{BitIter, BitSetLike, Index, BITS, LAYERS},
+    util::average_ones,
+};
 
 /// A `ParallelIterator` over a [`BitSetLike`] structure.
 ///
@@ -28,8 +30,6 @@ impl<T> BitParIter<T> {
     /// # Examples
     ///
     /// ```
-    /// # extern crate rayon;
-    /// # extern crate hibitset;
     /// # use hibitset::{BitSet, BitSetLike};
     /// # use rayon::iter::ParallelIterator;
     /// # fn main() {
@@ -178,8 +178,7 @@ mod test_bit_producer {
     use rayon::iter::plumbing::UnindexedProducer;
 
     use super::BitProducer;
-    use iter::BitSetLike;
-    use util::BITS;
+    use crate::{BitSetLike, BITS};
 
     fn test_splitting(split_levels: u8) {
         fn visit<T>(
@@ -207,7 +206,7 @@ mod test_bit_producer {
 
         let usize_bits = ::std::mem::size_of::<usize>() * 8;
 
-        let mut c = ::BitSet::new();
+        let mut c = crate::BitSet::new();
         for i in 0..(usize_bits.pow(3) * 2) {
             assert!(!c.add(i as u32));
         }

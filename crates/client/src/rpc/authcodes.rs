@@ -20,7 +20,7 @@ use cfx_types::H256;
 use itertools::Itertools;
 use keccak_hash::keccak;
 use log::{trace, warn};
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
+use rand::{distr::Alphanumeric, Rng};
 use std::{
     fs,
     io::{self, Read, Write},
@@ -186,10 +186,13 @@ impl<T: TimeProvider> AuthCodes<T> {
 
     /// Generates and returns a new code that can be used by `SignerUIs`
     pub fn generate_new(&mut self) -> io::Result<String> {
-        let code = OsRng
+        let mut rng = rand::rng();
+
+        let code: String = (&mut rng)
             .sample_iter(&Alphanumeric)
             .take(TOKEN_LENGTH)
-            .collect::<String>();
+            .map(char::from)
+            .collect();
         let readable_code = code
             .as_bytes()
             .chunks(4)
@@ -236,7 +239,7 @@ mod tests {
         io::{Read, Write},
         time,
     };
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     fn generate_hash(val: &str, time: u64) -> H256 {
         keccak(format!("{}:{}", val, time))
@@ -306,7 +309,7 @@ mod tests {
     #[test]
     fn should_read_old_format_from_file() {
         // given
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
         let file_path = tempdir.path().join("file");
         let code = "23521352asdfasdfadf";
         {
@@ -328,7 +331,7 @@ mod tests {
     #[test]
     fn should_remove_old_unused_tokens() {
         // given
-        let tempdir = TempDir::new("").unwrap();
+        let tempdir = tempdir().unwrap();
         let file_path = tempdir.path().join("file");
         let code1 = "11111111asdfasdf111";
         let code2 = "22222222asdfasdf222";

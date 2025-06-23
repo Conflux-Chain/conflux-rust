@@ -438,7 +438,7 @@ impl Provider {
         validate_chain_id(
             &self
                 .consensus
-                .get_config()
+                .config()
                 .chain_id
                 .read()
                 .to_native_space_params(),
@@ -928,7 +928,7 @@ impl Provider {
                 "Apply throttling for broadcast, total: {}, allowed: {}",
                 total, allowed
             );
-            peers.shuffle(&mut rand::thread_rng());
+            peers.shuffle(&mut rand::rng());
             peers.truncate(allowed);
         }
 

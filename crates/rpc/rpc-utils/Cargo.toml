@@ -14,11 +14,18 @@ license-file.workspace = true
 
 [dependencies]
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
-jsonrpc-core = { workspace = true}
+jsonrpc-core = { workspace = true }
 cfx-types = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-rpc-types = { workspace = true }
 serde_json = { workspace = true }
 alloy-sol-types = { workspace = true }
-revm = { workspace = true }
+revm-primitives = { workspace = true }
 thiserror = { workspace = true }
+jsonrpsee-core = { workspace = true }
+futures.workspace = true
+tokio.workspace = true
+cfx-tasks = { workspace = true }
+
+[features]
+accounts = []

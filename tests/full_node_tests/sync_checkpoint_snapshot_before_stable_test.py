@@ -3,11 +3,11 @@ import os
 import sys
 import time
 import random
-from jsonrpcclient.exceptions import ReceivedErrorResponseError
 
 sys.path.insert(1, os.path.dirname(sys.path[0]))
 
 from test_framework.test_framework import ConfluxTestFramework
+from test_framework.simple_rpc_proxy import ReceivedErrorResponseError
 from test_framework.util import sync_blocks, connect_nodes, connect_sample_nodes, assert_equal, wait_until
 from conflux.rpc import RpcClient
 

@@ -1,0 +1,17 @@
+[package]
+name = "bounded-executor"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem bounded executor"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+futures = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }

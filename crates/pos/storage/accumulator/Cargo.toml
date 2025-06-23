@@ -1,0 +1,29 @@
+[package]
+name = "accumulator"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem accumulator"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.38"
+diem-crypto = { workspace = true }
+mirai-annotations = "1.10.1"
+diem-types = { workspace = true }
+proptest = { version = "1.0.0", optional = true }
+
+[dev-dependencies]
+proptest = "1.0.0"
+
+diem-crypto = { workspace = true, features = ["fuzzing"] }
+
+[features]
+default = []
+fuzzing = ["proptest", "diem-crypto/fuzzing", "diem-types/fuzzing"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }

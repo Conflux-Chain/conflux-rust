@@ -1,0 +1,27 @@
+[package]
+description = "Conflux VM Interpreter"
+homepage = "https://www.confluxnetwork.org"
+license = "GPL-3.0"
+name = "cfx-vm-interpreter"
+version = "2.0.2"
+edition = "2021"
+
+[dependencies]
+bit-set = { workspace = true }
+cfx-bytes = { workspace = true }
+cfx-types = { workspace = true }
+cfx-vm-types = { workspace = true }
+keccak-hash = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+malloc_size_of = { workspace = true }
+memory-cache = { workspace = true }
+parking_lot = { workspace = true }
+rustc-hex = { workspace = true }
+
+[dev-dependencies]
+cfx-vm-types = { workspace = true, features = ["testonly_code"] }
+
+[features]
+align_evm = ["cfx-vm-types/align_evm"]
+evm-debug = []

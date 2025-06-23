@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 // Copyright 2015-2019 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
@@ -21,52 +20,15 @@
 
 //! A map of subscribers.
 
+use cfx_rpc_cfx_types::random;
+pub use cfx_rpc_cfx_types::SubId as Id;
 use cfx_types::H64;
 use jsonrpc_pubsub::{
     typed::{Sink, Subscriber},
     SubscriptionId,
 };
 use log::{debug, trace};
-use std::{collections::HashMap, ops, str};
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Id(H64);
-impl str::FromStr for Id {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with("0x") {
-            Ok(Id(s[2..].parse().map_err(|e| format!("{}", e))?))
-        } else {
-            Err("The id must start with 0x".into())
-        }
-    }
-}
-impl Id {
-    // TODO: replace `format!` see [#10412](https://github.com/paritytech/parity-ethereum/issues/10412)
-    pub fn as_string(&self) -> String { format!("{:?}", self.0) }
-}
-
-#[cfg(not(test))]
-mod random {
-    use rand;
-
-    pub type Rng = rand::rngs::OsRng;
-
-    pub fn new() -> Rng { rand::rngs::OsRng }
-}
-
-#[cfg(test)]
-mod random {
-    use rand::SeedableRng;
-    use rand_xorshift::XorShiftRng;
-
-    const RNG_SEED: [u8; 16] = [0u8; 16];
-
-    pub type Rng = XorShiftRng;
-
-    pub fn new() -> Rng { Rng::from_seed(RNG_SEED) }
-}
+use std::{collections::HashMap, ops};
 
 pub struct Subscribers<T> {
     rand: random::Rng,
@@ -85,10 +47,11 @@ impl<T> Default for Subscribers<T> {
 impl<T> Subscribers<T> {
     pub fn next_id(&mut self) -> Id {
         let data = H64::random_using(&mut self.rand);
-        Id(data)
+        Id::new(data)
     }
 
     /// Insert new subscription and return assigned id.
+    #[allow(dead_code)]
     pub fn insert(&mut self, val: T) -> SubscriptionId {
         let id = self.next_id();
         debug!(target: "pubsub", "Adding subscription id={:?}", id);

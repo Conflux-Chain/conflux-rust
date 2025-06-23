@@ -8,7 +8,7 @@ use alloy_rpc_types::error::EthRpcErrorCode;
 use alloy_sol_types::decode_revert_reason;
 use jsonrpc_core::{Error as JsonRpcError, ErrorCode};
 use jsonrpsee::types::ErrorObjectOwned;
-use revm::primitives::{HaltReason, OutOfGasError};
+use revm_primitives::{HaltReason, OutOfGasError};
 use std::time::Duration;
 
 // The key point is the error code and message.
@@ -314,6 +314,12 @@ pub enum RpcInvalidTransactionError {
     /// Blob transaction is a create transaction
     #[error("blob transaction is a create transaction")]
     BlobTransactionIsCreate,
+    /// Empty authorization list (EIP-7702)
+    #[error("empty authorization list")]
+    EmptyAuthorizationList,
+    /// Max priority fee greater than max fee (EIP-1559)
+    #[error("blob transaction is a create transaction")]
+    PriortyGreaterThanMaxFee,
 }
 
 impl RpcInvalidTransactionError {
