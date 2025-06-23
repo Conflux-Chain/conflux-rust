@@ -110,6 +110,7 @@ members = [
     "crates/eest_types",
     "crates/config",
     "crates/cfxcore/types",
+    "crates/cfxcore/pow",
 ]
 
 resolver = "2"
@@ -183,6 +184,7 @@ cfxstore = { path = "./crates/cfx_store" }
 network = { path = "./crates/network" }
 cfxcore = { path = "./crates/cfxcore/core" }
 cfxcore-types = { path = "./crates/cfxcore/types" }
+cfxcore-pow = { path = "./crates/cfxcore/pow" }
 cfx-parameters = { path = "./crates/parameters" }
 cfx-execute-helper = { path = "./crates/execution/execute-helper" }
 cfx-executor = { path = "./crates/execution/executor" }
@@ -335,6 +337,7 @@ blst = "0.3"
 #secp256k1 = "0.30.0"
 #rustls = "0.21"
 hashbrown = "0.7.1"
+vrf = "0.2"
 
 clap = "4"
 
@@ -357,13 +360,13 @@ once_cell = "1.17.1"
 byteorder = "1.2.7"
 strum = "0.26"
 strum_macros = "0.26"
-toml = "0.5.8"
+toml = "0.8"
 app_dirs = "1.2.1"
 slab = "0.4"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
 transient-hashmap = "0.4"
-num_cpus = "1.6"
+num_cpus = "1.17"
 tempfile = "3"
 bcs = "0.1.3"
 order-stat = "0.1"
@@ -386,22 +389,22 @@ impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
 derive_more = "0.99"
 c-kzg = { version = "1.0.2", default-features = false }
-strfmt = "0.1"
+strfmt = "0.2"
 smart-default = "0.6.0"
 num-derive = { version = "0.4.2", default-features = false }
 mirai-annotations = { version = "1.10.1", default-features = false }
 rangetools = "0.1.4"
 # prometheus = { version = "0.7.0", default-features = false }
 primal = "0.2.3"
-memoffset = "0.5.1"
-either = "1.5.3"
-fallible-iterator = "0.2"
+memoffset = "0.9"
+either = "1.15"
+fallible-iterator = "0.3"
 fs_extra = "1.1.0"
 fs-swap = "0.2.4"
 regex = "1.3.1"
-cfg-if = "0.1"
+cfg-if = "1"
 unroll = "0.1.5"
-winapi = "0.3.7"
+winapi = "0.3"
 synstructure = "0.12"
 lru-cache = "0.1"
 lru_time_cache = "0.9.0"
@@ -412,9 +415,9 @@ enumn = "0.1.14"
 walkdir = "2.5"
 
 # num misc
-bigdecimal = "0.1.0"
-num-bigint = "0.2.6"
-num = "0.2"
+bigdecimal = "0.1"
+num-bigint = "0.2"
+num = "0.4"
 num-traits = { version = "0.2.8", default-features = false }
 
 # time misc 
@@ -454,4 +457,6 @@ influx_db_client = "0.5.1"
 rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "7dbd66f507db1d0cfdf5334ad56ca0b24a768740" }
 
 [patch.crates-io]
+# use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed
+vrf = { git = "https://github.com/andrcmdr/vrf-rs.git", rev = "f7bdb21f7f5d1858a3bb0183f194440f9a4199b3" }
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }

@@ -903,7 +903,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     pub fn retain<F>(&mut self, mut f: F)
     where F: FnMut(usize, &mut T) -> bool {
         for i in 0..self.entries.len() {
-            let keep = self.get_mut(i).map_or(true, |v| f(i, v));
+            let keep = self.get_mut(i).is_none_or(|v| f(i, v));
 
             if !keep {
                 self.remove(i).unwrap();

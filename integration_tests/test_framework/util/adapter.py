@@ -115,7 +115,7 @@ def conflux_state_test(
         if tx.sender is not None and tx.secret_key is not None:
             warnings.warn("tx.sender and tx.secret_key are both provided, tx.sender will be used")
             tx.secret_key = tx.sender.key
-        raw_tx = tx.with_signature_and_sender().rlp
+        raw_tx = tx.with_signature_and_sender().rlp()
         return raw_tx
     
     if tx and blocks:

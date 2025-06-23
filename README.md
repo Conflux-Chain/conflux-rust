@@ -39,10 +39,11 @@ page for more information.
 Integration tests are Python test scripts with the `_test.py` suffix in the `tests` directory and in the `integration_tests/tests` directory.
 To run these tests:
 
-1. Install Python `3.11` or later.
+1. Setting up and activating a NEW virtual env via `source ./dev-support/activate_new_venv.sh`. This command will create a new one with Python `3.11` to `.venv` and activate it each time you run it. Or you can simply run `.venv/bin/activate` to activate the created one.
 2. Install the required Python packages using `bash ./dev-support/dep_pip3.sh` in the root directory.
 3. Compile Conflux in _release_ mode using `cargo build --release`
-4. Fetch all submodule using `git submodule update --remote --recursive --init`.
+4. Compile the `consensus_bench binary` using `cd tools/consensus_bench && cargo build --release`
+5. Fetch all submodule using `git submodule update --remote --recursive --init`.
 
 Then, you can run all integration tests using:
 
