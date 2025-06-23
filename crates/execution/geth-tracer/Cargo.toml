@@ -23,6 +23,8 @@ cfx-executor = { workspace = true }
 typemap = { workspace = true }
 cfx-vm-interpreter = { workspace = true }
 primitives = { workspace = true }
+revm-primitives = { workspace = true }
+revm-interpreter = { workspace = true }
 
 [features]
 serde = []

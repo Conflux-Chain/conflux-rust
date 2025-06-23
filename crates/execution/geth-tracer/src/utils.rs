@@ -5,7 +5,7 @@ use cfx_types::{Address, H160, H256, U256};
 use cfx_vm_interpreter::instructions::{
     INSTRUCTIONS, INSTRUCTIONS_CANCUN, INSTRUCTIONS_CIP645,
 };
-use revm::primitives::{Address as RAddress, U256 as RU256};
+use revm_primitives::{Address as RAddress, U256 as RU256};
 
 /// creates the memory data in 32byte chunks
 /// see <https://github.com/ethereum/go-ethereum/blob/366d2169fbc0e0f803b68c042b77b6b480836dbc/eth/tracers/logger/logger.go#L450-L452>

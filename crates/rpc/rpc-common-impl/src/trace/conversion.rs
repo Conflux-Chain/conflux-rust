@@ -28,8 +28,8 @@ pub fn into_eth_localized_traces(
             result: EthRes::None,
             trace_address: trace_path,
             subtraces: child_count,
-            transaction_position: Some(tx_idx),
-            transaction_hash: Some(tx_hash),
+            transaction_position: tx_idx,
+            transaction_hash: tx_hash,
             block_number,
             block_hash,
             // action and its result should have the same `valid`.

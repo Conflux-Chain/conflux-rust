@@ -800,7 +800,7 @@ impl TransactionPool {
         for tx in txs {
             gas_used[tx.space()] += *tx.gas_limit();
             min_gas_price[tx.space()] =
-                min_gas_price[tx.space()].min(*tx.gas_limit());
+                min_gas_price[tx.space()].min(*tx.gas_price());
         }
 
         let core_gas_limit =

@@ -24,7 +24,7 @@ pub struct ProcessTxOutcome {
     pub geth_trace: Option<GethTrace>,
 }
 
-fn tx_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
+fn parity_traces(outcome: &ExecutionOutcome) -> Vec<ExecTrace> {
     outcome
         .try_as_executed()
         .and_then(|executed| executed.ext_result.get::<ExecTraceKey>().cloned())
@@ -41,7 +41,7 @@ pub fn make_process_tx_outcome(
     outcome: ExecutionOutcome, accumulated_gas_used: &mut U256, tx_hash: H256,
     spec: &Spec,
 ) -> ProcessTxOutcome {
-    let tx_traces = tx_traces(&outcome);
+    let tx_traces = parity_traces(&outcome);
     let geth_trace = geth_traces(&outcome);
     let tx_exec_error_msg = outcome.error_message();
     let consider_repacked = outcome.consider_repacked();

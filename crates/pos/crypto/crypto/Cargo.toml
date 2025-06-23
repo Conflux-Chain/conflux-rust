@@ -35,7 +35,7 @@ diem-crypto-derive = { workspace = true }
 bcs = "0.1.2"
 cfx-types = { workspace = true }
 bls-signatures = { workspace = true }
-vrf = "0.2.2"
+vrf = { workspace = true }
 lazy_static = { workspace = true }
 parking_lot = { workspace = true }
 openssl = "0.10"
@@ -52,8 +52,8 @@ sha3 = "0.9.1"
 serde_json = "1.0.64"
 trybuild = "1.0.41"
 
-# [lints.rust]
-# unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
 
 [features]
 default = ["fiat"]

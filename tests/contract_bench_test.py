@@ -348,7 +348,7 @@ class ContractBenchTest(SmartContractBenchBase):
         result = self.call_contract(self.pub[0], self.pri[0], contractAddr, data, storage_limit=128)
         assert(result["outcomeStatus"] != "0x0")
 
-        # insuffcient allowance 
+        # insufficient allowance 
         data = contract.functions.transferFrom(Web3.to_checksum_address(self.pub[0]), self.sender_checksum, 10000).build_transaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[1], self.pri[1], contractAddr, data, storage_limit=128)
         assert(result["outcomeStatus"] != "0x0")

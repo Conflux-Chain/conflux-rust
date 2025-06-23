@@ -165,6 +165,8 @@ pub fn recover_phantom_trace_for_call(
             Action::InternalTransferAction(InternalTransferAction {
                 ..
             }) => {}
+            // phantom tx should not have these actions
+            Action::SetAuth(_) => {}
         }
 
         phantom_traces.push(trace);

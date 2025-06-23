@@ -36,10 +36,7 @@ use alloy_rpc_types_trace::geth::{
     DiffMode, GethDefaultTracingOptions, PreStateConfig, PreStateFrame,
     PreStateMode, StructLog,
 };
-use revm::{
-    db::DatabaseRef,
-    primitives::{AccountInfo, State, KECCAK_EMPTY},
-};
+use revm_primitives::{db::DatabaseRef, AccountInfo, State, KECCAK_EMPTY};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
 /// A type for creating geth style traces
@@ -126,7 +123,7 @@ impl GethTraceBuilder {
     /// Generate a geth-style trace e.g. for `debug_traceTransaction`
     ///
     /// This expects the gas used and return value for the
-    /// [ExecutionResult](revm::primitives::ExecutionResult) of the executed
+    /// [ExecutionResult](revm_primitives::ExecutionResult) of the executed
     /// transaction.
     pub fn geth_traces(
         &self, receipt_gas_used: u64, return_value: Bytes,
@@ -162,7 +159,7 @@ impl GethTraceBuilder {
     /// This decodes all call frames from the recorded traces.
     ///
     /// This expects the gas used for the
-    /// [ExecutionResult](revm::primitives::ExecutionResult) of the executed
+    /// [ExecutionResult](revm_primitives::ExecutionResult) of the executed
     /// transaction.
     pub fn geth_call_traces(
         &self, opts: CallConfig, gas_used: u64,

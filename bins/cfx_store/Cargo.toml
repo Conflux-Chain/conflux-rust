@@ -9,13 +9,12 @@ license-file.workspace = true
 [dependencies]
 env_logger = { workspace = true }
 num_cpus = { workspace = true }
-serde = { workspace = true }
 parking_lot = { workspace = true }
 cfxstore = { workspace = true }
 panic_hook = { workspace = true }
 dir = { workspace = true }
-# todo use workspace version
-clap = { version = "4", features = ["derive"] }
+clap = { workspace = true, features = ["derive"] }
+
 [[bin]]
 name = "cfxstore"
 path = "src/main.rs"

@@ -17,7 +17,6 @@ from ethereum_test_tools import (
     Initcode,
     Transaction,
 )
-from ethereum_test_tools.eof.v1 import Container
 from ethereum_test_tools.vm.opcode import Opcodes as Op
 
 from .spec import ref_spec_1153
@@ -44,7 +43,7 @@ def test_tstore_clear_after_deployment_tx(
     init_code = Op.TSTORE(1, 1)
     deploy_code = Op.SSTORE(1, Op.TLOAD(1))
 
-    code: Optional[Container | Initcode] = None
+    code: Optional[Initcode] = None
     # if evm_code_type == EVMCodeType.EOF_V1:
     #     code = Container.Init(
     #         deploy_container=Container.Code(deploy_code + Op.STOP), initcode_prefix=init_code

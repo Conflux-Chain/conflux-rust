@@ -64,11 +64,6 @@ feature-depth = 1
 # https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
 [advisories]
 
-# This three options below will temporarily downgrade all errors in the project to warnings, This allow the CI to pass. if you need to test locally. comment them.
-vulnerability='warn'
-unmaintained='warn'
-unsound='warn'
-
 # The path where the advisory databases are cloned/fetched into
 #db-path = "$CARGO_HOME/advisory-dbs"
 # The url(s) of the advisory databases to use
@@ -280,7 +275,7 @@ allow-git = [
     # diem-logger -> pipe-logger-lib
     "https://github.com/aleksuss/pipe-logger-lib.git",
 
-
+    "https://github.com/andrcmdr/vrf-rs.git",
 ]
 
 [sources.allow-org]

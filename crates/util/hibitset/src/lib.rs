@@ -438,6 +438,8 @@ impl Eq for BitSet {}
 
 #[cfg(test)]
 mod tests {
+    use rand::rng;
+
     use super::{BitSet, BitSetAnd, BitSetLike, BitSetNot, BITS};
 
     #[test]
@@ -517,11 +519,11 @@ mod tests {
         use rand::prelude::*;
 
         let mut set = BitSet::new();
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let limit = 1_048_576;
         let mut added = 0;
         for _ in 0..(limit / 10) {
-            let index = rng.gen_range(0, limit);
+            let index = rng.random_range(0..limit);
             if !set.add(index) {
                 added += 1;
             }
@@ -563,6 +565,7 @@ mod tests {
 #[cfg(all(test, feature = "parallel"))]
 mod test_parallel {
     use super::{BitSet, BitSetAnd, BitSetLike, BITS};
+    use rand::rng;
     use rayon::iter::ParallelIterator;
 
     #[test]
@@ -590,10 +593,10 @@ mod test_parallel {
 
         let mut set = BitSet::new();
         let mut check_set = HashSet::new();
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let limit = 1_048_576;
         for _ in 0..(limit / 10) {
-            let index = rng.gen_range(0, limit);
+            let index = rng.random_range(0..limit);
             set.add(index);
             check_set.insert(index);
         }

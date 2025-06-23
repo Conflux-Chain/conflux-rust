@@ -61,7 +61,7 @@ class TestNode:
             self.ethwsport = evm_rpc_ws_port(self.index)
             self.pubsubport = pubsub_port(self.index)
         self.ethrpcport = evm_rpc_port(self.index)
-        self.ethrpcportv2 = evm_rpc_port_v2(self.index)
+        # self.ethrpcportv2 = evm_rpc_port(self.index)
         self.port = str(p2p_port(index))
         if self.rpchost is None:
             self.rpchost = ip  # + ":" + str(rpc_port(index))

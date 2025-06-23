@@ -33,7 +33,7 @@ use crate::{
     common::delegate_convert,
     rpc::{
         errors::{self, invalid_params_check},
-        helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+        helpers::{build_block, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT},
         impls::common::{self, RpcImpl as CommonImpl},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
@@ -796,7 +796,7 @@ impl RpcImpl {
 
             let inner = consensus_graph.inner.read();
 
-            Ok(Some(RpcBlock::new(
+            Ok(Some(build_block(
                 &block,
                 *light.get_network_type(),
                 &*consensus_graph,
@@ -844,7 +844,7 @@ impl RpcImpl {
 
             let inner = consensus_graph.inner.read();
 
-            Ok(RpcBlock::new(
+            Ok(build_block(
                 &block,
                 *light.get_network_type(),
                 &*consensus_graph,
@@ -892,7 +892,7 @@ impl RpcImpl {
 
             let inner = consensus_graph.inner.read();
 
-            Ok(Some(RpcBlock::new(
+            Ok(Some(build_block(
                 &block,
                 *light.get_network_type(),
                 &*consensus_graph,
