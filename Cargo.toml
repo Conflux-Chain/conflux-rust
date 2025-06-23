@@ -54,6 +54,7 @@ members = [
     "crates/util/treap-map",
     "crates/util/version",
     "crates/util/serde_utils",
+    "crates/util/rlp_bool",
     "crates/execution/geth-tracer",
     "crates/rpc/rpc-eth-types",
     "crates/rpc/rpc-primitives",
