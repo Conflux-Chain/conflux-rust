@@ -202,7 +202,7 @@ dependencies = [
  "bytes 1.9.0",
  "cfg-if 1.0.0",
  "const-hex",
- "derive_more",
+ "derive_more 0.99.17",
  "hex-literal",
  "itoa",
  "k256",
@@ -1260,7 +1260,7 @@ dependencies = [
  "cfx-vm-interpreter",
  "cfx-vm-types",
  "cfxkey",
- "derive_more",
+ "derive_more 2.0.1",
  "diem-types",
  "hex-literal",
  "impl-tools",
@@ -1292,7 +1292,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-parameters",
  "cfx-types",
- "derivative",
+ "derive_more 2.0.1",
  "log",
  "malloc_size_of",
  "malloc_size_of_derive",
@@ -1598,7 +1598,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "delegate 0.5.2",
- "derivative",
+ "derive_more 2.0.1",
  "fallible-iterator",
  "fs_extra",
  "futures 0.3.30",
@@ -2288,6 +2288,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
+name = "convert_case"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2674,11 +2683,33 @@ version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
 dependencies = [
- "convert_case",
+ "convert_case 0.4.0",
  "proc-macro2",
  "quote",
  "rustc_version 0.4.0",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_more"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+dependencies = [
+ "convert_case 0.7.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -7269,7 +7300,7 @@ dependencies = [
  "bitvec 1.0.1",
  "c-kzg",
  "cfg-if 1.0.0",
- "derive_more",
+ "derive_more 0.99.17",
  "dyn-clone",
  "enumn",
  "hashbrown 0.14.3",
