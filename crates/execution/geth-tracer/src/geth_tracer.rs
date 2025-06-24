@@ -19,7 +19,7 @@ use cfx_executor::{
     },
     stack::{FrameResult, FrameReturn},
 };
-use cfx_types::H160;
+use cfx_types::{Space, H160};
 use cfx_vm_types::{ActionParams, CallType, Error, InterpreterInfo};
 use revm::db::InMemoryDB;
 use revm_interpreter::{Gas, InstructionResult, InterpreterResult};
@@ -406,8 +406,8 @@ impl OpcodeTracer for GethTracer {
     }
 
     fn selfdestruct(
-        &mut self, _contract: &cfx_types::Address, target: &cfx_types::Address,
-        _value: cfx_types::U256,
+        &mut self, space: Space, _contract: &cfx_types::Address,
+        target: &cfx_types::Address, _value: cfx_types::U256,
     ) {
         if self.is_fourbyte_tracer() {
             return;
