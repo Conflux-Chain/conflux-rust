@@ -1114,7 +1114,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1132,7 +1132,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1158,7 +1158,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -1191,7 +1191,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1268,7 +1268,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -1292,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "2.6.0"
+version = "3.0.0"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -1335,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -1449,7 +1449,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-pow"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-parameters",
  "cfx-types",
@@ -1464,7 +1464,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-bytes",
  "cfx-execute-helper",
@@ -2856,7 +2856,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -5880,7 +5880,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
