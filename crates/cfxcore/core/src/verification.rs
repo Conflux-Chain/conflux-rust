@@ -95,7 +95,7 @@ fn compute_block_receipts_root(block_receipts: &Vec<Receipt>) -> MerkleHash {
 }
 
 /// Compute a proof for the `tx_index_in_block`-th receipt in a block.
-pub fn compute_block_receipts_proof(
+pub fn compute_block_receipt_proof(
     block_receipts: &Vec<Receipt>, tx_index_in_block: usize,
 ) -> TrieProof {
     simple_mpt_proof(
@@ -118,7 +118,7 @@ fn epoch_receipts_trie(epoch_receipts: &Vec<Arc<BlockReceipts>>) -> SimpleMpt {
 
 /// Compute epoch receipts root.
 /// This value is stored in the `deferred_receipts_root` header field.
-pub fn compute_epoch_receipts_root(
+pub fn compute_receipts_root(
     epoch_receipts: &Vec<Arc<BlockReceipts>>,
 ) -> MerkleHash {
     simple_mpt_merkle_root(&mut epoch_receipts_trie(epoch_receipts))
@@ -146,7 +146,7 @@ pub fn compute_epoch_receipt_proof(
     epoch_receipts: &Vec<Arc<BlockReceipts>>, block_index_in_epoch: usize,
     tx_index_in_block: usize,
 ) -> EpochReceiptProof {
-    let block_receipt_proof = compute_block_receipts_proof(
+    let block_receipt_proof = compute_block_receipt_proof(
         &epoch_receipts[block_index_in_epoch].receipts,
         tx_index_in_block,
     );

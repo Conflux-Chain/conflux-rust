@@ -12,7 +12,7 @@ use crate::{
         synchronization_state::PeerFilter,
         SynchronizationProtocolHandler,
     },
-    verification::compute_epoch_receipts_root,
+    verification::compute_receipts_root,
 };
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
 use cfx_parameters::{
@@ -569,7 +569,7 @@ impl SnapshotManifestManager {
                     return None;
                 }
             }
-            let receipt_root = compute_epoch_receipts_root(&epoch_receipts);
+            let receipt_root = compute_receipts_root(&epoch_receipts);
             let logs_bloom_hash =
                 BlockHeaderBuilder::compute_block_logs_bloom_hash(
                     &epoch_receipts,

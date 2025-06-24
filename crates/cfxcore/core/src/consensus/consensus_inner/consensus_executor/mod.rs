@@ -53,7 +53,7 @@ use crate::{
     },
     errors::{invalid_params_check, Result as CoreResult},
     verification::{
-        compute_epoch_receipts_root, VerificationConfig, VerifyTxLocalMode,
+        compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
     },
     SharedTransactionPool,
@@ -1108,7 +1108,7 @@ impl ConsensusExecutionHandler {
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             commit_result.state_root.clone(),
-            compute_epoch_receipts_root(&epoch_receipts),
+            compute_receipts_root(&epoch_receipts),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
 

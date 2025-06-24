@@ -39,9 +39,7 @@ use primitives::{
 };
 use secret_store::SecretStore;
 
-use crate::verification::{
-    compute_epoch_receipts_root, compute_transaction_root,
-};
+use crate::verification::{compute_receipts_root, compute_transaction_root};
 use cfx_executor::{
     executive::{
         contract_address, ExecutionOutcome, ExecutiveContext, TransactOptions,
@@ -381,13 +379,12 @@ pub fn genesis_block(
             /* debug_record = */ debug_record.as_mut(),
         )
         .unwrap();
-    let receipt_root =
-        compute_epoch_receipts_root(&vec![Arc::new(BlockReceipts {
-            receipts: vec![],
-            block_number: 0,
-            secondary_reward: U256::zero(),
-            tx_execution_error_messages: vec![],
-        })]);
+    let receipt_root = compute_receipts_root(&vec![Arc::new(BlockReceipts {
+        receipts: vec![],
+        block_number: 0,
+        secondary_reward: U256::zero(),
+        tx_execution_error_messages: vec![],
+    })]);
 
     let mut genesis = Block::new(
         BlockHeaderBuilder::new()
