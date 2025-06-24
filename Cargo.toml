@@ -116,8 +116,8 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "2.6.0"
-authors = ["peilun-conflux", "ChenxingLi"]
+version = "3.0.0"
+authors = ["Conflux Network"]
 description = "A rust implementation of the Conflux-Protocol"
 documentation = "https://doc.confluxnetwork.org"
 homepage = "https://confluxnetwork.org/"
