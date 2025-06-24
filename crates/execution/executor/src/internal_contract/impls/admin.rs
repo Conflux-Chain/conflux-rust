@@ -45,12 +45,6 @@ pub fn suicide(
     let balance = state.balance(contract_address)?;
 
     if !soft_suicide {
-        tracer.selfdestruct(
-            &contract_address.address,
-            &refund_address.address,
-            balance,
-        );
-
         substate.suicides.insert(contract_address.clone());
     }
 
@@ -74,6 +68,12 @@ pub fn suicide(
         tracer.trace_internal_transfer(
             AddressPocket::Balance(*contract_address),
             AddressPocket::Balance(*refund_address),
+            balance,
+        );
+        tracer.selfdestruct(
+            contract_address.space,
+            &contract_address.address,
+            &refund_address.address,
             balance,
         );
         state.transfer_balance(contract_address, refund_address, &balance)?;

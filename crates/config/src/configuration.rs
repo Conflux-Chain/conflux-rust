@@ -186,15 +186,16 @@ build_config! {
         (base_fee_burn_transition_number, (Option<u64>),  Some(226570000))
         (base_fee_burn_transition_height, (Option<u64>), Some(175600000))
         (cip1559_transition_height, (Option<u64>), None)
-        (c2_fix_transition_height, (Option<u64>), Some(208160000))
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
         // V2.5
+        (c2_fix_transition_height, (Option<u64>), Some(208160000))
+        // V3.0
         (eoa_code_transition_height, (Option<u64>), None)
         (cip151_transition_height, (Option<u64>), None)
         (cip645_transition_height, (Option<u64>), None)
-
+        // For test only
         (align_evm_transition_height, (u64), u64::MAX)
 
 

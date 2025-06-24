@@ -5,7 +5,7 @@
 use crate::rpc::types::{
     EpochNumber, LocalizedBlockTrace, LocalizedTrace, TraceFilter,
 };
-use cfx_rpc_cfx_types::trace::EpochTrace;
+use cfx_rpc_eth_types::trace::EpochTrace;
 use cfx_types::H256;
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
