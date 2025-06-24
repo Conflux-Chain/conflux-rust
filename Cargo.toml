@@ -253,9 +253,9 @@ cfx-config = { path = "./crates/config" }
 
 # basics
 bytes = "1.9"
-byte-unit = "1.1.0"
+byte-unit = "1.1"
 libc = "0.2"
-smallvec = "1.4"
+smallvec = "1.15"
 
 # proc-macros
 proc-macro2 = "1.0"
@@ -270,12 +270,12 @@ serde = { version = "1.0", features = [
 ], default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1.0", default-features = false }
-hex = "0.4.3"
+hex = "0.4"
 rustc-hex = "2.1"
-hex-literal = "0.4.1"
+hex-literal = "1.0"
 
 # error handling
-fail = "0.5.1"
+fail = "0.5"
 thiserror = "2.0"
 anyhow = "1.0"
 
@@ -307,28 +307,28 @@ jsonrpc-pubsub = "18.0.0"
 jsonrpc-ws-server = "18.0.0"
 
 # jsonrpc framework(new)
-jsonrpsee = "0.24.4"
+jsonrpsee = "0.24"
 jsonrpsee-core = "0.24"
 jsonrpsee-types = "0.24"
 
 # async
-tokio = "1.44.2"
-tokio-stream = "0.1.11"
-tokio-test = "0.4.1"
+tokio = "1.44"
+tokio-stream = "0.1"
+tokio-test = "0.4"
 futures = "0.3"
 futures-util = "0.3"
 hyper = "1.3"
-hyper-util = "0.1.8"
+hyper-util = "0.1"
 async-trait = "0.1"
 tower = "0.4"
-pin-project = "1.0.12"
-mio = "0.6.8"
+pin-project = "1.0"
+mio = "0.6"
 reqwest = "0.12"
 
 # crypto & hash
 #fixed-hash = "0.5"
 keccak-hash = "0.5"
-tiny-keccak = "2.0.2"
+tiny-keccak = "2.0"
 bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = [
     "multicore",
     "blst",
@@ -336,7 +336,7 @@ bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", 
 blst = "0.3"
 #secp256k1 = "0.30.0"
 #rustls = "0.21"
-hashbrown = "0.7.1"
+hashbrown = "0.7"
 vrf = "0.2"
 
 clap = "4"
@@ -344,7 +344,7 @@ clap = "4"
 # rand & rng
 rand = "0.9"
 rand_xorshift = "0.4"
-rand_chacha = "0.9.0"
+rand_chacha = "0.9"
 
 # old rand
 rand_07 = { package = "rand", version = "0.7" }
@@ -356,8 +356,8 @@ log4rs = "1.3.0"
 env_logger = "0.11"
 lazy_static = "1.4"
 itertools = "0.14"
-once_cell = "1.17.1"
-byteorder = "1.2.7"
+once_cell = "1.21"
+byteorder = "1.5"
 strum = "0.26"
 strum_macros = "0.26"
 toml = "0.8"
@@ -410,8 +410,8 @@ lru-cache = "0.1"
 lru_time_cache = "0.9.0"
 slice-group-by = "0.3.1"
 auto_impl = "1"
-dyn-clone = "1.0.17"
-enumn = "0.1.14"
+dyn-clone = "1.0"
+enumn = "0.1"
 walkdir = "2.5"
 
 # num misc
@@ -443,7 +443,7 @@ substrate-bn = { git = "https://github.com/paritytech/bn", rev = "63f8c587356a67
 ethcore-bytes = "0.1.1"
 
 # misc-testing
-similar-asserts = "1.5"
+similar-asserts = "1.7"
 criterion = "0.6"
 proptest = "1.0.0"
 proptest-derive = "0.5.1"

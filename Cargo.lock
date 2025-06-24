@@ -203,7 +203,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "const-hex",
  "derive_more",
- "hex-literal",
+ "hex-literal 0.4.1",
  "itoa",
  "k256",
  "keccak-asm",
@@ -1055,9 +1055,9 @@ dependencies = [
 
 [[package]]
 name = "byteorder"
-version = "1.4.3"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
@@ -1268,7 +1268,7 @@ dependencies = [
  "cfxkey",
  "derive_more",
  "diem-types",
- "hex-literal",
+ "hex-literal 1.0.0",
  "impl-tools",
  "impl-trait-for-tuples 0.2.2",
  "keccak-hash",
@@ -1349,7 +1349,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-types",
  "cfxkey",
- "hex-literal",
+ "hex-literal 1.0.0",
  "lazy_static",
  "rustc-hex",
 ]
@@ -1922,7 +1922,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
  "tempfile",
  "time",
 ]
@@ -4124,6 +4124,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
+name = "hex-literal"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcaaec4551594c969335c98c903c1397853d4198408ea609190f420500f6be71"
+
+[[package]]
 name = "hibitset"
 version = "0.6.0"
 dependencies = [
@@ -4322,7 +4328,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
  "tokio",
  "want",
 ]
@@ -4474,7 +4480,7 @@ dependencies = [
  "icu_normalizer_data",
  "icu_properties",
  "icu_provider",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
  "utf16_iter",
  "utf8_iter",
  "write16",
@@ -4543,7 +4549,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "686f825264d630750a544639377bae737628043f20d38bbc029e8f29ea968a7e"
 dependencies = [
  "idna_adapter",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
  "utf8_iter",
 ]
 
@@ -5192,7 +5198,7 @@ checksum = "03080afe6f42cd996da9f568d6add5d7fb5ee2ea7fb7802d2d2cbd836958fd87"
 dependencies = [
  "parity-bytes",
  "parity-util-mem",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
 ]
 
 [[package]]
@@ -5474,7 +5480,7 @@ dependencies = [
  "jemallocator",
  "parking_lot 0.12.1",
  "slab",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
  "winapi 0.3.9",
 ]
 
@@ -5935,9 +5941,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.19.0"
+version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "oorandom"
@@ -6238,7 +6244,7 @@ dependencies = [
  "instant",
  "libc",
  "redox_syscall",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
  "winapi 0.3.9",
 ]
 
@@ -6253,7 +6259,7 @@ dependencies = [
  "libc",
  "petgraph",
  "redox_syscall",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
  "thread-id",
  "windows-sys 0.45.0",
 ]
@@ -8192,9 +8198,9 @@ dependencies = [
 
 [[package]]
 name = "similar-asserts"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe85670573cd6f0fa97940f26e7e6601213c3b0555246c24234131f88c5709e"
+checksum = "b5b441962c817e33508847a22bd82f03a30cff43642dc2fae8b050566121eb9a"
 dependencies = [
  "console",
  "similar",
@@ -8232,9 +8238,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.13.2"
+version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
+checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "smart-default"
@@ -9009,7 +9015,7 @@ dependencies = [
  "matchers",
  "regex",
  "sharded-slab",
- "smallvec 1.13.2",
+ "smallvec 1.15.1",
  "thread_local",
  "tracing",
  "tracing-core",
