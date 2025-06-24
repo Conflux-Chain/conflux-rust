@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use treap_map::{SharedKeyTreapMapConfig, TreapMap};
 use std::hint::black_box;
+use treap_map::{SharedKeyTreapMapConfig, TreapMap};
 
 pub struct CombinedMap;
 impl SharedKeyTreapMapConfig for CombinedMap {
