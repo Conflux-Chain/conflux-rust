@@ -192,7 +192,7 @@ build_config! {
         // V2.5
         (c2_fix_transition_height, (Option<u64>), Some(208160000))
         // V3.0
-        (eoa_code_transition_height, (Option<u64>), None)
+        (eoa_code_transition_height, (Option<u64>), Some(223340000))
         (cip151_transition_height, (Option<u64>), None)
         (cip645_transition_height, (Option<u64>), None)
         // For test only
@@ -387,7 +387,7 @@ build_config! {
         (pos_fix_cip136_transition_view, (u64), 1733760)
         (pos_fix_cip136_in_queue_locked_views, (u64), 18720 * 2)
         (pos_fix_cip136_out_queue_locked_views, (u64), 1440 * 2)
-        (pos_cip156_transition_view, (u64), u64::MAX)
+        (pos_cip156_transition_view, (u64), 2745000)
         // 6 months with 30s rounds
         (pos_cip156_dispute_locked_views, (u64), 6 * 30 * 24 * 60 * 2)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
