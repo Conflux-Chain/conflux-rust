@@ -173,6 +173,7 @@ cfx-stratum = { path = "./crates/stratum" }
 txgen = { path = "./crates/transactiongen" }
 blockgen = { path = "./crates/blockgen" }
 serde-utils = { path = "./crates/util/serde_utils" }
+rlp-bool = { path = "./crates/util/rlp_bool" }
 db = { path = "./crates/dbs/db" }
 cfx-db-errors = { path = "./crates/dbs/db-errors" }
 cfx-statedb = { path = "./crates/dbs/statedb" }

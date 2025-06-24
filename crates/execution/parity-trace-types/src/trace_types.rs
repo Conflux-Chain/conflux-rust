@@ -8,6 +8,7 @@ use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Bloom, Space, H256, U256, U64};
 use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_bool::CompatibleBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 /// Trace localized in vector of traces produced by a single transaction.
@@ -18,7 +19,7 @@ pub struct ExecTrace {
     #[ignore_malloc_size_of = "ignored for performance reason"]
     /// Type of action performed by a transaction.
     pub action: Action,
-    pub valid: bool,
+    pub valid: CompatibleBool,
 }
 
 impl ExecTrace {
@@ -39,7 +40,7 @@ impl Decodable for ExecTrace {
         match d.item_count()? {
             1 => Ok(ExecTrace {
                 action: d.val_at(0)?,
-                valid: true,
+                valid: CompatibleBool(true),
             }),
             2 => Ok(ExecTrace {
                 action: d.val_at(0)?,

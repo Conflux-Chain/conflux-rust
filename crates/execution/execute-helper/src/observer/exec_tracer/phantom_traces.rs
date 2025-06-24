@@ -17,6 +17,7 @@ use cfx_executor::{
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
 use cfx_vm_types::CallType;
+use rlp_bool::CompatibleBool;
 use solidity_abi::ABIEncodable;
 
 pub fn recover_phantom_trace_for_withdraw(
@@ -55,7 +56,7 @@ pub fn recover_phantom_trace_for_withdraw(
                         input: Default::default(),
                         call_type: CallType::Call,
                     }),
-                    valid: true,
+                    valid: CompatibleBool(true),
                 },
                 ExecTrace {
                     action: Action::CallResult(CallResult {
@@ -63,7 +64,7 @@ pub fn recover_phantom_trace_for_withdraw(
                         gas_left: 0.into(),
                         return_data: Default::default(),
                     }),
-                    valid: true,
+                    valid: CompatibleBool(true),
                 },
             ])]);
         }
@@ -113,7 +114,7 @@ pub fn recover_phantom_trace_for_call(
                         input,
                         call_type: CallType::Call,
                     }),
-                    valid: true,
+                    valid: CompatibleBool(true),
                 },
                 ExecTrace {
                     action: Action::CallResult(CallResult {
@@ -121,7 +122,7 @@ pub fn recover_phantom_trace_for_call(
                         gas_left: 0.into(),
                         return_data: Default::default(),
                     }),
-                    valid: true,
+                    valid: CompatibleBool(true),
                 },
             ]));
         }
@@ -211,7 +212,7 @@ pub fn recover_phantom_traces(
                 input,
                 ..
             }) if to == CROSS_SPACE_CONTRACT_ADDRESS
-                && trace.valid
+                && trace.valid.into()
                 && is_call_create_sig(&input[0..4]) =>
             {
                 let phantom_traces = recover_phantom_trace_for_call(
@@ -230,7 +231,7 @@ pub fn recover_phantom_traces(
                 input,
                 ..
             }) if to == CROSS_SPACE_CONTRACT_ADDRESS
-                && trace.valid
+                && trace.valid.into()
                 && is_withdraw_sig(&input[0..4]) =>
             {
                 let phantom_traces =

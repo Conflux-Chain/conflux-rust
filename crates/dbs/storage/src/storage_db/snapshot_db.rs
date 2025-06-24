@@ -1,6 +1,7 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+use rlp_bool::CompatibleBool;
 
 #[derive(Clone, Copy, Debug, DeriveMallocSizeOf, PartialEq)]
 #[repr(u8)]
@@ -35,7 +36,7 @@ pub struct SnapshotInfo {
     /// itself is removed, or when
     pub snapshot_info_kept_to_provide_sync: SnapshotKeptToProvideSyncStatus,
     // FIXME: update serve_one_step_sync at maintenance.
-    pub serve_one_step_sync: bool,
+    pub serve_one_step_sync: CompatibleBool,
 
     pub merkle_root: MerkleHash,
     pub parent_snapshot_height: u64,
@@ -51,7 +52,7 @@ impl SnapshotInfo {
     pub fn genesis_snapshot_info() -> Self {
         Self {
             snapshot_info_kept_to_provide_sync: Default::default(),
-            serve_one_step_sync: false,
+            serve_one_step_sync: CompatibleBool(false),
             merkle_root: MERKLE_NULL_NODE,
             parent_snapshot_height: 0,
             height: 0,

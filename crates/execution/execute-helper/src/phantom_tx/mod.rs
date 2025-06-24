@@ -5,8 +5,8 @@ use primitives::{
     transaction::eth_transaction::Eip155Transaction, Action, LogEntry, Receipt,
     SignedTransaction, TransactionStatus,
 };
-
 pub use recover::{build_bloom_and_recover_phantom, recover_phantom};
+use rlp_bool::LegacyBool;
 
 #[derive(Clone, Debug, Default)]
 pub struct PhantomTransaction {
@@ -56,13 +56,13 @@ impl PhantomTransaction {
         Receipt {
             accumulated_gas_used,
             gas_fee: 0.into(),
-            gas_sponsor_paid: false,
+            gas_sponsor_paid: LegacyBool(false),
             log_bloom: self.log_bloom,
             logs: self.logs,
             outcome_status: self.outcome_status,
             storage_collateralized: vec![],
             storage_released: vec![],
-            storage_sponsor_paid: false,
+            storage_sponsor_paid: LegacyBool(false),
             burnt_gas_fee: None,
         }
     }

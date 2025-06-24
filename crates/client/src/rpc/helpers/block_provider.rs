@@ -17,8 +17,8 @@ use primitives::{
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
     TransactionIndex, TransactionStatus,
 };
+use rlp_bool::CompatibleBool;
 use std::sync::Arc;
-
 pub fn build_block(
     b: &PrimitiveBlock, network: Network, consensus: &ConsensusGraph,
     consensus_inner: &ConsensusGraphInner, data_man: &Arc<BlockDataManager>,
@@ -109,7 +109,7 @@ pub fn build_block(
                                         let tx_index = TransactionIndex {
                                             block_hash: b.hash(),
                                             real_index: original_index,
-                                            is_phantom: false,
+                                            is_phantom: CompatibleBool(false),
                                             rpc_index: Some(new_index),
                                         };
                                         let tx_exec_error_msg =

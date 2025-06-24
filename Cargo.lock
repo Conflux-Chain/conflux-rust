@@ -1235,6 +1235,7 @@ dependencies = [
  "log",
  "pow-types",
  "primitives",
+ "rlp-bool",
  "solidity-abi",
  "typemap-ors",
 ]
@@ -1361,6 +1362,7 @@ dependencies = [
  "malloc_size_of_derive",
  "primitives",
  "rlp 0.6.1",
+ "rlp-bool",
  "rlp-derive",
  "serde",
  "strum_macros",
@@ -1615,6 +1617,7 @@ dependencies = [
  "rand_chacha 0.9.0",
  "random-crash",
  "rlp 0.6.1",
+ "rlp-bool",
  "rlp-derive",
  "rustc-hex",
  "serde",
@@ -1795,6 +1798,7 @@ dependencies = [
  "rangetools",
  "rayon",
  "rlp 0.6.1",
+ "rlp-bool",
  "rlp-derive",
  "rustc-hex",
  "safety-rules",
@@ -2115,6 +2119,7 @@ dependencies = [
  "rand 0.9.0",
  "random-crash",
  "rlp 0.6.1",
+ "rlp-bool",
  "rpassword",
  "rustc-hex",
  "secret-store",
@@ -6621,6 +6626,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.0",
  "rlp 0.6.1",
+ "rlp-bool",
  "rlp-derive",
  "serde",
  "serde_derive",
@@ -7383,6 +7389,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rlp-bool"
+version = "2.6.0"
+dependencies = [
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "rlp 0.6.1",
+]
+
+[[package]]
 name = "rlp-derive"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7391,13 +7406,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.96",
-]
-
-[[package]]
-name = "rlp_bool"
-version = "2.6.0"
-dependencies = [
- "rlp 0.6.1",
 ]
 
 [[package]]

@@ -366,7 +366,7 @@ impl LocalizedTransactionTrace {
                     Action::try_from(t.action, network).map(|action| {
                         LocalizedTrace {
                             action,
-                            valid,
+                            valid: valid.into(),
                             // Set to None because the information has been
                             // included in the outer
                             // structs

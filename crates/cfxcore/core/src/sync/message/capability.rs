@@ -12,11 +12,12 @@ use crate::{
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, NetworkContext};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_bool::CompatibleBool;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, DeriveMallocSizeOf)]
 pub enum DynamicCapability {
-    NormalPhase(bool),  // provide tx relay
-    ServeHeaders(bool), // provide block header downloads
+    NormalPhase(CompatibleBool),  // provide tx relay
+    ServeHeaders(CompatibleBool), // provide block header downloads
 }
 
 impl DynamicCapability {

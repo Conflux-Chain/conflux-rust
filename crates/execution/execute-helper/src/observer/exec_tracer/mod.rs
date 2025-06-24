@@ -29,6 +29,7 @@ use cfx_executor::{
 };
 use cfx_types::{Address, U256};
 use cfx_vm_types::ActionParams;
+use rlp_bool::CompatibleBool;
 use typemap::ShareDebugMap;
 
 /// Simple executive tracer. Traces all calls and creates.
@@ -47,7 +48,10 @@ impl ExecTracer {
         self.traces
             .into_iter()
             .zip(validity.into_iter())
-            .map(|(action, valid)| ExecTrace { action, valid })
+            .map(|(action, valid)| ExecTrace {
+                action,
+                valid: CompatibleBool(valid),
+            })
             .collect()
     }
 }

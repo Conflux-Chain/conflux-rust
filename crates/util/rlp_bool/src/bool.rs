@@ -1,12 +1,14 @@
 use std::iter::once;
 
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use rlp::{Decodable, Encodable};
-
 /// Legacy boolean type for RLP encoding:
 /// - encodes `true` as `0x01` and `false` as `0x00`.
 /// - decodes `0x01` as `true`, `0x00` as `false`
 /// - any other value is an error.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Copy, Default, Hash, DeriveMallocSizeOf,
+)]
 pub struct LegacyBool(pub bool);
 
 impl Encodable for LegacyBool {
@@ -30,11 +32,22 @@ impl Decodable for LegacyBool {
     }
 }
 
+impl From<bool> for LegacyBool {
+    fn from(value: bool) -> Self { LegacyBool(value) }
+}
+
+impl From<LegacyBool> for bool {
+    fn from(value: LegacyBool) -> Self { value.0 }
+}
+
 /// Compatible boolean type for RLP encoding:
 /// - encodes `true` as `0x01` and `false` as `0x80`.
-/// - decodes `0x01` as `true`, `0x80` as `false`, and `0x00` as `false` (legacy behavior).
+/// - decodes `0x01` as `true`, `0x80` as `false`, and `0x00` as `false` (legacy
+///   behavior).
 /// - any other value is an error.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Copy, Default, Hash, DeriveMallocSizeOf,
+)]
 pub struct CompatibleBool(pub bool);
 
 impl Encodable for CompatibleBool {
@@ -56,6 +69,13 @@ impl Decodable for CompatibleBool {
             _ => Err(rlp::DecoderError::RlpIsTooBig),
         })
     }
+}
+
+impl From<bool> for CompatibleBool {
+    fn from(value: bool) -> Self { CompatibleBool(value) }
+}
+impl From<CompatibleBool> for bool {
+    fn from(value: CompatibleBool) -> Self { value.0 }
 }
 
 #[cfg(test)]

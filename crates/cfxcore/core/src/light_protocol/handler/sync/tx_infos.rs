@@ -31,6 +31,7 @@ use parking_lot::RwLock;
 use primitives::{
     Receipt, SignedTransaction, TransactionIndex, TransactionStatus,
 };
+use rlp_bool::CompatibleBool;
 use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
@@ -357,7 +358,7 @@ impl TxInfos {
         let tx_index = TransactionIndex {
             block_hash,
             real_index: tx_index_in_block,
-            is_phantom: false,
+            is_phantom: CompatibleBool(false),
             rpc_index: None,
         };
 

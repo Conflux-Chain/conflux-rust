@@ -989,6 +989,7 @@ dependencies = [
  "log",
  "pow-types",
  "primitives",
+ "rlp-bool",
  "solidity-abi",
  "typemap-ors",
 ]
@@ -1109,6 +1110,7 @@ dependencies = [
  "malloc_size_of_derive",
  "primitives",
  "rlp 0.6.1",
+ "rlp-bool",
  "rlp-derive",
  "serde",
  "strum_macros",
@@ -1239,6 +1241,7 @@ dependencies = [
  "rand_chacha 0.9.0",
  "random-crash",
  "rlp 0.6.1",
+ "rlp-bool",
  "rlp-derive",
  "rustc-hex",
  "serde",
@@ -1401,6 +1404,7 @@ dependencies = [
  "rangetools",
  "rayon",
  "rlp 0.6.1",
+ "rlp-bool",
  "rlp-derive",
  "rustc-hex",
  "safety-rules",
@@ -4981,6 +4985,7 @@ dependencies = [
  "once_cell",
  "rand 0.9.0",
  "rlp 0.6.1",
+ "rlp-bool",
  "rlp-derive",
  "serde",
  "serde_derive",
@@ -5484,6 +5489,15 @@ checksum = "fa24e92bb2a83198bb76d661a71df9f7076b8c420b8696e4d3d97d50d94479e3"
 dependencies = [
  "bytes",
  "rustc-hex",
+]
+
+[[package]]
+name = "rlp-bool"
+version = "2.6.0"
+dependencies = [
+ "malloc_size_of",
+ "malloc_size_of_derive",
+ "rlp 0.6.1",
 ]
 
 [[package]]
@@ -6586,7 +6600,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.22.20",
+ "toml_edit",
 ]
 
 [[package]]
