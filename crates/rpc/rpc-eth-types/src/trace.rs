@@ -1,19 +1,19 @@
-use crate::trace::{
-    Action as RpcCfxAction, LocalizedTrace as RpcCfxLocalizedTrace,
-};
+use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_parity_trace_types::{
-    Outcome, SetAuth as VmSetAuth, SetAuthOutcome as VmSetAuthOutcome,
+    Action as VmAction, Outcome, SetAuth as VmSetAuth,
+    SetAuthOutcome as VmSetAuthOutcome,
+};
+use cfx_rpc_cfx_types::{
+    trace::{Action as CfxRpcAction, LocalizedTrace as CfxLocalizedTrace},
+    RpcAddress,
 };
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use cfx_util_macros::bail;
 use cfx_vm_types::{CallType, CreateType};
 use jsonrpc_core::Error as JsonRpcError;
-use serde::{ser::SerializeStruct, Serialize, Serializer};
-use std::{
-    convert::{TryFrom, TryInto},
-    fmt,
-};
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use std::{collections::HashMap, convert::TryFrom, fmt};
 
 /// Create response
 #[derive(Debug, Serialize, Clone)]
@@ -49,6 +49,18 @@ pub struct Call {
     call_type: CallType,
 }
 
+/// Represents a _selfdestruct_ action fka `suicide`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelfDestructAction {
+    /// destroyed/suicided address.
+    pub address: Address,
+    /// Balance of the contract just before it was destroyed.
+    pub balance: U256,
+    /// destroyed contract heir.
+    pub refund_address: Address,
+}
+
 /// Action
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -56,30 +68,38 @@ pub enum Action {
     Call(Call),
     /// Create
     Create(Create),
-    /* TODO: Support Suicide
-     * TODO: Support Reward */
+    /// SelfDestruct
+    SelfDestruct(SelfDestructAction),
+    /* TODO: Support Reward */
 }
 
-impl TryFrom<RpcCfxAction> for Action {
+impl TryFrom<VmAction> for Action {
     type Error = String;
 
-    fn try_from(cfx_action: RpcCfxAction) -> Result<Self, String> {
+    fn try_from(cfx_action: VmAction) -> Result<Self, String> {
         match cfx_action {
-            RpcCfxAction::Call(call) => Ok(Action::Call(Call {
-                from: call.from.hex_address,
-                to: call.to.hex_address,
+            VmAction::Call(call) => Ok(Action::Call(Call {
+                from: call.from,
+                to: call.to,
                 value: call.value,
                 gas: call.gas,
-                input: call.input,
+                input: call.input.into(),
                 call_type: call.call_type,
             })),
-            RpcCfxAction::Create(create) => Ok(Action::Create(Create {
-                from: create.from.hex_address,
+            VmAction::Create(create) => Ok(Action::Create(Create {
+                from: create.from,
                 value: create.value,
                 gas: create.gas,
-                init: create.init,
+                init: create.init.into(),
                 create_type: create.create_type,
             })),
+            VmAction::SelfDestruct(selfdestruct) => {
+                Ok(Action::SelfDestruct(SelfDestructAction {
+                    address: selfdestruct.address,
+                    balance: selfdestruct.balance,
+                    refund_address: selfdestruct.refund_address,
+                }))
+            }
             action => {
                 bail!("unsupported action in eth space: {:?}", action);
             }
@@ -111,7 +131,7 @@ pub struct CreateResult {
 
 /// Response
 #[derive(Debug, Clone)]
-pub enum Res {
+pub enum ActionResult {
     /// Call
     Call(CallResult),
     /// Create
@@ -130,7 +150,7 @@ pub struct LocalizedTrace {
     /// Action
     pub action: Action,
     /// Result
-    pub result: Res,
+    pub result: ActionResult,
     /// Trace address
     pub trace_address: Vec<usize>,
     /// Subtraces
@@ -160,20 +180,26 @@ impl Serialize for LocalizedTrace {
                 struc.serialize_field("type", "create")?;
                 struc.serialize_field("action", create)?;
             }
+            Action::SelfDestruct(ref selfdestruct) => {
+                struc.serialize_field("type", "suicide")?;
+                struc.serialize_field("action", selfdestruct)?;
+            }
         }
 
         match self.result {
-            Res::Call(ref call) => struc.serialize_field("result", call)?,
-            Res::Create(ref create) => {
+            ActionResult::Call(ref call) => {
+                struc.serialize_field("result", call)?
+            }
+            ActionResult::Create(ref create) => {
                 struc.serialize_field("result", create)?
             }
-            Res::FailedCall(ref error) => {
+            ActionResult::FailedCall(ref error) => {
                 struc.serialize_field("error", &error.to_string())?
             }
-            Res::FailedCreate(ref error) => {
+            ActionResult::FailedCreate(ref error) => {
                 struc.serialize_field("error", &error.to_string())?
             }
-            Res::None => {
+            ActionResult::None => {
                 struc.serialize_field("result", &None as &Option<u8>)?
             }
         }
@@ -193,68 +219,45 @@ impl Serialize for LocalizedTrace {
     }
 }
 
-impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
-    type Error = String;
-
-    fn try_from(cfx_trace: RpcCfxLocalizedTrace) -> Result<Self, String> {
-        let transaction_position = cfx_trace
-            .transaction_position
-            .map(|pos| pos.as_usize())
-            .ok_or_else(|| "transaction position should exist".to_string())?;
-        let transaction_hash = cfx_trace
-            .transaction_hash
-            .ok_or_else(|| "transaction hash should exist".to_string())?;
-        Ok(Self {
-            action: cfx_trace.action.try_into()?,
-            result: Res::None,
-            trace_address: vec![],
-            subtraces: 0,
-            // note: `as_usize` will panic on overflow,
-            // however, this should not happen for tx position
-            transaction_position,
-            transaction_hash,
-            block_number: cfx_trace
-                .epoch_number
-                .map(|en| en.as_u64())
-                .unwrap_or(0),
-            block_hash: cfx_trace.epoch_hash.unwrap_or_default(),
-            valid: cfx_trace.valid,
-        })
-    }
-}
-
 impl LocalizedTrace {
     pub fn set_result(
-        &mut self, result: RpcCfxAction,
+        &mut self, result: Option<VmAction>,
     ) -> Result<(), JsonRpcError> {
-        if !matches!(self.result, Res::None) {
+        if !matches!(self.result, ActionResult::None) {
             // One action matches exactly one result.
             bail!(JsonRpcError::internal_error());
         }
+        if result.is_none() {
+            // If the result is None, it means the action has no result.
+            self.result = ActionResult::None;
+            return Ok(());
+        }
+        let result = result.unwrap();
         match result {
-            RpcCfxAction::CallResult(call_result) => {
+            VmAction::CallResult(call_result) => {
                 if !matches!(self.action, Action::Call(_)) {
                     bail!(JsonRpcError::internal_error());
                 }
                 match call_result.outcome {
                     Outcome::Success => {
                         // FIXME(lpl): Convert gas_left to gas_used.
-                        self.result = Res::Call(CallResult {
+                        self.result = ActionResult::Call(CallResult {
                             gas_used: call_result.gas_left,
-                            output: call_result.return_data,
+                            output: call_result.return_data.into(),
                         })
                     }
                     Outcome::Reverted => {
-                        self.result = Res::FailedCall(TraceError::Reverted);
+                        self.result =
+                            ActionResult::FailedCall(TraceError::Reverted);
                     }
                     Outcome::Fail => {
-                        self.result = Res::FailedCall(TraceError::Error(
-                            call_result.return_data,
-                        ));
+                        self.result = ActionResult::FailedCall(
+                            TraceError::Error(call_result.return_data.into()),
+                        );
                     }
                 }
             }
-            RpcCfxAction::CreateResult(create_result) => {
+            VmAction::CreateResult(create_result) => {
                 if !matches!(self.action, Action::Create(_)) {
                     bail!(JsonRpcError::internal_error());
                 }
@@ -262,19 +265,20 @@ impl LocalizedTrace {
                     Outcome::Success => {
                         // FIXME(lpl): Convert gas_left to gas_used.
                         // FIXME(lpl): Check if `return_data` is `code`.
-                        self.result = Res::Create(CreateResult {
+                        self.result = ActionResult::Create(CreateResult {
                             gas_used: create_result.gas_left,
-                            code: create_result.return_data,
-                            address: create_result.addr.hex_address,
+                            code: create_result.return_data.into(),
+                            address: create_result.addr,
                         })
                     }
                     Outcome::Reverted => {
-                        self.result = Res::FailedCreate(TraceError::Reverted);
+                        self.result =
+                            ActionResult::FailedCreate(TraceError::Reverted);
                     }
                     Outcome::Fail => {
-                        self.result = Res::FailedCreate(TraceError::Error(
-                            create_result.return_data,
-                        ));
+                        self.result = ActionResult::FailedCreate(
+                            TraceError::Error(create_result.return_data.into()),
+                        );
                     }
                 }
             }
@@ -294,7 +298,7 @@ pub struct Trace {
     /// Action
     action: Action,
     /// Result
-    result: Res,
+    result: ActionResult,
 }
 
 impl Serialize for Trace {
@@ -310,20 +314,26 @@ impl Serialize for Trace {
                 struc.serialize_field("type", "create")?;
                 struc.serialize_field("action", create)?;
             }
+            Action::SelfDestruct(ref selfdestruct) => {
+                struc.serialize_field("type", "suicide")?;
+                struc.serialize_field("action", selfdestruct)?;
+            }
         }
 
         match self.result {
-            Res::Call(ref call) => struc.serialize_field("result", call)?,
-            Res::Create(ref create) => {
+            ActionResult::Call(ref call) => {
+                struc.serialize_field("result", call)?
+            }
+            ActionResult::Create(ref create) => {
                 struc.serialize_field("result", create)?
             }
-            Res::FailedCall(ref error) => {
+            ActionResult::FailedCall(ref error) => {
                 struc.serialize_field("error", &error.to_string())?
             }
-            Res::FailedCreate(ref error) => {
+            ActionResult::FailedCreate(ref error) => {
                 struc.serialize_field("error", &error.to_string())?
             }
-            Res::None => {
+            ActionResult::None => {
                 struc.serialize_field("result", &None as &Option<u8>)?
             }
         }
@@ -403,6 +413,37 @@ impl LocalizedSetAuthTrace {
             transaction_hash,
             block_number,
             block_hash,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EpochTrace {
+    cfx_traces: Vec<CfxLocalizedTrace>,
+    eth_traces: Vec<LocalizedTrace>,
+    mirror_address_map: HashMap<Address, RpcAddress>,
+}
+
+impl EpochTrace {
+    pub fn new(
+        cfx_traces: Vec<CfxLocalizedTrace>, eth_traces: Vec<LocalizedTrace>,
+    ) -> Self {
+        let mut mirror_address_map = HashMap::new();
+        for t in &cfx_traces {
+            if let CfxRpcAction::Call(action) = &t.action {
+                if action.to.hex_address == CROSS_SPACE_CONTRACT_ADDRESS {
+                    mirror_address_map.insert(
+                        action.from.hex_address.evm_map().address,
+                        action.from.clone(),
+                    );
+                }
+            }
+        }
+        Self {
+            cfx_traces,
+            eth_traces,
+            mirror_address_map,
         }
     }
 }

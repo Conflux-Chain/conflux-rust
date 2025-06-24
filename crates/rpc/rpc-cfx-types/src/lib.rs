@@ -9,7 +9,6 @@ pub mod pos;
 mod rpc_impl_configuration;
 mod subscriber_id;
 pub mod trace;
-pub mod trace_eth;
 pub mod trace_filter;
 pub mod traits;
 mod transaction_status;

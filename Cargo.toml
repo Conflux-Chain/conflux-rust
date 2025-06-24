@@ -116,8 +116,8 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "2.6.0"
-authors = ["peilun-conflux", "ChenxingLi"]
+version = "3.0.0"
+authors = ["Conflux Network"]
 description = "A rust implementation of the Conflux-Protocol"
 documentation = "https://doc.confluxnetwork.org"
 homepage = "https://confluxnetwork.org/"
@@ -377,7 +377,6 @@ enum-map = "0.4.0"
 #enum-map-derive = "0.4.0"
 igd = "0.10"
 ipnetwork = "0.12.6"
-derivative = "2.0.2"
 edit-distance = "2"
 zeroize = "1"
 vergen = "8.3.2"
@@ -387,7 +386,7 @@ typenum = "1.17.0"
 typemap = { package = "typemap-ors", version = "1.0"}
 impl-trait-for-tuples = "^0.2"
 impl-tools = "^0.10"
-derive_more = "0.99"
+derive_more = { version = "2.0.1", features = ["full"] }
 c-kzg = { version = "1.0.2", default-features = false }
 strfmt = "0.2"
 smart-default = "0.6.0"

@@ -38,6 +38,7 @@ impl ErrorUnwind {
                 }
                 Action::InternalTransferAction(_) => {}
                 Action::SetAuth(_) => {}
+                Action::SelfDestruct(_) => {}
             }
         }
         errors

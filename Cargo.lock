@@ -202,7 +202,7 @@ dependencies = [
  "bytes 1.9.0",
  "cfg-if 1.0.0",
  "const-hex",
- "derive_more",
+ "derive_more 0.99.17",
  "hex-literal 0.4.1",
  "itoa",
  "k256",
@@ -1186,7 +1186,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-config"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-addr",
  "cfx-executor",
@@ -1266,7 +1266,7 @@ dependencies = [
  "cfx-vm-interpreter",
  "cfx-vm-types",
  "cfxkey",
- "derive_more",
+ "derive_more 2.0.1",
  "diem-types",
  "hex-literal 1.0.0",
  "impl-tools",
@@ -1298,7 +1298,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-parameters",
  "cfx-types",
- "derivative",
+ "derive_more 2.0.1",
  "log",
  "malloc_size_of",
  "malloc_size_of_derive",
@@ -1356,7 +1356,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-parity-trace-types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-bytes",
  "cfx-internal-common",
@@ -1374,7 +1374,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "async-trait",
@@ -1416,7 +1416,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-builder"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "cfx-rpc",
@@ -1446,6 +1446,7 @@ dependencies = [
  "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
  "cfx-rpc-common-impl",
+ "cfx-rpc-eth-types",
  "cfx-types",
  "cfx-util-macros",
  "cfxcore",
@@ -1456,7 +1457,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-cfx-types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "bls-signatures",
  "cfx-addr",
@@ -1482,18 +1483,19 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-common-impl"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-addr",
  "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
+ "cfx-rpc-eth-types",
  "cfx-types",
  "slice-group-by",
 ]
 
 [[package]]
 name = "cfx-rpc-eth-api"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "cfx-rpc-eth-types",
@@ -1504,7 +1506,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-eth-types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-rpc-types",
  "cfx-bytes",
@@ -1513,6 +1515,8 @@ dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-primitives",
  "cfx-types",
+ "cfx-util-macros",
+ "cfx-vm-types",
  "jsonrpc-core",
  "jsonrpsee",
  "primitives",
@@ -1525,7 +1529,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-middlewares"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "cfx-rpc-utils",
@@ -1545,7 +1549,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-primitives"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "rustc-hex",
  "serde",
@@ -1555,7 +1559,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-rpc-utils"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types",
@@ -1600,7 +1604,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "delegate 0.5.2",
- "derivative",
+ "derive_more 2.0.1",
  "fallible-iterator",
  "fs_extra",
  "futures 0.3.30",
@@ -1646,7 +1650,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-tasks"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "auto_impl",
  "dyn-clone",
@@ -1672,7 +1676,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-util-macros"
-version = "2.6.0"
+version = "3.0.0"
 
 [[package]]
 name = "cfx-vm-interpreter"
@@ -1715,7 +1719,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "anyhow",
@@ -1846,7 +1850,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-pow"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-parameters",
  "cfx-types",
@@ -1861,7 +1865,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-bytes",
  "cfx-execute-helper",
@@ -2082,7 +2086,7 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 
 [[package]]
 name = "client"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "app_dirs",
@@ -2217,7 +2221,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "bcs",
  "bls-signatures",
@@ -2315,6 +2319,15 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
+name = "convert_case"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb402b8d4c85569410425650ce3eddc7d698ed96d39a73f941b08fb63082f1e7"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "core-foundation"
@@ -2736,11 +2749,33 @@ version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fb810d30a7c1953f91334de7244731fc3f3c10d7fe163338a35b9f640960321"
 dependencies = [
- "convert_case",
+ "convert_case 0.4.0",
  "proc-macro2",
  "quote",
  "rustc_version 0.4.0",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_more"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+dependencies = [
+ "convert_case 0.7.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+ "unicode-xid",
 ]
 
 [[package]]
@@ -3212,7 +3247,7 @@ checksum = "bbbaaaf38131deb9ca518a274a45bfdb8771f139517b073b16c2d3d32ae5037b"
 
 [[package]]
 name = "eest_types"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "cfx-rpc-primitives",
  "cfx-types",
@@ -3858,7 +3893,7 @@ dependencies = [
 
 [[package]]
 name = "geth-tracer"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-trace",
@@ -7356,7 +7391,7 @@ dependencies = [
  "bitvec 1.0.1",
  "c-kzg",
  "cfg-if 1.0.0",
- "derive_more",
+ "derive_more 0.99.17",
  "dyn-clone",
  "enumn",
  "hashbrown 0.14.3",
@@ -7940,7 +7975,7 @@ dependencies = [
 
 [[package]]
 name = "serde-utils"
-version = "2.6.0"
+version = "3.0.0"
 dependencies = [
  "alloy-primitives",
  "cfx-types",
