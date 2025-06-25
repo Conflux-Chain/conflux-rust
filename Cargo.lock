@@ -1440,6 +1440,7 @@ dependencies = [
  "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
  "cfx-rpc-common-impl",
+ "cfx-rpc-eth-types",
  "cfx-types",
  "cfx-util-macros",
  "cfxcore",
@@ -1481,6 +1482,7 @@ dependencies = [
  "cfx-addr",
  "cfx-parity-trace-types",
  "cfx-rpc-cfx-types",
+ "cfx-rpc-eth-types",
  "cfx-types",
  "slice-group-by",
 ]
@@ -1507,6 +1509,8 @@ dependencies = [
  "cfx-rpc-cfx-types",
  "cfx-rpc-primitives",
  "cfx-types",
+ "cfx-util-macros",
+ "cfx-vm-types",
  "jsonrpc-core",
  "jsonrpsee",
  "primitives",
@@ -1840,7 +1844,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-pow"
-version = "2.6.0"
+version = "3.0.0-net8888"
 dependencies = [
  "cfx-parameters",
  "cfx-types",
