@@ -453,7 +453,7 @@ sqlite3-sys = "0.12"
 kvdb = "0.4"
 influx_db_client = "0.5.1"
 # conflux forked crates
-rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "7dbd66f507db1d0cfdf5334ad56ca0b24a768740" }
+rocksdb = { git = "https://github.com/Conflux-Chain/rust-rocksdb.git", rev = "f42a47efa918ebccf1f49076c96051af67d9893f" }
 
 [patch.crates-io]
 # use a forked version to fix a vulnerability(introduced by failure) in vrf-rs, can be removed after the upstream is fixed
