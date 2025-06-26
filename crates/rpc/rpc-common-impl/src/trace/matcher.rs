@@ -123,7 +123,7 @@ impl<'a> CallCreateTraceNode<'a> {
                             SelfDestructTraceWithPosition {
                                 action: suicide.0,
                                 child_count: 0,
-                                trace_path: trace_path.clone(),
+                                trace_path: child_path,
                             },
                         )))
                     }

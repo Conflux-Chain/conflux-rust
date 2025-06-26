@@ -27,9 +27,8 @@ impl Decodable for SnapshotKeptToProvideSyncStatus {
 }
 
 #[derive(
-    Clone, Default, Derivative, DeriveMallocSizeOf, RlpEncodable, RlpDecodable,
+    Clone, Default, DeriveMallocSizeOf, RlpEncodable, RlpDecodable, Debug,
 )]
-#[derivative(Debug)]
 pub struct SnapshotInfo {
     /// This field is true when the snapshot info is kept but the snapshot
     /// itself is removed, or when
@@ -43,7 +42,7 @@ pub struct SnapshotInfo {
     pub parent_snapshot_epoch_id: EpochId,
     // the last element of pivot_chain_parts is the epoch id of the snapshot
     // itself.
-    #[derivative(Debug = "ignore")]
+    #[debug(skip)]
     pub pivot_chain_parts: Vec<EpochId>,
 }
 
@@ -184,7 +183,7 @@ use crate::{
     utils::wrap::{Wrap, WrappedTrait},
     MptKeyValue,
 };
-use derivative::Derivative;
+use derive_more::Debug;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
