@@ -78,3 +78,4 @@ def test_trace_suicide(ew3, evm_accounts, ew3_tracing):
     assert len(traces) == 2
     assert traces[1]["type"] == "suicide"
     assert traces[1]["action"]["refundAddress"] == account.address
+    assert traces[1]["traceAddress"] == [0]
