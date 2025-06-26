@@ -22,7 +22,7 @@ significant changes to the Conflux protocol, please submit a
 
 ### Building
 
-The Minimum Supported Rust Version (MSRV) of this project is 1.77.2
+The Minimum Supported Rust Version (MSRV) of this project is `1.86`
 
 See the doc for detailed instructions on how to [build from source](./docs/build-from-source.md).
 

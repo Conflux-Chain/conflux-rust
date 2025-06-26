@@ -47,7 +47,7 @@ pkcs8 = {version = "0.7.5", features = ["encryption", "std"]}
 bitvec = "1.0.1"
 proptest = "1.0.0"
 proptest-derive = "0.5.1"
-criterion = "0.3.4"
+criterion = { workspace = true }
 sha3 = "0.9.1"
 serde_json = "1.0.64"
 trybuild = "1.0.41"

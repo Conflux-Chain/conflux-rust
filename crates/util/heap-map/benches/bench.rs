@@ -2,8 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use heap_map::HeapMap;
+use std::hint::black_box;
 
 fn bench_heapmap_insert(c: &mut Criterion) {
     let mut heapmap = HeapMap::<usize, u64>::new();

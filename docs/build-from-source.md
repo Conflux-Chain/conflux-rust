@@ -2,7 +2,7 @@
 
 ## Install Build Dependencies
 
-Conflux requires **Rust 1.77.2**, ```clang```, and ```sqlite``` to build.
+Conflux requires **Rust 1.86**, ```clang```, and ```sqlite``` to build.
 
 We recommend installing Rust through [rustup](https://rustup.rs/). If you don't already have ```rustup``` or ```clang```, you can install them like this:
 
@@ -13,7 +13,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # you might need to run 
 # source "$HOME/.cargo/env"
 # to configure your shell
-rustup install 1.77.2
+rustup install 1.86
 ```
 
 Other dependencies including ```clang```, ```cmake (version >= 3.12 and < 4.0)``` and ```sqlite (version >= 3.8.3 and < 4.0)``` can be installed with:
@@ -57,7 +57,7 @@ curl https://sh.rustup.rs -sSf | sh
 # you might need to run 
 # source "$HOME/.cargo/env"
 # to configure your shell
-rustup install 1.77.2
+rustup install 1.86
 ```
 
 You might need to install ```brew``` if you need to use it to install ```clang```:

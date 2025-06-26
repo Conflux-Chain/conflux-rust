@@ -4,8 +4,9 @@
 
 use std::collections::BTreeMap;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::hint::black_box;
 use treap_map::{SharedKeyTreapMapConfig, TreapMap};
 
 pub struct CombinedMap;
