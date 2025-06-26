@@ -1,4 +1,4 @@
-use super::super::error::{StateMismatch, TestErrorKind};
+use crate::{bail, StateMismatch, TestErrorKind};
 use cfx_executor::{
     executive::{
         execution_outcome::ToRepackError, Executed, ExecutionError,
@@ -11,12 +11,6 @@ use cfxkey::Address;
 use eest_types::{AccountInfo, StateTestUnit};
 use primitives::{transaction::TransactionError, SignedTransaction};
 use std::collections::HashMap;
-
-macro_rules! bail {
-    ($e:expr) => {
-        return Err($e.into())
-    };
-}
 
 #[derive(Clone, Copy)]
 pub enum TestOutcome<'a> {
@@ -97,7 +91,9 @@ pub fn is_unsupport_reason(expected_reason: &Option<String>) -> bool {
     }
 }
 
-fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
+pub fn match_fail_single_reason(
+    reason: &str, outcome: TestOutcome<'_>,
+) -> bool {
     use ExecutionOutcome::*;
     use TestOutcome::*;
     match reason {
@@ -144,6 +140,10 @@ fn match_fail_single_reason(reason: &str, outcome: TestOutcome<'_>) -> bool {
         "TransactionException.SENDER_NOT_EOA" => matches!(
             outcome,
             Execution(NotExecutedDrop(TxDropError::SenderWithCode { .. }))
+        ),
+        "TransactionException.NONCE_MISMATCH_TOO_LOW" => matches!(
+            outcome,
+            Execution(NotExecutedDrop(TxDropError::OldNonce { .. }))
         ),
         "TransactionException.TYPE_4_EMPTY_AUTHORIZATION_LIST" => matches!(
             outcome,
@@ -204,6 +204,7 @@ pub fn check_execution_outcome(
         let expected_code = account_info.code.0.clone();
         if got_code != expected_code {
             bail!(StateMismatch::CodeMismatch {
+                address: addr,
                 got: hex::encode(got_code),
                 expected: hex::encode(expected_code),
             });
@@ -217,6 +218,7 @@ pub fn check_execution_outcome(
                 state.storage_at(&user_addr, &key_bytes).unwrap_or_default();
             if curr_value != value {
                 bail!(StateMismatch::StorageMismatch {
+                    address: addr,
                     key,
                     got: curr_value,
                     expected: value,
