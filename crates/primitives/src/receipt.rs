@@ -6,6 +6,7 @@ use crate::log_entry::LogEntry;
 use cfx_types::{Address, Bloom, Space, U256, U64};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_bool::LegacyBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
@@ -99,7 +100,7 @@ pub struct Receipt {
     /// The gas fee charged for transaction execution.
     pub gas_fee: U256,
     /// The designated account to bear the gas fee, if any.
-    pub gas_sponsor_paid: bool,
+    pub gas_sponsor_paid: LegacyBool,
     /// The OR-wide combination of all logs' blooms for this transaction.
     pub log_bloom: Bloom,
     /// The logs stemming from this transaction.
@@ -107,7 +108,7 @@ pub struct Receipt {
     /// Transaction outcome.
     pub outcome_status: TransactionStatus,
     /// The designated account to bear the storage fee, if any.
-    pub storage_sponsor_paid: bool,
+    pub storage_sponsor_paid: LegacyBool,
     pub storage_collateralized: Vec<StorageChange>,
     pub storage_released: Vec<StorageChange>,
     pub burnt_gas_fee: Option<U256>,
@@ -167,11 +168,11 @@ impl Receipt {
         Self {
             accumulated_gas_used,
             gas_fee,
-            gas_sponsor_paid,
+            gas_sponsor_paid: LegacyBool(gas_sponsor_paid),
             log_bloom,
             logs,
             outcome_status: outcome,
-            storage_sponsor_paid,
+            storage_sponsor_paid: LegacyBool(storage_sponsor_paid),
             storage_collateralized,
             storage_released,
             burnt_gas_fee,

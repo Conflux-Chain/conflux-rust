@@ -202,7 +202,7 @@ fn test_snapshot_random_read_performance() {
         let account_key =
             StorageKey::new_account_key(&address).with_native_space();
         state_0
-            .set(account_key, rlp::encode(&account).into())
+            .set(account_key, rlp::encode(&account).as_ref().into())
             .expect("Failed to set key");
     }
 
@@ -381,7 +381,7 @@ fn simulate_transactions(
         } else {
             account.balance += U256::one();
         }
-        values[i] = Some(rlp::encode(&account).into());
+        values[i] = Some(rlp::encode(&account).as_ref().into());
     }
     *update_ms += now.elapsed().as_millis() as u32;
 

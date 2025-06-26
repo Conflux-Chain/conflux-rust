@@ -562,7 +562,7 @@ impl RpcImpl {
                 accounts,
             )?;
 
-            Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
+            Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes().into()))
         };
 
         fut.boxed()
@@ -698,7 +698,7 @@ impl RpcImpl {
                 prior_gas_used,
             } = tx_info;
 
-            if maybe_block_number.is_none() || tx_index.is_phantom {
+            if maybe_block_number.is_none() || tx_index.is_phantom.into() {
                 return Ok(None);
             }
 

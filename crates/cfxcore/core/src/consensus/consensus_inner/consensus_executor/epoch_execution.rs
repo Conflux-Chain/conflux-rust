@@ -33,7 +33,7 @@ use cfx_executor::{
     },
 };
 use cfx_vm_types::Env;
-
+use rlp_bool::CompatibleBool;
 pub enum VirtualCall<'a> {
     GethTrace(GethTask<'a>),
 }
@@ -329,7 +329,7 @@ impl ConsensusExecutionHandler {
             &TransactionIndex {
                 block_hash: block.hash(),
                 real_index: idx,
-                is_phantom: false,
+                is_phantom: CompatibleBool(false),
                 rpc_index: Some(rpc_index),
             },
         );
@@ -349,7 +349,7 @@ impl ConsensusExecutionHandler {
                 &TransactionIndex {
                     block_hash: block.hash(),
                     real_index: idx,
-                    is_phantom: true,
+                    is_phantom: CompatibleBool(true),
                     rpc_index: Some(*evm_tx_index),
                 },
             );

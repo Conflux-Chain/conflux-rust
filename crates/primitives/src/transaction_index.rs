@@ -5,7 +5,7 @@
 use cfx_types::H256;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-
+use rlp_bool::CompatibleBool;
 /// Represents address of certain transaction within block
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Default)]
 pub struct TransactionIndex {
@@ -14,7 +14,7 @@ pub struct TransactionIndex {
     /// Transaction index within the block
     pub real_index: usize,
     /// true when this index belongs to a phantom transaction
-    pub is_phantom: bool,
+    pub is_phantom: CompatibleBool,
     /// Transaction index to be used in RPC responses
     pub rpc_index: Option<usize>,
 }
@@ -39,7 +39,7 @@ impl Decodable for TransactionIndex {
             2 => Ok(TransactionIndex {
                 block_hash: rlp.val_at(0)?,
                 real_index: rlp.val_at(1)?,
-                is_phantom: false,
+                is_phantom: CompatibleBool(false),
                 rpc_index: None,
             }),
             3 => Ok(TransactionIndex {

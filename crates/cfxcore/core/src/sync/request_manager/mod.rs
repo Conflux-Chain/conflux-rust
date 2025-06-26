@@ -33,6 +33,7 @@ use primitives::{SignedTransaction, TransactionWithSignature};
 pub use request_handler::{
     AsAny, Request, RequestHandler, RequestMessage, SynchronizationPeerRequest,
 };
+use rlp_bool::CompatibleBool;
 use std::{
     cmp::Ordering,
     collections::{binary_heap::BinaryHeap, HashSet},
@@ -298,7 +299,7 @@ impl RequestManager {
 
         let request = GetBlocks {
             request_id: 0,
-            with_public,
+            with_public: CompatibleBool(with_public),
             hashes,
             preferred_node_type,
         };

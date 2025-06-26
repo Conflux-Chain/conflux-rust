@@ -4,8 +4,8 @@ use keccak_hash::keccak;
 // General function for solidity storage rule
 pub fn mapping_slot(base: U256, index: U256) -> U256 {
     let mut input = [0u8; 64];
-    base.to_big_endian(&mut input[32..]);
-    index.to_big_endian(&mut input[..32]);
+    base.write_as_big_endian(&mut input[32..]);
+    index.write_as_big_endian(&mut input[..32]);
     let hash = keccak(input);
     U256::from_big_endian(hash.as_ref())
 }
@@ -19,7 +19,7 @@ pub fn vector_slot(base: U256, index: usize, size: usize) -> U256 {
 
 pub fn dynamic_slot(base: U256) -> U256 {
     let mut input = [0u8; 32];
-    base.to_big_endian(&mut input);
+    base.write_as_big_endian(&mut input);
     let hash = keccak(input);
     return U256::from_big_endian(hash.as_ref());
 }
@@ -35,6 +35,6 @@ pub fn array_slot(base: U256, index: usize, element_size: usize) -> U256 {
 
 pub fn u256_to_array(input: U256) -> [u8; 32] {
     let mut answer = [0u8; 32];
-    input.to_big_endian(answer.as_mut());
+    input.write_as_big_endian(answer.as_mut());
     answer
 }

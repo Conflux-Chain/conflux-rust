@@ -34,7 +34,7 @@ pub fn into_eth_localized_traces(
                     block_number,
                     block_hash,
                     // action and its result should have the same `valid`.
-                    valid: action.valid,
+                    valid: action.valid.into(),
                 };
 
                 eth_trace.set_result(Some(result.action.clone())).expect(
@@ -58,7 +58,7 @@ pub fn into_eth_localized_traces(
                     block_number,
                     block_hash,
                     // action and its result should have the same `valid`.
-                    valid: action.valid,
+                    valid: action.valid.into(),
                 };
 
                 eth_traces.push(eth_trace);
@@ -83,7 +83,7 @@ pub fn primitive_traces_to_eth_localized_traces(
             .iter()
             .map(|x| ExecTrace {
                 action: x.action.clone(),
-                valid: x.valid,
+                valid: x.valid.into(),
             })
             .collect();
         let eth_traces = into_eth_localized_traces(

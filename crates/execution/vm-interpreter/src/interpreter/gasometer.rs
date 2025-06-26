@@ -150,7 +150,7 @@ impl<Gas: CostType> Gasometer<Gas> {
             instructions::SLOAD => {
                 let gas = if spec.cip645.eip_cold_warm_access {
                     let mut key = H256::zero();
-                    stack.peek(0).to_big_endian(&mut key.0);
+                    stack.peek(0).write_as_big_endian(&mut key.0);
                     if context.is_warm_storage_entry(&key)? {
                         spec.warm_access_gas
                     } else {
@@ -532,7 +532,7 @@ fn calc_sstore_gas<Gas: CostType>(
     }
 
     let mut key = H256::zero();
-    stack.peek(0).to_big_endian(&mut key.0);
+    stack.peek(0).write_as_big_endian(&mut key.0);
 
     let new_val = *stack.peek(1);
     let warm_val = context.is_warm_storage_entry(&key)?;
