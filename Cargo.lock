@@ -1764,7 +1764,6 @@ dependencies = [
  "hashbrown 0.7.2",
  "heap-map",
  "hibitset",
- "io",
  "itertools 0.14.0",
  "jsonrpc-core",
  "jsonrpsee",

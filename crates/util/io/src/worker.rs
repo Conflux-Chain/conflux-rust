@@ -24,17 +24,13 @@ use crate::{
 };
 use crossbeam_channel;
 use crossbeam_deque;
+use log::{trace, warn};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
-        Arc,
+        Arc, Condvar as SCondvar, Mutex as SMutex,
     },
     thread::{self, JoinHandle},
-};
-
-use log::{trace, warn};
-use std::{
-    sync::{Condvar as SCondvar, Mutex as SMutex},
     time::Duration,
 };
 
