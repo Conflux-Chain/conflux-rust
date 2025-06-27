@@ -10,7 +10,7 @@ Currently Available Subcommands：
 
 ```sh
 ./conflux -h
-conflux conflux-rust/v2.4.0-82500ad-20250418/x86_64-linux-gnu/rustc1.77.2
+conflux conflux-rust/v2.4.0-82500ad-20250418/x86_64-linux-gnu/rustc1.78
 The Conflux Team
 Conflux client.
 
