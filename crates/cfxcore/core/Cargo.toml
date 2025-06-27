@@ -133,5 +133,5 @@ testonly_code = []
 consensus_bench = []
 fuzzing = ["proptest", "proptest-derive"]
 
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
+# [lints.rust]
+# unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
