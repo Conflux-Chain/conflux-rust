@@ -75,7 +75,6 @@ mod tests {
         let test_version = "0.0.0";
         let version_string = version(test_version);
         // example:  conflux-rust/v0.0.0-b7cca2a-20250423/x86_64-linux-gnu/
-        // rustc1.77.2
 
         println!("version_string: {}", version_string);
         assert!(version_string
