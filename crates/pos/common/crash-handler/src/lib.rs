@@ -11,7 +11,7 @@
 use backtrace::Backtrace;
 use diem_logger::prelude::*;
 use serde::Serialize;
-use std::panic::{self, PanicHookInfo};
+use std::panic::{self, PanicInfo as PanicHookInfo};
 
 #[derive(Debug, Serialize)]
 pub struct CrashInfo {
