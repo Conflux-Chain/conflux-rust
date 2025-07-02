@@ -22,8 +22,8 @@ use crate::{
     service_mio::{HandlerId, IoChannel, IoContext},
     IoHandler, LOCAL_STACK_SIZE,
 };
-use crossbeam_channel;
-use crossbeam_deque;
+use crossbeam_channel::{Receiver, RecvTimeoutError};
+use crossbeam_deque::{Steal, Stealer};
 use log::{trace, warn};
 use std::{
     sync::{
@@ -57,12 +57,9 @@ pub struct SocketWorker {
 impl SocketWorker {
     /// Creates a socket worker instance
     pub fn new<Message>(
-        index: usize, rx: crossbeam_channel::Receiver<Work<Message>>,
-        channel: IoChannel<Message>,
+        index: usize, rx: Receiver<Work<Message>>, channel: IoChannel<Message>,
     ) -> SocketWorker
-    where
-        Message: Send + Sync + 'static,
-    {
+    where Message: Send + Sync + 'static {
         let deleting = Arc::new(AtomicBool::new(false));
         let mut worker = SocketWorker {
             thread: None,
@@ -82,8 +79,8 @@ impl SocketWorker {
     }
 
     fn work_loop<Message>(
-        rx: crossbeam_channel::Receiver<Work<Message>>,
-        channel: IoChannel<Message>, deleting: Arc<AtomicBool>,
+        rx: Receiver<Work<Message>>, channel: IoChannel<Message>,
+        deleting: Arc<AtomicBool>,
     ) where
         Message: Send + Sync + 'static,
     {
@@ -92,8 +89,8 @@ impl SocketWorker {
             // `deleting` without blocking forever.
             match rx.recv_timeout(Duration::from_millis(500)) {
                 Ok(work) => SocketWorker::do_work(work, channel.clone()),
-                Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
-                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
+                Err(RecvTimeoutError::Timeout) => continue,
+                Err(RecvTimeoutError::Disconnected) => break,
             }
         }
     }
@@ -135,7 +132,7 @@ pub struct Worker {
 impl Worker {
     /// Creates a new worker instance.
     pub fn new<Message>(
-        index: usize, stealer: crossbeam_deque::Stealer<Work<Message>>,
+        index: usize, stealer: Stealer<Work<Message>>,
         channel: IoChannel<Message>, wait: Arc<SCondvar>,
         wait_mutex: Arc<SMutex<()>>,
     ) -> Worker
@@ -169,9 +166,9 @@ impl Worker {
     }
 
     fn work_loop<Message>(
-        stealer: crossbeam_deque::Stealer<Work<Message>>,
-        channel: IoChannel<Message>, wait: Arc<SCondvar>,
-        wait_mutex: Arc<SMutex<()>>, deleting: Arc<AtomicBool>,
+        stealer: Stealer<Work<Message>>, channel: IoChannel<Message>,
+        wait: Arc<SCondvar>, wait_mutex: Arc<SMutex<()>>,
+        deleting: Arc<AtomicBool>,
     ) where
         Message: Send + Sync + 'static,
     {
@@ -191,11 +188,11 @@ impl Worker {
             // many timeout events that always notify workers.
             while !deleting.load(AtomicOrdering::Acquire) {
                 match stealer.steal() {
-                    crossbeam_deque::Steal::Success(work) => {
+                    Steal::Success(work) => {
                         Worker::do_work(work, channel.clone())
                     }
-                    crossbeam_deque::Steal::Retry => {}
-                    crossbeam_deque::Steal::Empty => break,
+                    Steal::Retry => {}
+                    Steal::Empty => break,
                 }
             }
         }

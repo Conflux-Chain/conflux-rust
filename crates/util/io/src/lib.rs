@@ -20,9 +20,9 @@
 
 //! General IO module.
 
-//TODO: use Poll from mio
 #![allow(deprecated)]
 
+mod mio_util;
 mod service_mio;
 mod worker;
 
@@ -31,7 +31,8 @@ pub use crate::service_mio::{
     TimerToken, TOKENS_PER_HANDLER,
 };
 
-use mio::{deprecated::NotifyError, Poll, Token};
+use mio::{Poll, Token};
+use mio_util::NotifyError;
 use std::{cell::Cell, env, error, fmt, io};
 
 thread_local! {

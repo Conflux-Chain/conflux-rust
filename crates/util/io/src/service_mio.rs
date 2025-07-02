@@ -19,18 +19,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    mio_util::{timer::Timeout, EventLoop, EventLoopBuilder, Handler, Sender},
     worker::{SocketWorker, Work, WorkType, Worker},
     IoError, IoHandler,
 };
-use crossbeam_deque;
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use mio::{
-    deprecated::{EventLoop, EventLoopBuilder, Handler, Sender},
-    timer::Timeout,
-    Events, Poll, PollOpt, Ready, Registration, SetReadiness, Token,
-};
+use mio::{Events, Poll, PollOpt, Ready, Registration, SetReadiness, Token};
 use parking_lot::{Mutex, RwLock};
 use slab::Slab;
 use std::{
@@ -43,7 +39,7 @@ use std::{
 // FIXME: Use a enum type instead for function calls.
 /// Timer ID
 pub type TimerToken = usize;
-/// Timer ID
+/// Stream ID
 pub type StreamToken = usize;
 /// IO Handler ID
 pub type HandlerId = usize;
@@ -350,9 +346,7 @@ where Message: Send + Sync + 'static
                         event_loop.clear_timeout(&timer.timeout);
                     }
                 } else {
-                    event_loop
-                        .timeout(token, timer.delay)
-                        .expect("Error re-registering user timer");
+                    event_loop.timeout(token, timer.delay);
                 }
                 self.worker_channel.push(Work {
                     work_type: WorkType::Timeout,
@@ -413,9 +407,7 @@ where Message: Send + Sync + 'static
                 cancel_all,
             } => {
                 let timer_id = token + handler_id * TOKENS_PER_HANDLER;
-                let timeout = event_loop
-                    .timeout(Token(timer_id), delay)
-                    .expect("Error registering user timer");
+                let timeout = event_loop.timeout(Token(timer_id), delay);
                 self.timers.write().insert(
                     timer_id,
                     UserTimer {

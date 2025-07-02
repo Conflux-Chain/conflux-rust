@@ -4685,6 +4685,7 @@ dependencies = [
  "crossbeam-channel",
  "crossbeam-deque",
  "lazy_static",
+ "lazycell",
  "log",
  "metrics",
  "mio 0.6.23",
