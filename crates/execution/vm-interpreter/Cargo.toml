@@ -21,7 +21,12 @@ rustc-hex = { workspace = true }
 
 [dev-dependencies]
 cfx-vm-types = { workspace = true, features = ["testonly_code"] }
+criterion = { workspace = true, features = ["html_reports"] }
 
 [features]
 align_evm = ["cfx-vm-types/align_evm"]
 evm-debug = []
+
+[[bench]]
+name = "u256"
+harness = false
