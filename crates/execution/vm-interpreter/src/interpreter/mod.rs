@@ -56,17 +56,6 @@ const GASOMETER_PROOF: &str = "If gasometer is None, Err is immediately returned
 
 type ProgramCounter = usize;
 
-const ONE: U256 = U256([1, 0, 0, 0]);
-const TWO: U256 = U256([2, 0, 0, 0]);
-const TWO_POW_5: U256 = U256([0x20, 0, 0, 0]);
-const TWO_POW_8: U256 = U256([0x100, 0, 0, 0]);
-const TWO_POW_16: U256 = U256([0x10000, 0, 0, 0]);
-const TWO_POW_24: U256 = U256([0x1000000, 0, 0, 0]);
-const TWO_POW_64: U256 = U256([0, 0x1, 0, 0]); // 0x1 00000000 00000000
-const TWO_POW_96: U256 = U256([0, 0x100000000, 0, 0]); //0x1 00000000 00000000 00000000
-const TWO_POW_224: U256 = U256([0, 0, 0, 0x100000000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000
-const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000 000000
-
 /// Maximal subroutine stack size as specified in
 /// https://eips.ethereum.org/EIPS/eip-2315.
 pub const MAX_SUB_STACK_SIZE: usize = 1023;
@@ -1322,48 +1311,8 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
             instructions::DIV => {
                 let a = self.stack.pop_back();
                 let b = self.stack.pop_back();
-                self.stack.push(
-                    if !b.is_zero() {
-                        // match b {
-                        //     ONE => a,
-                        //     TWO => a >> 1,
-                        //     TWO_POW_5 => a >> 5,
-                        //     TWO_POW_8 => a >> 8,
-                        //     TWO_POW_16 => a >> 16,
-                        //     TWO_POW_24 => a >> 24,
-                        //     TWO_POW_64 => a >> 64,
-                        //     TWO_POW_96 => a >> 96,
-                        //     TWO_POW_224 => a >> 224,
-                        //     TWO_POW_248 => a >> 248,
-                        //     _ => a / b,
-                        // }
-                        if b == ONE {
-                            a
-                        } else if b == TWO {
-                            a >> 1
-                        } else if b == TWO_POW_5 {
-                            a >> 5
-                        } else if b == TWO_POW_8 {
-                            a >> 8
-                        } else if b == TWO_POW_16 {
-                            a >> 16
-                        } else if b == TWO_POW_24 {
-                            a >> 24
-                        } else if b == TWO_POW_64 {
-                            a >> 64
-                        } else if b == TWO_POW_96 {
-                            a >> 96
-                        } else if b == TWO_POW_224 {
-                            a >> 224
-                        } else if b == TWO_POW_248 {
-                            a >> 248
-                        } else {
-                            a / b
-                        }
-                    } else {
-                        U256::zero()
-                    },
-                );
+                self.stack
+                    .push(if !b.is_zero() { a / b } else { U256::zero() });
             }
             instructions::MOD => {
                 let a = self.stack.pop_back();
