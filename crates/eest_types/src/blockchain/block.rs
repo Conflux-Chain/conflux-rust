@@ -7,7 +7,7 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct BlockHeader {
     pub parent_hash: H256,
-    pub uncle_hash: H256,
+    pub uncle_hash: H256, // The SHA3 of the uncles data in the block
     pub coinbase: Address,
     pub state_root: H256,
     pub transactions_trie: H256,
@@ -26,7 +26,7 @@ pub struct BlockHeader {
     pub blob_gas_used: Option<U256>,
     pub excess_blob_gas: Option<U256>,
     pub parent_beacon_block_root: Option<H256>,
-    pub requests_hash: Option<H256>,
+    pub requests_hash: Option<H256>, // EIP-7685
     pub hash: H256,
 }
 
@@ -37,7 +37,7 @@ pub struct Block {
     pub transactions: Vec<Transaction>,
     pub uncle_headers: Vec<BlockHeader>,
     pub withdrawals: Option<Vec<Withdrawal>>,
-    pub rlp: Bytes,
+    pub rlp: Option<Bytes>,
     pub blocknumber: Option<String>, // TODO deserialize to u64
 }
 
@@ -55,6 +55,7 @@ pub struct Withdrawal {
 pub struct InvalidBlock {
     pub rlp: Bytes,
     pub expect_exception: String,
+    #[serde(default, rename = "rlp_decoded")]
     pub rlp_decoded: Option<Block>,
 }
 
