@@ -527,7 +527,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert(len(erc1820_code) > 2)
         result = self.call_contract(self.sender, self.priv_key, create2factory_addr, data, 0, storage_limit=2048)
         assert(result["outcomeStatus"] == "0x1")
-        # destory erc1820
+        # deploy erc1820
         data = "0x00f55d9d000000000000000000000000861bfca161e8c9f314f6128d142d852905f52d05"
         result = self.call_contract(self.sender, self.priv_key, "0x0888000000000000000000000000000000000000", data, 0, storage_limit=2048)
         assert(result["outcomeStatus"] == "0x0")
