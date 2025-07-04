@@ -83,7 +83,7 @@ impl Restorer {
                     || snapshot_info.get_snapshot_epoch_id()
                         != snapshot_info_in_db.get_snapshot_epoch_id()
                 {
-                    debug!("destory snapshot {:?}", snapshot_epoch_id);
+                    debug!("destroy snapshot {:?}", snapshot_epoch_id);
                     storage_manager
                         .get_snapshot_manager()
                         .get_snapshot_db_manager()

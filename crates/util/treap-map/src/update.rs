@@ -197,7 +197,7 @@ where
                 assert!(
                     C::next_node_dir(self.key, (&node.sort_key, &node.key))
                         .is_none(),
-                    "Inserted node has incosistent key"
+                    "Inserted node has inconsistent key"
                 );
                 InsertOnVacant {
                     insert: Box::new(node),
