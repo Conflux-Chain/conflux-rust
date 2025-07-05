@@ -15,4 +15,5 @@ log = { workspace = true }
 slab = { workspace = true }
 metrics = { workspace = true }
 lazy_static = { workspace = true }
+lazycell = { workspace = true }
 
