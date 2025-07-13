@@ -13,8 +13,8 @@ use std::{
 /// This determined the frequency of checking a new PoW problem.
 /// And the current mining speed in the Rust implementation is about 2 ms per
 /// nonce.
-const NONCES_PER_ATTEMPT: u64 = 20;
-const FETCH_PROBLEM_INTERVAL: Duration = Duration::from_millis(100);
+const NONCES_PER_ATTEMPT: u64 = 100;
+const FETCH_PROBLEM_INTERVAL: Duration = Duration::from_millis(1);
 
 use crate::{BlockGenerator, SolutionReceiver};
 
