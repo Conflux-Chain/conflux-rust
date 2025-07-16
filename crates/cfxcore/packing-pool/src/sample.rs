@@ -27,11 +27,11 @@ pub enum SampleTag {
 ///
 /// The iterator operates in three phases:
 /// 1. **Random Sampling Phase**: Based on the random packing algorithm,
-/// addresses are selected from high    to low gas prices of their first
+/// addresses are selected from high to low gas prices of their first
 /// transaction. The probability of inclusion is determined by the algorithm.
-/// Transactions not selected    are placed in a candidate queue.
+/// Transactions not selected are placed in a candidate queue.
 /// 2. **Candidate Queue Phase**: Transactions from the candidate queue are
-/// output in a random order. Transactions    with a higher probability in the
+/// output in a random order. Transactions with a higher probability in the
 /// first phase have a greater chance of appearing earlier in this phase.
 /// 3. **Remaining Transactions Phase**: Remaining addresses are output in
 /// descending order of their first transaction gas prices.
