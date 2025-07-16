@@ -4,7 +4,7 @@ mod transaction;
 use crate::{AccountInfo, Config, SpecName};
 pub use block::*;
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{Address, H256};
+use cfx_types::{Address, H256, U256};
 use serde::{de, Deserialize, Deserializer};
 use std::collections::{BTreeMap, HashMap};
 pub use transaction::*;
@@ -13,10 +13,11 @@ pub use transaction::*;
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 pub struct BlockchainTestSuite(pub BTreeMap<String, BlockchainTestUnit>);
 
+// https://eest.ethereum.org/main/consuming_tests/blockchain_test/#structures
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockchainTestUnit {
-    pub network: SpecName,
+    pub network: SpecName, // deprecated, use config.network instead
     pub genesis_block_header: BlockHeader,
     pub pre: HashMap<Address, AccountInfo>,
     pub post_state: HashMap<Address, AccountInfo>,
@@ -25,7 +26,7 @@ pub struct BlockchainTestUnit {
     #[serde(default, rename = "genesisRLP")]
     pub genesis_rlp: Bytes,
     pub blocks: Vec<TestBlock>,
-    pub seal_engine: String,
+    pub seal_engine: String, // deprecated
     /// Test info is optional.
     #[serde(default, rename = "_info")]
     pub info: Option<serde_json::Value>,
@@ -35,6 +36,15 @@ pub struct BlockchainTestUnit {
 pub enum TestBlock {
     Block(Block),
     InvalidBlock(InvalidBlock),
+}
+
+impl TestBlock {
+    pub fn get_excess_blog_gas(&self) -> Option<U256> {
+        match self {
+            TestBlock::Block(block) => block.block_header.excess_blob_gas,
+            TestBlock::InvalidBlock(_block) => None,
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for TestBlock {
