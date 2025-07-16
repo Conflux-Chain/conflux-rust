@@ -113,6 +113,7 @@ use cfxcore::{
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
 };
 use diem_types::account_address::AccountAddress;
+use rlp_bool::CompatibleBool;
 use serde::Serialize;
 
 #[derive(Debug)]
@@ -710,7 +711,7 @@ impl RpcImpl {
             },
         )) = self.consensus.get_transaction_info_by_hash(&hash)
         {
-            if tx.space() == Space::Ethereum || tx_index.is_phantom {
+            if tx.space() == Space::Ethereum || tx_index.is_phantom.into() {
                 return Ok(None);
             }
 
@@ -853,7 +854,7 @@ impl RpcImpl {
         let tx = &exec_info.block.transactions[id];
 
         if !include_eth_receipt
-            && (tx.space() == Space::Ethereum || tx_index.is_phantom)
+            && (tx.space() == Space::Ethereum || tx_index.is_phantom.into())
         {
             return Ok(None);
         }
@@ -904,7 +905,7 @@ impl RpcImpl {
                 Some(tx_index) => tx_index,
             };
 
-        if tx_index.is_phantom {
+        if tx_index.is_phantom.into() {
             return Ok(None);
         }
 
@@ -966,7 +967,7 @@ impl RpcImpl {
                 TransactionIndex {
                     block_hash,
                     real_index: original_index,
-                    is_phantom: false,
+                    is_phantom: CompatibleBool(false),
                     rpc_index: Some(new_index),
                 },
                 &exec_info,
@@ -2220,7 +2221,7 @@ impl RpcImpl {
             let tx_index = TransactionIndex {
                 block_hash: b.hash(),
                 real_index: id,
-                is_phantom: false,
+                is_phantom: CompatibleBool(false),
                 rpc_index: Some(cfx_transaction_index),
             };
             let tx_exec_error_msg = &execution_result

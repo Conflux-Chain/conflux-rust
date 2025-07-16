@@ -4,7 +4,7 @@ use super::{
 };
 use cfx_vm_types::CallType;
 use rlp::*;
-
+use rlp_bool::CompatibleBool;
 #[test]
 fn encode_flat_transaction_traces() {
     let ftt = TransactionExecTraces::from(Vec::new());
@@ -43,7 +43,7 @@ fn test_trace_serialization() {
             input: vec![],
             call_type: CallType::Call,
         }),
-        valid: true,
+        valid: CompatibleBool(true),
     };
 
     let flat_trace1 = ExecTrace {
@@ -56,7 +56,7 @@ fn test_trace_serialization() {
             input: vec![0x41, 0xc0, 0xe1, 0xb5],
             call_type: CallType::Call,
         }),
-        valid: true,
+        valid: CompatibleBool(true),
     };
 
     let block_traces = BlockExecTraces(vec![

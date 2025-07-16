@@ -18,13 +18,13 @@ use network::{
 };
 use parking_lot::RwLock;
 use rand::prelude::{IndexedRandom, SliceRandom};
+use rlp_bool::CompatibleBool;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
 };
 use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
-
 #[derive(DeriveMallocSizeOf)]
 pub struct SynchronizationPeerState {
     pub node_id: NodeId,
@@ -220,10 +220,9 @@ impl SynchronizationState {
             }
             for (_, state_lock) in &*peers {
                 let state = state_lock.read();
-                if state
-                    .capabilities
-                    .contains(DynamicCapability::NormalPhase(true))
-                {
+                if state.capabilities.contains(DynamicCapability::NormalPhase(
+                    CompatibleBool(true),
+                )) {
                     fresh_start = false;
                     peer_best_epoches.push(state.best_epoch);
                 } else if state.best_epoch != 0 {

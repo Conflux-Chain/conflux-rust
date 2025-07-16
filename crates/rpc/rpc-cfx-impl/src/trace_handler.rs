@@ -118,7 +118,7 @@ impl TraceHandler {
             .transaction_index_by_hash(tx_hash, true /* update_cache */)?;
 
         // FIXME(thegaram): do we support traces for phantom txs?
-        if tx_index.is_phantom {
+        if tx_index.is_phantom.into() {
             return None;
         }
 
@@ -156,7 +156,7 @@ impl TraceHandler {
             .map(|trace| RpcLocalizedTrace {
                 action: RpcAction::try_from(trace.action, self.network)
                     .expect("local address convert error"),
-                valid: trace.valid,
+                valid: trace.valid.into(),
                 epoch_hash: Some(pivot_hash),
                 epoch_number: Some(epoch_number.into()),
                 block_hash: Some(tx_index.block_hash),

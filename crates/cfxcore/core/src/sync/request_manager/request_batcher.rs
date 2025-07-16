@@ -6,6 +6,7 @@ use crate::{
     NodeType,
 };
 use cfx_types::H256;
+use rlp_bool::CompatibleBool;
 use std::{cmp::min, time::Duration};
 
 const DEFAULT_REQUEST_BATCHER_BUCKET_NUMBER: usize = 30;
@@ -100,7 +101,7 @@ impl RequestBatcher {
                 delay,
                 Box::new(GetBlocks {
                     request_id: 0,
-                    with_public: false,
+                    with_public: CompatibleBool(false),
                     hashes,
                     preferred_node_type: preferred_node_type.clone(),
                 }) as Box<dyn Request>,

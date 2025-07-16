@@ -41,7 +41,7 @@ pub fn get_state_for_genesis_write() -> State {
 
 fn u256_to_vec(val: &U256) -> Vec<u8> {
     let mut key = vec![0; 32];
-    val.to_big_endian(key.as_mut());
+    val.write_as_big_endian(key.as_mut());
     key
 }
 
