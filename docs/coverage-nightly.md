@@ -6,8 +6,8 @@
 ## Install Dependencies
 
 ```bash
-rustup toolchain install nightly-2025-02-14
-rustup override set nightly-2025-02-14
+rustup toolchain install nightly-2025-02-01
+rustup override set nightly-2025-02-01
 cargo +stable install cargo-llvm-cov --locked
 ```
 
