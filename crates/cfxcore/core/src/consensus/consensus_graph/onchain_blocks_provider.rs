@@ -9,6 +9,9 @@ use cfx_types::H256;
 use primitives::{compute_block_number, EpochNumber};
 use std::cmp::min;
 
+pub const EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE: &str =
+    "Invalid params: expected a numbers with less than largest epoch number.";
+
 impl ConsensusGraph {
     /// Returns the total number of blocks processed in consensus graph.
     ///
@@ -40,7 +43,7 @@ impl ConsensusGraph {
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.inner.read_recursive().best_epoch_number() {
-                    return Err("Invalid params: expected a numbers with less than largest epoch number.".to_owned());
+                    return Err(EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE.to_owned());
                 }
                 epoch_num
             }

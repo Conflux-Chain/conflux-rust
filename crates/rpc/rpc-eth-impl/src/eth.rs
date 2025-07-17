@@ -32,6 +32,7 @@ use cfx_types::{
 use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
+    consensus::EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE,
     errors::{Error as CoreError, Result as CoreResult},
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
@@ -606,13 +607,19 @@ impl EthApi {
                         .map_err(RpcError::invalid_params)?
                 }
                 _ => {
-                    self.consensus_graph()
-                        .get_phantom_block_by_number(
-                            block_num.try_into()?,
-                            None,
-                            false, /* include_traces */
-                        )
-                        .map_err(RpcError::invalid_params)?
+                    match self.consensus_graph().get_phantom_block_by_number(
+                        block_num.try_into()?,
+                        None,
+                        false, /* include_traces */
+                    ) {
+                        Ok(pb) => pb,
+                        Err(e) if e == EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE => {
+                            None
+                        }
+                        Err(e) => {
+                            return Err(RpcError::invalid_params(e).into());
+                        }
+                    }
                 }
             }
         };

@@ -22,7 +22,7 @@ pub use consensus_graph::{
     rpc_api::transaction_provider::{
         MaybeExecutedTxExtraInfo, TransactionInfo,
     },
-    ConsensusGraph,
+    ConsensusGraph, EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE,
 };
 pub use statistics::ConsensusGraphStatistics;
 
