@@ -27,6 +27,7 @@ use crate::{
     verification::VerificationConfig,
     NodeType, Notifications,
 };
+pub use onchain_blocks_provider::EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE;
 
 use cfx_executor::spec::CommonParams;
 
