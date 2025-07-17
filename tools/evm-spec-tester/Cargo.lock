@@ -3956,6 +3956,7 @@ dependencies = [
  "log",
  "metrics",
  "mio 0.6.23",
+ "mio-extras",
  "parking_lot 0.12.1",
  "slab",
 ]
@@ -4700,6 +4701,18 @@ dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mio-extras"
+version = "2.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52403fe290012ce777c4626790c8951324a2b9e3316b3143779c72b029742f19"
+dependencies = [
+ "lazycell",
+ "log",
+ "mio 0.6.23",
+ "slab",
 ]
 
 [[package]]

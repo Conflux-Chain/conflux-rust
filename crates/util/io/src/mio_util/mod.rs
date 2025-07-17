@@ -1,10 +1,10 @@
 #![allow(unused)]
-mod channel;
 mod event_loop;
 mod handler;
 mod io;
 mod notify;
-pub mod timer;
+use mio_extras::channel;
+pub use mio_extras::timer;
 
 pub use event_loop::{EventLoop, EventLoopBuilder, Sender};
 pub use handler::Handler;

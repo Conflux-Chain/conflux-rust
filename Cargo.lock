@@ -4677,6 +4677,7 @@ dependencies = [
  "log",
  "metrics",
  "mio 0.6.23",
+ "mio-extras",
  "parking_lot 0.12.1",
  "slab",
 ]
