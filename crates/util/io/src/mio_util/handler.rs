@@ -1,9 +1,9 @@
 use super::EventLoop;
-use mio::{Ready, Token};
+use mio::{event::Event, Token};
 
 #[allow(unused_variables)]
 pub trait Handler: Sized {
-    type Timeout;
+    type TimeoutState;
     type Message;
 
     /// Invoked when the socket represented by `token` is ready to be operated
@@ -16,11 +16,7 @@ pub trait Handler: Sized {
     ///
     /// This function will only be invoked a single time per socket per event
     /// loop tick.
-    fn ready(
-        &mut self, event_loop: &mut EventLoop<Self>, token: Token,
-        events: Ready,
-    ) {
-    }
+    fn ready(&mut self, event_loop: &mut EventLoop<Self>, event: Event) {}
 
     /// Invoked when a message has been received via the event loop's channel.
     fn notify(&mut self, event_loop: &mut EventLoop<Self>, msg: Self::Message) {
@@ -28,7 +24,8 @@ pub trait Handler: Sized {
 
     /// Invoked when a timeout has completed.
     fn timeout(
-        &mut self, event_loop: &mut EventLoop<Self>, timeout: Self::Timeout,
+        &mut self, event_loop: &mut EventLoop<Self>,
+        timeout: Self::TimeoutState,
     ) {
     }
 

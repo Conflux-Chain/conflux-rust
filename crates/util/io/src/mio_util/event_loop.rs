@@ -1,11 +1,17 @@
-use super::{
-    channel,
-    timer::{Builder as TimerBuilder, Timeout, Timer},
-    Handler, NotifyError,
-};
+use super::{Handler, NotifyError};
 use log::trace;
-use mio::{event::Evented, Event, Events, Poll, PollOpt, Ready, Token};
-use std::{default::Default, fmt, io, time::Duration, usize};
+use mio::{
+    event::{Event, Source},
+    Events, Interest, Poll, Token, Waker,
+};
+use mio_misc::{channel, queue::NotificationQueue, NotificationId};
+use mio_timer::{Builder as TimerBuilder, Timeout, Timer};
+use std::{
+    default::Default,
+    fmt, io,
+    sync::{mpsc, Arc},
+    time::Duration,
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct EventLoopBuilder {
@@ -88,15 +94,17 @@ pub struct EventLoop<H: Handler> {
     run: bool,
     poll: Poll,
     events: Events,
-    timer: Timer<H::Timeout>,
+    timer: Timer<H::TimeoutState>,
     notify_tx: channel::SyncSender<H::Message>,
-    notify_rx: channel::Receiver<H::Message>,
+    notify_rx: mpsc::Receiver<H::Message>,
     config: Config,
+    timer_noti_id: NotificationId,
+    channel_noti_id: NotificationId,
+    notify_queue: Arc<NotificationQueue>,
 }
 
 // Token used to represent notifications
-const NOTIFY: Token = Token(usize::MAX - 1);
-const TIMER: Token = Token(usize::MAX - 2);
+const NOTIFY_OR_TIMER: Token = Token(usize::MAX - 1);
 
 impl<H: Handler> EventLoop<H> {
     /// Constructs a new `EventLoop` using the default configuration values.
@@ -109,23 +117,25 @@ impl<H: Handler> EventLoop<H> {
         // Create the IO poller
         let poll = Poll::new()?;
 
-        let timer = TimerBuilder::default()
+        let mut timer = TimerBuilder::default()
             .tick_duration(config.timer_tick)
             .num_slots(config.timer_wheel_size)
             .capacity(config.timer_capacity)
             .build();
 
-        // Create cross thread notification queue
-        let (tx, rx) = channel::sync_channel(config.notify_capacity);
+        let timer_noti_id = NotificationId::gen_next();
+        let channel_noti_id = NotificationId::gen_next();
 
-        // Register the notification wakeup FD with the IO poller
-        poll.register(
-            &rx,
-            NOTIFY,
-            Ready::readable(),
-            PollOpt::edge() | PollOpt::oneshot(),
-        )?;
-        poll.register(&timer, TIMER, Ready::readable(), PollOpt::edge())?;
+        let waker = Arc::new(Waker::new(poll.registry(), NOTIFY_OR_TIMER)?);
+        let notify_queue = Arc::new(NotificationQueue::new(waker));
+
+        // Create cross thread notification queue
+        let (tx, rx) = channel::sync_channel(
+            notify_queue.clone(),
+            channel_noti_id,
+            config.notify_capacity,
+        );
+        timer.register(notify_queue.clone(), timer_noti_id)?;
 
         Ok(EventLoop {
             run: true,
@@ -135,6 +145,9 @@ impl<H: Handler> EventLoop<H> {
             notify_rx: rx,
             config,
             events: Events::with_capacity(1024),
+            timer_noti_id,
+            channel_noti_id,
+            notify_queue,
         })
     }
 
@@ -170,7 +183,9 @@ impl<H: Handler> EventLoop<H> {
     ///
     /// Returns a handle to the timeout that can be used to cancel the timeout
     /// using [#clear_timeout](#method.clear_timeout).
-    pub fn timeout(&mut self, token: H::Timeout, delay: Duration) -> Timeout {
+    pub fn timeout(
+        &mut self, token: H::TimeoutState, delay: Duration,
+    ) -> Timeout {
         self.timer.set_timeout(delay, token)
     }
 
@@ -190,18 +205,32 @@ impl<H: Handler> EventLoop<H> {
 
     /// Registers an IO handle with the event loop.
     pub fn register<E: ?Sized>(
-        &mut self, io: &E, token: Token, interest: Ready, opt: PollOpt,
+        &mut self, io: &mut E, token: Token, interest: Interest,
     ) -> io::Result<()>
-    where E: Evented {
-        self.poll.register(io, token, interest, opt)
+    where E: Source {
+        self.poll.registry().register(io, token, interest)
     }
 
     /// Re-Registers an IO handle with the event loop.
     pub fn reregister<E: ?Sized>(
-        &mut self, io: &E, token: Token, interest: Ready, opt: PollOpt,
+        &mut self, io: &mut E, token: Token, interest: Interest,
     ) -> io::Result<()>
-    where E: Evented {
-        self.poll.reregister(io, token, interest, opt)
+    where E: Source {
+        self.poll.registry().reregister(io, token, interest)
+    }
+
+    /// Deregisters an IO handle with the event loop.
+    ///
+    /// Both kqueue and epoll will automatically clear any pending events when
+    /// closing a file descriptor (socket). In that case, this method does
+    /// not need to be called prior to dropping a connection from the slab.
+    ///
+    /// Warning: kqueue effectively builds in deregister when using
+    /// edge-triggered mode with oneshot. Calling `deregister()` on the
+    /// socket will cause a TcpStream error.
+    pub fn deregister<E: ?Sized>(&mut self, io: &mut E) -> io::Result<()>
+    where E: Source {
+        self.poll.registry().deregister(io)
     }
 
     /// Keep spinning the event loop indefinitely, and notify the handler
@@ -217,20 +246,6 @@ impl<H: Handler> EventLoop<H> {
         Ok(())
     }
 
-    /// Deregisters an IO handle with the event loop.
-    ///
-    /// Both kqueue and epoll will automatically clear any pending events when
-    /// closing a file descriptor (socket). In that case, this method does
-    /// not need to be called prior to dropping a connection from the slab.
-    ///
-    /// Warning: kqueue effectively builds in deregister when using
-    /// edge-triggered mode with oneshot. Calling `deregister()` on the
-    /// socket will cause a TcpStream error.
-    pub fn deregister<E: ?Sized>(&mut self, io: &E) -> io::Result<()>
-    where E: Evented {
-        self.poll.deregister(io)
-    }
-
     /// Spin the event loop once, with a given timeout (forever if `None`),
     /// and notify the handler if any of the registered handles become ready
     /// during that time.
@@ -242,77 +257,66 @@ impl<H: Handler> EventLoop<H> {
         // Check the registered IO handles for any new events. Each poll
         // is for one second, so a shutdown request can last as long as
         // one second before it takes effect.
-        let events = match self.io_poll(timeout) {
-            Ok(e) => e,
-            Err(err) => {
-                if err.kind() == io::ErrorKind::Interrupted {
-                    handler.interrupted(self);
-                    0
-                } else {
-                    return Err(err);
-                }
+        if let Err(err) = self.io_poll(timeout) {
+            if err.kind() == io::ErrorKind::Interrupted {
+                handler.interrupted(self);
+            } else {
+                return Err(err);
             }
-        };
+        }
 
-        self.io_process(handler, events);
+        self.io_process(handler);
         handler.tick(self);
         Ok(())
     }
 
     #[inline]
-    fn io_poll(&mut self, timeout: Option<Duration>) -> io::Result<usize> {
+    fn io_poll(&mut self, timeout: Option<Duration>) -> io::Result<()> {
         self.poll.poll(&mut self.events, timeout)
     }
 
     // Process IO events that have been previously polled
-    fn io_process(&mut self, handler: &mut H, cnt: usize) {
-        let mut i = 0;
-
-        trace!("io_process(..); cnt={}; len={}", cnt, self.events.len());
-
+    fn io_process(&mut self, handler: &mut H) {
         // Iterate over the notifications. Each event provides the token
         // it was registered with (which usually represents, at least, the
         // handle that the event is about) as well as information about
         // what kind of event occurred (readable, writable, signal, etc.)
-        while i < cnt {
-            let evt = self.events.get(i).unwrap();
+        let events: Vec<Event> =
+            self.events.iter().map(|e| e.clone()).collect();
 
-            trace!("event={:?}; idx={:?}", evt, i);
-
+        for evt in events {
             match evt.token() {
-                NOTIFY => self.notify(handler),
-                TIMER => self.timer_process(handler),
+                NOTIFY_OR_TIMER => {
+                    // channel and timer use the same token, so we need to
+                    // check both the channel and the timer
+                    self.notify(handler);
+                    self.timer_process(handler);
+                }
                 _ => self.io_event(handler, evt),
             }
-
-            i += 1;
         }
     }
 
     fn io_event(&mut self, handler: &mut H, evt: Event) {
-        handler.ready(self, evt.token(), evt.readiness());
+        handler.ready(self, evt);
     }
 
     fn notify(&mut self, handler: &mut H) {
         for _ in 0..self.config.messages_per_tick {
             match self.notify_rx.try_recv() {
-                Ok(msg) => handler.notify(self, msg),
+                Ok(msg) => {
+                    handler.notify(self, msg);
+                    let _ = self.notify_queue.pop();
+                }
                 _ => break,
             }
         }
-
-        // Re-register
-        let _ = self.poll.reregister(
-            &self.notify_rx,
-            NOTIFY,
-            Ready::readable(),
-            PollOpt::edge() | PollOpt::oneshot(),
-        );
     }
 
     fn timer_process(&mut self, handler: &mut H) {
         while let Some(t) = self.timer.poll() {
             handler.timeout(self, t);
+            let _ = self.notify_queue.pop();
         }
     }
 }

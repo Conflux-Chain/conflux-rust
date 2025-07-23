@@ -17,7 +17,7 @@ use diem_crypto::{bls::BLS_PUBLIC_KEY_LENGTH, ValidCryptoMaterial};
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::{IoContext, StreamToken};
 use log::{debug, trace};
-use mio::{tcp::TcpStream, Poll, Token};
+use mio::{net::TcpStream, Poll, Token};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
 use serde::Deserialize;
@@ -177,10 +177,10 @@ impl Session {
     /// Register event loop for the underlying connection.
     /// If session expired, no effect taken.
     pub fn register_socket(
-        &self, reg: Token, event_loop: &Poll,
+        &mut self, reg: Token, event_loop: &Poll,
     ) -> Result<(), Error> {
         if !self.expired() {
-            self.connection().register_socket(reg, event_loop)?;
+            self.connection_mut().register_socket(reg, event_loop)?;
         }
 
         Ok(())
@@ -188,15 +188,17 @@ impl Session {
 
     /// Update the event loop for the underlying connection.
     pub fn update_socket(
-        &self, reg: Token, event_loop: &Poll,
+        &mut self, reg: Token, event_loop: &Poll,
     ) -> Result<(), Error> {
-        self.connection().update_socket(reg, event_loop)?;
+        self.connection_mut().update_socket(reg, event_loop)?;
         Ok(())
     }
 
     /// Deregister the event loop for the underlying connection.
-    pub fn deregister_socket(&self, event_loop: &Poll) -> Result<(), Error> {
-        self.connection().deregister_socket(event_loop)?;
+    pub fn deregister_socket(
+        &mut self, event_loop: &Poll,
+    ) -> Result<(), Error> {
+        self.connection_mut().deregister_socket(event_loop)?;
         Ok(())
     }
 

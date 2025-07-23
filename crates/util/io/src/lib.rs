@@ -114,6 +114,7 @@ where Message: Send + Sync + 'static
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parking_lot::Mutex;
     use std::{
         sync::{atomic, Arc},
         thread,
@@ -142,7 +143,7 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicBool::new(false)));
-        let poll = Arc::new(Poll::new().unwrap());
+        let poll = Arc::new(Mutex::new(Poll::new().unwrap()));
 
         let service = IoService::<MyMessage>::start(poll)
             .expect("Error creating network service");
@@ -177,7 +178,7 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicBool::new(false)));
-        let poll = Arc::new(Poll::new().unwrap());
+        let poll = Arc::new(Mutex::new(Poll::new().unwrap()));
 
         let service = IoService::<MyMessage>::start(poll)
             .expect("Error creating network service");
@@ -209,7 +210,7 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicUsize::new(0)));
-        let poll = Arc::new(Poll::new().unwrap());
+        let poll = Arc::new(Mutex::new(Poll::new().unwrap()));
 
         let service = IoService::<MyMessage>::start(poll)
             .expect("Error creating network service");

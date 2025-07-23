@@ -289,6 +289,8 @@ allow-git = [
     "https://github.com/aleksuss/pipe-logger-lib.git",
 
     "https://github.com/andrcmdr/vrf-rs.git",
+    "https://github.com/Pana/mio-timer",
+    "https://github.com/Pana/mio-misc",
 ]
 
 [sources.allow-org]
