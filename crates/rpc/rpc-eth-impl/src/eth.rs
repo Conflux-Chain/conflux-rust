@@ -1168,9 +1168,6 @@ impl EthApiServer for EthApi {
     }
 
     /// Returns the EIP-2718 encoded transaction if it exists.
-    ///
-    /// If this is a EIP-4844 transaction that is in the pool it will include
-    /// the sidecar.
     async fn raw_transaction_by_hash(
         &self, hash: H256,
     ) -> RpcResult<Option<Bytes>> {
