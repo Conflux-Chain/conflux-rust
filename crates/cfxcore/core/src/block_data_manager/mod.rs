@@ -51,6 +51,7 @@ use cfx_internal_common::{
 use db_gc_manager::GCProgress;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::pos::PosBlockId;
+use rlp_bool::CompatibleBool;
 use std::{hash::Hash, path::Path, time::Duration};
 
 lazy_static! {
@@ -272,7 +273,7 @@ impl BlockDataManager {
                     &TransactionIndex {
                         block_hash: cur_era_genesis_hash,
                         real_index: index,
-                        is_phantom: false,
+                        is_phantom: CompatibleBool(false),
                         // FIXME(thegaram): do we allow EVM txs in genesis?
                         rpc_index: Some(index),
                     },
@@ -1304,7 +1305,7 @@ impl BlockDataManager {
                             &TransactionIndex {
                                 block_hash: *block_hash,
                                 real_index: tx_idx,
-                                is_phantom: false,
+                                is_phantom: CompatibleBool(false),
                                 rpc_index: Some(rpc_index),
                             },
                         );
@@ -1315,7 +1316,7 @@ impl BlockDataManager {
                                 &TransactionIndex {
                                     block_hash: *block_hash,
                                     real_index: tx_idx,
-                                    is_phantom: true,
+                                    is_phantom: CompatibleBool(true),
                                     rpc_index: Some(evm_tx_index),
                                 },
                             );

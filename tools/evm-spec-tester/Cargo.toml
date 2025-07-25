@@ -22,7 +22,7 @@ cfx-bytes = { path = "../../crates/cfx_bytes" }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 walkdir = "2.5"
 thiserror = "2.0.11"
-rlp = "0.4.0"
+rlp = "0.6.1"
 hex = "0.4.3"
 hex-literal = "0.4.1"
 

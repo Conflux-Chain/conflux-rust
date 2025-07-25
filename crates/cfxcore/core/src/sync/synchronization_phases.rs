@@ -16,6 +16,7 @@ use cfx_internal_common::StateAvailabilityBoundary;
 use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use network::NetworkContext;
 use parking_lot::RwLock;
+use rlp_bool::CompatibleBool;
 use std::{
     collections::HashMap,
     sync::{
@@ -25,7 +26,6 @@ use std::{
     thread,
     time::{self, Instant},
 };
-
 /// Both Archive and Full node go through the following phases:
 ///     CatchUpRecoverBlockHeaderFromDB --> CatchUpSyncBlockHeader -->
 ///     CatchUpCheckpoint --> CatchUpFillBlockBody -->
@@ -203,7 +203,8 @@ impl SynchronizationPhaseTrait for CatchUpRecoverBlockHeaderFromDbPhase {
             return self.phase_type();
         }
 
-        DynamicCapability::ServeHeaders(true).broadcast(io, &sync_handler.syn);
+        DynamicCapability::ServeHeaders(CompatibleBool(true))
+            .broadcast(io, &sync_handler.syn);
         SyncPhaseType::CatchUpSyncBlockHeader
     }
 

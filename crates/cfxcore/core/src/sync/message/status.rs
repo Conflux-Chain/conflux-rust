@@ -15,6 +15,7 @@ use crate::{
 use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_types::H256;
 use network::{NODE_TAG_ARCHIVE, NODE_TAG_FULL, NODE_TAG_NODE_TYPE};
+use rlp_bool::CompatibleBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{collections::HashSet, time::Instant};
 use throttling::token_bucket::TokenBucketManager;
@@ -111,7 +112,7 @@ impl Handleable for StatusV2 {
 
             peer_state
                 .capabilities
-                .insert(DynamicCapability::NormalPhase(true));
+                .insert(DynamicCapability::NormalPhase(CompatibleBool(true)));
 
             debug!(
                 "New peer (pv={:?}, gh={:?})",
@@ -238,7 +239,7 @@ impl Handleable for StatusV3 {
 
             peer_state
                 .capabilities
-                .insert(DynamicCapability::NormalPhase(true));
+                .insert(DynamicCapability::NormalPhase(CompatibleBool(true)));
 
             debug!(
                 "New peer (pv={:?}, gh={:?})",

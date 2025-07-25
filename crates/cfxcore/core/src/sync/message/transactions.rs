@@ -23,10 +23,10 @@ use network::service::ProtocolVersion;
 use primitives::{transaction::TxPropagateId, TransactionWithSignature};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_bool::CompatibleBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use siphasher::sip::SipHasher24;
 use std::{any::Any, collections::HashSet, hash::Hasher, time::Duration};
-
 #[derive(Debug, PartialEq)]
 pub struct Transactions {
     pub transactions: Vec<TransactionWithSignature>,
@@ -59,7 +59,7 @@ impl Handleable for Transactions {
             let mut peer_info = peer_info.write();
             if peer_info
                 .notified_capabilities
-                .contains(DynamicCapability::NormalPhase(false))
+                .contains(DynamicCapability::NormalPhase(CompatibleBool(false)))
             {
                 peer_info.received_transaction_count += transactions.len();
                 peer_info.received_transaction_count
@@ -132,7 +132,7 @@ impl Handleable for TransactionDigests {
             let mut peer_info = peer_info.write();
             if peer_info
                 .notified_capabilities
-                .contains(DynamicCapability::NormalPhase(false))
+                .contains(DynamicCapability::NormalPhase(CompatibleBool(false)))
             {
                 peer_info.received_transaction_count += self.short_ids.len()
                     / Self::SHORT_ID_SIZE_IN_BYTES
@@ -315,7 +315,7 @@ impl Message for GetTransactions {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 
@@ -474,7 +474,7 @@ impl Message for GetTransactionsFromTxHashes {
     fn encode(&self) -> Vec<u8> {
         let mut encoded = self.rlp_bytes();
         self.push_msg_id_leb128_encoding(&mut encoded);
-        encoded
+        encoded.into()
     }
 }
 

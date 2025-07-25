@@ -228,8 +228,8 @@ impl Receipt {
                 .map_or_else(Default::default, Into::into),
             epoch_number: epoch_number.map(U64::from),
             tx_exec_error_msg,
-            gas_covered_by_sponsor: gas_sponsor_paid,
-            storage_covered_by_sponsor: storage_sponsor_paid,
+            gas_covered_by_sponsor: gas_sponsor_paid.into(),
+            storage_covered_by_sponsor: storage_sponsor_paid.into(),
             storage_collateralized,
             storage_released: storage_released
                 .into_iter()
