@@ -1,10 +1,17 @@
-use crate::util::{find_all_json_tests, make_configuration};
+mod unit_tester;
+
+use crate::{test_cmd_runner::EestTestCmdTrait, util::make_configuration};
+pub use unit_tester::BlockchainUnitTester;
+
 use cfx_config::Configuration;
 use clap::Args;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 /// ethereum statetest doc: https://eest.ethereum.org/main/consuming_tests/state_test/
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct BlockchainTestCmd {
     /// Paths to blockchain test files or directories
     #[arg(required = true)]
@@ -19,38 +26,36 @@ pub struct BlockchainTestCmd {
     pub(super) matches: Option<String>,
 }
 
-impl BlockchainTestCmd {
-    pub fn run(&self) -> bool {
-        for path in &self.paths {
-            if !path.exists() {
-                panic!("Path not exists: {:?}", path);
-            }
+impl EestTestCmdTrait for BlockchainTestCmd {
+    fn get_matches(&self) -> &Option<String> { &self.matches }
 
-            let test_files = find_all_json_tests(path);
+    fn get_paths(&self) -> &Vec<PathBuf> { &self.paths }
 
-            if test_files.is_empty() {
-                error!("No fixtures found in directory: {:?}", path);
-                continue;
-            }
+    fn get_config(&self) -> &Arc<Configuration> { &self.config }
 
-            if let Err(_) = self.run_file_tests(test_files, path) {
-                warn!("Failed to run tests in directory: {:?}", path);
-                continue;
-            }
+    fn skip_test(&self, path: &Path) -> bool {
+        let folder_to_skip = [
+            "eip7002_el_triggerable_withdrawals", /* conflux do not support
+                                                   * 7002 */
+            "eip4788_beacon_root/beacon_root_contract",
+            "eip4844_blobs",
+            "eip7251_consolidations",
+            "eip4895_withdrawals",
+        ];
+        let path_str = path.to_str().unwrap();
+        if folder_to_skip
+            .iter()
+            .any(|folder| path_str.contains(folder))
+        {
+            return true;
         }
 
-        true
-    }
+        let name_to_skip: Vec<&str> = vec![];
+        let file_name = path.file_name().unwrap().to_str().unwrap();
+        if name_to_skip.contains(&file_name) {
+            return true;
+        }
 
-    fn run_file_tests(
-        &self, test_files: Vec<PathBuf>, path: &PathBuf,
-    ) -> Result<(), String> {
-        info!(
-            "Running {} TestSuites in {}",
-            test_files.len(),
-            path.display()
-        );
-
-        Ok(())
+        false
     }
 }
