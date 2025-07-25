@@ -11,7 +11,7 @@ use cfx_rpc_cfx_types::{
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
     AccessListResult, AccountOverride, AccountPendingTransactions, Block,
-    BlockNumber as BlockId, BlockOverrides, Bundle, Error, EthCallResponse,
+    BlockNumber as BlockId, BlockOverrides, Bundle, EthCallResponse,
     EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides, FeeHistory,
     Header, Log, Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock,
     StateContext, SyncInfo, SyncStatus, Transaction, TransactionRequest,
@@ -44,7 +44,9 @@ use primitives::{
 };
 use rustc_hex::ToHex;
 use solidity_abi::string_revert_reason_decode;
-use std::{collections::HashMap, future::Future};
+use std::{
+    collections::HashMap, future::Future, thread::sleep, time::Duration,
+};
 
 type BlockNumber = BlockId;
 type BlockNumberOrTag = BlockId;
@@ -85,21 +87,43 @@ impl EthApi {
     pub fn fetch_block_by_height(
         &self, height: u64,
     ) -> Result<PhantomBlock, String> {
-        self.consensus_graph()
-            .get_phantom_block_by_number(
-                EpochNumber::Number(height),
-                None,
-                false,
-            )?
-            .ok_or("Specified block header does not exist".to_string())
+        let retry_times = 5;
+        for _ in 0..retry_times {
+            let maybe_block =
+                self.consensus_graph().get_phantom_block_by_number(
+                    EpochNumber::Number(height),
+                    None,
+                    false, /* include_traces */
+                )?;
+            if let Some(block) = maybe_block {
+                return Ok(block);
+            }
+            sleep(Duration::from_millis(500));
+        }
+        Err(format!(
+            "Failed to fetch espace block at height {} after {} retries",
+            height, retry_times
+        ))
     }
 
     pub fn fetch_block_by_hash(
         &self, hash: &H256,
     ) -> Result<PhantomBlock, String> {
-        self.consensus_graph()
-            .get_phantom_block_by_hash(hash, false)?
-            .ok_or("Specified block header does not exist".into())
+        let retry_times = 5;
+        for _ in 0..retry_times {
+            let maybe_block =
+                self.consensus_graph().get_phantom_block_by_hash(
+                    hash, false, /* include_traces */
+                )?;
+            if let Some(block) = maybe_block {
+                return Ok(block);
+            }
+            sleep(Duration::from_millis(500));
+        }
+        Err(format!(
+            "Failed to fetch espace block by hash {} after {} retries",
+            hash, retry_times
+        ))
     }
 
     fn convert_block_number_to_epoch_number(
@@ -109,12 +133,11 @@ impl EthApi {
             let consensus_graph = self.consensus_graph();
             match consensus_graph.get_block_epoch_number(&hash) {
                 Some(num) => {
-                    // do not expose non-pivot blocks in eth RPC
+                    // recheck hash is the last block of the epoch
                     let pivot = consensus_graph
                         .get_block_hashes_by_epoch(EpochNumber::Number(num))?
                         .last()
                         .cloned();
-
                     if Some(hash) != pivot {
                         return Err(format!("Block {} not found", hash));
                     }
@@ -124,7 +147,7 @@ impl EthApi {
                 None => return Err(format!("Block {} not found", hash)),
             }
         } else {
-            block_number.try_into().map_err(|e: Error| e.to_string())
+            Ok(block_number.try_into().expect("successful conversion"))
         }
     }
 
