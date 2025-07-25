@@ -1675,6 +1675,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-types",
  "cfx-vm-types",
+ "criterion",
  "keccak-hash",
  "lazy_static",
  "log",
