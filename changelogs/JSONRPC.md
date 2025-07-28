@@ -1,16 +1,23 @@
 # JSON-RPC CHANGELOG
 
-## v2.5.0
+## v3.0.0
 
-EIP-7702 related RPC:
+Below RPC add support for EIP-7702 tx:
 
 1. eth_call & eth_estimateGas
-2. transaction related RPCs: eth_getTransactionByHash, eth_blockByNumber, eth_blockByHash, eth_getBlockReceipts, parity_getBlockReceipts
+2. transaction related RPCs: eth_getTransactionByHash, eth_blockByNumber, eth_blockByHash
 
-## vNext
+Misc changes:
 
 1. Support gasFee in transaction receipt for espace RPC
-2. eSpace block.gasLimit change to half of the consensus gas limit, add block.espaceGasLimit to return the real gas limit for eSpace transactions.
+2. eSpace `block.gasLimit` change to half of the consensus gas limit, add `block.espaceGasLimit` to return the real gas limit for eSpace transactions.
+3. eSpace parity style trace RPCs updates:
+   1. Trace RPC methods now compatible with parity and erigon, including `trace_block`, `trace_transaction`, `trace_filter`, this is a `API breaking change`
+   2. Two new RPCs `trace_get` and `trace_blockSetAuth` are added
+   3. `trace_blockSetAuth` is a Conflux specific RPC used to get the block set auth result, check [trace doc](../docs/transaction-trace/parity-style-trace.md) for details.
+   4. These trace methods now support `SelfDestruct(Suicide)` trace, to access historical selfdestruct transaction data, a resync of the data is required.
+4. eSpace now support geth style `txpool` namespace methods, including: `txpool_status`, `txpool_inspect`, `txpool_content`, `txpool_contentFrom`
+5. `eth_call`, `eth_estimateGas` add support for `stateoverride` feature.
 
 ## v2.4.1
 

@@ -92,7 +92,7 @@ contract HashedTimelock {
     
     /**
      * @dev Sender sets up a new hash time lock contract depositing the ETH and 
-     * providing the reciever lock terms.
+     * providing the receiver lock terms.
      *
      * @param _receiver Receiver of the ETH.
      * @param _hashlock A sha-2 sha256 hash hashlock.

@@ -64,11 +64,6 @@ feature-depth = 1
 # https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
 [advisories]
 
-# This three options below will temporarily downgrade all errors in the project to warnings, This allow the CI to pass. if you need to test locally. comment them.
-vulnerability='warn'
-unmaintained='warn'
-unsound='warn'
-
 # The path where the advisory databases are cloned/fetched into
 #db-path = "$CARGO_HOME/advisory-dbs"
 # The url(s) of the advisory databases to use
@@ -80,6 +75,19 @@ ignore = [
     #{ id = "RUSTSEC-0000-0000", reason = "you can specify a reason the advisory is ignored" },
     #"a-crate-that-is-yanked@0.1.1", # you can also ignore yanked crate versions if you wish
     #{ crate = "a-crate-that-is-yanked@0.1.1", reason = "you can specify why you are ignoring the yanked crate" },
+    "RUSTSEC-2024-0320", # yaml-rust unmaintained
+    "RUSTSEC-2022-0070", # secp256k1 unsound
+    "RUSTSEC-2024-0370", # proc-macro-error unmaintained
+    "RUSTSEC-2024-0436", # paste unmaintained
+    "RUSTSEC-2022-0080", # parity-util-mem unmaintained
+    "RUSTSEC-2020-0016", # net2 unmaintained
+    "RUSTSEC-2024-0384", # instant unmaintained
+    "RUSTSEC-2024-0388", # derivative unmaintained
+    "RUSTSEC-2021-0064", # cpuid-bool unmaintained
+    "RUSTSEC-2021-0139", # ansi_term unmaintained
+    "RUSTSEC-2021-0059", # aesni unmaintained
+    "RUSTSEC-2021-0060", # aes-soft unmaintained
+    "RUSTSEC-2021-0061", # aes-ctr unmaintained
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.
@@ -280,7 +288,7 @@ allow-git = [
     # diem-logger -> pipe-logger-lib
     "https://github.com/aleksuss/pipe-logger-lib.git",
 
-
+    "https://github.com/andrcmdr/vrf-rs.git",
 ]
 
 [sources.allow-org]

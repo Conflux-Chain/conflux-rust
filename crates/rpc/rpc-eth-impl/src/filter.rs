@@ -14,13 +14,13 @@ use cfx_rpc_eth_types::{
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
     invalid_request_msg, jsonrpc_error_to_error_object_owned,
 };
+use cfx_tasks::TaskExecutor;
 use cfx_types::{H128 as FilterId, H256};
 use cfx_util_macros::bail;
 use cfxcore::{channel::Channel, SharedConsensusGraph, SharedTransactionPool};
 use jsonrpsee::core::RpcResult;
 use primitives::filter::LogFilter;
 use std::{collections::VecDeque, sync::Arc};
-use tokio::runtime::Runtime;
 
 type PendingTransactionFilterKind = ();
 
@@ -31,7 +31,7 @@ pub struct EthFilterApi {
 impl EthFilterApi {
     pub fn new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
-        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Arc<Runtime>,
+        epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: TaskExecutor,
         poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
     ) -> EthFilterApi {
         let eth_filter = EthFilterHelper::new(

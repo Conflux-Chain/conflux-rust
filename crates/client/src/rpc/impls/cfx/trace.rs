@@ -10,17 +10,14 @@ use crate::{
             EpochNumber as RpcEpochNumber, LocalizedBlockTrace, LocalizedTrace,
             TraceFilter as RpcTraceFilter,
         },
-        CoreResult,
     },
 };
 use cfx_addr::Network;
-use cfx_execute_helper::exec_tracer::TraceFilter as PrimitiveTraceFilter;
-use cfx_parity_trace_types::LocalizedTrace as PrimitiveLocalizedTrace;
 use cfx_rpc_cfx_impl::TraceHandler as CfxTraceHandler;
-use cfx_rpc_cfx_types::trace::EpochTrace;
+use cfx_rpc_eth_types::trace::EpochTrace;
 use cfx_types::H256;
 
-use cfxcore::{ConsensusGraph, SharedConsensusGraph};
+use cfxcore::SharedConsensusGraph;
 use jsonrpc_core::Result as JsonRpcResult;
 
 #[derive(Clone)]
@@ -33,16 +30,6 @@ impl TraceHandler {
         TraceHandler {
             inner: CfxTraceHandler::new(network, consensus),
         }
-    }
-
-    pub(crate) fn consensus_graph(&self) -> &ConsensusGraph {
-        self.inner.consensus_graph()
-    }
-
-    pub(crate) fn filter_primitives_traces_impl(
-        &self, filter: PrimitiveTraceFilter,
-    ) -> CoreResult<Option<Vec<PrimitiveLocalizedTrace>>> {
-        self.inner.filter_primitives_traces_impl(filter)
     }
 }
 

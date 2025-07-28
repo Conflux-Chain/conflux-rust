@@ -18,9 +18,7 @@ use cfx_internal_common::{
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
-use cfx_rpc_cfx_types::{
-    apis::ApiSet, eth_apis::EthApiSet, RpcImplConfiguration,
-};
+use cfx_rpc_cfx_types::{apis::ApiSet, RpcImplConfiguration};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -188,15 +186,16 @@ build_config! {
         (base_fee_burn_transition_number, (Option<u64>), Some(247480000))
         (base_fee_burn_transition_height, (Option<u64>), Some(101900000))
         (cip1559_transition_height, (Option<u64>), None)
-        (c2_fix_transition_height, (Option<u64>), Some(118580000))
         (cancun_opcodes_transition_number, (Option<u64>), None)
         (min_native_base_price, (Option<u64>), None)
         (min_eth_base_price, (Option<u64>), None)
         // V2.5
+        (c2_fix_transition_height, (Option<u64>), Some(118580000))
+        // V3.0
         (eoa_code_transition_height, (Option<u64>), None)
         (cip151_transition_height, (Option<u64>), None)
         (cip645_transition_height, (Option<u64>), None)
-
+        // For test only
         (align_evm_transition_height, (u64), u64::MAX)
 
 
@@ -222,7 +221,6 @@ build_config! {
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
         (jsonrpc_http_eth_port, (Option<u16>), None)
         (jsonrpc_ws_eth_port, (Option<u16>), None)
-        (jsonrpc_http_eth_port_v2, (Option<u16>), None)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -425,15 +423,8 @@ build_config! {
         // Development related section.
         (
             log_level, (LevelFilter), LevelFilter::Info, |l| {
-                match l {
-                    "off" => Ok(LevelFilter::Off),
-                    "error" => Ok(LevelFilter::Error),
-                    "warn" => Ok(LevelFilter::Warn),
-                    "info" => Ok(LevelFilter::Info),
-                    "debug" => Ok(LevelFilter::Debug),
-                    "trace" => Ok(LevelFilter::Trace),
-                    _ => Err("Invalid log_level".to_owned()),
-                }
+                LevelFilter::from_str(l)
+                    .map_err(|_| format!("Invalid log level: {}", l))
             }
         )
 
@@ -450,16 +441,12 @@ build_config! {
             ProvideExtraSnapshotSyncConfig::parse_config_list)
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
-        (public_evm_rpc_apis, (EthApiSet), EthApiSet::Evm, EthApiSet::from_str)
-        (public_evm_rpc_async_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
-        (single_mpt_space, (Option<Space>), None, |s| match s {
-            "native" => Ok(Space::Native),
-            "evm" => Ok(Space::Ethereum),
-            _ =>  Err("Invalid single_mpt_space".to_owned()),
-        })
+        (public_evm_rpc_apis, (RpcModuleSelection), RpcModuleSelection::Evm, RpcModuleSelection::from_str)
+        (single_mpt_space, (Option<Space>), None, Space::from_str)
     }
 }
 
+#[derive(Debug)]
 pub struct Configuration {
     pub raw_conf: RawConfiguration,
 }
@@ -477,11 +464,11 @@ impl Configuration {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
 
-        if matches.is_present("archive") {
+        if matches.get_flag("archive") {
             config.raw_conf.node_type = Some(NodeType::Archive);
-        } else if matches.is_present("full") {
+        } else if matches.get_flag("full") {
             config.raw_conf.node_type = Some(NodeType::Full);
-        } else if matches.is_present("light") {
+        } else if matches.get_flag("light") {
             config.raw_conf.node_type = Some(NodeType::Light);
         }
 
@@ -490,6 +477,12 @@ impl Configuration {
             .expect("called once");
 
         Ok(config)
+    }
+
+    pub fn from_file(config_path: &str) -> Result<Configuration, String> {
+        Ok(Configuration {
+            raw_conf: RawConfiguration::from_file(config_path)?,
+        })
     }
 
     fn network_id(&self) -> u64 {
@@ -624,7 +617,7 @@ impl Configuration {
                     let chain_id = self
                         .raw_conf
                         .chain_id
-                        .unwrap_or_else(|| rand::thread_rng().gen());
+                        .unwrap_or_else(|| rand::rng().random());
                     let evm_chain_id =
                         self.raw_conf.evm_chain_id.unwrap_or(chain_id);
                     *to_init = Some(ChainIdParamsInner::new_simple(
@@ -1489,10 +1482,6 @@ impl Configuration {
             self.raw_conf.base_fee_burn_transition_height.unwrap_or(default_transition_time);
             params.transition_heights => { cip130, cip133e }
         );
-        params.transition_heights.cip_c2_fix = self
-            .raw_conf
-            .c2_fix_transition_height
-            .unwrap_or(default_transition_time);
         // TODO: disable 1559 test during dev
         params.transition_heights.cip1559 = self
             .raw_conf
@@ -1512,7 +1501,15 @@ impl Configuration {
         }
 
         //
-        // 7702 hardfork (V2.5)
+        // hardfork (V2.5)
+        //
+        params.transition_heights.cip_c2_fix = self
+            .raw_conf
+            .c2_fix_transition_height
+            .unwrap_or(default_transition_time);
+
+        //
+        // 7702 hardfork (V2.6)
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);

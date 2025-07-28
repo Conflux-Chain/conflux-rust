@@ -1,5 +1,10 @@
 name: Tests
 
+env:
+  RUST_VERSION: 1.86.0
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
 on:
   push:
     branches: [master]
@@ -24,33 +29,45 @@ on:
       - "cargo_fmt.sh"
       - "CODEOWNERS"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  check-crates:
+  check-workspace:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
       - name: Setup Cargo Cache
         uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache debug build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/debug/deps
-            target/debug/.fingerprint
-            target/debug/build
-            !target/debug/build/**/out
-            !target/debug/deps/librust_verify*
-            !target/debug/incremental
-            !target/debug/.cargo-lock
-          key: ${{ runner.os }}-build-crates-debug-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-crates-debug-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
+      - name: Check workspace
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo check --all --locked
 
+  check-individual-crates:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
       - name: Check individual crates
         run: |
           ./dev-support/check-crates.sh
@@ -62,32 +79,22 @@ jobs:
       - name: Free up space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android
-
       - name: Setup Cargo Cache
         uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/release/deps
-            target/release/.fingerprint
-            target/release/build
-            !target/release/build/**/out
-            !target/release/incremental
-            !target/release/.cargo-lock
-          key: ${{ runner.os }}-build-workspace-release-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-workspace-release-
-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
       - name: Run build bench
+        env:
+          RUSTFLAGS: -D warnings
         run: |
           cargo bench --all --no-run
 
       - name: Run workspace tests
+        env:
+          RUSTFLAGS: -D warnings
         run: |
           cargo install cargo-nextest --version "0.9.85" --locked
           cargo nextest run --no-fail-fast --release --workspace
@@ -99,29 +106,16 @@ jobs:
       - name: Free up space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android
-
       - name: Setup Cargo Cache
         uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache debug build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/debug/deps
-            target/debug/.fingerprint
-            target/debug/build
-            !target/debug/build/**/out
-            !target/debug/deps/librust_verify*
-            !target/debug/incremental
-            !target/debug/.cargo-lock
-          key: ${{ runner.os }}-build-addr-debug-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-addr-debug-
-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
       - name: Run cfx-addr
+        env:
+          RUSTFLAGS: -D warnings
         run: |
           cargo install cargo-nextest --version "0.9.85" --locked
           cargo nextest run --no-fail-fast -p cfx-addr --no-default-features
@@ -130,9 +124,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
       - name: Setup Cargo Cache
         uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
@@ -151,24 +146,10 @@ jobs:
       - name: Free up space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android
-
       - name: Setup Cargo Cache
         uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache release artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/release/deps
-            target/release/.fingerprint
-            target/release/build
-            !target/release/build/**/out
-            !target/release/incremental
-            !target/release/.cargo-lock
-          key: ${{ runner.os }}-build-evm-spec-tester-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-evm-spec-tester-
-
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
@@ -180,7 +161,30 @@ jobs:
         run: tar --use-compress-program="zstd --long=31" -xvf evm-spec-test.tar.zst
 
       - name: Build in release mode
-        run: cargo build --release --bin evm-spec-tester
+        working-directory: ./tools/evm-spec-tester
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo run --release --locked -- statetest ../../testdata/evm-spec-test
 
-      - name: Run EVM spec tests
-        run: cargo run --release --bin evm-spec-tester -- testdata/evm-spec-test
+  consensus-bench-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install Dependencies
+        uses: ./.github/actions/install-dependencies
+
+      - name: Run build
+        working-directory: ./tools/consensus_bench
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo check --locked

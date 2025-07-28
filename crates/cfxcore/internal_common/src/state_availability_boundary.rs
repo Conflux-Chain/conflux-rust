@@ -1,13 +1,10 @@
 // Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
-#[derive(Derivative, Clone)]
-#[derivative(Debug)]
-#[derive(MallocSizeOf)]
+#[derive(Clone, Debug, MallocSizeOf)]
 pub struct StateAvailabilityBoundary {
     /// This is the hash of blocks in pivot chain based on current graph.
-    #[derivative(Debug = "ignore")]
+    #[debug(ignore)]
     pub pivot_chain: Vec<H256>,
 
     pub synced_state_height: u64,
@@ -152,6 +149,6 @@ impl StateAvailabilityBoundary {
 
 use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
 use cfx_types::{Space, H256};
-use derivative::Derivative;
+use derive_more::Debug;
 use malloc_size_of_derive::MallocSizeOf;
 use primitives::BlockHeader;
