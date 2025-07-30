@@ -1,3 +1,0 @@
-(function() {var implementors = {
-"io":[["impl&lt;Message&gt; Handler for <a class=\"struct\" href=\"io/struct.IoManager.html\" title=\"struct io::IoManager\">IoManager</a>&lt;Message&gt;<div class=\"where\">where\n    Message: <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Send.html\" title=\"trait core::marker::Send\">Send</a> + <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/marker/trait.Sync.html\" title=\"trait core::marker::Sync\">Sync</a> + 'static,</div>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

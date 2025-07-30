@@ -1,4 +1,5 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/rpc/rpc-common-impl/src/trace/conversion.rs`."><title>conversion.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-081576b923113409.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfx_rpc_common_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (fb898629a 2024-04-21)" data-channel="nightly" data-search-js="search-bf21c90c8c1d92b1.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../cfx_rpc_common_impl/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Type ‘S’ or ‘/’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/rpc/rpc-common-impl/src/trace/conversion.rs`."><title>conversion.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cf3c48c1.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfx_rpc_common_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0-nightly (854f22563 2025-01-31)" data-channel="nightly" data-search-js="search-2d513d54.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-302de22f.js"></script><script defer src="../../../static.files/src-script-8fee9dc5.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-9b5d7e41.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cfx_rpc_common_impl/trace/</div>conversion.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -75,56 +76,100 @@
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>cfx_addr::Network;
-<span class="kw">use </span>cfx_parity_trace_types::{
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_parity_trace_types::{
     ExecTrace, LocalizedTrace <span class="kw">as </span>PrimitiveLocalizedTrace,
 };
-<span class="kw">use </span>cfx_rpc_cfx_types::{
-    trace::Action <span class="kw">as </span>RpcAction,
-    trace_eth::{LocalizedTrace <span class="kw">as </span>EthLocalizedTrace, Res <span class="kw">as </span>EthRes},
+<span class="kw">use </span>cfx_rpc_eth_types::trace::{
+    Action, ActionResult <span class="kw">as </span>EthRes, LocalizedTrace <span class="kw">as </span>EthLocalizedTrace,
 };
 <span class="kw">use </span>cfx_types::H256;
 
-<span class="kw">use </span><span class="kw">super</span>::matcher::{construct_parity_trace, TraceWithPosition};
+<span class="kw">use </span><span class="kw">super</span>::matcher::{
+    construct_parity_trace, CallCreateTraceWithPosition,
+    SelfDestructTraceWithPosition, TraceWithPosition,
+};
 
 <span class="kw">pub fn </span>into_eth_localized_traces(
     tx_traces: <span class="kw-2">&amp;</span>[ExecTrace], block_number: u64, block_hash: H256,
-    tx_hash: H256, tx_idx: usize, network: Network,
+    tx_hash: H256, tx_idx: usize,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;EthLocalizedTrace&gt;, String&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>eth_traces = <span class="macro">vec!</span>[];
-    <span class="kw">for </span>TraceWithPosition {
-        action,
-        result,
-        child_count,
-        trace_path,
-    } <span class="kw">in </span>construct_parity_trace(<span class="kw-2">&amp;</span>tx_traces)<span class="question-mark">?
-    </span>{
-        <span class="kw">let </span><span class="kw-2">mut </span>eth_trace = EthLocalizedTrace {
-            action: RpcAction::try_from(action.action.clone(), network)<span class="question-mark">?
-                </span>.try_into()<span class="question-mark">?</span>,
-            result: EthRes::None,
-            trace_address: trace_path,
-            subtraces: child_count,
-            transaction_position: tx_idx,
-            transaction_hash: tx_hash,
-            block_number,
-            block_hash,
-            <span class="comment">// action and its result should have the same `valid`.
-            </span>valid: action.valid,
-        };
+    <span class="kw">for </span>trace_with_position <span class="kw">in </span>construct_parity_trace(<span class="kw-2">&amp;</span>tx_traces)<span class="question-mark">? </span>{
+        <span class="kw">match </span>trace_with_position {
+            TraceWithPosition::CallCreate(CallCreateTraceWithPosition {
+                action,
+                result,
+                child_count,
+                trace_path,
+            }) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>eth_trace = EthLocalizedTrace {
+                    action: Action::try_from(action.action.clone())<span class="question-mark">?</span>,
+                    result: EthRes::None,
+                    trace_address: trace_path,
+                    subtraces: child_count,
+                    transaction_position: tx_idx,
+                    transaction_hash: tx_hash,
+                    block_number,
+                    block_hash,
+                    <span class="comment">// action and its result should have the same `valid`.
+                    </span>valid: action.valid,
+                };
 
-        eth_trace
-            .set_result(RpcAction::try_from(result.action.clone(), network)<span class="question-mark">?</span>)
-            .expect(<span class="string">"`construct_parity_trace` has guarantee the consistency"</span>);
+                eth_trace.set_result(<span class="prelude-val">Some</span>(result.action.clone())).expect(
+                    <span class="string">"`construct_parity_trace` has guarantee the consistency"</span>,
+                );
 
-        eth_traces.push(eth_trace);
+                eth_traces.push(eth_trace);
+            }
+            TraceWithPosition::Suicide(SelfDestructTraceWithPosition {
+                action,
+                child_count,
+                trace_path,
+            }) =&gt; {
+                <span class="kw">let </span>eth_trace = EthLocalizedTrace {
+                    action: Action::try_from(action.action.clone())<span class="question-mark">?</span>,
+                    result: EthRes::None,
+                    trace_address: trace_path,
+                    subtraces: child_count,
+                    transaction_position: tx_idx,
+                    transaction_hash: tx_hash,
+                    block_number,
+                    block_hash,
+                    <span class="comment">// action and its result should have the same `valid`.
+                    </span>valid: action.valid,
+                };
+
+                eth_traces.push(eth_trace);
+            }
+        }
     }
 
     <span class="prelude-val">Ok</span>(eth_traces)
 }
 
 <span class="kw">pub fn </span>primitive_traces_to_eth_localized_traces(
-    primitive_traces: <span class="kw-2">&amp;</span>[PrimitiveLocalizedTrace], network: Network,
+    primitive_traces: <span class="kw-2">&amp;</span>[PrimitiveLocalizedTrace],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;EthLocalizedTrace&gt;, String&gt; {
     <span class="kw">use </span>slice_group_by::GroupBy;
 
@@ -146,7 +191,6 @@
             first_tx.epoch_hash,
             first_tx.transaction_hash,
             first_tx.transaction_position.as_usize(),
-            network,
         )<span class="question-mark">?</span>;
         traces.extend(eth_traces);
     }

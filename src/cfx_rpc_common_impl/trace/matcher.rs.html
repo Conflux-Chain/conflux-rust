@@ -1,4 +1,5 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/rpc/rpc-common-impl/src/trace/matcher.rs`."><title>matcher.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-081576b923113409.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfx_rpc_common_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (fb898629a 2024-04-21)" data-channel="nightly" data-search-js="search-bf21c90c8c1d92b1.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../cfx_rpc_common_impl/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Type ‘S’ or ‘/’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/rpc/rpc-common-impl/src/trace/matcher.rs`."><title>matcher.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cf3c48c1.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="cfx_rpc_common_impl" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0-nightly (854f22563 2025-01-31)" data-channel="nightly" data-search-js="search-2d513d54.js" data-settings-js="settings-6dad6058.js" ><script src="../../../static.files/storage-302de22f.js"></script><script defer src="../../../static.files/src-script-8fee9dc5.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-9b5d7e41.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">cfx_rpc_common_impl/trace/</div>matcher.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -189,7 +190,64 @@
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>cfx_parity_trace_types::{Action, ExecTrace};
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_parity_trace_types::{Action, ExecTrace};
 
 <span class="doccomment">/// Converts raw EVM execution steps into Parity-compatible trace entries,
 /// pairing each action (call/create) with its corresponding result.
@@ -210,24 +268,40 @@
     <span class="prelude-val">Ok</span>(call_hierarchy.flatten_into_traces(<span class="macro">vec!</span>[]))
 }
 
+<span class="kw">pub enum </span>TraceWithPosition&lt;<span class="lifetime">'a</span>&gt; {
+    CallCreate(CallCreateTraceWithPosition&lt;<span class="lifetime">'a</span>&gt;),
+    Suicide(SelfDestructTraceWithPosition&lt;<span class="lifetime">'a</span>&gt;),
+}
+
 <span class="doccomment">/// Final trace output with execution position metadata
-</span><span class="kw">pub struct </span>TraceWithPosition&lt;<span class="lifetime">'a</span>&gt; {
+</span><span class="kw">pub struct </span>CallCreateTraceWithPosition&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">pub </span>action: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ExecTrace,
     <span class="kw">pub </span>result: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ExecTrace,
     <span class="kw">pub </span>child_count: usize,
     <span class="kw">pub </span>trace_path: Vec&lt;usize&gt;,
 }
 
+<span class="kw">pub struct </span>SelfDestructTraceWithPosition&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">pub </span>action: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ExecTrace,
+    <span class="kw">pub </span>child_count: usize,
+    <span class="kw">pub </span>trace_path: Vec&lt;usize&gt;,
+}
+
 <span class="doccomment">/// Represents an EVM execution frame with matched action-result pair
 /// and nested child frames (sub-calls).
-</span><span class="kw">pub struct </span>ResolvedTraceNode&lt;<span class="lifetime">'a</span>&gt; {
+</span><span class="kw">pub struct </span>CallCreateTraceNode&lt;<span class="lifetime">'a</span>&gt; {
     action_trace: ActionTrace&lt;<span class="lifetime">'a</span>&gt;,
     result_trace: ResultTrace&lt;<span class="lifetime">'a</span>&gt;,
-    child_nodes: Vec&lt;ResolvedTraceNode&lt;<span class="lifetime">'a</span>&gt;&gt;,
+    child_nodes: Vec&lt;TraceNode&lt;<span class="lifetime">'a</span>&gt;&gt;,
     total_child_count: usize,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ResolvedTraceNode&lt;<span class="lifetime">'a</span>&gt; {
+<span class="kw">enum </span>TraceNode&lt;<span class="lifetime">'a</span>&gt; {
+    CallCreate(CallCreateTraceNode&lt;<span class="lifetime">'a</span>&gt;),
+    Suicide(SelfDestructTrace&lt;<span class="lifetime">'a</span>&gt;),
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; CallCreateTraceNode&lt;<span class="lifetime">'a</span>&gt; {
     <span class="doccomment">/// Creates a new node after validating action-result type consistency.
     ///
     /// # Arguments
@@ -237,7 +311,7 @@
     ///   message call)
     </span><span class="kw">fn </span>new(
         action: ActionTrace&lt;<span class="lifetime">'a</span>&gt;, result: ResultTrace&lt;<span class="lifetime">'a</span>&gt;,
-        children: Vec&lt;ResolvedTraceNode&lt;<span class="lifetime">'a</span>&gt;&gt;,
+        children: Vec&lt;TraceNode&lt;<span class="lifetime">'a</span>&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, String&gt; {
         <span class="comment">// Validate action-result type pairing
         </span><span class="kw">match </span>(<span class="kw-2">&amp;</span>action.<span class="number">0</span>.action, <span class="kw-2">&amp;</span>result.<span class="number">0</span>.action) {
@@ -253,7 +327,13 @@
 
         <span class="comment">// Calculate total children count (direct + indirect)
         </span><span class="kw">let </span>total_child_count = children.len()
-            + children.iter().map(|x| x.total_child_count).sum::&lt;usize&gt;();
+            + children
+                .iter()
+                .map(|x| <span class="kw">match </span>x {
+                    TraceNode::CallCreate(node) =&gt; node.total_child_count,
+                    TraceNode::Suicide(<span class="kw">_</span>) =&gt; <span class="number">0</span>,
+                })
+                .sum::&lt;usize&gt;();
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             action_trace: action,
@@ -269,19 +349,34 @@
         <span class="self">self</span>, trace_path: Vec&lt;usize&gt;,
     ) -&gt; Box&lt;<span class="kw">dyn </span><span class="lifetime">'a </span>+ Iterator&lt;Item = TraceWithPosition&lt;<span class="lifetime">'a</span>&gt;&gt;&gt; {
         <span class="comment">// Current node's trace entry
-        </span><span class="kw">let </span>root_entry = std::iter::once(TraceWithPosition {
-            action: <span class="self">self</span>.action_trace.<span class="number">0</span>,
-            result: <span class="self">self</span>.result_trace.<span class="number">0</span>,
-            child_count: <span class="self">self</span>.total_child_count,
-            trace_path: trace_path.clone(),
-        });
+        </span><span class="kw">let </span>root_entry = std::iter::once(TraceWithPosition::CallCreate(
+            CallCreateTraceWithPosition {
+                action: <span class="self">self</span>.action_trace.<span class="number">0</span>,
+                result: <span class="self">self</span>.result_trace.<span class="number">0</span>,
+                child_count: <span class="self">self</span>.total_child_count,
+                trace_path: trace_path.clone(),
+            },
+        ));
 
         <span class="comment">// Recursively process child nodes
         </span><span class="kw">let </span>child_entries = <span class="self">self</span>.child_nodes.into_iter().enumerate().flat_map(
             <span class="kw">move </span>|(idx, child)| {
                 <span class="kw">let </span><span class="kw-2">mut </span>child_path = trace_path.clone();
                 child_path.push(idx);
-                child.flatten_into_traces(child_path)
+                <span class="kw">match </span>child {
+                    TraceNode::CallCreate(child) =&gt; {
+                        child.flatten_into_traces(child_path)
+                    }
+                    TraceNode::Suicide(suicide) =&gt; {
+                        Box::new(std::iter::once(TraceWithPosition::Suicide(
+                            SelfDestructTraceWithPosition {
+                                action: suicide.<span class="number">0</span>,
+                                child_count: <span class="number">0</span>,
+                                trace_path: child_path,
+                            },
+                        )))
+                    }
+                }
             },
         );
 
@@ -293,12 +388,11 @@
 /// Returns root node of the execution tree.
 </span><span class="kw">pub fn </span>build_call_hierarchy&lt;<span class="lifetime">'a</span>&gt;(
     traces: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>[ExecTrace],
-) -&gt; <span class="prelude-ty">Result</span>&lt;ResolvedTraceNode&lt;<span class="lifetime">'a</span>&gt;, String&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;CallCreateTraceNode&lt;<span class="lifetime">'a</span>&gt;, String&gt; {
     <span class="comment">// Stack tracks unclosed actions and their collected children
-    </span><span class="kw">let </span><span class="kw-2">mut </span>unclosed_actions: Vec&lt;(ActionTrace, Vec&lt;ResolvedTraceNode&gt;)&gt; =
-        <span class="macro">vec!</span>[];
+    </span><span class="kw">let </span><span class="kw-2">mut </span>unclosed_actions: Vec&lt;(ActionTrace, Vec&lt;TraceNode&gt;)&gt; = <span class="macro">vec!</span>[];
 
-    <span class="comment">// Filter out internal transfer events (handled separately)
+    <span class="comment">// Filter out internal transfer and set auth events (handled separately)
     </span><span class="kw">let </span><span class="kw-2">mut </span>iter = traces.iter().filter(|x| {
         !<span class="macro">matches!</span>(
             x.action,
@@ -325,12 +419,12 @@
                     ));
                 };
 
-                <span class="kw">let </span>node = ResolvedTraceNode::new(action, result, children)<span class="question-mark">?</span>;
+                <span class="kw">let </span>node = CallCreateTraceNode::new(action, result, children)<span class="question-mark">?</span>;
 
                 <span class="comment">// Attach to parent if exists, otherwise return as root
                 </span><span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, parent_children)) = unclosed_actions.last_mut()
                 {
-                    parent_children.push(node);
+                    parent_children.push(TraceNode::CallCreate(node));
                 } <span class="kw">else </span>{
                     <span class="kw">return if let </span><span class="prelude-val">Some</span>(trace) = iter.next() {
                         <span class="prelude-val">Err</span>(<span class="macro">format!</span>(
@@ -342,7 +436,16 @@
                     };
                 }
             }
-
+            Action::SelfDestruct(<span class="kw">_</span>) =&gt; {
+                <span class="kw">let </span>action = SelfDestructTrace::try_from(trace).unwrap();
+                <span class="comment">// Attach to parent if exists, otherwise return as root
+                </span><span class="kw">if let </span><span class="prelude-val">Some</span>((<span class="kw">_</span>, parent_children)) = unclosed_actions.last_mut()
+                {
+                    parent_children.push(TraceNode::Suicide(action));
+                } <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"selfdestruct trace should have parent"</span>.into());
+                }
+            }
             <span class="comment">// Filtered out earlier
             </span>Action::InternalTransferAction(<span class="kw">_</span>) | Action::SetAuth(<span class="kw">_</span>) =&gt; {
                 <span class="macro">unreachable!</span>()
@@ -377,6 +480,19 @@
         <span class="kw">match </span>trace.action {
             Action::CallResult(<span class="kw">_</span>) | Action::CreateResult(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self</span>(trace)),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="string">"Not a result trace"</span>),
+        }
+    }
+}
+
+<span class="kw">struct </span>SelfDestructTrace&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>ExecTrace);
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; TryFrom&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>ExecTrace&gt; <span class="kw">for </span>SelfDestructTrace&lt;<span class="lifetime">'a</span>&gt; {
+    <span class="kw">type </span>Error = <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str;
+
+    <span class="kw">fn </span>try_from(trace: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ExecTrace) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">match </span>trace.action {
+            Action::SelfDestruct(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="self">Self</span>(trace)),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="string">"Not a self-destruct trace"</span>),
         }
     }
 }

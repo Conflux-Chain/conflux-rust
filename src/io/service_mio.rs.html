@@ -1,4 +1,5 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/util/io/src/service_mio.rs`."><title>service_mio.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-081576b923113409.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="io" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (fb898629a 2024-04-21)" data-channel="nightly" data-search-js="search-bf21c90c8c1d92b1.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../io/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Type ‘S’ or ‘/’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/util/io/src/service_mio.rs`."><title>service_mio.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-cf3c48c1.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="io" data-themes="" data-resource-suffix="" data-rustdoc-version="1.86.0-nightly (854f22563 2025-01-31)" data-channel="nightly" data-search-js="search-2d513d54.js" data-settings-js="settings-6dad6058.js" ><script src="../../static.files/storage-302de22f.js"></script><script defer src="../../static.files/src-script-8fee9dc5.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-9b5d7e41.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">io/</div>service_mio.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers">
+<a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -777,19 +778,7 @@
 <a href="#777" id="777">777</a>
 <a href="#778" id="778">778</a>
 <a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a>
-<a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
-<a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
-</pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+<a href="#780" id="780">780</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -810,18 +799,14 @@
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">use crate</span>::{
+    mio_util::{timer::Timeout, EventLoop, EventLoopBuilder, Handler, Sender},
     worker::{SocketWorker, Work, WorkType, Worker},
     IoError, IoHandler,
 };
-<span class="kw">use </span>crossbeam_deque;
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>log::{debug, error, trace, warn};
 <span class="kw">use </span>metrics::{register_meter_with_group, Meter, MeterTimer};
-<span class="kw">use </span>mio::{
-    deprecated::{EventLoop, EventLoopBuilder, Handler, Sender},
-    timer::Timeout,
-    <span class="kw-2">*</span>,
-};
+<span class="kw">use </span>mio::{Events, Poll, PollOpt, Ready, Registration, SetReadiness, Token};
 <span class="kw">use </span>parking_lot::{Mutex, RwLock};
 <span class="kw">use </span>slab::Slab;
 <span class="kw">use </span>std::{
@@ -834,7 +819,7 @@
 <span class="comment">// FIXME: Use a enum type instead for function calls.
 </span><span class="doccomment">/// Timer ID
 </span><span class="kw">pub type </span>TimerToken = usize;
-<span class="doccomment">/// Timer ID
+<span class="doccomment">/// Stream ID
 </span><span class="kw">pub type </span>StreamToken = usize;
 <span class="doccomment">/// IO Handler ID
 </span><span class="kw">pub type </span>HandlerId = usize;
@@ -850,9 +835,7 @@
 
 <span class="doccomment">/// Messages used to communicate with the event loop from other threads.
 </span><span class="attr">#[derive(Clone)]
-</span><span class="kw">pub enum </span>IoMessage&lt;Message&gt;
-<span class="kw">where </span>Message: Send + Sized
-{
+</span><span class="kw">pub enum </span>IoMessage&lt;Message: Send + Sized&gt; {
     <span class="doccomment">/// Shutdown the event loop
     </span>Shutdown,
     <span class="doccomment">/// Register a new protocol handler.
@@ -903,7 +886,7 @@
 <span class="kw">where </span>Message: Send + Sync + <span class="lifetime">'static
 </span>{
     channel: IoChannel&lt;Message&gt;,
-    handler: HandlerId,
+    handler_id: HandlerId,
 }
 
 <span class="kw">impl</span>&lt;Message&gt; IoContext&lt;Message&gt;
@@ -914,7 +897,10 @@
     </span><span class="kw">pub fn </span>new(
         channel: IoChannel&lt;Message&gt;, handler: HandlerId,
     ) -&gt; IoContext&lt;Message&gt; {
-        IoContext { handler, channel }
+        IoContext {
+            handler_id: handler,
+            channel,
+        }
     }
 
     <span class="doccomment">/// Register a new recurring IO timer. 'IoHandler::timeout' will be called
@@ -925,7 +911,7 @@
         <span class="self">self</span>.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: <span class="self">self</span>.handler,
+            handler_id: <span class="self">self</span>.handler_id,
             once: <span class="bool-val">false</span>,
             cancel_all: <span class="bool-val">false</span>,
         })<span class="question-mark">?</span>;
@@ -940,7 +926,7 @@
         <span class="self">self</span>.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: <span class="self">self</span>.handler,
+            handler_id: <span class="self">self</span>.handler_id,
             once: <span class="bool-val">true</span>,
             cancel_all: <span class="bool-val">true</span>,
         })<span class="question-mark">?</span>;
@@ -956,7 +942,7 @@
         <span class="self">self</span>.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: <span class="self">self</span>.handler,
+            handler_id: <span class="self">self</span>.handler_id,
             once: <span class="bool-val">true</span>,
             cancel_all: <span class="bool-val">false</span>,
         })<span class="question-mark">?</span>;
@@ -967,7 +953,7 @@
     </span><span class="kw">pub fn </span>clear_timer(<span class="kw-2">&amp;</span><span class="self">self</span>, token: TimerToken) -&gt; <span class="prelude-ty">Result</span>&lt;(), IoError&gt; {
         <span class="self">self</span>.channel.send_io(IoMessage::RemoveTimer {
             token,
-            handler_id: <span class="self">self</span>.handler,
+            handler_id: <span class="self">self</span>.handler_id,
         })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
@@ -976,7 +962,7 @@
     </span><span class="kw">pub fn </span>register_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, token: StreamToken) -&gt; <span class="prelude-ty">Result</span>&lt;(), IoError&gt; {
         <span class="self">self</span>.channel.send_io(IoMessage::RegisterStream {
             token,
-            handler_id: <span class="self">self</span>.handler,
+            handler_id: <span class="self">self</span>.handler_id,
         })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
@@ -985,7 +971,7 @@
     </span><span class="kw">pub fn </span>deregister_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, token: StreamToken) -&gt; <span class="prelude-ty">Result</span>&lt;(), IoError&gt; {
         <span class="self">self</span>.channel.send_io(IoMessage::DeregisterStream {
             token,
-            handler_id: <span class="self">self</span>.handler,
+            handler_id: <span class="self">self</span>.handler_id,
         })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
@@ -996,7 +982,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), IoError&gt; {
         <span class="self">self</span>.channel.send_io(IoMessage::UpdateStreamRegistration {
             token,
-            handler_id: <span class="self">self</span>.handler,
+            handler_id: <span class="self">self</span>.handler_id,
         })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
@@ -1027,7 +1013,7 @@
         // the handler is no longer active and can be considered as
         // unregistered.
         </span><span class="kw">let _ </span>= <span class="self">self</span>.channel.send_io(IoMessage::RemoveHandler {
-            handler_id: <span class="self">self</span>.handler,
+            handler_id: <span class="self">self</span>.handler_id,
         });
     }
 }
@@ -1140,9 +1126,7 @@
                         event_loop.clear_timeout(<span class="kw-2">&amp;</span>timer.timeout);
                     }
                 } <span class="kw">else </span>{
-                    event_loop
-                        .timeout(token, timer.delay)
-                        .expect(<span class="string">"Error re-registering user timer"</span>);
+                    event_loop.timeout(token, timer.delay);
                 }
                 <span class="self">self</span>.worker_channel.push(Work {
                     work_type: WorkType::Timeout,
@@ -1203,9 +1187,7 @@
                 cancel_all,
             } =&gt; {
                 <span class="kw">let </span>timer_id = token + handler_id * TOKENS_PER_HANDLER;
-                <span class="kw">let </span>timeout = event_loop
-                    .timeout(Token(timer_id), delay)
-                    .expect(<span class="string">"Error registering user timer"</span>);
+                <span class="kw">let </span>timeout = event_loop.timeout(Token(timer_id), delay);
                 <span class="self">self</span>.timers.write().insert(
                     timer_id,
                     UserTimer {
@@ -1290,9 +1272,7 @@
     }
 }
 
-<span class="kw">enum </span>Handlers&lt;Message&gt;
-<span class="kw">where </span>Message: Send
-{
+<span class="kw">enum </span>Handlers&lt;Message: Send&gt; {
     SharedCollection(Weak&lt;RwLock&lt;Slab&lt;Arc&lt;<span class="kw">dyn </span>IoHandler&lt;Message&gt;&gt;&gt;&gt;&gt;),
     Single(Weak&lt;<span class="kw">dyn </span>IoHandler&lt;Message&gt;&gt;),
 }
@@ -1310,9 +1290,7 @@
 
 <span class="doccomment">/// Allows sending messages into the event loop. All the IO handlers will get
 /// the message in the `message` callback.
-</span><span class="kw">pub struct </span>IoChannel&lt;Message&gt;
-<span class="kw">where </span>Message: Send
-{
+</span><span class="kw">pub struct </span>IoChannel&lt;Message: Send&gt; {
     channel: <span class="prelude-ty">Option</span>&lt;Sender&lt;IoMessage&lt;Message&gt;&gt;&gt;,
     handlers: Handlers&lt;Message&gt;,
 }
