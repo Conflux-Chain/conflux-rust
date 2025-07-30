@@ -206,7 +206,10 @@
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -296,6 +299,9 @@
             gas_sponsor_paid = <span class="bool-val">false</span>;
             storage_sponsor_paid = <span class="bool-val">false</span>;
         }
+        <span class="kw">if </span>spec.cip145_fix {
+            gas_sponsor_paid = <span class="bool-val">false</span>;
+        }
 
         <span class="kw">let </span>burnt_fee = spec.cip1559.then(|| {
             <span class="kw">let </span>target_burnt = tx.gas().saturating_mul(cost.burnt_gas_price);
@@ -330,7 +336,7 @@
             gas_sponsor_paid = <span class="bool-val">false</span>;
             storage_sponsor_paid = <span class="bool-val">false</span>;
         }
-        <span class="kw">if </span>spec.cip145 {
+        <span class="kw">if </span>spec.cip145 &amp;&amp; !spec.cip145_fix {
             gas_sponsor_paid = <span class="bool-val">false</span>;
         }
 

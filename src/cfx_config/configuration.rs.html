@@ -1617,7 +1617,11 @@
 <a href="#1616" id="1616">1616</a>
 <a href="#1617" id="1617">1617</a>
 <a href="#1618" id="1618">1618</a>
-<a href="#1619" id="1619">1619</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1619" id="1619">1619</a>
+<a href="#1620" id="1620">1620</a>
+<a href="#1621" id="1621">1621</a>
+<a href="#1622" id="1622">1622</a>
+<a href="#1623" id="1623">1623</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1814,6 +1818,7 @@
         </span>(eoa_code_transition_height, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
         (cip151_transition_height, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
         (cip645_transition_height, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
+        (cip145_fix_transition_height, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
         <span class="comment">// For test only
         </span>(align_evm_transition_height, (u64), u64::MAX)
 
@@ -3126,13 +3131,16 @@
         //
         </span><span class="macro">set_conf!</span>(
             <span class="self">self</span>.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights =&gt; { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935, eip7623 }
+            params.transition_heights =&gt; { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935, eip7623, cip145_fix }
         );
         <span class="kw">if let </span><span class="prelude-val">Some</span>(x) = <span class="self">self</span>.raw_conf.cip151_transition_height {
             params.transition_heights.cip151 = x;
         }
         <span class="kw">if let </span><span class="prelude-val">Some</span>(x) = <span class="self">self</span>.raw_conf.cip645_transition_height {
             params.transition_heights.cip645 = x;
+        }
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(x) = <span class="self">self</span>.raw_conf.cip145_fix_transition_height {
+            params.transition_heights.cip145_fix = x;
         }
         params.transition_heights.align_evm =
             <span class="self">self</span>.raw_conf.align_evm_transition_height;
