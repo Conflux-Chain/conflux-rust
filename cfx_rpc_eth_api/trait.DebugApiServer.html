@@ -26,15 +26,15 @@
              'life0: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.debug_trace_block_by_number" class="fn">debug_trace_block_by_number</a>&lt;'life0, 'async_trait&gt;(
         &amp;'life0 self,
-        block: BlockNumber,
+        block: <a class="enum" href="../cfx_rpc_eth_types/block_number/enum.BlockNumber.html" title="enum cfx_rpc_eth_types::block_number::BlockNumber">BlockNumber</a>,
         opts: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;GethDebugTracingOptions&gt;,
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;TraceResult&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
              'life0: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.debug_trace_call" class="fn">debug_trace_call</a>&lt;'life0, 'async_trait&gt;(
         &amp;'life0 self,
-        request: TransactionRequest,
-        block_number: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;BlockNumber&gt;,
+        request: <a class="struct" href="../cfx_rpc_eth_types/transaction_request/struct.TransactionRequest.html" title="struct cfx_rpc_eth_types::transaction_request::TransactionRequest">TransactionRequest</a>,
+        block_number: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../cfx_rpc_eth_types/block_number/enum.BlockNumber.html" title="enum cfx_rpc_eth_types::block_number::BlockNumber">BlockNumber</a>&gt;,
         opts: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;GethDebugTracingCallOptions&gt;,
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;GethTrace&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
@@ -67,14 +67,14 @@ transaction that corresponds to the given hash.</p>
     Self: 'async_trait,
     'life0: 'async_trait,</div></h4></section><section id="tymethod.debug_trace_block_by_number" class="method"><a class="src rightside" href="../src/cfx_rpc_eth_api/debug.rs.html#30-32">Source</a><h4 class="code-header">fn <a href="#tymethod.debug_trace_block_by_number" class="fn">debug_trace_block_by_number</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
-    block: BlockNumber,
+    block: <a class="enum" href="../cfx_rpc_eth_types/block_number/enum.BlockNumber.html" title="enum cfx_rpc_eth_types::block_number::BlockNumber">BlockNumber</a>,
     opts: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;GethDebugTracingOptions&gt;,
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;TraceResult&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,</div></h4></section><section id="tymethod.debug_trace_call" class="method"><a class="src rightside" href="../src/cfx_rpc_eth_api/debug.rs.html#35-38">Source</a><h4 class="code-header">fn <a href="#tymethod.debug_trace_call" class="fn">debug_trace_call</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
-    request: TransactionRequest,
-    block_number: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;BlockNumber&gt;,
+    request: <a class="struct" href="../cfx_rpc_eth_types/transaction_request/struct.TransactionRequest.html" title="struct cfx_rpc_eth_types::transaction_request::TransactionRequest">TransactionRequest</a>,
+    block_number: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../cfx_rpc_eth_types/block_number/enum.BlockNumber.html" title="enum cfx_rpc_eth_types::block_number::BlockNumber">BlockNumber</a>&gt;,
     opts: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;GethDebugTracingCallOptions&gt;,
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = RpcResult&lt;GethTrace&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
