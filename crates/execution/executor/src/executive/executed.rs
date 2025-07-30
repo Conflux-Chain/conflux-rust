@@ -88,9 +88,6 @@ impl Executed {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
-        if spec.cip145_fix {
-            gas_sponsor_paid = false;
-        }
 
         let burnt_fee = spec.cip1559.then(|| {
             let target_burnt = tx.gas().saturating_mul(cost.burnt_gas_price);
@@ -125,7 +122,7 @@ impl Executed {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
-        if spec.cip145 && !spec.cip145_fix {
+        if spec.cip145 {
             gas_sponsor_paid = false;
         }
 
