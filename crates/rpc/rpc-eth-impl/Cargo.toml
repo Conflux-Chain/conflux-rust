@@ -49,3 +49,4 @@ solidity-abi = { workspace = true }
 cfx-rpc-common-impl = { workspace = true }
 cfx-tasks = { workspace = true }
 cfx-parity-trace-types = { workspace = true }
+cfxcore-errors = { workspace = true }

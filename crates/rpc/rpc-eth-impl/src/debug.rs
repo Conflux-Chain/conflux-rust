@@ -46,7 +46,8 @@ impl DebugApi {
             | BlockNumber::Finalized => {
                 let epoch_num = block.try_into().expect("should success");
                 self.consensus_graph()
-                    .get_height_from_epoch_number(epoch_num)?
+                    .get_height_from_epoch_number(epoch_num)
+                    .map_err(|e| e.to_string())?
             }
             BlockNumber::Hash {
                 hash,
@@ -90,7 +91,7 @@ impl DebugApi {
         let epoch_block_hashes = self
             .consensus_graph()
             .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
-            .map_err(|err| CoreError::Msg(err))?;
+            .map_err(|err| CoreError::Msg(err.to_string()))?;
         let epoch_id = epoch_block_hashes
             .last()
             .ok_or(CoreError::Msg("should have block hash".to_string()))?;
