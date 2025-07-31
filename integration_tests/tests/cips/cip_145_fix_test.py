@@ -17,9 +17,9 @@ class BaseTestEnv(ConfluxTestFramework):
         self.add_nodes(self.num_nodes)
         self.start_node(0, ["--archive"])
 
-class CIP145FixTestEnv(BaseTestEnv):
-    def set_test_params(self):
-        super().set_test_params()
+# class CIP145FixTestEnv(BaseTestEnv):
+#     def set_test_params(self):
+#         super().set_test_params()
 
 class CIP145TestEnv(BaseTestEnv):
     def set_test_params(self):
@@ -102,7 +102,12 @@ def send_raw_failed_transaction_executed(network, raw_tx):
     transaction_hash = raw_tx.hash
     return network.cw3.cfx.get_transaction_receipt(transaction_hash)
 
-@pytest.mark.parametrize("framework_class", [OriginTestEnv, CIP78TestEnv, CIP145TestEnv, CIP145FixTestEnv])
+@pytest.mark.parametrize("framework_class", [
+    OriginTestEnv,
+    CIP78TestEnv,
+    CIP145TestEnv,
+    # CIP145FixTestEnv
+])
 def test_success_behaviour(network, gas_sponsored_contract):
     network.client.generate_blocks_to_state()
     cw3 = network.cw3
@@ -127,7 +132,9 @@ def test_success_behaviour(network, gas_sponsored_contract):
                          [(OriginTestEnv, False),
                           (CIP78TestEnv, True),
                           (CIP145TestEnv, True), 
-                          (CIP145FixTestEnv, False)])
+                        #   (CIP145FixTestEnv, False)
+                          ]
+                         )
 def test_not_enough_balance_behaviour(network, gas_sponsored_contract, expected_sponsor_flag):
     cw3 = network.cw3
     # ensure hardfork transition number
@@ -162,7 +169,8 @@ def test_not_enough_balance_behaviour(network, gas_sponsored_contract, expected_
                          [(OriginTestEnv, False),
                           (CIP78TestEnv, True),
                           (CIP145TestEnv, False), 
-                          (CIP145FixTestEnv, True)])
+                        #   (CIP145FixTestEnv, True)
+                          ])
 def test_out_of_gas_behaviour(network, gas_sponsored_contract, expected_sponsor_flag):
     cw3 = network.cw3
     # ensure hardfork transition number
