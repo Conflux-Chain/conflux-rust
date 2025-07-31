@@ -19,18 +19,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    mio_util::{timer::Timeout, EventLoop, EventLoopBuilder, Handler, Sender},
     worker::{SocketWorker, Work, WorkType, Worker},
     IoError, IoHandler,
 };
-use crossbeam_deque;
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use mio::{
-    deprecated::{EventLoop, EventLoopBuilder, Handler, Sender},
-    timer::Timeout,
-    *,
-};
+use mio::{Events, Poll, PollOpt, Ready, Registration, SetReadiness, Token};
 use parking_lot::{Mutex, RwLock};
 use slab::Slab;
 use std::{
@@ -43,7 +39,7 @@ use std::{
 // FIXME: Use a enum type instead for function calls.
 /// Timer ID
 pub type TimerToken = usize;
-/// Timer ID
+/// Stream ID
 pub type StreamToken = usize;
 /// IO Handler ID
 pub type HandlerId = usize;
@@ -59,9 +55,7 @@ lazy_static! {
 
 /// Messages used to communicate with the event loop from other threads.
 #[derive(Clone)]
-pub enum IoMessage<Message>
-where Message: Send + Sized
-{
+pub enum IoMessage<Message: Send + Sized> {
     /// Shutdown the event loop
     Shutdown,
     /// Register a new protocol handler.
@@ -112,7 +106,7 @@ pub struct IoContext<Message>
 where Message: Send + Sync + 'static
 {
     channel: IoChannel<Message>,
-    handler: HandlerId,
+    handler_id: HandlerId,
 }
 
 impl<Message> IoContext<Message>
@@ -123,7 +117,10 @@ where Message: Send + Sync + 'static
     pub fn new(
         channel: IoChannel<Message>, handler: HandlerId,
     ) -> IoContext<Message> {
-        IoContext { handler, channel }
+        IoContext {
+            handler_id: handler,
+            channel,
+        }
     }
 
     /// Register a new recurring IO timer. 'IoHandler::timeout' will be called
@@ -134,7 +131,7 @@ where Message: Send + Sync + 'static
         self.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
             once: false,
             cancel_all: false,
         })?;
@@ -149,7 +146,7 @@ where Message: Send + Sync + 'static
         self.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
             once: true,
             cancel_all: true,
         })?;
@@ -165,7 +162,7 @@ where Message: Send + Sync + 'static
         self.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
             once: true,
             cancel_all: false,
         })?;
@@ -176,7 +173,7 @@ where Message: Send + Sync + 'static
     pub fn clear_timer(&self, token: TimerToken) -> Result<(), IoError> {
         self.channel.send_io(IoMessage::RemoveTimer {
             token,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         })?;
         Ok(())
     }
@@ -185,7 +182,7 @@ where Message: Send + Sync + 'static
     pub fn register_stream(&self, token: StreamToken) -> Result<(), IoError> {
         self.channel.send_io(IoMessage::RegisterStream {
             token,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         })?;
         Ok(())
     }
@@ -194,7 +191,7 @@ where Message: Send + Sync + 'static
     pub fn deregister_stream(&self, token: StreamToken) -> Result<(), IoError> {
         self.channel.send_io(IoMessage::DeregisterStream {
             token,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         })?;
         Ok(())
     }
@@ -205,7 +202,7 @@ where Message: Send + Sync + 'static
     ) -> Result<(), IoError> {
         self.channel.send_io(IoMessage::UpdateStreamRegistration {
             token,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         })?;
         Ok(())
     }
@@ -236,7 +233,7 @@ where Message: Send + Sync + 'static
         // the handler is no longer active and can be considered as
         // unregistered.
         let _ = self.channel.send_io(IoMessage::RemoveHandler {
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         });
     }
 }
@@ -349,9 +346,7 @@ where Message: Send + Sync + 'static
                         event_loop.clear_timeout(&timer.timeout);
                     }
                 } else {
-                    event_loop
-                        .timeout(token, timer.delay)
-                        .expect("Error re-registering user timer");
+                    event_loop.timeout(token, timer.delay);
                 }
                 self.worker_channel.push(Work {
                     work_type: WorkType::Timeout,
@@ -412,9 +407,7 @@ where Message: Send + Sync + 'static
                 cancel_all,
             } => {
                 let timer_id = token + handler_id * TOKENS_PER_HANDLER;
-                let timeout = event_loop
-                    .timeout(Token(timer_id), delay)
-                    .expect("Error registering user timer");
+                let timeout = event_loop.timeout(Token(timer_id), delay);
                 self.timers.write().insert(
                     timer_id,
                     UserTimer {
@@ -499,9 +492,7 @@ where Message: Send + Sync + 'static
     }
 }
 
-enum Handlers<Message>
-where Message: Send
-{
+enum Handlers<Message: Send> {
     SharedCollection(Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>),
     Single(Weak<dyn IoHandler<Message>>),
 }
@@ -519,9 +510,7 @@ impl<Message: Send> Clone for Handlers<Message> {
 
 /// Allows sending messages into the event loop. All the IO handlers will get
 /// the message in the `message` callback.
-pub struct IoChannel<Message>
-where Message: Send
-{
+pub struct IoChannel<Message: Send> {
     channel: Option<Sender<IoMessage<Message>>>,
     handlers: Handlers<Message>,
 }
