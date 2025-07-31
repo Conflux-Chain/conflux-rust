@@ -32,11 +32,11 @@ use cfx_types::{
 use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
-    consensus::EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE,
     errors::{Error as CoreError, Result as CoreResult},
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
+use cfxcore_errors::ProviderBlockError;
 use jsonrpc_core::Error as RpcError;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use primitives::{
@@ -85,19 +85,19 @@ impl EthApi {
 
     pub fn fetch_block_by_height(
         &self, height: u64,
-    ) -> Result<PhantomBlock, String> {
+    ) -> Result<PhantomBlock, ProviderBlockError> {
         self.consensus_graph()
             .get_phantom_block_by_number(
                 EpochNumber::Number(height),
                 None,
                 false,
             )?
-            .ok_or("Specified block header does not exist".to_string())
+            .ok_or("Specified block header does not exist".into())
     }
 
     pub fn fetch_block_by_hash(
         &self, hash: &H256,
-    ) -> Result<PhantomBlock, String> {
+    ) -> Result<PhantomBlock, ProviderBlockError> {
         self.consensus_graph()
             .get_phantom_block_by_hash(hash, false)?
             .ok_or("Specified block header does not exist".into())
@@ -613,12 +613,12 @@ impl EthApi {
                         false, /* include_traces */
                     ) {
                         Ok(pb) => pb,
-                        Err(e) if e == EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE => {
-                            None
-                        }
-                        Err(e) => {
-                            return Err(RpcError::invalid_params(e).into());
-                        }
+                        Err(e) => match e {
+                            ProviderBlockError::Common(e) => {
+                                return Err(RpcError::invalid_params(e).into());
+                            }
+                            ProviderBlockError::EpochNumberTooLarge => None,
+                        },
                     }
                 }
             }
@@ -781,8 +781,9 @@ impl EthApi {
             .map_err(RpcError::invalid_params)?;
 
         if newest_block == BlockNumber::Latest {
-            let fetch_block_by_hash =
-                |height| self.fetch_block_by_hash(&height);
+            let fetch_block_by_hash = |height| {
+                self.fetch_block_by_hash(&height).map_err(|e| e.to_string())
+            };
 
             let latest_block = self
                 .fetch_block_by_height(newest_height)
@@ -1073,6 +1074,7 @@ impl BlockProvider for &EthApi {
     ) -> Result<Vec<H256>, String> {
         self.consensus_graph()
             .get_block_hashes_by_epoch(epoch_number)
+            .map_err(|e| e.to_string())
     }
 }
 

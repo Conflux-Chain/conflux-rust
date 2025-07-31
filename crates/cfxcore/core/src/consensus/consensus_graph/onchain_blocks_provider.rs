@@ -1,6 +1,7 @@
 use super::ConsensusGraph;
 
 use crate::errors::{invalid_params, Result as CoreResult};
+use cfxcore_errors::ProviderBlockError;
 
 use cfx_parameters::consensus::*;
 
@@ -8,9 +9,6 @@ use cfx_types::H256;
 
 use primitives::{compute_block_number, EpochNumber};
 use std::cmp::min;
-
-pub const EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE: &str =
-    "Invalid params: expected a numbers with less than largest epoch number.";
 
 impl ConsensusGraph {
     /// Returns the total number of blocks processed in consensus graph.
@@ -26,7 +24,7 @@ impl ConsensusGraph {
     /// Convert EpochNumber to height based on the current ConsensusGraph
     pub fn get_height_from_epoch_number(
         &self, epoch_number: EpochNumber,
-    ) -> Result<u64, String> {
+    ) -> Result<u64, ProviderBlockError> {
         Ok(match epoch_number {
             EpochNumber::Earliest => 0,
             EpochNumber::LatestCheckpoint => {
@@ -43,7 +41,7 @@ impl ConsensusGraph {
             EpochNumber::Number(num) => {
                 let epoch_num = num;
                 if epoch_num > self.inner.read_recursive().best_epoch_number() {
-                    return Err(EPOCH_NUMBER_TOO_LARGE_ERR_MESSAGE.to_owned());
+                    return Err(ProviderBlockError::EpochNumberTooLarge);
                 }
                 epoch_num
             }
@@ -64,7 +62,7 @@ impl ConsensusGraph {
 
     pub fn get_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
-    ) -> Result<Vec<H256>, String> {
+    ) -> Result<Vec<H256>, ProviderBlockError> {
         self.get_height_from_epoch_number(epoch_number)
             .and_then(|height| {
                 self.inner.read_recursive().block_hashes_by_epoch(height)
@@ -73,7 +71,7 @@ impl ConsensusGraph {
 
     pub fn get_hash_from_epoch_number(
         &self, epoch_number: EpochNumber,
-    ) -> Result<H256, String> {
+    ) -> Result<H256, ProviderBlockError> {
         self.get_height_from_epoch_number(epoch_number)
             .and_then(|height| {
                 self.inner.read().get_pivot_hash_from_epoch_number(height)
@@ -82,7 +80,7 @@ impl ConsensusGraph {
 
     pub fn get_skipped_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
-    ) -> Result<Vec<H256>, String> {
+    ) -> Result<Vec<H256>, ProviderBlockError> {
         self.get_height_from_epoch_number(epoch_number)
             .and_then(|height| {
                 self.inner

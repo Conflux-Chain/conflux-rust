@@ -1360,6 +1360,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "cfxcore-errors",
  "cfxcore-pow",
  "cfxcore-types",
  "cfxkey",
@@ -1445,6 +1446,13 @@ dependencies = [
  "toml 0.8.19",
  "treap-map",
  "unexpected",
+]
+
+[[package]]
+name = "cfxcore-errors"
+version = "3.0.0"
+dependencies = [
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -5029,6 +5037,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-parameters",
  "cfx-types",
+ "cfxcore-errors",
  "cfxkey",
  "keccak-hash",
  "lazy_static",
