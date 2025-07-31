@@ -50,9 +50,9 @@ class OriginTestEnv(BaseTestEnv):
 
 # copied from integration_tests/tests/conftest.py to overide fixture scope
 @pytest.fixture
-def network(framework_class: Type[ConfluxTestFramework], port_min: int, additional_secrets: int, args: FrameworkOptions, request: pytest.FixtureRequest):
+def network(framework_class: Type[ConfluxTestFramework], module_internal_port_min: int, additional_secrets: int, args: FrameworkOptions, request: pytest.FixtureRequest):
     try:
-        framework = framework_class(port_min, additional_secrets, options=args)
+        framework = framework_class(module_internal_port_min, additional_secrets, options=args)
     except Exception as e:
         pytest.fail(f"Failed to setup framework: {e}")
     yield framework
