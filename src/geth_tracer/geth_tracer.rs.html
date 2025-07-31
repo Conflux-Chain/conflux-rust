@@ -916,7 +916,7 @@
             Error::Wasm(<span class="kw">_</span>) =&gt; InstructionResult::NotActivated,
             Error::OutOfBounds =&gt; InstructionResult::OutOfOffset,
             Error::Reverted =&gt; InstructionResult::Revert,
-            Error::InvalidAddress(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(), <span class="comment">/* when selfdestruct refund */
+            Error::InvalidAddress(<span class="kw">_</span>) =&gt; InstructionResult::Revert, <span class="comment">/* when selfdestruct refund */
             // address is invalid will emit this error
             </span>Error::ConflictAddress(<span class="kw">_</span>) =&gt; InstructionResult::CreateCollision,
             Error::CreateContractStartingWithEF =&gt; {
