@@ -203,7 +203,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "const-hex",
  "derive_more 0.99.17",
- "hex-literal 0.4.1",
+ "hex-literal",
  "itoa",
  "k256",
  "keccak-asm",
@@ -1257,7 +1257,7 @@ dependencies = [
  "cfxkey",
  "derive_more 2.0.1",
  "diem-types",
- "hex-literal 1.0.0",
+ "hex-literal",
  "impl-tools",
  "impl-trait-for-tuples 0.2.2",
  "keccak-hash",
@@ -1338,7 +1338,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-types",
  "cfxkey",
- "hex-literal 1.0.0",
+ "hex-literal",
  "lazy_static",
  "rustc-hex",
 ]
@@ -4062,12 +4062,6 @@ name = "hex-literal"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
-
-[[package]]
-name = "hex-literal"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcaaec4551594c969335c98c903c1397853d4198408ea609190f420500f6be71"
 
 [[package]]
 name = "hibitset"
