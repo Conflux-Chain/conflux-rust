@@ -13,7 +13,7 @@ use log::{debug, trace};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Histogram, Meter, Sample,
 };
-use mio::{net::TcpStream, Interest, Poll, Token};
+use mio::{net::TcpStream, Interest, Registry, Token};
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 use serde::Deserialize;
 use serde_derive::Serialize;
@@ -398,7 +398,7 @@ impl Connection {
 
     /// Register this connection with the IO event loop.
     pub fn register_socket(
-        &mut self, reg: Token, event_loop: &Poll,
+        &mut self, reg: Token, poll_registry: &Registry,
     ) -> io::Result<()> {
         if self.registered.load(AtomicOrdering::SeqCst) {
             return Ok(());
@@ -409,9 +409,7 @@ impl Connection {
             reg
         );
         if let Err(e) =
-            event_loop
-                .registry()
-                .register(&mut self.socket, reg, self.interest)
+            poll_registry.register(&mut self.socket, reg, self.interest)
         {
             trace!(
                 "Failed to register socket, token = {}, reg = {:?}, err = {:?}",
@@ -427,7 +425,7 @@ impl Connection {
     /// Update connection registration. Should be called at the end of the IO
     /// handler.
     pub fn update_socket(
-        &mut self, reg: Token, event_loop: &Poll,
+        &mut self, reg: Token, poll_registry: &Registry,
     ) -> io::Result<()> {
         trace!(
             "Connection reregister, token = {}, reg = {:?}",
@@ -435,9 +433,9 @@ impl Connection {
             reg
         );
         if !self.registered.load(AtomicOrdering::SeqCst) {
-            self.register_socket(reg, event_loop)
+            self.register_socket(reg, poll_registry)
         } else {
-            event_loop.registry()
+            poll_registry
                 .reregister(&mut self.socket, reg, self.interest)
                 .unwrap_or_else(|e| {
                     trace!("Failed to reregister socket, token = {}, reg = {:?}, err = {:?}", self.token, reg, e);
@@ -448,9 +446,11 @@ impl Connection {
 
     /// Delete connection registration. Should be called at the end of the IO
     /// handler.
-    pub fn deregister_socket(&mut self, event_loop: &Poll) -> io::Result<()> {
+    pub fn deregister_socket(
+        &mut self, poll_registry: &Registry,
+    ) -> io::Result<()> {
         trace!("Connection deregister, token = {}", self.token);
-        event_loop.registry().deregister(&mut self.socket).ok();
+        poll_registry.deregister(&mut self.socket).ok();
         Ok(())
     }
 

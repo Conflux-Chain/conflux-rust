@@ -31,7 +31,7 @@ pub use crate::service_mio::{
     TimerToken, TOKENS_PER_HANDLER,
 };
 
-use mio::{Poll, Token};
+use mio::{Registry, Token};
 use mio_util::NotifyError;
 use std::{cell::Cell, env, error, fmt, io};
 
@@ -99,22 +99,21 @@ where Message: Send + Sync + 'static
     fn stream_writable(&self, _io: &IoContext<Message>, _stream: StreamToken) {}
     /// Register a new stream with the event loop
     fn register_stream(
-        &self, _stream: StreamToken, _reg: Token, _event_loop: &Poll,
+        &self, _stream: StreamToken, _reg: Token, _registry: &Registry,
     ) {
     }
     /// Re-register a stream with the event loop
     fn update_stream(
-        &self, _stream: StreamToken, _reg: Token, _event_loop: &Poll,
+        &self, _stream: StreamToken, _reg: Token, _registry: &Registry,
     ) {
     }
     /// Deregister a stream. Called when stream is removed from event loop
-    fn deregister_stream(&self, _stream: StreamToken, _event_loop: &Poll) {}
+    fn deregister_stream(&self, _stream: StreamToken, _registry: &Registry) {}
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parking_lot::Mutex;
     use std::{
         sync::{atomic, Arc},
         thread,
@@ -143,9 +142,8 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicBool::new(false)));
-        let poll = Arc::new(Mutex::new(Poll::new().unwrap()));
 
-        let service = IoService::<MyMessage>::start(poll)
+        let service = IoService::<MyMessage>::start(123)
             .expect("Error creating network service");
         service.register_handler(handler.clone()).unwrap();
 
@@ -178,9 +176,8 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicBool::new(false)));
-        let poll = Arc::new(Mutex::new(Poll::new().unwrap()));
 
-        let service = IoService::<MyMessage>::start(poll)
+        let service = IoService::<MyMessage>::start(123)
             .expect("Error creating network service");
         service.register_handler(handler.clone()).unwrap();
 
@@ -210,9 +207,8 @@ mod tests {
         }
 
         let handler = Arc::new(MyHandler(atomic::AtomicUsize::new(0)));
-        let poll = Arc::new(Mutex::new(Poll::new().unwrap()));
 
-        let service = IoService::<MyMessage>::start(poll)
+        let service = IoService::<MyMessage>::start(123)
             .expect("Error creating network service");
         service.register_handler(handler.clone()).unwrap();
 

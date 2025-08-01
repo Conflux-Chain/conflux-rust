@@ -18,7 +18,7 @@ use std::{
 use keccak_hash::keccak;
 use mio::{
     net::{TcpListener, TcpStream, UdpSocket},
-    Interest, Poll, Token,
+    Interest, Registry, Token,
 };
 use parity_path::restrict_permissions_owner;
 use parking_lot::{Mutex, RwLock};
@@ -171,7 +171,6 @@ impl<'a> UdpIoContext<'a> {
 pub struct NetworkService {
     pub io_service: Option<IoService<NetworkIoMessage>>,
     pub inner: Option<Arc<NetworkServiceInner>>,
-    network_poll: Arc<Mutex<Poll>>,
     config: NetworkConfiguration,
 }
 
@@ -180,7 +179,6 @@ impl NetworkService {
         NetworkService {
             io_service: None,
             inner: None,
-            network_poll: Arc::new(Mutex::new(Poll::new().unwrap())),
             config,
         }
     }
@@ -200,7 +198,7 @@ impl NetworkService {
         &mut self, pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
     ) -> Result<(), Error> {
         let raw_io_service =
-            IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
+            IoService::<NetworkIoMessage>::start(STOP_NET_POLL)?;
         self.io_service = Some(raw_io_service);
 
         if self.inner.is_none() {
@@ -226,18 +224,10 @@ impl NetworkService {
 
     pub fn start(&self) {
         let handler = self.inner.as_ref().unwrap().clone();
-        let main_event_loop_channel =
-            self.io_service.as_ref().unwrap().channel();
         self.io_service
             .as_ref()
             .expect("Already set")
-            .start_network_poll(
-                self.network_poll.clone(),
-                handler,
-                main_event_loop_channel,
-                MAX_SESSIONS,
-                STOP_NET_POLL,
-            );
+            .start_network_poll(handler, MAX_SESSIONS);
     }
 
     /// Add a P2P peer to the client as a trusted node
@@ -1756,19 +1746,19 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     }
 
     fn register_stream(
-        &self, stream: StreamToken, reg: Token, event_loop: &Poll,
+        &self, stream: StreamToken, reg: Token, poll_registry: &Registry,
     ) {
         match stream {
             FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
-                        .register_socket(reg, event_loop)
+                        .register_socket(reg, poll_registry)
                         .expect("Error registering socket");
                 }
             }
             TCP_ACCEPT => {
-                event_loop.registry()
+                poll_registry
                     .register(
                         &mut *self.tcp_listener.lock(),
                         Token(TCP_ACCEPT),
@@ -1777,7 +1767,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     .expect("Error registering stream");
             }
             UDP_MESSAGE => {
-                event_loop.registry()
+                poll_registry
                     .register(
                         &mut *self.udp_socket.lock(),
                         reg,
@@ -1789,13 +1779,13 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
         }
     }
 
-    fn deregister_stream(&self, stream: StreamToken, event_loop: &Poll) {
+    fn deregister_stream(&self, stream: StreamToken, poll_registry: &Registry) {
         match stream {
             FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     let mut sess = session.write();
                     if sess.expired() {
-                        sess.deregister_socket(event_loop)
+                        sess.deregister_socket(poll_registry)
                             .expect("Error deregistering socket");
                         if let Some(node_id) = sess.id() {
                             self.node_db.write().note_failure(
@@ -1813,18 +1803,18 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
     }
 
     fn update_stream(
-        &self, stream: StreamToken, reg: Token, event_loop: &Poll,
+        &self, stream: StreamToken, reg: Token, poll_registry: &Registry,
     ) {
         match stream {
             FIRST_SESSION..=LAST_SESSION => {
                 if let Some(session) = self.sessions.get(stream) {
                     session
                         .write()
-                        .update_socket(reg, event_loop)
+                        .update_socket(reg, poll_registry)
                         .expect("Error updating socket");
                 }
             }
-            TCP_ACCEPT => event_loop.registry()
+            TCP_ACCEPT => poll_registry
                 .reregister(
                     &mut *self.tcp_listener.lock(),
                     Token(TCP_ACCEPT),
@@ -1840,7 +1830,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 } else {
                     Interest::READABLE
                 };
-                event_loop.registry()
+                poll_registry
                     .reregister(
                         &mut *udp_socket,
                         reg,
