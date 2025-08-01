@@ -32,7 +32,7 @@ pub use crate::service_mio::{
 };
 
 use mio::{Registry, Token};
-use mio_util::NotifyError;
+pub use mio_util::{would_block, MapNonBlock, NotifyError};
 use std::{cell::Cell, env, error, fmt, io};
 
 thread_local! {

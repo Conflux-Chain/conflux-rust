@@ -44,7 +44,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     discovery::Discovery,
     handshake::BYPASS_CRYPTOGRAPHY,
-    iolib::{IoContext, IoHandler, IoService, StreamToken, TimerToken},
+    iolib::{
+        IoContext, IoHandler, IoService, MapNonBlock, StreamToken, TimerToken,
+    },
     ip_utils::{map_external_address, select_public_address},
     node_database::NodeDatabase,
     node_table::*,
@@ -1389,12 +1391,13 @@ impl NetworkServiceInner {
         }
 
         let mut buf = [0u8; MAX_DATAGRAM_SIZE];
-        match udp_socket.recv_from(&mut buf) {
-            Ok((len, address)) => self
+        match udp_socket.recv_from(&mut buf).map_non_block() {
+            Ok(Some((len, address))) => self
                 .on_udp_packet(&buf[0..len], address)
                 .unwrap_or_else(|e| {
                     debug!("Error processing UDP packet: {:?}", e);
                 }),
+            Ok(_) => {}
             Err(e) => {
                 debug!("Error reading UDP socket: {:?}", e);
             }
@@ -1420,10 +1423,17 @@ impl NetworkServiceInner {
         let udp_socket = self.udp_socket.lock();
         let mut udp_channel = self.udp_channel.write();
         while let Some(data) = udp_channel.dequeue_send() {
-            match udp_socket.send_to(&data.payload, data.address) {
-                Ok(size) if size == data.payload.len() => {}
-                Ok(_) => {
+            match udp_socket
+                .send_to(&data.payload, data.address)
+                .map_non_block()
+            {
+                Ok(Some(size)) if size == data.payload.len() => {}
+                Ok(Some(_)) => {
                     warn!("UDP sent incomplete datagram");
+                }
+                Ok(None) => {
+                    udp_channel.requeue_send(data);
+                    return;
                 }
                 Err(e) => {
                     debug!(
