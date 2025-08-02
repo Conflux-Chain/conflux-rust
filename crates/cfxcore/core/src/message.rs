@@ -6,6 +6,7 @@ pub type RequestId = u64;
 pub type MsgId = u16;
 const MSG_ID_MAX: u16 = 1 << 14;
 
+use bytes::{BufMut, BytesMut};
 pub use cfx_bytes::Bytes;
 pub use priority_send_queue::SendQueuePriority;
 use rlp::{Decodable, Rlp};
@@ -60,16 +61,16 @@ pub trait Message:
     // If true, message may be throttled when sent to remote peer.
     fn is_size_sensitive(&self) -> bool { false }
     fn msg_id(&self) -> MsgId;
-    fn push_msg_id_leb128_encoding(&self, buffer: &mut Vec<u8>) {
+    fn push_msg_id_leb128_encoding(&self, buffer: &mut BytesMut) {
         let msg_id = self.msg_id();
         assert!(msg_id < MSG_ID_MAX);
         let msg_id_msb = (msg_id >> 7) as u8;
         let mut msg_id_lsb = (msg_id as u8) & 0x7f;
         if msg_id_msb != 0 {
-            buffer.push(msg_id_msb);
+            buffer.put_u8(msg_id_msb);
             msg_id_lsb |= 0x80;
         }
-        buffer.push(msg_id_lsb);
+        buffer.put_u8(msg_id_lsb);
     }
     fn msg_name(&self) -> &'static str;
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::High }
@@ -187,7 +188,7 @@ macro_rules! build_msg_basic {
             fn encode(&self) -> Vec<u8> {
                 let mut encoded = self.rlp_bytes();
                 self.push_msg_id_leb128_encoding(&mut encoded);
-                encoded
+                encoded.into()
             }
         }
     };
@@ -278,10 +279,10 @@ mod test {
     #[test]
     fn test_message_id_encode_decode() {
         for msg_id in 0..MSG_ID_MAX {
-            let mut buf = vec![];
             let message = TestMessage { msg_id };
-            buf.extend_from_slice(&message.rlp_bytes());
-            message.push_msg_id_leb128_encoding(&mut buf);
+            let mut encoded = message.rlp_bytes();
+            message.push_msg_id_leb128_encoding(&mut encoded);
+            let buf = encoded.as_ref();
             match decode_msg(&buf) {
                 None => assert!(false, "Can not decode message"),
                 Some((decoded_msg_id, rlp)) => {

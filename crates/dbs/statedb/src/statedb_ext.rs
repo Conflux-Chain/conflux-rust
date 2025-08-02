@@ -77,11 +77,8 @@ impl StateDbExt for StateDbGeneric {
         if value.is_default() {
             self.delete(key, debug_record)
         } else {
-            self.set_raw(
-                key,
-                ::rlp::encode(value).into_boxed_slice(),
-                debug_record,
-            )
+            let value_vec = Vec::from(::rlp::encode(value));
+            self.set_raw(key, value_vec.into_boxed_slice(), debug_record)
         }
     }
 

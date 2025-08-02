@@ -53,6 +53,7 @@ rangetools = { workspace = true }
 rayon = { workspace = true }
 rlp = { workspace = true }
 rlp_derive = { workspace = true }
+bytes = { workspace = true }
 rustc-hex = { workspace = true }
 secret-store = { workspace = true }
 serde = { workspace = true, features = ["rc"] }
@@ -116,6 +117,7 @@ cfx-rpc-utils = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfxcore-types = { workspace = true }
 cfxcore-pow = { workspace = true }
+rlp-bool = { workspace = true }
 
 [dev-dependencies]
 cfx-storage = { workspace = true, features = ["testonly_code"] }

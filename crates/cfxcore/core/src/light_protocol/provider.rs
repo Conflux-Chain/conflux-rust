@@ -58,6 +58,7 @@ use primitives::{
 };
 use rand::prelude::SliceRandom;
 use rlp::Rlp;
+use rlp_bool::CompatibleBool;
 use std::{
     sync::{Arc, Weak},
     time::{Duration, Instant},
@@ -249,7 +250,8 @@ impl Provider {
                     TransactionInfo {
                         tx_index:
                             TransactionIndex {
-                                is_phantom: true, ..
+                                is_phantom: CompatibleBool(true),
+                                ..
                             },
                         ..
                     },

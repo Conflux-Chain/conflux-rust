@@ -27,11 +27,11 @@ use primitives::{
     },
     SignedTransaction, Transaction,
 };
+use rlp::Encodable;
 use std::{
     collections::{BTreeMap, HashMap},
     u64,
 };
-
 pub fn make_tx(
     tx_meta: &TransactionParts, tx_part_indices: &TxPartIndices, chain_id: u64,
     unprotected: bool,
@@ -270,7 +270,7 @@ pub fn check_tx_bytes(
         return Ok(());
     };
 
-    let raw_tx = rlp::encode(&tx.transaction.transaction);
+    let raw_tx = &tx.transaction.transaction.rlp_bytes();
 
     if raw_tx != txbytes {
         // trace!(

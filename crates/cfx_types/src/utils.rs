@@ -35,7 +35,7 @@ pub fn parse_hex_string<F: FromStr>(hex_str: &str) -> Result<F, F::Err> {
 
 pub fn u256_to_h256_be(value: U256) -> H256 {
     let mut buf = [0u8; 32];
-    value.to_big_endian(&mut buf);
+    value.write_as_big_endian(&mut buf);
     H256::from(buf)
 }
 

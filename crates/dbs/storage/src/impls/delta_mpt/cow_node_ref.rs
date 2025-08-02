@@ -655,7 +655,7 @@ impl CowNodeRef {
                         .value
                         .try_into()
                         .expect("not exceed i64::MAX"),
-                    trie_node.rlp_bytes().as_slice(),
+                    trie_node.rlp_bytes().as_ref(),
                 )?;
             commit_transaction.info.row_number =
                 commit_transaction.info.row_number.get_next()?;

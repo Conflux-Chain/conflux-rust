@@ -42,13 +42,13 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{Block, BlockHeader, EpochId, SignedTransaction};
 use rand::{prelude::SliceRandom, Rng};
 use rlp::Rlp;
+use rlp_bool::CompatibleBool;
 use std::{
     cmp::{self, min},
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-
 lazy_static! {
     static ref TX_PROPAGATE_METER: Arc<dyn Meter> =
         register_meter_with_group("system_metrics", "tx_propagate_set_size");
@@ -1340,7 +1340,7 @@ impl SynchronizationProtocolHandler {
             .min(self.protocol_config.max_peers_tx_propagation);
 
         PeerFilter::new(msgid::TRANSACTION_DIGESTS)
-            .with_cap(DynamicCapability::NormalPhase(true))
+            .with_cap(DynamicCapability::NormalPhase(CompatibleBool(true)))
             .select_n(num_peers, &self.syn)
     }
 
@@ -1638,14 +1638,15 @@ impl SynchronizationProtocolHandler {
         let mut need_notify = Vec::new();
         for (peer, state) in self.syn.peers.read().iter() {
             let mut state = state.write();
-            if !state
-                .notified_capabilities
-                .contains(DynamicCapability::NormalPhase(!catch_up_mode))
-            {
+            if !state.notified_capabilities.contains(
+                DynamicCapability::NormalPhase(CompatibleBool(!catch_up_mode)),
+            ) {
                 state.received_transaction_count = 0;
-                state
-                    .notified_capabilities
-                    .insert(DynamicCapability::NormalPhase(!catch_up_mode));
+                state.notified_capabilities.insert(
+                    DynamicCapability::NormalPhase(CompatibleBool(
+                        !catch_up_mode,
+                    )),
+                );
                 need_notify.push(*peer);
             }
         }
@@ -1656,7 +1657,7 @@ impl SynchronizationProtocolHandler {
             self.graph.inner.read().block_to_fill_set.len()
         );
 
-        DynamicCapability::NormalPhase(!catch_up_mode)
+        DynamicCapability::NormalPhase(CompatibleBool(!catch_up_mode))
             .broadcast_with_peers(io, need_notify);
     }
 
