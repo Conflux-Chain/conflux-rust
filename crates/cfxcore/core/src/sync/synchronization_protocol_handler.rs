@@ -30,6 +30,7 @@ use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
+use io::TimerToken;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -62,8 +63,6 @@ lazy_static! {
     static ref PROPAGATE_TX_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "sync:propagate_tx_timer");
 }
-
-type TimerToken = usize;
 
 const TX_TIMER: TimerToken = 0;
 const CHECK_REQUEST_TIMER: TimerToken = 1;
