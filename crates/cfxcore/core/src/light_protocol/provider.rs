@@ -46,6 +46,7 @@ use cfx_parameters::light::{
 };
 use cfx_types::H256;
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
+use io::TimerToken;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
     node_table::NodeId, service::ProtocolVersion,
@@ -63,8 +64,6 @@ use std::{
     time::{Duration, Instant},
 };
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
-
-type TimerToken = usize;
 
 const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 0;
 

@@ -18,6 +18,7 @@ use diem_types::{
     epoch_change::EpochChangeProof,
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
 };
+use io::TimerToken;
 use network::{
     node_table::NodeId, service::ProtocolVersion, NetworkContext,
     NetworkProtocolHandler, NetworkService, UpdateNodeOperation,
@@ -45,8 +46,6 @@ use crate::{
 };
 
 use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
-
-type TimerToken = usize;
 
 #[derive(Default)]
 pub struct PeerState {

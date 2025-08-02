@@ -29,6 +29,7 @@ futures = { workspace = true, features = ["compat"] }
 hashbrown = { workspace = true }
 hibitset = { workspace = true }
 itertools = { workspace = true }
+io = { workspace = true }
 jsonrpc-core = { workspace = true }
 keccak-hash = { workspace = true }
 kvdb = { workspace = true }

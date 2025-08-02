@@ -13,7 +13,7 @@ use log::{debug, trace};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Histogram, Meter, Sample,
 };
-use mio::{tcp::TcpStream, Poll, PollOpt, Ready, Token};
+use mio::{tcp::*, *};
 use priority_send_queue::{PrioritySendQueue, SendQueuePriority};
 use serde::Deserialize;
 use serde_derive::Serialize;
@@ -590,7 +590,7 @@ impl PacketAssembler for PacketWithLenAssembler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::iolib::IoChannel;
+    use crate::iolib::*;
     use mio::Ready;
     use std::{
         cmp,

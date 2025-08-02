@@ -36,6 +36,7 @@ use cfx_parameters::light::{
 };
 use cfx_types::H256;
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
+use io::TimerToken;
 use network::{
     node_table::NodeId, service::ProtocolVersion, NetworkContext,
     NetworkProtocolHandler,
@@ -55,8 +56,6 @@ use sync::{
     StateRoots, StorageRoots, TxInfos, Txs, Witnesses,
 };
 use throttling::token_bucket::TokenBucketManager;
-
-type TimerToken = usize;
 
 const SYNC_TIMER: TimerToken = 0;
 const REQUEST_CLEANUP_TIMER: TimerToken = 1;
