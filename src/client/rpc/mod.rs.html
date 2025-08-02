@@ -904,7 +904,7 @@
                     TransportRpcModuleConfig::set_http(apis.clone());
                 <span class="kw">let </span>server_config =
                     RpcServerConfig::http(ServerBuilder::default())
-                        .with_http_address(ws_config.address);
+                        .with_http_address(http_config.address);
                 (transport_rpc_module_config, server_config)
             }
             (<span class="bool-val">false</span>, <span class="bool-val">true</span>) =&gt; {
