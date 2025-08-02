@@ -22,6 +22,7 @@
 
 use crate::{epoch::EpochNumber, log_entry::LogEntry};
 use cfx_types::{Address, Bloom, BloomInput, Space, H256};
+use cfxcore_errors::ProviderBlockError;
 use std::{
     error, fmt,
     ops::{Deref, DerefMut},
@@ -96,6 +97,20 @@ pub enum FilterError {
 
     /// Filter error with custom error message (e.g. timeout)
     Custom(String),
+}
+
+impl From<String> for FilterError {
+    fn from(s: String) -> Self { FilterError::Custom(s) }
+}
+
+impl From<&str> for FilterError {
+    fn from(s: &str) -> Self { FilterError::Custom(s.to_string()) }
+}
+
+impl From<ProviderBlockError> for FilterError {
+    fn from(err: ProviderBlockError) -> Self {
+        FilterError::from(err.to_string())
+    }
 }
 
 impl fmt::Display for FilterError {
@@ -325,8 +340,4 @@ impl LogFilterParams {
                     _ => true,
                 })
     }
-}
-
-impl From<String> for FilterError {
-    fn from(s: String) -> Self { FilterError::Custom(s) }
 }

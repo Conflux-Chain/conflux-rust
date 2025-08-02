@@ -279,7 +279,10 @@ impl QueryService {
                 break;
             }
 
-            let mut epoch_hashes = inner.read().block_hashes_by_epoch(epoch)?;
+            let mut epoch_hashes = inner
+                .read()
+                .block_hashes_by_epoch(epoch)
+                .map_err(|e| e.to_string())?;
             epoch_hashes.reverse();
 
             let missing = GAS_PRICE_BLOCK_SAMPLE_SIZE - hashes.len();
