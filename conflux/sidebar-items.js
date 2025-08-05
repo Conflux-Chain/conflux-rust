@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["handle_sub_command","main","setup_logger"],"mod":["cli","command"]};
+window.SIDEBAR_ITEMS = {"fn":["get_version","handle_sub_command","main","setup_logger"],"mod":["cli","command"],"static":["VERSION"]};

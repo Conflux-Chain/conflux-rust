@@ -223,7 +223,12 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -253,7 +258,13 @@
 };
 <span class="kw">use </span>network::throttling::THROTTLING_SERVICE;
 <span class="kw">use </span>parking_lot::{Condvar, Mutex};
-<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::sync::{Arc, OnceLock};
+
+<span class="kw">static </span>VERSION: OnceLock&lt;String&gt; = OnceLock::new();
+
+<span class="kw">fn </span>get_version() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str {
+    VERSION.get_or_init(|| parity_version::version(<span class="macro">crate_version!</span>()))
+}
 
 <span class="kw">fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
     <span class="attr">#[cfg(feature = <span class="string">"deadlock-detection"</span>)]
@@ -281,8 +292,7 @@
         });
     } <span class="comment">// only for #[cfg]
 
-    </span><span class="kw">let </span>version = parity_version::version(<span class="macro">crate_version!</span>());
-    <span class="kw">let </span>matches = Cli::command().get_matches();
+    </span><span class="kw">let </span>matches = Cli::command().version(get_version()).get_matches();
 
     <span class="kw">if let </span><span class="prelude-val">Some</span>(output) = handle_sub_command(<span class="kw-2">&amp;</span>matches)<span class="question-mark">? </span>{
         <span class="macro">println!</span>(<span class="string">"{}"</span>, output);
@@ -313,7 +323,7 @@
 :......::::.......:::..::::..::..::::::::........:::.......:::..:::::..::
 Current Version: {}
 "</span>,
-        version
+        get_version()
     );
 
     <span class="kw">let </span>client_handle: Box&lt;<span class="kw">dyn </span>ClientTrait&gt;;
