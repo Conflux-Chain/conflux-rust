@@ -25,8 +25,9 @@ impl RpcCommand {
             None => return Err(String::from("RPC URL not specified")),
         };
 
-        let args: Vec<Value> = match matches.get_many::<String>("rpc-args") {
-            Some(args) => {
+        let args: Vec<Value> = match matches.try_get_many::<String>("rpc-args")
+        {
+            Ok(Some(args)) => {
                 let mut params = Vec::new();
 
                 for arg in args {
@@ -37,7 +38,8 @@ impl RpcCommand {
                 }
                 params
             }
-            None => Vec::new(),
+            Ok(None) => Vec::new(),
+            Err(_e) => Vec::new(),
         };
 
         Ok(Some(RpcCommand {
@@ -136,6 +138,8 @@ impl<'a> ArgSchema<'a> {
 #[cfg(test)]
 
 mod tests {
+    use std::vec;
+
     use crate::cli::Cli;
 
     use super::*;
@@ -307,6 +311,28 @@ mod tests {
                 expected_method: "cfx_getBlockByHash",
                 expected_url: "http://localhost:12539",
                 expected_params: vec![json!("0x654321fedcba"), json!(false)],
+            },
+            TestCase {
+                name: "voting_status",
+                args: vec!["conflux", "rpc", "local", "pos", "voting_status"],
+                expected_method: "test_posVotingStatus",
+                expected_params: vec![],
+                expected_url: "http://localhost:12539",
+            },
+            TestCase {
+                name: "voting_status_with_custom_url",
+                args: vec![
+                    "conflux",
+                    "rpc",
+                    "local",
+                    "pos",
+                    "voting_status",
+                    "--url",
+                    "http://localhost:9999",
+                ],
+                expected_method: "test_posVotingStatus",
+                expected_params: vec![],
+                expected_url: "http://localhost:9999",
             },
         ];
 

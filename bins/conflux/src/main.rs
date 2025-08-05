@@ -28,7 +28,13 @@ use log4rs::{
 };
 use network::throttling::THROTTLING_SERVICE;
 use parking_lot::{Condvar, Mutex};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+static VERSION: OnceLock<String> = OnceLock::new();
+
+fn get_version() -> &'static str {
+    VERSION.get_or_init(|| parity_version::version(crate_version!()))
+}
 
 fn main() -> Result<(), String> {
     #[cfg(feature = "deadlock-detection")]
@@ -56,8 +62,7 @@ fn main() -> Result<(), String> {
         });
     } // only for #[cfg]
 
-    let version = parity_version::version(crate_version!());
-    let matches = Cli::command().get_matches();
+    let matches = Cli::command().version(get_version()).get_matches();
 
     if let Some(output) = handle_sub_command(&matches)? {
         println!("{}", output);
@@ -88,7 +93,7 @@ fn main() -> Result<(), String> {
 :......::::.......:::..::::..::..::::::::........:::.......:::..:::::..::
 Current Version: {}
 ",
-        version
+        get_version()
     );
 
     let client_handle: Box<dyn ClientTrait>;
