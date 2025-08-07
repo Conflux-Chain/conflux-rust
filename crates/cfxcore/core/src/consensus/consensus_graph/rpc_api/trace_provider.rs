@@ -940,7 +940,7 @@ impl ConsensusGraph {
                     }
                     let trace = LocalizedTrace {
                         action: trace.action,
-                        valid: trace.valid,
+                        valid: trace.valid.into(),
                         epoch_hash: pivot_hash,
                         epoch_number: epoch_number.into(),
                         block_hash,

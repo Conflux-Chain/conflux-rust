@@ -63,6 +63,7 @@ from rlp.exceptions import (
 )
 
 # Copied from rlp.sedes.Boolean, but encode False to 0x00, not empty.
+# The current Conflux Rust implementation encodes False to 0x80 and treats both 0x00 and 0x80 as False.
 class Boolean:
     """A sedes for booleans
     """
@@ -78,13 +79,13 @@ class Boolean:
             raise Exception("Invariant: no other options for boolean values")
 
     def deserialize(self, serial):
-        if serial == b'\x00':
+        if serial == b'':
             return False
         elif serial == b'\x01':
             return True
         else:
             raise DeserializationError(
-                'Invalid serialized boolean.  Must be either 0x01 or 0x00',
+                'Invalid serialized boolean.  Must be either 0x01 or 0x80',
                 serial
             )
 

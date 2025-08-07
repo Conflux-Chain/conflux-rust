@@ -16,9 +16,9 @@ use crate::{
 use cfx_parameters::sync::{MAX_BLOCKS_TO_SEND, MAX_HEADERS_TO_SEND};
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
+use rlp_bool::CompatibleBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{any::Any, time::Duration};
-
 #[derive(
     Debug, PartialEq, Default, RlpDecodable, RlpEncodable, DeriveMallocSizeOf,
 )]
@@ -58,7 +58,7 @@ impl Request for GetCompactBlocks {
     fn resend(&self) -> Option<Box<dyn Request>> {
         Some(Box::new(GetBlocks {
             request_id: 0,
-            with_public: true,
+            with_public: CompatibleBool(true),
             hashes: self.hashes.iter().cloned().collect(),
             preferred_node_type: None,
         }))

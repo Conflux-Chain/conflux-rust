@@ -1,0 +1,16 @@
+[package]
+name = "rlp-bool"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+edition.workspace = true
+
+[dependencies]
+rlp = { workspace = true }
+malloc_size_of_derive = { workspace = true }
+malloc_size_of = { workspace = true }

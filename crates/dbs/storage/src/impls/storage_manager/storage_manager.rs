@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use rlp_bool::CompatibleBool;
 /// The in mem snapshot_info map and the on disk snapshot_info_db is always in
 /// sync.
 pub struct PersistedSnapshotInfoMap {
@@ -618,7 +619,7 @@ impl StorageManager {
 
             let in_progress_snapshot_info = SnapshotInfo {
                 snapshot_info_kept_to_provide_sync: Default::default(),
-                serve_one_step_sync: true,
+                serve_one_step_sync: CompatibleBool(true),
                 height: height as u64,
                 parent_snapshot_height: height
                     - this.storage_conf.consensus_param.snapshot_epoch_count

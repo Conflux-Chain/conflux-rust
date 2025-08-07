@@ -34,6 +34,7 @@ use rand::{
     seq::{IndexedRandom, SliceRandom},
 };
 
+use rlp_bool::CompatibleBool;
 use std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
@@ -472,7 +473,7 @@ impl SnapshotManifestManager {
                 // Prevent immediate removed by setting 'InfoOnly' to avoid
                 snapshot_info_kept_to_provide_sync:
                     SnapshotKeptToProvideSyncStatus::InfoOnly,
-                serve_one_step_sync: false,
+                serve_one_step_sync: CompatibleBool(false),
                 merkle_root: state_root_vec[offset - 1].snapshot_root,
                 height: snapshot_block_header.height()
                     - snapshot_epoch_count as u64,
@@ -505,7 +506,7 @@ impl SnapshotManifestManager {
             },
             SnapshotInfo {
                 snapshot_info_kept_to_provide_sync: Default::default(),
-                serve_one_step_sync: false,
+                serve_one_step_sync: CompatibleBool(false),
                 // We need the extra -1 to get a state root that points to the
                 // snapshot we want.
                 merkle_root: state_root_vec[offset

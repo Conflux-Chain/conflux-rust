@@ -54,6 +54,7 @@ members = [
     "crates/util/treap-map",
     "crates/util/version",
     "crates/util/serde_utils",
+    "crates/util/rlp_bool",
     "crates/execution/geth-tracer",
     "crates/rpc/rpc-eth-types",
     "crates/rpc/rpc-primitives",
@@ -172,6 +173,7 @@ cfx-stratum = { path = "./crates/stratum" }
 txgen = { path = "./crates/transactiongen" }
 blockgen = { path = "./crates/blockgen" }
 serde-utils = { path = "./crates/util/serde_utils" }
+rlp-bool = { path = "./crates/util/rlp_bool" }
 db = { path = "./crates/dbs/db" }
 cfx-db-errors = { path = "./crates/dbs/db-errors" }
 cfx-statedb = { path = "./crates/dbs/statedb" }
@@ -329,7 +331,7 @@ reqwest = "0.12"
 
 # crypto & hash
 #fixed-hash = "0.5"
-keccak-hash = "0.5"
+keccak-hash = "0.11.0"
 tiny-keccak = "2.0"
 bls-signatures = { git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "fb52187df92d27c365642cb7e7b2aaf60437cf9c", default-features = false, features = [
     "multicore",
@@ -429,12 +431,12 @@ chrono = "0.4"
 duration-str = "0.17"
 
 # parity crates
-rlp = "0.4.0"
+rlp = "0.6.1"
 rlp_derive = { package = "rlp-derive", version = "0.2.0" }
 panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
-ethereum-types = "0.9"
+ethereum-types = "0.15.1"
 parity-wordlist = "1.3.0"
 parity-crypto = "0.9.0"
 parity-path = "0.1"

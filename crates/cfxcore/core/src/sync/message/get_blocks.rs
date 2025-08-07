@@ -19,12 +19,12 @@ use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::Block;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_bool::CompatibleBool;
 use std::{any::Any, time::Duration};
-
 #[derive(Debug, PartialEq, Default, Clone, DeriveMallocSizeOf)]
 pub struct GetBlocks {
     pub request_id: RequestId,
-    pub with_public: bool,
+    pub with_public: CompatibleBool,
     pub hashes: Vec<H256>,
     // This field specifies what node type of peers this
     // request needs to be sent to.
@@ -167,8 +167,8 @@ impl GetBlocks {
 
 impl Handleable for GetBlocks {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let blocks = self.get_blocks(ctx, self.with_public);
-        if self.with_public {
+        let blocks = self.get_blocks(ctx, self.with_public.into());
+        if self.with_public.into() {
             self.send_response_with_public(ctx, blocks)
         } else {
             self.send_response(ctx, blocks)

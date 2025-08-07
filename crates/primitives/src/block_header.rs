@@ -19,6 +19,7 @@ use cfx_types::{
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use once_cell::sync::OnceCell;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_bool::LegacyBool;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{
     mem,
@@ -59,7 +60,7 @@ pub struct BlockHeaderRlpPart {
     /// Block difficulty.
     difficulty: U256,
     /// Whether it is an adaptive block (from GHAST algorithm)
-    adaptive: bool,
+    adaptive: LegacyBool,
     /// Gas limit.
     gas_limit: U256,
     /// Referee hashes
@@ -166,7 +167,7 @@ impl BlockHeader {
     pub fn difficulty(&self) -> &U256 { &self.difficulty }
 
     /// Get the adaptive field of the header
-    pub fn adaptive(&self) -> bool { self.adaptive }
+    pub fn adaptive(&self) -> bool { self.adaptive.into() }
 
     /// Get the gas limit field of the header.
     pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
@@ -241,19 +242,23 @@ impl BlockHeader {
     pub fn rlp_without_nonce(&self) -> Bytes {
         let mut stream = RlpStream::new();
         self.stream_rlp_without_nonce(&mut stream);
-        stream.out()
+        stream.as_raw().into()
     }
 
     /// Get the RLP representation of this header.
     pub fn rlp(&self) -> Bytes {
         let mut stream = RlpStream::new();
         self.stream_rlp(&mut stream);
-        stream.out()
+        stream.out().into()
     }
 
     /// Place this header(except nonce) into an RLP stream `stream`.
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
-        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let adaptive_n = if self.adaptive.into() {
+            1 as u8
+        } else {
+            0 as u8
+        };
         let list_len = HEADER_LIST_MIN_LEN
             + self.pos_reference.is_some() as usize
             + self.base_price.is_some() as usize
@@ -293,7 +298,11 @@ impl BlockHeader {
 
     /// Place this header into an RLP stream `stream`.
     fn stream_rlp(&self, stream: &mut RlpStream) {
-        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let adaptive_n = if self.adaptive.into() {
+            1 as u8
+        } else {
+            0 as u8
+        };
         let list_len = HEADER_LIST_MIN_LEN
             + 1
             + self.pos_reference.is_some() as usize
@@ -334,7 +343,11 @@ impl BlockHeader {
 
     /// Place this header and its `pow_hash` into an RLP stream `stream`.
     pub fn stream_rlp_with_pow_hash(&self, stream: &mut RlpStream) {
-        let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
+        let adaptive_n = if self.adaptive.into() {
+            1 as u8
+        } else {
+            0 as u8
+        };
         let list_len = HEADER_LIST_MIN_LEN
             + 2
             + self.pos_reference.is_some() as usize
@@ -390,7 +403,7 @@ impl BlockHeader {
             deferred_logs_bloom_hash: r.val_at(7)?,
             blame: r.val_at(8)?,
             difficulty: r.val_at(9)?,
-            adaptive: r.val_at::<u8>(10)? == 1,
+            adaptive: LegacyBool(r.val_at::<u8>(10)? == 1),
             gas_limit: r.val_at(11)?,
             referee_hashes: r.list_at(12)?,
             custom: vec![],
@@ -589,7 +602,7 @@ impl BlockHeaderBuilder {
                 deferred_logs_bloom_hash: self.deferred_logs_bloom_hash,
                 blame: self.blame,
                 difficulty: self.difficulty,
-                adaptive: self.adaptive,
+                adaptive: self.adaptive.into(),
                 gas_limit: self.gas_limit,
                 referee_hashes: self.referee_hashes.clone(),
                 custom: self.custom.clone(),
@@ -672,7 +685,7 @@ impl Decodable for BlockHeader {
             deferred_logs_bloom_hash: r.val_at(7)?,
             blame: r.val_at(8)?,
             difficulty: r.val_at(9)?,
-            adaptive: r.val_at::<u8>(10)? == 1,
+            adaptive: LegacyBool(r.val_at::<u8>(10)? == 1),
             gas_limit: r.val_at(11)?,
             referee_hashes: r.list_at(12)?,
             custom: vec![],
@@ -720,6 +733,7 @@ mod tests {
         TransactionStatus,
     };
     use cfx_types::{Bloom, KECCAK_EMPTY_BLOOM, U256};
+    use rlp_bool::LegacyBool;
     use std::{str::FromStr, sync::Arc};
 
     #[test]
@@ -747,11 +761,11 @@ mod tests {
         let receipt = Receipt {
             accumulated_gas_used: U256::zero(),
             gas_fee: U256::zero(),
-            gas_sponsor_paid: false,
+            gas_sponsor_paid: LegacyBool(false),
             logs: vec![],
             outcome_status: TransactionStatus::Success,
             log_bloom: Bloom::zero(),
-            storage_sponsor_paid: false,
+            storage_sponsor_paid: LegacyBool(false),
             storage_collateralized: vec![],
             storage_released: vec![],
             burnt_gas_fee: None,
@@ -779,7 +793,7 @@ mod tests {
                 Receipt {
                     accumulated_gas_used: 0.into(),
                     gas_fee: 0.into(),
-                    gas_sponsor_paid: false,
+                    gas_sponsor_paid: LegacyBool(false),
                     logs: vec![],
                     outcome_status: TransactionStatus::Success,
                     log_bloom: Bloom::from_str(
@@ -801,7 +815,7 @@ mod tests {
                          00000000000000000000000000000000",
                     )
                     .unwrap(),
-                    storage_sponsor_paid: false,
+                    storage_sponsor_paid: LegacyBool(false),
                     storage_collateralized: vec![],
                     storage_released: vec![],
                     burnt_gas_fee: None,
@@ -809,7 +823,7 @@ mod tests {
                 Receipt {
                     accumulated_gas_used: U256::zero(),
                     gas_fee: U256::zero(),
-                    gas_sponsor_paid: false,
+                    gas_sponsor_paid: LegacyBool(false),
                     logs: vec![],
                     outcome_status: TransactionStatus::Success,
                     log_bloom: Bloom::from_str(
@@ -831,7 +845,7 @@ mod tests {
                          00000000000000000000000000000000",
                     )
                     .unwrap(),
-                    storage_sponsor_paid: false,
+                    storage_sponsor_paid: LegacyBool(false),
                     storage_collateralized: vec![],
                     storage_released: vec![],
                     burnt_gas_fee: None,
@@ -846,7 +860,7 @@ mod tests {
             receipts: vec![Receipt {
                 accumulated_gas_used: U256::zero(),
                 gas_fee: U256::zero(),
-                gas_sponsor_paid: false,
+                gas_sponsor_paid: LegacyBool(false),
                 logs: vec![],
                 outcome_status: TransactionStatus::Success,
                 log_bloom: Bloom::from_str(
@@ -868,7 +882,7 @@ mod tests {
                      00000000000000000000000000000000",
                 )
                 .unwrap(),
-                storage_sponsor_paid: false,
+                storage_sponsor_paid: LegacyBool(false),
                 storage_collateralized: vec![],
                 storage_released: vec![],
                 burnt_gas_fee: None,

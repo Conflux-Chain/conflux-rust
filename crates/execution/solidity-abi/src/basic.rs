@@ -36,7 +36,7 @@ impl ABIVariable for U256 {
 
     fn to_abi(&self) -> LinkedBytes {
         let mut answer = vec![0u8; 32];
-        self.to_big_endian(&mut answer);
+        self.write_as_big_endian(&mut answer);
         LinkedBytes::from_bytes(answer)
     }
 

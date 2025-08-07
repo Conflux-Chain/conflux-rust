@@ -173,7 +173,7 @@ impl Discovery {
             uio,
             PACKET_PING,
             &node.endpoint.udp_address(),
-            &rlp.drain(),
+            &rlp.as_raw(),
         )?;
 
         self.in_flight_pings.insert(
@@ -286,7 +286,7 @@ impl Discovery {
 
         response.append(&echo_hash);
         response.append(&self.config.expire_timestamp());
-        self.send_packet(uio, PACKET_PONG, from, &response.drain())?;
+        self.send_packet(uio, PACKET_PONG, from, &response.as_raw())?;
 
         let entry = NodeEntry {
             id: node_id.clone(),

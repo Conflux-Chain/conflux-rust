@@ -28,6 +28,7 @@ use std::{
     str::FromStr, sync::Arc, time::Instant,
 };
 
+use rlp_bool::CompatibleBool;
 // cargo run --release -p cfxcore --example snapshot_merge_test
 // cargo run --release -p cfxcore --example snapshot_merge_test -- --help
 fn main() -> Result<(), Error> {
@@ -92,7 +93,7 @@ fn main() -> Result<(), Error> {
         merkle_root: Default::default(),
         parent_snapshot_epoch_id: NULL_EPOCH,
         pivot_chain_parts: vec![snapshot1_epoch],
-        serve_one_step_sync: false,
+        serve_one_step_sync: CompatibleBool(false),
         snapshot_info_kept_to_provide_sync: Default::default(),
     };
     let (mut snapshot_info_map_locked, snapshot_info1) = snapshot_db_manager
@@ -163,7 +164,7 @@ fn main() -> Result<(), Error> {
         merkle_root: snapshot_info1.merkle_root,
         parent_snapshot_epoch_id: snapshot1_epoch,
         pivot_chain_parts: vec![snapshot2_epoch],
-        serve_one_step_sync: false,
+        serve_one_step_sync: CompatibleBool(false),
         snapshot_info_kept_to_provide_sync: Default::default(),
     };
     let (mut snapshot_info_map_locked, snapshot_info2) = snapshot_db_manager
@@ -198,7 +199,7 @@ fn main() -> Result<(), Error> {
         assert!(value.is_some(), "Address {:?} does not exist", addr);
         let account_bytes = rlp::encode(account);
         let get_bytes = value.unwrap();
-        assert_eq!(account_bytes.as_slice(), get_bytes.as_ref());
+        assert_eq!(account_bytes.as_ref(), get_bytes.as_ref());
     }
     // TODO Make snapshot3 to compare the snapshot merkle_root
     let state_root_3 = StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
@@ -230,7 +231,7 @@ fn main() -> Result<(), Error> {
         merkle_root: Default::default(),
         parent_snapshot_epoch_id: NULL_EPOCH,
         pivot_chain_parts: vec![snapshot3_epoch],
-        serve_one_step_sync: false,
+        serve_one_step_sync: CompatibleBool(false),
         snapshot_info_kept_to_provide_sync: Default::default(),
     };
     let (mut snapshot_info_map_locked, snapshot_info3) = snapshot_db_manager

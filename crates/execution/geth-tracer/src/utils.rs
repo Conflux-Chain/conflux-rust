@@ -72,7 +72,7 @@ pub(crate) fn stack_push_count(
 // convert from cfx U256 to alloy U256
 pub fn to_alloy_u256(u: U256) -> RU256 {
     let mut be_bytes: [u8; 32] = [0; 32];
-    u.to_big_endian(&mut be_bytes);
+    u.write_as_big_endian(&mut be_bytes);
     RU256::from_be_bytes(be_bytes)
 }
 
