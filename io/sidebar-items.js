@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["LOCAL_STACK_SIZE","TOKENS_PER_HANDLER"],"enum":["IoError","IoMessage"],"struct":["IoChannel","IoContext","IoManager","IoService"],"trait":["IoHandler"],"type":["StreamToken","TimerToken"]};
+window.SIDEBAR_ITEMS = {"constant":["LOCAL_STACK_SIZE","TOKENS_PER_HANDLER"],"enum":["IoError","IoMessage","NotifyError"],"fn":["would_block"],"struct":["IoChannel","IoContext","IoManager","IoService"],"trait":["IoHandler","MapNonBlock"],"type":["StreamToken","TimerToken"]};

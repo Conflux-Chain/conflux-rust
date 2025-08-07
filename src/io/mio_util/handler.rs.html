@@ -35,15 +35,12 @@
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
-<a href="#37" id="37">37</a>
-<a href="#38" id="38">38</a>
-<a href="#39" id="39">39</a>
-<a href="#40" id="40">40</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::EventLoop;
-<span class="kw">use </span>mio::{Ready, Token};
+<a href="#37" id="37">37</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::EventLoop;
+<span class="kw">use </span>mio::{event::Event, Token};
 
 <span class="attr">#[allow(unused_variables)]
 </span><span class="kw">pub trait </span>Handler: Sized {
-    <span class="kw">type </span>Timeout;
+    <span class="kw">type </span>TimeoutState;
     <span class="kw">type </span>Message;
 
     <span class="doccomment">/// Invoked when the socket represented by `token` is ready to be operated
@@ -56,11 +53,7 @@
     ///
     /// This function will only be invoked a single time per socket per event
     /// loop tick.
-    </span><span class="kw">fn </span>ready(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>, event_loop: <span class="kw-2">&amp;mut </span>EventLoop&lt;<span class="self">Self</span>&gt;, token: Token,
-        events: Ready,
-    ) {
-    }
+    </span><span class="kw">fn </span>ready(<span class="kw-2">&amp;mut </span><span class="self">self</span>, event_loop: <span class="kw-2">&amp;mut </span>EventLoop&lt;<span class="self">Self</span>&gt;, event: Event) {}
 
     <span class="doccomment">/// Invoked when a message has been received via the event loop's channel.
     </span><span class="kw">fn </span>notify(<span class="kw-2">&amp;mut </span><span class="self">self</span>, event_loop: <span class="kw-2">&amp;mut </span>EventLoop&lt;<span class="self">Self</span>&gt;, msg: <span class="self">Self</span>::Message) {
@@ -68,7 +61,8 @@
 
     <span class="doccomment">/// Invoked when a timeout has completed.
     </span><span class="kw">fn </span>timeout(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>, event_loop: <span class="kw-2">&amp;mut </span>EventLoop&lt;<span class="self">Self</span>&gt;, timeout: <span class="self">Self</span>::Timeout,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, event_loop: <span class="kw-2">&amp;mut </span>EventLoop&lt;<span class="self">Self</span>&gt;,
+        timeout: <span class="self">Self</span>::TimeoutState,
     ) {
     }
 

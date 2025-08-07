@@ -2165,34 +2165,7 @@
 <a href="#2164" id="2164">2164</a>
 <a href="#2165" id="2165">2165</a>
 <a href="#2166" id="2166">2166</a>
-<a href="#2167" id="2167">2167</a>
-<a href="#2168" id="2168">2168</a>
-<a href="#2169" id="2169">2169</a>
-<a href="#2170" id="2170">2170</a>
-<a href="#2171" id="2171">2171</a>
-<a href="#2172" id="2172">2172</a>
-<a href="#2173" id="2173">2173</a>
-<a href="#2174" id="2174">2174</a>
-<a href="#2175" id="2175">2175</a>
-<a href="#2176" id="2176">2176</a>
-<a href="#2177" id="2177">2177</a>
-<a href="#2178" id="2178">2178</a>
-<a href="#2179" id="2179">2179</a>
-<a href="#2180" id="2180">2180</a>
-<a href="#2181" id="2181">2181</a>
-<a href="#2182" id="2182">2182</a>
-<a href="#2183" id="2183">2183</a>
-<a href="#2184" id="2184">2184</a>
-<a href="#2185" id="2185">2185</a>
-<a href="#2186" id="2186">2186</a>
-<a href="#2187" id="2187">2187</a>
-<a href="#2188" id="2188">2188</a>
-<a href="#2189" id="2189">2189</a>
-<a href="#2190" id="2190">2190</a>
-<a href="#2191" id="2191">2191</a>
-<a href="#2192" id="2192">2192</a>
-<a href="#2193" id="2193">2193</a>
-<a href="#2194" id="2194">2194</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#2167" id="2167">2167</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -2211,9 +2184,8 @@
 
 <span class="kw">use </span>keccak_hash::keccak;
 <span class="kw">use </span>mio::{
-    tcp::{TcpListener, TcpStream},
-    udp::UdpSocket,
-    Poll, PollOpt, Ready, Token,
+    net::{TcpListener, TcpStream, UdpSocket},
+    Interest, Registry, Token,
 };
 <span class="kw">use </span>parity_path::restrict_permissions_owner;
 <span class="kw">use </span>parking_lot::{Mutex, RwLock};
@@ -2239,7 +2211,9 @@
 <span class="kw">use crate</span>::{
     discovery::Discovery,
     handshake::BYPASS_CRYPTOGRAPHY,
-    iolib::{IoContext, IoHandler, IoService, StreamToken, TimerToken},
+    iolib::{
+        IoContext, IoHandler, IoService, MapNonBlock, StreamToken, TimerToken,
+    },
     ip_utils::{map_external_address, select_public_address},
     node_database::NodeDatabase,
     node_table::<span class="kw-2">*</span>,
@@ -2366,7 +2340,6 @@
 </span><span class="kw">pub struct </span>NetworkService {
     <span class="kw">pub </span>io_service: <span class="prelude-ty">Option</span>&lt;IoService&lt;NetworkIoMessage&gt;&gt;,
     <span class="kw">pub </span>inner: <span class="prelude-ty">Option</span>&lt;Arc&lt;NetworkServiceInner&gt;&gt;,
-    network_poll: Arc&lt;Poll&gt;,
     config: NetworkConfiguration,
 }
 
@@ -2375,7 +2348,6 @@
         NetworkService {
             io_service: <span class="prelude-val">None</span>,
             inner: <span class="prelude-val">None</span>,
-            network_poll: Arc::new(Poll::new().unwrap()),
             config,
         }
     }
@@ -2390,29 +2362,12 @@
 
     <span class="kw">pub fn </span>is_test_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="self">self</span>.config.test_mode }
 
-    <span class="kw">pub fn </span>start_network_poll(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-        <span class="kw">let </span>handler = <span class="self">self</span>.inner.as_ref().unwrap().clone();
-        <span class="kw">let </span>main_event_loop_channel =
-            <span class="self">self</span>.io_service.as_ref().unwrap().channel();
-        <span class="self">self</span>.io_service
-            .as_ref()
-            .expect(<span class="string">"Already set"</span>)
-            .start_network_poll(
-                <span class="self">self</span>.network_poll.clone(),
-                handler,
-                main_event_loop_channel,
-                MAX_SESSIONS,
-                STOP_NET_POLL,
-            );
-        <span class="prelude-val">Ok</span>(())
-    }
-
     <span class="doccomment">/// Create and start the event loop inside the NetworkService
     </span><span class="kw">pub fn </span>initialize(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="kw">let </span>raw_io_service =
-            IoService::&lt;NetworkIoMessage&gt;::start(<span class="self">self</span>.network_poll.clone())<span class="question-mark">?</span>;
+            IoService::&lt;NetworkIoMessage&gt;::start(STOP_NET_POLL)<span class="question-mark">?</span>;
         <span class="self">self</span>.io_service = <span class="prelude-val">Some</span>(raw_io_service);
 
         <span class="kw">if </span><span class="self">self</span>.inner.is_none() {
@@ -2438,18 +2393,10 @@
 
     <span class="kw">pub fn </span>start(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>handler = <span class="self">self</span>.inner.as_ref().unwrap().clone();
-        <span class="kw">let </span>main_event_loop_channel =
-            <span class="self">self</span>.io_service.as_ref().unwrap().channel();
         <span class="self">self</span>.io_service
             .as_ref()
             .expect(<span class="string">"Already set"</span>)
-            .start_network_poll(
-                <span class="self">self</span>.network_poll.clone(),
-                handler,
-                main_event_loop_channel,
-                MAX_SESSIONS,
-                STOP_NET_POLL,
-            );
+            .start_network_poll(handler, MAX_SESSIONS);
     }
 
     <span class="doccomment">/// Add a P2P peer to the client as a trusted node
@@ -2755,7 +2702,7 @@
 
         <span class="macro">info!</span>(<span class="string">"Self node id: {:?}"</span>, <span class="kw-2">*</span>keys.public());
 
-        <span class="kw">let </span>tcp_listener = TcpListener::bind(<span class="kw-2">&amp;</span>listen_address)<span class="question-mark">?</span>;
+        <span class="kw">let </span>tcp_listener = TcpListener::bind(listen_address)<span class="question-mark">?</span>;
         listen_address = SocketAddr::new(
             listen_address.ip(),
             tcp_listener.local_addr()<span class="question-mark">?</span>.port(),
@@ -2769,7 +2716,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>udp_addr = local_endpoint.address;
         udp_addr.set_port(local_endpoint.udp_port);
         <span class="kw">let </span>udp_socket =
-            UdpSocket::bind(<span class="kw-2">&amp;</span>udp_addr).expect(<span class="string">"Error binding UDP socket"</span>);
+            UdpSocket::bind(udp_addr).expect(<span class="string">"Error binding UDP socket"</span>);
 
         <span class="kw">let </span>public_address = config.public_address;
         <span class="kw">let </span>public_endpoint = <span class="kw">match </span>public_address {
@@ -3148,7 +3095,7 @@
                 <span class="kw">return</span>;
             }
 
-            <span class="kw">match </span>TcpStream::connect(<span class="kw-2">&amp;</span>address) {
+            <span class="kw">match </span>TcpStream::connect(address) {
                 <span class="prelude-val">Ok</span>(socket) =&gt; {
                     <span class="macro">trace!</span>(<span class="string">"{}: connecting to {:?}"</span>, id, address);
                     (socket, address)
@@ -3611,7 +3558,7 @@
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; MAX_DATAGRAM_SIZE];
-        <span class="kw">match </span>udp_socket.recv_from(<span class="kw-2">&amp;mut </span>buf) {
+        <span class="kw">match </span>udp_socket.recv_from(<span class="kw-2">&amp;mut </span>buf).map_non_block() {
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((len, address))) =&gt; <span class="self">self
                 </span>.on_udp_packet(<span class="kw-2">&amp;</span>buf[<span class="number">0</span>..len], address)
                 .unwrap_or_else(|e| {
@@ -3643,7 +3590,10 @@
         <span class="kw">let </span>udp_socket = <span class="self">self</span>.udp_socket.lock();
         <span class="kw">let </span><span class="kw-2">mut </span>udp_channel = <span class="self">self</span>.udp_channel.write();
         <span class="kw">while let </span><span class="prelude-val">Some</span>(data) = udp_channel.dequeue_send() {
-            <span class="kw">match </span>udp_socket.send_to(<span class="kw-2">&amp;</span>data.payload, <span class="kw-2">&amp;</span>data.address) {
+            <span class="kw">match </span>udp_socket
+                .send_to(<span class="kw-2">&amp;</span>data.payload, data.address)
+                .map_non_block()
+            {
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(size)) <span class="kw">if </span>size == data.payload.len() =&gt; {}
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; {
                     <span class="macro">warn!</span>(<span class="string">"UDP sent incomplete datagram"</span>);
@@ -3973,48 +3923,46 @@
     }
 
     <span class="kw">fn </span>register_stream(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, stream: StreamToken, reg: Token, event_loop: <span class="kw-2">&amp;</span>Poll,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, stream: StreamToken, reg: Token, poll_registry: <span class="kw-2">&amp;</span>Registry,
     ) {
         <span class="kw">match </span>stream {
             FIRST_SESSION..=LAST_SESSION =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(session) = <span class="self">self</span>.sessions.get(stream) {
                     session
                         .write()
-                        .register_socket(reg, event_loop)
+                        .register_socket(reg, poll_registry)
                         .expect(<span class="string">"Error registering socket"</span>);
                 }
             }
             TCP_ACCEPT =&gt; {
-                event_loop
+                poll_registry
                     .register(
-                        <span class="kw-2">&amp;*</span><span class="self">self</span>.tcp_listener.lock(),
+                        <span class="kw-2">&amp;mut *</span><span class="self">self</span>.tcp_listener.lock(),
                         Token(TCP_ACCEPT),
-                        Ready::all(),
-                        PollOpt::edge(),
-                    )
+                        Interest::READABLE | Interest::WRITABLE, <span class="comment">// previously(mio0.6) Ready::all() is used here
+                    </span>)
                     .expect(<span class="string">"Error registering stream"</span>);
             }
             UDP_MESSAGE =&gt; {
-                event_loop
+                poll_registry
                     .register(
-                        <span class="kw-2">&amp;*</span><span class="self">self</span>.udp_socket.lock(),
+                        <span class="kw-2">&amp;mut *</span><span class="self">self</span>.udp_socket.lock(),
                         reg,
-                        Ready::all(),
-                        PollOpt::edge(),
-                    )
+                        Interest::READABLE | Interest::WRITABLE, <span class="comment">// previously(mio0.6) Ready::all() is used here
+                    </span>)
                     .expect(<span class="string">"Error registering UDP socket"</span>);
             }
             <span class="kw">_ </span>=&gt; <span class="macro">warn!</span>(<span class="string">"Unexpected stream registeration"</span>),
         }
     }
 
-    <span class="kw">fn </span>deregister_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, stream: StreamToken, event_loop: <span class="kw-2">&amp;</span>Poll) {
+    <span class="kw">fn </span>deregister_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, stream: StreamToken, poll_registry: <span class="kw-2">&amp;</span>Registry) {
         <span class="kw">match </span>stream {
             FIRST_SESSION..=LAST_SESSION =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(session) = <span class="self">self</span>.sessions.get(stream) {
-                    <span class="kw">let </span>sess = session.write();
+                    <span class="kw">let </span><span class="kw-2">mut </span>sess = session.write();
                     <span class="kw">if </span>sess.expired() {
-                        sess.deregister_socket(event_loop)
+                        sess.deregister_socket(poll_registry)
                             .expect(<span class="string">"Error deregistering socket"</span>);
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(node_id) = sess.id() {
                             <span class="self">self</span>.node_db.write().note_failure(
@@ -4032,40 +3980,38 @@
     }
 
     <span class="kw">fn </span>update_stream(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, stream: StreamToken, reg: Token, event_loop: <span class="kw-2">&amp;</span>Poll,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, stream: StreamToken, reg: Token, poll_registry: <span class="kw-2">&amp;</span>Registry,
     ) {
         <span class="kw">match </span>stream {
             FIRST_SESSION..=LAST_SESSION =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(session) = <span class="self">self</span>.sessions.get(stream) {
                     session
                         .write()
-                        .update_socket(reg, event_loop)
+                        .update_socket(reg, poll_registry)
                         .expect(<span class="string">"Error updating socket"</span>);
                 }
             }
-            TCP_ACCEPT =&gt; event_loop
+            TCP_ACCEPT =&gt; poll_registry
                 .reregister(
-                    <span class="kw-2">&amp;*</span><span class="self">self</span>.tcp_listener.lock(),
+                    <span class="kw-2">&amp;mut *</span><span class="self">self</span>.tcp_listener.lock(),
                     Token(TCP_ACCEPT),
-                    Ready::all(),
-                    PollOpt::edge(),
-                )
+                    Interest::READABLE | Interest::WRITABLE, <span class="comment">// previously(mio0.6) Ready::all() is used here
+                </span>)
                 .expect(<span class="string">"Error reregistering stream"</span>),
             UDP_MESSAGE =&gt; {
-                <span class="kw">let </span>udp_socket = <span class="self">self</span>.udp_socket.lock();
+                <span class="kw">let </span><span class="kw-2">mut </span>udp_socket = <span class="self">self</span>.udp_socket.lock();
                 <span class="kw">let </span>udp_channel = <span class="self">self</span>.udp_channel.read();
 
                 <span class="kw">let </span>registration = <span class="kw">if </span>udp_channel.any_sends_queued() {
-                    Ready::readable() | Ready::writable()
+                    Interest::READABLE | Interest::WRITABLE
                 } <span class="kw">else </span>{
-                    Ready::readable()
+                    Interest::READABLE
                 };
-                event_loop
+                poll_registry
                     .reregister(
-                        <span class="kw-2">&amp;*</span>udp_socket,
+                        <span class="kw-2">&amp;mut *</span>udp_socket,
                         reg,
                         registration,
-                        PollOpt::edge(),
                     )
                     .expect(<span class="string">"Error reregistering UDP socket"</span>);
             }

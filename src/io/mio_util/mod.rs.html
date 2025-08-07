@@ -8,60 +8,14 @@
 <a href="#7" id="7">7</a>
 <a href="#8" id="8">8</a>
 <a href="#9" id="9">9</a>
-<a href="#10" id="10">10</a>
-<a href="#11" id="11">11</a>
-<a href="#12" id="12">12</a>
-<a href="#13" id="13">13</a>
-<a href="#14" id="14">14</a>
-<a href="#15" id="15">15</a>
-<a href="#16" id="16">16</a>
-<a href="#17" id="17">17</a>
-<a href="#18" id="18">18</a>
-<a href="#19" id="19">19</a>
-<a href="#20" id="20">20</a>
-<a href="#21" id="21">21</a>
-<a href="#22" id="22">22</a>
-<a href="#23" id="23">23</a>
-<a href="#24" id="24">24</a>
-<a href="#25" id="25">25</a>
-<a href="#26" id="26">26</a>
-<a href="#27" id="27">27</a>
-<a href="#28" id="28">28</a>
-<a href="#29" id="29">29</a>
-<a href="#30" id="30">30</a>
-<a href="#31" id="31">31</a>
-<a href="#32" id="32">32</a>
-<a href="#33" id="33">33</a></pre></div><pre class="rust"><code><span class="attr">#![allow(unused)]
+<a href="#10" id="10">10</a></pre></div><pre class="rust"><code><span class="attr">#![allow(unused)]
 </span><span class="kw">mod </span>event_loop;
 <span class="kw">mod </span>handler;
 <span class="kw">mod </span>io;
-<span class="kw">mod </span>notify;
-<span class="kw">use </span>mio_extras::channel;
-<span class="kw">pub use </span>mio_extras::timer;
+<span class="kw">mod </span>notify_error;
 
 <span class="kw">pub use </span>event_loop::{EventLoop, EventLoopBuilder, Sender};
 <span class="kw">pub use </span>handler::Handler;
-<span class="kw">pub use </span>notify::NotifyError;
-
-<span class="kw">mod </span>convert {
-    <span class="kw">use </span>std::time::Duration;
-
-    <span class="kw">const </span>NANOS_PER_MILLI: u32 = <span class="number">1_000_000</span>;
-    <span class="kw">const </span>MILLIS_PER_SEC: u64 = <span class="number">1_000</span>;
-
-    <span class="doccomment">/// Convert a `Duration` to milliseconds, rounding up and saturating at
-    /// `u64::MAX`.
-    ///
-    /// The saturating is fine because `u64::MAX` milliseconds are still many
-    /// million years.
-    </span><span class="kw">pub fn </span>millis(duration: Duration) -&gt; u64 {
-        <span class="comment">// Round up.
-        </span><span class="kw">let </span>millis =
-            (duration.subsec_nanos() + NANOS_PER_MILLI - <span class="number">1</span>) / NANOS_PER_MILLI;
-        duration
-            .as_secs()
-            .saturating_mul(MILLIS_PER_SEC)
-            .saturating_add(u64::from(millis))
-    }
-}
+<span class="kw">pub use </span>io::{would_block, MapNonBlock};
+<span class="kw">pub use </span>notify_error::NotifyError;
 </code></pre></div></section></main></body></html>

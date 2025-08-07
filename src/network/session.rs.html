@@ -942,7 +942,9 @@
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
 <a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -961,7 +963,7 @@
 <span class="kw">use </span>diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 <span class="kw">use </span>io::{IoContext, StreamToken};
 <span class="kw">use </span>log::{debug, trace};
-<span class="kw">use </span>mio::{tcp::TcpStream, Poll, Token};
+<span class="kw">use </span>mio::{net::TcpStream, Registry, Token};
 <span class="kw">use </span>priority_send_queue::SendQueuePriority;
 <span class="kw">use </span>rlp::{Rlp, RlpStream};
 <span class="kw">use </span>serde::Deserialize;
@@ -1121,10 +1123,10 @@
     <span class="doccomment">/// Register event loop for the underlying connection.
     /// If session expired, no effect taken.
     </span><span class="kw">pub fn </span>register_socket(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, reg: Token, event_loop: <span class="kw-2">&amp;</span>Poll,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, reg: Token, poll_registry: <span class="kw-2">&amp;</span>Registry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
         <span class="kw">if </span>!<span class="self">self</span>.expired() {
-            <span class="self">self</span>.connection().register_socket(reg, event_loop)<span class="question-mark">?</span>;
+            <span class="self">self</span>.connection_mut().register_socket(reg, poll_registry)<span class="question-mark">?</span>;
         }
 
         <span class="prelude-val">Ok</span>(())
@@ -1132,15 +1134,17 @@
 
     <span class="doccomment">/// Update the event loop for the underlying connection.
     </span><span class="kw">pub fn </span>update_socket(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, reg: Token, event_loop: <span class="kw-2">&amp;</span>Poll,
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, reg: Token, poll_registry: <span class="kw-2">&amp;</span>Registry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-        <span class="self">self</span>.connection().update_socket(reg, event_loop)<span class="question-mark">?</span>;
+        <span class="self">self</span>.connection_mut().update_socket(reg, poll_registry)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Deregister the event loop for the underlying connection.
-    </span><span class="kw">pub fn </span>deregister_socket(<span class="kw-2">&amp;</span><span class="self">self</span>, event_loop: <span class="kw-2">&amp;</span>Poll) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
-        <span class="self">self</span>.connection().deregister_socket(event_loop)<span class="question-mark">?</span>;
+    </span><span class="kw">pub fn </span>deregister_socket(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>, poll_registry: <span class="kw-2">&amp;</span>Registry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+        <span class="self">self</span>.connection_mut().deregister_socket(poll_registry)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 

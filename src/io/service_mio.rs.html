@@ -778,7 +778,20 @@
 <a href="#777" id="777">777</a>
 <a href="#778" id="778">778</a>
 <a href="#779" id="779">779</a>
-<a href="#780" id="780">780</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -799,14 +812,15 @@
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">use crate</span>::{
-    mio_util::{timer::Timeout, EventLoop, EventLoopBuilder, Handler, Sender},
+    mio_util::{EventLoop, EventLoopBuilder, Handler, Sender},
     worker::{SocketWorker, Work, WorkType, Worker},
     IoError, IoHandler,
 };
 <span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>log::{debug, error, trace, warn};
 <span class="kw">use </span>metrics::{register_meter_with_group, Meter, MeterTimer};
-<span class="kw">use </span>mio::{Events, Poll, PollOpt, Ready, Registration, SetReadiness, Token};
+<span class="kw">use </span>mio::{Events, Poll, Registry, Token, Waker};
+<span class="kw">use </span>mio_timer::Timeout;
 <span class="kw">use </span>parking_lot::{Mutex, RwLock};
 <span class="kw">use </span>slab::Slab;
 <span class="kw">use </span>std::{
@@ -1040,7 +1054,7 @@
     work_ready: Arc&lt;SCondvar&gt;,
     socket_workers:
         Vec&lt;(crossbeam_channel::Sender&lt;Work&lt;Message&gt;&gt;, SocketWorker)&gt;,
-    network_poll: Arc&lt;Poll&gt;,
+    network_poll_registry: Arc&lt;Registry&gt;,
 }
 
 <span class="kw">impl</span>&lt;Message&gt; IoManager&lt;Message&gt;
@@ -1050,7 +1064,7 @@
     </span><span class="kw">pub fn </span>start(
         event_loop: <span class="kw-2">&amp;mut </span>EventLoop&lt;IoManager&lt;Message&gt;&gt;,
         handlers: Arc&lt;RwLock&lt;Slab&lt;Arc&lt;<span class="kw">dyn </span>IoHandler&lt;Message&gt;&gt;&gt;&gt;&gt;,
-        network_poll: Arc&lt;Poll&gt;,
+        network_poll_registry: Arc&lt;Registry&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), IoError&gt; {
         <span class="kw">let </span>worker = crossbeam_deque::Worker::new_fifo();
         <span class="kw">let </span>stealer = worker.stealer();
@@ -1097,7 +1111,7 @@
             workers,
             work_ready,
             socket_workers,
-            network_poll,
+            network_poll_registry,
         };
         event_loop.run(<span class="kw-2">&amp;mut </span>io)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -1108,7 +1122,7 @@
 <span class="kw">where </span>Message: Send + Sync + <span class="lifetime">'static
 </span>{
     <span class="kw">type </span>Message = IoMessage&lt;Message&gt;;
-    <span class="kw">type </span>Timeout = Token;
+    <span class="kw">type </span>TimeoutState = Token;
 
     <span class="comment">// All network reading and writing is now handled by the network_poll, so
     // this event loop will not have any ready event.
@@ -1208,17 +1222,18 @@
                 <span class="macro">trace!</span>(<span class="string">"register stream {} {}"</span>, handler_id, token);
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(handler) = <span class="self">self</span>.handlers.read().get(handler_id) {
                     <span class="macro">trace!</span>(<span class="string">"do register stream {} {}"</span>, handler_id, token);
+                    <span class="kw">let </span>registry = <span class="self">self</span>.network_poll_registry.as_ref();
                     handler.register_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
-                        <span class="self">self</span>.network_poll.as_ref(),
+                        registry,
                     );
                 }
             }
             IoMessage::DeregisterStream { handler_id, token } =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(handler) = <span class="self">self</span>.handlers.read().get(handler_id) {
-                    handler
-                        .deregister_stream(token, <span class="self">self</span>.network_poll.as_ref());
+                    <span class="kw">let </span>registry = <span class="self">self</span>.network_poll_registry.as_ref();
+                    handler.deregister_stream(token, registry);
                     <span class="comment">// unregister a timer associated with the token (if any)
                     </span><span class="kw">let </span>timer_id = token + handler_id * TOKENS_PER_HANDLER;
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(timer) = <span class="self">self</span>.timers.write().remove(<span class="kw-2">&amp;</span>timer_id) {
@@ -1228,10 +1243,11 @@
             }
             IoMessage::UpdateStreamRegistration { handler_id, token } =&gt; {
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(handler) = <span class="self">self</span>.handlers.read().get(handler_id) {
+                    <span class="kw">let </span>registry = <span class="self">self</span>.network_poll_registry.as_ref();
                     handler.update_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
-                        <span class="self">self</span>.network_poll.as_ref(),
+                        registry,
                     );
                 }
             }
@@ -1394,16 +1410,16 @@
     host_channel: Mutex&lt;Sender&lt;IoMessage&lt;Message&gt;&gt;&gt;,
     handlers: Arc&lt;RwLock&lt;Slab&lt;Arc&lt;<span class="kw">dyn </span>IoHandler&lt;Message&gt;&gt;&gt;&gt;&gt;,
     network_poll_thread: Mutex&lt;<span class="prelude-ty">Option</span>&lt;JoinHandle&lt;()&gt;&gt;&gt;,
-    network_poll_stopped: Arc&lt;(Registration, SetReadiness)&gt;,
+    network_poll_stopped: Arc&lt;Waker&gt;,
+    network_poll: Arc&lt;Mutex&lt;Poll&gt;&gt;,
+    stop_token: usize,
 }
 
 <span class="kw">impl</span>&lt;Message&gt; IoService&lt;Message&gt;
 <span class="kw">where </span>Message: Send + Sync + <span class="lifetime">'static
 </span>{
     <span class="doccomment">/// Starts IO event loop
-    </span><span class="kw">pub fn </span>start(
-        network_poll: Arc&lt;Poll&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;IoService&lt;Message&gt;, IoError&gt; {
+    </span><span class="kw">pub fn </span>start(stop_token: usize) -&gt; <span class="prelude-ty">Result</span>&lt;IoService&lt;Message&gt;, IoError&gt; {
         <span class="macro">debug!</span>(<span class="string">"start IoService"</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>config = EventLoopBuilder::new();
         config.messages_per_tick(<span class="number">1024</span>);
@@ -1413,11 +1429,24 @@
         <span class="kw">let </span>handlers = Arc::new(RwLock::new(Slab::with_capacity(MAX_HANDLERS)));
         <span class="kw">let </span>h = handlers.clone();
 
+        <span class="kw">let </span>network_poll = Poll::new().expect(<span class="string">"Failed to create Poll instance"</span>);
+        <span class="kw">let </span>registry = network_poll
+            .registry()
+            .try_clone()
+            .expect(<span class="string">"Failed to clone registry for event loop"</span>);
+
+        <span class="kw">let </span>waker = Waker::new(network_poll.registry(), Token(stop_token))
+            .expect(<span class="string">"Failed to create Waker"</span>);
+
         <span class="kw">let </span>thread = thread::Builder::new()
             .name(<span class="string">"io_service"</span>.into())
             .spawn(<span class="kw">move </span>|| {
-                IoManager::&lt;Message&gt;::start(<span class="kw-2">&amp;mut </span>event_loop, h, network_poll)
-                    .expect(<span class="string">"Error starting IO service"</span>);
+                IoManager::&lt;Message&gt;::start(
+                    <span class="kw-2">&amp;mut </span>event_loop,
+                    h,
+                    Arc::new(registry),
+                )
+                .expect(<span class="string">"Error starting IO service"</span>);
             })
             .expect(<span class="string">"only one io_service thread, so it should not fail"</span>);
         <span class="prelude-val">Ok</span>(IoService {
@@ -1425,7 +1454,9 @@
             host_channel: Mutex::new(channel),
             handlers,
             network_poll_thread: Mutex::new(<span class="prelude-val">None</span>),
-            network_poll_stopped: Arc::new(Registration::new2()),
+            network_poll_stopped: Arc::new(waker),
+            network_poll: Arc::new(Mutex::new(network_poll)),
+            stop_token,
         })
     }
 
@@ -1434,9 +1465,9 @@
         <span class="comment">// Network poll should be closed before the main EventLoop, otherwise it
         // will send messages to a closed EventLoop.
         </span><span class="self">self</span>.network_poll_stopped
-            .<span class="number">1
-            </span>.set_readiness(Ready::readable())
-            .expect(<span class="string">"Set network_poll_stopped readiness failure"</span>);
+            .wake()
+            .expect(<span class="string">"Failed to wake network poll thread"</span>);
+
         <span class="kw">if let </span><span class="prelude-val">Some</span>(thread) = <span class="self">self</span>.network_poll_thread.lock().take() {
             thread.join().unwrap_or_else(|e| <span class="kw">match </span>e.downcast_ref::&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;() {
                 <span class="prelude-val">Some</span>(e) =&gt; <span class="macro">error!</span>(<span class="string">"Error joining network poll thread: {}"</span>, e),
@@ -1460,38 +1491,33 @@
     }
 
     <span class="kw">pub fn </span>start_network_poll(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, network_poll: Arc&lt;Poll&gt;, handler: Arc&lt;<span class="kw">dyn </span>IoHandler&lt;Message&gt;&gt;,
-        main_event_loop_channel: IoChannel&lt;Message&gt;, max_sessions: usize,
-        stop_token: usize,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, handler: Arc&lt;<span class="kw">dyn </span>IoHandler&lt;Message&gt;&gt;, max_sessions: usize,
     ) {
-        network_poll
-            .register(
-                <span class="kw-2">&amp;</span><span class="self">self</span>.network_poll_stopped.<span class="number">0</span>,
-                Token(stop_token),
-                Ready::readable(),
-                PollOpt::edge(),
-            )
-            .expect(<span class="string">"network_poll register failure"</span>);
+        <span class="kw">let </span>main_event_loop_channel = <span class="self">self</span>.channel().clone();
+        <span class="kw">let </span>network_poll = <span class="self">self</span>.network_poll.clone();
+        <span class="kw">let </span>stop_token = <span class="self">self</span>.stop_token;
         <span class="kw">let </span>thread = thread::Builder::new()
             .name(<span class="string">"network_eventloop"</span>.into())
             .spawn(<span class="kw">move </span>|| {
                 <span class="kw">let </span><span class="kw-2">mut </span>events = Events::with_capacity(max_sessions);
                 <span class="kw">loop </span>{
-                    network_poll
-                        .poll(<span class="kw-2">&amp;mut </span>events, <span class="prelude-val">None</span>)
-                        .expect(<span class="string">"Network poll failure"</span>);
                     <span class="kw">let </span>_timer =
                         MeterTimer::time_func(NET_POLL_THREAD_TIMER.as_ref());
+
+                    {
+                        <span class="kw">let </span><span class="kw-2">mut </span>poll = network_poll.lock();
+                        poll.poll(<span class="kw-2">&amp;mut </span>events, <span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">1</span>)))
+                            .expect(<span class="string">"Network poll failure"</span>);
+                    }
+
                     <span class="kw">for </span>event <span class="kw">in </span><span class="kw-2">&amp;</span>events {
-                        <span class="comment">// IoService is dropped and we should stop this thread
-                        </span><span class="kw">if </span>event.token().<span class="number">0 </span>== stop_token {
-                            <span class="macro">assert!</span>(event.readiness().is_readable());
+                        <span class="kw">if </span>event.token().<span class="number">0 </span>== stop_token {
                             <span class="kw">return</span>;
                         }
 
                         <span class="kw">let </span>handler_id = <span class="number">0</span>;
                         <span class="kw">let </span>token_id = event.token().<span class="number">0 </span>% TOKENS_PER_HANDLER;
-                        <span class="kw">if </span>event.readiness().is_readable() {
+                        <span class="kw">if </span>event.is_readable() {
                             handler.stream_readable(
                                 <span class="kw-2">&amp;</span>IoContext::new(
                                     main_event_loop_channel.clone(),
@@ -1500,7 +1526,7 @@
                                 token_id,
                             );
                         }
-                        <span class="kw">if </span>event.readiness().is_writable() {
+                        <span class="kw">if </span>event.is_writable() {
                             handler.stream_writable(
                                 <span class="kw-2">&amp;</span>IoContext::new(
                                     main_event_loop_channel.clone(),
@@ -1509,7 +1535,7 @@
                                 token_id,
                             );
                         }
-                        <span class="kw">if </span>event.readiness().is_hup() {
+                        <span class="kw">if </span>event.is_read_closed() || event.is_write_closed() {
                             handler.stream_hup(
                                 <span class="kw-2">&amp;</span>IoContext::new(
                                     main_event_loop_channel.clone(),
