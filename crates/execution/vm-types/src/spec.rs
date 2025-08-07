@@ -185,6 +185,7 @@ pub struct Spec {
     pub cip144: bool,
     /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
     pub cip145: bool,
+    pub cip145_fix: bool,
     /// CIP-150: Reject New Contract Code Starting with the 0xEF byte
     pub cip150: bool,
     /// CIP-151: SELFDESTRUCT only in Same Transaction
@@ -400,6 +401,7 @@ impl Spec {
             cip133_core: false,
             cip137: false,
             cip145: false,
+            cip145_fix: false,
             cip1559: false,
             cancun_opcodes: false,
             cip144: false,

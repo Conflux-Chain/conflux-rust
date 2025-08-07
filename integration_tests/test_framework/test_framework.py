@@ -583,7 +583,7 @@ class ConfluxTestFramework:
         if check_status:
             for i in receipts:
                 if int(i["outcomeStatus"], 0) != 0:
-                    raise AssertionError("Receipt states the execution failes: {}".format(i))
+                    raise AssertionError("Receipt states the execution fails: {}".format(i))
         return receipts   
 
     def start_block_gen(self):

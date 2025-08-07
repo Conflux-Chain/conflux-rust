@@ -195,6 +195,7 @@ build_config! {
         (eoa_code_transition_height, (Option<u64>), Some(48580000))
         (cip151_transition_height, (Option<u64>), None)
         (cip645_transition_height, (Option<u64>), None)
+        (cip145_fix_transition_height, (Option<u64>), None)
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
 
@@ -1507,13 +1508,16 @@ impl Configuration {
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
-            params.transition_heights => { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935, eip7623 }
+            params.transition_heights => { cip150, cip151, cip152, cip154, cip7702, cip645, eip2537, eip2935, eip7623, cip145_fix }
         );
         if let Some(x) = self.raw_conf.cip151_transition_height {
             params.transition_heights.cip151 = x;
         }
         if let Some(x) = self.raw_conf.cip645_transition_height {
             params.transition_heights.cip645 = x;
+        }
+        if let Some(x) = self.raw_conf.cip145_fix_transition_height {
+            params.transition_heights.cip145_fix = x;
         }
         params.transition_heights.align_evm =
             self.raw_conf.align_evm_transition_height;
