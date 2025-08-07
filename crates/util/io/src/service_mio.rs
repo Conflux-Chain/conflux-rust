@@ -713,11 +713,8 @@ where Message: Send + Sync + 'static
 
                     {
                         let mut poll = network_poll.lock();
-                        poll.poll(
-                            &mut events,
-                            Some(Duration::from_millis(100)),
-                        )
-                        .expect("Network poll failure");
+                        poll.poll(&mut events, Some(Duration::from_secs(1)))
+                            .expect("Network poll failure");
                     }
 
                     for event in &events {

@@ -287,10 +287,25 @@ impl<H: Handler> EventLoop<H> {
         for evt in events {
             match evt.token() {
                 NOTIFY_OR_TIMER => {
-                    // channel and timer use the same token, so we need to
-                    // check both the channel and the timer
-                    self.notify(handler);
-                    self.timer_process(handler);
+                    while self.notify_queue.len() > 0 {
+                        match self.notify_queue.pop() {
+                            Some(id) if id == self.channel_noti_id => {
+                                self.notify(handler);
+                            }
+                            Some(id) if id == self.timer_noti_id => {
+                                self.timer_process(handler);
+                            }
+                            Some(id) => {
+                                trace!("event loop got spurious wakeup for unknown id: {:?}", id);
+                            }
+                            None => {
+                                // Spurious wakeup, nothing to do
+                                trace!(
+                                    "event loop got spurious wakeup with no id"
+                                );
+                            }
+                        }
+                    }
                 }
                 _ => self.io_event(handler, evt),
             }
@@ -302,21 +317,17 @@ impl<H: Handler> EventLoop<H> {
     }
 
     fn notify(&mut self, handler: &mut H) {
-        for _ in 0..self.config.messages_per_tick {
-            match self.notify_rx.try_recv() {
-                Ok(msg) => {
-                    handler.notify(self, msg);
-                    let _ = self.notify_queue.pop();
-                }
-                _ => break,
+        match self.notify_rx.try_recv() {
+            Ok(msg) => {
+                handler.notify(self, msg);
             }
+            _ => {}
         }
     }
 
     fn timer_process(&mut self, handler: &mut H) {
         while let Some(t) = self.timer.poll() {
             handler.timeout(self, t);
-            let _ = self.notify_queue.pop();
         }
     }
 }
