@@ -1,10 +1,11 @@
-use super::channel;
+use mio_misc::channel;
 use std::{any, error, fmt, io};
 
 pub enum NotifyError<T> {
     Io(io::Error),
     Full(T),
     Closed(Option<T>),
+    NotificationQueueFull,
 }
 
 impl<M> fmt::Debug for NotifyError<M> {
@@ -19,6 +20,9 @@ impl<M> fmt::Debug for NotifyError<M> {
             NotifyError::Closed(..) => {
                 write!(fmt, "NotifyError::Closed(..)")
             }
+            NotifyError::NotificationQueueFull => {
+                write!(fmt, "NotifyError::NotificationQueueFull")
+            }
         }
     }
 }
@@ -31,6 +35,9 @@ impl<M> fmt::Display for NotifyError<M> {
             }
             NotifyError::Full(..) => write!(fmt, "Full"),
             NotifyError::Closed(..) => write!(fmt, "Closed"),
+            NotifyError::NotificationQueueFull => {
+                write!(fmt, "Notification queue is full")
+            }
         }
     }
 }
@@ -41,6 +48,7 @@ impl<M: any::Any> error::Error for NotifyError<M> {
             NotifyError::Io(ref err) => err.description(),
             NotifyError::Closed(..) => "The receiving end has hung up",
             NotifyError::Full(..) => "Queue is full",
+            NotifyError::NotificationQueueFull => "Notification queue is full",
         }
     }
 
@@ -59,6 +67,9 @@ impl<M> From<channel::TrySendError<M>> for NotifyError<M> {
             channel::TrySendError::Full(v) => NotifyError::Full(v),
             channel::TrySendError::Disconnected(v) => {
                 NotifyError::Closed(Some(v))
+            }
+            channel::TrySendError::NotificationQueueFull => {
+                NotifyError::NotificationQueueFull
             }
         }
     }
