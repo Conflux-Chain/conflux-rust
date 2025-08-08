@@ -228,6 +228,7 @@ impl StratumImpl {
                     }
                     Err(e) => {
                         warn!(target: "stratum", "Unexpected transport error: {:?}", e);
+                        hup_peers.insert(**addr);
                     }
                     Ok(_) => {}
                 }
