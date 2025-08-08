@@ -1,4 +1,5 @@
 use crate::transaction::PackingPoolTransaction;
+use cfx_types::U256;
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Debug, Hash)]
 /// A minimal implementation of the [`PackingPoolTransaction`] trait for testing
@@ -26,9 +27,13 @@ impl PackingPoolTransaction for MockTransaction {
 
     fn sender(&self) -> Self::Sender { self.sender }
 
-    fn nonce(&self) -> cfx_types::U256 { self.nonce.into() }
+    fn nonce(&self) -> U256 { self.nonce.into() }
 
-    fn gas_price(&self) -> cfx_types::U256 { self.gas_price.into() }
+    fn gas_price(&self) -> U256 { self.gas_price.into() }
 
-    fn gas_limit(&self) -> cfx_types::U256 { self.gas_limit.into() }
+    // mock tx is a eip155 like transaction, so we use gas_price as
+    // max_priority_gas_price
+    fn max_priority_gas_price(&self) -> U256 { self.gas_price.into() }
+
+    fn gas_limit(&self) -> U256 { self.gas_limit.into() }
 }
