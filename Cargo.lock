@@ -1385,6 +1385,7 @@ dependencies = [
  "cfx-util-macros",
  "cfx-vm-types",
  "cfxcore",
+ "cfxcore-errors",
  "futures 0.3.30",
  "geth-tracer",
  "jsonrpc-core",
@@ -1733,6 +1734,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "cfxcore-errors",
  "cfxcore-pow",
  "cfxcore-types",
  "cfxkey",
@@ -1834,6 +1836,13 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "cfxcore-errors"
+version = "3.0.0"
+dependencies = [
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -6630,6 +6639,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-parameters",
  "cfx-types",
+ "cfxcore-errors",
  "cfxkey",
  "criterion",
  "itertools 0.14.0",

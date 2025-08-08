@@ -1,0 +1,14 @@
+[package]
+name = "cfxcore-errors"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+edition.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
