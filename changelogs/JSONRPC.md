@@ -18,6 +18,7 @@ Misc changes:
    4. These trace methods now support `SelfDestruct(Suicide)` trace, to access historical selfdestruct transaction data, a resync of the data is required.
 4. eSpace now support geth style `txpool` namespace methods, including: `txpool_status`, `txpool_inspect`, `txpool_content`, `txpool_contentFrom`
 5. `eth_call`, `eth_estimateGas` add support for `stateoverride` feature.
+6. `eth_getBlockByNumber` will return `null` when block number is bigger than latest block, other than return error message.
 
 ## v2.4.1
 
