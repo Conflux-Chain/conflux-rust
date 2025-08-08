@@ -341,7 +341,13 @@
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -407,7 +413,10 @@
     </span><span class="attr">#[inline]
     </span><span class="kw">fn </span>pivot_hash_of(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;H256, Error&gt; {
         <span class="kw">let </span>epoch = EpochNumber::Number(height);
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.consensus.get_hash_from_epoch_number(epoch)<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.consensus
+            .get_hash_from_epoch_number(epoch)
+            .map_err(|e| e.to_string())<span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Get header at `height` on the pivot chain, if it exists.
@@ -422,7 +431,10 @@
     </span><span class="attr">#[inline]
     </span><span class="kw">pub fn </span>block_hashes_in(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;H256&gt;, Error&gt; {
         <span class="kw">let </span>epoch = EpochNumber::Number(height);
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.consensus.get_block_hashes_by_epoch(epoch)<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.consensus
+            .get_block_hashes_by_epoch(epoch)
+            .map_err(|e| e.to_string())<span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Get the correct deferred state root of the block at `height` on the

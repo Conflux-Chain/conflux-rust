@@ -374,7 +374,7 @@
         <span class="kw">let </span>epoch_block_hashes = <span class="self">self
             </span>.consensus_graph()
             .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
-            .map_err(|err| CoreError::Msg(err))<span class="question-mark">?</span>;
+            .map_err(|err| CoreError::Msg(err.into()))<span class="question-mark">?</span>;
         <span class="kw">let </span>epoch_id = epoch_block_hashes
             .last()
             .ok_or(CoreError::Msg(<span class="string">"should have block hash"</span>.to_string()))<span class="question-mark">?</span>;

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("cfxcore_errors", 0, "Error type for block-related operations in the provider.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

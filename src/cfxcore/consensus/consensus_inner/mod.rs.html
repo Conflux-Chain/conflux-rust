@@ -4152,7 +4152,9 @@
 <a href="#4151" id="4151">4151</a>
 <a href="#4152" id="4152">4152</a>
 <a href="#4153" id="4153">4153</a>
-<a href="#4154" id="4154">4154</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#4154" id="4154">4154</a>
+<a href="#4155" id="4155">4155</a>
+<a href="#4156" id="4156">4156</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -4160,6 +4162,7 @@
 <span class="kw">pub mod </span>confirmation_meter;
 <span class="kw">pub mod </span>consensus_executor;
 <span class="kw">pub mod </span>consensus_new_block_handler;
+<span class="kw">use </span>cfxcore_errors::ProviderBlockError;
 <span class="kw">use </span>cfxcore_pow <span class="kw">as </span>pow;
 
 <span class="kw">use </span>pow::{PowComputer, ProofOfWorkConfig};
@@ -6285,7 +6288,7 @@
     /// out of the current era.
     </span><span class="kw">pub fn </span>get_pivot_hash_from_epoch_number(
         <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_number: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EpochId, String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EpochId, ProviderBlockError&gt; {
         <span class="kw">let </span>height = epoch_number;
         <span class="kw">if </span>height &gt;= <span class="self">self</span>.cur_era_genesis_height {
             <span class="kw">let </span>pivot_index = (height - <span class="self">self</span>.cur_era_genesis_height) <span class="kw">as </span>usize;
@@ -6315,7 +6318,7 @@
 
     <span class="kw">pub fn </span>block_hashes_by_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_number: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;H256&gt;, String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;H256&gt;, ProviderBlockError&gt; {
         <span class="macro">debug!</span>(
             <span class="string">"block_hashes_by_epoch epoch_number={:?} pivot_chain.len={:?}"</span>,
             epoch_number,
@@ -6353,7 +6356,7 @@
 
     <span class="kw">pub fn </span>skipped_block_hashes_by_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_number: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;H256&gt;, String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;H256&gt;, ProviderBlockError&gt; {
         <span class="macro">debug!</span>(
             <span class="string">"skipped_block_hashes_by_epoch epoch_number={:?} pivot_chain.len={:?}"</span>,
             epoch_number,
@@ -6505,11 +6508,11 @@
 
     <span class="kw">pub fn </span>check_block_pivot_assumption(
         <span class="kw-2">&amp;</span><span class="self">self</span>, pivot_hash: <span class="kw-2">&amp;</span>H256, epoch: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ProviderBlockError&gt; {
         <span class="kw">let </span>last_number = <span class="self">self</span>.best_epoch_number();
         <span class="kw">let </span>hash = <span class="self">self</span>.get_pivot_hash_from_epoch_number(epoch)<span class="question-mark">?</span>;
         <span class="kw">if </span>epoch &gt; last_number || hash != <span class="kw-2">*</span>pivot_hash {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Error: pivot chain assumption failed"</span>.to_owned());
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="string">"Error: pivot chain assumption failed"</span>.into());
         }
         <span class="prelude-val">Ok</span>(())
     }
@@ -8297,6 +8300,7 @@
             <span class="self">self</span>,
             epoch_number,
         )
+        .map_err(|e| e.to_string())
     }
 
     <span class="kw">fn </span>get_epoch_execution_commitment_with_db(

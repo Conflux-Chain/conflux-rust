@@ -310,12 +310,14 @@
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_execute_helper::{
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_execute_helper::{
     exec_tracer::recover_phantom_traces,
     phantom_tx::build_bloom_and_recover_phantom,
 };
 <span class="kw">use </span>cfx_rpc_cfx_types::PhantomBlock;
 <span class="kw">use </span>cfx_types::{Bloom, Space, H256, U256};
+<span class="kw">use </span>cfxcore_errors::ProviderBlockError;
 <span class="kw">use </span>primitives::{receipt::Receipt, EpochNumber, TransactionStatus};
 <span class="kw">use </span>std::sync::Arc;
 
@@ -324,7 +326,7 @@
 <span class="kw">impl </span>ConsensusGraph {
     <span class="kw">pub fn </span>get_phantom_block_bloom_filter(
         <span class="kw-2">&amp;</span><span class="self">self</span>, block_num: EpochNumber, pivot_assumption: H256,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Bloom&gt;, String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Bloom&gt;, ProviderBlockError&gt; {
         <span class="kw">let </span>hashes = <span class="self">self</span>.get_block_hashes_by_epoch(block_num)<span class="question-mark">?</span>;
 
         <span class="comment">// sanity check: epoch is not empty
@@ -378,7 +380,7 @@
     <span class="kw">pub fn </span>get_phantom_block_pivot_by_number(
         <span class="kw-2">&amp;</span><span class="self">self</span>, block_num: EpochNumber, pivot_assumption: <span class="prelude-ty">Option</span>&lt;H256&gt;,
         include_traces: bool,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;, String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;, ProviderBlockError&gt; {
         <span class="self">self</span>.get_phantom_block_by_number_inner(
             block_num,
             pivot_assumption,
@@ -390,7 +392,7 @@
     <span class="kw">pub fn </span>get_phantom_block_by_number(
         <span class="kw-2">&amp;</span><span class="self">self</span>, block_num: EpochNumber, pivot_assumption: <span class="prelude-ty">Option</span>&lt;H256&gt;,
         include_traces: bool,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;, String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;, ProviderBlockError&gt; {
         <span class="self">self</span>.get_phantom_block_by_number_inner(
             block_num,
             pivot_assumption,
@@ -402,7 +404,7 @@
     <span class="kw">fn </span>get_phantom_block_by_number_inner(
         <span class="kw-2">&amp;</span><span class="self">self</span>, block_num: EpochNumber, pivot_assumption: <span class="prelude-ty">Option</span>&lt;H256&gt;,
         include_traces: bool, only_pivot: bool,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;, String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;, ProviderBlockError&gt; {
         <span class="kw">let </span>hashes = <span class="self">self</span>.get_block_hashes_by_epoch(block_num)<span class="question-mark">?</span>;
 
         <span class="comment">// special handling for genesis block
@@ -609,7 +611,7 @@
 
     <span class="kw">pub fn </span>get_phantom_block_by_hash(
         <span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>H256, include_traces: bool,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;, String&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;, ProviderBlockError&gt; {
         <span class="kw">let </span>epoch_num = <span class="kw">match </span><span class="self">self</span>.get_block_epoch_number(hash) {
             <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
             <span class="prelude-val">Some</span>(n) =&gt; n,

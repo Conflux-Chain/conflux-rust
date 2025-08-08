@@ -591,7 +591,9 @@
 <a href="#590" id="590">590</a>
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::EpochQueue;
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::EpochQueue;
 <span class="kw">use </span>cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
@@ -1134,7 +1136,9 @@
     <span class="kw">fn </span>get_block_hashes_by_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>, epoch_number: EpochNumber,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;H256&gt;, String&gt; {
-        <span class="self">self</span>.consensus.get_block_hashes_by_epoch(epoch_number)
+        <span class="self">self</span>.consensus
+            .get_block_hashes_by_epoch(epoch_number)
+            .map_err(|e| e.to_string())
     }
 }
 

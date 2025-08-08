@@ -128,7 +128,12 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 </span><span class="kw">use </span><span class="kw">crate</span>::light_protocol::Error <span class="kw">as </span>LightProtocolError;
@@ -136,6 +141,7 @@
 <span class="kw">pub use </span>cfx_rpc_utils::error::error_codes::EXCEPTION_ERROR;
 <span class="kw">use </span>cfx_statedb::Error <span class="kw">as </span>StateDbError;
 <span class="kw">use </span>cfx_storage::Error <span class="kw">as </span>StorageError;
+<span class="kw">use </span>cfxcore_errors::ProviderBlockError;
 <span class="kw">use </span>jsonrpc_core::{futures::future, Error <span class="kw">as </span>JsonRpcError, ErrorCode};
 <span class="kw">use </span>jsonrpsee::types::ErrorObjectOwned;
 <span class="kw">use </span>primitives::{account::AccountError, filter::FilterError};
@@ -218,6 +224,10 @@
 
 <span class="kw">impl </span>From&lt;String&gt; <span class="kw">for </span>Error {
     <span class="kw">fn </span>from(s: String) -&gt; Error { Error::Msg(s) }
+}
+
+<span class="kw">impl </span>From&lt;ProviderBlockError&gt; <span class="kw">for </span>Error {
+    <span class="kw">fn </span>from(e: ProviderBlockError) -&gt; Error { Error::from(e.to_string()) }
 }
 
 <span class="kw">impl </span>From&lt;EthRpcError&gt; <span class="kw">for </span>Error {
