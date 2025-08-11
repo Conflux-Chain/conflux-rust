@@ -29,7 +29,6 @@ futures = { workspace = true, features = ["compat"] }
 hashbrown = { workspace = true }
 hibitset = { workspace = true }
 itertools = { workspace = true }
-io = { workspace = true }
 jsonrpc-core = { workspace = true }
 keccak-hash = { workspace = true }
 kvdb = { workspace = true }
@@ -117,6 +116,7 @@ cfx-rpc-utils = { workspace = true }
 cfx-util-macros = { workspace = true }
 cfxcore-types = { workspace = true }
 cfxcore-pow = { workspace = true }
+cfxcore-errors = { workspace = true}
 
 [dev-dependencies]
 cfx-storage = { workspace = true, features = ["testonly_code"] }

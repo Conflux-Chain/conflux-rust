@@ -390,6 +390,8 @@ impl BlockProvider for &EthFilterHelper {
     fn get_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
-        self.consensus.get_block_hashes_by_epoch(epoch_number)
+        self.consensus
+            .get_block_hashes_by_epoch(epoch_number)
+            .map_err(|e| e.to_string())
     }
 }

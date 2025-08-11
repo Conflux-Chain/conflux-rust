@@ -6,6 +6,7 @@ mod blame_verifier;
 pub mod confirmation_meter;
 pub mod consensus_executor;
 pub mod consensus_new_block_handler;
+use cfxcore_errors::ProviderBlockError;
 use cfxcore_pow as pow;
 
 use pow::{PowComputer, ProofOfWorkConfig};
@@ -2138,7 +2139,7 @@ impl ConsensusGraphInner {
     /// out of the current era.
     pub fn get_pivot_hash_from_epoch_number(
         &self, epoch_number: u64,
-    ) -> Result<EpochId, String> {
+    ) -> Result<EpochId, ProviderBlockError> {
         let height = epoch_number;
         if height >= self.cur_era_genesis_height {
             let pivot_index = (height - self.cur_era_genesis_height) as usize;
@@ -2168,7 +2169,7 @@ impl ConsensusGraphInner {
 
     pub fn block_hashes_by_epoch(
         &self, epoch_number: u64,
-    ) -> Result<Vec<H256>, String> {
+    ) -> Result<Vec<H256>, ProviderBlockError> {
         debug!(
             "block_hashes_by_epoch epoch_number={:?} pivot_chain.len={:?}",
             epoch_number,
@@ -2206,7 +2207,7 @@ impl ConsensusGraphInner {
 
     pub fn skipped_block_hashes_by_epoch(
         &self, epoch_number: u64,
-    ) -> Result<Vec<H256>, String> {
+    ) -> Result<Vec<H256>, ProviderBlockError> {
         debug!(
             "skipped_block_hashes_by_epoch epoch_number={:?} pivot_chain.len={:?}",
             epoch_number,
@@ -2358,11 +2359,11 @@ impl ConsensusGraphInner {
 
     pub fn check_block_pivot_assumption(
         &self, pivot_hash: &H256, epoch: u64,
-    ) -> Result<(), String> {
+    ) -> Result<(), ProviderBlockError> {
         let last_number = self.best_epoch_number();
         let hash = self.get_pivot_hash_from_epoch_number(epoch)?;
         if epoch > last_number || hash != *pivot_hash {
-            return Err("Error: pivot chain assumption failed".to_owned());
+            return Err("Error: pivot chain assumption failed".into());
         }
         Ok(())
     }
@@ -4150,6 +4151,7 @@ impl StateMaintenanceTrait for ConsensusGraphInner {
             self,
             epoch_number,
         )
+        .map_err(|e| e.to_string())
     }
 
     fn get_epoch_execution_commitment_with_db(

@@ -28,7 +28,7 @@ use crate::{
 use cfx_types::{Public, H256};
 use io::{IoContext, StreamToken};
 use log::{debug, error, trace};
-use mio::tcp::TcpStream;
+use mio::net::TcpStream;
 use priority_send_queue::SendQueuePriority;
 use std::{
     sync::atomic::{AtomicBool, Ordering},

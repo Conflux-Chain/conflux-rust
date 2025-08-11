@@ -4,6 +4,7 @@ use cfx_execute_helper::{
 };
 use cfx_rpc_cfx_types::PhantomBlock;
 use cfx_types::{Bloom, Space, H256, U256};
+use cfxcore_errors::ProviderBlockError;
 use primitives::{receipt::Receipt, EpochNumber, TransactionStatus};
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use super::super::ConsensusGraph;
 impl ConsensusGraph {
     pub fn get_phantom_block_bloom_filter(
         &self, block_num: EpochNumber, pivot_assumption: H256,
-    ) -> Result<Option<Bloom>, String> {
+    ) -> Result<Option<Bloom>, ProviderBlockError> {
         let hashes = self.get_block_hashes_by_epoch(block_num)?;
 
         // sanity check: epoch is not empty
@@ -66,7 +67,7 @@ impl ConsensusGraph {
     pub fn get_phantom_block_pivot_by_number(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool,
-    ) -> Result<Option<PhantomBlock>, String> {
+    ) -> Result<Option<PhantomBlock>, ProviderBlockError> {
         self.get_phantom_block_by_number_inner(
             block_num,
             pivot_assumption,
@@ -78,7 +79,7 @@ impl ConsensusGraph {
     pub fn get_phantom_block_by_number(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool,
-    ) -> Result<Option<PhantomBlock>, String> {
+    ) -> Result<Option<PhantomBlock>, ProviderBlockError> {
         self.get_phantom_block_by_number_inner(
             block_num,
             pivot_assumption,
@@ -90,7 +91,7 @@ impl ConsensusGraph {
     fn get_phantom_block_by_number_inner(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
         include_traces: bool, only_pivot: bool,
-    ) -> Result<Option<PhantomBlock>, String> {
+    ) -> Result<Option<PhantomBlock>, ProviderBlockError> {
         let hashes = self.get_block_hashes_by_epoch(block_num)?;
 
         // special handling for genesis block
@@ -297,7 +298,7 @@ impl ConsensusGraph {
 
     pub fn get_phantom_block_by_hash(
         &self, hash: &H256, include_traces: bool,
-    ) -> Result<Option<PhantomBlock>, String> {
+    ) -> Result<Option<PhantomBlock>, ProviderBlockError> {
         let epoch_num = match self.get_block_epoch_number(hash) {
             None => return Ok(None),
             Some(n) => n,

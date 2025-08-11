@@ -450,7 +450,7 @@ pub fn to_instruction_result(frame_result: &FrameResult) -> InstructionResult {
             Error::Wasm(_) => InstructionResult::NotActivated,
             Error::OutOfBounds => InstructionResult::OutOfOffset,
             Error::Reverted => InstructionResult::Revert,
-            Error::InvalidAddress(_) => todo!(), /* when selfdestruct refund */
+            Error::InvalidAddress(_) => InstructionResult::Revert, /* when selfdestruct refund */
             // address is invalid will emit this error
             Error::ConflictAddress(_) => InstructionResult::CreateCollision,
             Error::CreateContractStartingWithEF => {

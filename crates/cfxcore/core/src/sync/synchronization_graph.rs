@@ -23,6 +23,7 @@ use unexpected::{Mismatch, OutOfBounds};
 
 use cfx_executor::machine::Machine;
 use cfx_types::{H256, U256};
+use cfxcore_errors::ProviderBlockError;
 use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -1876,7 +1877,7 @@ impl SynchronizationGraph {
 
     pub fn get_all_block_hashes_by_epoch(
         &self, epoch_number: u64,
-    ) -> Result<Vec<H256>, String> {
+    ) -> Result<Vec<H256>, ProviderBlockError> {
         let mut res = self.consensus.get_skipped_block_hashes_by_epoch(
             EpochNumber::Number(epoch_number.into()),
         )?;

@@ -159,6 +159,7 @@ pub struct TransitionsEpochHeight {
     /// EIP-7623: Increase calldata cost
     pub eip7623: BlockHeight,
     pub cip_c2_fix: BlockHeight,
+    pub cip145_fix: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -216,6 +217,7 @@ impl CommonParams {
         spec.cip137 = number >= self.transition_numbers.cip137;
         spec.cip144 = number >= self.transition_numbers.cip144;
         spec.cip145 = number >= self.transition_numbers.cip145;
+        spec.cip145_fix = height >= self.transition_heights.cip145_fix;
         spec.cip1559 = height >= self.transition_heights.cip1559;
         spec.cip150 = height >= self.transition_heights.cip150;
         spec.cip151 = height >= self.transition_heights.cip151;
