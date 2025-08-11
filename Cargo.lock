@@ -1385,6 +1385,7 @@ dependencies = [
  "cfx-util-macros",
  "cfx-vm-types",
  "cfxcore",
+ "cfxcore-errors",
  "futures 0.3.30",
  "geth-tracer",
  "jsonrpc-core",
@@ -1733,6 +1734,7 @@ dependencies = [
  "cfx-types",
  "cfx-util-macros",
  "cfx-vm-types",
+ "cfxcore-errors",
  "cfxcore-pow",
  "cfxcore-types",
  "cfxkey",
@@ -1834,6 +1836,13 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "cfxcore-errors"
+version = "3.0.0"
+dependencies = [
+ "thiserror 2.0.11",
 ]
 
 [[package]]
@@ -4676,8 +4685,9 @@ dependencies = [
  "lazycell",
  "log",
  "metrics",
- "mio 0.6.23",
- "mio-extras",
+ "mio 1.0.4",
+ "mio-misc",
+ "mio-timer",
  "parking_lot 0.12.1",
  "slab",
 ]
@@ -5333,9 +5343,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.22"
+version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
+checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 dependencies = [
  "serde",
 ]
@@ -5557,14 +5567,14 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "1.0.2"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80e04d1dcff3aae0704555fe5fee3bcfaf3d1fdf8a7e521d5b9d2b42acb52cec"
+checksum = "78bed444cc8a2160f01cbcf811ef18cac863ad68ae8ca62092e8db51d51c761c"
 dependencies = [
- "hermit-abi 0.3.9",
  "libc",
+ "log",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5576,6 +5586,29 @@ dependencies = [
  "lazycell",
  "log",
  "mio 0.6.23",
+ "slab",
+]
+
+[[package]]
+name = "mio-misc"
+version = "2.1.0"
+source = "git+https://github.com/Pana/mio-misc?rev=27ad80f#27ad80f084dd94ff560c93d4abfdab79189d0927"
+dependencies = [
+ "crossbeam",
+ "crossbeam-queue",
+ "log",
+ "mio 1.0.4",
+]
+
+[[package]]
+name = "mio-timer"
+version = "0.2.0"
+source = "git+https://github.com/Pana/mio-timer?rev=251170b#251170ba2724cbeb2b99215a2893c7de0dadc9af"
+dependencies = [
+ "lazycell",
+ "log",
+ "mio 1.0.4",
+ "mio-misc",
  "slab",
 ]
 
@@ -5701,7 +5734,7 @@ dependencies = [
  "log",
  "malloc_size_of",
  "metrics",
- "mio 0.6.23",
+ "mio 1.0.4",
  "natpmp",
  "parity-path",
  "parking_lot 0.12.1",
@@ -6606,6 +6639,7 @@ dependencies = [
  "cfx-bytes",
  "cfx-parameters",
  "cfx-types",
+ "cfxcore-errors",
  "cfxkey",
  "criterion",
  "itertools 0.14.0",
@@ -8146,12 +8180,9 @@ checksum = "7bd3e3206899af3f8b12af284fafc038cc1dc2b41d1b89dd17297221c5d225de"
 
 [[package]]
 name = "slab"
-version = "0.4.8"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6528351c9bc8ab22353f9d776db39a20288e8d6c37ef8cfe3317cf875eecfc2d"
-dependencies = [
- "autocfg 1.1.0",
-]
+checksum = "04dc19736151f35336d325007ac991178d504a119863a2fcb3758cdb5e52c50d"
 
 [[package]]
 name = "slice-group-by"
@@ -8690,7 +8721,7 @@ dependencies = [
  "backtrace",
  "bytes 1.9.0",
  "libc",
- "mio 1.0.2",
+ "mio 1.0.4",
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",

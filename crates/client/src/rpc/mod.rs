@@ -432,7 +432,7 @@ pub async fn launch_async_rpc_servers(
                     TransportRpcModuleConfig::set_http(apis.clone());
                 let server_config =
                     RpcServerConfig::http(ServerBuilder::default())
-                        .with_http_address(ws_config.address);
+                        .with_http_address(http_config.address);
                 (transport_rpc_module_config, server_config)
             }
             (false, true) => {

@@ -90,7 +90,7 @@ impl DebugApi {
         let epoch_block_hashes = self
             .consensus_graph()
             .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
-            .map_err(|err| CoreError::Msg(err))?;
+            .map_err(|err| CoreError::Msg(err.into()))?;
         let epoch_id = epoch_block_hashes
             .last()
             .ok_or(CoreError::Msg("should have block hash".to_string()))?;
