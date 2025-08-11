@@ -1840,7 +1840,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore-errors"
-version = "3.0.0"
+version = "3.0.1-net8888"
 dependencies = [
  "thiserror 2.0.11",
 ]
