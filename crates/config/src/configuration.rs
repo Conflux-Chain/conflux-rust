@@ -195,7 +195,7 @@ build_config! {
         (eoa_code_transition_height, (Option<u64>), Some(223340000))
         (cip151_transition_height, (Option<u64>), None)
         (cip645_transition_height, (Option<u64>), None)
-        (cip145_fix_transition_height, (Option<u64>), None)
+        (cip145_fix_transition_height, (Option<u64>), Some(229140000))
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
 
