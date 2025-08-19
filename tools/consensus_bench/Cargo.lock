@@ -2737,8 +2737,7 @@ dependencies = [
 [[package]]
 name = "fs-swap"
 version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03d47dad3685eceed8488986cad3d5027165ea5edb164331770e2059555f10a5"
+source = "git+https://github.com/Conflux-Chain/fs-swap?rev=72fed3585f430b1485e133d02b291d1976c58b06#72fed3585f430b1485e133d02b291d1976c58b06"
 dependencies = [
  "lazy_static",
  "libc",
