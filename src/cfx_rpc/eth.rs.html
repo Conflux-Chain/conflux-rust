@@ -1518,7 +1518,20 @@
 <a href="#1517" id="1517">1517</a>
 <a href="#1518" id="1518">1518</a>
 <a href="#1519" id="1519">1519</a>
-<a href="#1520" id="1520">1520</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cfx_execute_helper::estimation::EstimateRequest;
 <span class="kw">use </span>cfx_executor::executive::{
@@ -1612,7 +1625,10 @@
                 <span class="prelude-val">None</span>,
                 <span class="bool-val">false</span>,
             )<span class="question-mark">?
-            </span>.ok_or(<span class="string">"Specified block header does not exist"</span>.into())
+            </span>.ok_or(
+                <span class="macro">format!</span>(<span class="string">"Specified block does not exist, height={}"</span>, height)
+                    .into(),
+            )
     }
 
     <span class="kw">pub fn </span>fetch_block_by_hash(
@@ -1620,7 +1636,10 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PhantomBlock, ProviderBlockError&gt; {
         <span class="self">self</span>.consensus_graph()
             .get_phantom_block_by_hash(hash, <span class="bool-val">false</span>)<span class="question-mark">?
-            </span>.ok_or(<span class="string">"Specified block header does not exist"</span>.into())
+            </span>.ok_or(
+                <span class="macro">format!</span>(<span class="string">"Specified block does not exist, hash={:?}"</span>, hash)
+                    .into(),
+            )
     }
 
     <span class="kw">fn </span>convert_block_number_to_epoch_number(
@@ -2357,13 +2376,20 @@
             }
         }
 
-        <span class="kw">let </span>block = <span class="self">self
-            </span>.fetch_block_by_height(end_block + <span class="number">1</span>)
-            .map_err(RpcError::invalid_params)<span class="question-mark">?</span>;
+        <span class="kw">let </span>last_hash = <span class="self">self
+            </span>.consensus_graph()
+            .get_hash_from_epoch_number((end_block + <span class="number">1</span>).into())<span class="question-mark">?</span>;
+        <span class="kw">let </span>last_header = <span class="self">self
+            </span>.consensus_graph()
+            .data_manager()
+            .block_header_by_hash(<span class="kw-2">&amp;</span>last_hash)
+            .ok_or_else(|| {
+                <span class="macro">format!</span>(<span class="string">"last block missing, height={}"</span>, end_block + <span class="number">1</span>)
+            })<span class="question-mark">?</span>;
 
         fee_history.finish(
             start_block,
-            block.pivot_header.base_price().as_ref(),
+            last_header.base_price().as_ref(),
             Space::Ethereum,
         );
 
