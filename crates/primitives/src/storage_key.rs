@@ -58,6 +58,8 @@ pub enum StorageKey<'a> {
     },
     DepositListKey(&'a [u8]),
     VoteListKey(&'a [u8]),
+    // Empty key is used to traverse all key and value pairs.
+    EmptyKey,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -195,6 +197,9 @@ impl<'a> StorageKeyWithSpace<'a> {
             StorageKey::VoteListKey(address_bytes) => {
                 delta_mpt_storage_key::new_vote_list_key(address_bytes, padding)
             }
+            StorageKey::EmptyKey => {
+                return vec![];
+            }
         };
 
         return if self.space == Space::Native {
@@ -283,6 +288,9 @@ impl<'a> StorageKeyWithSpace<'a> {
                 key.extend_from_slice(Self::VOTE_LIST_PREFIX);
 
                 key
+            }
+            StorageKey::EmptyKey => {
+                return vec![];
             }
         };
 

@@ -160,6 +160,7 @@ enum OwnedStorageKey {
     },
     DepositListKey(Vec<u8>),
     VoteListKey(Vec<u8>),
+    EmptyKey,
 }
 
 impl OwnedStorageKey {
@@ -194,6 +195,7 @@ impl OwnedStorageKey {
             OwnedStorageKey::VoteListKey(k) => {
                 StorageKey::VoteListKey(k.as_slice())
             }
+            OwnedStorageKey::EmptyKey => StorageKey::EmptyKey,
         }
     }
 }
@@ -245,6 +247,7 @@ impl<'a> From<StorageKey<'a>> for OwnedStorageKey {
             StorageKey::VoteListKey(k) => {
                 OwnedStorageKey::VoteListKey(k.to_vec())
             }
+            StorageKey::EmptyKey => OwnedStorageKey::EmptyKey,
         }
     }
 }

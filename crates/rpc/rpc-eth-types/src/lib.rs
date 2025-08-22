@@ -11,6 +11,7 @@ mod log;
 mod receipt;
 mod simulate;
 mod state;
+mod state_dump;
 mod sync;
 pub mod trace;
 pub mod trace_filter;
@@ -35,6 +36,7 @@ pub use state::{
     AccountOverride, AccountStateOverrideMode, EvmOverrides,
     RpcAccountOverride, RpcStateOverride, StateOverride,
 };
+pub use state_dump::*;
 pub use sync::{SyncInfo, SyncStatus};
 pub use trace::*;
 pub use trace_filter::TraceFilter;
