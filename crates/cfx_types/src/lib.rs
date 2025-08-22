@@ -7,6 +7,9 @@ pub use ethereum_types::{
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
 
+pub type StorageKey = H256;
+pub type StorageValue = U256;
+
 mod space;
 pub use space::{Space, SpaceMap};
 
