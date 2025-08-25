@@ -1014,6 +1014,8 @@ impl ConsensusExecutionHandler {
             self.data_man
                 .insert_hash_by_block_number(block_number, hash);
         }
+        let end_block_number =
+            start_block_number + epoch_block_hashes.len() as u64 - 1;
 
         let pivot_block_header = self
             .data_man
@@ -1071,13 +1073,10 @@ impl ConsensusExecutionHandler {
             // program may restart by itself.
             .expect("Can not handle db error in consensus, crashing.");
 
-        let current_block_number =
-            start_block_number + epoch_receipts.len() as u64 - 1;
-
         if let Some(reward_execution_info) = reward_execution_info {
             let spec = self
                 .machine
-                .spec(current_block_number, pivot_block.block_header.height());
+                .spec(end_block_number, pivot_block.block_header.height());
             // Calculate the block reward for blocks inside the epoch
             // All transaction fees are shared among blocks inside one epoch
             self.process_rewards_and_fees(
@@ -1092,8 +1091,8 @@ impl ConsensusExecutionHandler {
 
         self.process_pos_interest(
             &mut state,
-            pivot_block,
-            current_block_number,
+            &pivot_block.block_header,
+            end_block_number,
         )
         .expect("db error");
 
@@ -1162,23 +1161,22 @@ impl ConsensusExecutionHandler {
     }
 
     fn process_pos_interest(
-        &self, state: &mut State, pivot_block: &Block,
+        &self, state: &mut State, pivot_header: &BlockHeader,
         current_block_number: u64,
     ) -> DbResult<()> {
         // TODO(peilun): Specify if we unlock before or after executing the
         // transactions.
         let maybe_parent_pos_ref = self
             .data_man
-            .block_header_by_hash(&pivot_block.block_header.parent_hash()) // `None` only for genesis.
+            .block_header_by_hash(&pivot_header.parent_hash()) // `None` only for genesis.
             .and_then(|parent| parent.pos_reference().clone());
         if self
             .pos_verifier
-            .is_enabled_at_height(pivot_block.block_header.height())
+            .is_enabled_at_height(pivot_header.height())
             && maybe_parent_pos_ref.is_some()
-            && *pivot_block.block_header.pos_reference() != maybe_parent_pos_ref
+            && *pivot_header.pos_reference() != maybe_parent_pos_ref
         {
-            let current_pos_ref = pivot_block
-                .block_header
+            let current_pos_ref = pivot_header
                 .pos_reference()
                 .as_ref()
                 .expect("checked before sync graph insertion");
@@ -1208,7 +1206,7 @@ impl ConsensusExecutionHandler {
                     )?;
                 self.data_man.insert_pos_reward(
                     *pos_epoch,
-                    &PosRewardInfo::new(account_rewards, pivot_block.hash()),
+                    &PosRewardInfo::new(account_rewards, pivot_header.hash()),
                 )
             }
         }
