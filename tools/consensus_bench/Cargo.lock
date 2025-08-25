@@ -4164,7 +4164,7 @@ dependencies = [
 [[package]]
 name = "mio-misc"
 version = "2.1.0"
-source = "git+https://github.com/Pana/mio-misc?rev=27ad80f#27ad80f084dd94ff560c93d4abfdab79189d0927"
+source = "git+https://github.com/Conflux-Chain/mio-misc?rev=27ad80f#27ad80f084dd94ff560c93d4abfdab79189d0927"
 dependencies = [
  "crossbeam",
  "crossbeam-queue",
@@ -4175,7 +4175,7 @@ dependencies = [
 [[package]]
 name = "mio-timer"
 version = "0.2.0"
-source = "git+https://github.com/Pana/mio-timer?rev=251170b#251170ba2724cbeb2b99215a2893c7de0dadc9af"
+source = "git+https://github.com/Conflux-Chain/mio-timer?rev=91a02cc#91a02cc74c9b92b2939638949aafe36aed730a5c"
 dependencies = [
  "lazycell",
  "log",
