@@ -1772,7 +1772,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     .register(
                         &mut *self.tcp_listener.lock(),
                         Token(TCP_ACCEPT),
-                        Interest::READABLE | Interest::WRITABLE, // previously(mio0.6) Ready::all() is used here
+                        Interest::READABLE | Interest::WRITABLE,
                     )
                     .expect("Error registering stream");
             }
@@ -1781,7 +1781,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     .register(
                         &mut *self.udp_socket.lock(),
                         reg,
-                        Interest::READABLE | Interest::WRITABLE, // previously(mio0.6) Ready::all() is used here
+                        Interest::READABLE | Interest::WRITABLE,
                     )
                     .expect("Error registering UDP socket");
             }
@@ -1828,7 +1828,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 .reregister(
                     &mut *self.tcp_listener.lock(),
                     Token(TCP_ACCEPT),
-                    Interest::READABLE | Interest::WRITABLE, // previously(mio0.6) Ready::all() is used here
+                    Interest::READABLE | Interest::WRITABLE,
                 )
                 .expect("Error reregistering stream"),
             UDP_MESSAGE => {
@@ -1841,11 +1841,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     Interest::READABLE
                 };
                 poll_registry
-                    .reregister(
-                        &mut *udp_socket,
-                        reg,
-                        registration,
-                    )
+                    .reregister(&mut *udp_socket, reg, registration)
                     .expect("Error reregistering UDP socket");
             }
             _ => warn!("Unexpected stream update"),
