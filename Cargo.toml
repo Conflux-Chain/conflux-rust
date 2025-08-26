@@ -325,8 +325,8 @@ async-trait = "0.1"
 tower = "0.4"
 pin-project = "1.0"
 mio = { version = "1.0.4", features = ["os-ext", "net", "os-poll"] }
-mio-timer = { git = "https://github.com/Pana/mio-timer", rev = "251170b" }
-mio-misc = { git = "https://github.com/Pana/mio-misc", rev = "27ad80f" }
+mio-timer = { git = "https://github.com/Conflux-Chain/mio-timer", rev = "91a02cc" }
+mio-misc = { git = "https://github.com/Conflux-Chain/mio-misc", rev = "27ad80f" }
 reqwest = "0.12"
 
 # crypto & hash
