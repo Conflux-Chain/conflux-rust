@@ -800,10 +800,7 @@
 <a href="#799" id="799">799</a>
 <a href="#800" id="800">800</a>
 <a href="#801" id="801">801</a>
-<a href="#802" id="802">802</a>
-<a href="#803" id="803">803</a>
-<a href="#804" id="804">804</a>
-<a href="#805" id="805">805</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#802" id="802">802</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1192,11 +1189,8 @@
             recv_buf: BytesMut::new(),
             send_queue: PrioritySendQueue::default(),
             sending_packet: <span class="prelude-val">None</span>,
-            interest: Interest::READABLE, <span class="comment">/* previously(mio0.6) use
-                                           * Ready::hup() |
-                                           * Ready::readable(), Ready::hub()
-                                           * is removed from 0.7 */
-            </span>registered: AtomicBool::new(<span class="bool-val">false</span>),
+            interest: Interest::READABLE,
+            registered: AtomicBool::new(<span class="bool-val">false</span>),
             assembler: Box::new(PacketWithLenAssembler::default()),
         }
     }

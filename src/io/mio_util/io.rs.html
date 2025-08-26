@@ -25,12 +25,10 @@
 <a href="#24" id="24">24</a>
 <a href="#25" id="25">25</a>
 <a href="#26" id="26">26</a>
-<a href="#27" id="27">27</a>
-<a href="#28" id="28">28</a></pre></div><pre class="rust"><code><span class="comment">// Re-export the io::Result / Error types for convenience
+<a href="#27" id="27">27</a></pre></div><pre class="rust"><code><span class="comment">// Re-export the io::Result / Error types for convenience
 </span><span class="kw">pub use </span>std::io::{Error, ErrorKind, Read, <span class="prelude-ty">Result</span>, Write};
 
-<span class="comment">// TODO: Delete this
-</span><span class="doccomment">/// A helper trait to provide the map_non_block function on Results.
+<span class="doccomment">/// A helper trait to provide the map_non_block function on Results.
 </span><span class="kw">pub trait </span>MapNonBlock&lt;T&gt; {
     <span class="doccomment">/// Maps a `Result&lt;T&gt;` to a `Result&lt;Option&lt;T&gt;&gt;` by converting
     /// operation-would-block errors into `Ok(None)`.
