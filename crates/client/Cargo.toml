@@ -79,6 +79,7 @@ cfx-parity-trace-types = { workspace = true }
 cfx-tasks = { workspace = true }
 cfx-config = { workspace = true }
 cfxcore-types = { workspace = true }
+fallible-iterator = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

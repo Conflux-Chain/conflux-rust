@@ -39,6 +39,12 @@ pub trait StateTrait: Sync + Send {
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>>;
 
+    fn read_all_iterator(
+        &mut self, _access_key_prefix: StorageKeyWithSpace,
+    ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
+        Err(Error::Msg("Not implemented".into()))
+    }
+
     // Finalize
     /// It's costly to compute state root however it's only necessary to compute
     /// state root once before committing.
@@ -78,6 +84,7 @@ pub trait StateDbGetOriginalMethods {
 use super::{
     impls::{
         errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
+        storage_db::kvdb_sqlite_sharded::KvdbSqliteSharded,
     },
     MptKeyValue, StateRootWithAuxInfo,
 };

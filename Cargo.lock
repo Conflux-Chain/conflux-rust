@@ -2115,6 +2115,7 @@ dependencies = [
  "diem-crypto",
  "diem-types",
  "dir",
+ "fallible-iterator",
  "futures 0.3.30",
  "itertools 0.14.0",
  "jsonrpc-core",
