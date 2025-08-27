@@ -2106,6 +2106,7 @@ dependencies = [
  "cfxcore-types",
  "cfxkey",
  "cfxstore",
+ "chrono",
  "consensus-types",
  "criterion",
  "ctrlc",

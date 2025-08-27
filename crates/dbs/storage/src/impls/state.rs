@@ -309,10 +309,11 @@ impl StateTrait for State {
         self.delete_all_impl::<access_mode::Read>(access_key_prefix)
     }
 
-    fn read_all_iterator(
+    fn read_all_with_callback(
         &mut self, access_key_prefix: StorageKeyWithSpace,
-    ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
-        self.read_all_iterator_impl(access_key_prefix)
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        self.read_all_with_callback_impl(access_key_prefix, callback)
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
@@ -908,6 +909,14 @@ impl State {
             snapshot_kvs.push((key, value));
         }
 
+        let is_address_search_prefix =
+            if let StorageKey::AddressPrefixKey(prefix) = access_key_prefix.key
+            {
+                Some(prefix)
+            } else {
+                None
+            };
+
         let mut result = Vec::new();
         // This is used to keep track of the deleted keys.
         let mut deleted_keys = HashSet::new();
@@ -915,6 +924,15 @@ impl State {
             for (k, v) in kvs {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
                 let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        continue;
+                    }
+                }
+
                 deleted_keys.insert(k.clone());
                 if v.len() > 0 {
                     result.push((k, v));
@@ -925,11 +943,21 @@ impl State {
         if let Some(kvs) = intermediate_trie_kvs {
             for (k, v) in kvs {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        continue;
+                    }
+                }
+
                 // Only delete non-empty keys.
                 if v.len() > 0 && !AM::READ_ONLY {
                     self.delete(storage_key)?;
                 }
-                let k = storage_key.to_key_bytes();
+
                 if !deleted_keys.contains(&k) {
                     deleted_keys.insert(k.clone());
                     if v.len() > 0 {
@@ -959,107 +987,115 @@ impl State {
         }
     }
 
-    /// Read all key/value pairs with access_key_prefix as prefix.
-    /// It will return data from delta trie, intermediate trie as a vector,
-    /// and data from snapshot as a iterator.
-    /// To use the iterator, you need to call `take()` on it.
-    /// ```rust
-    /// let (kvs, kv_iterator) = state.read_all_impl(access_key_prefix)?;
-    /// let lower_bound_incl = access_key_prefix.to_key_bytes();
-    /// let upper_bound_excl = to_key_prefix_iter_upper_bound(&lower_bound_incl);
-    /// let mut kvs = kv_iterator
-    ///     .iter_range(
-    ///         lower_bound_incl.as_slice(),
-    ///         upper_bound_excl.as_ref().map(|v| &**v),
-    ///     )?
-    ///     .take();
-    ///
-    /// // use it as a iterator
-    /// let mut snapshot_kvs = Vec::new();
-    /// while let Some((key, value)) = kvs.next()? {
-    ///     snapshot_kvs.push((key, value));
-    /// }
-    /// ```
-    /// Note: In the iterator, the keys may be duplicated with the keys in the
-    /// vector.
-    pub fn read_all_iterator_impl(
+    pub fn read_all_with_callback_impl(
         &mut self, access_key_prefix: StorageKeyWithSpace,
-    ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
         self.ensure_temp_slab_for_db_load();
 
+        let is_address_search_prefix =
+            if let StorageKey::AddressPrefixKey(prefix) = access_key_prefix.key
+            {
+                Some(prefix)
+            } else {
+                None
+            };
+
+        // This is used to keep track of the deleted keys.
+        let mut deleted_keys = HashSet::new();
+
         // Retrieve and delete key/value pairs from delta trie
-        let delta_trie_kvs = match &self.delta_trie_root {
-            None => None,
-            Some(old_root_node) => {
-                let delta_mpt_key_prefix = access_key_prefix
-                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
-                let deleted = SubTrieVisitor::new(
-                    &self.delta_trie,
-                    old_root_node.clone(),
-                    &mut self.owned_node_set,
-                )?
-                .traversal(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
-                deleted
-            }
+        if let Some(old_root_node) = &self.delta_trie_root {
+            let mut inner_callback = |(k, v): MptKeyValue| {
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        return;
+                    }
+                }
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    callback((k, v));
+                }
+            };
+            let delta_mpt_key_prefix = access_key_prefix
+                .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
+            SubTrieVisitor::new(
+                &self.delta_trie,
+                old_root_node.clone(),
+                &mut self.owned_node_set,
+            )?
+            .traversal_with_callback(
+                &delta_mpt_key_prefix,
+                &delta_mpt_key_prefix,
+                &mut inner_callback,
+            )?;
         };
 
         // Retrieve key/value pairs from intermediate trie
-        let intermediate_trie_kvs = match &self.intermediate_trie_root {
-            None => None,
-            Some(root_node) => {
-                if self.maybe_intermediate_trie_key_padding.is_some()
-                    && self.maybe_intermediate_trie.is_some()
-                {
-                    let intermediate_trie_key_padding = self
-                        .maybe_intermediate_trie_key_padding
-                        .as_ref()
-                        .unwrap();
-                    let intermediate_mpt_key_prefix = access_key_prefix
-                        .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
-                    let values = SubTrieVisitor::new(
-                        self.maybe_intermediate_trie.as_ref().unwrap(),
-                        root_node.clone(),
-                        &mut self.owned_node_set,
-                    )?
-                    .traversal(
-                        &intermediate_mpt_key_prefix,
-                        &intermediate_mpt_key_prefix,
-                    )?;
+        if let Some(root_node) = &self.intermediate_trie_root {
+            let mut inner_callback = |(k, v): MptKeyValue| {
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
 
-                    values
-                } else {
-                    None
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        return;
+                    }
                 }
-            }
-        };
 
-        let mut result = Vec::new();
-        // This is used to keep track of the deleted keys.
-        let mut deleted_keys = HashSet::new();
-        if let Some(kvs) = delta_trie_kvs {
-            for (k, v) in kvs {
-                deleted_keys.insert(k.clone());
-                if v.len() > 0 {
-                    result.push((k, v));
-                }
-            }
-        }
-
-        if let Some(kvs) = intermediate_trie_kvs {
-            for (k, v) in kvs {
                 if !deleted_keys.contains(&k) {
                     deleted_keys.insert(k.clone());
                     if v.len() > 0 {
-                        result.push((k, v));
+                        callback((k, v));
                     }
                 }
+            };
+            if self.maybe_intermediate_trie_key_padding.is_some()
+                && self.maybe_intermediate_trie.is_some()
+            {
+                let intermediate_trie_key_padding =
+                    self.maybe_intermediate_trie_key_padding.as_ref().unwrap();
+                let intermediate_mpt_key_prefix = access_key_prefix
+                    .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
+                SubTrieVisitor::new(
+                    self.maybe_intermediate_trie.as_ref().unwrap(),
+                    root_node.clone(),
+                    &mut self.owned_node_set,
+                )?
+                .traversal_with_callback(
+                    &intermediate_mpt_key_prefix,
+                    &intermediate_mpt_key_prefix,
+                    &mut inner_callback,
+                )?;
             }
         }
 
         // Retrieve key/value pairs from snapshot
-        let kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
+        let lower_bound_incl = access_key_prefix.to_key_bytes();
+        let upper_bound_excl =
+            to_key_prefix_iter_upper_bound(&lower_bound_incl);
+        let mut kvs = kv_iterator
+            .iter_range(
+                lower_bound_incl.as_slice(),
+                upper_bound_excl.as_ref().map(|v| &**v),
+            )?
+            .take();
 
-        Ok((result, Some(kv_iterator)))
+        while let Some((k, v)) = kvs.next()? {
+            if !deleted_keys.contains(&k) {
+                callback((k, v));
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -1074,7 +1110,6 @@ use crate::{
         node_merkle_proof::NodeMerkleProof,
         state_manager::*,
         state_proof::StateProof,
-        storage_db::kvdb_sqlite_sharded::KvdbSqliteSharded,
     },
     state::*,
     storage_db::*,

@@ -80,6 +80,7 @@ cfx-tasks = { workspace = true }
 cfx-config = { workspace = true }
 cfxcore-types = { workspace = true }
 fallible-iterator = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

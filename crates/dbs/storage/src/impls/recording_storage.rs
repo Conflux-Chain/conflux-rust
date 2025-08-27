@@ -54,7 +54,7 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
             fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
             fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
             fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo>;
-            fn read_all_iterator(&mut self, access_key_prefix: StorageKeyWithSpace) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)>;
+            fn read_all_with_callback(&mut self, access_key_prefix: StorageKeyWithSpace, callback: &mut dyn FnMut(MptKeyValue)) -> Result<()>;
         }
     }
 
@@ -95,7 +95,6 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
 use crate::{
     impls::{
         errors::*, merkle_patricia_trie::MptKeyValue, state_proof::StateProof,
-        storage_db::kvdb_sqlite_sharded::KvdbSqliteSharded,
     },
     state::*,
     StateProofMerger,

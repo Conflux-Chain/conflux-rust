@@ -3,13 +3,10 @@ use cfx_config::Configuration;
 use cfx_rpc_eth_types::{AccountState, StateDump, EOA_STORAGE_ROOT_H256};
 use cfx_rpc_primitives::Bytes;
 use cfx_statedb::{StateDbExt, StateDbGeneric};
-use cfx_storage::{
-    state_manager::StateManagerTrait, utils::to_key_prefix_iter_upper_bound,
-    KeyValueDbIterableTrait,
-};
+use cfx_storage::state_manager::StateManagerTrait;
 use cfx_types::{Address, Space, H256};
 use cfxcore::NodeType;
-use fallible_iterator::FallibleIterator;
+use chrono::Utc;
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{Condvar, Mutex};
 use primitives::{
@@ -17,7 +14,7 @@ use primitives::{
 };
 use rlp::Rlp;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     ops::Deref,
     sync::Arc,
     thread,
@@ -32,6 +29,10 @@ pub struct StateDumpConfig {
     pub no_storage: bool,
 }
 
+// This method will read all data (k, v) from the Conflux state tree (including
+// core space and espace accounts, code, storage, deposit, vote_list) into
+// memory at once, then parse and assemble them and assemble all account states
+// into a StateDump struct and return it
 pub fn dump_whole_state(
     conf: &mut Configuration, exit_cond_var: Arc<(Mutex<bool>, Condvar)>,
     config: &StateDumpConfig,
@@ -52,6 +53,11 @@ pub fn dump_whole_state(
     Ok(state_dump)
 }
 
+// This method will iterate through the entire state tree, storing each found
+// account in a temporary map After iterating through all accounts, it will
+// retrieve the code and storage for each account, then call the callback method
+// Pass the AccountState as a parameter to the callback method, which will
+// handle the AccountState
 pub fn iterate_dump_whole_state<F: Fn(AccountState)>(
     conf: &mut Configuration, exit_cond_var: Arc<(Mutex<bool>, Condvar)>,
     config: &StateDumpConfig, callback: F,
@@ -59,7 +65,7 @@ pub fn iterate_dump_whole_state<F: Fn(AccountState)>(
     let (mut state_db, state_root) =
         prepare_state_db(conf, exit_cond_var, config)?;
 
-    export_space_accounts_with_iterator(
+    export_space_accounts_with_callback(
         &mut state_db,
         Space::Ethereum,
         config,
@@ -74,7 +80,7 @@ fn prepare_state_db(
     conf: &mut Configuration, exit_cond_var: Arc<(Mutex<bool>, Condvar)>,
     config: &StateDumpConfig,
 ) -> Result<(StateDbGeneric, H256), String> {
-    println!("Preparing state...");
+    println("Preparing state...");
     let (
         data_man,
         _,
@@ -140,6 +146,7 @@ fn prepare_state_db(
 fn export_space_accounts(
     state: &mut StateDbGeneric, space: Space, config: &StateDumpConfig,
 ) -> Result<BTreeMap<Address, AccountState>, Box<dyn std::error::Error>> {
+    println("Start to iterate state...");
     let empty_key = StorageKey::EmptyKey.with_space(space);
     let kv_pairs = state.read_all(empty_key, None)?;
 
@@ -156,7 +163,7 @@ fn export_space_accounts(
         match storage_key_with_space.key {
             StorageKey::AccountKey(address_bytes) => {
                 let address = Address::from_slice(address_bytes);
-                println!("Find account: {:?}", address);
+                println(&format!("Find account: {:?}", address));
                 let account =
                     Account::new_from_rlp(address, &Rlp::new(&value))?;
                 accounts_map.insert(address, account);
@@ -208,7 +215,7 @@ fn export_space_accounts(
             codes_map.get(&address).cloned()
         } else {
             if let Some(code) = codes_map.get(&address) {
-                println!("no-contract account have code: {:?}", code);
+                println(&format!("no-contract account have code: {:?}", code));
             }
             None
         };
@@ -216,8 +223,8 @@ fn export_space_accounts(
         let storage = if is_contract {
             storage_map.get(&address).cloned()
         } else {
-            if let Some(storage) = storage_map.get(&address) {
-                println!("no-contract account have storage: {:?}", storage);
+            if let Some(_storage) = storage_map.get(&address) {
+                println(&format!("no-contract account have storage"));
             }
             None
         };
@@ -243,86 +250,61 @@ fn export_space_accounts(
     Ok(accounts)
 }
 
-fn export_space_accounts_with_iterator<F: Fn(AccountState)>(
+pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
     state: &mut StateDbGeneric, space: Space, config: &StateDumpConfig,
     callback: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let empty_key = StorageKey::EmptyKey.with_space(space);
-    let (kvs, maybe_kv_iterator) = state.read_all_iterator(empty_key)?;
-
-    let mut deleted_keys = HashSet::new();
+    println("Start to iterate state...");
     let mut found_accounts = 0;
+    let mut core_space_key_count: u64 = 0;
+    let mut total_key_count: u64 = 0;
 
-    // Iterate key value pairs from delta trie and intermediate trie
-    for (k, v) in kvs {
-        let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-        let key = storage_key.to_key_bytes();
-        deleted_keys.insert(key.clone());
+    for i in 0..=255 {
+        let prefix = [i];
+        let start_key = StorageKey::AddressPrefixKey(&prefix).with_space(space);
 
-        let storage_key_with_space =
-            StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key);
-        if storage_key_with_space.space != space {
-            continue;
-        }
+        let mut account_states = BTreeMap::new();
 
-        if let StorageKey::AccountKey(address_bytes) =
-            storage_key_with_space.key
-        {
-            let address = Address::from_slice(address_bytes);
-            println!("Find account: {:?}", address);
-            let account = Account::new_from_rlp(address, &Rlp::new(&v))?;
-
-            let account_state = get_account_state(state, &account, config)?;
-            callback(account_state);
-            found_accounts += 1;
-
-            if config.limit > 0 && found_accounts >= config.limit as usize {
-                break;
-            }
-        } else {
-            continue;
-        }
-    }
-
-    let lower_bound_incl = empty_key.to_key_bytes();
-    let upper_bound_excl = to_key_prefix_iter_upper_bound(&lower_bound_incl);
-
-    if let Some(mut kv_iterator) = maybe_kv_iterator {
-        let mut kvs = kv_iterator
-            .iter_range(
-                lower_bound_incl.as_slice(),
-                upper_bound_excl.as_ref().map(|v| &**v),
-            )?
-            .take();
-
-        while let Some((key, value)) = kvs.next()? {
-            if deleted_keys.contains(&key) {
-                continue;
-            }
-
+        let mut inner_callback = |(key, value): (Vec<u8>, Box<[u8]>)| {
+            total_key_count += 1;
             let storage_key_with_space =
                 StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key);
             if storage_key_with_space.space != space {
-                continue;
+                core_space_key_count += 1;
+                return;
+            }
+
+            if total_key_count % 10000 == 0 {
+                println(&format!(
+                    "total_key_count: {}, core_space_key_count: {}",
+                    total_key_count, core_space_key_count
+                ));
             }
 
             if let StorageKey::AccountKey(address_bytes) =
                 storage_key_with_space.key
             {
                 let address = Address::from_slice(address_bytes);
-                println!("Find account: {:?}", address);
-                let account =
-                    Account::new_from_rlp(address, &Rlp::new(&value))?;
+                println(&format!("Find account: {:?}", address));
+                let account = Account::new_from_rlp(address, &Rlp::new(&value))
+                    .expect("Failed to decode account");
 
-                let account_state = get_account_state(state, &account, config)?;
-                callback(account_state);
-                found_accounts += 1;
+                account_states.insert(address, account);
+            }
+        };
 
-                if config.limit > 0 && found_accounts >= config.limit as usize {
-                    break;
-                }
-            } else {
-                continue;
+        state.read_all_with_callback(start_key, &mut inner_callback)?;
+
+        if account_states.len() > 0 {
+            println("Start to read account code and storage data...");
+        }
+
+        for (_address, account) in account_states {
+            let account_state = get_account_state(state, &account, config)?;
+            callback(account_state);
+            found_accounts += 1;
+            if config.limit > 0 && found_accounts >= config.limit as usize {
+                break;
             }
         }
     }
@@ -368,4 +350,8 @@ fn get_account_state(
         address: Some(address.address),
         address_hash: Some(address_hash),
     })
+}
+
+fn println(message: &str) {
+    println!("[{}] {}", Utc::now().format("%Y-%m-%d %H:%M:%S"), message);
 }

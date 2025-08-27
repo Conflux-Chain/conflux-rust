@@ -89,6 +89,17 @@ Note:
 
 1. Conflux contract data storage differs significantly from Ethereum, as it is not stored in separate MPT form, therefore the storage root cannot be obtained. The exported data's `account.root` is fixed as `0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421`
 2. The exported root information is the full state root of Conflux dual-space (Core Space, eSpace), only for maintaining data format consistency, not the state root of all eSpace accounts.
-3. When exporting mainnet state data, due to the large number of accounts, high machine configuration is required, and the runtime will be quite long; if you want to export the state at a certain height in history, it needs to be performed on a fullstate node data.
+3. When exporting mainnet state data, due to the large number of accounts, high machine configuration is required, and the runtime will be quite long; if you want to export the state at a certain height in history, it needs to be performed on a `fullstate node` data.
 4. When performing state export, please stop the node program first, then execute the export operation in the node directory.
-5. Please use the binary corresponding to the network and execute the export operation in the corresponding network data directory; do not use testnet or master code compiled binary to execute export operations on mainnet data.
+5. Please use the binary corresponding to the network and execute the export operation in the corresponding network data directory; `do not` use `testnet or master` code compiled binary to execute export operations on `mainnet data`.
+6. If the state is very big, recommand export state into multi file, through arg `--multifile`
+7. When this command start, it will first sync to latest block(if your node is not fully synced, this step will take long time), and then do the state export operation
+8. When running this command on mainnnet or testnet, recommend open below configs
+  ```toml
+  storage_delta_mpts_cache_size=10_000_0000
+  storage_delta_mpts_cache_start_size=1_000_0000
+  storage_delta_mpts_slab_idle_size=5_000_0000
+  storage_single_mpt_cache_start_size=2_000_0000
+  storage_single_mpt_slab_idle_size=1_000_000_00
+  storage_single_mpt_cache_size=20_000_0000
+  ```

@@ -1,7 +1,6 @@
 use crate::{
-    impls::{errors::*, storage_db::kvdb_sqlite_sharded::KvdbSqliteSharded},
-    state::StateTrait,
-    MptKeyValue, NodeMerkleProof, StateProof, StorageStateTraitExt,
+    impls::errors::*, state::StateTrait, MptKeyValue, NodeMerkleProof,
+    StateProof, StorageStateTraitExt,
 };
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_types::Space;
@@ -162,6 +161,7 @@ enum OwnedStorageKey {
     DepositListKey(Vec<u8>),
     VoteListKey(Vec<u8>),
     EmptyKey,
+    AddressPrefixKey(Vec<u8>),
 }
 
 impl OwnedStorageKey {
@@ -197,6 +197,9 @@ impl OwnedStorageKey {
                 StorageKey::VoteListKey(k.as_slice())
             }
             OwnedStorageKey::EmptyKey => StorageKey::EmptyKey,
+            OwnedStorageKey::AddressPrefixKey(k) => {
+                StorageKey::AddressPrefixKey(k.as_slice())
+            }
         }
     }
 }
@@ -249,6 +252,9 @@ impl<'a> From<StorageKey<'a>> for OwnedStorageKey {
                 OwnedStorageKey::VoteListKey(k.to_vec())
             }
             StorageKey::EmptyKey => OwnedStorageKey::EmptyKey,
+            StorageKey::AddressPrefixKey(k) => {
+                OwnedStorageKey::AddressPrefixKey(k.to_vec())
+            }
         }
     }
 }
@@ -307,10 +313,12 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
         self.state.read_all(access_key_prefix)
     }
 
-    fn read_all_iterator(
+    fn read_all_with_callback(
         &mut self, access_key_prefix: StorageKeyWithSpace,
-    ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
-        self.state.read_all_iterator(access_key_prefix)
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        self.state
+            .read_all_with_callback(access_key_prefix, callback)
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {

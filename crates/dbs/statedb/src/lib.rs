@@ -188,12 +188,12 @@ mod impls {
             self.delete_all::<access_mode::Read>(key_prefix, debug_record)
         }
 
-        pub fn read_all_iterator(
+        pub fn read_all_with_callback(
             &mut self, access_key_prefix: StorageKeyWithSpace,
-        ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)>
-        {
+            callback: &mut dyn FnMut(MptKeyValue),
+        ) -> Result<()> {
             self.storage
-                .read_all_iterator(access_key_prefix)
+                .read_all_with_callback(access_key_prefix, callback)
                 .map_err(|err| err.into())
         }
 
@@ -544,7 +544,7 @@ mod impls {
     };
     use cfx_storage::{
         utils::{access_mode, to_key_prefix_iter_upper_bound},
-        KvdbSqliteSharded, MptKeyValue, StorageStateTrait,
+        MptKeyValue, StorageStateTrait,
     };
     use cfx_types::{
         address_util::AddressUtil, Address, AddressWithSpace, Space,

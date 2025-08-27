@@ -622,6 +622,57 @@ impl CowNodeRef {
         Ok(())
     }
 
+    pub fn iterate_internal_with_callback(
+        &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
+        guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
+        key_prefix: CompressedPathRaw, db: &mut DeltaDbOwnedReadTraitObj,
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        if guarded_trie_node.as_ref().as_ref().has_value() {
+            assert!(CompressedPathRaw::has_second_nibble(
+                key_prefix.path_mask()
+            ));
+            callback((
+                key_prefix.path_slice().to_vec(),
+                guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
+            ));
+        }
+
+        let children_table =
+            guarded_trie_node.as_ref().as_ref().children_table.clone();
+        // Free the lock for trie_node.
+        // FIXME: try to share the lock.
+        drop(guarded_trie_node);
+
+        let node_memory_manager = trie.get_node_memory_manager();
+        let allocator = node_memory_manager.get_allocator();
+        for (i, node_ref) in children_table.iter() {
+            let mut cow_child_node =
+                Self::new((*node_ref).into(), owned_node_set, self.mpt_id);
+            let child_node = cow_child_node.get_trie_node(
+                node_memory_manager,
+                &allocator,
+                db,
+            )?;
+            let key_prefix = CompressedPathRaw::join_connected_paths(
+                &key_prefix,
+                i,
+                &child_node.compressed_path_ref(),
+            );
+            let child_node = GuardedValue::take(child_node);
+            cow_child_node.iterate_internal_with_callback(
+                owned_node_set,
+                trie,
+                child_node,
+                key_prefix,
+                db,
+                callback,
+            )?;
+        }
+
+        Ok(())
+    }
+
     /// Recursively commit dirty nodes.
     pub fn commit_dirty_recursively<
         Transaction: BorrowMut<DeltaDbTransactionTraitObj>,
