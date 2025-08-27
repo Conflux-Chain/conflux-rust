@@ -505,11 +505,7 @@
 <a href="#504" id="504">504</a>
 <a href="#505" id="505">505</a>
 <a href="#506" id="506">506</a>
-<a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a>
-<a href="#509" id="509">509</a>
-<a href="#510" id="510">510</a>
-<a href="#511" id="511">511</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#507" id="507">507</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -594,24 +590,20 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>, key: StorageKeyWithSpace,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Arc&lt;[u8]&gt;&gt;&gt; {
             <span class="kw">let </span>key_bytes = key.to_key_bytes();
-            <span class="kw">let </span><span class="kw-2">mut </span>r;
+            <span class="kw">let </span>r;
             <span class="kw">let </span>accessed_entries_read_guard = <span class="self">self</span>.accessed_entries.read();
             <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = accessed_entries_read_guard.get(<span class="kw-2">&amp;</span>key_bytes) {
                 r = v.current_value.clone();
             } <span class="kw">else </span>{
                 drop(accessed_entries_read_guard);
-                r = <span class="self">self</span>.storage.get(key)<span class="question-mark">?</span>.map(Into::into);
                 <span class="kw">let </span><span class="kw-2">mut </span>accessed_entries = <span class="self">self</span>.accessed_entries.write();
                 <span class="kw">let </span>entry = accessed_entries.entry(key_bytes);
-                <span class="kw">let </span>was_vacant = <span class="kw">if let </span>Occupied(o) = <span class="kw-2">&amp;</span>entry {
+                <span class="kw">if let </span>Occupied(o) = <span class="kw-2">&amp;</span>entry {
                     r = o.get().current_value.clone();
-                    <span class="bool-val">false
-                </span>} <span class="kw">else </span>{
-                    <span class="bool-val">true
-                </span>};
-                <span class="kw">if </span>was_vacant {
+                } <span class="kw">else </span>{
+                    r = <span class="self">self</span>.storage.get(key)<span class="question-mark">?</span>.map(Into::into);
                     entry.or_insert(EntryValue::new(r.clone()));
-                }
+                };
             };
             <span class="macro">trace!</span>(<span class="string">"get_raw key={:?}, value={:?}"</span>, key, r);
             <span class="prelude-val">Ok</span>(r)
