@@ -9,6 +9,7 @@ use cfx_storage::{
 };
 use cfx_types::{Address, Space, H256};
 use cfxcore::NodeType;
+use chrono::Utc;
 use fallible_iterator::FallibleIterator;
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{Condvar, Mutex};
@@ -74,7 +75,10 @@ fn prepare_state_db(
     conf: &mut Configuration, exit_cond_var: Arc<(Mutex<bool>, Condvar)>,
     config: &StateDumpConfig,
 ) -> Result<(StateDbGeneric, H256), String> {
-    println!("Preparing state...");
+    println!(
+        "[{}] Preparing state...",
+        Utc::now().format("%Y-%m-%d %H:%M:%S")
+    );
     let (
         data_man,
         _,
@@ -140,6 +144,10 @@ fn prepare_state_db(
 fn export_space_accounts(
     state: &mut StateDbGeneric, space: Space, config: &StateDumpConfig,
 ) -> Result<BTreeMap<Address, AccountState>, Box<dyn std::error::Error>> {
+    println!(
+        "[{}] Start to iterate state...",
+        Utc::now().format("%Y-%m-%d %H:%M:%S")
+    );
     let empty_key = StorageKey::EmptyKey.with_space(space);
     let kv_pairs = state.read_all(empty_key, None)?;
 
@@ -156,7 +164,11 @@ fn export_space_accounts(
         match storage_key_with_space.key {
             StorageKey::AccountKey(address_bytes) => {
                 let address = Address::from_slice(address_bytes);
-                println!("Find account: {:?}", address);
+                println!(
+                    "[{}] Find account: {:?}",
+                    Utc::now().format("%Y-%m-%d %H:%M:%S"),
+                    address
+                );
                 let account =
                     Account::new_from_rlp(address, &Rlp::new(&value))?;
                 accounts_map.insert(address, account);
@@ -208,7 +220,11 @@ fn export_space_accounts(
             codes_map.get(&address).cloned()
         } else {
             if let Some(code) = codes_map.get(&address) {
-                println!("no-contract account have code: {:?}", code);
+                println!(
+                    "[{}] no-contract account have code: {:?}",
+                    Utc::now().format("%Y-%m-%d %H:%M:%S"),
+                    code
+                );
             }
             None
         };
@@ -217,7 +233,11 @@ fn export_space_accounts(
             storage_map.get(&address).cloned()
         } else {
             if let Some(storage) = storage_map.get(&address) {
-                println!("no-contract account have storage: {:?}", storage);
+                println!(
+                    "[{}] no-contract account have storage: {:?}",
+                    Utc::now().format("%Y-%m-%d %H:%M:%S"),
+                    storage
+                );
             }
             None
         };
@@ -247,6 +267,10 @@ fn export_space_accounts_with_iterator<F: Fn(AccountState)>(
     state: &mut StateDbGeneric, space: Space, config: &StateDumpConfig,
     callback: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    println!(
+        "[{}] Start to iterate state...",
+        Utc::now().format("%Y-%m-%d %H:%M:%S")
+    );
     let empty_key = StorageKey::EmptyKey.with_space(space);
     let (kvs, maybe_kv_iterator) = state.read_all_iterator(empty_key)?;
 
@@ -269,7 +293,11 @@ fn export_space_accounts_with_iterator<F: Fn(AccountState)>(
             storage_key_with_space.key
         {
             let address = Address::from_slice(address_bytes);
-            println!("Find account: {:?}", address);
+            println!(
+                "[{}] Find account: {:?}",
+                Utc::now().format("%Y-%m-%d %H:%M:%S"),
+                address
+            );
             let account = Account::new_from_rlp(address, &Rlp::new(&v))?;
 
             let account_state = get_account_state(state, &account, config)?;
@@ -310,7 +338,11 @@ fn export_space_accounts_with_iterator<F: Fn(AccountState)>(
                 storage_key_with_space.key
             {
                 let address = Address::from_slice(address_bytes);
-                println!("Find account: {:?}", address);
+                println!(
+                    "[{}] Find account: {:?}",
+                    Utc::now().format("%Y-%m-%d %H:%M:%S"),
+                    address
+                );
                 let account =
                     Account::new_from_rlp(address, &Rlp::new(&value))?;
 
