@@ -39,12 +39,6 @@ pub trait StateTrait: Sync + Send {
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>>;
 
-    fn read_all_iterator(
-        &mut self, _access_key_prefix: StorageKeyWithSpace,
-    ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
-        Err(Error::Msg("Not implemented".into()))
-    }
-
     fn read_all_with_callback(
         &mut self, _access_key_prefix: StorageKeyWithSpace,
         _callback: &mut dyn FnMut(MptKeyValue),
@@ -91,7 +85,6 @@ pub trait StateDbGetOriginalMethods {
 use super::{
     impls::{
         errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
-        storage_db::kvdb_sqlite_sharded::KvdbSqliteSharded,
     },
     MptKeyValue, StateRootWithAuxInfo,
 };

@@ -1,8 +1,5 @@
 use crate::{
-    impls::{
-        errors::*, state::ChildrenMerkleMap,
-        storage_db::kvdb_sqlite_sharded::KvdbSqliteSharded,
-    },
+    impls::{errors::*, state::ChildrenMerkleMap},
     state::StateTrait,
     utils::access_mode,
     CowNodeRef, DeltaMpt, MptKeyValue, NodeRefDeltaMpt, OwnedNodeSet,
@@ -311,37 +308,6 @@ impl SingleMptState {
         }
     }
 
-    fn read_all_iterator_impl(
-        &mut self, access_key_prefix: StorageKeyWithSpace,
-    ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
-        self.ensure_temp_slab_for_db_load();
-
-        // Retrieve and delete key/value pairs from delta trie
-        let trie_kvs = {
-            let key_prefix = access_key_prefix.to_key_bytes();
-            let deleted = SubTrieVisitor::new(
-                &self.trie,
-                self.trie_root.clone(),
-                &mut self.owned_node_set,
-            )?
-            .traversal(&key_prefix, &key_prefix)?;
-            deleted
-        };
-
-        let mut result = Vec::new();
-        if let Some(kvs) = trie_kvs {
-            for (k, v) in kvs {
-                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-                let k = storage_key.to_key_bytes();
-                if v.len() > 0 {
-                    result.push((k, v));
-                }
-            }
-        }
-
-        Ok((result, None))
-    }
-
     fn read_all_with_callback_impl(
         &mut self, access_key_prefix: StorageKeyWithSpace,
         callback: &mut dyn FnMut(MptKeyValue),
@@ -349,8 +315,6 @@ impl SingleMptState {
         self.ensure_temp_slab_for_db_load();
 
         let mut inner_callback = |(k, v): MptKeyValue| {
-            let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-            let k = storage_key.to_key_bytes();
             if v.len() > 0 {
                 callback((k, v));
             }
@@ -432,12 +396,6 @@ impl StateTrait for SingleMptState {
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
         self.delete_all_impl::<access_mode::Read>(access_key_prefix)
-    }
-
-    fn read_all_iterator(
-        &mut self, access_key_prefix: StorageKeyWithSpace,
-    ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
-        self.read_all_iterator_impl(access_key_prefix)
     }
 
     fn read_all_with_callback(

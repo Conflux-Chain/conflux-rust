@@ -1,7 +1,6 @@
 use crate::{
-    impls::{errors::*, storage_db::kvdb_sqlite_sharded::KvdbSqliteSharded},
-    state::StateTrait,
-    MptKeyValue, NodeMerkleProof, StateProof, StorageStateTraitExt,
+    impls::errors::*, state::StateTrait, MptKeyValue, NodeMerkleProof,
+    StateProof, StorageStateTraitExt,
 };
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_types::Space;
@@ -305,12 +304,6 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
         self.state.read_all(access_key_prefix)
-    }
-
-    fn read_all_iterator(
-        &mut self, access_key_prefix: StorageKeyWithSpace,
-    ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
-        self.state.read_all_iterator(access_key_prefix)
     }
 
     fn read_all_with_callback(
