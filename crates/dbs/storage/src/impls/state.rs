@@ -1056,6 +1056,8 @@ impl State {
             }
         }
 
+        println!("Delta trie process finished: {:?}", result.len());
+
         // Retrieve key/value pairs from snapshot
         let kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
 
