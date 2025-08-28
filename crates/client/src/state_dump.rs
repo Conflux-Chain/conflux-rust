@@ -60,7 +60,7 @@ pub fn iterate_dump_whole_state<F: Fn(AccountState)>(
     let (mut state_db, state_root) =
         prepare_state_db(conf, exit_cond_var, config)?;
 
-    export_space_accounts_with_iterator(
+    export_space_accounts_with_callback(
         &mut state_db,
         Space::Ethereum,
         config,
@@ -356,6 +356,55 @@ fn export_space_accounts_with_iterator<F: Fn(AccountState)>(
             } else {
                 continue;
             }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
+    state: &mut StateDbGeneric, space: Space, config: &StateDumpConfig,
+    callback: F,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!(
+        "[{}] Start to iterate state...",
+        Utc::now().format("%Y-%m-%d %H:%M:%S")
+    );
+    let mut account_states = BTreeMap::new();
+
+    let mut inner_callback = |(key, value): (Vec<u8>, Box<[u8]>)| {
+        let storage_key_with_space =
+            StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key);
+        if storage_key_with_space.space != space {
+            return;
+        }
+
+        if let StorageKey::AccountKey(address_bytes) =
+            storage_key_with_space.key
+        {
+            let address = Address::from_slice(address_bytes);
+            println!(
+                "[{}] Find account: {:?}",
+                Utc::now().format("%Y-%m-%d %H:%M:%S"),
+                address
+            );
+            let account = Account::new_from_rlp(address, &Rlp::new(&value))
+                .expect("Failed to decode account");
+
+            account_states.insert(address, account);
+        }
+    };
+
+    let empty_key = StorageKey::EmptyKey.with_space(space);
+    state.read_all_with_callback(empty_key, &mut inner_callback)?;
+
+    let mut found_accounts = 0;
+    for (_address, account) in account_states {
+        let account_state = get_account_state(state, &account, config)?;
+        callback(account_state);
+        found_accounts += 1;
+        if config.limit > 0 && found_accounts >= config.limit as usize {
+            break;
         }
     }
 

@@ -45,6 +45,13 @@ pub trait StateTrait: Sync + Send {
         Err(Error::Msg("Not implemented".into()))
     }
 
+    fn read_all_with_callback(
+        &mut self, _access_key_prefix: StorageKeyWithSpace,
+        _callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        Err(Error::Msg("Not implemented".into()))
+    }
+
     // Finalize
     /// It's costly to compute state root however it's only necessary to compute
     /// state root once before committing.

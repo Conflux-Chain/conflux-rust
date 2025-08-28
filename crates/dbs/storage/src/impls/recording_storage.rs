@@ -55,6 +55,7 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
             fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
             fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo>;
             fn read_all_iterator(&mut self, access_key_prefix: StorageKeyWithSpace) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)>;
+            fn read_all_with_callback(&mut self, access_key_prefix: StorageKeyWithSpace, callback: &mut dyn FnMut(MptKeyValue)) -> Result<()>;
         }
     }
 

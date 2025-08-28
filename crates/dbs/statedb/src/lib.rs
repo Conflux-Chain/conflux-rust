@@ -197,6 +197,15 @@ mod impls {
                 .map_err(|err| err.into())
         }
 
+        pub fn read_all_with_callback(
+            &mut self, access_key_prefix: StorageKeyWithSpace,
+            callback: &mut dyn FnMut(MptKeyValue),
+        ) -> Result<()> {
+            self.storage
+                .read_all_with_callback(access_key_prefix, callback)
+                .map_err(|err| err.into())
+        }
+
         pub fn delete_all<AM: access_mode::AccessMode>(
             &mut self, key_prefix: StorageKeyWithSpace,
             debug_record: Option<&mut ComputeEpochDebugRecord>,

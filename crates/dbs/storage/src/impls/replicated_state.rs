@@ -313,6 +313,14 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
         self.state.read_all_iterator(access_key_prefix)
     }
 
+    fn read_all_with_callback(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        self.state
+            .read_all_with_callback(access_key_prefix, callback)
+    }
+
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
         self.replication_handler
             .send_op(StateOperation::ComputeStateRoot);

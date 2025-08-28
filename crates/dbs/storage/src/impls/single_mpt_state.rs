@@ -341,6 +341,36 @@ impl SingleMptState {
 
         Ok((result, None))
     }
+
+    fn read_all_with_callback_impl(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        self.ensure_temp_slab_for_db_load();
+
+        let mut inner_callback = |(k, v): MptKeyValue| {
+            let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+            let k = storage_key.to_key_bytes();
+            if v.len() > 0 {
+                callback((k, v));
+            }
+        };
+
+        // Retrieve and delete key/value pairs from delta trie
+        let key_prefix = access_key_prefix.to_key_bytes();
+        SubTrieVisitor::new(
+            &self.trie,
+            self.trie_root.clone(),
+            &mut self.owned_node_set,
+        )?
+        .traversal_with_callback(
+            &key_prefix,
+            &key_prefix,
+            &mut inner_callback,
+        )?;
+
+        Ok(())
+    }
 }
 
 impl StateTrait for SingleMptState {
@@ -408,6 +438,13 @@ impl StateTrait for SingleMptState {
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<(Vec<MptKeyValue>, Option<KvdbSqliteSharded<Box<[u8]>>>)> {
         self.read_all_iterator_impl(access_key_prefix)
+    }
+
+    fn read_all_with_callback(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        self.read_all_with_callback_impl(access_key_prefix, callback)
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
