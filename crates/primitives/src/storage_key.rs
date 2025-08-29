@@ -58,6 +58,11 @@ pub enum StorageKey<'a> {
     },
     DepositListKey(&'a [u8]),
     VoteListKey(&'a [u8]),
+    // Empty key is used to traverse all key and value pairs.
+    EmptyKey,
+    // Address prefix key is used to search all keys with the same address
+    // prefix, eg [1, 2](0x0102) will search all keys with prefix 0x0102
+    AddressPrefixKey(&'a [u8]),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -195,6 +200,16 @@ impl<'a> StorageKeyWithSpace<'a> {
             StorageKey::VoteListKey(address_bytes) => {
                 delta_mpt_storage_key::new_vote_list_key(address_bytes, padding)
             }
+            StorageKey::EmptyKey => {
+                return vec![];
+            }
+            StorageKey::AddressPrefixKey(_address_bytes) => {
+                // delta mpt trie does not support address prefix key search
+                // so we search all keys and filter them by address prefix
+                // due to delta mpt trie won't be very big, so the performance
+                // impact is not very big
+                return vec![];
+            }
         };
 
         return if self.space == Space::Native {
@@ -283,6 +298,14 @@ impl<'a> StorageKeyWithSpace<'a> {
                 key.extend_from_slice(Self::VOTE_LIST_PREFIX);
 
                 key
+            }
+            StorageKey::EmptyKey => {
+                return vec![];
+            }
+            StorageKey::AddressPrefixKey(address_bytes) => {
+                let mut key = Vec::with_capacity(address_bytes.len());
+                key.extend_from_slice(address_bytes);
+                return key;
             }
         };
 

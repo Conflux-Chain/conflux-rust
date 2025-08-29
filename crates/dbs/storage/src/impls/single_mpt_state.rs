@@ -10,7 +10,8 @@ use primitives::{
     EpochId, MerkleHash, MptValue, StateRoot, StorageKeyWithSpace,
     MERKLE_NULL_NODE,
 };
-use std::{cell::UnsafeCell, collections::HashSet, sync::Arc};
+use rustc_hex::ToHex;
+use std::{cell::UnsafeCell, sync::Arc};
 
 pub struct SingleMptState {
     trie: Arc<DeltaMpt>,
@@ -267,7 +268,7 @@ impl SingleMptState {
             self.pre_modification();
         }
 
-        // Retrieve and delete key/value pairs from delta trie
+        // Retrieve and delete key/value pairs from single mpt trie
         let trie_kvs = {
             let key_prefix = access_key_prefix.to_key_bytes();
             let deleted = if AM::READ_ONLY {
@@ -292,13 +293,8 @@ impl SingleMptState {
         };
 
         let mut result = Vec::new();
-        // This is used to keep track of the deleted keys.
-        let mut deleted_keys = HashSet::new();
         if let Some(kvs) = trie_kvs {
             for (k, v) in kvs {
-                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-                let k = storage_key.to_key_bytes();
-                deleted_keys.insert(k.clone());
                 if v.len() > 0 {
                     result.push((k, v));
                 }
@@ -309,6 +305,44 @@ impl SingleMptState {
         } else {
             Ok(Some(result))
         }
+    }
+
+    fn read_all_with_callback_impl(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        self.ensure_temp_slab_for_db_load();
+
+        let mut total_key_count: u64 = 0;
+
+        let mut inner_callback = |(k, v): MptKeyValue| {
+            total_key_count += 1;
+            if total_key_count % 10000 == 0 {
+                println!(
+                    "read_all_with_callback_impl -> total_key_count: {} {}",
+                    total_key_count,
+                    k.to_hex::<String>()
+                );
+            }
+            if v.len() > 0 {
+                callback((k, v));
+            }
+        };
+
+        // Retrieve and delete key/value pairs from delta trie
+        let key_prefix = access_key_prefix.to_key_bytes();
+        SubTrieVisitor::new(
+            &self.trie,
+            self.trie_root.clone(),
+            &mut self.owned_node_set,
+        )?
+        .traversal_with_callback(
+            &key_prefix,
+            &key_prefix,
+            &mut inner_callback,
+        )?;
+
+        Ok(())
     }
 }
 
@@ -371,6 +405,13 @@ impl StateTrait for SingleMptState {
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
         self.delete_all_impl::<access_mode::Read>(access_key_prefix)
+    }
+
+    fn read_all_with_callback(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+        callback: &mut dyn FnMut(MptKeyValue),
+    ) -> Result<()> {
+        self.read_all_with_callback_impl(access_key_prefix, callback)
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
