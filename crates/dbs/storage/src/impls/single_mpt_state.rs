@@ -10,6 +10,7 @@ use primitives::{
     EpochId, MerkleHash, MptValue, StateRoot, StorageKeyWithSpace,
     MERKLE_NULL_NODE,
 };
+use rustc_hex::ToHex;
 use std::{cell::UnsafeCell, sync::Arc};
 
 pub struct SingleMptState {
@@ -312,7 +313,17 @@ impl SingleMptState {
     ) -> Result<()> {
         self.ensure_temp_slab_for_db_load();
 
+        let mut total_key_count: u64 = 0;
+
         let mut inner_callback = |(k, v): MptKeyValue| {
+            total_key_count += 1;
+            if total_key_count % 10000 == 0 {
+                println!(
+                    "read_all_with_callback_impl -> total_key_count: {} {}",
+                    total_key_count,
+                    k.to_hex::<String>()
+                );
+            }
             if v.len() > 0 {
                 callback((k, v));
             }

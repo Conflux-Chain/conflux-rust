@@ -271,13 +271,14 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
                 StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key);
             if storage_key_with_space.space != space {
                 core_space_key_count += 1;
-                if core_space_key_count % 10000 == 0 {
-                    println(&format!(
-                        "total_key_count: {}, core_space_key_count: {}",
-                        total_key_count, core_space_key_count
-                    ));
-                }
                 return;
+            }
+
+            if total_key_count % 10000 == 0 {
+                println(&format!(
+                    "total_key_count: {}, core_space_key_count: {}",
+                    total_key_count, core_space_key_count
+                ));
             }
 
             if let StorageKey::AccountKey(address_bytes) =
