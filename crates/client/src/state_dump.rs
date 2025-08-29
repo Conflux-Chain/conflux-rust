@@ -276,6 +276,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
         "[{}] Start to iterate state...",
         Utc::now().format("%Y-%m-%d %H:%M:%S")
     );
+    let mut found_accounts = 0;
 
     for i in 0..=255 {
         let prefix = [i];
@@ -314,7 +315,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
                 Utc::now().format("%Y-%m-%d %H:%M:%S")
             );
         }
-        let mut found_accounts = 0;
+
         for (_address, account) in account_states {
             let account_state = get_account_state(state, &account, config)?;
             callback(account_state);

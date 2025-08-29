@@ -93,7 +93,8 @@ Note:
 4. When performing state export, please stop the node program first, then execute the export operation in the node directory.
 5. Please use the binary corresponding to the network and execute the export operation in the corresponding network data directory; `do not` use `testnet or master` code compiled binary to execute export operations on `mainnet data`.
 6. If the state is very big, recommand export state into multi file, through arg `--multifile`
-7. When running this command on mainnnet or testnet, recommend open below configs
+7. When this command start, it will first sync to latest block(if your node is not fully synced, this step will take long time), and then do the state export operation
+8. When running this command on mainnnet or testnet, recommend open below configs
   ```toml
   storage_delta_mpts_cache_size=10_000_0000
   storage_delta_mpts_cache_start_size=1_000_0000

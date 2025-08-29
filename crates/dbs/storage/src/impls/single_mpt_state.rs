@@ -267,7 +267,7 @@ impl SingleMptState {
             self.pre_modification();
         }
 
-        // Retrieve and delete key/value pairs from delta trie
+        // Retrieve and delete key/value pairs from single mpt trie
         let trie_kvs = {
             let key_prefix = access_key_prefix.to_key_bytes();
             let deleted = if AM::READ_ONLY {
@@ -294,8 +294,6 @@ impl SingleMptState {
         let mut result = Vec::new();
         if let Some(kvs) = trie_kvs {
             for (k, v) in kvs {
-                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-                let k = storage_key.to_key_bytes();
                 if v.len() > 0 {
                     result.push((k, v));
                 }
