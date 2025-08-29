@@ -80,10 +80,7 @@ fn prepare_state_db(
     conf: &mut Configuration, exit_cond_var: Arc<(Mutex<bool>, Condvar)>,
     config: &StateDumpConfig,
 ) -> Result<(StateDbGeneric, H256), String> {
-    println!(
-        "[{}] Preparing state...",
-        Utc::now().format("%Y-%m-%d %H:%M:%S")
-    );
+    println("Preparing state...");
     let (
         data_man,
         _,
@@ -149,10 +146,7 @@ fn prepare_state_db(
 fn export_space_accounts(
     state: &mut StateDbGeneric, space: Space, config: &StateDumpConfig,
 ) -> Result<BTreeMap<Address, AccountState>, Box<dyn std::error::Error>> {
-    println!(
-        "[{}] Start to iterate state...",
-        Utc::now().format("%Y-%m-%d %H:%M:%S")
-    );
+    println("Start to iterate state...");
     let empty_key = StorageKey::EmptyKey.with_space(space);
     let kv_pairs = state.read_all(empty_key, None)?;
 
@@ -169,11 +163,7 @@ fn export_space_accounts(
         match storage_key_with_space.key {
             StorageKey::AccountKey(address_bytes) => {
                 let address = Address::from_slice(address_bytes);
-                println!(
-                    "[{}] Find account: {:?}",
-                    Utc::now().format("%Y-%m-%d %H:%M:%S"),
-                    address
-                );
+                println(&format!("Find account: {:?}", address));
                 let account =
                     Account::new_from_rlp(address, &Rlp::new(&value))?;
                 accounts_map.insert(address, account);
@@ -225,11 +215,7 @@ fn export_space_accounts(
             codes_map.get(&address).cloned()
         } else {
             if let Some(code) = codes_map.get(&address) {
-                println!(
-                    "[{}] no-contract account have code: {:?}",
-                    Utc::now().format("%Y-%m-%d %H:%M:%S"),
-                    code
-                );
+                println(&format!("no-contract account have code: {:?}", code));
             }
             None
         };
@@ -237,12 +223,8 @@ fn export_space_accounts(
         let storage = if is_contract {
             storage_map.get(&address).cloned()
         } else {
-            if let Some(storage) = storage_map.get(&address) {
-                println!(
-                    "[{}] no-contract account have storage: {:?}",
-                    Utc::now().format("%Y-%m-%d %H:%M:%S"),
-                    storage
-                );
+            if let Some(_storage) = storage_map.get(&address) {
+                println(&format!("no-contract account have storage"));
             }
             None
         };
@@ -272,11 +254,10 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
     state: &mut StateDbGeneric, space: Space, config: &StateDumpConfig,
     callback: F,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!(
-        "[{}] Start to iterate state...",
-        Utc::now().format("%Y-%m-%d %H:%M:%S")
-    );
+    println("Start to iterate state...");
     let mut found_accounts = 0;
+    let mut core_space_key_count: u64 = 0;
+    let mut total_key_count: u64 = 0;
 
     for i in 0..=255 {
         let prefix = [i];
@@ -285,9 +266,17 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
         let mut account_states = BTreeMap::new();
 
         let mut inner_callback = |(key, value): (Vec<u8>, Box<[u8]>)| {
+            total_key_count += 1;
             let storage_key_with_space =
                 StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key);
             if storage_key_with_space.space != space {
+                core_space_key_count += 1;
+                if core_space_key_count % 10000 == 0 {
+                    println(&format!(
+                        "total_key_count: {}, core_space_key_count: {}",
+                        total_key_count, core_space_key_count
+                    ));
+                }
                 return;
             }
 
@@ -295,11 +284,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
                 storage_key_with_space.key
             {
                 let address = Address::from_slice(address_bytes);
-                println!(
-                    "[{}] Find account: {:?}",
-                    Utc::now().format("%Y-%m-%d %H:%M:%S"),
-                    address
-                );
+                println(&format!("Find account: {:?}", address));
                 let account = Account::new_from_rlp(address, &Rlp::new(&value))
                     .expect("Failed to decode account");
 
@@ -310,10 +295,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
         state.read_all_with_callback(start_key, &mut inner_callback)?;
 
         if account_states.len() > 0 {
-            println!(
-                "[{}] Start to read account code and storage data...",
-                Utc::now().format("%Y-%m-%d %H:%M:%S")
-            );
+            println("Start to read account code and storage data...");
         }
 
         for (_address, account) in account_states {
@@ -367,4 +349,8 @@ fn get_account_state(
         address: Some(address.address),
         address_hash: Some(address_hash),
     })
+}
+
+fn println(message: &str) {
+    println!("[{}] {}", Utc::now().format("%Y-%m-%d %H:%M:%S"), message);
 }
