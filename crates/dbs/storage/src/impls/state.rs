@@ -909,6 +909,14 @@ impl State {
             snapshot_kvs.push((key, value));
         }
 
+        let is_address_search_prefix =
+            if let StorageKey::AddressPrefixKey(prefix) = access_key_prefix.key
+            {
+                Some(prefix)
+            } else {
+                None
+            };
+
         let mut result = Vec::new();
         // This is used to keep track of the deleted keys.
         let mut deleted_keys = HashSet::new();
@@ -916,6 +924,15 @@ impl State {
             for (k, v) in kvs {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
                 let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        continue;
+                    }
+                }
+
                 deleted_keys.insert(k.clone());
                 if v.len() > 0 {
                     result.push((k, v));
@@ -926,11 +943,21 @@ impl State {
         if let Some(kvs) = intermediate_trie_kvs {
             for (k, v) in kvs {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        continue;
+                    }
+                }
+
                 // Only delete non-empty keys.
                 if v.len() > 0 && !AM::READ_ONLY {
                     self.delete(storage_key)?;
                 }
-                let k = storage_key.to_key_bytes();
+
                 if !deleted_keys.contains(&k) {
                     deleted_keys.insert(k.clone());
                     if v.len() > 0 {
@@ -966,6 +993,14 @@ impl State {
     ) -> Result<()> {
         self.ensure_temp_slab_for_db_load();
 
+        let is_address_search_prefix =
+            if let StorageKey::AddressPrefixKey(prefix) = access_key_prefix.key
+            {
+                Some(prefix)
+            } else {
+                None
+            };
+
         // This is used to keep track of the deleted keys.
         let mut deleted_keys = HashSet::new();
 
@@ -974,6 +1009,14 @@ impl State {
             let mut inner_callback = |(k, v): MptKeyValue| {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
                 let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        return;
+                    }
+                }
                 deleted_keys.insert(k.clone());
                 if v.len() > 0 {
                     callback((k, v));
@@ -998,6 +1041,15 @@ impl State {
             let mut inner_callback = |(k, v): MptKeyValue| {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
                 let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        return;
+                    }
+                }
+
                 if !deleted_keys.contains(&k) {
                     deleted_keys.insert(k.clone());
                     if v.len() > 0 {
