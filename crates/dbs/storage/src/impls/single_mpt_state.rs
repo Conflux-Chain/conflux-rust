@@ -10,7 +10,7 @@ use primitives::{
     EpochId, MerkleHash, MptValue, StateRoot, StorageKeyWithSpace,
     MERKLE_NULL_NODE,
 };
-use std::{cell::UnsafeCell, collections::HashSet, sync::Arc};
+use std::{cell::UnsafeCell, sync::Arc};
 
 pub struct SingleMptState {
     trie: Arc<DeltaMpt>,
@@ -267,7 +267,7 @@ impl SingleMptState {
             self.pre_modification();
         }
 
-        // Retrieve and delete key/value pairs from delta trie
+        // Retrieve and delete key/value pairs from single mpt trie
         let trie_kvs = {
             let key_prefix = access_key_prefix.to_key_bytes();
             let deleted = if AM::READ_ONLY {
@@ -292,13 +292,8 @@ impl SingleMptState {
         };
 
         let mut result = Vec::new();
-        // This is used to keep track of the deleted keys.
-        let mut deleted_keys = HashSet::new();
         if let Some(kvs) = trie_kvs {
             for (k, v) in kvs {
-                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-                let k = storage_key.to_key_bytes();
-                deleted_keys.insert(k.clone());
                 if v.len() > 0 {
                     result.push((k, v));
                 }
