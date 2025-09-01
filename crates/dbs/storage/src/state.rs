@@ -39,9 +39,14 @@ pub trait StateTrait: Sync + Send {
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>>;
 
+    /// space_storage_filter can be used to filter only the wanted contract
+    /// storage key if you specify SpaceStorageFilter::Native, it will
+    /// filter out the ethereum space storage key/value, by this way, we can
+    /// speedup space key/value traversal
     fn read_all_with_callback(
         &mut self, _access_key_prefix: StorageKeyWithSpace,
         _callback: &mut dyn FnMut(MptKeyValue),
+        _space_storage_filter: Option<SpaceStorageFilter>,
     ) -> Result<()> {
         Err(Error::Msg("Not implemented".into()))
     }
@@ -90,5 +95,6 @@ use super::{
 };
 use crate::StorageRootProof;
 use primitives::{
-    EpochId, NodeMerkleTriplet, StaticBool, StorageKeyWithSpace, StorageRoot,
+    EpochId, NodeMerkleTriplet, SpaceStorageFilter, StaticBool,
+    StorageKeyWithSpace, StorageRoot,
 };

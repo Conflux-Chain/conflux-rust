@@ -739,6 +739,62 @@ mod delta_mpt_storage_key {
     }
 }
 
+// This enum is used to filter only the wanted contract storage key when
+// traversal the trie for example, when traverse eth space key/value, we can
+// only filter the eSpace storage key/value to accelerate the traversal
+// speed
+// Native means filter(keep) the native space storage key/value
+// Ethereum means filter(keep) the ethereum space storage key/value
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpaceStorageFilter(pub Space);
+
+impl From<Space> for SpaceStorageFilter {
+    fn from(space: Space) -> Self { SpaceStorageFilter(space) }
+}
+
+impl From<SpaceStorageFilter> for Space {
+    fn from(filter: SpaceStorageFilter) -> Self { filter.0 }
+}
+
+impl SpaceStorageFilter {
+    pub fn is_native(&self) -> bool { matches!(self.0, Space::Native) }
+
+    pub fn is_ethereum(&self) -> bool { matches!(self.0, Space::Ethereum) }
+
+    // return the flag index according the trie type
+    // if is_delta_mpt is true, then the space flag is at the 32th index
+    // otherwise, the space flag is at the 20th index
+    fn flag_index(&self, is_delta_mpt: bool) -> usize {
+        if is_delta_mpt {
+            delta_mpt_storage_key::KEY_PADDING_BYTES
+        } else {
+            StorageKeyWithSpace::ACCOUNT_BYTES
+        }
+    }
+
+    // return true if the key is filtered out
+    pub fn is_filtered(&self, is_delta_mpt: bool, key: &[u8]) -> bool {
+        let flag_index = self.flag_index(is_delta_mpt);
+        if key.len() > flag_index {
+            match self.0 {
+                Space::Native => {
+                    if key[flag_index] == StorageKeyWithSpace::EVM_SPACE_TYPE[0]
+                    {
+                        return true;
+                    }
+                }
+                Space::Ethereum => {
+                    if key[flag_index] != StorageKeyWithSpace::EVM_SPACE_TYPE[0]
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
 use super::{MerkleHash, MERKLE_NULL_NODE};
 use crate::{
     hash::keccak, storage_key::delta_mpt_storage_key::ACCOUNT_KEYPART_BYTES,

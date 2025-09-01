@@ -312,8 +312,13 @@ impl StateTrait for State {
     fn read_all_with_callback(
         &mut self, access_key_prefix: StorageKeyWithSpace,
         callback: &mut dyn FnMut(MptKeyValue),
+        space_storage_filter: Option<SpaceStorageFilter>,
     ) -> Result<()> {
-        self.read_all_with_callback_impl(access_key_prefix, callback)
+        self.read_all_with_callback_impl(
+            access_key_prefix,
+            callback,
+            space_storage_filter,
+        )
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
@@ -990,6 +995,7 @@ impl State {
     pub fn read_all_with_callback_impl(
         &mut self, access_key_prefix: StorageKeyWithSpace,
         callback: &mut dyn FnMut(MptKeyValue),
+        space_storage_filter: Option<SpaceStorageFilter>,
     ) -> Result<()> {
         self.ensure_temp_slab_for_db_load();
 
@@ -1033,6 +1039,8 @@ impl State {
                 &delta_mpt_key_prefix,
                 &delta_mpt_key_prefix,
                 &mut inner_callback,
+                true,
+                space_storage_filter,
             )?;
         };
 
@@ -1073,6 +1081,8 @@ impl State {
                     &intermediate_mpt_key_prefix,
                     &intermediate_mpt_key_prefix,
                     &mut inner_callback,
+                    true,
+                    space_storage_filter,
                 )?;
             }
         }
@@ -1121,8 +1131,8 @@ use cfx_types::AddressWithSpace;
 use fallible_iterator::FallibleIterator;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, MptValue, NodeMerkleTriplet,
-    SkipInputCheck, StateRoot, StaticBool, StorageKey, StorageKeyWithSpace,
-    StorageRoot, MERKLE_NULL_NODE, NULL_EPOCH,
+    SkipInputCheck, SpaceStorageFilter, StateRoot, StaticBool, StorageKey,
+    StorageKeyWithSpace, StorageRoot, MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use rustc_hex::ToHex;
 use std::{

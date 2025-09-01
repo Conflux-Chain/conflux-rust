@@ -12,7 +12,7 @@ pub mod global_params;
 mod in_memory_storage;
 mod statedb_ext;
 use cfx_types::H256;
-use primitives::StorageValue;
+use primitives::{SpaceStorageFilter, StorageValue};
 
 use cfx_db_errors::statedb as error;
 
@@ -191,9 +191,14 @@ mod impls {
         pub fn read_all_with_callback(
             &mut self, access_key_prefix: StorageKeyWithSpace,
             callback: &mut dyn FnMut(MptKeyValue),
+            space_storage_filter: Option<SpaceStorageFilter>,
         ) -> Result<()> {
             self.storage
-                .read_all_with_callback(access_key_prefix, callback)
+                .read_all_with_callback(
+                    access_key_prefix,
+                    callback,
+                    space_storage_filter,
+                )
                 .map_err(|err| err.into())
         }
 
