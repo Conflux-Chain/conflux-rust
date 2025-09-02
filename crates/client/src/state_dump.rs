@@ -10,7 +10,8 @@ use chrono::Utc;
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{Condvar, Mutex};
 use primitives::{
-    Account, SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
+    Account, SkipInputCheck, SpaceStorageFilter, StorageKey,
+    StorageKeyWithSpace, StorageValue,
 };
 use rlp::Rlp;
 use std::{
@@ -293,7 +294,11 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
             }
         };
 
-        state.read_all_with_callback(start_key, &mut inner_callback)?;
+        state.read_all_with_callback(
+            start_key,
+            &mut inner_callback,
+            Some(SpaceStorageFilter::from(space)),
+        )?;
 
         if account_states.len() > 0 {
             println("Start to read account code and storage data...");

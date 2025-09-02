@@ -622,12 +622,19 @@ impl CowNodeRef {
         Ok(())
     }
 
+    // space_storage_filter can be used to filter the wanted space storage keys
     pub fn iterate_internal_with_callback(
         &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, db: &mut DeltaDbOwnedReadTraitObj,
-        callback: &mut dyn FnMut(MptKeyValue),
+        callback: &mut dyn FnMut(MptKeyValue), is_delta_mpt: bool,
+        space_storage_filter: Option<SpaceStorageFilter>,
     ) -> Result<()> {
+        if let Some(filter) = space_storage_filter {
+            if filter.is_filtered(is_delta_mpt, key_prefix.path_slice()) {
+                return Ok(());
+            }
+        }
         if guarded_trie_node.as_ref().as_ref().has_value() {
             assert!(CompressedPathRaw::has_second_nibble(
                 key_prefix.path_mask()
@@ -667,6 +674,8 @@ impl CowNodeRef {
                 key_prefix,
                 db,
                 callback,
+                is_delta_mpt,
+                space_storage_filter,
             )?;
         }
 
@@ -961,7 +970,7 @@ use super::{
     AtomicCommitTransaction, DeltaMpt, *,
 };
 use parking_lot::MutexGuard;
-use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MptValue, SpaceStorageFilter, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
     borrow::BorrowMut, cell::Cell, convert::TryInto, ops::Deref,

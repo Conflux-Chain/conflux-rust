@@ -636,7 +636,8 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     /// return all key/value pairs given the prefix
     pub fn traversal_with_callback(
         mut self, key: KeyPart, key_remaining: KeyPart,
-        callback: &mut dyn FnMut(MptKeyValue),
+        callback: &mut dyn FnMut(MptKeyValue), is_delta_mpt: bool,
+        space_storage_filter: Option<SpaceStorageFilter>,
     ) -> Result<()> {
         let node_memory_manager = self.node_memory_manager();
         let allocator = node_memory_manager.get_allocator();
@@ -678,7 +679,13 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             } => {
                 drop(trie_node_ref);
                 self.new_visitor_for_subtree(child_node.clone().into())
-                    .traversal_with_callback(key, key_remaining, callback)?;
+                    .traversal_with_callback(
+                        key,
+                        key_remaining,
+                        callback,
+                        is_delta_mpt,
+                        space_storage_filter,
+                    )?;
                 return Ok(());
             }
         }
@@ -691,6 +698,8 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             key_prefix,
             &mut *self.db.get_mut().to_owned_read()?,
             callback,
+            is_delta_mpt,
+            space_storage_filter,
         )?;
         Ok(())
     }
@@ -919,5 +928,5 @@ use super::{
     ChildrenTableDeltaMpt, DeltaMpt, *,
 };
 use parking_lot::MutexGuard;
-use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MptValue, SpaceStorageFilter, MERKLE_NULL_NODE};
 use std::marker::PhantomData;

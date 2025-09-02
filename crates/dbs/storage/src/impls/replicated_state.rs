@@ -6,7 +6,8 @@ use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_types::Space;
 use parking_lot::Mutex;
 use primitives::{
-    EpochId, NodeMerkleTriplet, StaticBool, StorageKey, StorageKeyWithSpace,
+    EpochId, NodeMerkleTriplet, SpaceStorageFilter, StaticBool, StorageKey,
+    StorageKeyWithSpace,
 };
 use std::{
     sync::mpsc::{channel, Sender},
@@ -316,9 +317,13 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
     fn read_all_with_callback(
         &mut self, access_key_prefix: StorageKeyWithSpace,
         callback: &mut dyn FnMut(MptKeyValue),
+        space_storage_filter: Option<SpaceStorageFilter>,
     ) -> Result<()> {
-        self.state
-            .read_all_with_callback(access_key_prefix, callback)
+        self.state.read_all_with_callback(
+            access_key_prefix,
+            callback,
+            space_storage_filter,
+        )
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
