@@ -320,7 +320,7 @@ impl SingleMptState {
             total_key_count += 1;
             if total_key_count % 10000 == 0 {
                 println!(
-                    "read_all_with_callback_impl -> total_key_count: {} {}",
+                    "read_all_with_callback_impl: total_key_count {} key {}",
                     total_key_count,
                     k.to_hex::<String>()
                 );
