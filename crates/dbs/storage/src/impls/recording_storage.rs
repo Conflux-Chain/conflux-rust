@@ -54,7 +54,7 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
             fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
             fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
             fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo>;
-            fn read_all_with_callback(&mut self, access_key_prefix: StorageKeyWithSpace, callback: &mut dyn FnMut(MptKeyValue), space_storage_filter: Option<SpaceStorageFilter>) -> Result<()>;
+            fn read_all_with_callback(&mut self, access_key_prefix: StorageKeyWithSpace, callback: &mut dyn FnMut(MptKeyValue), only_account_key: bool) -> Result<()>;
         }
     }
 
@@ -102,6 +102,4 @@ use crate::{
 use cfx_internal_common::StateRootWithAuxInfo;
 use delegate::delegate;
 use parking_lot::Mutex;
-use primitives::{
-    CheckInput, EpochId, SpaceStorageFilter, StorageKeyWithSpace,
-};
+use primitives::{CheckInput, EpochId, StorageKeyWithSpace};

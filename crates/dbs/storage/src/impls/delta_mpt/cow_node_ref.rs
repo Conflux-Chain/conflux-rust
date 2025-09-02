@@ -622,16 +622,19 @@ impl CowNodeRef {
         Ok(())
     }
 
-    // space_storage_filter can be used to filter the wanted space storage keys
+    // only_account_key can be used to filter the only account key
     pub fn iterate_internal_with_callback(
         &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
         guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
         key_prefix: CompressedPathRaw, db: &mut DeltaDbOwnedReadTraitObj,
         callback: &mut dyn FnMut(MptKeyValue), is_delta_mpt: bool,
-        space_storage_filter: Option<SpaceStorageFilter>,
+        only_account_key: bool,
     ) -> Result<()> {
-        if let Some(filter) = space_storage_filter {
-            if filter.is_filtered(is_delta_mpt, key_prefix.path_slice()) {
+        // filter out all the key that is longer than the account key
+        if only_account_key {
+            let key_len =
+                SpaceStorageFilter::space_flag_index(is_delta_mpt) + 1;
+            if key_prefix.path_slice().len() > key_len {
                 return Ok(());
             }
         }
@@ -675,7 +678,7 @@ impl CowNodeRef {
                 db,
                 callback,
                 is_delta_mpt,
-                space_storage_filter,
+                only_account_key,
             )?;
         }
 

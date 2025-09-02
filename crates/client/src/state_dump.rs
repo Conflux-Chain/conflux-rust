@@ -4,14 +4,13 @@ use cfx_rpc_eth_types::{AccountState, StateDump, EOA_STORAGE_ROOT_H256};
 use cfx_rpc_primitives::Bytes;
 use cfx_statedb::{StateDbExt, StateDbGeneric};
 use cfx_storage::state_manager::StateManagerTrait;
-use cfx_types::{Address, Space, H256};
+use cfx_types::{Address, Space, H256, U256};
 use cfxcore::NodeType;
 use chrono::Utc;
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{Condvar, Mutex};
 use primitives::{
-    Account, SkipInputCheck, SpaceStorageFilter, StorageKey,
-    StorageKeyWithSpace, StorageValue,
+    Account, SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
 };
 use rlp::Rlp;
 use std::{
@@ -260,7 +259,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
     let mut core_space_key_count: u64 = 0;
     let mut total_key_count: u64 = 0;
 
-    for i in 0..=255 {
+    for i in 198..=255 {
         let prefix = [i];
         let start_key = StorageKey::AddressPrefixKey(&prefix).with_space(space);
 
@@ -295,18 +294,15 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
             }
         };
 
-        state.read_all_with_callback(
-            start_key,
-            &mut inner_callback,
-            Some(SpaceStorageFilter::from(space)),
-        )?;
+        state.read_all_with_callback(start_key, &mut inner_callback, true)?;
 
         if account_states.len() > 0 {
             println("Start to read account code and storage data...");
         }
 
         for (_address, account) in account_states {
-            let account_state = get_account_state(state, &account, config)?;
+            let account_state =
+                get_account_state(state, &account, config, space)?;
             callback(account_state);
             found_accounts += 1;
             if config.limit > 0 && found_accounts >= config.limit as usize {
@@ -321,6 +317,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
 #[allow(unused)]
 fn get_account_state(
     state: &mut StateDbGeneric, account: &Account, config: &StateDumpConfig,
+    space: Space,
 ) -> Result<AccountState, Box<dyn std::error::Error>> {
     let address = account.address();
 
@@ -335,7 +332,7 @@ fn get_account_state(
     };
 
     let storage = if is_contract && !config.no_storage {
-        let storage = state.get_account_storage_entries(&address, None)?;
+        let storage = get_contract_storage(state, &address.address, space)?;
         Some(storage)
     } else {
         None
@@ -356,6 +353,36 @@ fn get_account_state(
         address: Some(address.address),
         address_hash: Some(address_hash),
     })
+}
+
+fn get_contract_storage(
+    state: &mut StateDbGeneric, address: &Address, space: Space,
+) -> Result<BTreeMap<H256, U256>, Box<dyn std::error::Error>> {
+    let mut storage: BTreeMap<H256, U256> = Default::default();
+
+    let mut inner_callback = |(key, value): (Vec<u8>, Box<[u8]>)| {
+        let storage_key_with_space =
+            StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key);
+        if storage_key_with_space.space != space {
+            return;
+        }
+
+        if let StorageKey::StorageKey {
+            address_bytes: _,
+            storage_key,
+        } = storage_key_with_space.key
+        {
+            let h256_storage_key = H256::from_slice(storage_key);
+            let storage_value_with_owner: StorageValue =
+                rlp::decode(&value).expect("Failed to decode storage value");
+            storage.insert(h256_storage_key, storage_value_with_owner.value);
+        };
+    };
+
+    let start_key = StorageKey::new_storage_root_key(address).with_space(space);
+    state.read_all_with_callback(start_key, &mut inner_callback, false)?;
+
+    Ok(storage)
 }
 
 fn println(message: &str) {

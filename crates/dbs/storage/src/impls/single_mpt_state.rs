@@ -7,8 +7,8 @@ use crate::{
 };
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
 use primitives::{
-    EpochId, MerkleHash, MptValue, SpaceStorageFilter, StateRoot,
-    StorageKeyWithSpace, MERKLE_NULL_NODE,
+    EpochId, MerkleHash, MptValue, StateRoot, StorageKeyWithSpace,
+    MERKLE_NULL_NODE,
 };
 use rustc_hex::ToHex;
 use std::{cell::UnsafeCell, sync::Arc};
@@ -309,8 +309,7 @@ impl SingleMptState {
 
     fn read_all_with_callback_impl(
         &mut self, access_key_prefix: StorageKeyWithSpace,
-        callback: &mut dyn FnMut(MptKeyValue),
-        space_storage_filter: Option<SpaceStorageFilter>,
+        callback: &mut dyn FnMut(MptKeyValue), only_account_key: bool,
     ) -> Result<()> {
         self.ensure_temp_slab_for_db_load();
 
@@ -342,7 +341,7 @@ impl SingleMptState {
             &key_prefix,
             &mut inner_callback,
             false,
-            space_storage_filter,
+            only_account_key,
         )?;
 
         Ok(())
@@ -412,13 +411,12 @@ impl StateTrait for SingleMptState {
 
     fn read_all_with_callback(
         &mut self, access_key_prefix: StorageKeyWithSpace,
-        callback: &mut dyn FnMut(MptKeyValue),
-        space_storage_filter: Option<SpaceStorageFilter>,
+        callback: &mut dyn FnMut(MptKeyValue), only_account_key: bool,
     ) -> Result<()> {
         self.read_all_with_callback_impl(
             access_key_prefix,
             callback,
-            space_storage_filter,
+            only_account_key,
         )
     }
 

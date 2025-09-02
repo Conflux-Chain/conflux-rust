@@ -764,7 +764,7 @@ impl SpaceStorageFilter {
     // return the flag index according the trie type
     // if is_delta_mpt is true, then the space flag is at the 32th index
     // otherwise, the space flag is at the 20th index
-    fn flag_index(&self, is_delta_mpt: bool) -> usize {
+    pub fn space_flag_index(is_delta_mpt: bool) -> usize {
         if is_delta_mpt {
             delta_mpt_storage_key::KEY_PADDING_BYTES
         } else {
@@ -774,7 +774,7 @@ impl SpaceStorageFilter {
 
     // return true if the key is filtered out
     pub fn is_filtered(&self, is_delta_mpt: bool, key: &[u8]) -> bool {
-        let flag_index = self.flag_index(is_delta_mpt);
+        let flag_index = Self::space_flag_index(is_delta_mpt);
         if key.len() > flag_index {
             match self.0 {
                 Space::Native => {
