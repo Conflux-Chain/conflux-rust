@@ -262,7 +262,7 @@ pub fn export_space_accounts_with_callback<F: Fn(AccountState)>(
     let mut core_space_key_count: u64 = 0;
     let mut total_key_count: u64 = 0;
 
-    for i in 198..=255 {
+    for i in 0..=255 {
         let prefix = [i];
         let start_key = StorageKey::AddressPrefixKey(&prefix).with_space(space);
 
@@ -383,7 +383,7 @@ fn get_contract_storage(
                 rlp::decode(&value).expect("Failed to decode storage value");
             storage.insert(h256_storage_key, storage_value_with_owner.value);
 
-            if storage.len() == 5000_0000 {
+            if storage.len() == 5000_000 {
                 chunk_count += 1;
                 let name = format!("{:?}-chunk{}.json", address, chunk_count);
                 let file_path = Path::new(&config.out_put_path).join(&name);

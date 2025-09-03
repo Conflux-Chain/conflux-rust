@@ -94,7 +94,8 @@ Note:
 5. Please use the binary corresponding to the network and execute the export operation in the corresponding network data directory; `do not` use `testnet or master` code compiled binary to execute export operations on `mainnet data`.
 6. If the state is very big, recommand export state into multi file, through arg `--multifile`
 7. When this command start, it will first sync to latest block(if your node is not fully synced, this step will take long time), and then do the state export operation
-8. When running this command on mainnnet or testnet, recommend open below configs
+8. If a contract's storage key is very much, it's storage data will be splited into multi file, eg `0xc6e865c213c89ca42a622c5572d19f00d84d7a16-chunk1.json` each with 5000,000 key
+9. When running this command on mainnnet or testnet, recommend open below configs
   ```toml
   storage_delta_mpts_cache_size=10_000_0000
   storage_delta_mpts_cache_start_size=1_000_0000
