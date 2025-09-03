@@ -67,7 +67,9 @@ impl DumpCommand {
         })
     }
 
-    fn get_state_dump_config(&self) -> Result<StateDumpConfig, String> {
+    fn get_state_dump_config(
+        &self, output_path: &str,
+    ) -> Result<StateDumpConfig, String> {
         let start_address = parse_hex_string(&self.start)
             .map_err(|e| format!("Invalid address: {}", e))?;
         Ok(StateDumpConfig {
@@ -76,6 +78,7 @@ impl DumpCommand {
             block: self.block,
             no_code: self.no_code,
             no_storage: self.no_storage,
+            out_put_path: output_path.to_string(),
         })
     }
 
@@ -96,7 +99,7 @@ impl DumpCommand {
         }
 
         let exit = Arc::new((Mutex::new(false), Condvar::new()));
-        let config = self.get_state_dump_config()?;
+        let config = self.get_state_dump_config(output_path)?;
 
         let _total_accounts = if self.multi_file {
             // Write to multiple files

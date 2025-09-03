@@ -15,7 +15,9 @@ use primitives::{
 use rlp::Rlp;
 use std::{
     collections::{BTreeMap, HashMap},
+    fs,
     ops::Deref,
+    path::Path,
     sync::Arc,
     thread,
     time::Duration,
@@ -27,6 +29,7 @@ pub struct StateDumpConfig {
     pub block: Option<u64>,
     pub no_code: bool,
     pub no_storage: bool,
+    pub out_put_path: String,
 }
 
 // This method will read all data (k, v) from the Conflux state tree (including
@@ -332,7 +335,8 @@ fn get_account_state(
     };
 
     let storage = if is_contract && !config.no_storage {
-        let storage = get_contract_storage(state, &address.address, space)?;
+        let storage =
+            get_contract_storage(state, &address.address, space, config)?;
         Some(storage)
     } else {
         None
@@ -357,8 +361,10 @@ fn get_account_state(
 
 fn get_contract_storage(
     state: &mut StateDbGeneric, address: &Address, space: Space,
+    config: &StateDumpConfig,
 ) -> Result<BTreeMap<H256, U256>, Box<dyn std::error::Error>> {
     let mut storage: BTreeMap<H256, U256> = Default::default();
+    let mut chunk_count = 0;
 
     let mut inner_callback = |(key, value): (Vec<u8>, Box<[u8]>)| {
         let storage_key_with_space =
@@ -376,6 +382,17 @@ fn get_contract_storage(
             let storage_value_with_owner: StorageValue =
                 rlp::decode(&value).expect("Failed to decode storage value");
             storage.insert(h256_storage_key, storage_value_with_owner.value);
+
+            if storage.len() == 5000_0000 {
+                chunk_count += 1;
+                let name = format!("{:?}-chunk{}.json", address, chunk_count);
+                let file_path = Path::new(&config.out_put_path).join(&name);
+                let json_content = serde_json::to_string_pretty(&storage)
+                    .expect("Failed to serialize storage");
+                fs::write(&file_path, json_content)
+                    .expect("Failed to write storage file");
+                storage.clear();
+            }
         };
     };
 
