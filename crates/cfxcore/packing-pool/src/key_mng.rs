@@ -37,7 +37,7 @@ impl<TX: PackingPoolTransaction> KeyMngTrait<PackingPoolMap<TX>>
     ) {
         match (value, old_value) {
             (Some(v), _) => {
-                self.insert(*key, v.first_gas_price());
+                self.insert(*key, v.first_priority_gas_price());
             }
             (None, Some(_)) => {
                 self.remove(key);
@@ -57,6 +57,6 @@ impl<TX: PackingPoolTransaction> KeyMngTrait<PackingPoolMap<TX>>
     fn make_sort_key(
         &self, _key: &TX::Sender, value: &PackingBatch<TX>,
     ) -> U256 {
-        value.first_gas_price()
+        value.first_priority_gas_price()
     }
 }
