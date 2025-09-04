@@ -1,5 +1,5 @@
-# Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
+resolver = "2"
 exclude = ["tools"]
 members = [
     # bins
@@ -111,10 +111,9 @@ members = [
     "crates/config",
     "crates/cfxcore/types",
     "crates/cfxcore/pow",
-    "crates/cfxcore/errors",
+    "crates/cfxcore/errors", 
+    "crates/util/mallocator",
 ]
-
-resolver = "2"
 
 [workspace.package]
 version = "3.0.0"
@@ -252,6 +251,7 @@ diem-network-address-encryption = { path = "./crates/pos/config/management/netwo
 cfx-tasks = { path = "./crates/tasks" }
 # eest_types = { path = "./crates/eest_types" }
 cfx-config = { path = "./crates/config" }
+cfx-mallocator-utils = { path = "./crates/util/mallocator" }
 
 # basics
 bytes = "1.9"
@@ -328,9 +328,18 @@ mio = { version = "1.0.4", features = ["os-ext", "net", "os-poll"] }
 mio-timer = { git = "https://github.com/Conflux-Chain/mio-timer", rev = "91a02cc" }
 mio-misc = { git = "https://github.com/Conflux-Chain/mio-misc", rev = "27ad80f" }
 reqwest = "0.12"
+axum = "0.8"
+mockito = "1.5.0"
 
-# jemallocator
-tikv-jemallocator = "0.6"
+# mallocator
+tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
+tikv-jemalloc-ctl = { version = "0.6", features = ["use_std", "stats"] }
+tikv-jemalloc-sys = { version = "0.6", features = ["profiling"] }
+jemalloc_pprof = { version = "0.8", features = ["symbolize", "flamegraph"] }
+# CPU profiling
+pprof = { version = "0.15", features = ["flamegraph", "protobuf-codec"] }
+tracy-client = "0.18.0"
+snmalloc-rs = { version = "0.3.7", features = ["build_cc"] }
 
 # crypto & hash
 #fixed-hash = "0.5"

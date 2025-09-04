@@ -132,6 +132,7 @@ build_config! {
         (metrics_output_file, (Option<String>), None)
         (metrics_report_interval_ms, (u64), 3_000)
         (metrics_prometheus_listen_addr, (Option<String>), None)
+        (profiling_listen_addr, (Option<String>), None)
         (rocksdb_disable_wal, (bool), false)
         (txgen_account_count, (usize), 10)
 
