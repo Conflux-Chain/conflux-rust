@@ -2780,8 +2780,7 @@ dependencies = [
 [[package]]
 name = "fs-swap"
 version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03d47dad3685eceed8488986cad3d5027165ea5edb164331770e2059555f10a5"
+source = "git+https://github.com/Conflux-Chain/fs-swap?rev=72fed3585f430b1485e133d02b291d1976c58b06#72fed3585f430b1485e133d02b291d1976c58b06"
 dependencies = [
  "lazy_static",
  "libc",
@@ -4214,7 +4213,7 @@ dependencies = [
 [[package]]
 name = "mio-misc"
 version = "2.1.0"
-source = "git+https://github.com/Pana/mio-misc?rev=27ad80f#27ad80f084dd94ff560c93d4abfdab79189d0927"
+source = "git+https://github.com/Conflux-Chain/mio-misc?rev=27ad80f#27ad80f084dd94ff560c93d4abfdab79189d0927"
 dependencies = [
  "crossbeam",
  "crossbeam-queue",
@@ -4225,7 +4224,7 @@ dependencies = [
 [[package]]
 name = "mio-timer"
 version = "0.2.0"
-source = "git+https://github.com/Pana/mio-timer?rev=251170b#251170ba2724cbeb2b99215a2893c7de0dadc9af"
+source = "git+https://github.com/Conflux-Chain/mio-timer?rev=91a02cc#91a02cc74c9b92b2939638949aafe36aed730a5c"
 dependencies = [
  "lazycell",
  "log",

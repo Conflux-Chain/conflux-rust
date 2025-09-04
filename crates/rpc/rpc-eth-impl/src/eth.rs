@@ -92,7 +92,10 @@ impl EthApi {
                 None,
                 false,
             )?
-            .ok_or("Specified block header does not exist".into())
+            .ok_or(
+                format!("Specified block does not exist, height={}", height)
+                    .into(),
+            )
     }
 
     pub fn fetch_block_by_hash(
@@ -100,7 +103,10 @@ impl EthApi {
     ) -> Result<PhantomBlock, ProviderBlockError> {
         self.consensus_graph()
             .get_phantom_block_by_hash(hash, false)?
-            .ok_or("Specified block header does not exist".into())
+            .ok_or(
+                format!("Specified block does not exist, hash={:?}", hash)
+                    .into(),
+            )
     }
 
     fn convert_block_number_to_epoch_number(
@@ -837,13 +843,20 @@ impl EthApi {
             }
         }
 
-        let block = self
-            .fetch_block_by_height(end_block + 1)
-            .map_err(RpcError::invalid_params)?;
+        let last_hash = self
+            .consensus_graph()
+            .get_hash_from_epoch_number((end_block + 1).into())?;
+        let last_header = self
+            .consensus_graph()
+            .data_manager()
+            .block_header_by_hash(&last_hash)
+            .ok_or_else(|| {
+                format!("last block missing, height={}", end_block + 1)
+            })?;
 
         fee_history.finish(
             start_block,
-            block.pivot_header.base_price().as_ref(),
+            last_header.base_price().as_ref(),
             Space::Ethereum,
         );
 

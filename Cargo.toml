@@ -268,7 +268,7 @@ proc-macro-crate = "3"
 serde = { version = "1.0", features = [
     "derive",
     "alloc",
-    "rc"
+    "rc",
 ], default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1.0", default-features = false }
@@ -326,8 +326,8 @@ async-trait = "0.1"
 tower = "0.4"
 pin-project = "1.0"
 mio = { version = "1.0.4", features = ["os-ext", "net", "os-poll"] }
-mio-timer = { git = "https://github.com/Pana/mio-timer", rev = "251170b" }
-mio-misc = { git = "https://github.com/Pana/mio-misc", rev = "27ad80f" }
+mio-timer = { git = "https://github.com/Conflux-Chain/mio-timer", rev = "91a02cc" }
+mio-misc = { git = "https://github.com/Conflux-Chain/mio-misc", rev = "27ad80f" }
 reqwest = "0.12"
 
 # crypto & hash
@@ -389,7 +389,7 @@ vergen = "8.3.2"
 target_info = "0.1"
 bit-set = "0.4"
 typenum = "1.17.0"
-typemap = { package = "typemap-ors", version = "1.0"}
+typemap = { package = "typemap-ors", version = "1.0" }
 impl-trait-for-tuples = "0.2"
 impl-tools = "0.10"
 derive_more = { version = "2.0.1", features = ["full"] }
@@ -405,7 +405,7 @@ memoffset = "0.9"
 either = "1.15"
 fallible-iterator = "0.3"
 fs_extra = "1.1.0"
-fs-swap = "0.2.4"
+fs-swap = { git = "https://github.com/Conflux-Chain/fs-swap", rev = "72fed3585f430b1485e133d02b291d1976c58b06" }
 regex = "1.3.1"
 cfg-if = "1"
 unroll = "0.1.5"
@@ -418,6 +418,7 @@ auto_impl = "1"
 dyn-clone = "1.0"
 enumn = "0.1"
 walkdir = "2.5"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 
 # num misc
 bigdecimal = "0.1"
