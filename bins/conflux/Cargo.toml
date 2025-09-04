@@ -42,14 +42,13 @@ bls-signatures = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
-version = "0.3.2"
-optional = true
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = { workspace = true }
 
 [features]
 default = ["jemalloc-global"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
-jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
+jemalloc-global = ["malloc_size_of/jemalloc-global"]
 u64-mpt-db-key = ["client/u64_mpt_db_key"]
 # According to Rust's feature unification, when a feature is enabled for a dependency in the root package,
 # it will be enabled across all paths depending on that package. 
