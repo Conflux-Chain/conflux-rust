@@ -977,7 +977,7 @@ impl EthApi {
                 return Ok(Some(receipt));
             }
 
-            // if the if-branch was not entered, we do the bookeeping here
+            // if the if-branch was not entered, we do the bookkeeping here
             prior_log_index += phantom_block.receipts[idx].logs.len();
         }
 
