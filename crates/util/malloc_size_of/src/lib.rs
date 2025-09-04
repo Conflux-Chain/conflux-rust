@@ -12,9 +12,7 @@
 //! WebRender.
 
 #[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
-use jemallocator;
-#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
-use jemallocator::Jemalloc;
+use tikv_jemallocator::Jemalloc;
 #[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
@@ -561,7 +559,7 @@ mod usable_size {
 
             /// Use of jemalloc usable size C function through jemallocator crate call.
             pub unsafe extern "C" fn malloc_usable_size(ptr: *const c_void) -> usize {
-                jemallocator::usable_size(ptr)
+                tikv_jemallocator::usable_size(ptr)
             }
 
         } else if #[cfg(target_os = "linux")] {

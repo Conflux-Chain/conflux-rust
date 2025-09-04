@@ -330,6 +330,9 @@ mio-timer = { git = "https://github.com/Conflux-Chain/mio-timer", rev = "91a02cc
 mio-misc = { git = "https://github.com/Conflux-Chain/mio-misc", rev = "27ad80f" }
 reqwest = "0.12"
 
+# jemallocator
+tikv-jemallocator = "0.6"
+
 # crypto & hash
 #fixed-hash = "0.5"
 keccak-hash = "0.5"
