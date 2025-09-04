@@ -234,7 +234,7 @@ impl<'a> Visitor<'a> for BlockHashOrEpochNumberVisitor {
         let (mut require_pivot, mut epoch_number, mut block_hash) =
             (true, None::<u64>, None::<H256>);
 
-        // following the implementaion in rpc/types/eth/block_number.rs
+        // following the implementation in rpc/types/eth/block_number.rs
         loop {
             let key_str: Option<String> = visitor.next_key()?;
 
