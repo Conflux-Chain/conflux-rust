@@ -185,14 +185,25 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
             "safe" => Ok(BlockNumber::Safe),
             "finalized" => Ok(BlockNumber::Finalized),
             _ if value.starts_with("0x") => {
-                u64::from_str_radix(&value[2..], 16)
-                    .map(BlockNumber::Num)
-                    .map_err(|e| {
-                        SerdeError::custom(format!(
-                            "Invalid block number: {}",
-                            e
-                        ))
+                // Since there is no way to clearly distinguish between a DATA parameter and a QUANTITY parameter. A str is therefore deserialized into a Block Number: <https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1898.md>
+                // However, since the hex string should be a QUANTITY, we can safely assume that if the len is 66 bytes, it is in fact a hash, ref <https://github.com/ethereum/go-ethereum/blob/ee530c0d5aa70d2c00ab5691a89ab431b73f8165/rpc/types.go#L184-L184>
+                if value.len() == 66 {
+                    let hash =
+                        value[2..].parse().map_err(SerdeError::custom)?;
+                    Ok(BlockNumber::Hash {
+                        hash,
+                        require_canonical: None,
                     })
+                } else {
+                    u64::from_str_radix(&value[2..], 16)
+                        .map(BlockNumber::Num)
+                        .map_err(|e| {
+                            SerdeError::custom(format!(
+                                "Invalid block number: {}",
+                                e
+                            ))
+                        })
+                }
             }
             _ => Err(SerdeError::custom(
                 "Invalid block number: missing 0x prefix".to_string(),
