@@ -9,7 +9,7 @@ use crate::{
 };
 use cfx_rpc_eth_api::EthFilterApiServer;
 use cfx_rpc_eth_types::{
-    BlockNumber, EthRpcLogFilter as Filter, FilterChanges, Log,
+    BlockId, EthRpcLogFilter as Filter, FilterChanges, Log,
 };
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::{
     invalid_request_msg, jsonrpc_error_to_error_object_owned,
@@ -52,7 +52,7 @@ impl EthFilterApiServer for EthFilterApi {
         let mut polls = self.inner.polls().lock();
         let epoch_number = self.inner.best_executed_epoch_number();
 
-        if filter.to_block == Some(BlockNumber::Pending) {
+        if filter.to_block == Some(BlockId::Pending) {
             bail!(invalid_request_msg(
                 "Filter logs from pending blocks is not supported"
             ))

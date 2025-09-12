@@ -29,7 +29,7 @@ use std::{convert::TryFrom, fmt};
 
 /// Represents rpc api block number param.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-pub enum BlockNumber {
+pub enum BlockId {
     /// Hash
     Hash {
         /// block hash
@@ -53,34 +53,34 @@ pub enum BlockNumber {
     Finalized,
 }
 
-impl Default for BlockNumber {
-    fn default() -> Self { BlockNumber::Latest }
+impl Default for BlockId {
+    fn default() -> Self { BlockId::Latest }
 }
 
-impl<'a> Deserialize<'a> for BlockNumber {
-    fn deserialize<D>(deserializer: D) -> Result<BlockNumber, D::Error>
+impl<'a> Deserialize<'a> for BlockId {
+    fn deserialize<D>(deserializer: D) -> Result<BlockId, D::Error>
     where D: Deserializer<'a> {
         deserializer.deserialize_any(BlockNumberVisitor)
     }
 }
 
-impl BlockNumber {
+impl BlockId {
     /// Convert block number to min block target.
     pub fn to_min_block_num(&self) -> Option<u64> {
         match *self {
-            BlockNumber::Num(ref x) => Some(*x),
+            BlockId::Num(ref x) => Some(*x),
             _ => None,
         }
     }
 }
 
-impl Serialize for BlockNumber {
+impl Serialize for BlockId {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         use serde::ser::SerializeStruct;
 
         match *self {
-            BlockNumber::Hash {
+            BlockId::Hash {
                 hash,
                 require_canonical,
             } => {
@@ -91,14 +91,14 @@ impl Serialize for BlockNumber {
                 }
                 s.end()
             }
-            BlockNumber::Num(ref x) => {
+            BlockId::Num(ref x) => {
                 serializer.serialize_str(&format!("0x{:x}", x))
             }
-            BlockNumber::Latest => serializer.serialize_str("latest"),
-            BlockNumber::Earliest => serializer.serialize_str("earliest"),
-            BlockNumber::Pending => serializer.serialize_str("pending"),
-            BlockNumber::Safe => serializer.serialize_str("safe"),
-            BlockNumber::Finalized => serializer.serialize_str("finalized"),
+            BlockId::Latest => serializer.serialize_str("latest"),
+            BlockId::Earliest => serializer.serialize_str("earliest"),
+            BlockId::Pending => serializer.serialize_str("pending"),
+            BlockId::Safe => serializer.serialize_str("safe"),
+            BlockId::Finalized => serializer.serialize_str("finalized"),
         }
     }
 }
@@ -106,7 +106,7 @@ impl Serialize for BlockNumber {
 struct BlockNumberVisitor;
 
 impl<'a> Visitor<'a> for BlockNumberVisitor {
-    type Value = BlockNumber;
+    type Value = BlockId;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -163,11 +163,11 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
         }
 
         if let Some(number) = block_number {
-            return Ok(BlockNumber::Num(number));
+            return Ok(BlockId::Num(number));
         }
 
         if let Some(hash) = block_hash {
-            return Ok(BlockNumber::Hash {
+            return Ok(BlockId::Hash {
                 hash,
                 require_canonical,
             });
@@ -179,24 +179,24 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where E: SerdeError {
         match value {
-            "latest" => Ok(BlockNumber::Latest),
-            "earliest" => Ok(BlockNumber::Earliest),
-            "pending" => Ok(BlockNumber::Pending),
-            "safe" => Ok(BlockNumber::Safe),
-            "finalized" => Ok(BlockNumber::Finalized),
+            "latest" => Ok(BlockId::Latest),
+            "earliest" => Ok(BlockId::Earliest),
+            "pending" => Ok(BlockId::Pending),
+            "safe" => Ok(BlockId::Safe),
+            "finalized" => Ok(BlockId::Finalized),
             _ if value.starts_with("0x") => {
                 // Since there is no way to clearly distinguish between a DATA parameter and a QUANTITY parameter. A str is therefore deserialized into a Block Number: <https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1898.md>
                 // However, since the hex string should be a QUANTITY, we can safely assume that if the len is 66 bytes, it is in fact a hash, ref <https://github.com/ethereum/go-ethereum/blob/ee530c0d5aa70d2c00ab5691a89ab431b73f8165/rpc/types.go#L184-L184>
                 if value.len() == 66 {
                     let hash =
                         value[2..].parse().map_err(SerdeError::custom)?;
-                    Ok(BlockNumber::Hash {
+                    Ok(BlockId::Hash {
                         hash,
                         require_canonical: None,
                     })
                 } else {
                     u64::from_str_radix(&value[2..], 16)
-                        .map(BlockNumber::Num)
+                        .map(BlockId::Num)
                         .map_err(|e| {
                             SerdeError::custom(format!(
                                 "Invalid block number: {}",
@@ -217,18 +217,18 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
     }
 }
 
-impl TryFrom<BlockNumber> for EpochNumber {
+impl TryFrom<BlockId> for EpochNumber {
     type Error = Error;
 
-    fn try_from(x: BlockNumber) -> Result<EpochNumber, Error> {
+    fn try_from(x: BlockId) -> Result<EpochNumber, Error> {
         match x {
-            BlockNumber::Num(num) => Ok(EpochNumber::Number(num)),
-            BlockNumber::Latest => Ok(EpochNumber::LatestState),
-            BlockNumber::Earliest => Ok(EpochNumber::Earliest),
-            BlockNumber::Pending => Ok(EpochNumber::LatestState), /* TODO: LatestMined maybe is better or add a new Pending variant for EpochNumber */
-            BlockNumber::Safe => Ok(EpochNumber::LatestConfirmed),
-            BlockNumber::Finalized => Ok(EpochNumber::LatestFinalized),
-            BlockNumber::Hash { .. } => Err(Error::InvalidParams(
+            BlockId::Num(num) => Ok(EpochNumber::Number(num)),
+            BlockId::Latest => Ok(EpochNumber::LatestState),
+            BlockId::Earliest => Ok(EpochNumber::Earliest),
+            BlockId::Pending => Ok(EpochNumber::LatestState), /* TODO: LatestMined maybe is better or add a new Pending variant for EpochNumber */
+            BlockId::Safe => Ok(EpochNumber::LatestConfirmed),
+            BlockId::Finalized => Ok(EpochNumber::LatestFinalized),
+            BlockId::Hash { .. } => Err(Error::InvalidParams(
                 "block_num".into(),
                 "Expected block number, found block hash".into(),
             )),
@@ -236,28 +236,28 @@ impl TryFrom<BlockNumber> for EpochNumber {
     }
 }
 
-impl From<BlockNumber> for BlockHashOrEpochNumber {
-    fn from(x: BlockNumber) -> BlockHashOrEpochNumber {
+impl From<BlockId> for BlockHashOrEpochNumber {
+    fn from(x: BlockId) -> BlockHashOrEpochNumber {
         match x {
-            BlockNumber::Num(num) => {
+            BlockId::Num(num) => {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(num))
             }
-            BlockNumber::Latest => {
+            BlockId::Latest => {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
             }
-            BlockNumber::Earliest => {
+            BlockId::Earliest => {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::Earliest)
             }
-            BlockNumber::Pending => {
+            BlockId::Pending => {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
             }
-            BlockNumber::Safe => BlockHashOrEpochNumber::EpochNumber(
+            BlockId::Safe => BlockHashOrEpochNumber::EpochNumber(
                 EpochNumber::LatestConfirmed,
             ),
-            BlockNumber::Finalized => BlockHashOrEpochNumber::EpochNumber(
+            BlockId::Finalized => BlockHashOrEpochNumber::EpochNumber(
                 EpochNumber::LatestFinalized,
             ),
-            BlockNumber::Hash {
+            BlockId::Hash {
                 hash,
                 require_canonical,
             } => BlockHashOrEpochNumber::BlockHashWithOption {
@@ -281,7 +281,7 @@ mod tests {
         )
         .unwrap();
 
-        let block_number = BlockNumber::Hash {
+        let block_number = BlockId::Hash {
             hash,
             require_canonical: None,
         };
@@ -291,7 +291,7 @@ mod tests {
             r#"{"blockHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}"#
         );
 
-        let block_number = BlockNumber::Hash {
+        let block_number = BlockId::Hash {
             hash,
             require_canonical: Some(false),
         };
@@ -301,7 +301,7 @@ mod tests {
             r#"{"blockHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","requireCanonical":false}"#
         );
 
-        let block_number = BlockNumber::Hash {
+        let block_number = BlockId::Hash {
             hash,
             require_canonical: Some(true),
         };
@@ -326,33 +326,33 @@ mod tests {
             {"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": false},
 			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": true}
 		]"#;
-        let deserialized: Vec<BlockNumber> = serde_json::from_str(s).unwrap();
+        let deserialized: Vec<BlockId> = serde_json::from_str(s).unwrap();
 
         assert_eq!(
             deserialized,
             vec![
-                BlockNumber::Num(10),
-                BlockNumber::Latest,
-                BlockNumber::Earliest,
-                BlockNumber::Pending,
-                BlockNumber::Safe,
-                BlockNumber::Finalized,
-                BlockNumber::Num(10),
-                BlockNumber::Hash {
+                BlockId::Num(10),
+                BlockId::Latest,
+                BlockId::Earliest,
+                BlockId::Pending,
+                BlockId::Safe,
+                BlockId::Finalized,
+                BlockId::Num(10),
+                BlockId::Hash {
                     hash: H256::from_str(
                         "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     )
                     .unwrap(),
                     require_canonical: None,
                 },
-                BlockNumber::Hash {
+                BlockId::Hash {
                     hash: H256::from_str(
                         "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     )
                     .unwrap(),
                     require_canonical: Some(false),
                 },
-                BlockNumber::Hash {
+                BlockId::Hash {
                     hash: H256::from_str(
                         "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     )
@@ -366,6 +366,6 @@ mod tests {
     #[test]
     fn should_not_deserialize() {
         let s = r#"[{}, "10"]"#;
-        assert!(serde_json::from_str::<Vec<BlockNumber>>(s).is_err());
+        assert!(serde_json::from_str::<Vec<BlockId>>(s).is_err());
     }
 }
