@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use blockgen::BlockGenerator;
 use cfx_rpc_builder::{
     RpcModuleBuilder, RpcServerConfig, RpcServerHandle,
     TransportRpcModuleConfig,
@@ -406,8 +407,9 @@ where
 // start espace rpc server v2(async)
 pub async fn launch_async_rpc_servers(
     consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-    tx_pool: SharedTransactionPool, notifications: Arc<Notifications>,
-    executor: TaskExecutor, conf: &Configuration,
+    tx_pool: SharedTransactionPool, block_gen: Arc<BlockGenerator>,
+    notifications: Arc<Notifications>, executor: TaskExecutor,
+    conf: &Configuration,
 ) -> Result<Option<RpcServerHandle>, String> {
     let http_config = conf.eth_http_config();
     let ws_config = conf.eth_ws_config();
@@ -455,6 +457,7 @@ pub async fn launch_async_rpc_servers(
         consensus,
         sync,
         tx_pool,
+        block_gen,
         executor,
         notifications,
     );

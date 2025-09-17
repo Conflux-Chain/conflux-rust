@@ -19,6 +19,7 @@ cfx-types = { workspace = true }
 cfx-rpc-eth-types = { workspace = true }
 cfx-rpc-primitives = { workspace = true }
 cfx-rpc-cfx-impl = { workspace = true }
+blockgen = { workspace = true }
 async-trait = { workspace = true }
 keccak-hash = { workspace = true }
 alloy-rpc-types-trace = { workspace = true }

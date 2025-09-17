@@ -31,5 +31,6 @@ log = { workspace = true }
 cfx-rpc-middlewares = { workspace = true }
 cfx-tasks = { workspace = true }
 tokio = { workspace = true }
+blockgen = { workspace = true }
 
 [dev-dependencies]

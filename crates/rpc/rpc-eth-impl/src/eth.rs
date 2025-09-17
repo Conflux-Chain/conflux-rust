@@ -1,5 +1,6 @@
 use crate::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 use async_trait::async_trait;
+use blockgen::BlockGenerator;
 use cfx_execute_helper::estimation::EstimateRequest;
 use cfx_executor::executive::{
     Executed, ExecutionError, ExecutionOutcome, TxDropError,
@@ -32,6 +33,7 @@ use cfx_types::{
 use cfx_util_macros::bail;
 use cfx_vm_types::Error as VmError;
 use cfxcore::{
+    consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
     errors::{Error as CoreError, Result as CoreResult},
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
@@ -45,7 +47,9 @@ use primitives::{
 };
 use rustc_hex::ToHex;
 use solidity_abi::string_revert_reason_decode;
-use std::{collections::HashMap, future::Future};
+use std::{
+    collections::HashMap, future::Future, sync::Arc, thread, time::Duration,
+};
 
 type BlockNumber = BlockId;
 type BlockNumberOrTag = BlockId;
@@ -59,6 +63,7 @@ pub struct EthApi {
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
+    block_gen: Arc<BlockGenerator>,
     fee_history_cache: FeeHistoryCache,
     executor: TaskExecutor,
 }
@@ -67,13 +72,14 @@ impl EthApi {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor,
+        block_gen: Arc<BlockGenerator>, executor: TaskExecutor,
     ) -> Self {
         EthApi {
             config,
             consensus,
             sync,
             tx_pool,
+            block_gen,
             fee_history_cache: FeeHistoryCache::new(),
             executor,
         }
@@ -82,6 +88,17 @@ impl EthApi {
     pub fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
     pub fn tx_pool(&self) -> &SharedTransactionPool { &self.tx_pool }
+
+    fn generate_one_block(
+        &self, num_txs: usize, block_size_limit: usize,
+    ) -> CoreResult<H256> {
+        let hash = self.block_gen.test_api().generate_block(
+            num_txs,
+            block_size_limit,
+            vec![],
+        );
+        Ok(hash)
+    }
 
     pub fn fetch_block_by_height(
         &self, height: u64,
@@ -1491,6 +1508,28 @@ impl EthApiServer for EthApi {
         }
 
         let r = self.send_transaction_with_signature(tx)?;
+        if self.config.dev_pack_tx_immediately {
+            // Try to pack and execute this new tx.
+            for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+                let generated = self.generate_one_block(
+                    1, /* num_txs */
+                    self.sync
+                        .get_synchronization_graph()
+                        .verification_config
+                        .max_block_size_in_bytes,
+                )?;
+                loop {
+                    // Wait for the new block to be fully processed, so all
+                    // generated blocks form a chain for
+                    // `tx` to be executed.
+                    if self.consensus.best_block_hash() == generated {
+                        break;
+                    } else {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                }
+            }
+        }
         Ok(r)
     }
 
