@@ -13,6 +13,7 @@ from ethereum_test_forks.forks.forks import Prague
 from ethereum_test_tools.code import Yul
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework, AutoTraceMiddleware
+from integration_tests.test_framework.framework_templates import DefaultDevFramework
 from integration_tests.test_framework.util.adapter import AllocMock, conflux_state_test
 
 def pytest_configure(config):
@@ -112,9 +113,9 @@ def pytest_generate_tests(metafunc):
 
 @pytest.fixture(scope="module")
 def framework_class():
-    class EIP7702TestEnv(ConfluxTestFramework):
+    class EIP7702TestEnv(DefaultDevFramework):
         def set_test_params(self):
-            self.num_nodes = 1
+            super().set_test_params()
             self.conf_parameters["evm_chain_id"] = str(EVM_CHAIN_ID)
             self.conf_parameters["eoa_code_transition_height"] = 1
             self.conf_parameters["evm_transaction_block_ratio"] = str(1)
