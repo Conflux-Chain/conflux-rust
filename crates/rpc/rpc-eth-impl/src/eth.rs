@@ -11,11 +11,10 @@ use cfx_rpc_cfx_types::{
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
     AccessListResult, AccountOverride, AccountPendingTransactions, Block,
-    BlockNumber as BlockId, BlockOverrides, Bundle, Error, EthCallResponse,
-    EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides, FeeHistory,
-    Header, Log, LogData, Receipt, RpcStateOverride, SimulatePayload,
-    SimulatedBlock, StateContext, SyncInfo, SyncStatus, Transaction,
-    TransactionRequest,
+    BlockId, BlockOverrides, Bundle, Error, EthCallResponse, EthRpcLogFilter,
+    EthRpcLogFilter as Filter, EvmOverrides, FeeHistory, Header, Log, LogData,
+    Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext,
+    SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::{

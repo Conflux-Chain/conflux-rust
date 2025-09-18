@@ -21,7 +21,7 @@ mod tx_pool;
 pub use access_list::*;
 pub use authorization::{Authorization, SignedAuthorization};
 pub use block::{Block, BlockOverrides, Header};
-pub use block_number::BlockNumber;
+pub use block_number::BlockId;
 pub use call::*;
 pub use cfx_rpc_primitives::{Bytes, Index, U64};
 pub use errors::Error;
