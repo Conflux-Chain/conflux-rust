@@ -277,12 +277,7 @@
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a></pre></div><pre class="rust"><code><span class="kw">use </span>alloy_rpc_types_trace::geth::{
+<a href="#279" id="279">279</a></pre></div><pre class="rust"><code><span class="kw">use </span>alloy_rpc_types_trace::geth::{
     GethDebugBuiltInTracerType,
     GethDebugTracerType::{BuiltInTracer, JsTracer},
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace, NoopFrame,
@@ -290,7 +285,7 @@
 };
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cfx_rpc_eth_api::DebugApiServer;
-<span class="kw">use </span>cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
+<span class="kw">use </span>cfx_rpc_eth_types::{BlockId, TransactionRequest};
 <span class="kw">use </span>cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 <span class="kw">use </span>cfx_types::{AddressSpaceUtil, Space, H256, U256};
 <span class="kw">use </span>cfxcore::{
@@ -320,19 +315,15 @@
 
     <span class="kw">pub fn </span>consensus_graph(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ConsensusGraph { <span class="kw-2">&amp;</span><span class="self">self</span>.consensus }
 
-    <span class="kw">pub fn </span>get_block_epoch_num(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block: BlockNumber,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;u64, String&gt; {
+    <span class="kw">pub fn </span>get_block_epoch_num(<span class="kw-2">&amp;</span><span class="self">self</span>, block: BlockId) -&gt; <span class="prelude-ty">Result</span>&lt;u64, String&gt; {
         <span class="kw">let </span>num = <span class="kw">match </span>block {
-            BlockNumber::Num(block_number) =&gt; block_number,
-            BlockNumber::Latest
-            | BlockNumber::Safe
-            | BlockNumber::Finalized =&gt; {
+            BlockId::Num(block_number) =&gt; block_number,
+            BlockId::Latest | BlockId::Safe | BlockId::Finalized =&gt; {
                 <span class="kw">let </span>epoch_num = block.try_into().expect(<span class="string">"should success"</span>);
                 <span class="self">self</span>.consensus_graph()
                     .get_height_from_epoch_number(epoch_num)<span class="question-mark">?
             </span>}
-            BlockNumber::Hash {
+            BlockId::Hash {
                 hash,
                 require_canonical,
             } =&gt; <span class="self">self
@@ -348,8 +339,7 @@
     }
 
     <span class="kw">pub fn </span>trace_call(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>request: TransactionRequest,
-        block_number: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
         opts: <span class="prelude-ty">Option</span>&lt;GethDebugTracingCallOptions&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GethTrace, CoreError&gt; {
         <span class="kw">if </span>request.from.is_none() {
@@ -549,7 +539,7 @@
     }
 
     <span class="kw">async fn </span>debug_trace_block_by_number(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block: BlockNumber, opts: <span class="prelude-ty">Option</span>&lt;GethDebugTracingOptions&gt;,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block: BlockId, opts: <span class="prelude-ty">Option</span>&lt;GethDebugTracingOptions&gt;,
     ) -&gt; RpcResult&lt;Vec&lt;TraceResult&gt;&gt; {
         <span class="kw">let </span>num = <span class="self">self
             </span>.get_block_epoch_num(block)
@@ -559,7 +549,7 @@
     }
 
     <span class="kw">async fn </span>debug_trace_call(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
         opts: <span class="prelude-ty">Option</span>&lt;GethDebugTracingCallOptions&gt;,
     ) -&gt; RpcResult&lt;GethTrace&gt; {
         <span class="self">self</span>.trace_call(request, block_number, opts)

@@ -180,7 +180,7 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see &lt;http://www.gnu.org/licenses/&gt;.
 
-</span><span class="kw">use crate</span>::{BlockNumber, Error <span class="kw">as </span>SelfError, Log};
+</span><span class="kw">use crate</span>::{BlockId, Error <span class="kw">as </span>SelfError, Log};
 <span class="kw">use </span>cfx_rpc_cfx_types::traits::BlockProvider;
 <span class="kw">use </span>cfx_rpc_primitives::VariadicValue;
 <span class="kw">use </span>cfx_types::{Space, H160, H256};
@@ -203,9 +203,9 @@
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>EthRpcLogFilter {
     <span class="doccomment">/// From Block
-    </span><span class="kw">pub </span>from_block: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+    </span><span class="kw">pub </span>from_block: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
     <span class="doccomment">/// To Block
-    </span><span class="kw">pub </span>to_block: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+    </span><span class="kw">pub </span>to_block: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
     <span class="doccomment">/// Block hash
     </span><span class="kw">pub </span>block_hash: <span class="prelude-ty">Option</span>&lt;H256&gt;,
     <span class="doccomment">/// Address

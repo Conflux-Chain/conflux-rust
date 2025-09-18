@@ -41,7 +41,7 @@
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace,
     TraceResult,
 };
-<span class="kw">use </span>cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
+<span class="kw">use </span>cfx_rpc_eth_types::{BlockId, TransactionRequest};
 <span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
@@ -67,12 +67,12 @@
 
     <span class="attr">#[method(name = <span class="string">"traceBlockByNumber"</span>)]
     </span><span class="kw">async fn </span>debug_trace_block_by_number(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block: BlockNumber, opts: <span class="prelude-ty">Option</span>&lt;GethDebugTracingOptions&gt;,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block: BlockId, opts: <span class="prelude-ty">Option</span>&lt;GethDebugTracingOptions&gt;,
     ) -&gt; RpcResult&lt;Vec&lt;TraceResult&gt;&gt;;
 
     <span class="attr">#[method(name = <span class="string">"traceCall"</span>)]
     </span><span class="kw">async fn </span>debug_trace_call(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, request: TransactionRequest, block_number: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
         opts: <span class="prelude-ty">Option</span>&lt;GethDebugTracingCallOptions&gt;,
     ) -&gt; RpcResult&lt;GethTrace&gt;;
 }

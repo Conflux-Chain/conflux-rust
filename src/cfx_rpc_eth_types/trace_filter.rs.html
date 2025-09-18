@@ -92,7 +92,7 @@
 
 </span><span class="doccomment">//! Trace filter deserialization.
 
-</span><span class="kw">use </span><span class="kw">crate</span>::BlockNumber;
+</span><span class="kw">use </span><span class="kw">crate</span>::BlockId;
 <span class="kw">use </span>cfx_parity_trace_types::TraceFilter <span class="kw">as </span>PrimitiveTraceFilter;
 <span class="kw">use </span>cfx_types::{Space, H160};
 <span class="kw">use </span>jsonrpc_core::Error <span class="kw">as </span>RpcError;
@@ -106,9 +106,9 @@
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>TraceFilter {
     <span class="doccomment">/// From block
-    </span><span class="kw">pub </span>from_block: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+    </span><span class="kw">pub </span>from_block: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
     <span class="doccomment">/// To block
-    </span><span class="kw">pub </span>to_block: <span class="prelude-ty">Option</span>&lt;BlockNumber&gt;,
+    </span><span class="kw">pub </span>to_block: <span class="prelude-ty">Option</span>&lt;BlockId&gt;,
     <span class="doccomment">/// From address
     </span><span class="kw">pub </span>from_address: <span class="prelude-ty">Option</span>&lt;Vec&lt;H160&gt;&gt;,
     <span class="doccomment">/// To address

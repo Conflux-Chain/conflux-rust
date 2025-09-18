@@ -358,7 +358,18 @@
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of OpenEthereum.
 
 // OpenEthereum is free software: you can redistribute it and/or modify
@@ -389,7 +400,7 @@
 
 <span class="doccomment">/// Represents rpc api block number param.
 </span><span class="attr">#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-</span><span class="kw">pub enum </span>BlockNumber {
+</span><span class="kw">pub enum </span>BlockId {
     <span class="doccomment">/// Hash
     </span>Hash {
         <span class="doccomment">/// block hash
@@ -413,34 +424,34 @@
     </span>Finalized,
 }
 
-<span class="kw">impl </span>Default <span class="kw">for </span>BlockNumber {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{ BlockNumber::Latest }
+<span class="kw">impl </span>Default <span class="kw">for </span>BlockId {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{ BlockId::Latest }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Deserialize&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>BlockNumber {
-    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;BlockNumber, D::Error&gt;
+<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Deserialize&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>BlockId {
+    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;BlockId, D::Error&gt;
     <span class="kw">where </span>D: Deserializer&lt;<span class="lifetime">'a</span>&gt; {
         deserializer.deserialize_any(BlockNumberVisitor)
     }
 }
 
-<span class="kw">impl </span>BlockNumber {
+<span class="kw">impl </span>BlockId {
     <span class="doccomment">/// Convert block number to min block target.
     </span><span class="kw">pub fn </span>to_min_block_num(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
         <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
-            BlockNumber::Num(<span class="kw-2">ref </span>x) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>x),
+            BlockId::Num(<span class="kw-2">ref </span>x) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>x),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
         }
     }
 }
 
-<span class="kw">impl </span>Serialize <span class="kw">for </span>BlockNumber {
+<span class="kw">impl </span>Serialize <span class="kw">for </span>BlockId {
     <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
     <span class="kw">where </span>S: Serializer {
         <span class="kw">use </span>serde::ser::SerializeStruct;
 
         <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
-            BlockNumber::Hash {
+            BlockId::Hash {
                 hash,
                 require_canonical,
             } =&gt; {
@@ -451,14 +462,14 @@
                 }
                 s.end()
             }
-            BlockNumber::Num(<span class="kw-2">ref </span>x) =&gt; {
+            BlockId::Num(<span class="kw-2">ref </span>x) =&gt; {
                 serializer.serialize_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"0x{:x}"</span>, x))
             }
-            BlockNumber::Latest =&gt; serializer.serialize_str(<span class="string">"latest"</span>),
-            BlockNumber::Earliest =&gt; serializer.serialize_str(<span class="string">"earliest"</span>),
-            BlockNumber::Pending =&gt; serializer.serialize_str(<span class="string">"pending"</span>),
-            BlockNumber::Safe =&gt; serializer.serialize_str(<span class="string">"safe"</span>),
-            BlockNumber::Finalized =&gt; serializer.serialize_str(<span class="string">"finalized"</span>),
+            BlockId::Latest =&gt; serializer.serialize_str(<span class="string">"latest"</span>),
+            BlockId::Earliest =&gt; serializer.serialize_str(<span class="string">"earliest"</span>),
+            BlockId::Pending =&gt; serializer.serialize_str(<span class="string">"pending"</span>),
+            BlockId::Safe =&gt; serializer.serialize_str(<span class="string">"safe"</span>),
+            BlockId::Finalized =&gt; serializer.serialize_str(<span class="string">"finalized"</span>),
         }
     }
 }
@@ -466,7 +477,7 @@
 <span class="kw">struct </span>BlockNumberVisitor;
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; Visitor&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>BlockNumberVisitor {
-    <span class="kw">type </span>Value = BlockNumber;
+    <span class="kw">type </span>Value = BlockId;
 
     <span class="kw">fn </span>expecting(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
         <span class="macro">write!</span>(
@@ -523,11 +534,11 @@
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(number) = block_number {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(BlockNumber::Num(number));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(BlockId::Num(number));
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(hash) = block_hash {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(BlockNumber::Hash {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(BlockId::Hash {
                 hash,
                 require_canonical,
             });
@@ -539,20 +550,31 @@
     <span class="kw">fn </span>visit_str&lt;E&gt;(<span class="self">self</span>, value: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Value, E&gt;
     <span class="kw">where </span>E: SerdeError {
         <span class="kw">match </span>value {
-            <span class="string">"latest" </span>=&gt; <span class="prelude-val">Ok</span>(BlockNumber::Latest),
-            <span class="string">"earliest" </span>=&gt; <span class="prelude-val">Ok</span>(BlockNumber::Earliest),
-            <span class="string">"pending" </span>=&gt; <span class="prelude-val">Ok</span>(BlockNumber::Pending),
-            <span class="string">"safe" </span>=&gt; <span class="prelude-val">Ok</span>(BlockNumber::Safe),
-            <span class="string">"finalized" </span>=&gt; <span class="prelude-val">Ok</span>(BlockNumber::Finalized),
+            <span class="string">"latest" </span>=&gt; <span class="prelude-val">Ok</span>(BlockId::Latest),
+            <span class="string">"earliest" </span>=&gt; <span class="prelude-val">Ok</span>(BlockId::Earliest),
+            <span class="string">"pending" </span>=&gt; <span class="prelude-val">Ok</span>(BlockId::Pending),
+            <span class="string">"safe" </span>=&gt; <span class="prelude-val">Ok</span>(BlockId::Safe),
+            <span class="string">"finalized" </span>=&gt; <span class="prelude-val">Ok</span>(BlockId::Finalized),
             <span class="kw">_ if </span>value.starts_with(<span class="string">"0x"</span>) =&gt; {
-                u64::from_str_radix(<span class="kw-2">&amp;</span>value[<span class="number">2</span>..], <span class="number">16</span>)
-                    .map(BlockNumber::Num)
-                    .map_err(|e| {
-                        SerdeError::custom(<span class="macro">format!</span>(
-                            <span class="string">"Invalid block number: {}"</span>,
-                            e
-                        ))
+                <span class="comment">// Since there is no way to clearly distinguish between a DATA parameter and a QUANTITY parameter. A str is therefore deserialized into a Block Number: &lt;https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1898.md&gt;
+                // However, since the hex string should be a QUANTITY, we can safely assume that if the len is 66 bytes, it is in fact a hash, ref &lt;https://github.com/ethereum/go-ethereum/blob/ee530c0d5aa70d2c00ab5691a89ab431b73f8165/rpc/types.go#L184-L184&gt;
+                </span><span class="kw">if </span>value.len() == <span class="number">66 </span>{
+                    <span class="kw">let </span>hash =
+                        value[<span class="number">2</span>..].parse().map_err(SerdeError::custom)<span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>(BlockId::Hash {
+                        hash,
+                        require_canonical: <span class="prelude-val">None</span>,
                     })
+                } <span class="kw">else </span>{
+                    u64::from_str_radix(<span class="kw-2">&amp;</span>value[<span class="number">2</span>..], <span class="number">16</span>)
+                        .map(BlockId::Num)
+                        .map_err(|e| {
+                            SerdeError::custom(<span class="macro">format!</span>(
+                                <span class="string">"Invalid block number: {}"</span>,
+                                e
+                            ))
+                        })
+                }
             }
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(SerdeError::custom(
                 <span class="string">"Invalid block number: missing 0x prefix"</span>.to_string(),
@@ -566,18 +588,18 @@
     }
 }
 
-<span class="kw">impl </span>TryFrom&lt;BlockNumber&gt; <span class="kw">for </span>EpochNumber {
+<span class="kw">impl </span>TryFrom&lt;BlockId&gt; <span class="kw">for </span>EpochNumber {
     <span class="kw">type </span>Error = Error;
 
-    <span class="kw">fn </span>try_from(x: BlockNumber) -&gt; <span class="prelude-ty">Result</span>&lt;EpochNumber, Error&gt; {
+    <span class="kw">fn </span>try_from(x: BlockId) -&gt; <span class="prelude-ty">Result</span>&lt;EpochNumber, Error&gt; {
         <span class="kw">match </span>x {
-            BlockNumber::Num(num) =&gt; <span class="prelude-val">Ok</span>(EpochNumber::Number(num)),
-            BlockNumber::Latest =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestState),
-            BlockNumber::Earliest =&gt; <span class="prelude-val">Ok</span>(EpochNumber::Earliest),
-            BlockNumber::Pending =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestState), <span class="comment">/* TODO: LatestMined maybe is better or add a new Pending variant for EpochNumber */
-            </span>BlockNumber::Safe =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestConfirmed),
-            BlockNumber::Finalized =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestFinalized),
-            BlockNumber::Hash { .. } =&gt; <span class="prelude-val">Err</span>(Error::InvalidParams(
+            BlockId::Num(num) =&gt; <span class="prelude-val">Ok</span>(EpochNumber::Number(num)),
+            BlockId::Latest =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestState),
+            BlockId::Earliest =&gt; <span class="prelude-val">Ok</span>(EpochNumber::Earliest),
+            BlockId::Pending =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestState), <span class="comment">/* TODO: LatestMined maybe is better or add a new Pending variant for EpochNumber */
+            </span>BlockId::Safe =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestConfirmed),
+            BlockId::Finalized =&gt; <span class="prelude-val">Ok</span>(EpochNumber::LatestFinalized),
+            BlockId::Hash { .. } =&gt; <span class="prelude-val">Err</span>(Error::InvalidParams(
                 <span class="string">"block_num"</span>.into(),
                 <span class="string">"Expected block number, found block hash"</span>.into(),
             )),
@@ -585,28 +607,28 @@
     }
 }
 
-<span class="kw">impl </span>From&lt;BlockNumber&gt; <span class="kw">for </span>BlockHashOrEpochNumber {
-    <span class="kw">fn </span>from(x: BlockNumber) -&gt; BlockHashOrEpochNumber {
+<span class="kw">impl </span>From&lt;BlockId&gt; <span class="kw">for </span>BlockHashOrEpochNumber {
+    <span class="kw">fn </span>from(x: BlockId) -&gt; BlockHashOrEpochNumber {
         <span class="kw">match </span>x {
-            BlockNumber::Num(num) =&gt; {
+            BlockId::Num(num) =&gt; {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::Number(num))
             }
-            BlockNumber::Latest =&gt; {
+            BlockId::Latest =&gt; {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
             }
-            BlockNumber::Earliest =&gt; {
+            BlockId::Earliest =&gt; {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::Earliest)
             }
-            BlockNumber::Pending =&gt; {
+            BlockId::Pending =&gt; {
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
             }
-            BlockNumber::Safe =&gt; BlockHashOrEpochNumber::EpochNumber(
+            BlockId::Safe =&gt; BlockHashOrEpochNumber::EpochNumber(
                 EpochNumber::LatestConfirmed,
             ),
-            BlockNumber::Finalized =&gt; BlockHashOrEpochNumber::EpochNumber(
+            BlockId::Finalized =&gt; BlockHashOrEpochNumber::EpochNumber(
                 EpochNumber::LatestFinalized,
             ),
-            BlockNumber::Hash {
+            BlockId::Hash {
                 hash,
                 require_canonical,
             } =&gt; BlockHashOrEpochNumber::BlockHashWithOption {
@@ -630,7 +652,7 @@
         )
         .unwrap();
 
-        <span class="kw">let </span>block_number = BlockNumber::Hash {
+        <span class="kw">let </span>block_number = BlockId::Hash {
             hash,
             require_canonical: <span class="prelude-val">None</span>,
         };
@@ -640,7 +662,7 @@
             <span class="string">r#"{"blockHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}"#
         </span>);
 
-        <span class="kw">let </span>block_number = BlockNumber::Hash {
+        <span class="kw">let </span>block_number = BlockId::Hash {
             hash,
             require_canonical: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>),
         };
@@ -650,7 +672,7 @@
             <span class="string">r#"{"blockHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","requireCanonical":false}"#
         </span>);
 
-        <span class="kw">let </span>block_number = BlockNumber::Hash {
+        <span class="kw">let </span>block_number = BlockId::Hash {
             hash,
             require_canonical: <span class="prelude-val">Some</span>(<span class="bool-val">true</span>),
         };
@@ -675,33 +697,33 @@
             {"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": false},
 			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": true}
 		]"#</span>;
-        <span class="kw">let </span>deserialized: Vec&lt;BlockNumber&gt; = serde_json::from_str(s).unwrap();
+        <span class="kw">let </span>deserialized: Vec&lt;BlockId&gt; = serde_json::from_str(s).unwrap();
 
         <span class="macro">assert_eq!</span>(
             deserialized,
             <span class="macro">vec!</span>[
-                BlockNumber::Num(<span class="number">10</span>),
-                BlockNumber::Latest,
-                BlockNumber::Earliest,
-                BlockNumber::Pending,
-                BlockNumber::Safe,
-                BlockNumber::Finalized,
-                BlockNumber::Num(<span class="number">10</span>),
-                BlockNumber::Hash {
+                BlockId::Num(<span class="number">10</span>),
+                BlockId::Latest,
+                BlockId::Earliest,
+                BlockId::Pending,
+                BlockId::Safe,
+                BlockId::Finalized,
+                BlockId::Num(<span class="number">10</span>),
+                BlockId::Hash {
                     hash: H256::from_str(
                         <span class="string">"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     </span>)
                     .unwrap(),
                     require_canonical: <span class="prelude-val">None</span>,
                 },
-                BlockNumber::Hash {
+                BlockId::Hash {
                     hash: H256::from_str(
                         <span class="string">"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     </span>)
                     .unwrap(),
                     require_canonical: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>),
                 },
-                BlockNumber::Hash {
+                BlockId::Hash {
                     hash: H256::from_str(
                         <span class="string">"1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     </span>)
@@ -715,7 +737,7 @@
     <span class="attr">#[test]
     </span><span class="kw">fn </span>should_not_deserialize() {
         <span class="kw">let </span>s = <span class="string">r#"[{}, "10"]"#</span>;
-        <span class="macro">assert!</span>(serde_json::from_str::&lt;Vec&lt;BlockNumber&gt;&gt;(s).is_err());
+        <span class="macro">assert!</span>(serde_json::from_str::&lt;Vec&lt;BlockId&gt;&gt;(s).is_err());
     }
 }
 </code></pre></div></section></main></body></html>

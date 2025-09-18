@@ -36,7 +36,7 @@
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
 <a href="#37" id="37">37</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_rpc_eth_types::{
-    BlockNumber, Index, LocalizedSetAuthTrace, LocalizedTrace, TraceFilter,
+    BlockId, Index, LocalizedSetAuthTrace, LocalizedTrace, TraceFilter,
 };
 <span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>jsonrpsee::{core::RpcResult, proc_macros::rpc};
@@ -46,13 +46,13 @@
     <span class="doccomment">/// Returns all traces produced at the given block.
     </span><span class="attr">#[method(name = <span class="string">"block"</span>)]
     </span><span class="kw">async fn </span>block_traces(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockId,
     ) -&gt; RpcResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;LocalizedTrace&gt;&gt;&gt;;
 
     <span class="doccomment">/// Returns all set auth traces produced at the given block.
     </span><span class="attr">#[method(name = <span class="string">"blockSetAuth"</span>)]
     </span><span class="kw">async fn </span>block_set_auth_traces(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockId,
     ) -&gt; RpcResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;LocalizedSetAuthTrace&gt;&gt;&gt;;
 
     <span class="doccomment">/// Returns all traces matching the provided filter.

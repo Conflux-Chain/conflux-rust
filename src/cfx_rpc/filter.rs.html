@@ -272,7 +272,7 @@
 };
 <span class="kw">use </span>cfx_rpc_eth_api::EthFilterApiServer;
 <span class="kw">use </span>cfx_rpc_eth_types::{
-    BlockNumber, EthRpcLogFilter <span class="kw">as </span>Filter, FilterChanges, Log,
+    BlockId, EthRpcLogFilter <span class="kw">as </span>Filter, FilterChanges, Log,
 };
 <span class="kw">use </span>cfx_rpc_utils::error::jsonrpsee_error_helpers::{
     invalid_request_msg, jsonrpc_error_to_error_object_owned,
@@ -315,7 +315,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>polls = <span class="self">self</span>.inner.polls().lock();
         <span class="kw">let </span>epoch_number = <span class="self">self</span>.inner.best_executed_epoch_number();
 
-        <span class="kw">if </span>filter.to_block == <span class="prelude-val">Some</span>(BlockNumber::Pending) {
+        <span class="kw">if </span>filter.to_block == <span class="prelude-val">Some</span>(BlockId::Pending) {
             <span class="macro">bail!</span>(invalid_request_msg(
                 <span class="string">"Filter logs from pending blocks is not supported"
             </span>))

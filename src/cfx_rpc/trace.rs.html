@@ -254,7 +254,7 @@
 <span class="kw">use </span>cfx_rpc_eth_api::TraceApiServer;
 <span class="kw">use </span>cfx_rpc_eth_types::{
     trace::{LocalizedSetAuthTrace, LocalizedTrace <span class="kw">as </span>EthLocalizedTrace},
-    BlockNumber, Index, LocalizedTrace, TraceFilter,
+    BlockId, Index, LocalizedTrace, TraceFilter,
 };
 <span class="kw">use </span>cfx_types::H256;
 <span class="kw">use </span>cfx_util_macros::unwrap_option_or_return_result_none <span class="kw">as </span>unwrap_or_return;
@@ -274,10 +274,10 @@
     }
 
     <span class="kw">pub fn </span>get_block(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockId,
     ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;PhantomBlock&gt;&gt; {
         <span class="kw">let </span>phantom_block = <span class="kw">match </span>block_number {
-            BlockNumber::Hash { hash, .. } =&gt; <span class="self">self
+            BlockId::Hash { hash, .. } =&gt; <span class="self">self
                 </span>.trace_handler
                 .consensus_graph()
                 .get_phantom_block_by_hash(
@@ -300,7 +300,7 @@
     }
 
     <span class="kw">pub fn </span>block_traces(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockId,
     ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;LocalizedTrace&gt;&gt;&gt; {
         <span class="kw">let </span>phantom_block = <span class="self">self</span>.get_block(block_number)<span class="question-mark">?</span>;
 
@@ -330,7 +330,7 @@
     }
 
     <span class="kw">pub fn </span>block_set_auth_traces(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockId,
     ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;LocalizedSetAuthTrace&gt;&gt;&gt; {
         <span class="kw">let </span>phantom_block = <span class="self">self</span>.get_block(block_number)<span class="question-mark">?</span>;
 
@@ -446,7 +446,7 @@
 <span class="attr">#[async_trait::async_trait]
 </span><span class="kw">impl </span>TraceApiServer <span class="kw">for </span>TraceApi {
     <span class="kw">async fn </span>block_traces(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockId,
     ) -&gt; RpcResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;LocalizedTrace&gt;&gt;&gt; {
         <span class="self">self</span>.block_traces(block_number).map_err(|err| err.into())
     }
@@ -464,7 +464,7 @@
     }
 
     <span class="kw">async fn </span>block_set_auth_traces(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockNumber,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, block_number: BlockId,
     ) -&gt; RpcResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;LocalizedSetAuthTrace&gt;&gt;&gt; {
         <span class="self">self</span>.block_set_auth_traces(block_number)
             .map_err(|err| err.into())
