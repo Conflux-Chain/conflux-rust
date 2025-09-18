@@ -28,7 +28,7 @@ pub use errors::Error;
 pub use eth_pubsub::*;
 pub use fee_history::FeeHistory;
 pub use filter::*;
-pub use log::Log;
+pub use log::*;
 pub use receipt::Receipt;
 pub use simulate::*;
 pub use state::{
