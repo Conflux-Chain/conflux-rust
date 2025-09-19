@@ -1508,9 +1508,12 @@ impl EthApiServer for EthApi {
         }
 
         let r = self.send_transaction_with_signature(tx)?;
+        // evm txs are packed every ratio blocks
+        // always generate another ratio blocks to ensure the tx is packed
+        let ratio = self.tx_pool.machine().params().evm_transaction_block_ratio;
         if self.config.dev_pack_tx_immediately {
             // Try to pack and execute this new tx.
-            for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
+            for _ in 0..(DEFERRED_STATE_EPOCH_COUNT + ratio - 1) {
                 let generated = self.generate_one_block(
                     1, /* num_txs */
                     self.sync
