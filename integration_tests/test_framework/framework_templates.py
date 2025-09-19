@@ -21,9 +21,6 @@ class DefaultDevFramework(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["mode"] = "'dev'"
-        self.conf_parameters["min_native_base_price"] = 10000
-        self.conf_parameters["base_fee_burn_transition_height"] = 1
-        self.conf_parameters["base_fee_burn_transition_number"] = 1
 
     def setup_network(self):
         self.setup_nodes()
