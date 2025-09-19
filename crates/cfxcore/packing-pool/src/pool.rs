@@ -239,8 +239,9 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             let weight = &node.weight;
             let packing_batch = &node.value;
             packing_batch.assert_constraints();
-            let loss_ratio =
-                self.config.loss_ratio(packing_batch.first_gas_price());
+            let loss_ratio = self
+                .config
+                .loss_ratio(packing_batch.first_priority_gas_price());
             let gas_limit = packing_batch.total_gas_limit();
             assert_eq!(gas_limit, weight.gas_limit);
             assert_eq!(loss_ratio, weight.max_loss_ratio);
@@ -253,14 +254,15 @@ fn make_apply_outcome<TX: PackingPoolTransaction, T>(
     old_info: PackInfo, new_info: PackInfo,
     node: &mut Node<PackingPoolMap<TX>>, config: &PackingPoolConfig, out: T,
 ) -> ApplyOpOutcome<T> {
-    let change_gas_price = old_info.first_gas_price != new_info.first_gas_price;
+    let change_gas_price =
+        old_info.first_priority_gas_price != new_info.first_priority_gas_price;
     let change_gas_limit = old_info.total_gas_limit != new_info.total_gas_limit;
 
     let mut update_weight = false;
     let mut update_key = false;
 
     if change_gas_price {
-        let gas_price = new_info.first_gas_price;
+        let gas_price = new_info.first_priority_gas_price;
         node.sort_key = gas_price;
         node.weight.max_loss_ratio = config.loss_ratio(gas_price);
         node.weight.gas_limit = new_info.total_gas_limit;
