@@ -39,7 +39,7 @@ pub struct Call {
     from: Address,
     /// Recipient
     to: Address,
-    /// Transfered Value
+    /// Transferred Value
     value: U256,
     /// Gas
     gas: U256,
