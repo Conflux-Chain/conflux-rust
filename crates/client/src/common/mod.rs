@@ -725,6 +725,7 @@ pub fn initialize_not_light_node_modules(
             consensus.clone(),
             sync.clone(),
             txpool.clone(),
+            blockgen.clone(),
             notifications.clone(),
             task_executor.clone(),
             conf,
