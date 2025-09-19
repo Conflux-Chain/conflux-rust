@@ -160,6 +160,8 @@ enum OwnedStorageKey {
     },
     DepositListKey(Vec<u8>),
     VoteListKey(Vec<u8>),
+    EmptyKey,
+    AddressPrefixKey(Vec<u8>),
 }
 
 impl OwnedStorageKey {
@@ -193,6 +195,10 @@ impl OwnedStorageKey {
             }
             OwnedStorageKey::VoteListKey(k) => {
                 StorageKey::VoteListKey(k.as_slice())
+            }
+            OwnedStorageKey::EmptyKey => StorageKey::EmptyKey,
+            OwnedStorageKey::AddressPrefixKey(k) => {
+                StorageKey::AddressPrefixKey(k.as_slice())
             }
         }
     }
@@ -244,6 +250,10 @@ impl<'a> From<StorageKey<'a>> for OwnedStorageKey {
             }
             StorageKey::VoteListKey(k) => {
                 OwnedStorageKey::VoteListKey(k.to_vec())
+            }
+            StorageKey::EmptyKey => OwnedStorageKey::EmptyKey,
+            StorageKey::AddressPrefixKey(k) => {
+                OwnedStorageKey::AddressPrefixKey(k.to_vec())
             }
         }
     }
@@ -301,6 +311,17 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
         self.state.read_all(access_key_prefix)
+    }
+
+    fn read_all_with_callback(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+        callback: &mut dyn FnMut(MptKeyValue), only_account_key: bool,
+    ) -> Result<()> {
+        self.state.read_all_with_callback(
+            access_key_prefix,
+            callback,
+            only_account_key,
+        )
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {

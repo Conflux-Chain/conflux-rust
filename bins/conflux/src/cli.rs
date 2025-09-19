@@ -1,3 +1,4 @@
+use crate::command::dump::DumpCommand;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// Conflux client
@@ -267,6 +268,9 @@ pub enum Commands {
     /// Manage accounts
     #[command(subcommand_required = true, arg_required_else_help = true)]
     Account(AccountSubcommands),
+    /// Dump eSpace account state at a given block number
+    #[command(subcommand_required = false, arg_required_else_help = false)]
+    Dump(DumpCommand),
     /// RPC based subcommands to query blockchain information and send
     /// transactions
     #[command(subcommand_required = true, arg_required_else_help = true)]
