@@ -121,6 +121,7 @@ allow = [
 
     "GPL-3.0",
     "MPL-2.0",
+    "CDLA-Permissive-2.0",
     "Unicode-DFS-2016",
 
     # https://github.com/briansmith/ring/issues/902
