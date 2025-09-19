@@ -46,7 +46,7 @@
 </div></details><h2 id="variants" class="variants section-header">Variants<a href="#variants" class="anchor">§</a></h2><div class="variants"><section id="variant.OutOfGas" class="variant"><a href="#variant.OutOfGas" class="anchor">§</a><h3 class="code-header">OutOfGas</h3></section><div class="docblock"><p><code>OutOfGas</code> is returned when transaction execution runs out of gas.
 The state should be reverted to the state from before the
 transaction execution. But it does not mean that transaction
-was invalid. Balance still should be transfered and nonce
+was invalid. Balance still should be transferred and nonce
 should be increased.</p>
 </div><section id="variant.BadJumpDestination" class="variant"><a href="#variant.BadJumpDestination" class="anchor">§</a><h3 class="code-header">BadJumpDestination</h3></section><div class="docblock"><p><code>BadJumpDestination</code> is returned when execution tried to move
 to position that wasn’t marked with JUMPDEST instruction</p>
