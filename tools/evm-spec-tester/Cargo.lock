@@ -796,6 +796,22 @@ name = "block-padding"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
+[[package]]
+name = "blockgen"
+version = "0.1.0"
+dependencies = [
+ "cfx-parameters",
+ "cfx-stratum",
+ "cfx-types",
+ "cfxcore",
+ "lazy_static",
+ "log",
+ "metrics",
+ "parking_lot 0.12.4",
+ "primitives",
+ "rand 0.9.2",
+ "txgen",
+]
 
 [[package]]
 name = "bls-signatures"
