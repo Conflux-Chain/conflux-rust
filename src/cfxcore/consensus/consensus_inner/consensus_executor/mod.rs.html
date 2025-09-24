@@ -1774,14 +1774,7 @@
 <a href="#1773" id="1773">1773</a>
 <a href="#1774" id="1774">1774</a>
 <a href="#1775" id="1775">1775</a>
-<a href="#1776" id="1776">1776</a>
-<a href="#1777" id="1777">1777</a>
-<a href="#1778" id="1778">1778</a>
-<a href="#1779" id="1779">1779</a>
-<a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
-<a href="#1782" id="1782">1782</a>
-<a href="#1783" id="1783">1783</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1776" id="1776">1776</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1815,8 +1808,8 @@
     StorageManagerTrait,
 };
 <span class="kw">use </span>cfx_types::{
-    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+    AddressSpaceUtil, AllChainID, BigEndianHash, Space, H160, H256,
+    KECCAK_EMPTY_BLOOM, U256, U512,
 };
 <span class="kw">use </span>metrics::{register_meter_with_group, Meter, MeterTimer};
 <span class="kw">use </span>primitives::{
@@ -3423,14 +3416,7 @@
         </span>};
 
         <span class="kw">let </span>time_stamp = best_block_header.timestamp();
-
-        <span class="kw">let </span>miner = {
-            <span class="kw">let </span><span class="kw-2">mut </span>address = H160::random();
-            <span class="kw">if </span>tx.space() == Space::Native {
-                address.set_user_account_type_bits();
-            }
-            address
-        };
+        <span class="kw">let </span>miner = best_block_header.author().clone();
 
         <span class="kw">let </span>base_gas_price = best_block_header.base_price().unwrap_or_default();
         <span class="kw">let </span>burnt_gas_price =
