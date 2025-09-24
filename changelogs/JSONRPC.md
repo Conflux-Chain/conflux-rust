@@ -1,5 +1,9 @@
 # JSON-RPC CHANGELOG
 
+## v3.0.2
+
+1. eSpace `log` object add `blockTimestamp` field.
+
 ## v3.0.0
 
 Below RPC add support for EIP-7702 tx:
