@@ -1360,6 +1360,7 @@ version = "3.0.0"
 dependencies = [
  "alloy-rpc-types-trace",
  "async-trait",
+ "blockgen",
  "cfx-addr",
  "cfx-execute-helper",
  "cfx-executor",
@@ -1402,6 +1403,7 @@ name = "cfx-rpc-builder"
 version = "3.0.0"
 dependencies = [
  "alloy-primitives",
+ "blockgen",
  "cfx-rpc",
  "cfx-rpc-cfx-types",
  "cfx-rpc-eth-api",
