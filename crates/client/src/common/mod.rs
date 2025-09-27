@@ -732,7 +732,12 @@ pub fn initialize_not_light_node_modules(
     // start pprf server, which is used to serve the pprof data for heap
     // profiling
     if let Some(pprf_addr) = conf.raw_conf.profiling_listen_addr.as_ref() {
-        let _ = tokio_runtime.block_on(start_pprf_server(pprf_addr));
+        let pprf_addr = pprf_addr.clone();
+        let _pprf_server_handle = tokio_runtime.spawn(async move {
+            if let Err(e) = start_pprf_server(&pprf_addr).await {
+                eprintln!("Error starting pprof server: {}", e);
+            }
+        });
     }
 
     metrics::initialize(conf.metrics_config(), task_executor.clone());
