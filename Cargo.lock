@@ -1363,7 +1363,7 @@ dependencies = [
 
 [[package]]
 name = "cfx-mallocator-utils"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "axum",
  "cfg-if 1.0.0",
