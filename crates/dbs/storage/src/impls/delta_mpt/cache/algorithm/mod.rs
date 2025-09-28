@@ -80,7 +80,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
     /// therefore we have CacheAlgoDataAdapter.
     fn get_mut(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
-    ) -> CacheAlgoDataSetter<CacheStoreUtilT, CacheIndexT> {
+    ) -> CacheAlgoDataSetter<'_, CacheStoreUtilT, CacheIndexT> {
         let data = Self::get(util, index).clone();
         CacheAlgoDataSetter {
             cache_store_util: util,
@@ -92,7 +92,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
     #[allow(unused)]
     fn get_mut_most_recently_accessed(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
-    ) -> CacheAlgoDataSetterMostRecentlyAccessed<CacheStoreUtilT, CacheIndexT>
+    ) -> CacheAlgoDataSetterMostRecentlyAccessed<'_, CacheStoreUtilT, CacheIndexT>
     {
         let data = util.get_most_recently_accessed(index).clone();
         CacheAlgoDataSetterMostRecentlyAccessed {
@@ -104,7 +104,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
 
     unsafe fn new_mut(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
-    ) -> CacheAlgoDataSetter<CacheStoreUtilT, CacheIndexT> {
+    ) -> CacheAlgoDataSetter<'_, CacheStoreUtilT, CacheIndexT> {
         CacheAlgoDataSetter {
             cache_store_util: util,
             element_index: index,
@@ -114,7 +114,7 @@ where CacheStoreUtilT::CacheAlgoData: CacheAlgoDataTrait
 
     unsafe fn new_mut_most_recently_accessed(
         util: &mut CacheStoreUtilT, index: CacheIndexT,
-    ) -> CacheAlgoDataSetterMostRecentlyAccessed<CacheStoreUtilT, CacheIndexT>
+    ) -> CacheAlgoDataSetterMostRecentlyAccessed<'_, CacheStoreUtilT, CacheIndexT>
     {
         CacheAlgoDataSetterMostRecentlyAccessed {
             cache_store_util: util,

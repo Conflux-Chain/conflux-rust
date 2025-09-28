@@ -210,6 +210,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         &self,
     ) -> Result<
         Wrap<
+            '_,
             Self::SnapshotKvdbIterType,
             dyn KeyValueDbIterableTrait<
                 MptKeyValue,
