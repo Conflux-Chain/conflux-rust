@@ -215,9 +215,7 @@ fn generate_keys(number_of_keys: usize) -> Vec<Vec<u8>> {
     let mut last_key = keys_num[0];
     for key in &keys_num[1..number_of_keys] {
         if *key != last_key {
-            keys.push(Vec::from(
-                &unsafe { std::mem::transmute::<u64, [u8; 8]>(key.clone()) }[..],
-            ));
+            keys.push(Vec::from(key.to_ne_bytes()));
         }
         last_key = *key;
     }

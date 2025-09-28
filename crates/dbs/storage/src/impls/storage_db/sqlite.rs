@@ -204,9 +204,11 @@ impl SqliteConnection {
         self.connection.get_mut()
     }
 
-    pub fn lock_db(&self) -> MutexGuard<Connection> { self.connection.lock() }
+    pub fn lock_db(&self) -> MutexGuard<'_, Connection> {
+        self.connection.lock()
+    }
 
-    pub fn lock_statement_cache(&self) -> MutexGuard<StatementCache> {
+    pub fn lock_statement_cache(&self) -> MutexGuard<'_, StatementCache> {
         self.cached_statements.lock()
     }
 
@@ -355,6 +357,7 @@ impl<'db> MaybeRows<'db> {
     }
 }
 
+#[allow(dead_code)]
 pub struct ConnectionWithRowParser<Connection, RowParser>(
     pub Connection,
     pub RowParser,

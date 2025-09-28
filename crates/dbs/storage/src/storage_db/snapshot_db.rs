@@ -158,6 +158,7 @@ pub trait SnapshotDbTrait:
         &self,
     ) -> StorageResult<
         Wrap<
+            '_,
             Self::SnapshotKvdbIterType,
             dyn KeyValueDbIterableTrait<
                 MptKeyValue,

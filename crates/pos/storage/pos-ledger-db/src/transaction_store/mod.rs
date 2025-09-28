@@ -62,7 +62,7 @@ impl TransactionStore {
     /// from `start_version`.
     pub fn get_transaction_iter(
         &self, start_version: Version, num_transactions: usize,
-    ) -> Result<TransactionIter> {
+    ) -> Result<TransactionIter<'_>> {
         let mut iter = self.db.iter::<TransactionSchema>(Default::default())?;
         iter.seek(&start_version)?;
         Ok(TransactionIter {
