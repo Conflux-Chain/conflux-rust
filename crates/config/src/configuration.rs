@@ -50,9 +50,11 @@ use diem_types::term_state::{
     pos_state_config::PosStateConfig, IN_QUEUE_LOCKED_VIEWS,
     OUT_QUEUE_LOCKED_VIEWS, ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
 };
+use jsonrpsee::server::ServerBuilder;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
+use tower::layer::util::Identity;
 use txgen::TransactionGeneratorConfig;
 
 use crate::{HttpConfiguration, TcpConfiguration, WsConfiguration};
@@ -223,6 +225,11 @@ build_config! {
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
         (jsonrpc_http_eth_port, (Option<u16>), None)
         (jsonrpc_ws_eth_port, (Option<u16>), None)
+        (jsonrpc_max_request_body_size, (u32), 10 * 1024 * 1024)
+        (jsonrpc_max_response_body_size, (u32), 10 * 1024 * 1024)
+        (jsonrpc_max_connections, (u32), 100)
+        (jsonrpc_max_subscriptions_per_connection, (u32), 1024)
+        (jsonrpc_message_buffer_capacity, (u32), 1024)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -1177,6 +1184,25 @@ impl Configuration {
 
     pub fn tcp_config(&self) -> TcpConfiguration {
         TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
+    }
+
+    pub fn jsonrpsee_server_builder(
+        &self,
+    ) -> ServerBuilder<Identity, Identity> {
+        let builder = ServerBuilder::default()
+            .max_request_body_size(self.raw_conf.jsonrpc_max_request_body_size)
+            .max_response_body_size(
+                self.raw_conf.jsonrpc_max_response_body_size,
+            )
+            .max_connections(self.raw_conf.jsonrpc_max_connections)
+            .max_subscriptions_per_connection(
+                self.raw_conf.jsonrpc_max_subscriptions_per_connection,
+            )
+            .set_message_buffer_capacity(
+                self.raw_conf.jsonrpc_message_buffer_capacity,
+            );
+
+        builder
     }
 
     pub fn local_ws_config(&self) -> WsConfiguration {

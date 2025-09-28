@@ -1251,6 +1251,7 @@ dependencies = [
  "db",
  "diem-types",
  "jsonrpc-http-server",
+ "jsonrpsee",
  "kvdb-rocksdb",
  "lazy_static",
  "log",
@@ -1260,6 +1261,7 @@ dependencies = [
  "primitives",
  "rand 0.9.0",
  "toml 0.8.19",
+ "tower",
  "txgen",
 ]
 

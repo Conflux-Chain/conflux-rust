@@ -11,10 +11,10 @@ use cfx_rpc_cfx_types::{
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
     AccessListResult, AccountOverride, AccountPendingTransactions, Block,
-    BlockNumber as BlockId, BlockOverrides, Bundle, Error, EthCallResponse,
-    EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides, FeeHistory,
-    Header, Log, Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock,
-    StateContext, SyncInfo, SyncStatus, Transaction, TransactionRequest,
+    BlockId, BlockOverrides, Bundle, Error, EthCallResponse, EthRpcLogFilter,
+    EthRpcLogFilter as Filter, EvmOverrides, FeeHistory, Header, Log, Receipt,
+    RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext, SyncInfo,
+    SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::{
@@ -977,7 +977,7 @@ impl EthApi {
                 return Ok(Some(receipt));
             }
 
-            // if the if-branch was not entered, we do the bookeeping here
+            // if the if-branch was not entered, we do the bookkeeping here
             prior_log_index += phantom_block.receipts[idx].logs.len();
         }
 
