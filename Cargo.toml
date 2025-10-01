@@ -254,7 +254,7 @@ cfx-tasks = { path = "./crates/tasks" }
 cfx-config = { path = "./crates/config" }
 
 # basics
-bytes = "1.9"
+bytes = "1.10"
 byte-unit = "1.1"
 libc = "0.2"
 smallvec = "1.15"
@@ -283,7 +283,7 @@ anyhow = "1.0"
 
 # parallelism
 parking_lot = "0.12"
-rayon = "1.10"
+rayon = "1.11"
 threadpool = "1.7"
 crossbeam-deque = "0.8"
 crossbeam-channel = "0.5"
@@ -314,7 +314,7 @@ jsonrpsee-core = "0.24"
 jsonrpsee-types = "0.24"
 
 # async
-tokio = "1.44"
+tokio = "1.47"
 tokio-stream = "0.1"
 tokio-test = "0.4"
 futures = "0.3"
@@ -322,8 +322,8 @@ futures-util = "0.3"
 hyper = "1.3"
 hyper-util = "0.1"
 async-trait = "0.1"
-tower = "0.4"
-pin-project = "1.0"
+tower = "0.5"
+pin-project = "1.1"
 mio = { version = "1.0.4", features = ["os-ext", "net", "os-poll"] }
 mio-timer = { git = "https://github.com/Conflux-Chain/mio-timer", rev = "91a02cc" }
 mio-misc = { git = "https://github.com/Conflux-Chain/mio-misc", rev = "27ad80f" }
@@ -361,14 +361,14 @@ rand_08 = { package = "rand", version = "0.8" }
 log = "0.4"
 log4rs = "1.3.0"
 env_logger = "0.11"
-lazy_static = "1.4"
+lazy_static = "1.5"
 itertools = "0.14"
 lazycell = "1.3"
 once_cell = "1.21"
 byteorder = "1.5"
 strum = "0.26"
 strum_macros = "0.26"
-toml = "0.8"
+toml = "0.9"
 app_dirs = "1.2.1"
 slab = "0.4"
 rpassword = "5.0.1"
@@ -414,7 +414,7 @@ unroll = "0.1.5"
 winapi = "0.3"
 synstructure = "0.12"
 lru-cache = "0.1"
-lru_time_cache = "0.9.0"
+lru_time_cache = "0.11"
 slice-group-by = "0.3.1"
 auto_impl = "1"
 dyn-clone = "1.0"
