@@ -1,0 +1,1 @@
+searchState.loadedDescShard("cfx_mallocator_utils", 0, "Custom allocator implementation.\nCustom allocator.\nCreates a new custom allocator.")

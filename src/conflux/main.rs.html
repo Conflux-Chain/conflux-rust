@@ -228,9 +228,31 @@
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+
+</span><span class="attr">#[cfg(all(not(target_env = <span class="string">"msvc"</span>), feature = <span class="string">"jemalloc-global"</span>))]
+#[global_allocator]
+</span><span class="kw">static </span>ALLOC: cfx_mallocator_utils::allocator::Allocator =
+    cfx_mallocator_utils::allocator::new_allocator();
+<span class="comment">// jemalloc profiling config
+</span><span class="attr">#[allow(non_upper_case_globals)]
+#[export_name = <span class="string">"malloc_conf"</span>]
+#[cfg(all(not(target_env = <span class="string">"msvc"</span>), feature = <span class="string">"jemalloc-prof"</span>))]
+</span><span class="kw">pub static </span>malloc_conf: <span class="kw-2">&amp;</span>[u8] =
+    <span class="string">b"prof:true,prof_active:true,lg_prof_sample:19\0"</span>; <span class="comment">// 512kb
 
 </span><span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test;

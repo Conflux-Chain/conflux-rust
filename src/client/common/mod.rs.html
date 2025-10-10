@@ -807,7 +807,19 @@
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
 <a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -830,7 +842,6 @@
 <span class="kw">use </span>rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 <span class="kw">use </span>threadpool::ThreadPool;
 
-<span class="kw">use </span><span class="kw">crate</span>::keylib::KeyPair;
 <span class="kw">use </span>blockgen::BlockGenerator;
 <span class="kw">use </span>cfx_executor::machine::{Machine, VmFactory};
 <span class="kw">use </span>cfx_parameters::genesis::{
@@ -874,6 +885,7 @@
 
 <span class="kw">use crate</span>::{
     accounts::{account_provider, keys_path},
+    keylib::KeyPair,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -883,6 +895,7 @@
         launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
+<span class="kw">use </span>cfx_mallocator_utils::start_pprf_server;
 <span class="kw">use </span>cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
 <span class="kw">pub mod </span>delegate_convert;
@@ -1465,9 +1478,6 @@
         accounts,
     ));
 
-    <span class="kw">let </span>task_manager = TaskManager::new(tokio_runtime.handle().clone());
-    <span class="kw">let </span>task_executor = task_manager.executor();
-
     <span class="kw">let </span>debug_rpc_http_server = <span class="kw">super</span>::rpc::start_http(
         conf.local_http_config(),
         setup_debug_rpc_apis(
@@ -1527,7 +1537,8 @@
         setup_public_rpc_apis(common_impl, rpc_impl, pubsub, <span class="kw-2">&amp;</span>conf),
     )<span class="question-mark">?</span>;
 
-    network.start();
+    <span class="kw">let </span>task_manager = TaskManager::new(tokio_runtime.handle().clone());
+    <span class="kw">let </span>task_executor = task_manager.executor();
 
     <span class="kw">let </span>eth_rpc_server_handle =
         tokio_runtime.block_on(launch_async_rpc_servers(
@@ -1539,7 +1550,20 @@
             conf,
         ))<span class="question-mark">?</span>;
 
+    <span class="comment">// start pprf server, which is used to serve the pprof data for heap
+    // profiling
+    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(pprf_addr) = conf.raw_conf.profiling_listen_addr.as_ref() {
+        <span class="kw">let </span>pprf_addr = pprf_addr.clone();
+        <span class="kw">let </span>_pprf_server_handle = tokio_runtime.spawn(<span class="kw">async move </span>{
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = start_pprf_server(<span class="kw-2">&amp;</span>pprf_addr).<span class="kw">await </span>{
+                <span class="macro">eprintln!</span>(<span class="string">"Error starting pprof server: {}"</span>, e);
+            }
+        });
+    }
+
     metrics::initialize(conf.metrics_config(), task_executor.clone());
+
+    network.start();
 
     <span class="prelude-val">Ok</span>((
         data_man,

@@ -592,14 +592,7 @@
 <a href="#591" id="591">591</a>
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
-<a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2016-2017 The Servo Project Developers. See the COPYRIGHT
+<a href="#594" id="594">594</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2016-2017 The Servo Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -611,14 +604,7 @@
 
 </span><span class="doccomment">//! A reduced fork of Firefox's malloc_size_of crate, for bundling with
 //! WebRender.
-
-</span><span class="attr">#[cfg(all(not(target_env = <span class="string">"msvc"</span>), feature = <span class="string">"jemalloc-global"</span>))]
-</span><span class="kw">use </span>tikv_jemallocator::Jemalloc;
-<span class="attr">#[cfg(all(not(target_env = <span class="string">"msvc"</span>), feature = <span class="string">"jemalloc-global"</span>))]
-#[global_allocator]
-</span><span class="kw">static </span>GLOBAL: Jemalloc = Jemalloc;
-
-<span class="kw">use </span>cfg_if::cfg_if;
+</span><span class="kw">use </span>cfg_if::cfg_if;
 <span class="kw">use </span>cfx_types::{
     AddressWithSpace, AllChainID, Space, SpaceMap, H160, H256, H512, U256, U512,
 };
@@ -1156,7 +1142,7 @@
                 HeapSize(heap, <span class="number">0</span>, ptr) <span class="kw">as </span>usize
             }
 
-        } <span class="kw">else if </span><span class="attr">#[cfg(feature = <span class="string">"jemalloc-global"</span>)] </span>{
+        } <span class="kw">else if </span><span class="attr">#[cfg(feature = <span class="string">"jemalloc"</span>)] </span>{
 
             <span class="doccomment">/// Use of jemalloc usable size C function through jemallocator crate call.
             </span><span class="kw">pub unsafe extern </span><span class="string">"C" </span><span class="kw">fn </span>malloc_usable_size(ptr: <span class="kw-2">*const </span>c_void) -&gt; usize {
