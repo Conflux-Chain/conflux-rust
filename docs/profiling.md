@@ -4,9 +4,9 @@
 
 > Memory profiling is only supported on Linux platform.
 
-To enable memory profiling, the `jemalloc-prof` need to be opened when compiling the program.
+To enable memory profiling, the feature `jemalloc-prof` needs to be enabled when compiling the program.
 
-And and this to your configuration file.
+And add this to your configuration file.
 
 ```toml
 profiling_listen_addr="0.0.0.0:6060"
