@@ -8,7 +8,7 @@ use std::default::Default;
 
 /// This trait checks whether a variable equals to initialization value.
 /// For a variable equals to the initialization value, the world-state should
-/// treat is as None value.
+/// treat it as a None value.
 pub trait IsDefault {
     fn is_default(&self) -> bool;
 }
