@@ -43,7 +43,7 @@ pub enum Error {
     /// `OutOfGas` is returned when transaction execution runs out of gas.
     /// The state should be reverted to the state from before the
     /// transaction execution. But it does not mean that transaction
-    /// was invalid. Balance still should be transfered and nonce
+    /// was invalid. Balance still should be transferred and nonce
     /// should be increased.
     OutOfGas,
     /// `BadJumpDestination` is returned when execution tried to move

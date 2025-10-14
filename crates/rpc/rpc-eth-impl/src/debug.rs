@@ -6,7 +6,7 @@ use alloy_rpc_types_trace::geth::{
 };
 use async_trait::async_trait;
 use cfx_rpc_eth_api::DebugApiServer;
-use cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
+use cfx_rpc_eth_types::{BlockId, TransactionRequest};
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 use cfx_types::{AddressSpaceUtil, Space, H256, U256};
 use cfxcore::{
@@ -36,19 +36,15 @@ impl DebugApi {
 
     pub fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
-    pub fn get_block_epoch_num(
-        &self, block: BlockNumber,
-    ) -> Result<u64, String> {
+    pub fn get_block_epoch_num(&self, block: BlockId) -> Result<u64, String> {
         let num = match block {
-            BlockNumber::Num(block_number) => block_number,
-            BlockNumber::Latest
-            | BlockNumber::Safe
-            | BlockNumber::Finalized => {
+            BlockId::Num(block_number) => block_number,
+            BlockId::Latest | BlockId::Safe | BlockId::Finalized => {
                 let epoch_num = block.try_into().expect("should success");
                 self.consensus_graph()
                     .get_height_from_epoch_number(epoch_num)?
             }
-            BlockNumber::Hash {
+            BlockId::Hash {
                 hash,
                 require_canonical,
             } => self
@@ -64,8 +60,7 @@ impl DebugApi {
     }
 
     pub fn trace_call(
-        &self, mut request: TransactionRequest,
-        block_number: Option<BlockNumber>,
+        &self, mut request: TransactionRequest, block_number: Option<BlockId>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> Result<GethTrace, CoreError> {
         if request.from.is_none() {
@@ -265,7 +260,7 @@ impl DebugApiServer for DebugApi {
     }
 
     async fn debug_trace_block_by_number(
-        &self, block: BlockNumber, opts: Option<GethDebugTracingOptions>,
+        &self, block: BlockId, opts: Option<GethDebugTracingOptions>,
     ) -> RpcResult<Vec<TraceResult>> {
         let num = self
             .get_block_epoch_num(block)
@@ -275,7 +270,7 @@ impl DebugApiServer for DebugApi {
     }
 
     async fn debug_trace_call(
-        &self, request: TransactionRequest, block_number: Option<BlockNumber>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<GethTrace> {
         self.trace_call(request, block_number, opts)
