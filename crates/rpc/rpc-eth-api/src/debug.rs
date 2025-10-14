@@ -2,7 +2,7 @@ use alloy_rpc_types_trace::geth::{
     GethDebugTracingCallOptions, GethDebugTracingOptions, GethTrace,
     TraceResult,
 };
-use cfx_rpc_eth_types::{BlockId, TransactionRequest};
+use cfx_rpc_eth_types::{BlockId, BlockProperties, TransactionRequest};
 use cfx_types::H256;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
@@ -36,4 +36,11 @@ pub trait DebugApi {
         &self, request: TransactionRequest, block_number: Option<BlockId>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<GethTrace>;
+
+    /// Returns block properties needed for validate transaction execution
+    /// This method will not return properties for phantom transactions
+    #[method(name = "blockProperties")]
+    async fn debug_block_properties(
+        &self, block_number: BlockId,
+    ) -> RpcResult<Option<Vec<BlockProperties>>>;
 }
