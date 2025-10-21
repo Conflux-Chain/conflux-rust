@@ -97,7 +97,9 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_parity_trace_types::{
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_parity_trace_types::{
     ExecTrace, LocalizedTrace <span class="kw">as </span>PrimitiveLocalizedTrace,
 };
 <span class="kw">use </span>cfx_rpc_eth_types::trace::{
@@ -126,6 +128,7 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>eth_trace = EthLocalizedTrace {
                     action: Action::try_from(action.action.clone())<span class="question-mark">?</span>,
                     result: EthRes::None,
+                    error: <span class="prelude-val">None</span>,
                     trace_address: trace_path,
                     subtraces: child_count,
                     transaction_position: tx_idx,
@@ -150,6 +153,7 @@
                 <span class="kw">let </span>eth_trace = EthLocalizedTrace {
                     action: Action::try_from(action.action.clone())<span class="question-mark">?</span>,
                     result: EthRes::None,
+                    error: <span class="prelude-val">None</span>,
                     trace_address: trace_path,
                     subtraces: child_count,
                     transaction_position: tx_idx,

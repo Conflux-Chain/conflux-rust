@@ -1623,7 +1623,8 @@
 <a href="#1622" id="1622">1622</a>
 <a href="#1623" id="1623">1623</a>
 <a href="#1624" id="1624">1624</a>
-<a href="#1625" id="1625">1625</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1625" id="1625">1625</a>
+<a href="#1626" id="1626">1626</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -2152,18 +2153,18 @@
                 </span>} <span class="kw">else </span>{
                     <span class="macro">warn!</span>(
                         <span class="string">"In MptCursorRw, non-existing key {:?} is asked to be deleted."</span>,
-                        key);
+                        key.to_hex::&lt;String&gt;());
                 }
             }
             CursorOpenPathTerminal::PathDiverted(<span class="kw">_</span>) =&gt; {
                 <span class="macro">warn!</span>(
                     <span class="string">"In MptCursorRw, non-existing key {:?} is asked to be deleted."</span>,
-                    key);
+                    key.to_hex::&lt;String&gt;());
             }
             CursorOpenPathTerminal::ChildNotFound { .. } =&gt; {
                 <span class="macro">warn!</span>(
                     <span class="string">"In MptCursorRw, non-existing key {:?} is asked to be deleted."</span>,
-                    key);
+                    key.to_hex::&lt;String&gt;());
             }
         }
         <span class="prelude-val">Ok</span>(())
@@ -3242,6 +3243,7 @@
     utils::access_mode,
 };
 <span class="kw">use </span>primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+<span class="kw">use </span>rustc_hex::ToHex;
 <span class="kw">use </span>std::{
     cell::Cell,
     mem,

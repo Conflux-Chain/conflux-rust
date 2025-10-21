@@ -110,7 +110,16 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2021 Conflux Foundation. All rights reserved.
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019-2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -132,7 +141,7 @@
 
 </span><span class="kw">use crate</span>::{Bytes, Error};
 <span class="kw">use </span>cfx_rpc_cfx_types::traits::BlockProvider;
-<span class="kw">use </span>cfx_types::{H160, H256, U256};
+<span class="kw">use </span>cfx_types::{H160, H256, U256, U64};
 <span class="kw">use </span>primitives::{
     log_entry::{LocalizedLogEntry, LogEntry},
     EpochNumber,
@@ -143,12 +152,9 @@
 </span><span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">pub struct </span>Log {
-    <span class="doccomment">/// H160
-    </span><span class="kw">pub </span>address: H160,
-    <span class="doccomment">/// Topics
-    </span><span class="kw">pub </span>topics: Vec&lt;H256&gt;,
-    <span class="doccomment">/// Data
-    </span><span class="kw">pub </span>data: Bytes,
+    <span class="attr">#[serde(flatten)]
+    </span><span class="doccomment">/// Consensus log object
+    </span><span class="kw">pub </span>inner: LogData,
     <span class="doccomment">/// Block Hash
     </span><span class="kw">pub </span>block_hash: H256,
     <span class="doccomment">/// Block Number
@@ -161,6 +167,8 @@
     </span><span class="kw">pub </span>log_index: <span class="prelude-ty">Option</span>&lt;U256&gt;,
     <span class="doccomment">/// Log Index in Transaction
     </span><span class="kw">pub </span>transaction_log_index: <span class="prelude-ty">Option</span>&lt;U256&gt;,
+    <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>, default)]
+    </span><span class="kw">pub </span>block_timestamp: <span class="prelude-ty">Option</span>&lt;U64&gt;,
     <span class="doccomment">/// Whether Log Type is Removed (Geth Compatibility Field)
     </span><span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>removed: bool,
@@ -193,12 +201,15 @@
 
         <span class="comment">// construct RPC log
         </span><span class="prelude-val">Ok</span>(Log {
-            address: e.entry.address,
-            topics: e.entry.topics.into_iter().map(Into::into).collect(),
-            data: e.entry.data.into(),
+            inner: LogData {
+                address: e.entry.address,
+                topics: e.entry.topics.into_iter().map(Into::into).collect(),
+                data: e.entry.data.into(),
+            },
             block_hash: <span class="kw-2">*</span>pivot_hash,
             <span class="comment">// note: blocks in EVM space RPCs correspond to epochs
             </span>block_number: e.epoch_number.into(),
+            block_timestamp: e.block_timestamp.map(Into::into),
             transaction_hash: e.transaction_hash.into(),
             transaction_index: e.transaction_index.into(),
             log_index: <span class="prelude-val">Some</span>(e.log_index.into()),
@@ -221,5 +232,12 @@
         //     transaction_log_index: None,
         // })
     </span>}
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+</span><span class="kw">pub struct </span>LogData {
+    <span class="kw">pub </span>address: H160,
+    <span class="kw">pub </span>topics: Vec&lt;H256&gt;,
+    <span class="kw">pub </span>data: Bytes,
 }
 </code></pre></div></section></main></body></html>

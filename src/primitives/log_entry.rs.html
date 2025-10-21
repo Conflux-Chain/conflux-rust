@@ -186,7 +186,9 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -293,6 +295,8 @@
     </span><span class="kw">pub </span>block_hash: H256,
     <span class="doccomment">/// Epoch number.
     </span><span class="kw">pub </span>epoch_number: BlockNumber,
+    <span class="doccomment">/// Timestamp of the block in which this log was created.
+    </span><span class="kw">pub </span>block_timestamp: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="doccomment">/// Hash of transaction in which this log was created.
     </span><span class="kw">pub </span>transaction_hash: H256,
     <span class="doccomment">/// Index of transaction within block.

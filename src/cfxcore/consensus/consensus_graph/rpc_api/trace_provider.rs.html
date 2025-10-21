@@ -955,7 +955,11 @@
 <a href="#954" id="954">954</a>
 <a href="#955" id="955">955</a>
 <a href="#956" id="956">956</a>
-<a href="#957" id="957">957</a></pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a></pre></div><pre class="rust"><code><span class="kw">use crate</span>::{
     block_data_manager::DataVersionTuple, errors::Result <span class="kw">as </span>CoreResult,
 };
 <span class="kw">use </span>alloy_rpc_types_trace::geth::GethDebugTracingOptions;
@@ -1013,7 +1017,8 @@
 
     <span class="kw">fn </span>filter_block_receipts&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>, filter: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>LogFilter, epoch_number: u64, block_hash: H256,
-        <span class="kw-2">mut </span>receipts: Vec&lt;Receipt&gt;, <span class="kw-2">mut </span>tx_hashes: Vec&lt;H256&gt;,
+        block_timestamp: <span class="prelude-ty">Option</span>&lt;u64&gt;, <span class="kw-2">mut </span>receipts: Vec&lt;Receipt&gt;,
+        <span class="kw-2">mut </span>tx_hashes: Vec&lt;H256&gt;,
     ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = LocalizedLogEntry&gt; + <span class="lifetime">'a </span>{
         <span class="comment">// sanity check
         </span><span class="kw">if </span>receipts.len() != tx_hashes.len() {
@@ -1054,6 +1059,7 @@
                         entry: log,
                         block_hash,
                         epoch_number,
+                        block_timestamp,
                         transaction_hash,
                         <span class="comment">// iterating in reverse order
                         </span>transaction_index: receipts_len - index - <span class="number">1</span>,
@@ -1123,6 +1129,7 @@
             <span class="kw-2">&amp;</span>filter,
             epoch,
             block_hash,
+            <span class="prelude-val">Some</span>(block.block_header.timestamp()),
             receipts,
             block.transaction_hashes(<span class="comment">/* space filter */ </span><span class="prelude-val">None</span>),
         )))
@@ -1182,6 +1189,7 @@
             <span class="kw-2">&amp;</span>filter,
             epoch,
             pivot_hash,
+            <span class="prelude-val">Some</span>(pb.pivot_header.timestamp()),
             pb.receipts,
             pb.transactions.iter().map(|t| t.hash()).collect(),
         )))

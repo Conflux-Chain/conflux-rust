@@ -395,7 +395,8 @@
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{
     collections::{BTreeSet, HashMap, HashSet, VecDeque},
     iter::zip,
     sync::Arc,
@@ -558,6 +559,7 @@
                     entry,
                     block_hash: pivot,
                     epoch_number,
+                    block_timestamp: <span class="prelude-val">Some</span>(pb.pivot_header.timestamp()),
                     transaction_hash: tx.hash,
                     transaction_index: txid,
                     log_index,

@@ -659,7 +659,8 @@
 <a href="#658" id="658">658</a>
 <a href="#659" id="659">659</a>
 <a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2022 Conflux Foundation. All rights reserved.
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2022 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1291,6 +1292,7 @@
                     entry,
                     block_hash,
                     epoch_number,
+                    block_timestamp: <span class="prelude-val">Some</span>(block.block_header.timestamp()),
                     transaction_hash: tx.hash,
                     transaction_index: txid,
                     log_index,

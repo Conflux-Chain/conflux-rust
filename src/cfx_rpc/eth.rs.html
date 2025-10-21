@@ -1531,7 +1531,10 @@
 <a href="#1530" id="1530">1530</a>
 <a href="#1531" id="1531">1531</a>
 <a href="#1532" id="1532">1532</a>
-<a href="#1533" id="1533">1533</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cfx_execute_helper::estimation::EstimateRequest;
 <span class="kw">use </span>cfx_executor::executive::{
@@ -1545,9 +1548,9 @@
 <span class="kw">use </span>cfx_rpc_eth_types::{
     AccessListResult, AccountOverride, AccountPendingTransactions, Block,
     BlockId, BlockOverrides, Bundle, Error, EthCallResponse, EthRpcLogFilter,
-    EthRpcLogFilter <span class="kw">as </span>Filter, EvmOverrides, FeeHistory, Header, Log, Receipt,
-    RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext, SyncInfo,
-    SyncStatus, Transaction, TransactionRequest,
+    EthRpcLogFilter <span class="kw">as </span>Filter, EvmOverrides, FeeHistory, Header, Log, LogData,
+    Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext,
+    SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 <span class="kw">use </span>cfx_rpc_primitives::{Bytes, Index, U64 <span class="kw">as </span>HexU64};
 <span class="kw">use </span>cfx_rpc_utils::{
@@ -1888,13 +1891,16 @@
             .cloned()
             .enumerate()
             .map(|(idx, log)| Log {
-                address: log.address,
-                topics: log.topics,
-                data: Bytes(log.data),
+                inner: LogData {
+                    address: log.address,
+                    topics: log.topics,
+                    data: log.data.into(),
+                },
                 block_hash,
                 block_number: block_height,
                 transaction_hash,
                 transaction_index,
+                block_timestamp: <span class="prelude-val">Some</span>(b.pivot_header.timestamp().into()),
                 log_index: <span class="prelude-val">Some</span>((<span class="kw-2">*</span>prior_log_index + idx).into()),
                 transaction_log_index: <span class="prelude-val">Some</span>(idx.into()),
                 removed: <span class="bool-val">false</span>,

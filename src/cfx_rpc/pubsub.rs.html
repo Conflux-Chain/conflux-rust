@@ -593,7 +593,8 @@
 <a href="#592" id="592">592</a>
 <a href="#593" id="593">593</a>
 <a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::EpochQueue;
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::helpers::EpochQueue;
 <span class="kw">use </span>cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
@@ -1114,6 +1115,7 @@
                     entry,
                     block_hash: pivot,
                     epoch_number,
+                    block_timestamp: <span class="prelude-val">Some</span>(pb.pivot_header.timestamp()),
                     transaction_hash: tx.hash,
                     transaction_index: txid,
                     log_index,
