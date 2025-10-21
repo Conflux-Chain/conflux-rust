@@ -1772,9 +1772,7 @@
 <a href="#1771" id="1771">1771</a>
 <a href="#1772" id="1772">1772</a>
 <a href="#1773" id="1773">1773</a>
-<a href="#1774" id="1774">1774</a>
-<a href="#1775" id="1775">1775</a>
-<a href="#1776" id="1776">1776</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1774" id="1774">1774</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -2790,6 +2788,8 @@
             <span class="self">self</span>.data_man
                 .insert_hash_by_block_number(block_number, hash);
         }
+        <span class="kw">let </span>end_block_number =
+            start_block_number + epoch_block_hashes.len() <span class="kw">as </span>u64 - <span class="number">1</span>;
 
         <span class="kw">let </span>pivot_block_header = <span class="self">self
             </span>.data_man
@@ -2847,13 +2847,10 @@
             // program may restart by itself.
             </span>.expect(<span class="string">"Can not handle db error in consensus, crashing."</span>);
 
-        <span class="kw">let </span>current_block_number =
-            start_block_number + epoch_receipts.len() <span class="kw">as </span>u64 - <span class="number">1</span>;
-
         <span class="kw">if let </span><span class="prelude-val">Some</span>(reward_execution_info) = reward_execution_info {
             <span class="kw">let </span>spec = <span class="self">self
                 </span>.machine
-                .spec(current_block_number, pivot_block.block_header.height());
+                .spec(end_block_number, pivot_block.block_header.height());
             <span class="comment">// Calculate the block reward for blocks inside the epoch
             // All transaction fees are shared among blocks inside one epoch
             </span><span class="self">self</span>.process_rewards_and_fees(
@@ -2868,8 +2865,8 @@
 
         <span class="self">self</span>.process_pos_interest(
             <span class="kw-2">&amp;mut </span>state,
-            pivot_block,
-            current_block_number,
+            <span class="kw-2">&amp;</span>pivot_block.block_header,
+            end_block_number,
         )
         .expect(<span class="string">"db error"</span>);
 
@@ -2938,23 +2935,22 @@
     }
 
     <span class="kw">fn </span>process_pos_interest(
-        <span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>State, pivot_block: <span class="kw-2">&amp;</span>Block,
+        <span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>State, pivot_header: <span class="kw-2">&amp;</span>BlockHeader,
         current_block_number: u64,
     ) -&gt; DbResult&lt;()&gt; {
         <span class="comment">// TODO(peilun): Specify if we unlock before or after executing the
         // transactions.
         </span><span class="kw">let </span>maybe_parent_pos_ref = <span class="self">self
             </span>.data_man
-            .block_header_by_hash(<span class="kw-2">&amp;</span>pivot_block.block_header.parent_hash()) <span class="comment">// `None` only for genesis.
+            .block_header_by_hash(<span class="kw-2">&amp;</span>pivot_header.parent_hash()) <span class="comment">// `None` only for genesis.
             </span>.and_then(|parent| parent.pos_reference().clone());
         <span class="kw">if </span><span class="self">self
             </span>.pos_verifier
-            .is_enabled_at_height(pivot_block.block_header.height())
+            .is_enabled_at_height(pivot_header.height())
             &amp;&amp; maybe_parent_pos_ref.is_some()
-            &amp;&amp; <span class="kw-2">*</span>pivot_block.block_header.pos_reference() != maybe_parent_pos_ref
+            &amp;&amp; <span class="kw-2">*</span>pivot_header.pos_reference() != maybe_parent_pos_ref
         {
-            <span class="kw">let </span>current_pos_ref = pivot_block
-                .block_header
+            <span class="kw">let </span>current_pos_ref = pivot_header
                 .pos_reference()
                 .as_ref()
                 .expect(<span class="string">"checked before sync graph insertion"</span>);
@@ -2984,7 +2980,7 @@
                     )<span class="question-mark">?</span>;
                 <span class="self">self</span>.data_man.insert_pos_reward(
                     <span class="kw-2">*</span>pos_epoch,
-                    <span class="kw-2">&amp;</span>PosRewardInfo::new(account_rewards, pivot_block.hash()),
+                    <span class="kw-2">&amp;</span>PosRewardInfo::new(account_rewards, pivot_header.hash()),
                 )
             }
         }

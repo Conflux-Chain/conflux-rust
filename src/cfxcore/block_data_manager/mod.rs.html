@@ -1832,7 +1832,40 @@
 <a href="#1831" id="1831">1831</a>
 <a href="#1832" id="1832">1832</a>
 <a href="#1833" id="1833">1833</a>
-<a href="#1834" id="1834">1834</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1834" id="1834">1834</a>
+<a href="#1835" id="1835">1835</a>
+<a href="#1836" id="1836">1836</a>
+<a href="#1837" id="1837">1837</a>
+<a href="#1838" id="1838">1838</a>
+<a href="#1839" id="1839">1839</a>
+<a href="#1840" id="1840">1840</a>
+<a href="#1841" id="1841">1841</a>
+<a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
+<a href="#1844" id="1844">1844</a>
+<a href="#1845" id="1845">1845</a>
+<a href="#1846" id="1846">1846</a>
+<a href="#1847" id="1847">1847</a>
+<a href="#1848" id="1848">1848</a>
+<a href="#1849" id="1849">1849</a>
+<a href="#1850" id="1850">1850</a>
+<a href="#1851" id="1851">1851</a>
+<a href="#1852" id="1852">1852</a>
+<a href="#1853" id="1853">1853</a>
+<a href="#1854" id="1854">1854</a>
+<a href="#1855" id="1855">1855</a>
+<a href="#1856" id="1856">1856</a>
+<a href="#1857" id="1857">1857</a>
+<a href="#1858" id="1858">1858</a>
+<a href="#1859" id="1859">1859</a>
+<a href="#1860" id="1860">1860</a>
+<a href="#1861" id="1861">1861</a>
+<a href="#1862" id="1862">1862</a>
+<a href="#1863" id="1863">1863</a>
+<a href="#1864" id="1864">1864</a>
+<a href="#1865" id="1865">1865</a>
+<a href="#1866" id="1866">1866</a>
+<a href="#1867" id="1867">1867</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -3178,6 +3211,39 @@
         }
         <span class="kw">let </span>me_height = <span class="self">self</span>.block_height_by_hash(epoch_hash).unwrap();
         <span class="kw">if </span>pos_verifier.pos_option().is_some() &amp;&amp; me_height != <span class="number">0 </span>{
+            <span class="comment">// Check if stored pos reward is on pivot.
+            </span><span class="kw">let </span>pivot_block_header = <span class="self">self
+                </span>.block_header_by_hash(epoch_hash)
+                .expect(<span class="string">"header exists"</span>);
+            <span class="kw">let </span>maybe_parent_pos_ref = <span class="self">self
+                </span>.block_header_by_hash(<span class="kw-2">&amp;</span>pivot_block_header.parent_hash()) <span class="comment">// `None` only for genesis.
+                </span>.and_then(|parent| parent.pos_reference().clone());
+            <span class="kw">if </span>pos_verifier.is_enabled_at_height(me_height)
+                &amp;&amp; maybe_parent_pos_ref.is_some()
+                &amp;&amp; maybe_parent_pos_ref != <span class="kw-2">*</span>pivot_block_header.pos_reference()
+            {
+                <span class="kw">if let </span><span class="prelude-val">Some</span>((pos_epoch, <span class="kw">_</span>)) = pos_verifier
+                    .get_reward_distribution_event(
+                        pivot_block_header.pos_reference().as_ref().unwrap(),
+                        maybe_parent_pos_ref.as_ref().unwrap(),
+                    )
+                    .as_ref()
+                    .and_then(|x| x.first())
+                {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(pos_reward) =
+                        <span class="self">self</span>.pos_reward_by_pos_epoch(<span class="kw-2">*</span>pos_epoch)
+                    {
+                        <span class="kw">if </span>pos_reward.execution_epoch_hash != <span class="kw-2">*</span>epoch_hash {
+                            <span class="comment">// The stored pos reward is executed in another
+                            // epoch, so we need to
+                            // reexecute this epoch to restore the pos reward of
+                            // the current pivot.
+                            </span><span class="kw">return </span><span class="bool-val">false</span>;
+                        }
+                    }
+                }
+            }
+
             <span class="macro">trace!</span>(
                 <span class="string">"staking events update: height={}, new={}"</span>,
                 me_height,
