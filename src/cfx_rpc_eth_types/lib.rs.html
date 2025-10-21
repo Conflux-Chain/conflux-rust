@@ -43,10 +43,13 @@
 <a href="#42" id="42">42</a>
 <a href="#43" id="43">43</a>
 <a href="#44" id="44">44</a>
-<a href="#45" id="45">45</a></pre></div><pre class="rust"><code><span class="kw">mod </span>access_list;
+<a href="#45" id="45">45</a>
+<a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a></pre></div><pre class="rust"><code><span class="kw">mod </span>access_list;
 <span class="kw">mod </span>authorization;
 <span class="kw">mod </span>block;
 <span class="kw">mod </span>block_number;
+<span class="kw">mod </span>block_properties;
 <span class="kw">mod </span>call;
 <span class="kw">mod </span>errors;
 <span class="kw">pub mod </span>eth_pubsub;
@@ -67,6 +70,7 @@
 <span class="kw">pub use </span>authorization::{Authorization, SignedAuthorization};
 <span class="kw">pub use </span>block::{Block, BlockOverrides, Header};
 <span class="kw">pub use </span>block_number::BlockId;
+<span class="kw">pub use </span>block_properties::BlockProperties;
 <span class="kw">pub use </span>call::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>cfx_rpc_primitives::{Bytes, Index, U64};
 <span class="kw">pub use </span>errors::Error;

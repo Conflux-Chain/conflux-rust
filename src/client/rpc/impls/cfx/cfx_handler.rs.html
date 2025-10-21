@@ -2432,42 +2432,7 @@
 <a href="#2431" id="2431">2431</a>
 <a href="#2432" id="2432">2432</a>
 <a href="#2433" id="2433">2433</a>
-<a href="#2434" id="2434">2434</a>
-<a href="#2435" id="2435">2435</a>
-<a href="#2436" id="2436">2436</a>
-<a href="#2437" id="2437">2437</a>
-<a href="#2438" id="2438">2438</a>
-<a href="#2439" id="2439">2439</a>
-<a href="#2440" id="2440">2440</a>
-<a href="#2441" id="2441">2441</a>
-<a href="#2442" id="2442">2442</a>
-<a href="#2443" id="2443">2443</a>
-<a href="#2444" id="2444">2444</a>
-<a href="#2445" id="2445">2445</a>
-<a href="#2446" id="2446">2446</a>
-<a href="#2447" id="2447">2447</a>
-<a href="#2448" id="2448">2448</a>
-<a href="#2449" id="2449">2449</a>
-<a href="#2450" id="2450">2450</a>
-<a href="#2451" id="2451">2451</a>
-<a href="#2452" id="2452">2452</a>
-<a href="#2453" id="2453">2453</a>
-<a href="#2454" id="2454">2454</a>
-<a href="#2455" id="2455">2455</a>
-<a href="#2456" id="2456">2456</a>
-<a href="#2457" id="2457">2457</a>
-<a href="#2458" id="2458">2458</a>
-<a href="#2459" id="2459">2459</a>
-<a href="#2460" id="2460">2460</a>
-<a href="#2461" id="2461">2461</a>
-<a href="#2462" id="2462">2462</a>
-<a href="#2463" id="2463">2463</a>
-<a href="#2464" id="2464">2464</a>
-<a href="#2465" id="2465">2465</a>
-<a href="#2466" id="2466">2466</a>
-<a href="#2467" id="2467">2467</a>
-<a href="#2468" id="2468">2468</a>
-<a href="#2469" id="2469">2469</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#2434" id="2434">2434</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -4170,44 +4135,9 @@
     ) -&gt; CoreResult&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;Vec&lt;RpcReceipt&gt;&gt;&gt;&gt; {
         <span class="macro">info!</span>(<span class="string">"RPC Request: cfx_getEpochReceipts({:?})"</span>, epoch);
 
-        <span class="kw">let </span>hashes = <span class="kw">match </span>epoch {
-            BlockHashOrEpochNumber::EpochNumber(e) =&gt; {
-                <span class="self">self</span>.consensus.get_block_hashes_by_epoch(e.into())<span class="question-mark">?
-            </span>}
-            BlockHashOrEpochNumber::BlockHashWithOption {
-                hash: h,
-                require_pivot,
-            } =&gt; {
-                <span class="kw">if </span><span class="self">self
-                    </span>.consensus
-                    .data_manager()
-                    .block_header_by_hash(<span class="kw-2">&amp;</span>h)
-                    .is_none()
-                {
-                    <span class="macro">bail!</span>(invalid_params(<span class="string">"block_hash"</span>, <span class="string">"block not found"</span>));
-                }
-
-                <span class="kw">let </span>e = <span class="kw">match </span><span class="self">self</span>.get_block_epoch_number(<span class="kw-2">&amp;</span>h) {
-                    <span class="prelude-val">Some</span>(e) =&gt; e,
-                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>), <span class="comment">// not executed
-                </span>};
-
-                <span class="kw">let </span>hashes = <span class="self">self</span>.consensus.get_block_hashes_by_epoch(
-                    primitives::EpochNumber::Number(e),
-                )<span class="question-mark">?</span>;
-
-                <span class="comment">// if the provided hash is not the pivot hash,
-                // and require_pivot is true or None(default to true)
-                // abort
-                </span><span class="kw">let </span>pivot_hash = <span class="kw-2">*</span>hashes.last().ok_or(<span class="string">"Inconsistent state"</span>)<span class="question-mark">?</span>;
-
-                <span class="kw">if </span>require_pivot.unwrap_or(<span class="bool-val">true</span>) &amp;&amp; (h != pivot_hash) {
-                    <span class="macro">bail!</span>(pivot_assumption_failed(h, pivot_hash));
-                }
-
-                hashes
-            }
-        };
+        <span class="kw">let </span>hashes = <span class="self">self
+            </span>.consensus
+            .get_block_hashes_by_epoch_or_block_hash(epoch.into())<span class="question-mark">?</span>;
 
         <span class="kw">let </span>pivot_hash = <span class="kw-2">*</span>hashes.last().ok_or(<span class="string">"Inconsistent state"</span>)<span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>epoch_receipts = <span class="macro">vec!</span>[];
