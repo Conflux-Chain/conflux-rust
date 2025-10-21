@@ -318,11 +318,11 @@ impl TransactionStore {
         self.track_indices();
     }
 
-    pub(crate) fn iter(&self) -> AccountTransactionIter {
+    pub(crate) fn iter(&self) -> AccountTransactionIter<'_> {
         self.transactions.iter()
     }
 
-    pub(crate) fn iter_pivot_decision(&self) -> PivotDecisionIter {
+    pub(crate) fn iter_pivot_decision(&self) -> PivotDecisionIter<'_> {
         self.pivot_decisions.values()
     }
 }

@@ -110,14 +110,18 @@ macro_rules! impl_abi_variable_for_primitive {
 
 impl_abi_variable_for_primitive!(U8, u16, u32, u64, u128);
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub struct U8(u8);
 
 impl U8 {
+    #[allow(dead_code)]
     const BITS: usize = 8;
 
+    #[allow(dead_code)]
     fn to_be_bytes(self) -> [u8; 1] { [self.0] }
 
+    #[allow(dead_code)]
     fn from_be_bytes(input: [u8; 1]) -> Self { U8(input[0]) }
 }
 
