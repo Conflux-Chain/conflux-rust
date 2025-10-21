@@ -622,6 +622,69 @@ impl CowNodeRef {
         Ok(())
     }
 
+    // only_account_key can be used to filter the only account key
+    pub fn iterate_internal_with_callback(
+        &self, owned_node_set: &OwnedNodeSet, trie: &DeltaMpt,
+        guarded_trie_node: GuardedMaybeOwnedTrieNodeAsCowCallParam,
+        key_prefix: CompressedPathRaw, db: &mut DeltaDbOwnedReadTraitObj,
+        callback: &mut dyn FnMut(MptKeyValue), is_delta_mpt: bool,
+        only_account_key: bool,
+    ) -> Result<()> {
+        // filter out all the key that is longer than the account key
+        if only_account_key {
+            let key_len =
+                SpaceStorageFilter::space_flag_index(is_delta_mpt) + 1;
+            if key_prefix.path_slice().len() > key_len {
+                return Ok(());
+            }
+        }
+        if guarded_trie_node.as_ref().as_ref().has_value() {
+            assert!(CompressedPathRaw::has_second_nibble(
+                key_prefix.path_mask()
+            ));
+            callback((
+                key_prefix.path_slice().to_vec(),
+                guarded_trie_node.as_ref().as_ref().value_clone().unwrap(),
+            ));
+        }
+
+        let children_table =
+            guarded_trie_node.as_ref().as_ref().children_table.clone();
+        // Free the lock for trie_node.
+        // FIXME: try to share the lock.
+        drop(guarded_trie_node);
+
+        let node_memory_manager = trie.get_node_memory_manager();
+        let allocator = node_memory_manager.get_allocator();
+        for (i, node_ref) in children_table.iter() {
+            let mut cow_child_node =
+                Self::new((*node_ref).into(), owned_node_set, self.mpt_id);
+            let child_node = cow_child_node.get_trie_node(
+                node_memory_manager,
+                &allocator,
+                db,
+            )?;
+            let key_prefix = CompressedPathRaw::join_connected_paths(
+                &key_prefix,
+                i,
+                &child_node.compressed_path_ref(),
+            );
+            let child_node = GuardedValue::take(child_node);
+            cow_child_node.iterate_internal_with_callback(
+                owned_node_set,
+                trie,
+                child_node,
+                key_prefix,
+                db,
+                callback,
+                is_delta_mpt,
+                only_account_key,
+            )?;
+        }
+
+        Ok(())
+    }
+
     /// Recursively commit dirty nodes.
     pub fn commit_dirty_recursively<
         Transaction: BorrowMut<DeltaDbTransactionTraitObj>,
@@ -910,7 +973,7 @@ use super::{
     AtomicCommitTransaction, DeltaMpt, *,
 };
 use parking_lot::MutexGuard;
-use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MptValue, SpaceStorageFilter, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
     borrow::BorrowMut, cell::Cell, convert::TryInto, ops::Deref,
