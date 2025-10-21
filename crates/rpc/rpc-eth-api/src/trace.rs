@@ -1,5 +1,5 @@
 use cfx_rpc_eth_types::{
-    BlockNumber, Index, LocalizedSetAuthTrace, LocalizedTrace, TraceFilter,
+    BlockId, Index, LocalizedSetAuthTrace, LocalizedTrace, TraceFilter,
 };
 use cfx_types::H256;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
@@ -9,13 +9,13 @@ pub trait TraceApi {
     /// Returns all traces produced at the given block.
     #[method(name = "block")]
     async fn block_traces(
-        &self, block_number: BlockNumber,
+        &self, block_number: BlockId,
     ) -> RpcResult<Option<Vec<LocalizedTrace>>>;
 
     /// Returns all set auth traces produced at the given block.
     #[method(name = "blockSetAuth")]
     async fn block_set_auth_traces(
-        &self, block_number: BlockNumber,
+        &self, block_number: BlockId,
     ) -> RpcResult<Option<Vec<LocalizedSetAuthTrace>>>;
 
     /// Returns all traces matching the provided filter.

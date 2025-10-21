@@ -421,8 +421,8 @@ pub async fn launch_async_rpc_servers(
                         .with_ws(apis.clone());
 
                 let server_config =
-                    RpcServerConfig::http(ServerBuilder::default())
-                        .with_ws(ServerBuilder::default())
+                    RpcServerConfig::http(conf.jsonrpsee_server_builder())
+                        .with_ws(conf.jsonrpsee_server_builder())
                         .with_http_address(http_config.address)
                         .with_ws_address(ws_config.address);
                 (transport_rpc_module_config, server_config)
@@ -431,7 +431,7 @@ pub async fn launch_async_rpc_servers(
                 let transport_rpc_module_config =
                     TransportRpcModuleConfig::set_http(apis.clone());
                 let server_config =
-                    RpcServerConfig::http(ServerBuilder::default())
+                    RpcServerConfig::http(conf.jsonrpsee_server_builder())
                         .with_http_address(http_config.address);
                 (transport_rpc_module_config, server_config)
             }
@@ -439,7 +439,7 @@ pub async fn launch_async_rpc_servers(
                 let transport_rpc_module_config =
                     TransportRpcModuleConfig::set_ws(apis.clone());
                 let server_config =
-                    RpcServerConfig::ws(ServerBuilder::default())
+                    RpcServerConfig::ws(conf.jsonrpsee_server_builder())
                         .with_ws_address(ws_config.address);
                 (transport_rpc_module_config, server_config)
             }
