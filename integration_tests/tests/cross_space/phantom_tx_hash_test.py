@@ -2,15 +2,16 @@ from typing import Type
 import pytest
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
+from integration_tests.test_framework.framework_templates import DefaultDevFramework
 from eth_utils import decode_hex
 
 
 @pytest.fixture(scope="module")
 def framework_class() -> Type[ConfluxTestFramework]:
-    class DefaultFramework(ConfluxTestFramework):
+    class DefaultFramework(DefaultDevFramework):
 
         def set_test_params(self):
-            self.num_nodes = 1
+            super().set_test_params()
             self.core_secrets.append(decode_hex("46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495a").hex())
 
         def setup_network(self):

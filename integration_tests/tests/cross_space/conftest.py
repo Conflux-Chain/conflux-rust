@@ -3,13 +3,14 @@ from conflux_web3 import Web3
 import pytest
 
 from integration_tests.test_framework.test_framework import ConfluxTestFramework
+from integration_tests.test_framework.framework_templates import DefaultDevFramework
 
 
 @pytest.fixture(scope="module")
 def framework_class() -> Type[ConfluxTestFramework]:
-    class DefaultFramework(ConfluxTestFramework):
+    class DefaultFramework(DefaultDevFramework):
         def set_test_params(self):
-            self.num_nodes = 1
+            super().set_test_params()
             # self.conf_parameters["min_native_base_price"] = 10000
             self.conf_parameters["next_hardfork_transition_height"] = 1
             self.conf_parameters["next_hardfork_transition_number"] = 1
