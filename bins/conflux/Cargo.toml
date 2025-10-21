@@ -41,22 +41,30 @@ tokio = { workspace = true, features = ["rt"] }
 bls-signatures = { workspace = true }
 cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
+cfx-mallocator-utils = { workspace = true }
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
-version = "0.3.2"
-optional = true
+[target.'cfg(not(target_env = "msvc"))'.dependencies]
+tikv-jemallocator = { workspace = true }
 
 [features]
 default = ["jemalloc-global"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
-jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
 u64-mpt-db-key = ["client/u64_mpt_db_key"]
 # According to Rust's feature unification, when a feature is enabled for a dependency in the root package,
 # it will be enabled across all paths depending on that package. 
 # (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification)
 blst-portable = ["bls-signatures/blst-portable"]
 align_evm = ["cfx-executor/align_evm", "cfx-execute-helper/align_evm"]
+# mallocator related features
+jemalloc-global = ["malloc_size_of/jemalloc", "cfx-mallocator-utils/jemalloc"]
+jemalloc-prof = ["cfx-mallocator-utils/jemalloc", "cfx-mallocator-utils/jemalloc-prof"]
+tracy-allocator = ["cfx-mallocator-utils/tracy-allocator"]
+# Because jemalloc is default and preferred over snmalloc when both features are
+# enabled, `--no-default-features` should be used when enabling snmalloc or
+# snmalloc-native.
+snmalloc = ["cfx-mallocator-utils/snmalloc"]
+snmalloc-native = ["cfx-mallocator-utils/snmalloc-native"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
-mockito = "1.5.0"
+mockito = { workspace = true }

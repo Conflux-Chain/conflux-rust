@@ -32,8 +32,8 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{
-    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+    AddressSpaceUtil, AllChainID, BigEndianHash, Space, H160, H256,
+    KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
@@ -1640,14 +1640,7 @@ impl ConsensusExecutionHandler {
         };
 
         let time_stamp = best_block_header.timestamp();
-
-        let miner = {
-            let mut address = H160::random();
-            if tx.space() == Space::Native {
-                address.set_user_account_type_bits();
-            }
-            address
-        };
+        let miner = best_block_header.author().clone();
 
         let base_gas_price = best_block_header.base_price().unwrap_or_default();
         let burnt_gas_price =

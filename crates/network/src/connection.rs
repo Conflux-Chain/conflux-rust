@@ -387,10 +387,7 @@ impl Connection {
             recv_buf: BytesMut::new(),
             send_queue: PrioritySendQueue::default(),
             sending_packet: None,
-            interest: Interest::READABLE, /* previously(mio0.6) use
-                                           * Ready::hup() |
-                                           * Ready::readable(), Ready::hub()
-                                           * is removed from 0.7 */
+            interest: Interest::READABLE,
             registered: AtomicBool::new(false),
             assembler: Box::new(PacketWithLenAssembler::default()),
         }

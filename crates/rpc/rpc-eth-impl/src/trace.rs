@@ -10,7 +10,7 @@ use cfx_rpc_common_impl::trace::{
 use cfx_rpc_eth_api::TraceApiServer;
 use cfx_rpc_eth_types::{
     trace::{LocalizedSetAuthTrace, LocalizedTrace as EthLocalizedTrace},
-    BlockNumber, Index, LocalizedTrace, TraceFilter,
+    BlockId, Index, LocalizedTrace, TraceFilter,
 };
 use cfx_types::H256;
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
@@ -30,10 +30,10 @@ impl TraceApi {
     }
 
     pub fn get_block(
-        &self, block_number: BlockNumber,
+        &self, block_number: BlockId,
     ) -> CoreResult<Option<PhantomBlock>> {
         let phantom_block = match block_number {
-            BlockNumber::Hash { hash, .. } => self
+            BlockId::Hash { hash, .. } => self
                 .trace_handler
                 .consensus_graph()
                 .get_phantom_block_by_hash(
@@ -56,7 +56,7 @@ impl TraceApi {
     }
 
     pub fn block_traces(
-        &self, block_number: BlockNumber,
+        &self, block_number: BlockId,
     ) -> CoreResult<Option<Vec<LocalizedTrace>>> {
         let phantom_block = self.get_block(block_number)?;
 
@@ -86,7 +86,7 @@ impl TraceApi {
     }
 
     pub fn block_set_auth_traces(
-        &self, block_number: BlockNumber,
+        &self, block_number: BlockId,
     ) -> CoreResult<Option<Vec<LocalizedSetAuthTrace>>> {
         let phantom_block = self.get_block(block_number)?;
 
@@ -202,7 +202,7 @@ impl TraceApi {
 #[async_trait::async_trait]
 impl TraceApiServer for TraceApi {
     async fn block_traces(
-        &self, block_number: BlockNumber,
+        &self, block_number: BlockId,
     ) -> RpcResult<Option<Vec<LocalizedTrace>>> {
         self.block_traces(block_number).map_err(|err| err.into())
     }
@@ -220,7 +220,7 @@ impl TraceApiServer for TraceApi {
     }
 
     async fn block_set_auth_traces(
-        &self, block_number: BlockNumber,
+        &self, block_number: BlockId,
     ) -> RpcResult<Option<Vec<LocalizedSetAuthTrace>>> {
         self.block_set_auth_traces(block_number)
             .map_err(|err| err.into())
