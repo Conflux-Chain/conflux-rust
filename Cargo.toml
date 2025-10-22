@@ -116,7 +116,7 @@ members = [
 ]
 
 [workspace.package]
-version = "3.0.1-net8888"
+version = "3.0.2-net8888"
 authors = ["Conflux Network"]
 description = "A rust implementation of the Conflux-Protocol"
 documentation = "https://doc.confluxnetwork.org"
