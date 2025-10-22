@@ -1287,6 +1287,7 @@ dependencies = [
  "cfx-parity-trace-types",
  "cfx-statedb",
  "cfx-types",
+ "cfx-vm-interpreter",
  "cfx-vm-tracer-derive",
  "cfx-vm-types",
  "geth-tracer",

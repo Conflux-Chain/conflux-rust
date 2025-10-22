@@ -255,6 +255,14 @@ impl<'a> ContextTrait for Context<'a> {
         self.state.balance(&address).map_err(Into::into)
     }
 
+    fn nonce(&self, address: &Address) -> vm::Result<U256> {
+        let address = AddressWithSpace {
+            address: *address,
+            space: self.space,
+        };
+        self.state.nonce(&address).map_err(Into::into)
+    }
+
     fn blockhash(&mut self, number: &U256) -> vm::Result<H256> {
         match self.blockhash_source() {
             BlockHashSource::Env => Ok(self.blockhash_from_env(number)),
@@ -265,9 +273,8 @@ impl<'a> ContextTrait for Context<'a> {
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
         address_scheme: CreateContractAddress,
-    ) -> cfx_statedb::Result<
-        ::std::result::Result<ContractCreateResult, TrapKind>,
-    > {
+    ) -> cfx_statedb::Result<std::result::Result<ContractCreateResult, TrapKind>>
+    {
         let caller = AddressWithSpace {
             address: self.origin.address,
             space: self.space,
@@ -339,7 +346,7 @@ impl<'a> ContextTrait for Context<'a> {
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
         code_address: &Address, call_type: CallType,
-    ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
+    ) -> cfx_statedb::Result<std::result::Result<MessageCallResult, TrapKind>>
     {
         trace!(target: "context", "call");
 

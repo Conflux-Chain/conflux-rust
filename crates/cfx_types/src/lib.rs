@@ -20,6 +20,7 @@ mod utils;
 pub use utils::*;
 
 pub mod address_util;
+pub use address_util::AddressUtil;
 
 pub mod space_util;
 pub use space_util::AddressSpaceUtil;

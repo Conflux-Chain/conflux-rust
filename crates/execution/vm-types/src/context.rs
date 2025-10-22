@@ -104,6 +104,8 @@ pub trait Context {
     /// Returns address balance.
     fn balance(&self, address: &Address) -> Result<U256>;
 
+    fn nonce(&self, address: &Address) -> Result<U256>;
+
     /// Returns the hash of one of the 256 most recent complete blocks.
     fn blockhash(&mut self, number: &U256) -> Result<H256>;
 
