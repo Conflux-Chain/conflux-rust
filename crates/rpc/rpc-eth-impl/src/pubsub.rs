@@ -519,6 +519,7 @@ impl ChainDataProvider {
                     entry,
                     block_hash: pivot,
                     epoch_number,
+                    block_timestamp: Some(pb.pivot_header.timestamp()),
                     transaction_hash: tx.hash,
                     transaction_index: txid,
                     log_index,

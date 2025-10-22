@@ -6,7 +6,7 @@ use alloy_rpc_types_trace::geth::{
 };
 use async_trait::async_trait;
 use cfx_rpc_eth_api::DebugApiServer;
-use cfx_rpc_eth_types::{BlockNumber, TransactionRequest};
+use cfx_rpc_eth_types::{BlockId, BlockProperties, TransactionRequest};
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::invalid_params_msg;
 use cfx_types::{AddressSpaceUtil, Space, H256, U256};
 use cfxcore::{
@@ -17,7 +17,7 @@ use jsonrpsee::core::RpcResult;
 use primitives::{
     Block, BlockHashOrEpochNumber, BlockHeaderBuilder, EpochNumber,
 };
-use std::sync::Arc;
+use std::{sync::Arc, vec};
 
 pub struct DebugApi {
     consensus: SharedConsensusGraph,
@@ -36,19 +36,15 @@ impl DebugApi {
 
     pub fn consensus_graph(&self) -> &ConsensusGraph { &self.consensus }
 
-    pub fn get_block_epoch_num(
-        &self, block: BlockNumber,
-    ) -> Result<u64, String> {
+    pub fn get_block_epoch_num(&self, block: BlockId) -> Result<u64, String> {
         let num = match block {
-            BlockNumber::Num(block_number) => block_number,
-            BlockNumber::Latest
-            | BlockNumber::Safe
-            | BlockNumber::Finalized => {
+            BlockId::Num(block_number) => block_number,
+            BlockId::Latest | BlockId::Safe | BlockId::Finalized => {
                 let epoch_num = block.try_into().expect("should success");
                 self.consensus_graph()
                     .get_height_from_epoch_number(epoch_num)?
             }
-            BlockNumber::Hash {
+            BlockId::Hash {
                 hash,
                 require_canonical,
             } => self
@@ -64,8 +60,7 @@ impl DebugApi {
     }
 
     pub fn trace_call(
-        &self, mut request: TransactionRequest,
-        block_number: Option<BlockNumber>,
+        &self, mut request: TransactionRequest, block_number: Option<BlockId>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> Result<GethTrace, CoreError> {
         if request.from.is_none() {
@@ -265,7 +260,7 @@ impl DebugApiServer for DebugApi {
     }
 
     async fn debug_trace_block_by_number(
-        &self, block: BlockNumber, opts: Option<GethDebugTracingOptions>,
+        &self, block: BlockId, opts: Option<GethDebugTracingOptions>,
     ) -> RpcResult<Vec<TraceResult>> {
         let num = self
             .get_block_epoch_num(block)
@@ -275,10 +270,52 @@ impl DebugApiServer for DebugApi {
     }
 
     async fn debug_trace_call(
-        &self, request: TransactionRequest, block_number: Option<BlockNumber>,
+        &self, request: TransactionRequest, block_number: Option<BlockId>,
         opts: Option<GethDebugTracingCallOptions>,
     ) -> RpcResult<GethTrace> {
         self.trace_call(request, block_number, opts)
             .map_err(|e| e.into())
+    }
+
+    async fn debug_block_properties(
+        &self, block_number: BlockId,
+    ) -> RpcResult<Option<Vec<BlockProperties>>> {
+        let hashes = self
+            .consensus
+            .get_block_hashes_by_epoch_or_block_hash(block_number.into())
+            .map_err(|err| invalid_params_msg(&err.to_string()))?;
+
+        let blocks = self
+            .consensus
+            .data_manager()
+            .blocks_by_hash_list(&hashes, false)
+            .ok_or_else(|| invalid_params_msg("blocks should exist"))?;
+
+        let mut res = vec![];
+
+        for block in blocks {
+            let block_props = BlockProperties {
+                tx_hash: None,
+                inner_block_hash: block.hash(),
+                coinbase: *block.block_header.author(),
+                difficulty: *block.block_header.difficulty(),
+                gas_limit: *block.block_header.gas_limit(),
+                timestamp: block.block_header.timestamp().into(),
+                base_fee_per_gas: block
+                    .block_header
+                    .base_price()
+                    .map(|v| v.in_space(Space::Ethereum).clone()),
+            };
+
+            for tx in block.transactions.iter() {
+                if tx.space() == Space::Ethereum {
+                    let mut props = block_props.clone();
+                    props.tx_hash = Some(tx.hash());
+                    res.push(props);
+                }
+            }
+        }
+
+        Ok(Some(res))
     }
 }

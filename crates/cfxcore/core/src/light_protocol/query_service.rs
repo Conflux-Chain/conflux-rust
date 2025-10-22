@@ -684,9 +684,9 @@ impl QueryService {
     /// NOTE: `log.transaction_hash` is not known at this point,
     /// so this field has to be filled later on.
     fn filter_receipt_logs(
-        epoch: u64, block_hash: H256, transaction_index: usize,
-        num_logs_remaining: &mut usize, mut logs: Vec<LogEntry>,
-        filter: LogFilter,
+        epoch: u64, block_hash: H256, block_timestamp: Option<u64>,
+        transaction_index: usize, num_logs_remaining: &mut usize,
+        mut logs: Vec<LogEntry>, filter: LogFilter,
     ) -> impl Iterator<Item = LocalizedLogEntry> {
         let num_logs = logs.len();
 
@@ -702,6 +702,7 @@ impl QueryService {
             .map(move |(ii, entry)| LocalizedLogEntry {
                 block_hash,
                 epoch_number: epoch,
+                block_timestamp,
                 entry,
                 log_index: log_base_index - ii - 1,
                 transaction_hash: KECCAK_EMPTY_BLOOM, // will fill in later
@@ -731,6 +732,7 @@ impl QueryService {
                 Self::filter_receipt_logs(
                     epoch,
                     hash,
+                    None,
                     num_receipts - ii - 1,
                     &mut remaining,
                     logs,

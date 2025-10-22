@@ -21,7 +21,6 @@ use parking_lot::{Condvar, Mutex};
 use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use threadpool::ThreadPool;
 
-use crate::keylib::KeyPair;
 use blockgen::BlockGenerator;
 use cfx_executor::machine::{Machine, VmFactory};
 use cfx_parameters::genesis::{
@@ -65,6 +64,7 @@ use cfx_config::{parse_config_address_string, Configuration};
 
 use crate::{
     accounts::{account_provider, keys_path},
+    keylib::KeyPair,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -74,6 +74,7 @@ use crate::{
         launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
+use cfx_mallocator_utils::start_pprf_server;
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
 pub mod delegate_convert;
@@ -656,9 +657,6 @@ pub fn initialize_not_light_node_modules(
         accounts,
     ));
 
-    let task_manager = TaskManager::new(tokio_runtime.handle().clone());
-    let task_executor = task_manager.executor();
-
     let debug_rpc_http_server = super::rpc::start_http(
         conf.local_http_config(),
         setup_debug_rpc_apis(
@@ -718,7 +716,8 @@ pub fn initialize_not_light_node_modules(
         setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
 
-    network.start();
+    let task_manager = TaskManager::new(tokio_runtime.handle().clone());
+    let task_executor = task_manager.executor();
 
     let eth_rpc_server_handle =
         tokio_runtime.block_on(launch_async_rpc_servers(
@@ -730,7 +729,20 @@ pub fn initialize_not_light_node_modules(
             conf,
         ))?;
 
+    // start pprf server, which is used to serve the pprof data for heap
+    // profiling
+    if let Some(pprf_addr) = conf.raw_conf.profiling_listen_addr.as_ref() {
+        let pprf_addr = pprf_addr.clone();
+        let _pprf_server_handle = tokio_runtime.spawn(async move {
+            if let Err(e) = start_pprf_server(&pprf_addr).await {
+                eprintln!("Error starting pprof server: {}", e);
+            }
+        });
+    }
+
     metrics::initialize(conf.metrics_config(), task_executor.clone());
+
+    network.start();
 
     Ok((
         data_man,

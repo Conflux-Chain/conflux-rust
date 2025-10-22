@@ -122,6 +122,8 @@ log_conf="log.yaml"
 #
 # udp_port=32323
 
+# -------------- JSON-RPC Configuration -------------
+
 # `jsonrpc_http_threads` is used to control how many threads to process HTTP rpc requests.
 #
 # jsonrpc_http_threads=1
@@ -129,6 +131,9 @@ log_conf="log.yaml"
 # `jsonrpc_http_keep_alive` is used to control whether to set KeepAlive for rpc HTTP connections.
 #
 # jsonrpc_http_keep_alive=false
+
+# core space max payload size for ws server
+# jsonrpc_ws_max_payload_bytes=30 * 1024 * 1024
 
 # `jsonrpc_cors` is used to control the rpc domain validation policies.
 # The value should be "none", "all", or a list string split by commas without space.
@@ -175,6 +180,17 @@ jsonrpc_local_http_port=12539
 #
 # max_estimation_gas_limit = 30_000_000
 
+# Below are espace RPC configurations
+# Set the maximum size of a request body in bytes. Default is 10 MiB.
+# jsonrpc_max_request_body_size=10 * 1024 * 1024
+# Set the maximum size of a response body in bytes. Default is 10 MiB.
+# jsonrpc_max_response_body_size=10 * 1024 * 1024
+# Set the maximum number of connections allowed. Default is 100.
+# jsonrpc_max_connections=100
+# Set the maximum number of connections allowed. Default is 1024.
+# jsonrpc_max_subscriptions_per_connection=1024
+# Number of messages that server is allowed to `buffer` until backpressure kicks in. Default is 1024.
+# jsonrpc_message_buffer_capacity=1024
 # --------------- Performance-related Network Parameters ----------------------
 
 # Timeout for block-related requests (GetBlock, GetCmpctBlock, GetBlockTxn)
