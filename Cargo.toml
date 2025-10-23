@@ -290,15 +290,15 @@ crossbeam-channel = "0.5"
 atom = "0.3"
 
 # alloy & revm
-alloy-sol-types = "0.7.2"
-alloy-primitives = "0.7.2"
-alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
-alloy-rpc-types-trace = { git = "https://github.com/alloy-rs/alloy", rev = "4e22b9e" }
-revm = { version = "8.0", default-features = false }
-
-# revm v8
-revm-primitives = "3.1.1"
-revm-interpreter = "4.0.0"
+alloy-sol-types = "1.4.1"
+alloy-primitives = "1.4.1"
+alloy-rpc-types = "1.0.41"
+alloy-rpc-types-trace = "1.0.41"
+revm = { version = "30.2.0", default-features = false }
+revm-primitives = "21.0.1"
+revm-interpreter = "28.0.0"
+revm-context-interface = "11.1.2"
+revm-bytecode = "7.0.2"
 
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
@@ -395,7 +395,7 @@ typemap = { package = "typemap-ors", version = "1.0" }
 impl-trait-for-tuples = "0.2"
 impl-tools = "0.10"
 derive_more = { version = "2.0.1", features = ["full"] }
-c-kzg = { version = "1.0.2", default-features = false }
+c-kzg = { version = "2.1.5", default-features = false }
 strfmt = "0.2"
 smart-default = "0.6.0"
 num-derive = { version = "0.4.2", default-features = false }
