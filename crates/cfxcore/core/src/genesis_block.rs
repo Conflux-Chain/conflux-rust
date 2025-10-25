@@ -27,8 +27,9 @@ use cfx_parameters::{
 use cfx_statedb::StateDb;
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
-    Space, H256, U256,
+    address_util::AddressUtil, cal_contract_address_with_space, Address,
+    AddressSpaceUtil, AddressWithSpace, CreateContractAddressType, Space, H256,
+    U256,
 };
 use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
@@ -41,13 +42,11 @@ use secret_store::SecretStore;
 
 use crate::verification::{compute_receipts_root, compute_transaction_root};
 use cfx_executor::{
-    executive::{
-        contract_address, ExecutionOutcome, ExecutiveContext, TransactOptions,
-    },
+    executive::{ExecutionOutcome, ExecutiveContext, TransactOptions},
     machine::Machine,
     state::State,
 };
-use cfx_vm_types::{CreateContractAddress, Env};
+use cfx_vm_types::Env;
 use diem_types::account_address::AccountAddress;
 use primitives::transaction::native_transaction::NativeTransaction;
 
@@ -323,8 +322,8 @@ pub fn genesis_block(
                 machine.clone(),
             );
 
-            let (contract_address, _) = contract_address(
-                CreateContractAddress::FromSenderNonceAndCodeHash,
+            let (contract_address, _) = cal_contract_address_with_space(
+                CreateContractAddressType::FromSenderNonceAndCodeHash,
                 0,
                 &genesis_account_address,
                 &(i - 1).into(),

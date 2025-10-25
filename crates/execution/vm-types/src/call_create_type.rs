@@ -20,7 +20,7 @@
 
 //! EVM call types.
 
-use super::CreateContractAddress;
+use cfx_types::CreateContractAddressType;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::Serialize;
 
@@ -85,16 +85,18 @@ pub enum CreateType {
 }
 
 impl CreateType {
-    pub fn from_address_scheme(address: &CreateContractAddress) -> CreateType {
+    pub fn from_address_scheme(
+        address: &CreateContractAddressType,
+    ) -> CreateType {
         match address {
-            CreateContractAddress::FromSenderNonce => CreateType::CREATE,
-            CreateContractAddress::FromSenderNonceAndCodeHash => {
+            CreateContractAddressType::FromSenderNonce => CreateType::CREATE,
+            CreateContractAddressType::FromSenderNonceAndCodeHash => {
                 CreateType::CREATE
             }
-            CreateContractAddress::FromBlockNumberSenderNonceAndCodeHash => {
+            CreateContractAddressType::FromBlockNumberSenderNonceAndCodeHash => {
                 unreachable!("Inactivate address scheme")
             }
-            CreateContractAddress::FromSenderSaltAndCodeHash(_) => {
+            CreateContractAddressType::FromSenderSaltAndCodeHash(_) => {
                 CreateType::CREATE2
             }
         }

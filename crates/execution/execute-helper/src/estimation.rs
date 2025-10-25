@@ -9,7 +9,8 @@ use cfx_executor::{
 use solidity_abi::string_revert_reason_decode;
 
 use super::observer::{
-    exec_tracer::ErrorUnwind, gasman::GasLimitEstimation, Observer,
+    access_list::AccessListKey, exec_tracer::ErrorUnwind,
+    gasman::GasLimitEstimationKey, Observer,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_statedb::Result as DbResult;
@@ -17,9 +18,12 @@ use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, Space, U256,
 };
 use cfx_vm_types::{self as vm, Env, Spec};
-use primitives::{transaction::Action, SignedTransaction, Transaction};
+use primitives::{
+    transaction::Action, AccessList, SignedTransaction, Transaction,
+};
 use std::{
     cmp::{max, min},
+    collections::HashSet,
     fmt::Display,
     ops::{Mul, Shl},
 };
@@ -172,6 +176,49 @@ impl<'a> EstimationContext<'a> {
         )
     }
 
+    pub fn transact_virtual_with_access_list(
+        &mut self, tx: SignedTransaction, request: EstimateRequest,
+    ) -> DbResult<(U256, AccessList)> {
+        // estimate gas limit first
+        let estimate_res = self.transact_virtual(tx.clone(), request)?;
+        let gas_estimation = estimate_res.1.estimated_gas_limit;
+
+        // then transact again to get access list
+        let empty_list = AccessList::new();
+        let access_list = tx.access_list().unwrap_or(&empty_list);
+        let mut excludes = HashSet::new();
+        // add from, to, precompiles, 7702 authorities to excludes
+        excludes.insert(tx.sender().address);
+        let to = match tx.transaction.action() {
+            Action::Call(to) => to,
+            Action::Create => {
+                tx.cal_created_address().unwrap_or_default().address
+            }
+        };
+        excludes.insert(to);
+
+        if let Some(auth_list) = tx.authorization_list() {
+            for auth in auth_list {
+                if let Some(addr) = auth.authority() {
+                    excludes.insert(addr);
+                }
+            }
+        }
+
+        let executed = match self.as_executive().transact(
+            &tx,
+            request.access_list_options(access_list.to_vec(), excludes),
+        )? {
+            ExecutionOutcome::Finished(executed) => executed,
+            res => {
+                return Err(res.error_message().into());
+            }
+        };
+        let res = executed.ext_result.get::<AccessListKey>().unwrap();
+
+        Ok((gas_estimation, res.to_vec()))
+    }
+
     fn check_cip130(
         &self, tx: &SignedTransaction, request: &EstimateRequest,
     ) -> Option<(ExecutionOutcome, EstimateExt)> {
@@ -195,12 +242,11 @@ impl<'a> EstimationContext<'a> {
     // storage limit paid by the sponsor are different values. So
     // this function will
     //
-    // 1. First Pass: Assuming the sponsor pays for storage collateral,
-    // check if the transaction will fail for
-    // NotEnoughBalanceForStorage.
+    // 1. First Pass: Assuming the sender pays for storage collateral,
+    // check if the transaction will finished
     //
     // 2. Second Pass: If it does, executes the transaction again assuming
-    // the user pays for the storage collateral. The resultant
+    // the sponsor pays for the storage collateral. The resultant
     // storage limit must be larger than the maximum storage limit
     // can be afford by the sponsor, to guarantee the user pays for
     // the storage limit.
@@ -412,7 +458,7 @@ fn estimated_gas_limit(executed: &Executed, tx: &SignedTransaction) -> U256 {
             .map(|&x| if x == 0 { 10 } else { 40 })
             .sum::<u64>();
     let estimated =
-        executed.ext_result.get::<GasLimitEstimation>().unwrap() * 7 / 6
+        executed.ext_result.get::<GasLimitEstimationKey>().unwrap() * 7 / 6
             + executed.base_gas;
     U256::max(
         eip7623_gas_limit.into(),
@@ -496,6 +542,15 @@ impl EstimateRequest {
         TransactOptions {
             observer: Observer::virtual_call(),
             settings: self.transact_settings(ChargeCollateral::EstimateSponsor),
+        }
+    }
+
+    pub fn access_list_options(
+        self, access_list: AccessList, excludes: HashSet<Address>,
+    ) -> TransactOptions<Observer> {
+        TransactOptions {
+            observer: Observer::access_list_inspector(access_list, excludes),
+            settings: self.transact_settings(ChargeCollateral::EstimateSender),
         }
     }
 }

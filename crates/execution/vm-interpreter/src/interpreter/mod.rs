@@ -43,11 +43,13 @@ use super::{
 };
 use bit_set::BitSet;
 use cfx_bytes::Bytes;
-use cfx_types::{Address, BigEndianHash, Space, H256, U256, U512};
+use cfx_types::{
+    Address, BigEndianHash, CreateContractAddressType, Space, H256, U256, U512,
+};
 use cfx_vm_types::{
     self as vm, ActionParams, ActionValue, CallType, ContractCreateResult,
-    CreateContractAddress, GasLeft, InstructionResult, InterpreterInfo,
-    MessageCallResult, ParamsType, ReturnData, Spec, TrapError, TrapKind,
+    GasLeft, InstructionResult, InterpreterInfo, MessageCallResult, ParamsType,
+    ReturnData, Spec, TrapError, TrapKind,
 };
 use keccak_hash::keccak;
 use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
@@ -748,11 +750,11 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     return Err(vm::Error::CreateInitCodeSizeLimit);
                 }
                 let address_scheme = match instruction {
-					instructions::CREATE if context.space() == Space::Native => CreateContractAddress::FromSenderNonceAndCodeHash,
-                    instructions::CREATE if context.space() == Space::Ethereum => CreateContractAddress::FromSenderNonce,
+					instructions::CREATE if context.space() == Space::Native => CreateContractAddressType::FromSenderNonceAndCodeHash,
+                    instructions::CREATE if context.space() == Space::Ethereum => CreateContractAddressType::FromSenderNonce,
 					instructions::CREATE2 => {
                         let h: H256 = BigEndianHash::from_uint(&self.stack.pop_back());
-                        CreateContractAddress::FromSenderSaltAndCodeHash(h)
+                        CreateContractAddressType::FromSenderSaltAndCodeHash(h)
                     },
 					_ => unreachable!("instruction can only be CREATE/CREATE2 checked above; qed"),
 				};

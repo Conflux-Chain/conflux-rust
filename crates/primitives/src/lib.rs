@@ -45,7 +45,7 @@ pub use crate::{
         AccessList, AccessListItem, Action, AuthorizationList,
         AuthorizationListItem, SignedTransaction, Transaction,
         TransactionWithSignature, TransactionWithSignatureSerializePart,
-        TxPropagateId,
+        TxPropagateId, AUTH_MAGIC,
     },
     transaction_index::TransactionIndex,
     zero::Zero,

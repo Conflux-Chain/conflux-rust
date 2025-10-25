@@ -30,11 +30,7 @@ use super::{
 };
 use cfx_bytes::Bytes;
 use cfx_db_errors::statedb::Result as DbResult;
-pub use cfx_types::{
-    cal_contract_address as contract_address,
-    CreateContractAddressType as CreateContractAddress,
-};
-use cfx_types::{Address, Space, H256, U256};
+use cfx_types::{Address, CreateContractAddressType, Space, H256, U256};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -115,7 +111,7 @@ pub trait Context {
     /// succesfull.
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address: CreateContractAddress,
+        address: CreateContractAddressType,
     ) -> DbResult<::std::result::Result<ContractCreateResult, TrapKind>>;
 
     /// Message call.

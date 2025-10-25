@@ -4,9 +4,11 @@
 
 // TODO(7702): refactor this file
 
+mod authorization;
 pub mod eth_transaction;
 pub mod native_transaction;
 
+pub use authorization::{AuthorizationList, AuthorizationListItem, AUTH_MAGIC};
 pub use eth_transaction::{
     Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
     Eip7702Transaction, EthereumTransaction,
@@ -26,7 +28,8 @@ use crate::{
     },
 };
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
+    cal_contract_address_with_space, Address, AddressSpaceUtil,
+    AddressWithSpace, BigEndianHash, CreateContractAddressType, Space, H160,
     H256, U256,
 };
 use eth_transaction::eip155_signature;
@@ -272,28 +275,6 @@ pub struct AccessListItem {
 }
 
 pub type AccessList = Vec<AccessListItem>;
-
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    RlpEncodable,
-    RlpDecodable,
-)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthorizationListItem {
-    pub chain_id: U256,
-    pub address: Address,
-    pub nonce: u64,
-    pub y_parity: u8,
-    pub r: U256,
-    pub s: U256,
-}
-
-pub type AuthorizationList = Vec<AuthorizationListItem>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Transaction {
@@ -1144,6 +1125,33 @@ impl SignedTransaction {
             )?)
         } else {
             Ok(true)
+        }
+    }
+
+    // Calculates the created contract address if the transaction is a contract
+    // creation.
+    pub fn cal_created_address(&self) -> Option<AddressWithSpace> {
+        if let Action::Create = self.action() {
+            let from = self.sender();
+            let nonce = self.nonce();
+            let space = self.space();
+            let create_type = match space {
+                Space::Native => {
+                    CreateContractAddressType::FromSenderNonceAndCodeHash
+                }
+                Space::Ethereum => CreateContractAddressType::FromSenderNonce,
+            };
+            let code = self.data().as_slice();
+            let (created_address, _) = cal_contract_address_with_space(
+                create_type,
+                0,
+                &from,
+                &nonce,
+                code,
+            );
+            Some(created_address)
+        } else {
+            None
         }
     }
 }

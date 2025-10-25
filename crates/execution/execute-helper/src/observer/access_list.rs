@@ -1,18 +1,13 @@
-use cfx_executor::{
-    observer::{
-        CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
-        OpcodeTracer, SetAuthTracer, StorageTracer,
-    },
-    stack::FrameResult,
+use cfx_executor::observer::{
+    CallTracer, CheckpointTracer, DrainTrace, InternalTransferTracer,
+    OpcodeTracer, SetAuthTracer, StorageTracer,
 };
-use cfx_types::{
-    cal_contract_address, u256_to_address_be, u256_to_h256_be, Address,
-    AddressUtil, CreateContractAddressType, Space, H256, U256,
-};
+use cfx_types::{u256_to_address_be, u256_to_h256_be, Address, H256};
 use cfx_vm_interpreter::instructions::Instruction;
-use cfx_vm_types::{ActionParams, InterpreterInfo};
+use cfx_vm_types::InterpreterInfo;
 use primitives::{AccessList, AccessListItem};
 use std::collections::{BTreeSet, HashMap, HashSet};
+use typemap::ShareDebugMap;
 
 /// An [Inspector] that collects touched accounts and storage slots.
 ///
@@ -24,24 +19,23 @@ pub struct AccessListInspector {
     excluded: HashSet<Address>,
     /// All addresses and touched slots
     touched_slots: HashMap<Address, BTreeSet<H256>>,
-
-    depth: usize,
 }
 
-impl From<AccessList> for AccessListInspector {
-    fn from(access_list: AccessList) -> Self { Self::new(access_list) }
+impl From<(AccessList, HashSet<Address>)> for AccessListInspector {
+    fn from(data: (AccessList, HashSet<Address>)) -> Self {
+        Self::new(data.0, data.1)
+    }
 }
 
 impl AccessListInspector {
     /// Creates a new [AccessListInspector] with the given excluded addresses.
-    pub fn new(access_list: AccessList) -> Self {
+    pub fn new(access_list: AccessList, excluded: HashSet<Address>) -> Self {
         Self {
-            excluded: Default::default(),
+            excluded,
             touched_slots: access_list
                 .into_iter()
                 .map(|v| (v.address, v.storage_keys.into_iter().collect()))
                 .collect(),
-            depth: 0,
         }
     }
 
@@ -87,54 +81,21 @@ impl AccessListInspector {
         items.collect()
     }
 
-    fn collcect_excluded_addresses(&mut self, item: Address) {
+    pub fn collcect_excluded_addresses(&mut self, item: Address) {
         self.excluded.insert(item);
     }
 }
 
-impl CallTracer for AccessListInspector {
-    fn record_call(&mut self, params: &ActionParams) {
-        if self.depth == 0 {
-            self.collcect_excluded_addresses(params.original_sender);
-            self.collcect_excluded_addresses(params.address);
-            // TODO 7702 authorities should be excluded because those get loaded
-            // anyway
-        }
-        self.depth += 1;
+impl DrainTrace for AccessListInspector {
+    fn drain_trace(self, map: &mut ShareDebugMap) {
+        map.insert::<AccessListKey>(self.into_access_list());
     }
+}
 
-    fn record_call_result(&mut self, _result: &FrameResult) { self.depth -= 1; }
+pub struct AccessListKey;
 
-    fn record_create(&mut self, params: &ActionParams) {
-        if self.depth == 0 {
-            let from = params.original_sender;
-
-            // add caller to excluded list
-            self.collcect_excluded_addresses(from);
-
-            // add created address to excluded list
-            let create_type = match params.space {
-                Space::Native => {
-                    CreateContractAddressType::FromSenderNonceAndCodeHash
-                }
-                Space::Ethereum => CreateContractAddressType::FromSenderNonce,
-            };
-            let nonce = U256::from(0); // TODO get nonce from state
-            let empty_code = Vec::new();
-            let code = params.code.as_deref().unwrap_or(&empty_code); // TODO check code is right here
-            let (mut created_address, _) =
-                cal_contract_address(create_type, 0, &from, &nonce, code);
-            if params.space == Space::Native {
-                created_address.set_contract_type_bits();
-            }
-            self.collcect_excluded_addresses(created_address);
-        }
-        self.depth += 1;
-    }
-
-    fn record_create_result(&mut self, _result: &FrameResult) {
-        self.depth -= 1;
-    }
+impl typemap::Key for AccessListKey {
+    type Value = AccessList;
 }
 
 impl OpcodeTracer for AccessListInspector {
@@ -179,6 +140,7 @@ impl OpcodeTracer for AccessListInspector {
     }
 }
 
+impl CallTracer for AccessListInspector {}
 impl CheckpointTracer for AccessListInspector {}
 impl InternalTransferTracer for AccessListInspector {}
 impl StorageTracer for AccessListInspector {}

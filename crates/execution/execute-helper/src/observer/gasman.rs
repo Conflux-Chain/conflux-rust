@@ -54,13 +54,13 @@ pub struct GasMan {
 
 impl DrainTrace for GasMan {
     fn drain_trace(self, map: &mut ShareDebugMap) {
-        map.insert::<GasLimitEstimation>(self.gas_required());
+        map.insert::<GasLimitEstimationKey>(self.gas_required());
     }
 }
 
-pub struct GasLimitEstimation;
+pub struct GasLimitEstimationKey;
 
-impl typemap::Key for GasLimitEstimation {
+impl typemap::Key for GasLimitEstimationKey {
     type Value = U256;
 }
 

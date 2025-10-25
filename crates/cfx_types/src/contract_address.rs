@@ -1,4 +1,6 @@
-use super::{Address, H256, U256};
+use super::{
+    Address, AddressSpaceUtil, AddressUtil, AddressWithSpace, Space, H256, U256,
+};
 use keccak_hash::keccak;
 use rlp::RlpStream;
 
@@ -85,4 +87,21 @@ pub fn cal_contract_address(
         }
     };
     return (address, code_hash);
+}
+
+pub fn cal_contract_address_with_space(
+    address_scheme: CreateContractAddressType, block_number: u64,
+    sender: &AddressWithSpace, nonce: &U256, code: &[u8],
+) -> (AddressWithSpace, H256) {
+    let (mut address, code_hash) = cal_contract_address(
+        address_scheme,
+        block_number,
+        &sender.address,
+        nonce,
+        code,
+    );
+    if sender.space == Space::Native {
+        address.set_contract_type_bits();
+    }
+    (address.with_space(sender.space), code_hash)
 }
