@@ -255,14 +255,6 @@ impl<'a> ContextTrait for Context<'a> {
         self.state.balance(&address).map_err(Into::into)
     }
 
-    fn nonce(&self, address: &Address) -> vm::Result<U256> {
-        let address = AddressWithSpace {
-            address: *address,
-            space: self.space,
-        };
-        self.state.nonce(&address).map_err(Into::into)
-    }
-
     fn blockhash(&mut self, number: &U256) -> vm::Result<H256> {
         match self.blockhash_source() {
             BlockHashSource::Env => Ok(self.blockhash_from_env(number)),

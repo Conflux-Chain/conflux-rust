@@ -1,6 +1,6 @@
 use crate::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 use async_trait::async_trait;
-use cfx_execute_helper::estimation::EstimateRequest;
+use cfx_execute_helper::estimation::{EstimateExt, EstimateRequest};
 use cfx_executor::executive::{
     Executed, ExecutionError, ExecutionOutcome, TxDropError,
 };
@@ -140,7 +140,8 @@ impl EthApi {
         block_number_or_hash: Option<BlockNumber>,
         state_overrides: Option<RpcStateOverride>,
         block_overrides: Option<Box<BlockOverrides>>,
-    ) -> CoreResult<(Executed, U256)> {
+        collect_access_list: bool,
+    ) -> CoreResult<(Executed, EstimateExt)> {
         let consensus_graph = self.consensus_graph();
 
         if request.gas_price.is_some()
@@ -198,6 +199,7 @@ impl EthApi {
             has_gas_price: request.has_gas_price(),
             has_nonce: request.nonce.is_some(),
             has_storage_limit: false,
+            collect_access_list,
         };
 
         let chain_id = self.consensus.best_chain_id();
@@ -274,7 +276,7 @@ impl EthApi {
             ExecutionOutcome::Finished(executed) => executed,
         };
 
-        Ok((executed, estimation.estimated_gas_limit))
+        Ok((executed, estimation))
     }
 
     pub fn send_transaction_with_signature(
@@ -1332,6 +1334,7 @@ impl EthApiServer for EthApi {
             block_number,
             state_overrides,
             block_overrides,
+            false,
         )?;
 
         Ok(execution.output.into())
@@ -1367,10 +1370,23 @@ impl EthApiServer for EthApi {
     /// gas usage compared to a transaction without an access list.
     async fn create_access_list(
         &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_overrides: Option<RpcStateOverride>,
     ) -> RpcResult<AccessListResult> {
-        let _ = block_number;
-        let _ = request;
-        Err(jsonrpsee_internal_error("Not implemented"))
+        let (_, estimate_res) = self.exec_transaction(
+            request,
+            block_number,
+            state_overrides,
+            None,
+            false,
+        )?;
+        Ok(AccessListResult {
+            access_list: estimate_res.access_list,
+            // TODO: return the gas used after applying access list
+            gas_used: estimate_res.estimated_gas_limit,
+            // if tx execution failed, this rpc call is failed and error is in
+            // the rpc error
+            error: None,
+        })
     }
 
     /// Generates and returns an estimate of how much gas is necessary to allow
@@ -1379,14 +1395,15 @@ impl EthApiServer for EthApi {
         &self, request: TransactionRequest, block_number: Option<BlockId>,
         state_overrides: Option<RpcStateOverride>,
     ) -> RpcResult<U256> {
-        let (_, estimated_gas) = self.exec_transaction(
+        let (_, estimate_res) = self.exec_transaction(
             request,
             block_number,
             state_overrides,
             None,
+            false,
         )?;
 
-        Ok(estimated_gas)
+        Ok(estimate_res.estimated_gas_limit)
     }
 
     /// Returns the current price per gas in wei.

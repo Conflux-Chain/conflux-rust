@@ -37,6 +37,7 @@ enum SponsoredType {
 pub struct EstimateExt {
     pub estimated_gas_limit: U256,
     pub estimated_storage_limit: u64,
+    pub access_list: AccessList, // default empty
 }
 
 pub struct EstimationContext<'a> {
@@ -144,6 +145,12 @@ impl<'a> EstimationContext<'a> {
 
         self.process_estimate_request(&mut tx, &request)?;
 
+        let access_list = if request.collect_access_list {
+            self.collect_access_list(tx.clone(), request)?
+        } else {
+            AccessList::new()
+        };
+
         let (executed, overwrite_storage_limit) = match self
             .two_pass_estimation(&tx, request)?
         {
@@ -160,6 +167,7 @@ impl<'a> EstimationContext<'a> {
                                 executed, &tx,
                             ),
                             estimated_storage_limit: storage_limit(executed),
+                            access_list,
                         }
                     }
                     ExecutionOutcome::Finished(_) => unreachable!(),
@@ -173,50 +181,60 @@ impl<'a> EstimationContext<'a> {
             executed,
             overwrite_storage_limit,
             &request,
+            access_list,
         )
     }
 
-    pub fn transact_virtual_with_access_list(
+    pub fn collect_access_list(
         &mut self, tx: SignedTransaction, request: EstimateRequest,
-    ) -> DbResult<(U256, AccessList)> {
-        // estimate gas limit first
-        let estimate_res = self.transact_virtual(tx.clone(), request)?;
-        let gas_estimation = estimate_res.1.estimated_gas_limit;
-
-        // then transact again to get access list
-        let empty_list = AccessList::new();
-        let access_list = tx.access_list().unwrap_or(&empty_list);
+    ) -> DbResult<AccessList> {
+        // prepare the excludes: add from, to, precompiles, 7702 authorities to
+        // excludes
         let mut excludes = HashSet::new();
-        // add from, to, precompiles, 7702 authorities to excludes
         excludes.insert(tx.sender().address);
         let to = match tx.transaction.action() {
             Action::Call(to) => to,
             Action::Create => {
-                tx.cal_created_address().unwrap_or_default().address
+                tx.cal_created_address().expect("should success").address
             }
         };
         excludes.insert(to);
 
         if let Some(auth_list) = tx.authorization_list() {
-            for auth in auth_list {
-                if let Some(addr) = auth.authority() {
-                    excludes.insert(addr);
-                }
-            }
+            excludes
+                .extend(auth_list.iter().filter_map(|auth| auth.authority()));
         }
 
-        let executed = match self.as_executive().transact(
+        let builtins = match tx.space() {
+            Space::Native => &self.machine.builtins(),
+            Space::Ethereum => &self.machine.builtins_evm(),
+        };
+        excludes.extend(builtins.iter().map(|(addr, _)| *addr));
+
+        let access_list = tx
+            .access_list()
+            .map(|val| val.to_vec())
+            .unwrap_or(AccessList::new());
+
+        // execute the transaction to collect access list
+        let res = self.as_executive().transact(
             &tx,
-            request.access_list_options(access_list.to_vec(), excludes),
-        )? {
+            request.access_list_options(access_list, excludes),
+        )?;
+        let executed = match res {
             ExecutionOutcome::Finished(executed) => executed,
-            res => {
-                return Err(res.error_message().into());
+            ExecutionOutcome::ExecutionErrorBumpNonce(_exec_err, executed) => {
+                executed
+            }
+            ExecutionOutcome::NotExecutedDrop(_)
+            | ExecutionOutcome::NotExecutedToReconsiderPacking(_) => {
+                return Ok(AccessList::new());
             }
         };
-        let res = executed.ext_result.get::<AccessListKey>().unwrap();
-
-        Ok((gas_estimation, res.to_vec()))
+        let access_list = executed.ext_result.get::<AccessListKey>().expect(
+            "AccessListKey should be set by AccessListInspector observer",
+        );
+        Ok(access_list.to_vec())
     }
 
     fn check_cip130(
@@ -340,6 +358,7 @@ impl<'a> EstimationContext<'a> {
     fn enact_executed_by_estimation_request(
         &self, tx: SignedTransaction, mut executed: Executed,
         overwrite_storage_limit: Option<u64>, request: &EstimateRequest,
+        access_list: AccessList,
     ) -> DbResult<(ExecutionOutcome, EstimateExt)> {
         let estimated_storage_limit =
             overwrite_storage_limit.unwrap_or(storage_limit(&executed));
@@ -347,6 +366,7 @@ impl<'a> EstimationContext<'a> {
         let estimation = EstimateExt {
             estimated_storage_limit,
             estimated_gas_limit,
+            access_list,
         };
 
         let gas_sponsored_contract_if_eligible_sender = self
@@ -510,6 +530,7 @@ pub struct EstimateRequest {
     pub has_gas_price: bool,
     pub has_nonce: bool,
     pub has_storage_limit: bool,
+    pub collect_access_list: bool,
 }
 
 impl EstimateRequest {

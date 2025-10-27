@@ -101,7 +101,7 @@ impl typemap::Key for AccessListKey {
 impl OpcodeTracer for AccessListInspector {
     fn step(&mut self, interp: &dyn InterpreterInfo) {
         let ins = Instruction::from_u8(interp.current_opcode())
-            .expect("invalid opcode");
+            .expect("valid opcode");
         match ins {
             Instruction::SLOAD | Instruction::SSTORE => {
                 if let Some(slot) = interp.stack().last() {

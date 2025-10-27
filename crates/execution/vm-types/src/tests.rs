@@ -21,13 +21,15 @@
 use crate::BlockHashSource;
 
 use super::{
-    error::TrapKind, CallType, Context, ContractCreateResult,
-    CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
-    ReturnData, Spec,
+    error::TrapKind, CallType, Context, ContractCreateResult, Env, Error,
+    GasLeft, MessageCallResult, Result, ReturnData, Spec,
 };
 use cfx_bytes::Bytes;
 use cfx_db_errors::statedb::Result as DbResult;
-use cfx_types::{address_util::AddressUtil, Address, Space, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, CreateContractAddressType, Space, H256,
+    U256,
+};
 use keccak_hash::keccak;
 use std::{
     collections::{HashMap, HashSet},
@@ -48,7 +50,7 @@ pub enum MockCallType {
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub struct MockCall {
     pub call_type: MockCallType,
-    pub create_scheme: Option<CreateContractAddress>,
+    pub create_scheme: Option<CreateContractAddressType>,
     pub gas: U256,
     pub sender_address: Option<Address>,
     pub receive_address: Option<Address>,
@@ -155,7 +157,7 @@ impl Context for MockContext {
 
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address: CreateContractAddress,
+        address: CreateContractAddressType,
     ) -> DbResult<::std::result::Result<ContractCreateResult, TrapKind>> {
         self.calls.insert(MockCall {
             call_type: MockCallType::Create,
