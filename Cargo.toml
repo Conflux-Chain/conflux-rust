@@ -299,6 +299,7 @@ revm-primitives = "21.0.1"
 revm-interpreter = "28.0.0"
 revm-context-interface = "11.1.2"
 revm-bytecode = "7.0.2"
+revm-precompile = "28.1.1"
 
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"

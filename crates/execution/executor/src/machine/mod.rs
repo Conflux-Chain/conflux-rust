@@ -4,11 +4,12 @@
 
 mod vm_factory;
 
-use super::builtin::Builtin;
 use crate::{
     builtin::{
-        build_bls12_builtin_map, builtin_factory, AltBn128PairingPricer,
-        Blake2FPricer, IfPricer, Linear, ModexpPricer, StaticPlan,
+        build_bls12_builtin_map, builtin_factory,
+        secp256r1::{P256VERIFY_ADDRESS, P256VERIFY_BASE_GAS_FEE_OSAKA},
+        AltBn128PairingPricer, Blake2FPricer, Builtin, ConstPricer, IfPricer,
+        Linear, ModexpPricer, StaticPlan,
     },
     internal_contract::InternalContractMap,
     spec::CommonParams,
@@ -243,5 +244,17 @@ fn new_builtin_map(
             ),
         );
     }
+
+    btree.insert(
+        Address::from(H256::from_low_u64_be(P256VERIFY_ADDRESS)),
+        Builtin::new(
+            Box::new(StaticPlan(ConstPricer::new(
+                P256VERIFY_BASE_GAS_FEE_OSAKA,
+            ))),
+            builtin_factory("secp256r1"),
+            params.transition_heights.secp256r1,
+        ),
+    );
+
     btree
 }

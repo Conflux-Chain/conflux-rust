@@ -200,6 +200,8 @@ build_config! {
         (cip145_fix_transition_height, (Option<u64>), None)
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
+        // TODO rename to cipXXX
+        (secp256r1_transition_height, (Option<u64>), None)
 
 
         // Mining section.
@@ -1547,6 +1549,12 @@ impl Configuration {
         }
         params.transition_heights.align_evm =
             self.raw_conf.align_evm_transition_height;
+
+        // Secp256r1 precompile
+        params.transition_heights.secp256r1 = self
+            .raw_conf
+            .secp256r1_transition_height
+            .unwrap_or(default_transition_time);
     }
 }
 

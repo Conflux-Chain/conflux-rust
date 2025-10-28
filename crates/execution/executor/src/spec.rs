@@ -158,6 +158,8 @@ pub struct TransitionsEpochHeight {
     pub eip7623: BlockHeight,
     pub cip_c2_fix: BlockHeight,
     pub cip145_fix: BlockHeight,
+    // precompile secp256r1 activation height
+    pub secp256r1: BlockHeight,
 }
 
 impl Default for CommonParams {
