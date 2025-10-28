@@ -1309,6 +1309,7 @@ dependencies = [
  "malloc_size_of",
  "memory-cache",
  "parking_lot 0.12.3",
+ "primitives",
  "rustc-hex",
 ]
 

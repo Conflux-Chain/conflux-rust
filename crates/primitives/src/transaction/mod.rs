@@ -8,7 +8,10 @@ mod authorization;
 pub mod eth_transaction;
 pub mod native_transaction;
 
-pub use authorization::{AuthorizationList, AuthorizationListItem, AUTH_MAGIC};
+pub use authorization::{
+    extract_7702_payload, AuthorizationList, AuthorizationListItem, AUTH_MAGIC,
+    CODE_PREFIX_7702,
+};
 pub use eth_transaction::{
     Eip1559Transaction, Eip155Transaction, Eip2930Transaction,
     Eip7702Transaction, EthereumTransaction,

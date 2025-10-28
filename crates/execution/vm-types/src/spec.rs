@@ -22,8 +22,6 @@
 use cfx_types::{address_util::AddressUtil, Address};
 use primitives::{block::BlockHeight, BlockNumber};
 
-pub const CODE_PREFIX_7702: &'static [u8] = b"\xef\x01\x00";
-
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
 pub struct Spec {
@@ -505,17 +503,4 @@ impl ConsensusGasSpec {
 #[cfg(any(test, feature = "testonly_code"))]
 impl Default for Spec {
     fn default() -> Self { Spec::new_spec_for_test() }
-}
-
-pub fn extract_7702_payload(code: &[u8]) -> Option<Address> {
-    if code.starts_with(CODE_PREFIX_7702) {
-        let (_prefix, payload) = code.split_at(CODE_PREFIX_7702.len());
-        if payload.len() == Address::len_bytes() {
-            Some(Address::from_slice(payload))
-        } else {
-            None
-        }
-    } else {
-        None
-    }
 }

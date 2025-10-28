@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 
 pub const AUTH_MAGIC: u8 = 0x05;
 
+pub const CODE_PREFIX_7702: &'static [u8] = b"\xef\x01\x00";
+
 #[derive(
     Debug,
     Clone,
@@ -70,5 +72,18 @@ impl AuthorizationListItem {
         } else {
             None
         }
+    }
+}
+
+pub fn extract_7702_payload(code: &[u8]) -> Option<Address> {
+    if code.starts_with(CODE_PREFIX_7702) {
+        let (_prefix, payload) = code.split_at(CODE_PREFIX_7702.len());
+        if payload.len() == Address::len_bytes() {
+            Some(Address::from_slice(payload))
+        } else {
+            None
+        }
+    } else {
+        None
     }
 }

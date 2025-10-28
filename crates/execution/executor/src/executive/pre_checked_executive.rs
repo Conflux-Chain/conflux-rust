@@ -28,9 +28,9 @@ use cfx_types::{
 };
 use primitives::{
     transaction::Action, AuthorizationListItem, SignedTransaction,
+    CODE_PREFIX_7702,
 };
 use std::{convert::TryInto, sync::Arc};
-use vm::CODE_PREFIX_7702;
 
 pub(super) struct PreCheckedExecutive<'a, O: ExecutiveObserver> {
     pub context: ExecutiveContext<'a>,
