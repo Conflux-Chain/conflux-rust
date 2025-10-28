@@ -19,7 +19,10 @@
 // See http://www.gnu.org/licenses/
 
 //! Evm factory.
-use super::{interpreter::SharedCache, vmtype::VMType};
+use super::{
+    interpreter::{Interpreter, SharedCache},
+    vmtype::VMType,
+};
 use cfx_types::U256;
 #[cfg(test)]
 use cfx_vm_types::CallType;
@@ -40,7 +43,6 @@ impl Factory {
     pub fn create(
         &self, params: ActionParams, spec: &Spec, depth: usize,
     ) -> Box<dyn Exec> {
-        use super::interpreter::Interpreter;
         // Assert there is only one type. Parity Ethereum is dead and no more
         // types will be added.
         match self.evm {

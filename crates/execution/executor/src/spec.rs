@@ -115,6 +115,8 @@ pub struct TransitionsBlockNumber {
     pub cip144: BlockNumber,
     /// CIP-145: Fix Receipts upon `NotEnoughBalance` Error
     pub cip145: BlockNumber,
+    /// EIP-7939: Count Leading Zeros Instruction
+    pub eip7939: BlockHeight,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -229,6 +231,7 @@ impl CommonParams {
         spec.cip_c2_fix = height >= self.transition_heights.cip_c2_fix;
         spec.cancun_opcodes = number >= self.transition_numbers.cancun_opcodes;
         spec.align_evm = height >= self.transition_heights.align_evm && cip645;
+        spec.eip7939 = number >= self.transition_numbers.eip7939;
 
         spec.overwrite_gas_plan_by_cip();
 

@@ -201,6 +201,8 @@ build_config! {
         (cip145_fix_transition_height, (Option<u64>), None)
         // For test only
         (align_evm_transition_height, (u64), u64::MAX)
+        // V3.1
+        (eip7939_transition_number, (Option<u64>), None)
 
 
         // Mining section.
@@ -1531,7 +1533,7 @@ impl Configuration {
             .unwrap_or(default_transition_time);
 
         //
-        // 7702 hardfork (V2.6)
+        // 7702 hardfork (V3.0)
         //
         set_conf!(
             self.raw_conf.eoa_code_transition_height.unwrap_or(default_transition_time);
@@ -1548,6 +1550,12 @@ impl Configuration {
         }
         params.transition_heights.align_evm =
             self.raw_conf.align_evm_transition_height;
+
+        // hardfork (V3.1)
+        params.transition_numbers.eip7939 = self
+            .raw_conf
+            .eip7939_transition_number
+            .unwrap_or(default_transition_time);
     }
 }
 
