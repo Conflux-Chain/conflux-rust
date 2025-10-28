@@ -434,14 +434,14 @@ impl Instruction {
     pub fn info<const CANCUN: bool>(
         &self, cip645: bool, eip7939: bool,
     ) -> &InstructionInfo {
-        let instrs = if !CANCUN {
-            &*INSTRUCTIONS
-        } else if eip7939 {
+        let instrs = if eip7939 {
             &*INSTRUCTIONS_EIP7939
-        } else if !cip645 {
+        } else if cip645 {
+            &*INSTRUCTIONS_CIP645
+        } else if CANCUN {
             &*INSTRUCTIONS_CANCUN
         } else {
-            &*INSTRUCTIONS_CIP645
+            &*INSTRUCTIONS
         };
 
         instrs[*self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")

@@ -395,18 +395,6 @@ impl<Cost: CostType, const CANCUN: bool> Interpreter<Cost, CANCUN> {
                     + *gas;
         }
 
-        // if self.do_trace {
-        //     context.trace_executed(
-        //         self.gasometer
-        //             .as_mut()
-        //             .expect(GASOMETER_PROOF)
-        //             .current_gas
-        //             .as_u256(),
-        //         self.stack.peek_top(self.last_stack_ret_len),
-        //         &self.mem,
-        //     );
-        // }
-
         // Advance
         match result {
             InstructionResult::JumpToPosition(position) => {
