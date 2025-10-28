@@ -1552,7 +1552,7 @@ impl Configuration {
             self.raw_conf.align_evm_transition_height;
 
         // hardfork (V3.1)
-        params.transition_numbers.eip7939 = self
+        params.transition_heights.eip7939 = self
             .raw_conf
             .eip7939_transition_number
             .unwrap_or(default_transition_time);
