@@ -23,60 +23,38 @@
 mod blake2f;
 mod bls12_381;
 mod executable;
+mod interface;
 mod kzg_point_evaluations;
+mod modexp;
 mod price_plan;
 mod pricer;
 
 pub use bls12_381::build_bls12_builtin_map;
 pub use executable::BuiltinExec;
+pub use interface::*;
 pub use price_plan::{IfPricer, StaticPlan};
-pub use pricer::Pricer;
 
 use std::{
-    cmp::{max, min},
+    cmp::min,
     io::{self, Cursor, Read},
     mem::size_of,
 };
 
-use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+use byteorder::{BigEndian, LittleEndian, ReadBytesExt};
 use cfx_bytes::BytesRef;
-use cfx_types::{Space, H256, U256};
+use cfx_types::{Address, Space, H256, U256};
 use cfx_vm_types::Spec;
-use cfxkey::{public_to_address, recover as ec_recover, Address, Signature};
-use num::{BigUint, One, Zero};
+use cfxkey::{public_to_address, recover as ec_recover, Signature};
 use parity_crypto::digest;
 
 use blake2f::compress;
 
-use self::{bls12_381::bls12_builtin_factory, price_plan::PricePlan};
+use bls12_381::bls12_builtin_factory;
+use modexp::ModexpImpl;
+pub(crate) use modexp::ModexpPricer;
 pub(crate) use pricer::{
-    AltBn128PairingPricer, Blake2FPricer, ConstPricer, Linear, ModexpPricer,
+    AltBn128PairingPricer, Blake2FPricer, ConstPricer, Linear,
 };
-
-/// Execution error.
-#[derive(Debug)]
-pub struct Error(pub String);
-
-impl From<&'static str> for Error {
-    fn from(val: &'static str) -> Self { Error(val.into()) }
-}
-
-impl From<String> for Error {
-    fn from(val: String) -> Self { Error(val) }
-}
-
-impl Into<cfx_vm_types::Error> for Error {
-    fn into(self) -> cfx_vm_types::Error {
-        cfx_vm_types::Error::BuiltIn(self.0)
-    }
-}
-
-/// Native implementation of a built-in contract.
-pub trait Impl: Send + Sync {
-    /// execute this built-in on the given input, writing to the given output.
-    fn execute(&self, input: &[u8], output: &mut BytesRef)
-        -> Result<(), Error>;
-}
 
 /// Pricing scheme, execution definition, and activation block for a built-in
 /// contract.
@@ -88,7 +66,7 @@ pub trait Impl: Send + Sync {
 /// Unless `is_active` is true,
 pub struct Builtin {
     price_plan: Box<dyn PricePlan>,
-    native: Box<dyn Impl>,
+    native: Box<dyn Precompile>,
     activate_at: u64,
 }
 
@@ -115,7 +93,8 @@ impl Builtin {
     pub fn is_active(&self, at: u64) -> bool { at >= self.activate_at }
 
     pub fn new(
-        price_plan: Box<dyn PricePlan>, native: Box<dyn Impl>, activate_at: u64,
+        price_plan: Box<dyn PricePlan>, native: Box<dyn Precompile>,
+        activate_at: u64,
     ) -> Builtin {
         Builtin {
             price_plan,
@@ -126,21 +105,25 @@ impl Builtin {
 }
 
 /// Built-in instruction factory.
-pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
+pub fn builtin_factory(name: &str) -> Box<dyn Precompile> {
     match name {
-        "identity" => Box::new(Identity) as Box<dyn Impl>,
-        "ecrecover" => Box::new(EcRecover(Space::Native)) as Box<dyn Impl>,
-        "ecrecover_evm" => {
-            Box::new(EcRecover(Space::Ethereum)) as Box<dyn Impl>
+        "identity" => Box::new(Identity) as Box<dyn Precompile>,
+        "ecrecover" => {
+            Box::new(EcRecover(Space::Native)) as Box<dyn Precompile>
         }
-        "sha256" => Box::new(Sha256) as Box<dyn Impl>,
-        "ripemd160" => Box::new(Ripemd160) as Box<dyn Impl>,
-        "modexp" => Box::new(ModexpImpl) as Box<dyn Impl>,
-        "alt_bn128_add" => Box::new(Bn128AddImpl) as Box<dyn Impl>,
-        "alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<dyn Impl>,
-        "alt_bn128_pairing" => Box::new(Bn128PairingImpl) as Box<dyn Impl>,
-        "blake2_f" => Box::new(Blake2FImpl) as Box<dyn Impl>,
-        "kzg_point_eval" => Box::new(KzgPointEval) as Box<dyn Impl>,
+        "ecrecover_evm" => {
+            Box::new(EcRecover(Space::Ethereum)) as Box<dyn Precompile>
+        }
+        "sha256" => Box::new(Sha256) as Box<dyn Precompile>,
+        "ripemd160" => Box::new(Ripemd160) as Box<dyn Precompile>,
+        "modexp" => Box::new(ModexpImpl) as Box<dyn Precompile>,
+        "alt_bn128_add" => Box::new(Bn128AddImpl) as Box<dyn Precompile>,
+        "alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<dyn Precompile>,
+        "alt_bn128_pairing" => {
+            Box::new(Bn128PairingImpl) as Box<dyn Precompile>
+        }
+        "blake2_f" => Box::new(Blake2FImpl) as Box<dyn Precompile>,
+        "kzg_point_eval" => Box::new(KzgPointEval) as Box<dyn Precompile>,
         "bls12_g1add"
         | "bls12_g1msm"
         | "bls12_g2add"
@@ -178,10 +161,6 @@ struct Ripemd160;
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct ModexpImpl;
-
-#[derive(Debug)]
-#[allow(dead_code)]
 struct Bn128AddImpl;
 
 #[derive(Debug)]
@@ -200,7 +179,7 @@ struct Blake2FImpl;
 #[allow(dead_code)]
 struct KzgPointEval;
 
-impl Impl for Identity {
+impl Precompile for Identity {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
@@ -209,7 +188,7 @@ impl Impl for Identity {
     }
 }
 
-impl Impl for EcRecover {
+impl Precompile for EcRecover {
     fn execute(&self, i: &[u8], output: &mut BytesRef) -> Result<(), Error> {
         let len = min(i.len(), 128);
 
@@ -251,7 +230,7 @@ impl Impl for EcRecover {
     }
 }
 
-impl Impl for Sha256 {
+impl Precompile for Sha256 {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
@@ -261,127 +240,13 @@ impl Impl for Sha256 {
     }
 }
 
-impl Impl for Ripemd160 {
+impl Precompile for Ripemd160 {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
         let hash = digest::ripemd160(input);
         output.write(0, &[0; 12][..]);
         output.write(12, &hash);
-        Ok(())
-    }
-}
-
-// calculate modexp: left-to-right binary exponentiation to keep multiplicands
-// lower
-fn modexp(mut base: BigUint, exp: Vec<u8>, modulus: BigUint) -> BigUint {
-    const BITS_PER_DIGIT: usize = 8;
-
-    // n^m % 0 || n^m % 1
-    if modulus <= BigUint::one() {
-        return BigUint::zero();
-    }
-
-    // normalize exponent
-    let mut exp = exp.into_iter().skip_while(|d| *d == 0).peekable();
-
-    // n^0 % m
-    if let None = exp.peek() {
-        return BigUint::one();
-    }
-
-    // 0^n % m, n > 0
-    if base.is_zero() {
-        return BigUint::zero();
-    }
-
-    base = base % &modulus;
-
-    // Fast path for base divisible by modulus.
-    if base.is_zero() {
-        return BigUint::zero();
-    }
-
-    // Left-to-right binary exponentiation (Handbook of Applied Cryptography -
-    // Algorithm 14.79). http://www.cacr.math.uwaterloo.ca/hac/about/chap14.pdf
-    let mut result = BigUint::one();
-
-    for digit in exp {
-        let mut mask = 1 << (BITS_PER_DIGIT - 1);
-
-        for _ in 0..BITS_PER_DIGIT {
-            result = &result * &result % &modulus;
-
-            if digit & mask > 0 {
-                result = result * &base % &modulus;
-            }
-
-            mask >>= 1;
-        }
-    }
-
-    result
-}
-
-impl Impl for ModexpImpl {
-    fn execute(
-        &self, input: &[u8], output: &mut BytesRef,
-    ) -> Result<(), Error> {
-        let mut reader = input.chain(io::repeat(0));
-        let mut buf = [0; 32];
-
-        // read lengths as usize.
-        // ignoring the first 24 bytes might technically lead us to fall out of
-        // consensus, but so would running out of addressable memory!
-        let mut read_len = |reader: &mut io::Chain<&[u8], io::Repeat>| {
-            reader
-                .read_exact(&mut buf[..])
-                .expect("reading from zero-extended memory cannot fail; qed");
-            BigEndian::read_u64(&buf[24..]) as usize
-        };
-
-        let base_len = read_len(&mut reader);
-        let exp_len = read_len(&mut reader);
-        let mod_len = read_len(&mut reader);
-
-        // Gas formula allows arbitrary large exp_len when base and modulus are
-        // empty, so we need to handle empty base first.
-        let r = if base_len == 0 && mod_len == 0 {
-            BigUint::zero()
-        } else {
-            // read the numbers themselves.
-            let mut buf = vec![0; max(mod_len, max(base_len, exp_len))];
-            let mut read_num = |reader: &mut io::Chain<&[u8], io::Repeat>,
-                                len: usize| {
-                reader.read_exact(&mut buf[..len]).expect(
-                    "reading from zero-extended memory cannot fail; qed",
-                );
-                BigUint::from_bytes_be(&buf[..len])
-            };
-
-            let base = read_num(&mut reader, base_len);
-
-            let mut exp_buf = vec![0; exp_len];
-            reader
-                .read_exact(&mut exp_buf[..exp_len])
-                .expect("reading from zero-extended memory cannot fail; qed");
-
-            let modulus = read_num(&mut reader, mod_len);
-
-            modexp(base, exp_buf, modulus)
-        };
-
-        // write output to given memory, left padded and same length as the
-        // modulus.
-        let bytes = r.to_bytes_be();
-
-        // always true except in the case of zero-length modulus, which leads to
-        // output of length and value 1.
-        if bytes.len() <= mod_len {
-            let res_start = mod_len - bytes.len();
-            output.write(res_start, &bytes);
-        }
-
         Ok(())
     }
 }
@@ -425,7 +290,7 @@ fn read_point(
     })
 }
 
-impl Impl for Bn128AddImpl {
+impl Precompile for Bn128AddImpl {
     // Can fail if any of the 2 points does not belong the bn128 curve
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
@@ -452,7 +317,7 @@ impl Impl for Bn128AddImpl {
     }
 }
 
-impl Impl for Bn128MulImpl {
+impl Precompile for Bn128MulImpl {
     // Can fail if first paramter (bn128 curve point) does not actually belong
     // to the curve
     fn execute(
@@ -479,7 +344,7 @@ impl Impl for Bn128MulImpl {
     }
 }
 
-impl Impl for Bn128PairingImpl {
+impl Precompile for Bn128PairingImpl {
     /// Can fail if:
     ///     - input length is not a multiple of 192
     ///     - any of odd points does not belong to bn128 curve
@@ -598,7 +463,7 @@ impl Bn128PairingImpl {
     }
 }
 
-impl Impl for Blake2FImpl {
+impl Precompile for Blake2FImpl {
     /// Format of `input`:
     /// [4 bytes for rounds][64 bytes for h][128 bytes for m][8 bytes for t_0][8
     /// bytes for t_1][1 byte for f]
@@ -656,7 +521,7 @@ impl Impl for Blake2FImpl {
     }
 }
 
-impl Impl for KzgPointEval {
+impl Precompile for KzgPointEval {
     fn execute(
         &self, input: &[u8], output: &mut BytesRef,
     ) -> Result<(), Error> {
@@ -668,8 +533,8 @@ impl Impl for KzgPointEval {
 #[cfg(test)]
 mod tests {
     use super::{
-        builtin_factory, modexp as me, price_plan::StaticPlan, Blake2FPricer,
-        Builtin, Linear, ModexpPricer,
+        builtin_factory, modexp::modexp as me, price_plan::StaticPlan,
+        Blake2FPricer, Builtin, Linear, ModexpPricer,
     };
     use cfx_bytes::BytesRef;
     use cfx_types::U256;
