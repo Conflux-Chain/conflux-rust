@@ -634,7 +634,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// assert_eq!(slab[key1], 2);
     /// assert_eq!(slab[key2], 1);
     /// ```
-    pub fn iter_mut(&mut self) -> IterMut<T, E> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, T, E> {
         IterMut {
             entries: self.entries
                 [0..self.alloc_fields.get_mut().size_initialized]
@@ -819,7 +819,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// assert_eq!(hello, slab[hello].0);
     /// assert_eq!("hello", slab[hello].1);
     /// ```
-    pub fn vacant_entry(&self) -> Result<VacantEntry<T, E>> {
+    pub fn vacant_entry(&self) -> Result<VacantEntry<'_, T, E>> {
         Ok(VacantEntry {
             key: self.allocate()?,
             slab: self,
