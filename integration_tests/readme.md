@@ -158,6 +158,8 @@ def network(framework_class: Type[ConfluxTestFramework], port_min: int, request:
 
 In the tests, you can start by directly using the `network` fixture for the test framework setup.
 
+You can check available pre-defined framework classes in [test_framework/framework_templates.py](./test_framework/framework_templates.py). It is recommended to directly use `DefaultDevFramework` or inherit your `framework_class` fixture from `DefaultDevFramework` if you don't care about block generation or p2p network setup. This template will setup a dev node, resulting in txs being packed and executed immediately.
+
 You can overwrite the `framework_class` fixture in the test file to customize the test framework setup. Check [cip137_test.py](./tests/cip137_test.py) for an example.
 
 #### Common Fixtures
