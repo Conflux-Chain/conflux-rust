@@ -149,7 +149,12 @@
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_types::U256;
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_types::U256;
 <span class="kw">use </span>cfxcore::pow::{PowComputer, ProofOfWorkProblem, ProofOfWorkSolution};
 <span class="kw">use </span>log::{trace, warn};
 <span class="kw">use </span>std::{
@@ -231,20 +236,23 @@
 
         <span class="kw">let </span>bg = <span class="kw-2">&amp;</span><span class="self">self</span>.bg;
         <span class="kw">let </span>bg_pow = PowComputer::new(bg.pow_config.use_octopus());
+        <span class="kw">let </span><span class="kw-2">mut </span>maybe_problem = <span class="prelude-val">None</span>;
 
         <span class="kw">while </span>bg.is_running() {
-            <span class="kw">let </span>problem = <span class="kw">match </span><span class="self">self</span>.try_fetch_latest_problem() {
+            <span class="kw">match </span><span class="self">self</span>.try_fetch_latest_problem() {
                 <span class="prelude-val">Err</span>(Disconnected) =&gt; <span class="kw">return</span>,
                 <span class="prelude-val">Err</span>(Empty) =&gt; {
-                    thread::sleep(FETCH_PROBLEM_INTERVAL);
-                    <span class="kw">continue</span>;
+                    <span class="kw">if </span>maybe_problem.is_none() {
+                        thread::sleep(FETCH_PROBLEM_INTERVAL);
+                        <span class="kw">continue</span>;
+                    }
                 }
-                <span class="prelude-val">Ok</span>(new_problem) =&gt; new_problem,
+                <span class="prelude-val">Ok</span>(new_problem) =&gt; maybe_problem = <span class="prelude-val">Some</span>(new_problem),
             };
 
             <span class="comment">// If there is a problem to be solved
-
-            </span><span class="macro">trace!</span>(<span class="string">"problem is {:?}"</span>, problem);
+            </span><span class="kw">let </span>problem = maybe_problem.expect(<span class="string">"already set"</span>);
+            <span class="macro">trace!</span>(<span class="string">"problem is {:?}"</span>, problem);
             <span class="kw">let </span>boundary = problem.boundary;
             <span class="kw">let </span>block_hash = problem.block_hash;
             <span class="kw">let </span>block_height = problem.block_height;
@@ -268,6 +276,8 @@
                     <span class="self">self</span>.solution_tx.send(ProofOfWorkSolution { nonce });
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = send_res {
                     <span class="macro">warn!</span>(<span class="string">"Proof of work send error {}"</span>, e);
+                } <span class="kw">else </span>{
+                    maybe_problem = <span class="prelude-val">None</span>;
                 }
             }
         }
