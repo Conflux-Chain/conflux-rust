@@ -2,7 +2,7 @@ use crate::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 use async_trait::async_trait;
 use cfx_execute_helper::estimation::EstimateRequest;
 use cfx_executor::executive::{
-    Executed, ExecutionError, ExecutionOutcome, TxDropError,
+    Executed, ExecutionError, ExecutionOutcome, ToRepackError, TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_rpc_cfx_types::{
@@ -234,6 +234,13 @@ impl EthApi {
             )) => bail!(invalid_input_rpc_err(
                 format! {"tx sender has contract code: {:?}", address}
             )),
+            ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::SenderDoesNotExist,
+            ) => {
+                bail!(RpcError::from(
+                    RpcInvalidTransactionError::InsufficientFunds
+                ))
+            }
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
