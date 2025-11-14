@@ -4,7 +4,6 @@ use std::{fs, time::Duration};
 use tokio::time;
 
 // dump memory profile to file, return the filename
-#[cfg(not(target_env = "msvc"))]
 pub async fn dump_memory_profile() -> Result<String, String> {
     // Get jemalloc profiling controller
     let prof_ctl = jemalloc_pprof::PROF_CTL
@@ -36,7 +35,6 @@ pub async fn dump_memory_profile() -> Result<String, String> {
     Ok(filename)
 }
 
-#[cfg(not(target_env = "msvc"))]
 pub async fn dump_cpu_profile() -> Result<String, String> {
     info!("Starting CPU profiling for 60 seconds...");
 

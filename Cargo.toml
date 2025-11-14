@@ -333,8 +333,8 @@ mockito = "1.5.0"
 
 # mallocator
 tikv-jemallocator = { version = "0.6", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
-tikv-jemalloc-ctl = { version = "0.6", features = ["use_std", "stats"] }
-tikv-jemalloc-sys = { version = "0.6", features = ["profiling"] }
+# tikv-jemalloc-ctl = { version = "0.6", features = ["use_std", "stats"] }
+# tikv-jemalloc-sys = { version = "0.6", features = ["profiling"] }
 jemalloc_pprof = { version = "0.8", features = ["symbolize", "flamegraph"] }
 # CPU profiling
 pprof = { version = "0.15", features = ["flamegraph", "protobuf-codec"] }

@@ -12,8 +12,6 @@ edition.workspace = true
 
 [dependencies]
 chrono = { workspace = true }
-jemalloc_pprof = { workspace = true }
-pprof = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
@@ -21,6 +19,8 @@ cfg-if = { workspace = true }
 tracy-client = { workspace = true, optional = true, features = ["demangle"] }
 
 [target.'cfg(unix)'.dependencies]
+pprof = { workspace = true }
+jemalloc_pprof = { workspace = true }
 tikv-jemallocator = { workspace = true, optional = true }
 snmalloc-rs = { workspace = true, optional = true }
 libc = "0.2"
