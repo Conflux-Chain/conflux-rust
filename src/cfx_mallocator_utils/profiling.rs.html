@@ -69,15 +69,12 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a></pre></div><pre class="rust"><code><span class="kw">use </span>log::info;
+<a href="#71" id="71">71</a></pre></div><pre class="rust"><code><span class="kw">use </span>log::info;
 <span class="kw">use </span>pprof::{protos::Message, ProfilerGuard};
 <span class="kw">use </span>std::{fs, time::Duration};
 <span class="kw">use </span>tokio::time;
 
 <span class="comment">// dump memory profile to file, return the filename
-</span><span class="attr">#[cfg(not(target_env = <span class="string">"msvc"</span>))]
 </span><span class="kw">pub async fn </span>dump_memory_profile() -&gt; <span class="prelude-ty">Result</span>&lt;String, String&gt; {
     <span class="comment">// Get jemalloc profiling controller
     </span><span class="kw">let </span>prof_ctl = jemalloc_pprof::PROF_CTL
@@ -109,8 +106,7 @@
     <span class="prelude-val">Ok</span>(filename)
 }
 
-<span class="attr">#[cfg(not(target_env = <span class="string">"msvc"</span>))]
-</span><span class="kw">pub async fn </span>dump_cpu_profile() -&gt; <span class="prelude-ty">Result</span>&lt;String, String&gt; {
+<span class="kw">pub async fn </span>dump_cpu_profile() -&gt; <span class="prelude-ty">Result</span>&lt;String, String&gt; {
     <span class="macro">info!</span>(<span class="string">"Starting CPU profiling for 60 seconds..."</span>);
 
     <span class="comment">// Create CPU profiler with sampling frequency of 100 Hz

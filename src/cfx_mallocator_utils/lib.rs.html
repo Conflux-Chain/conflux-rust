@@ -4,10 +4,16 @@
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
 <a href="#5" id="5">5</a>
-<a href="#6" id="6">6</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>allocator;
-<span class="kw">pub mod </span>http_server;
-<span class="kw">mod </span>profiling;
-
-<span class="kw">pub use </span>http_server::start_pprf_server;
-<span class="kw">pub use </span>profiling::{dump_cpu_profile, dump_memory_profile};
+<a href="#6" id="6">6</a>
+<a href="#7" id="7">7</a>
+<a href="#8" id="8">8</a>
+<a href="#9" id="9">9</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>allocator;
+<span class="attr">#[cfg(unix)]
+</span><span class="kw">pub mod </span>http_server;
+<span class="attr">#[cfg(unix)]
+</span><span class="kw">mod </span>profiling;
+<span class="attr">#[cfg(unix)]
+</span><span class="kw">pub use </span>http_server::start_pprf_server;
+<span class="attr">#[cfg(unix)]
+</span><span class="kw">pub use </span>profiling::{dump_cpu_profile, dump_memory_profile};
 </code></pre></div></section></main></body></html>

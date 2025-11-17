@@ -154,7 +154,7 @@
     <span class="prelude-val">Ok</span>(pprof)
 }
 
-<span class="kw">pub async fn </span>handle_get_heap_flamegraph(
+<span class="kw">async fn </span>handle_get_heap_flamegraph(
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, (StatusCode, String)&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>prof_ctl = jemalloc_pprof::PROF_CTL
         .as_ref()

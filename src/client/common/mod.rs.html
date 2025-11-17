@@ -819,7 +819,9 @@
 <a href="#818" id="818">818</a>
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -895,7 +897,8 @@
         launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
-<span class="kw">use </span>cfx_mallocator_utils::start_pprf_server;
+<span class="attr">#[cfg(all(unix, feature = <span class="string">"jemalloc-prof"</span>))]
+</span><span class="kw">use </span>cfx_mallocator_utils::start_pprf_server;
 <span class="kw">use </span>cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
 <span class="kw">pub mod </span>delegate_convert;
@@ -1552,6 +1555,7 @@
 
     <span class="comment">// start pprf server, which is used to serve the pprof data for heap
     // profiling
+    </span><span class="attr">#[cfg(all(unix, feature = <span class="string">"jemalloc-prof"</span>))]
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(pprf_addr) = conf.raw_conf.profiling_listen_addr.as_ref() {
         <span class="kw">let </span>pprf_addr = pprf_addr.clone();
         <span class="kw">let </span>_pprf_server_handle = tokio_runtime.spawn(<span class="kw">async move </span>{
