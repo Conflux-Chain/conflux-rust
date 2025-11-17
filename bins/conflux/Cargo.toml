@@ -43,8 +43,8 @@ cfx-executor = { workspace = true }
 cfx-execute-helper = { workspace = true }
 cfx-mallocator-utils = { workspace = true }
 
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-tikv-jemallocator = { workspace = true }
+# [target.'cfg(not(target_env = "msvc"))'.dependencies]
+# tikv-jemallocator = { workspace = true }
 
 [features]
 default = ["jemalloc-global"]
