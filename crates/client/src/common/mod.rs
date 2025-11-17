@@ -74,6 +74,7 @@ use crate::{
         launch_async_rpc_servers, setup_debug_rpc_apis, setup_public_rpc_apis,
     },
 };
+#[cfg(all(unix, feature = "jemalloc-prof"))]
 use cfx_mallocator_utils::start_pprf_server;
 use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
@@ -731,6 +732,7 @@ pub fn initialize_not_light_node_modules(
 
     // start pprf server, which is used to serve the pprof data for heap
     // profiling
+    #[cfg(all(unix, feature = "jemalloc-prof"))]
     if let Some(pprf_addr) = conf.raw_conf.profiling_listen_addr.as_ref() {
         let pprf_addr = pprf_addr.clone();
         let _pprf_server_handle = tokio_runtime.spawn(async move {
