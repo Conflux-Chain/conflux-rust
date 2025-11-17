@@ -92,6 +92,7 @@ cfx-executor = { workspace = true, features = ["testonly_code"] }
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
 u64_mpt_db_key = ["cfx-storage/u64_mpt_db_key"]
+jemalloc-prof = ["cfx-mallocator-utils/jemalloc", "cfx-mallocator-utils/jemalloc-prof"]
 
 [[bench]]
 name = "benchmark"
