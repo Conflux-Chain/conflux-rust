@@ -659,6 +659,14 @@ impl TransactionPoolInner {
         self.deferred_pool.get_pack_info(addr, nonce, balance)
     }
 
+    /// Get gas prices of transactions in pack info range
+    /// Returns formatted string like "nonce1:price1, nonce2:price2, ..."
+    pub fn get_pack_info_tx_gas_prices(
+        &self, addr: &AddressWithSpace, first_tx_nonce: U256, last_valid_nonce: U256,
+    ) -> Option<String> {
+        self.deferred_pool.get_pack_info_tx_gas_prices(addr, first_tx_nonce, last_valid_nonce)
+    }
+
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
         &mut self, num_txs: usize, block_gas_limit: U256, evm_gas_limit: U256,

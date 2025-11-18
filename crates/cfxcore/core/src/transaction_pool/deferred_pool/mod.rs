@@ -555,4 +555,28 @@ impl DeferredPool {
             })
     }
 
+    /// Get gas prices of transactions in pack info range
+    /// Returns formatted string like "nonce1:price1, nonce2:price2, ..."
+    pub fn get_pack_info_tx_gas_prices(
+        &self, addr: &AddressWithSpace, first_tx_nonce: U256, last_valid_nonce: U256,
+    ) -> Option<String> {
+        self.buckets.get(addr).and_then(|bucket| {
+            let mut gas_prices = Vec::new();
+            let mut current_nonce = first_tx_nonce;
+            while current_nonce <= last_valid_nonce {
+                if let Some(tx_with_info) = bucket.get_tx_by_nonce(current_nonce) {
+                    gas_prices.push(format!("{}:{:?}", current_nonce, tx_with_info.transaction.gas_price()));
+                } else {
+                    break;
+                }
+                current_nonce += 1.into();
+            }
+            if gas_prices.is_empty() {
+                None
+            } else {
+                Some(gas_prices.join(", "))
+            }
+        })
+    }
+
 }
