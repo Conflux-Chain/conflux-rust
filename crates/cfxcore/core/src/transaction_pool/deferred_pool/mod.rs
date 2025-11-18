@@ -129,13 +129,22 @@ impl DeferredPool {
         let mut rest_size_limit = block_size_limit;
         let mut rest_gas_limit = block_gas_limit;
 
-        'all: for (_, sender_txs, _) in self
+        'all: for (sender_addr, sender_txs, _) in self
             .packing_pool
             .in_space_mut(space)
             .tx_sampler(&mut rng, block_gas_limit.into())
         {
             'sender: for tx in sender_txs.iter() {
                 if tx.gas_price() < &tx_min_price {
+                    warn!(
+                        "[Packing] Tx not packed: gas_price={:?} < tx_min_price={:?}, \
+                         sender={:?}, nonce={}, hash={:?}",
+                        tx.gas_price(),
+                        tx_min_price,
+                        sender_addr,
+                        tx.nonce(),
+                        tx.hash()
+                    );
                     break 'sender;
                 }
                 match validity(&*tx) {
@@ -513,4 +522,37 @@ impl DeferredPool {
             })
             .sum()
     }
+
+    pub fn is_in_packing_pool(&self, addr: &AddressWithSpace, nonce: &U256) -> bool {
+        self.packing_pool
+            .in_space(addr.space)
+            .get_transactions(addr)
+            .map(|txs| txs.iter().any(|tx| tx.nonce() == nonce))
+            .unwrap_or(false)
+    }
+
+    /// Get packing batch for an address
+    pub fn get_packing_batch(&self, addr: &AddressWithSpace) -> Option<Vec<&Arc<SignedTransaction>>> {
+        self.packing_pool
+            .in_space(addr.space)
+            .get_transactions(addr)
+            .map(|txs| txs.iter().collect())
+    }
+
+    /// Get pack_info from bucket.recalculate_readiness_with_local_info
+    /// Returns (first_tx_nonce, last_valid_nonce)
+    pub fn get_pack_info(
+        &self, addr: &AddressWithSpace, nonce: U256, balance: U256,
+    ) -> Option<(U256, U256)> {
+        self.buckets
+            .get(addr)
+            .and_then(|bucket| {
+                bucket
+                    .recalculate_readiness_with_local_info(nonce, balance)
+                    .map(|(first_tx, last_valid_nonce)| {
+                        (*first_tx.nonce(), last_valid_nonce)
+                    })
+            })
+    }
+
 }

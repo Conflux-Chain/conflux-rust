@@ -1,4 +1,5 @@
 target
+.qoder/
 *.profraw
 **/Cargo.lock
 !tools/*/Cargo.lock

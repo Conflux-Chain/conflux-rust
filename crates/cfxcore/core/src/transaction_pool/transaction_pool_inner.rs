@@ -640,6 +640,25 @@ impl TransactionPoolInner {
         }
     }
 
+    pub fn is_tx_in_packing_pool(&self, addr: &AddressWithSpace, nonce: &U256) -> bool {
+        self.deferred_pool.is_in_packing_pool(addr, nonce)
+    }
+
+    /// Get packing batch for an address from packing pool
+    pub fn deferred_pool_get_packing_batch(
+        &self, addr: &AddressWithSpace,
+    ) -> Option<Vec<&Arc<SignedTransaction>>> {
+        self.deferred_pool.get_packing_batch(addr)
+    }
+
+    /// Get pack_info from bucket.recalculate_readiness_with_local_info
+    /// Returns (first_tx_nonce, last_valid_nonce)
+    pub fn get_pack_info(
+        &self, addr: &AddressWithSpace, nonce: U256, balance: U256,
+    ) -> Option<(U256, U256)> {
+        self.deferred_pool.get_pack_info(addr, nonce, balance)
+    }
+
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
         &mut self, num_txs: usize, block_gas_limit: U256, evm_gas_limit: U256,

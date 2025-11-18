@@ -353,6 +353,56 @@ impl TransactionPool {
             first_tx_status = Some(Pending(PendingReason::OutdatedStatus));
         }
 
+        // Check if transaction has entered packing pool
+        if matches!(first_tx_status, Some(Ready)) {
+            let addr_with_space = first_tx.sender();
+            let first_tx_nonce = first_tx.nonce();
+            if !inner.is_tx_in_packing_pool(&addr_with_space, &first_tx_nonce) {
+                // Tx not in packing pool, log detailed diagnosis
+                info!(
+                    "[PackingPoolDiagnosis] Tx not in packing pool. addr={:?}, nonce={}, hash={:?}",
+                    addr_with_space, first_tx_nonce, first_tx.hash()
+                );
+
+                // Get packing batch info if address exists in packing pool
+                if let Some(txs) = inner.deferred_pool_get_packing_batch(&addr_with_space) {
+                    info!(
+                        "[PackingPoolDiagnosis] Address has packing batch: first_nonce={}, count={}",
+                        txs.first().map(|tx| *tx.nonce()).unwrap_or_default(),
+                        txs.len()
+                    );
+                } else {
+                    info!(
+                        "[PackingPoolDiagnosis] Address has NO packing batch in packing pool"
+                    );
+                }
+
+                // Get state nonce and balance
+                let (state_nonce, state_balance) =
+                    inner.get_local_nonce_and_balance(&addr_with_space)
+                        .unwrap_or((U256::zero(), U256::zero()));
+                info!(
+                    "[PackingPoolDiagnosis] State info: nonce={}, balance={}",
+                    state_nonce, state_balance
+                );
+
+                // Get pack_info from bucket.recalculate_readiness_with_local_info
+                if let Some(pack_info) = inner.get_pack_info(&addr_with_space, state_nonce, state_balance) {
+                    let (first_tx_in_pack, last_valid_nonce) = pack_info;
+                    info!(
+                        "[PackingPoolDiagnosis] Pack info: first_tx_nonce={}, last_valid_nonce={}",
+                        first_tx_in_pack, last_valid_nonce
+                    );
+                } else {
+                    info!(
+                        "[PackingPoolDiagnosis] Pack info: None (no ready transactions)"
+                    );
+                }
+
+                first_tx_status = Some(Pending(PendingReason::NotEnterPackingPool));
+            } 
+        }
+
         return Ok((txs, first_tx_status, pending_count));
     }
 

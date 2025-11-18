@@ -20,4 +20,9 @@ pub enum PendingReason {
     // been ready, and the user needs to send a new transaction to trigger
     // the status change.
     OutdatedStatus,
+    // The transaction has not entered the packing pool because there are
+    // unready transactions ahead of it (nonce gap or insufficient balance),
+    // or the transaction's gas price is too low compared to the current
+    // minimum price required for packing.
+    NotEnterPackingPool,
 }
