@@ -1198,16 +1198,12 @@ fn test_is_in_packing_pool_and_diagnosis() {
     assert!(!dpool.is_in_packing_pool(&addr, &U256::from(1)));
     assert!(!dpool.is_in_packing_pool(&addr, &U256::from(2)));
     
-    // 调用诊断方法，打印诊断信息
-    println!("\n========== Test: is_in_packing_pool and log_packing_pool_diagnosis ==========");
-    
     // 输出诊断信息
     dpool.log_packing_pool_diagnosis(
         &addr,
-        state_nonce,  // state_nonce为2
+        state_nonce,  
         state_balance,
     );
-    println!("=====================================================================\n");
 }
 
 
