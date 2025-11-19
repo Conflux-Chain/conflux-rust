@@ -1098,6 +1098,28 @@ fn test_eth_content_from() {
     assert!(result4.len() == 0);
 }
 
+fn init_logger() {
+    use log::LevelFilter;
+    let _ = log4rs::init_config(
+        log4rs::config::Config::builder()
+            .appender(
+                log4rs::config::Appender::builder().build(
+                    "stdout",
+                    Box::new(
+                        log4rs::append::console::ConsoleAppender::builder()
+                            .build(),
+                    ),
+                ),
+            )
+            .build(
+                log4rs::config::Root::builder()
+                    .appender("stdout")
+                    .build(LevelFilter::Info),
+            )
+            .unwrap(),
+    );
+}
+
 #[test]
 fn test_is_in_packing_pool_and_diagnosis() {
     // 测试场景：
@@ -1105,7 +1127,8 @@ fn test_is_in_packing_pool_and_diagnosis() {
     // 2. 删除nonce 0，使nonce 1不在packing_pool中
     // 3. 验证is_in_packing_pool()的返回值
     // 4. 调用log_packing_pool_diagnosis()观察诊断输出
-    
+
+    init_logger();
     let mut dpool = DeferredPool::new_for_test();
     let addr = const_account_with_native_space();
     let state_nonce = U256::from(0);
@@ -1146,25 +1169,24 @@ fn test_is_in_packing_pool_and_diagnosis() {
     assert!(dpool.is_in_packing_pool(&addr, &U256::from(0)));
     assert!(dpool.is_in_packing_pool(&addr, &U256::from(1)));
     assert!(dpool.is_in_packing_pool(&addr, &U256::from(2)));
-    
-    // 删除nonce 0
-    dpool.remove_lowest_nonce(&addr);
 
-    // 验证：nonce 0已删除，nonce 1在packing_pool中
-    assert!(!dpool.is_in_packing_pool(&addr, &U256::from(0)));
-    assert!(dpool.is_in_packing_pool(&addr, &U256::from(1)));
-    assert!(dpool.is_in_packing_pool(&addr, &U256::from(2)));
-
-       // 输出诊断信息
+         // 输出诊断信息
     dpool.log_packing_pool_diagnosis(
         &addr,
         state_nonce,  // state_nonce 仍然是 0
         state_balance,
     );
     
+    // 删除nonce 0
+    dpool.remove_lowest_nonce(&addr);
+
+    // 验证：nonce 0已删除
+    assert!(!dpool.is_in_packing_pool(&addr, &U256::from(0)));
+    assert!(dpool.is_in_packing_pool(&addr, &U256::from(1)));
+    assert!(dpool.is_in_packing_pool(&addr, &U256::from(2)));
+    
     //let state_nonce = U256::from(1);
-    // 重新计算，此时state_nonce为0（链上还未执行）
-    // 但因为bucket中的最低nonce变成了1，所以nonce 1不再连续，不在packing_pool中
+    //重新计算，deferred_pool的nonce是从1开始的，但state_nonce仍然是0，池中已没有从state_nonce开始的连续nonce
     dpool.recalculate_readiness_with_local_info(
         &addr,
         state_nonce,  // state_nonce 仍然是 0
@@ -1174,8 +1196,7 @@ fn test_is_in_packing_pool_and_diagnosis() {
     // 验证：nonce 0已删除，nonce 1不在packing_pool中
     assert!(!dpool.is_in_packing_pool(&addr, &U256::from(0)));
     assert!(!dpool.is_in_packing_pool(&addr, &U256::from(1)));
-    // nonce 2仍然在packing_pool中
-    assert!(dpool.is_in_packing_pool(&addr, &U256::from(2)));
+    assert!(!dpool.is_in_packing_pool(&addr, &U256::from(2)));
     
     // 调用诊断方法，打印诊断信息
     println!("\n========== Test: is_in_packing_pool and log_packing_pool_diagnosis ==========");
