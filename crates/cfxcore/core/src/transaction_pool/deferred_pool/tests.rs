@@ -1099,13 +1099,17 @@ fn test_eth_content_from() {
 }
 
 #[test]
-fn test_diagnosis_when_tx_not_in_packing_pool() {
-    // 测试：模拟 `get_account_pending_transactions` 的诊断推理
-    // 场景：nonce 1 是第一个就绪交易但不在 packing_pool 中
-    // 模拟打印推理信息：第一个交易信息、packing_batch、state 信息、pack_info
+fn test_is_in_packing_pool_and_diagnosis() {
+    // 测试场景：
+    // 1. 插入三个连续nonce的交易（0, 1, 2），使其都进入packing_pool
+    // 2. 删除nonce 0，使nonce 1不在packing_pool中
+    // 3. 验证is_in_packing_pool()的返回值
+    // 4. 调用log_packing_pool_diagnosis()观察诊断输出
     
     let mut dpool = DeferredPool::new_for_test();
     let addr = const_account_with_native_space();
+    let state_nonce = U256::from(0);
+    let state_balance = U256::from(1_000_000_000_000_000u64);
     
     // 创建三个交易
     let tx0 = create_tx_with_ready_info(
@@ -1130,76 +1134,59 @@ fn test_diagnosis_when_tx_not_in_packing_pool() {
         PRIVATE_KEY,
     );
     
+    // 插入交易
     dpool.insert(tx0.clone(), false);
     dpool.insert(tx1.clone(), false);
     dpool.insert(tx2.clone(), false);
     
-    // 一开始所有交易都进入 packing_pool
-    dpool.recalculate_readiness_with_local_info(
-        &addr,
-        U256::from(0),
-        U256::from(1_000_000_000_000_000u64),
-    );
+    // 计算就绪性，使所有交易进入packing_pool
+    dpool.recalculate_readiness_with_local_info(&addr, state_nonce, state_balance);
     
-    // 删除 nonce 0，此时 nonce 1 就不在 packing_pool 中
+    // 验证：所有交易都在packing_pool中
+    assert!(dpool.is_in_packing_pool(&addr, &U256::from(0)));
+    assert!(dpool.is_in_packing_pool(&addr, &U256::from(1)));
+    assert!(dpool.is_in_packing_pool(&addr, &U256::from(2)));
+    
+    // 删除nonce 0
     dpool.remove_lowest_nonce(&addr);
+
+    // 验证：nonce 0已删除，nonce 1在packing_pool中
+    assert!(!dpool.is_in_packing_pool(&addr, &U256::from(0)));
+    assert!(dpool.is_in_packing_pool(&addr, &U256::from(1)));
+    assert!(dpool.is_in_packing_pool(&addr, &U256::from(2)));
+
+       // 输出诊断信息
+    dpool.log_packing_pool_diagnosis(
+        &addr,
+        state_nonce,  // state_nonce 仍然是 0
+        state_balance,
+    );
+    
+    //let state_nonce = U256::from(1);
+    // 重新计算，此时state_nonce为0（链上还未执行）
+    // 但因为bucket中的最低nonce变成了1，所以nonce 1不再连续，不在packing_pool中
     dpool.recalculate_readiness_with_local_info(
         &addr,
-        U256::from(1),
-        U256::from(1_000_000_000_000_000u64),
+        state_nonce,  // state_nonce 仍然是 0
+        state_balance,
     );
     
-    // nonce 1 是第一个就绪交易
-    let first_tx = tx1.clone();
-    let first_tx_nonce = first_tx.nonce();
-    let addr_with_space = first_tx.sender();
+    // 验证：nonce 0已删除，nonce 1不在packing_pool中
+    assert!(!dpool.is_in_packing_pool(&addr, &U256::from(0)));
+    assert!(!dpool.is_in_packing_pool(&addr, &U256::from(1)));
+    // nonce 2仍然在packing_pool中
+    assert!(dpool.is_in_packing_pool(&addr, &U256::from(2)));
     
-    println!("\n========== DIAGNOSIS INFO ==========");
-    println!("[PackingPoolDiagnosis] Tx not in packing pool. addr={:?}, nonce={}, hash={:?}",
-        addr_with_space, first_tx_nonce, first_tx.hash());
+    // 调用诊断方法，打印诊断信息
+    println!("\n========== Test: is_in_packing_pool and log_packing_pool_diagnosis ==========");
     
-    // 获取 packing_batch 信息
-    if let Some(txs) = dpool.get_packing_batch(&addr_with_space) {
-        let gas_prices: Vec<String> = txs.iter()
-            .map(|tx| format!("{}:{:?}", tx.nonce(), tx.gas_price()))
-            .collect();
-        println!("[PackingPoolDiagnosis] Address has packing batch: first_nonce={}, count={}, gas_prices=[{}]",
-            txs.first().map(|tx| *tx.nonce()).unwrap_or_default(),
-            txs.len(),
-            gas_prices.join(", "));
-    } else {
-        println!("[PackingPoolDiagnosis] Address has NO packing batch in packing pool");
-    }
-    
-    // 获取 state nonce 和 balance
-    let (state_nonce, state_balance) = (
-        U256::from(1),
-        U256::from(1_000_000_000_000_000u64),
+    // 输出诊断信息
+    dpool.log_packing_pool_diagnosis(
+        &addr,
+        state_nonce,  // state_nonce为2
+        state_balance,
     );
-    println!("[PackingPoolDiagnosis] State info: nonce={}, balance={}",
-        state_nonce, state_balance);
-    
-    // 获取 pack_info
-    if let Some(pack_info) = dpool.get_pack_info(&addr_with_space, state_nonce, state_balance) {
-        let (first_tx_in_pack, last_valid_nonce) = pack_info;
-        
-        // 获取 gas_prices
-        if let Some(gas_prices_info) = dpool.get_pack_info_tx_gas_prices(
-            &addr_with_space,
-            first_tx_in_pack,
-            last_valid_nonce
-        ) {
-            println!("[PackingPoolDiagnosis] Pack info: first_tx_nonce={}, last_valid_nonce={}, gas_prices=[{}]",
-                first_tx_in_pack, last_valid_nonce, gas_prices_info);
-        } else {
-            println!("[PackingPoolDiagnosis] Pack info: first_tx_nonce={}, last_valid_nonce={}",
-                first_tx_in_pack, last_valid_nonce);
-        }
-    } else {
-        println!("[PackingPoolDiagnosis] Pack info: None (no ready transactions)");
-    }
-    println!("===================================\n");
-    
-    // 验证 nonce 1 不在 packing_pool
-    assert!(!dpool.is_in_packing_pool(&addr_with_space, &first_tx_nonce));
+    println!("=====================================================================\n");
 }
+
+

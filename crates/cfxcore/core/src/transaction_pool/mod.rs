@@ -335,7 +335,7 @@ impl TransactionPool {
 
         let (sponsored_gas, sponsored_storage) =
             inner.get_sponsored_gas_and_storage(&state, &first_tx)?;
-        let (_, balance) = state.get_nonce_and_balance(&first_tx.sender())?;
+        let (state_nonce, balance) = state.get_nonce_and_balance(&first_tx.sender())?;
         let tx_cost = TxWithReadyInfo::new(
             first_tx.clone(),
             false,
@@ -364,52 +364,8 @@ impl TransactionPool {
                     addr_with_space, first_tx_nonce, first_tx.hash()
                 );
 
-                // Get packing batch info if address exists in packing pool
-                if let Some(txs) = inner.deferred_pool_get_packing_batch(&addr_with_space) {
-                    let gas_prices: Vec<String> = txs.iter()
-                        .map(|tx| format!("{}:{:?}", tx.nonce(), tx.gas_price()))
-                        .collect();
-                    info!(
-                        "[PackingPoolDiagnosis] Address has packing batch: first_nonce={}, count={}, gas_prices=[{}]",
-                        txs.first().map(|tx| *tx.nonce()).unwrap_or_default(),
-                        txs.len(),
-                        gas_prices.join(", ")
-                    );
-                } else {
-                    info!(
-                        "[PackingPoolDiagnosis] Address has NO packing batch in packing pool"
-                    );
-                }
-
-                // Get state nonce and balance
-                let (state_nonce, state_balance) =
-                    inner.get_local_nonce_and_balance(&addr_with_space)
-                        .unwrap_or((U256::zero(), U256::zero()));
-                info!(
-                    "[PackingPoolDiagnosis] State info: nonce={}, balance={}",
-                    state_nonce, state_balance
-                );
-
-                // Get pack_info from bucket.recalculate_readiness_with_local_info
-                if let Some(pack_info) = inner.get_pack_info(&addr_with_space, state_nonce, state_balance) {
-                    let (first_tx_in_pack, last_valid_nonce) = pack_info;
-                    // Get gas prices of transactions in pack info range
-                    if let Some(gas_prices_info) = inner.get_pack_info_tx_gas_prices(&addr_with_space, first_tx_in_pack, last_valid_nonce) {
-                        info!(
-                            "[PackingPoolDiagnosis] Pack info: first_tx_nonce={}, last_valid_nonce={}, gas_prices=[{}]",
-                            first_tx_in_pack, last_valid_nonce, gas_prices_info
-                        );
-                    } else {
-                        info!(
-                            "[PackingPoolDiagnosis] Pack info: first_tx_nonce={}, last_valid_nonce={}",
-                            first_tx_in_pack, last_valid_nonce
-                        );
-                    }
-                } else {
-                    info!(
-                        "[PackingPoolDiagnosis] Pack info: None (no ready transactions)"
-                    );
-                }
+                // Log packing pool diagnosis (includes packing_batch, state info, and pack_info)
+                inner.log_packing_pool_diagnosis(&addr_with_space, state_nonce, balance);
 
                 first_tx_status = Some(Pending(PendingReason::NotEnterPackingPool));
             } 

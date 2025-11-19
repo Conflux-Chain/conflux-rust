@@ -644,27 +644,12 @@ impl TransactionPoolInner {
         self.deferred_pool.is_in_packing_pool(addr, nonce)
     }
 
-    /// Get packing batch for an address from packing pool
-    pub fn deferred_pool_get_packing_batch(
+    /// Log packing pool diagnosis info when tx is not in packing pool
+    pub fn log_packing_pool_diagnosis(
         &self, addr: &AddressWithSpace,
-    ) -> Option<Vec<&Arc<SignedTransaction>>> {
-        self.deferred_pool.get_packing_batch(addr)
-    }
-
-    /// Get pack_info from bucket.recalculate_readiness_with_local_info
-    /// Returns (first_tx_nonce, last_valid_nonce)
-    pub fn get_pack_info(
-        &self, addr: &AddressWithSpace, nonce: U256, balance: U256,
-    ) -> Option<(U256, U256)> {
-        self.deferred_pool.get_pack_info(addr, nonce, balance)
-    }
-
-    /// Get gas prices of transactions in pack info range
-    /// Returns formatted string like "nonce1:price1, nonce2:price2, ..."
-    pub fn get_pack_info_tx_gas_prices(
-        &self, addr: &AddressWithSpace, first_tx_nonce: U256, last_valid_nonce: U256,
-    ) -> Option<String> {
-        self.deferred_pool.get_pack_info_tx_gas_prices(addr, first_tx_nonce, last_valid_nonce)
+        state_nonce: U256, state_balance: U256,
+    ) {
+        self.deferred_pool.log_packing_pool_diagnosis(addr, state_nonce, state_balance)
     }
 
     /// pack at most num_txs transactions randomly
