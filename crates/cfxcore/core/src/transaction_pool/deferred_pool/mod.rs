@@ -288,17 +288,38 @@ impl DeferredPool {
     pub fn recalculate_readiness_with_local_info(
         &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
-        let bucket = self.buckets.get_mut(addr)?;
+        let bucket = match self.buckets.get_mut(addr) {
+            Some(bucket) => bucket,
+            None => {
+                debug!(
+                    "txpool::packing readiness addr={:?} missing bucket",
+                    addr
+                );
+                return None;
+            }
+        };
         let pack_info =
             bucket.recalculate_readiness_with_local_info(nonce, balance);
 
         let (first_tx, last_valid_nonce) = if let Some(info) = pack_info {
             info
         } else {
+            debug!(
+                "txpool::packing readiness addr={:?} no contiguous unpaid tx (nonce={:?}, balance={:?})",
+                addr, nonce, balance
+            );
             // If cannot found such transaction, clear item in packing pool
             let _ = self.packing_pool.in_space_mut(addr.space).remove(*addr);
             return None;
         };
+
+        debug!(
+            "txpool::packing readiness addr={:?} candidate window start_nonce={:?} last_valid_nonce={:?} first_tx_hash={:?}",
+            addr,
+            first_tx.nonce(),
+            last_valid_nonce,
+            first_tx.transaction.hash()
+        );
 
         let first_valid_nonce = *first_tx.nonce();
         let current_txs = if let Some(txs) = self
@@ -325,24 +346,62 @@ impl DeferredPool {
         let current_last_nonce = *current_txs.last().unwrap().nonce();
         // There must be current_first_nonce <= first_valid_nonce
         if current_first_nonce < first_valid_nonce {
-            self.packing_pool
+            let dropped = self
+                .packing_pool
                 .in_space_mut(addr.space)
                 .split_off_prefix(*addr, &first_valid_nonce);
+            if !dropped.is_empty() {
+                debug!(
+                    "txpool::packing readiness addr={:?} dropped {} txs with nonce < {:?}",
+                    addr,
+                    dropped.len(),
+                    first_valid_nonce
+                );
+            }
         }
 
         if current_last_nonce > last_valid_nonce {
-            self.packing_pool
+            let dropped = self
+                .packing_pool
                 .in_space_mut(addr.space)
                 .split_off_suffix(*addr, &(last_valid_nonce + 1));
+            if !dropped.is_empty() {
+                debug!(
+                    "txpool::packing readiness addr={:?} dropped {} txs with nonce > {:?}",
+                    addr,
+                    dropped.len(),
+                    last_valid_nonce
+                );
+            }
         } else if current_last_nonce < last_valid_nonce {
             for tx in bucket.iter_tx_by_nonce(&current_last_nonce) {
                 if tx.nonce() > &last_valid_nonce {
                     break;
                 }
-                let (_, res) = self
+                let (evicted, res) = self
                     .packing_pool
                     .in_space_mut(addr.space)
                     .insert(tx.transaction.clone());
+                match &res {
+                    Ok(_) => {
+                        debug!(
+                            "txpool::packing readiness addr={:?} promoted tx hash={:?} nonce={:?} evicted={}",
+                            addr,
+                            tx.transaction.hash(),
+                            tx.nonce(),
+                            evicted.len()
+                        );
+                    }
+                    Err(e) => {
+                        debug!(
+                            "txpool::packing readiness addr={:?} failed to promote tx hash={:?} nonce={:?} err={:?}",
+                            addr,
+                            tx.transaction.hash(),
+                            tx.nonce(),
+                            e
+                        );
+                    }
+                }
                 if res.is_err() {
                     break;
                 }
