@@ -693,6 +693,19 @@ impl TransactionPoolInner {
             return packed_transactions;
         }
 
+        let trace_enabled = READY_TRACE_ENABLED.load(Ordering::Relaxed);
+        if trace_enabled {
+            debug!(
+                "txpool::pack_transactions start best_epoch={} best_block={} block_gas_limit={} evm_gas_limit={} block_size_limit={} limit={}",
+                best_epoch_height,
+                best_block_number,
+                block_gas_limit,
+                evm_gas_limit,
+                block_size_limit,
+                num_txs
+            );
+        }
+
         let spec = machine.spec(best_block_number, best_epoch_height);
         let transitions = &machine.params().transition_heights;
 
@@ -714,6 +727,14 @@ impl TransactionPoolInner {
                 U256::zero(),
                 validity,
             );
+        if trace_enabled {
+            debug!(
+                "txpool::pack_transactions espace selected={} gas_used={} size_used={}",
+                sampled_tx.len(),
+                used_gas,
+                used_size
+            );
+        }
         packed_transactions.extend_from_slice(&sampled_tx);
 
         let (sampled_tx, _, _) = self.deferred_pool.packing_sampler(
@@ -724,6 +745,13 @@ impl TransactionPoolInner {
             U256::zero(),
             validity,
         );
+        if trace_enabled {
+            debug!(
+                "txpool::pack_transactions native selected={} total={}",
+                sampled_tx.len(),
+                packed_transactions.len() + sampled_tx.len()
+            );
+        }
         packed_transactions.extend_from_slice(&sampled_tx);
 
         if log::max_level() >= log::Level::Debug {

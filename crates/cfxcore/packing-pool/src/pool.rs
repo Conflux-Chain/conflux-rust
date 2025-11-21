@@ -75,7 +75,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             Ok((node, (vec![], Ok(()))))
         };
 
-        let (mut replaced, outcome) =
+        let (replaced, outcome) =
             self.treap_map.update(&sender, update, insert).unwrap();
         match &outcome {
             Ok(()) => {
@@ -138,7 +138,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             Ok((node, vec![]))
         };
 
-        let mut evicted = self.treap_map.update(&sender, update, insert).unwrap();
+        let evicted = self.treap_map.update(&sender, update, insert).unwrap();
         for tx in &evicted {
             debug!(
                 "packing_pool::replace evicted sender={:?} nonce={} gas_price={} gas_limit={}",
@@ -193,7 +193,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 
             Ok(make_apply_outcome(old_info, new_info, node, config, out))
         };
-        let mut removed = self
+        let removed = self
             .treap_map
             .update(&sender, update, |_| Err(()))
             .unwrap_or(vec![]);
