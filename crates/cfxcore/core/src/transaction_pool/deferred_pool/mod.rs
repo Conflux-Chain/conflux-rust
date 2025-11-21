@@ -3,7 +3,7 @@ use super::{
     pool_metrics::pool_inner_metrics::*,
 };
 
-use crate::verification::PackingCheckResult;
+use crate::{transaction_pool::READY_TRACE_ENABLED, verification::PackingCheckResult};
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 
 use cfx_rpc_cfx_types::PendingReason;
@@ -14,7 +14,7 @@ use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
 };
 
 #[cfg(test)]
@@ -288,13 +288,16 @@ impl DeferredPool {
     pub fn recalculate_readiness_with_local_info(
         &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
+        let trace_enabled = READY_TRACE_ENABLED.load(Ordering::Relaxed);
         let bucket = match self.buckets.get_mut(addr) {
             Some(bucket) => bucket,
             None => {
-                debug!(
-                    "txpool::packing readiness addr={:?} missing bucket",
-                    addr
-                );
+                if trace_enabled {
+                    debug!(
+                        "txpool::packing readiness addr={:?} missing bucket",
+                        addr
+                    );
+                }
                 return None;
             }
         };
@@ -304,22 +307,26 @@ impl DeferredPool {
         let (first_tx, last_valid_nonce) = if let Some(info) = pack_info {
             info
         } else {
-            debug!(
-                "txpool::packing readiness addr={:?} no contiguous unpaid tx (nonce={:?}, balance={:?})",
-                addr, nonce, balance
-            );
+            if trace_enabled {
+                debug!(
+                    "txpool::packing readiness addr={:?} no contiguous unpaid tx (nonce={:?}, balance={:?})",
+                    addr, nonce, balance
+                );
+            }
             // If cannot found such transaction, clear item in packing pool
             let _ = self.packing_pool.in_space_mut(addr.space).remove(*addr);
             return None;
         };
 
-        debug!(
-            "txpool::packing readiness addr={:?} candidate window start_nonce={:?} last_valid_nonce={:?} first_tx_hash={:?}",
-            addr,
-            first_tx.nonce(),
-            last_valid_nonce,
-            first_tx.transaction.hash()
-        );
+        if trace_enabled {
+            debug!(
+                "txpool::packing readiness addr={:?} candidate window start_nonce={:?} last_valid_nonce={:?} first_tx_hash={:?}",
+                addr,
+                first_tx.nonce(),
+                last_valid_nonce,
+                first_tx.transaction.hash()
+            );
+        }
 
         let first_valid_nonce = *first_tx.nonce();
         let current_txs = if let Some(txs) = self
@@ -350,7 +357,7 @@ impl DeferredPool {
                 .packing_pool
                 .in_space_mut(addr.space)
                 .split_off_prefix(*addr, &first_valid_nonce);
-            if !dropped.is_empty() {
+            if trace_enabled && !dropped.is_empty() {
                 debug!(
                     "txpool::packing readiness addr={:?} dropped {} txs with nonce < {:?}",
                     addr,
@@ -365,7 +372,7 @@ impl DeferredPool {
                 .packing_pool
                 .in_space_mut(addr.space)
                 .split_off_suffix(*addr, &(last_valid_nonce + 1));
-            if !dropped.is_empty() {
+            if trace_enabled && !dropped.is_empty() {
                 debug!(
                     "txpool::packing readiness addr={:?} dropped {} txs with nonce > {:?}",
                     addr,
@@ -382,24 +389,26 @@ impl DeferredPool {
                     .packing_pool
                     .in_space_mut(addr.space)
                     .insert(tx.transaction.clone());
-                match &res {
-                    Ok(_) => {
-                        debug!(
-                            "txpool::packing readiness addr={:?} promoted tx hash={:?} nonce={:?} evicted={}",
-                            addr,
-                            tx.transaction.hash(),
-                            tx.nonce(),
-                            evicted.len()
-                        );
-                    }
-                    Err(e) => {
-                        debug!(
-                            "txpool::packing readiness addr={:?} failed to promote tx hash={:?} nonce={:?} err={:?}",
-                            addr,
-                            tx.transaction.hash(),
-                            tx.nonce(),
-                            e
-                        );
+                if trace_enabled {
+                    match &res {
+                        Ok(_) => {
+                            debug!(
+                                "txpool::packing readiness addr={:?} promoted tx hash={:?} nonce={:?} evicted={}",
+                                addr,
+                                tx.transaction.hash(),
+                                tx.nonce(),
+                                evicted.len()
+                            );
+                        }
+                        Err(e) => {
+                            debug!(
+                                "txpool::packing readiness addr={:?} failed to promote tx hash={:?} nonce={:?} err={:?}",
+                                addr,
+                                tx.transaction.hash(),
+                                tx.nonce(),
+                                e
+                            );
+                        }
                     }
                 }
                 if res.is_err() {

@@ -7,7 +7,10 @@ use super::{
     TransactionPoolError,
 };
 
-use crate::verification::{PackingCheckResult, VerificationConfig};
+use crate::{
+    transaction_pool::READY_TRACE_ENABLED,
+    verification::{PackingCheckResult, VerificationConfig},
+};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::PackingPoolConfig;
 use cfx_parameters::{
@@ -31,7 +34,7 @@ use primitives::{
 use rlp::*;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::Arc,
+    sync::{atomic::Ordering, Arc},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -276,13 +279,15 @@ impl TransactionPoolInner {
                 .unwrap();
             let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
 
-            debug!(
-                "txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}",
-                to_remove_tx.hash(),
-                victim_address,
-                to_remove_tx.nonce(),
-                new_tx.hash()
-            );
+            if READY_TRACE_ENABLED.load(Ordering::Relaxed) {
+                debug!(
+                    "txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}",
+                    to_remove_tx.hash(),
+                    victim_address,
+                    to_remove_tx.nonce(),
+                    new_tx.hash()
+                );
+            }
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
@@ -601,7 +606,7 @@ impl TransactionPoolInner {
         let (nonce, balance) =
             self.get_and_update_nonce_and_balance_from_storage(addr, state)?;
         self.recalculate_readiness(addr, nonce, balance);
-        if log::log_enabled!(log::Level::Debug) {
+        if READY_TRACE_ENABLED.load(Ordering::Relaxed) {
             debug!(
                 "txpool::recalculate_readiness_with_state addr={:?} nonce={:?} balance={:?}",
                 addr,
@@ -619,21 +624,23 @@ impl TransactionPoolInner {
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
-        match &ret {
-            Some(tx) => debug!(
-                "txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}",
-                addr,
-                nonce,
-                tx.nonce(),
-                tx.hash(),
-                balance
-            ),
-            None => debug!(
-                "txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}",
-                addr,
-                nonce,
-                balance
-            ),
+        if READY_TRACE_ENABLED.load(Ordering::Relaxed) {
+            match &ret {
+                Some(tx) => debug!(
+                    "txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}",
+                    addr,
+                    nonce,
+                    tx.nonce(),
+                    tx.hash(),
+                    balance
+                ),
+                None => debug!(
+                    "txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}",
+                    addr,
+                    nonce,
+                    balance
+                ),
+            }
         }
         // If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
@@ -656,10 +663,12 @@ impl TransactionPoolInner {
             // so this is not likely to happen.
             // One possible reason is that an transactions not in txpool is
             // executed and passed to notify_modified_accounts.
-            debug!(
-                "recalculate_readiness called for missing account: addr={:?}",
-                addr
-            );
+            if READY_TRACE_ENABLED.load(Ordering::Relaxed) {
+                debug!(
+                    "recalculate_readiness called for missing account: addr={:?}",
+                    addr
+                );
+            }
         }
     }
 
