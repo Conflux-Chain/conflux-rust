@@ -2401,6 +2401,7 @@ impl LocalRpc for LocalRpcImpl {
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
             fn txpool_get_account_transactions(&self, address: RpcAddress) -> JsonRpcResult<Vec<RpcTransaction>>;
             fn txpool_clear(&self) -> JsonRpcResult<()>;
+            fn txpool_set_ready_trace_enabled(&self, enabled: bool) -> JsonRpcResult<bool>;
             fn net_node(&self, id: NodeId) -> JsonRpcResult<Option<(String, Node)>>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>)
                 -> JsonRpcResult<bool>;

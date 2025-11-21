@@ -34,11 +34,6 @@ pub trait TransactionPool {
         &self, hash: H256,
     ) -> JsonRpcResult<TxWithPoolInfo>;
 
-    #[rpc(name = "txpool_setReadyTraceEnabled")]
-    fn txpool_set_ready_trace_enabled(
-        &self, enabled: bool,
-    ) -> JsonRpcResult<bool>;
-
     /// Get transaction pending info by account address
     #[rpc(name = "txpool_accountPendingInfo")]
     fn account_pending_info(
