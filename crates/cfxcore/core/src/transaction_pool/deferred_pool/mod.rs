@@ -293,6 +293,20 @@ impl DeferredPool {
                 size_used
             );
         }
+        if to_pack_txs.is_empty()
+            && self.packing_pool.in_space(space).len() > 0
+        {
+            warn!(
+                "txpool::packing_sampler no_tx_selected space={:?} ready_entries={} block_gas_limit={} block_size_limit={} tx_limit={} remaining_gas={} remaining_size={}",
+                space,
+                self.packing_pool.in_space(space).len(),
+                block_gas_limit,
+                block_size_limit,
+                tx_num_limit,
+                rest_gas_limit,
+                rest_size_limit
+            );
+        }
         (to_pack_txs, gas_used, size_used)
     }
 
