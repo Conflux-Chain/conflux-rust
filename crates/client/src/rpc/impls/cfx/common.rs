@@ -1257,6 +1257,13 @@ impl RpcImpl {
         })
     }
 
+    pub fn txpool_set_ready_trace_enabled(
+        &self, enabled: bool,
+    ) -> JsonRpcResult<bool> {
+        self.tx_pool.set_ready_trace_enabled(enabled);
+        Ok(enabled)
+    }
+
     pub fn accounts(&self) -> CoreResult<Vec<RpcAddress>> {
         let accounts: Vec<Address> = self.accounts.accounts().map_err(|e| {
             format!("Could not fetch accounts. With error {:?}", e)
