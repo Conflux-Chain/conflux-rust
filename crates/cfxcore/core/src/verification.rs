@@ -6,6 +6,7 @@ use crate::{
     core_error::{BlockError, CoreError as Error},
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     sync::Error as SyncError,
+    transaction_pool::READY_TRACE_ENABLED,
 };
 use cfx_executor::{
     executive::{eip7623_required_gas, gas_required_for},
@@ -13,6 +14,7 @@ use cfx_executor::{
     spec::TransitionsEpochHeight,
 };
 use cfx_parameters::{block::*, consensus_internal::ELASTICITY_MULTIPLIER};
+use log::debug;
 use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
@@ -35,7 +37,11 @@ use primitives::{
 use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
-use std::{collections::HashSet, convert::TryInto, sync::Arc};
+use std::{
+    collections::HashSet,
+    convert::TryInto,
+    sync::{atomic::Ordering, Arc},
+};
 use unexpected::{Mismatch, OutOfBounds};
 
 #[derive(Clone)]
@@ -669,18 +675,40 @@ impl VerificationConfig {
         let cip1559 = height >= transitions.cip1559;
         let cip7702 = height >= transitions.cip7702;
         let cip645 = height >= transitions.cip645;
+        let trace_enabled = READY_TRACE_ENABLED.load(Ordering::Relaxed);
 
         let (can_pack, later_pack) =
             Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
                 if !Self::check_eip1559_transaction(tx, cip1559, mode) {
+                    if trace_enabled {
+                        debug!(
+                            "fast_recheck: EIP-1559 transaction check failed at height {} txhash={:?}",
+                            height,
+                            tx.hash()
+                        );
+                    }
                     return false;
                 }
 
                 if !Self::check_eip7702_transaction(tx, cip7702, mode) {
+                    if trace_enabled {
+                        debug!(
+                            "fast_recheck: EIP-7702 transaction check failed at height {} txhash={:?}",
+                            height,
+                            tx.hash()
+                        );
+                    }
                     return false;
                 }
 
                 if !Self::check_eip3860(tx, cip645) {
+                    if trace_enabled {
+                        debug!(
+                            "fast_recheck: EIP-3860 transaction check failed at height {} txhash={:?}",
+                            height,
+                            tx.hash()
+                        );
+                    }
                     return false;
                 }
 
