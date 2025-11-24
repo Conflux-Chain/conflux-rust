@@ -1149,6 +1149,7 @@ dependencies = [
  "cfx-math",
  "cfx-types",
  "heap-map",
+ "log",
  "malloc_size_of",
  "malloc_size_of_derive",
  "primitives",
