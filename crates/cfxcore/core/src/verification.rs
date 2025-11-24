@@ -36,7 +36,7 @@ use primitives::{
 use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
-use std::{collections::HashSet, convert::TryInto, sync::Arc,};
+use std::{collections::HashSet, convert::TryInto, sync::Arc};
 use unexpected::{Mismatch, OutOfBounds};
 
 #[derive(Clone)]

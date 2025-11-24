@@ -331,7 +331,6 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
     }
 }
 
-
 fn make_apply_outcome<TX: PackingPoolTransaction, T>(
     old_info: PackInfo, new_info: PackInfo,
     node: &mut Node<PackingPoolMap<TX>>, config: &PackingPoolConfig, out: T,

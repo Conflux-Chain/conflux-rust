@@ -58,8 +58,6 @@ use std::{
 };
 use transaction_pool_inner::TransactionPoolInner;
 
-pub static READY_TRACE_ENABLED: AtomicBool = AtomicBool::new(false);
-
 pub struct TxPoolConfig {
     pub capacity: usize,
     pub min_native_tx_price: u64,
@@ -248,10 +246,6 @@ impl TransactionPool {
     }
 
     pub fn machine(&self) -> Arc<Machine> { self.machine.clone() }
-
-    pub fn set_ready_trace_enabled(&self, enabled: bool) {
-        READY_TRACE_ENABLED.store(enabled, Ordering::Relaxed);
-    }
 
     pub fn get_transaction(
         &self, tx_hash: &H256,
