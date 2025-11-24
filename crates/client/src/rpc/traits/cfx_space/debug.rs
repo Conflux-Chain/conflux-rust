@@ -47,11 +47,6 @@ pub trait LocalRpc {
     #[rpc(name = "debug_clearTxPool")]
     fn txpool_clear(&self) -> JsonRpcResult<()>;
 
-    #[rpc(name = "debug_setTxPoolReadyTraceEnabled")]
-    fn txpool_set_ready_trace_enabled(
-        &self, enabled: bool,
-    ) -> JsonRpcResult<bool>;
-
     #[rpc(name = "debug_getNetThrottling")]
     fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
 

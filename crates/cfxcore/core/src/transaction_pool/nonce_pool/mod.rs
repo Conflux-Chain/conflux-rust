@@ -3,7 +3,7 @@
 mod nonce_pool_map;
 mod weight;
 
-use crate::transaction_pool::{TransactionPoolError, READY_TRACE_ENABLED};
+use crate::transaction_pool::TransactionPoolError;
 use cfx_packing_pool::{PackingBatch, PackingPoolConfig};
 use cfx_parameters::{
     consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
@@ -14,11 +14,7 @@ use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{SignedTransaction, Transaction};
-use std::{
-    collections::BTreeMap,
-    ops::Deref,
-    sync::{atomic::Ordering, Arc},
-};
+use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
 use self::{nonce_pool_map::NoncePoolMap, weight::NoncePoolWeight};
 
@@ -296,16 +292,13 @@ impl NoncePool {
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
     ) -> Option<(&TxWithReadyInfo, U256)> {
-        let trace_enabled = READY_TRACE_ENABLED.load(Ordering::Relaxed);
         let tx = match self.map.query(&nonce) {
             Some(tx) => tx,
             None => {
-                if trace_enabled {
-                    debug!(
-                        "txpool::nonce_pool readiness nonce={:?} has no transaction starting from sender",
-                        nonce
-                    );
-                }
+                debug!(
+                    "txpool::nonce_pool readiness nonce={:?} has no transaction starting from sender",
+                    nonce
+                );
                 return None;
             }
         };
@@ -325,25 +318,21 @@ impl NoncePool {
         let size_elapsed = b.size - a.size;
         let cost_elapsed = b.cost - a.cost;
         if U256::from(size_elapsed - 1) != tx.nonce() - nonce {
-            if trace_enabled {
-                debug!(
-                    "txpool::nonce_pool readiness gap sender={:?} start_nonce={:?} first_missing_nonce={:?}",
-                    tx.sender(),
-                    nonce,
-                    nonce + U256::from(size_elapsed - 1)
-                );
-            }
+            debug!(
+                "txpool::nonce_pool readiness gap sender={:?} start_nonce={:?} first_missing_nonce={:?}",
+                tx.sender(),
+                nonce,
+                nonce + U256::from(size_elapsed - 1)
+            );
             return None;
         }
         if cost_elapsed > balance {
-            if trace_enabled {
-                debug!(
-                    "txpool::nonce_pool readiness insufficient balance sender={:?} need={:?} have={:?}",
-                    tx.sender(),
-                    cost_elapsed,
-                    balance
-                );
-            }
+            debug!(
+                "txpool::nonce_pool readiness insufficient balance sender={:?} need={:?} have={:?}",
+                tx.sender(),
+                cost_elapsed,
+                balance
+            );
             return None;
         }
 
@@ -352,15 +341,13 @@ impl NoncePool {
             b,
             balance - cost_elapsed,
         );
-        if trace_enabled {
-            debug!(
-                "txpool::nonce_pool readiness range sender={:?} start_nonce={:?} end_nonce={:?} first_hash={:?}",
-                tx.sender(),
-                tx.nonce(),
-                end_nonce,
-                tx.transaction.hash()
-            );
-        }
+        debug!(
+            "txpool::nonce_pool readiness range sender={:?} start_nonce={:?} end_nonce={:?} first_hash={:?}",
+            tx.sender(),
+            tx.nonce(),
+            end_nonce,
+            tx.transaction.hash()
+        );
         Some((tx, end_nonce))
     }
 

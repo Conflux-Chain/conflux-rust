@@ -3,7 +3,7 @@ use super::{
     pool_metrics::pool_inner_metrics::*,
 };
 
-use crate::{transaction_pool::READY_TRACE_ENABLED, verification::PackingCheckResult};
+use crate::verification::PackingCheckResult;
 use cfx_packing_pool::{PackingPool, PackingPoolConfig};
 
 use cfx_rpc_cfx_types::PendingReason;
@@ -14,7 +14,7 @@ use rand::SeedableRng;
 use rand_xorshift::XorShiftRng;
 use std::{
     collections::{BTreeMap, HashMap},
-    sync::{atomic::Ordering, Arc},
+    sync::Arc,
 };
 
 #[cfg(test)]
@@ -106,17 +106,14 @@ impl DeferredPool {
             return (vec![], 0.into(), 0);
         }
 
-        let trace_enabled = READY_TRACE_ENABLED.load(Ordering::Relaxed);
-        if trace_enabled {
-            debug!(
-                "txpool::packing_sampler start space={:?} block_gas_limit={} block_size_limit={} tx_limit={} min_price={}",
-                space,
-                block_gas_limit,
-                block_size_limit,
-                tx_num_limit,
-                tx_min_price
-            );
-        }
+        debug!(
+            "txpool::packing_sampler start space={:?} block_gas_limit={} block_size_limit={} tx_limit={} min_price={}",
+            space,
+            block_gas_limit,
+            block_size_limit,
+            tx_num_limit,
+            tx_min_price
+        );
 
         let mut to_pack_txs = Vec::new();
         let mut to_drop_txs = Vec::new();
@@ -148,38 +145,32 @@ impl DeferredPool {
         {
             'sender: for tx in sender_txs.iter() {
                 if tx.gas_price() < &tx_min_price {
-                    if trace_enabled {
-                        debug!(
-                            "txpool::packing_sampler skip sender={:?} nonce={} reason=low_price tx_price={} min_price={}",
-                            sender,
-                            tx.nonce(),
-                            tx.gas_price(),
-                            tx_min_price
-                        );
-                    }
+                    debug!(
+                        "txpool::packing_sampler skip sender={:?} nonce={} reason=low_price tx_price={} min_price={}",
+                        sender,
+                        tx.nonce(),
+                        tx.gas_price(),
+                        tx_min_price
+                    );
                     break 'sender;
                 }
                 match validity(&*tx) {
                     PackingCheckResult::Pack => {}
                     PackingCheckResult::Pending => {
-                        if trace_enabled {
-                            debug!(
-                                "txpool::packing_sampler stop sender={:?} nonce={} reason=pending",
-                                sender,
-                                tx.nonce()
-                            );
-                        }
+                        debug!(
+                            "txpool::packing_sampler stop sender={:?} nonce={} reason=pending",
+                            sender,
+                            tx.nonce()
+                        );
                         break 'sender;
                     }
                     PackingCheckResult::Drop => {
                         to_drop_txs.push(tx.clone());
-                        if trace_enabled {
-                            debug!(
-                                "txpool::packing_sampler drop sender={:?} nonce={} reason=invalid",
-                                sender,
-                                tx.nonce()
-                            );
-                        }
+                        debug!(
+                            "txpool::packing_sampler drop sender={:?} nonce={} reason=invalid",
+                            sender,
+                            tx.nonce()
+                        );
                         break 'sender;
                     }
                 }
@@ -188,26 +179,22 @@ impl DeferredPool {
                 if gas_limit > rest_gas_limit {
                     if gas_limit >= minimum_unit_gas_limit {
                         minimum_unit_gas_limit += minimum_unit_gas_limit >> 4;
-                        if trace_enabled {
-                            debug!(
-                                "txpool::packing_sampler sender={:?} nonce={} gas_limit={} exceeds remaining_gas={} adjust_threshold={}",
-                                sender,
-                                tx.nonce(),
-                                gas_limit,
-                                rest_gas_limit,
-                                minimum_unit_gas_limit
-                            );
-                        }
+                        debug!(
+                            "txpool::packing_sampler sender={:?} nonce={} gas_limit={} exceeds remaining_gas={} adjust_threshold={}",
+                            sender,
+                            tx.nonce(),
+                            gas_limit,
+                            rest_gas_limit,
+                            minimum_unit_gas_limit
+                        );
                         break 'sender;
                     } else {
-                        if trace_enabled {
-                            debug!(
-                                "txpool::packing_sampler stop all space={:?} reason=gas_exhausted remaining_gas={} next_gas_limit={}",
-                                space,
-                                rest_gas_limit,
-                                gas_limit
-                            );
-                        }
+                        debug!(
+                            "txpool::packing_sampler stop all space={:?} reason=gas_exhausted remaining_gas={} next_gas_limit={}",
+                            space,
+                            rest_gas_limit,
+                            gas_limit
+                        );
                         break 'all;
                     }
                 } else {
@@ -218,26 +205,22 @@ impl DeferredPool {
                 if tx_size > rest_size_limit {
                     if tx_size >= minimum_unit_tx_size {
                         minimum_unit_tx_size += minimum_unit_tx_size >> 4;
-                        if trace_enabled {
-                            debug!(
-                                "txpool::packing_sampler sender={:?} nonce={} tx_size={} exceeds remaining_size={} adjust_threshold_size={}",
-                                sender,
-                                tx.nonce(),
-                                tx_size,
-                                rest_size_limit,
-                                minimum_unit_tx_size
-                            );
-                        }
+                        debug!(
+                            "txpool::packing_sampler sender={:?} nonce={} tx_size={} exceeds remaining_size={} adjust_threshold_size={}",
+                            sender,
+                            tx.nonce(),
+                            tx_size,
+                            rest_size_limit,
+                            minimum_unit_tx_size
+                        );
                         break 'sender;
                     } else {
-                        if trace_enabled {
-                            debug!(
-                                "txpool::packing_sampler stop all space={:?} reason=size_exhausted remaining_size={} next_size={}",
-                                space,
-                                rest_size_limit,
-                                tx_size
-                            );
-                        }
+                        debug!(
+                            "txpool::packing_sampler stop all space={:?} reason=size_exhausted remaining_size={} next_size={}",
+                            space,
+                            rest_size_limit,
+                            tx_size
+                        );
                         break 'all;
                     }
                 } else {
@@ -245,22 +228,18 @@ impl DeferredPool {
                 }
 
                 to_pack_txs.push(tx.clone());
-                if trace_enabled {
-                    debug!(
-                        "txpool::packing_sampler select sender={:?} nonce={} remaining_gas={} remaining_size={} count={}",
-                        sender,
-                        tx.nonce(),
-                        rest_gas_limit,
-                        rest_size_limit,
-                        to_pack_txs.len()
-                    );
-                }
+                debug!(
+                    "txpool::packing_sampler select sender={:?} nonce={} remaining_gas={} remaining_size={} count={}",
+                    sender,
+                    tx.nonce(),
+                    rest_gas_limit,
+                    rest_size_limit,
+                    to_pack_txs.len()
+                );
                 if to_pack_txs.len() >= tx_num_limit {
-                    if trace_enabled {
-                        debug!(
-                            "txpool::packing_sampler reached tx limit {}", tx_num_limit
-                        );
-                    }
+                    debug!(
+                        "txpool::packing_sampler reached tx limit {}", tx_num_limit
+                    );
                     break 'all;
                 }
             }
@@ -270,13 +249,11 @@ impl DeferredPool {
         // directly may break gc logic. So we only update packing
         // pool now.
         for tx in to_drop_txs {
-            if trace_enabled {
-                debug!(
-                    "txpool::packing_sampler prune sender={:?} nonce={}",
-                    tx.sender(),
-                    tx.nonce()
-                );
-            }
+            debug!(
+                "txpool::packing_sampler prune sender={:?} nonce={}",
+                tx.sender(),
+                tx.nonce()
+            );
             self.packing_pool
                 .in_space_mut(space)
                 .split_off_suffix(tx.sender(), tx.nonce());
@@ -284,15 +261,13 @@ impl DeferredPool {
 
         let gas_used = block_gas_limit - rest_gas_limit;
         let size_used = block_size_limit - rest_size_limit;
-        if trace_enabled {
-            debug!(
-                "txpool::packing_sampler finish space={:?}  packed={} gas_used={} size_used={}",
-                space,
-                to_pack_txs.len(),
-                gas_used,
-                size_used
-            );
-        }
+        debug!(
+            "txpool::packing_sampler finish space={:?}  packed={} gas_used={} size_used={}",
+            space,
+            to_pack_txs.len(),
+            gas_used,
+            size_used
+        );
         if to_pack_txs.is_empty()
             && self.packing_pool.in_space(space).len() > 0
         {
@@ -404,16 +379,13 @@ impl DeferredPool {
     pub fn recalculate_readiness_with_local_info(
         &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
-        let trace_enabled = READY_TRACE_ENABLED.load(Ordering::Relaxed);
         let bucket = match self.buckets.get_mut(addr) {
             Some(bucket) => bucket,
             None => {
-                if trace_enabled {
-                    debug!(
-                        "txpool::packing readiness addr={:?} missing bucket",
-                        addr
-                    );
-                }
+                debug!(
+                    "txpool::packing readiness addr={:?} missing bucket",
+                    addr
+                );
                 return None;
             }
         };
@@ -423,26 +395,22 @@ impl DeferredPool {
         let (first_tx, last_valid_nonce) = if let Some(info) = pack_info {
             info
         } else {
-            if trace_enabled {
-                debug!(
-                    "txpool::packing readiness addr={:?} no contiguous unpaid tx (nonce={:?}, balance={:?})",
-                    addr, nonce, balance
-                );
-            }
+            debug!(
+                "txpool::packing readiness addr={:?} no contiguous unpaid tx (nonce={:?}, balance={:?})",
+                addr, nonce, balance
+            );
             // If cannot found such transaction, clear item in packing pool
             let _ = self.packing_pool.in_space_mut(addr.space).remove(*addr);
             return None;
         };
 
-        if trace_enabled {
-            debug!(
-                "txpool::packing readiness addr={:?} candidate window start_nonce={:?} last_valid_nonce={:?} first_tx_hash={:?}",
-                addr,
-                first_tx.nonce(),
-                last_valid_nonce,
-                first_tx.transaction.hash()
-            );
-        }
+        debug!(
+            "txpool::packing readiness addr={:?} candidate window start_nonce={:?} last_valid_nonce={:?} first_tx_hash={:?}",
+            addr,
+            first_tx.nonce(),
+            last_valid_nonce,
+            first_tx.transaction.hash()
+        );
 
         let first_valid_nonce = *first_tx.nonce();
         let current_txs = if let Some(txs) = self
@@ -473,7 +441,7 @@ impl DeferredPool {
                 .packing_pool
                 .in_space_mut(addr.space)
                 .split_off_prefix(*addr, &first_valid_nonce);
-            if trace_enabled && !dropped.is_empty() {
+            if !dropped.is_empty() {
                 debug!(
                     "txpool::packing readiness addr={:?} dropped {} txs with nonce < {:?}",
                     addr,
@@ -488,7 +456,7 @@ impl DeferredPool {
                 .packing_pool
                 .in_space_mut(addr.space)
                 .split_off_suffix(*addr, &(last_valid_nonce + 1));
-            if trace_enabled && !dropped.is_empty() {
+            if !dropped.is_empty() {
                 debug!(
                     "txpool::packing readiness addr={:?} dropped {} txs with nonce > {:?}",
                     addr,
@@ -505,28 +473,27 @@ impl DeferredPool {
                     .packing_pool
                     .in_space_mut(addr.space)
                     .insert(tx.transaction.clone());
-                if trace_enabled {
-                    match &res {
-                        Ok(_) => {
-                            debug!(
-                                "txpool::packing readiness addr={:?} promoted tx hash={:?} nonce={:?} evicted={}",
-                                addr,
-                                tx.transaction.hash(),
-                                tx.nonce(),
-                                evicted.len()
-                            );
-                        }
-                        Err(e) => {
-                            debug!(
-                                "txpool::packing readiness addr={:?} failed to promote tx hash={:?} nonce={:?} err={:?}",
-                                addr,
-                                tx.transaction.hash(),
-                                tx.nonce(),
-                                e
-                            );
-                        }
+                match &res {
+                    Ok(_) => {
+                        debug!(
+                            "txpool::packing readiness addr={:?} promoted tx hash={:?} nonce={:?} evicted={}",
+                            addr,
+                            tx.transaction.hash(),
+                            tx.nonce(),
+                            evicted.len()
+                        );
+                    }
+                    Err(e) => {
+                        debug!(
+                            "txpool::packing readiness addr={:?} failed to promote tx hash={:?} nonce={:?} err={:?}",
+                            addr,
+                            tx.transaction.hash(),
+                            tx.nonce(),
+                            e
+                        );
                     }
                 }
+                
                 if res.is_err() {
                     break;
                 }

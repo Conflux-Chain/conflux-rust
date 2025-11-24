@@ -7,10 +7,7 @@ use super::{
     TransactionPoolError,
 };
 
-use crate::{
-    transaction_pool::READY_TRACE_ENABLED,
-    verification::{PackingCheckResult, VerificationConfig},
-};
+use crate::verification::{PackingCheckResult, VerificationConfig};
 use cfx_executor::machine::Machine;
 use cfx_packing_pool::PackingPoolConfig;
 use cfx_parameters::{
@@ -34,7 +31,7 @@ use primitives::{
 use rlp::*;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::{atomic::Ordering, Arc},
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -278,16 +275,13 @@ impl TransactionPoolInner {
                 .remove_lowest_nonce(&victim_address)
                 .unwrap();
             let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
-
-            if READY_TRACE_ENABLED.load(Ordering::Relaxed) {
-                debug!(
-                    "txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}",
-                    to_remove_tx.hash(),
-                    victim_address,
-                    to_remove_tx.nonce(),
-                    new_tx.hash()
-                );
-            }
+            debug!(
+                "txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}",
+                to_remove_tx.hash(),
+                victim_address,
+                to_remove_tx.nonce(),
+                new_tx.hash()
+            );
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
@@ -606,14 +600,12 @@ impl TransactionPoolInner {
         let (nonce, balance) =
             self.get_and_update_nonce_and_balance_from_storage(addr, state)?;
         self.recalculate_readiness(addr, nonce, balance);
-        if READY_TRACE_ENABLED.load(Ordering::Relaxed) {
-            debug!(
-                "txpool::recalculate_readiness_with_state addr={:?} nonce={:?} balance={:?}",
-                addr,
-                nonce,
-                balance
-            );
-        }
+        debug!(
+            "txpool::recalculate_readiness_with_state addr={:?} nonce={:?} balance={:?}",
+            addr,
+            nonce,
+            balance
+        );
         Ok(())
     }
 
@@ -624,23 +616,21 @@ impl TransactionPoolInner {
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
-        if READY_TRACE_ENABLED.load(Ordering::Relaxed) {
-            match &ret {
-                Some(tx) => debug!(
-                    "txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}",
-                    addr,
-                    nonce,
-                    tx.nonce(),
-                    tx.hash(),
-                    balance
-                ),
-                None => debug!(
-                    "txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}",
-                    addr,
-                    nonce,
-                    balance
-                ),
-            }
+        match &ret {
+            Some(tx) => debug!(
+                "txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}",
+                addr,
+                nonce,
+                tx.nonce(),
+                tx.hash(),
+                balance
+            ),
+            None => debug!(
+                "txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}",
+                addr,
+                nonce,
+                balance
+            ),
         }
         // If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
@@ -663,12 +653,10 @@ impl TransactionPoolInner {
             // so this is not likely to happen.
             // One possible reason is that an transactions not in txpool is
             // executed and passed to notify_modified_accounts.
-            if READY_TRACE_ENABLED.load(Ordering::Relaxed) {
-                debug!(
-                    "recalculate_readiness called for missing account: addr={:?}",
-                    addr
-                );
-            }
+            debug!(
+                "recalculate_readiness called for missing account: addr={:?}",
+                addr
+            );
         }
     }
 
@@ -692,19 +680,15 @@ impl TransactionPoolInner {
         if num_txs == 0 {
             return packed_transactions;
         }
-
-        let trace_enabled = READY_TRACE_ENABLED.load(Ordering::Relaxed);
-        if trace_enabled {
-            debug!(
-                "txpool::pack_transactions start best_epoch={} best_block={} block_gas_limit={} evm_gas_limit={} block_size_limit={} limit={}",
-                best_epoch_height,
-                best_block_number,
-                block_gas_limit,
-                evm_gas_limit,
-                block_size_limit,
-                num_txs
-            );
-        }
+        debug!(
+            "txpool::pack_transactions start best_epoch={} best_block={} block_gas_limit={} evm_gas_limit={} block_size_limit={} limit={}",
+            best_epoch_height,
+            best_block_number,
+            block_gas_limit,
+            evm_gas_limit,
+            block_size_limit,
+            num_txs
+        );
 
         let spec = machine.spec(best_block_number, best_epoch_height);
         let transitions = &machine.params().transition_heights;
@@ -727,14 +711,12 @@ impl TransactionPoolInner {
                 U256::zero(),
                 validity,
             );
-        if trace_enabled {
-            debug!(
-                "txpool::pack_transactions espace selected={} gas_used={} size_used={}",
-                sampled_tx.len(),
-                used_gas,
-                used_size
-            );
-        }
+        debug!(
+            "txpool::pack_transactions espace selected={} gas_used={} size_used={}",
+            sampled_tx.len(),
+            used_gas,
+            used_size
+        );
         packed_transactions.extend_from_slice(&sampled_tx);
 
         let (sampled_tx, _, _) = self.deferred_pool.packing_sampler(
@@ -745,13 +727,11 @@ impl TransactionPoolInner {
             U256::zero(),
             validity,
         );
-        if trace_enabled {
-            debug!(
-                "txpool::pack_transactions native selected={} total={}",
-                sampled_tx.len(),
-                packed_transactions.len() + sampled_tx.len()
-            );
-        }
+        debug!(
+            "txpool::pack_transactions native selected={} total={}",
+            sampled_tx.len(),
+            packed_transactions.len() + sampled_tx.len()
+        );
         packed_transactions.extend_from_slice(&sampled_tx);
 
         if log::max_level() >= log::Level::Debug {
