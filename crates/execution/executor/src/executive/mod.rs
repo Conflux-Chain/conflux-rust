@@ -11,11 +11,8 @@ pub mod transact_options;
 
 use cfx_rpc_eth_types::BlockOverrides;
 use cfx_statedb::Result as DbResult;
-use cfx_types::{
-    address_util::AddressUtil, AddressSpaceUtil, AddressWithSpace, Space,
-    SpaceMap, H256, U256,
-};
-use cfx_vm_types::{ConsensusGasSpec, CreateContractAddress, Env, Spec};
+use cfx_types::{SpaceMap, U256};
+use cfx_vm_types::{ConsensusGasSpec, Env, Spec};
 use primitives::{AccessList, SignedTransaction};
 
 use fresh_executive::FreshExecutive;
@@ -159,23 +156,6 @@ pub fn eip7623_required_gas(data: &[u8], spec: &ConsensusGasSpec) -> u64 {
     };
 
     spec.tx_gas as u64 + data.iter().map(byte_floor_gas).sum::<u64>()
-}
-
-pub fn contract_address(
-    address_scheme: CreateContractAddress, block_number: u64,
-    sender: &AddressWithSpace, nonce: &U256, code: &[u8],
-) -> (AddressWithSpace, H256) {
-    let (mut address, code_hash) = cfx_vm_types::contract_address(
-        address_scheme,
-        block_number,
-        &sender.address,
-        nonce,
-        code,
-    );
-    if sender.space == Space::Native {
-        address.set_contract_type_bits();
-    }
-    (address.with_space(sender.space), code_hash)
 }
 
 #[cfg(test)]

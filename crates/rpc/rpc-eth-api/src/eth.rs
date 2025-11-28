@@ -231,6 +231,7 @@ pub trait EthApi {
     #[method(name = "createAccessList")]
     async fn create_access_list(
         &self, request: TransactionRequest, block_number: Option<BlockId>,
+        state_override: Option<RpcStateOverride>,
     ) -> RpcResult<AccessListResult>;
 
     /// Generates and returns an estimate of how much gas is necessary to allow
