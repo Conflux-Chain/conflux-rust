@@ -292,7 +292,16 @@ impl NoncePool {
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
     ) -> Option<(&TxWithReadyInfo, U256)> {
-        let tx = self.map.query(&nonce)?;
+        let tx = match self.map.query(&nonce) {
+            Some(tx) => tx,
+            None => {
+                debug!(
+                    "txpool::nonce_pool readiness nonce={:?} has no transaction starting from sender",
+                    nonce
+                );
+                return None;
+            }
+        };
 
         let a = if nonce == U256::from(0) {
             NoncePoolWeight::default()
@@ -308,9 +317,22 @@ impl NoncePool {
         // number of transactions in `[nonce, tx.nonce()]`
         let size_elapsed = b.size - a.size;
         let cost_elapsed = b.cost - a.cost;
-        if U256::from(size_elapsed - 1) != tx.nonce() - nonce
-            || cost_elapsed > balance
-        {
+        if U256::from(size_elapsed - 1) != tx.nonce() - nonce {
+            debug!(
+                "txpool::nonce_pool readiness gap sender={:?} start_nonce={:?} first_missing_nonce={:?}",
+                tx.sender(),
+                nonce,
+                nonce + U256::from(size_elapsed - 1)
+            );
+            return None;
+        }
+        if cost_elapsed > balance {
+            debug!(
+                "txpool::nonce_pool readiness insufficient balance sender={:?} need={:?} have={:?}",
+                tx.sender(),
+                cost_elapsed,
+                balance
+            );
             return None;
         }
 
@@ -318,6 +340,13 @@ impl NoncePool {
             tx.nonce(),
             b,
             balance - cost_elapsed,
+        );
+        debug!(
+            "txpool::nonce_pool readiness range sender={:?} start_nonce={:?} end_nonce={:?} first_hash={:?}",
+            tx.sender(),
+            tx.nonce(),
+            end_nonce,
+            tx.transaction.hash()
         );
         Some((tx, end_nonce))
     }
