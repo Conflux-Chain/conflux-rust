@@ -22,7 +22,9 @@ use fresh_executive::FreshExecutive;
 use pre_checked_executive::PreCheckedExecutive;
 
 pub use executed::Executed;
-pub use execution_outcome::{ExecutionError, ExecutionOutcome, TxDropError};
+pub use execution_outcome::{
+    ExecutionError, ExecutionOutcome, ToRepackError, TxDropError,
+};
 pub use transact_options::{
     ChargeCollateral, TransactOptions, TransactSettings,
 };
