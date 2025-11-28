@@ -56,11 +56,9 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
     #[inline]
     pub fn insert(&mut self, tx: TX) -> (Vec<TX>, Result<(), InsertError>) {
         let config = &self.config;
-        let tx_nonce = tx.nonce();
-        let tx_gas_price = tx.gas_price();
-        let tx_gas_limit = tx.gas_limit();
-        let sender = tx.sender();
+        let tx_hash = tx.hash();
         let tx_clone = tx.clone();
+        let sender = tx.sender();
 
         let update = move |node: &mut Node<PackingPoolMap<TX>>| -> Result<_, Infallible> {
             let old_info = node.value.pack_info();
@@ -79,33 +77,14 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             self.treap_map.update(&sender, update, insert).unwrap();
         match &outcome {
             Ok(()) => {
-                debug!(
-                    "packing_pool::insert success sender={:?} nonce={} gas_price={} gas_limit={}",
-                    sender,
-                    tx_nonce,
-                    tx_gas_price,
-                    tx_gas_limit
-                );
+                debug!("packing_pool::insert success hash={:?}", tx_hash);
             }
             Err(e) => {
-                debug!(
-                    "packing_pool::insert failed sender={:?} nonce={} gas_price={} gas_limit={} err={:?}",
-                    sender,
-                    tx_nonce,
-                    tx_gas_price,
-                    tx_gas_limit,
-                    e
-                );
+                debug!("packing_pool::insert failed hash={:?} err={:?}", tx_hash, e);
             }
         }
         for tx in &replaced {
-            debug!(
-                "packing_pool::insert evicted sender={:?} nonce={} gas_price={} gas_limit={}",
-                tx.sender(),
-                tx.nonce(),
-                tx.gas_price(),
-                tx.gas_limit()
-            );
+            debug!("packing_pool::insert evicted hash={:?}", tx.hash());
         }
         (replaced, outcome)
     }
@@ -115,13 +94,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         let sender = packing_batch.sender();
         let packing_batch_clone = packing_batch.clone();
         for tx in &packing_batch_clone.txs {
-            debug!(
-                "packing_pool::replace incoming sender={:?} nonce={} gas_price={} gas_limit={}",
-                sender,
-                tx.nonce(),
-                tx.gas_price(),
-                tx.gas_limit()
-            );
+            debug!("packing_pool::replace incoming hash={:?}", tx.hash());
         }
 
         let update = move |node: &mut Node<PackingPoolMap<TX>>| -> Result<_, Infallible> {
@@ -140,13 +113,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
 
         let evicted = self.treap_map.update(&sender, update, insert).unwrap();
         for tx in &evicted {
-            debug!(
-                "packing_pool::replace evicted sender={:?} nonce={} gas_price={} gas_limit={}",
-                sender,
-                tx.nonce(),
-                tx.gas_price(),
-                tx.gas_limit()
-            );
+            debug!("packing_pool::replace evicted hash={:?}", tx.hash());
         }
         evicted
     }
@@ -207,11 +174,8 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         } else {
             for tx in &removed {
                 debug!(
-                    "packing_pool::split_off removed sender={:?} nonce={} gas_price={} gas_limit={}",
-                    sender,
-                    tx.nonce(),
-                    tx.gas_price(),
-                    tx.gas_limit()
+                    "packing_pool::split_off removed hash={:?}",
+                    tx.hash()
                 );
             }
         }
