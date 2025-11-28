@@ -10,7 +10,7 @@ publish = false
 edition = "2018"
 
 [dependencies]
-get_if_addrs = { version = "0.5.3", default-features = false }
+if-addrs = "0.14.0"
 rand = "0.8.3"
 serde = { version = "1.0.124", features = ["rc"], default-features = false }
 serde_yaml = "0.8" # deprecated
