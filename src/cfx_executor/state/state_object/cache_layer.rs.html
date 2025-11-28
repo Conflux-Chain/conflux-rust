@@ -277,14 +277,14 @@
     <span class="doccomment">/// A convenience function of `read_account_ext_lock`
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>read_account_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace,
-    ) -&gt; DbResult&lt;<span class="prelude-ty">Option</span>&lt;AccountReadGuard&gt;&gt; {
+    ) -&gt; DbResult&lt;<span class="prelude-ty">Option</span>&lt;AccountReadGuard&lt;<span class="lifetime">'_</span>&gt;&gt;&gt; {
         <span class="self">self</span>.read_account_ext_lock(address, RequireFields::None)
     }
 
     <span class="doccomment">/// A convenience function of `read_account_ext_lock`
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>read_native_account_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address,
-    ) -&gt; DbResult&lt;<span class="prelude-ty">Option</span>&lt;AccountReadGuard&gt;&gt; {
+    ) -&gt; DbResult&lt;<span class="prelude-ty">Option</span>&lt;AccountReadGuard&lt;<span class="lifetime">'_</span>&gt;&gt;&gt; {
         <span class="self">self</span>.read_account_lock(<span class="kw-2">&amp;</span>address.with_native_space())
     }
 
@@ -293,7 +293,7 @@
     /// It returns `None` if the account doesn't exist.
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>read_account_ext_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, require: RequireFields,
-    ) -&gt; DbResult&lt;<span class="prelude-ty">Option</span>&lt;AccountReadGuard&gt;&gt; {
+    ) -&gt; DbResult&lt;<span class="prelude-ty">Option</span>&lt;AccountReadGuard&lt;<span class="lifetime">'_</span>&gt;&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>cache = <span class="self">self</span>.cache.write();
 
         <span class="kw">let </span>account_entry = <span class="self">Self</span>::fetch_account_mut(
@@ -363,14 +363,14 @@
     <span class="doccomment">/// A convenience function of `write_account_ext_lock`
     </span><span class="kw">pub fn </span>write_account_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace,
-    ) -&gt; DbResult&lt;AccountWriteGuard&gt; {
+    ) -&gt; DbResult&lt;AccountWriteGuard&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="self">self</span>.write_account_ext_lock(address, RequireFields::None)
     }
 
     <span class="doccomment">/// A convenience function of `write_account_ext_lock`
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>write_native_account_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address,
-    ) -&gt; DbResult&lt;AccountWriteGuard&gt; {
+    ) -&gt; DbResult&lt;AccountWriteGuard&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="self">self</span>.write_account_lock(<span class="kw-2">&amp;</span>address.with_native_space())
     }
 
@@ -379,7 +379,7 @@
     /// It asserts a fail if the account doesn't exist.
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>write_account_ext_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, require: RequireFields,
-    ) -&gt; DbResult&lt;AccountWriteGuard&gt; {
+    ) -&gt; DbResult&lt;AccountWriteGuard&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">fn </span>no_account_is_an_error(
             address: <span class="kw-2">&amp;</span>AddressWithSpace,
         ) -&gt; DbResult&lt;OverlayAccount&gt; {
@@ -393,7 +393,7 @@
     /// new account if the account doesn't exist.
     </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>write_account_or_new_lock(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace,
-    ) -&gt; DbResult&lt;AccountWriteGuard&gt; {
+    ) -&gt; DbResult&lt;AccountWriteGuard&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">fn </span>init_if_no_account(
             address: <span class="kw-2">&amp;</span>AddressWithSpace,
         ) -&gt; DbResult&lt;OverlayAccount&gt; {
@@ -419,7 +419,7 @@
     /// and sets the dirty bit.
     </span><span class="kw">fn </span>write_account_inner&lt;F&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>AddressWithSpace, require: RequireFields, default: F,
-    ) -&gt; DbResult&lt;AccountWriteGuard&gt;
+    ) -&gt; DbResult&lt;AccountWriteGuard&lt;<span class="lifetime">'_</span>&gt;&gt;
     <span class="kw">where </span>F: Fn(<span class="kw-2">&amp;</span>AddressWithSpace) -&gt; DbResult&lt;OverlayAccount&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>cache = <span class="self">self</span>.cache.write();
 

@@ -216,7 +216,11 @@
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -328,15 +332,19 @@
 
 <span class="macro">impl_abi_variable_for_primitive!</span>(U8, u16, u32, u64, u128);
 
-<span class="attr">#[derive(Copy, Clone, Eq, PartialEq)]
+<span class="attr">#[allow(dead_code)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>U8(u8);
 
 <span class="kw">impl </span>U8 {
-    <span class="kw">const </span>BITS: usize = <span class="number">8</span>;
+    <span class="attr">#[allow(dead_code)]
+    </span><span class="kw">const </span>BITS: usize = <span class="number">8</span>;
 
-    <span class="kw">fn </span>to_be_bytes(<span class="self">self</span>) -&gt; [u8; <span class="number">1</span>] { [<span class="self">self</span>.<span class="number">0</span>] }
+    <span class="attr">#[allow(dead_code)]
+    </span><span class="kw">fn </span>to_be_bytes(<span class="self">self</span>) -&gt; [u8; <span class="number">1</span>] { [<span class="self">self</span>.<span class="number">0</span>] }
 
-    <span class="kw">fn </span>from_be_bytes(input: [u8; <span class="number">1</span>]) -&gt; <span class="self">Self </span>{ U8(input[<span class="number">0</span>]) }
+    <span class="attr">#[allow(dead_code)]
+    </span><span class="kw">fn </span>from_be_bytes(input: [u8; <span class="number">1</span>]) -&gt; <span class="self">Self </span>{ U8(input[<span class="number">0</span>]) }
 }
 
 <span class="attr">#[cfg(test)]

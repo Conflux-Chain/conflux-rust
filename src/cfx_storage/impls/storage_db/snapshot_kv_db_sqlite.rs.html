@@ -783,7 +783,9 @@
 <a href="#782" id="782">782</a>
 <a href="#783" id="783">783</a>
 <a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1275,6 +1277,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
         Wrap&lt;
+            <span class="lifetime">'_</span>,
             <span class="self">Self</span>::SnapshotKvdbIterType,
             <span class="kw">dyn </span>KeyValueDbIterableTrait&lt;
                 MptKeyValue,
@@ -1433,6 +1436,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
         Wrap&lt;
+            <span class="lifetime">'_</span>,
             KvdbSqliteSharded&lt;&lt;<span class="self">Self </span><span class="kw">as </span>KeyValueDbTypes&gt;::ValueType&gt;,
             <span class="kw">dyn </span>KeyValueDbIterableTrait&lt;
                 MptKeyValue,

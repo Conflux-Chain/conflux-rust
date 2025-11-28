@@ -459,7 +459,8 @@
 <a href="#458" id="458">458</a>
 <a href="#459" id="459">459</a>
 <a href="#460" id="460">460</a>
-<a href="#461" id="461">461</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -627,7 +628,8 @@
 
     <span class="kw">pub fn </span>start_commit(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;AtomicCommitTransaction&lt;Box&lt;DeltaDbTransactionTraitObj&gt;&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;AtomicCommitTransaction&lt;<span class="lifetime">'_</span>, Box&lt;DeltaDbTransactionTraitObj&gt;&gt;&gt;
+    {
         <span class="prelude-val">Ok</span>(AtomicCommitTransaction {
             info: <span class="self">self</span>.commit_lock.lock(),
             transaction: <span class="self">self</span>.get_arc_db()<span class="question-mark">?</span>.start_transaction_dyn(<span class="bool-val">true</span>)<span class="question-mark">?</span>,

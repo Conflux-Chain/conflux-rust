@@ -923,7 +923,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>get_allocator(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AllocatorRef&lt;CacheAlgoDataT&gt; {
+    <span class="kw">pub fn </span>get_allocator(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AllocatorRef&lt;<span class="lifetime">'_</span>, CacheAlgoDataT&gt; {
         <span class="self">self</span>.allocator.read_recursive()
     }
 

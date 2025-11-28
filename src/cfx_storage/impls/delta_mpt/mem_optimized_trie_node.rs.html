@@ -931,7 +931,7 @@
     <span class="kw">type </span>ChildrenTableType = ChildrenTableDeltaMpt;
     <span class="kw">type </span>NodeRefType = NodeRefDeltaMptCompact;
 
-    <span class="kw">fn </span>compressed_path_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompressedPathRef {
+    <span class="kw">fn </span>compressed_path_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompressedPathRef&lt;<span class="lifetime">'_</span>&gt; {
         <span class="kw">let </span>size = <span class="self">self</span>.path_size;
         CompressedPathRef::new(
             <span class="self">self</span>.path.get_slice(size <span class="kw">as </span>usize),

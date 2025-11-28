@@ -530,7 +530,7 @@
     }
 
     <span class="doccomment">/// Get a bit iterator iterates over the whole nibble path.
-    </span><span class="kw">pub fn </span>bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitIterator {
+    </span><span class="kw">pub fn </span>bits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitIterator&lt;<span class="lifetime">'_</span>&gt; {
         <span class="macro">assume!</span>(<span class="self">self</span>.num_nibbles &lt;= ROOT_NIBBLE_HEIGHT); <span class="comment">// invariant
         </span>BitIterator {
             nibble_path: <span class="self">self</span>,
@@ -539,7 +539,7 @@
     }
 
     <span class="doccomment">/// Get a nibble iterator iterates over the whole nibble path.
-    </span><span class="kw">pub fn </span>nibbles(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NibbleIterator {
+    </span><span class="kw">pub fn </span>nibbles(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NibbleIterator&lt;<span class="lifetime">'_</span>&gt; {
         <span class="macro">assume!</span>(<span class="self">self</span>.num_nibbles &lt;= ROOT_NIBBLE_HEIGHT); <span class="comment">// invariant
         </span>NibbleIterator::new(<span class="self">self</span>, <span class="number">0</span>, <span class="self">self</span>.num_nibbles)
     }

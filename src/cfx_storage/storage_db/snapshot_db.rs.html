@@ -190,7 +190,8 @@
 <a href="#189" id="189">189</a>
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -350,6 +351,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; StorageResult&lt;
         Wrap&lt;
+            <span class="lifetime">'_</span>,
             <span class="self">Self</span>::SnapshotKvdbIterType,
             <span class="kw">dyn </span>KeyValueDbIterableTrait&lt;
                 MptKeyValue,

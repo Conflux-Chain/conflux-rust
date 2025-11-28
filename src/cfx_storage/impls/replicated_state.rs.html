@@ -477,7 +477,7 @@
 }
 
 <span class="kw">impl </span>StateOperation {
-    <span class="kw">fn </span>get_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;StorageKeyWithSpace&gt; {
+    <span class="kw">fn </span>get_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;StorageKeyWithSpace&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">match </span><span class="self">self </span>{
             StateOperation::Set { access_key, .. }
             | StateOperation::Delete { access_key, .. }
@@ -509,7 +509,7 @@
 }
 
 <span class="kw">impl </span>OwnedStorageKey {
-    <span class="kw">fn </span>as_storage_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StorageKey {
+    <span class="kw">fn </span>as_storage_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StorageKey&lt;<span class="lifetime">'_</span>&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self </span>{
             OwnedStorageKey::AccountKey(k) =&gt; {
                 StorageKey::AccountKey(k.as_slice())
@@ -551,7 +551,7 @@
 }
 
 <span class="kw">impl </span>OwnedStorageKeyWithSpace {
-    <span class="kw">fn </span>as_storage_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StorageKeyWithSpace {
+    <span class="kw">fn </span>as_storage_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StorageKeyWithSpace&lt;<span class="lifetime">'_</span>&gt; {
         StorageKeyWithSpace {
             key: <span class="self">self</span>.key.as_storage_key(),
             space: <span class="self">self</span>.space,

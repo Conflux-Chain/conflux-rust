@@ -1011,7 +1011,7 @@
     /// starting from `start_version`.
     </span><span class="kw">pub fn </span>get_transaction_info_iter(
         <span class="kw-2">&amp;</span><span class="self">self</span>, start_version: Version, num_transaction_infos: usize,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionInfoIter&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionInfoIter&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>iter = <span class="self">self
             </span>.db
             .iter::&lt;TransactionInfoSchema&gt;(ReadOptions::default())<span class="question-mark">?</span>;
@@ -1031,7 +1031,7 @@
     /// from `start_epoch`, and ends at the one before `end_epoch`
     </span><span class="kw">pub fn </span>get_epoch_ending_ledger_info_iter(
         <span class="kw-2">&amp;</span><span class="self">self</span>, start_epoch: u64, end_epoch: u64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EpochEndingLedgerInfoIter&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EpochEndingLedgerInfoIter&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>iter =
             <span class="self">self</span>.db.iter::&lt;LedgerInfoSchema&gt;(ReadOptions::default())<span class="question-mark">?</span>;
         iter.seek(<span class="kw-2">&amp;</span>start_epoch)<span class="question-mark">?</span>;

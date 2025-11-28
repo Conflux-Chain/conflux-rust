@@ -557,7 +557,7 @@
         )
     }
 
-    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompressedPathRef {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompressedPathRef&lt;<span class="lifetime">'_</span>&gt; {
         CompressedPathRef {
             path_slice: <span class="self">self</span>.path_slice(),
             path_mask: <span class="self">self</span>.path_mask(),

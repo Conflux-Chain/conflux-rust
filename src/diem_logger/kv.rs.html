@@ -142,9 +142,9 @@
 <span class="doccomment">/// The value part of a logging key value pair e.g. `info!(key = value)`
 </span><span class="attr">#[derive(Clone, Copy)]
 </span><span class="kw">pub enum </span>Value&lt;<span class="lifetime">'v</span>&gt; {
-    Debug(<span class="kw-2">&amp;</span><span class="lifetime">'v </span>(<span class="kw">dyn </span>fmt::Debug)),
-    Display(<span class="kw-2">&amp;</span><span class="lifetime">'v </span>(<span class="kw">dyn </span>fmt::Display)),
-    Serde(<span class="kw-2">&amp;</span><span class="lifetime">'v </span>(<span class="kw">dyn </span>erased_serde::Serialize)),
+    Debug(<span class="kw-2">&amp;</span><span class="lifetime">'v </span><span class="kw">dyn </span>fmt::Debug),
+    Display(<span class="kw-2">&amp;</span><span class="lifetime">'v </span><span class="kw">dyn </span>fmt::Display),
+    Serde(<span class="kw-2">&amp;</span><span class="lifetime">'v </span><span class="kw">dyn </span>erased_serde::Serialize),
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'v</span>&gt; fmt::Debug <span class="kw">for </span>Value&lt;<span class="lifetime">'v</span>&gt; {

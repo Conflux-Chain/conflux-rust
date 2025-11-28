@@ -225,7 +225,7 @@
     /// from `start_version`.
     </span><span class="kw">pub fn </span>get_transaction_iter(
         <span class="kw-2">&amp;</span><span class="self">self</span>, start_version: Version, num_transactions: usize,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionIter&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionIter&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>iter = <span class="self">self</span>.db.iter::&lt;TransactionSchema&gt;(Default::default())<span class="question-mark">?</span>;
         iter.seek(<span class="kw-2">&amp;</span>start_version)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(TransactionIter {

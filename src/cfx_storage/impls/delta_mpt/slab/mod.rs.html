@@ -1660,7 +1660,7 @@ impl&lt;'x, E: EntryTrait&gt; WrappedCreateFrom&lt;&amp;'x E::EntryType, E&gt; f
     /// assert_eq!(slab[key1], 2);
     /// assert_eq!(slab[key2], 1);
     /// ```
-    </span><span class="kw">pub fn </span>iter_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; IterMut&lt;T, E&gt; {
+    </span><span class="kw">pub fn </span>iter_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; IterMut&lt;<span class="lifetime">'_</span>, T, E&gt; {
         IterMut {
             entries: <span class="self">self</span>.entries
                 [<span class="number">0</span>..<span class="self">self</span>.alloc_fields.get_mut().size_initialized]
@@ -1845,7 +1845,7 @@ impl&lt;'x, E: EntryTrait&gt; WrappedCreateFrom&lt;&amp;'x E::EntryType, E&gt; f
     /// assert_eq!(hello, slab[hello].0);
     /// assert_eq!("hello", slab[hello].1);
     /// ```
-    </span><span class="kw">pub fn </span>vacant_entry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;VacantEntry&lt;T, E&gt;&gt; {
+    </span><span class="kw">pub fn </span>vacant_entry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;VacantEntry&lt;<span class="lifetime">'_</span>, T, E&gt;&gt; {
         <span class="prelude-val">Ok</span>(VacantEntry {
             key: <span class="self">self</span>.allocate()<span class="question-mark">?</span>,
             slab: <span class="self">self</span>,

@@ -1223,7 +1223,9 @@
 <a href="#1222" id="1222">1222</a>
 <a href="#1223" id="1223">1223</a>
 <a href="#1224" id="1224">1224</a>
-<a href="#1225" id="1225">1225</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1225" id="1225">1225</a>
+<a href="#1226" id="1226">1226</a>
+<a href="#1227" id="1227">1227</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -2066,6 +2068,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, lower_bound_incl: <span class="kw-2">&amp;</span>[u8], upper_bound_excl: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
         Wrap&lt;
+            <span class="lifetime">'_</span>,
             KvdbIterIterator&lt;
                 (Vec&lt;u8&gt;, ValueType),
                 [u8],
@@ -2093,6 +2096,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, lower_bound_excl: <span class="kw-2">&amp;</span>[u8], upper_bound_excl: <span class="kw-2">&amp;</span>[u8],
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
         Wrap&lt;
+            <span class="lifetime">'_</span>,
             KvdbIterIterator&lt;
                 (Vec&lt;u8&gt;, ValueType),
                 [u8],

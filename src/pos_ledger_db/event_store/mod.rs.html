@@ -387,7 +387,7 @@
 
     <span class="kw">pub fn </span>get_events_by_version_iter(
         <span class="kw-2">&amp;</span><span class="self">self</span>, start_version: Version, num_versions: usize,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EventsByVersionIter&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EventsByVersionIter&lt;<span class="lifetime">'_</span>&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>iter = <span class="self">self</span>.db.iter::&lt;EventSchema&gt;(Default::default())<span class="question-mark">?</span>;
         iter.seek(<span class="kw-2">&amp;</span>start_version)<span class="question-mark">?</span>;
 

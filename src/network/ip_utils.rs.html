@@ -884,7 +884,8 @@
 <a href="#883" id="883">883</a>
 <a href="#884" id="884">884</a>
 <a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -932,6 +933,7 @@
 /// API
 </span><span class="kw">pub trait </span>SocketAddrExt {
     <span class="doccomment">/// Returns true if the address appears to be globally routable.
+    </span><span class="attr">#[allow(dead_code)]
     </span><span class="kw">fn </span>is_global_s(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 
     <span class="comment">// Ipv4 specific

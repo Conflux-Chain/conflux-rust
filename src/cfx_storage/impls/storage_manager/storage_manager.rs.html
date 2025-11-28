@@ -1626,7 +1626,9 @@
 <a href="#1625" id="1625">1625</a>
 <a href="#1626" id="1626">1626</a>
 <a href="#1627" id="1627">1627</a>
-<a href="#1628" id="1628">1628</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1628" id="1628">1628</a>
+<a href="#1629" id="1629">1629</a>
+<a href="#1630" id="1630">1630</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1950,7 +1952,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>, snapshot_epoch_id: <span class="kw-2">&amp;</span>EpochId, try_open: bool,
         open_mpt_snapshot: bool,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
-        <span class="prelude-ty">Option</span>&lt;GuardedValue&lt;RwLockReadGuard&lt;Vec&lt;SnapshotInfo&gt;&gt;, SnapshotDb&gt;&gt;,
+        <span class="prelude-ty">Option</span>&lt;
+            GuardedValue&lt;RwLockReadGuard&lt;<span class="lifetime">'_</span>, Vec&lt;SnapshotInfo&gt;&gt;, SnapshotDb&gt;,
+        &gt;,
     &gt; {
         <span class="comment">// Make sure that the snapshot info is ready at the same time of the
         // snapshot db. This variable is used for the whole scope

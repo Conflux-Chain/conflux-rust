@@ -275,9 +275,7 @@
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
-<a href="#279" id="279">279</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#277" id="277">277</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -494,9 +492,7 @@
     <span class="kw">let </span><span class="kw-2">mut </span>last_key = keys_num[<span class="number">0</span>];
     <span class="kw">for </span>key <span class="kw">in </span><span class="kw-2">&amp;</span>keys_num[<span class="number">1</span>..number_of_keys] {
         <span class="kw">if </span><span class="kw-2">*</span>key != last_key {
-            keys.push(Vec::from(
-                <span class="kw-2">&amp;</span><span class="kw">unsafe </span>{ std::mem::transmute::&lt;u64, [u8; <span class="number">8</span>]&gt;(key.clone()) }[..],
-            ));
+            keys.push(Vec::from(key.to_ne_bytes()));
         }
         last_key = <span class="kw-2">*</span>key;
     }

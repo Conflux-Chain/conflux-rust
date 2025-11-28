@@ -265,7 +265,8 @@
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a></pre></div><pre class="rust"><code><span class="comment">// Copyright (c) The Diem Core Contributors
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a></pre></div><pre class="rust"><code><span class="comment">// Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 // Copyright 2021 Conflux Foundation. All rights reserved.
@@ -331,11 +332,11 @@
         }
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AccountTransactionIter {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AccountTransactionIter&lt;<span class="lifetime">'_</span>&gt; {
         <span class="self">self</span>.normal_transaction.values()
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter_pivot_decision(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AccountTransactionIter {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter_pivot_decision(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AccountTransactionIter&lt;<span class="lifetime">'_</span>&gt; {
         <span class="self">self</span>.pivot_decision_transaction.values()
     }
 }
@@ -349,6 +350,7 @@
 }
 
 <span class="attr">#[derive(Eq, PartialEq, Clone, Debug, Hash)]
+#[allow(dead_code)]
 </span><span class="kw">pub struct </span>OrderedQueueKey {
     <span class="kw">pub </span>gas_ranking_score: u64,
     <span class="kw">pub </span>expiration_time: Duration,

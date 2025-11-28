@@ -841,7 +841,7 @@
 
     <span class="kw">fn </span>iter_with_direction&lt;S: Schema&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>, opts: ReadOptions, direction: ScanDirection,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;SchemaIterator&lt;S&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SchemaIterator&lt;<span class="lifetime">'_</span>, S&gt;&gt; {
         <span class="kw">let </span>cf_handle = <span class="self">self</span>.get_cf_handle(S::COLUMN_FAMILY_NAME)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(SchemaIterator::new(
             <span class="self">self</span>.inner.iter_cf_opt(cf_handle, opts),
@@ -852,14 +852,14 @@
     <span class="doccomment">/// Returns a forward [`SchemaIterator`] on a certain schema.
     </span><span class="kw">pub fn </span>iter&lt;S: Schema&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>, opts: ReadOptions,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;SchemaIterator&lt;S&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SchemaIterator&lt;<span class="lifetime">'_</span>, S&gt;&gt; {
         <span class="self">self</span>.iter_with_direction::&lt;S&gt;(opts, ScanDirection::Forward)
     }
 
     <span class="doccomment">/// Returns a backward [`SchemaIterator`] on a certain schema.
     </span><span class="kw">pub fn </span>rev_iter&lt;S: Schema&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>, opts: ReadOptions,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;SchemaIterator&lt;S&gt;&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;SchemaIterator&lt;<span class="lifetime">'_</span>, S&gt;&gt; {
         <span class="self">self</span>.iter_with_direction::&lt;S&gt;(opts, ScanDirection::Backward)
     }
 

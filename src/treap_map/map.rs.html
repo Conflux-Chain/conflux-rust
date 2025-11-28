@@ -495,7 +495,7 @@
     }
 
     <span class="doccomment">/// See details in [`crate::accumulate_weight_search`]
-    </span><span class="kw">pub fn </span>search&lt;F&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, f: F) -&gt; <span class="prelude-ty">Option</span>&lt;SearchResult&lt;C, C::Weight&gt;&gt;
+    </span><span class="kw">pub fn </span>search&lt;F&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, f: F) -&gt; <span class="prelude-ty">Option</span>&lt;SearchResult&lt;<span class="lifetime">'_</span>, C, C::Weight&gt;&gt;
     <span class="kw">where </span>F: FnMut(<span class="kw-2">&amp;</span>C::Weight, <span class="kw-2">&amp;</span>Node&lt;C&gt;) -&gt; SearchDirection&lt;C::Weight&gt; {
         <span class="prelude-val">Some</span>(accumulate_weight_search(<span class="self">self</span>.root.as_ref()<span class="question-mark">?</span>, f, |weight| {
             weight
@@ -508,7 +508,7 @@
     /// dimension.
     </span><span class="kw">pub fn </span>search_no_weight&lt;F&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>f: F,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;SearchResult&lt;C, NoWeight&gt;&gt;
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;SearchResult&lt;<span class="lifetime">'_</span>, C, NoWeight&gt;&gt;
     <span class="kw">where </span>F: FnMut(<span class="kw-2">&amp;</span>Node&lt;C&gt;) -&gt; SearchDirection&lt;()&gt; {
         <span class="kw">static </span>NW: NoWeight = NoWeight;
         <span class="prelude-val">Some</span>(accumulate_weight_search(
@@ -518,7 +518,7 @@
         ))
     }
 
-    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Iter&lt;C&gt; {
+    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Iter&lt;<span class="lifetime">'_</span>, C&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>iter = Iter { nodes: <span class="macro">vec!</span>[] };
         <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>n) = <span class="self">self</span>.root {
             iter.nodes.push(<span class="kw-2">&amp;**</span>n);
@@ -527,7 +527,7 @@
         iter
     }
 
-    <span class="kw">pub fn </span>iter_range(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>C::SearchKey) -&gt; Iter&lt;C&gt;
+    <span class="kw">pub fn </span>iter_range(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>C::SearchKey) -&gt; Iter&lt;<span class="lifetime">'_</span>, C&gt;
     <span class="kw">where </span>C: TreapMapConfig&lt;SortKey = ()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>iter = Iter { nodes: <span class="macro">vec!</span>[] };
         <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>n) = <span class="self">self</span>.root {

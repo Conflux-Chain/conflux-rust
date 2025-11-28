@@ -436,7 +436,7 @@
     <span class="prelude-val">Ok</span>(msg)
 }
 
-<span class="kw">pub fn </span>decode_msg(<span class="kw-2">mut </span>msg: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;(MsgId, Rlp)&gt; {
+<span class="kw">pub fn </span>decode_msg(<span class="kw-2">mut </span>msg: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Option</span>&lt;(MsgId, Rlp&lt;<span class="lifetime">'_</span>&gt;)&gt; {
     <span class="kw">let </span>len = msg.len();
     <span class="kw">if </span>len &lt; <span class="number">2 </span>{
         <span class="kw">return </span><span class="prelude-val">None</span>;

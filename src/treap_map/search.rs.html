@@ -546,7 +546,7 @@
 </span><span class="attr">#[inline]
 </span><span class="kw">pub fn </span>accumulate_weight_search&lt;C, W, F, E&gt;(
     root: <span class="kw-2">&amp;</span>Node&lt;C&gt;, <span class="kw-2">mut </span>f: F, extract: E,
-) -&gt; SearchResult&lt;C, W&gt;
+) -&gt; SearchResult&lt;<span class="lifetime">'_</span>, C, W&gt;
 <span class="kw">where
     </span>C: TreapMapConfig,
     F: FnMut(<span class="kw-2">&amp;</span>W, <span class="kw-2">&amp;</span>Node&lt;C&gt;) -&gt; SearchDirection&lt;W&gt;,

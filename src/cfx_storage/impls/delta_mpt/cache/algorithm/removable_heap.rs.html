@@ -878,7 +878,13 @@
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -905,9 +911,11 @@
     </span><span class="kw">pub fn </span>get_pos(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PosT { <span class="self">self</span>.pos }
 
     <span class="comment">// Update heap handle for value being moved in heap.
+    </span><span class="attr">#[allow(dead_code)]
     </span><span class="kw">pub fn </span>set_handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, pos: PosT) { <span class="self">self</span>.pos = pos; }
 
-    <span class="kw">pub fn </span>set_removed(<span class="kw-2">&amp;mut </span><span class="self">self</span>) { <span class="self">self</span>.pos = PosT::from(<span class="self">Self</span>::NULL_POS); }
+    <span class="attr">#[allow(dead_code)]
+    </span><span class="kw">pub fn </span>set_removed(<span class="kw-2">&amp;mut </span><span class="self">self</span>) { <span class="self">self</span>.pos = PosT::from(<span class="self">Self</span>::NULL_POS); }
 }
 
 <span class="kw">impl</span>&lt;PosT: PrimitiveNum&gt; Default <span class="kw">for </span>HeapHandle&lt;PosT&gt; {
@@ -920,7 +928,8 @@
 
 <span class="kw">pub struct </span>TrivialValueWithHeapHandle&lt;ValueType, PosT: PrimitiveNum&gt; {
     <span class="kw">pub </span>value: ValueType,
-    handle: HeapHandle&lt;PosT&gt;,
+    <span class="attr">#[allow(dead_code)]
+    </span>handle: HeapHandle&lt;PosT&gt;,
 }
 
 <span class="kw">impl</span>&lt;ValueType, PosT: PrimitiveNum&gt;
@@ -935,16 +944,19 @@
         }
     }
 
-    <span class="kw">pub fn </span>get_handle_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>HeapHandle&lt;PosT&gt; {
+    <span class="attr">#[allow(dead_code)]
+    </span><span class="kw">pub fn </span>get_handle_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span>HeapHandle&lt;PosT&gt; {
         <span class="kw-2">&amp;mut </span><span class="self">self</span>.handle
     }
 
     <span class="comment">// Update heap handle for value being moved in heap.
+    </span><span class="attr">#[allow(dead_code)]
     </span><span class="kw">pub fn </span>set_handle(<span class="kw-2">&amp;mut </span><span class="self">self</span>, pos: PosT) {
         <span class="self">self</span>.get_handle_mut().set_handle(pos);
     }
 
-    <span class="kw">pub fn </span>set_removed(<span class="kw-2">&amp;mut </span><span class="self">self</span>) { <span class="self">self</span>.get_handle_mut().set_removed(); }
+    <span class="attr">#[allow(dead_code)]
+    </span><span class="kw">pub fn </span>set_removed(<span class="kw-2">&amp;mut </span><span class="self">self</span>) { <span class="self">self</span>.get_handle_mut().set_removed(); }
 }
 
 <span class="kw">impl</span>&lt;ValueType, PosT: PrimitiveNum&gt; AsRef&lt;ValueType&gt;

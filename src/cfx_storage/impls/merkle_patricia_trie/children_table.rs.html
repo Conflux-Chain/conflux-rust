@@ -925,7 +925,9 @@
 <a href="#924" id="924">924</a>
 <a href="#925" id="925">925</a>
 <a href="#926" id="926">926</a>
-<a href="#927" id="927">927</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1045,7 +1047,7 @@
         <span class="self">self</span>.table.get_unchecked_mut(child_index <span class="kw">as </span>usize)
     }
 
-    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VanillaChildrenTableIterator&lt;NodeRefT&gt; {
+    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; VanillaChildrenTableIterator&lt;<span class="lifetime">'_</span>, NodeRefT&gt; {
         VanillaChildrenTableIterator {
             next_child_index: <span class="number">0</span>,
             table: <span class="kw-2">&amp;</span><span class="self">self</span>.table,
@@ -1363,7 +1365,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>to_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChildrenTableRef&lt;NodeRefT&gt; {
+    <span class="kw">pub fn </span>to_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ChildrenTableRef&lt;<span class="lifetime">'_</span>, NodeRefT&gt; {
         <span class="macro">debug_assert!</span>(!<span class="self">self</span>.table_ptr.is_null() || <span class="self">self</span>.children_count == <span class="number">0</span>);
         ChildrenTableRef {
             table: <span class="kw">unsafe </span>{
@@ -1424,7 +1426,7 @@
 }
 
 <span class="kw">impl</span>&lt;NodeRefT: NodeRefTrait&gt; CompactedChildrenTable&lt;NodeRefT&gt; {
-    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompactedChildrenTableIterator&lt;NodeRefT&gt; {
+    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CompactedChildrenTableIterator&lt;<span class="lifetime">'_</span>, NodeRefT&gt; {
         CompactedChildrenTableIterator {
             elements: <span class="self">self</span>.table_ptr,
             bitmap: <span class="self">self</span>.bitmap,
@@ -1432,7 +1434,9 @@
         }
     }
 
-    <span class="kw">pub fn </span>iter_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; CompactedChildrenTableIteratorMut&lt;NodeRefT&gt; {
+    <span class="kw">pub fn </span>iter_mut(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+    ) -&gt; CompactedChildrenTableIteratorMut&lt;<span class="lifetime">'_</span>, NodeRefT&gt; {
         CompactedChildrenTableIteratorMut {
             elements: <span class="self">self</span>.table_ptr,
             bitmap: <span class="self">self</span>.bitmap,
@@ -1442,7 +1446,7 @@
 
     <span class="kw">pub fn </span>iter_non_skip(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; CompactedChildrenTableIteratorNonSkip&lt;NodeRefT&gt; {
+    ) -&gt; CompactedChildrenTableIteratorNonSkip&lt;<span class="lifetime">'_</span>, NodeRefT&gt; {
         CompactedChildrenTableIteratorNonSkip {
             next_child_index: <span class="number">0</span>,
             elements: <span class="self">self</span>.table_ptr,
@@ -1453,7 +1457,7 @@
 
     <span class="kw">pub fn </span>iter_non_skip_mut(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-    ) -&gt; CompactedChildrenTableIteratorNonSkipMut&lt;NodeRefT&gt; {
+    ) -&gt; CompactedChildrenTableIteratorNonSkipMut&lt;<span class="lifetime">'_</span>, NodeRefT&gt; {
         CompactedChildrenTableIteratorNonSkipMut {
             next_child_index: <span class="number">0</span>,
             elements: <span class="self">self</span>.table_ptr,

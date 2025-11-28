@@ -646,11 +646,11 @@
         <span class="self">self</span>.track_indices();
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AccountTransactionIter {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AccountTransactionIter&lt;<span class="lifetime">'_</span>&gt; {
         <span class="self">self</span>.transactions.iter()
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter_pivot_decision(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PivotDecisionIter {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>iter_pivot_decision(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PivotDecisionIter&lt;<span class="lifetime">'_</span>&gt; {
         <span class="self">self</span>.pivot_decisions.values()
     }
 }

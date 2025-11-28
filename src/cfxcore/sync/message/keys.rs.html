@@ -108,14 +108,14 @@
 }
 
 <span class="kw">impl </span>KeyContainer {
-    <span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, msg_type: MsgId) -&gt; RwLockReadGuard&lt;HashSet&lt;Key&gt;&gt; {
+    <span class="kw">pub fn </span>read(<span class="kw-2">&amp;</span><span class="self">self</span>, msg_type: MsgId) -&gt; RwLockReadGuard&lt;<span class="lifetime">'_</span>, HashSet&lt;Key&gt;&gt; {
         <span class="self">self</span>.keys[msg_type <span class="kw">as </span>usize]
             .as_ref()
             .expect(<span class="string">"msg not supported"</span>)
             .read()
     }
 
-    <span class="kw">pub fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, msg_type: MsgId) -&gt; RwLockWriteGuard&lt;HashSet&lt;Key&gt;&gt; {
+    <span class="kw">pub fn </span>write(<span class="kw-2">&amp;</span><span class="self">self</span>, msg_type: MsgId) -&gt; RwLockWriteGuard&lt;<span class="lifetime">'_</span>, HashSet&lt;Key&gt;&gt; {
         <span class="self">self</span>.keys[msg_type <span class="kw">as </span>usize]
             .as_ref()
             .expect(<span class="string">"msg not supported"</span>)

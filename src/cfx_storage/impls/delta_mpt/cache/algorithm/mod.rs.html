@@ -429,7 +429,7 @@
     /// therefore we have CacheAlgoDataAdapter.
     </span><span class="kw">fn </span>get_mut(
         util: <span class="kw-2">&amp;mut </span>CacheStoreUtilT, index: CacheIndexT,
-    ) -&gt; CacheAlgoDataSetter&lt;CacheStoreUtilT, CacheIndexT&gt; {
+    ) -&gt; CacheAlgoDataSetter&lt;<span class="lifetime">'_</span>, CacheStoreUtilT, CacheIndexT&gt; {
         <span class="kw">let </span>data = <span class="self">Self</span>::get(util, index).clone();
         CacheAlgoDataSetter {
             cache_store_util: util,
@@ -441,7 +441,7 @@
     <span class="attr">#[allow(unused)]
     </span><span class="kw">fn </span>get_mut_most_recently_accessed(
         util: <span class="kw-2">&amp;mut </span>CacheStoreUtilT, index: CacheIndexT,
-    ) -&gt; CacheAlgoDataSetterMostRecentlyAccessed&lt;CacheStoreUtilT, CacheIndexT&gt;
+    ) -&gt; CacheAlgoDataSetterMostRecentlyAccessed&lt;<span class="lifetime">'_</span>, CacheStoreUtilT, CacheIndexT&gt;
     {
         <span class="kw">let </span>data = util.get_most_recently_accessed(index).clone();
         CacheAlgoDataSetterMostRecentlyAccessed {
@@ -453,7 +453,7 @@
 
     <span class="kw">unsafe fn </span>new_mut(
         util: <span class="kw-2">&amp;mut </span>CacheStoreUtilT, index: CacheIndexT,
-    ) -&gt; CacheAlgoDataSetter&lt;CacheStoreUtilT, CacheIndexT&gt; {
+    ) -&gt; CacheAlgoDataSetter&lt;<span class="lifetime">'_</span>, CacheStoreUtilT, CacheIndexT&gt; {
         CacheAlgoDataSetter {
             cache_store_util: util,
             element_index: index,
@@ -463,7 +463,7 @@
 
     <span class="kw">unsafe fn </span>new_mut_most_recently_accessed(
         util: <span class="kw-2">&amp;mut </span>CacheStoreUtilT, index: CacheIndexT,
-    ) -&gt; CacheAlgoDataSetterMostRecentlyAccessed&lt;CacheStoreUtilT, CacheIndexT&gt;
+    ) -&gt; CacheAlgoDataSetterMostRecentlyAccessed&lt;<span class="lifetime">'_</span>, CacheStoreUtilT, CacheIndexT&gt;
     {
         CacheAlgoDataSetterMostRecentlyAccessed {
             cache_store_util: util,
