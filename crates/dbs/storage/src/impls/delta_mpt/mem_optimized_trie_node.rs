@@ -281,7 +281,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     type ChildrenTableType = ChildrenTableDeltaMpt;
     type NodeRefType = NodeRefDeltaMptCompact;
 
-    fn compressed_path_ref(&self) -> CompressedPathRef {
+    fn compressed_path_ref(&self) -> CompressedPathRef<'_> {
         let size = self.path_size;
         CompressedPathRef::new(
             self.path.get_slice(size as usize),

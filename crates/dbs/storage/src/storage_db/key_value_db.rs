@@ -62,6 +62,7 @@ where KvdbIterIterator<Item, KeyType, Tag>:
         upper_bound_excl: Option<&KeyType>,
     ) -> Result<
         Wrap<
+            '_,
             KvdbIterIterator<Item, KeyType, Tag>,
             dyn FallibleIterator<Item = Item, Error = Error>,
         >,
@@ -70,6 +71,7 @@ where KvdbIterIterator<Item, KeyType, Tag>:
         &mut self, lower_bound_excl: &KeyType, upper_bound_excl: &KeyType,
     ) -> Result<
         Wrap<
+            '_,
             KvdbIterIterator<Item, KeyType, Tag>,
             dyn FallibleIterator<Item = Item, Error = Error>,
         >,
