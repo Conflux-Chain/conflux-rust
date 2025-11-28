@@ -37,6 +37,7 @@ pub use id_provider::EthSubscriptionIdProvider;
 use log::debug;
 pub use module::{EthRpcModule, RpcModuleSelection};
 
+use blockgen::BlockGenerator;
 use cfx_rpc::{helpers::ChainInfo, *};
 use cfx_rpc_cfx_types::RpcImplConfiguration;
 use cfx_rpc_eth_api::*;
@@ -75,6 +76,7 @@ pub struct RpcModuleBuilder {
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
+    block_gen: Arc<BlockGenerator>,
     executor: TaskExecutor,
     notifications: Arc<Notifications>,
 }
@@ -83,13 +85,15 @@ impl RpcModuleBuilder {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor, notifications: Arc<Notifications>,
+        block_gen: Arc<BlockGenerator>, executor: TaskExecutor,
+        notifications: Arc<Notifications>,
     ) -> Self {
         Self {
             config,
             consensus,
             sync,
             tx_pool,
+            block_gen,
             executor,
             notifications,
         }
@@ -111,6 +115,7 @@ impl RpcModuleBuilder {
                 consensus,
                 sync,
                 tx_pool,
+                block_gen,
                 executor,
                 notifications,
             } = self;
@@ -120,6 +125,7 @@ impl RpcModuleBuilder {
                 consensus,
                 sync,
                 tx_pool,
+                block_gen,
                 executor,
                 notifications,
             );
@@ -140,6 +146,7 @@ pub struct RpcRegistryInner {
     config: RpcImplConfiguration,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
+    block_gen: Arc<BlockGenerator>,
     modules: HashMap<EthRpcModule, Methods>,
     executor: TaskExecutor,
     notifications: Arc<Notifications>,
@@ -149,13 +156,15 @@ impl RpcRegistryInner {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor, notifications: Arc<Notifications>,
+        block_gen: Arc<BlockGenerator>, executor: TaskExecutor,
+        notifications: Arc<Notifications>,
     ) -> Self {
         Self {
             consensus,
             config,
             sync,
             tx_pool,
+            block_gen,
             modules: Default::default(),
             executor,
             notifications,
@@ -248,6 +257,7 @@ impl RpcRegistryInner {
                             self.consensus.clone(),
                             self.sync.clone(),
                             self.tx_pool.clone(),
+                            self.block_gen.clone(),
                             self.executor.clone(),
                         )
                         .into_rpc();
@@ -286,6 +296,7 @@ impl RpcRegistryInner {
                             self.consensus.clone(),
                             self.sync.clone(),
                             self.tx_pool.clone(),
+                            self.block_gen.clone(),
                             self.executor.clone(),
                         );
                         ParityApi::new(eth_api).into_rpc().into()

@@ -2,7 +2,7 @@ import os
 from conflux_web3 import Web3
 import pytest
 from integration_tests.conflux.rpc import RpcClient
-from integration_tests.test_framework.test_framework import ConfluxTestFramework
+from integration_tests.test_framework.framework_templates import DefaultDevFramework
 from integration_tests.test_framework.util import assert_equal, assert_is_hex_string, assert_ne, load_contract_metadata
 from eth_utils import decode_hex, encode_hex as encode_hex_0x
 
@@ -16,9 +16,9 @@ from integration_tests.conflux.config import default_config
 
 @pytest.fixture(scope="module")
 def framework_class():
-    class PhantomTransactionTestEnv(ConfluxTestFramework):
+    class PhantomTransactionTestEnv(DefaultDevFramework):
         def set_test_params(self):
-            self.num_nodes = 1
+            super().set_test_params()
             self.conf_parameters["chain_id"] = str(10)
             self.conf_parameters["evm_chain_id"] = str(11)
             self.conf_parameters["evm_transaction_block_ratio"] = str(1)

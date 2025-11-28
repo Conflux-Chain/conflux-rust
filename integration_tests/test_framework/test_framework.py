@@ -375,8 +375,8 @@ class ConfluxTestFramework:
         
         self.ew3.middleware_onion.add(SignAndSendRawMiddlewareBuilder.build(self.evm_secrets)) # type: ignore
         self.eth.default_account = self.evm_accounts[0].address
-        
-        class TestNodeMiddleware(ConfluxWeb3Middleware):
+
+        class MaxFeePerGasMiddleware(ConfluxWeb3Middleware):
             def request_processor(self, method: RPCEndpoint, params: Any) -> Any:
                 if method == RPC.cfx_sendRawTransaction or method == RPC.cfx_sendTransaction or method == "eth_sendRawTransaction" or method == "eth_sendTransaction":
                     client.node.wait_for_phase(["NormalSyncPhase"])
@@ -388,21 +388,31 @@ class ConfluxTestFramework:
                         client.generate_blocks_to_state(num_txs=1)
                 return super().request_processor(method, params)
 
+        self.cw3.middleware_onion.add(MaxFeePerGasMiddleware)
+        self.ew3.middleware_onion.add(MaxFeePerGasMiddleware)
+
+        if self.options.trace_tx:
+            self.cw3.middleware_onion.add(AutoTraceMiddleware)
+            self.ew3.middleware_onion.add(AutoTraceMiddleware)
+            
+        self._setup_w3_block_control_middleware()
+
+    # setup middleware to control the block generation to wait for tx receipt
+    def _setup_w3_block_control_middleware(self):
+        client = RpcClient(self.nodes[0])
+        log = self.log
+
+        class BlockControlMiddleware(ConfluxWeb3Middleware):
+
             def response_processor(self, method: RPCEndpoint, response: Any):
                 if method == RPC.cfx_getTransactionReceipt or method == "eth_getTransactionReceipt":
                     if "result" in response and response["result"] is None:
                         log.debug("Auto generate 5 blocks because did not get tx receipt")
                         client.generate_blocks_to_state(num_txs=1)  # why num_txs=1?
                 return response
-            
-            
-        self.cw3.middleware_onion.add(TestNodeMiddleware)
-        self.ew3.middleware_onion.add(TestNodeMiddleware)
 
-        if self.options.trace_tx:
-            self.cw3.middleware_onion.add(AutoTraceMiddleware)
-            self.ew3.middleware_onion.add(AutoTraceMiddleware)
-
+        self.cw3.middleware_onion.add(BlockControlMiddleware)
+        self.ew3.middleware_onion.add(BlockControlMiddleware)
 
     def add_nodes(self, num_nodes, genesis_nodes=None, rpchost=None, binary=None, auto_recovery=False,
                   recovery_timeout=30, is_consortium=True):
