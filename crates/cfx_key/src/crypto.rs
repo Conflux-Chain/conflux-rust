@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use parity_crypto::error::SymmError;
 use std::io;
 
 #[derive(Debug, thiserror::Error)]
@@ -25,8 +24,8 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error("invalid message")]
     InvalidMessage,
-    #[error(transparent)]
-    Symm(#[from] SymmError),
+    #[error("aes error")]
+    Aes,
 }
 
 /// ECDH functions
@@ -58,7 +57,11 @@ pub mod ecies {
     use super::{ecdh, Error};
     use crate::{KeyPairGenerator, Public, Random, Secret};
     use cfx_types::H128;
-    use parity_crypto::{aes, digest, hmac, is_equal};
+    use hmac::{Hmac, Mac};
+    use sha2::{Digest, Sha256};
+    use subtle::ConstantTimeEq;
+
+    type HmacSha256 = Hmac<Sha256>;
 
     /// Encrypt a message with a public key, writing an HMAC covering both
     /// the plaintext and authenticated data.
@@ -73,7 +76,7 @@ pub mod ecies {
         kdf(&z, &[0u8; 0], &mut key);
 
         let ekey = &key[0..16];
-        let mkey = hmac::SigKey::sha256(&digest::sha256(&key[16..32]));
+        let mkey = Sha256::digest(&key[16..32]);
 
         let mut msg = vec![0u8; 1 + 64 + 16 + plain.len() + 32];
         msg[0] = 0x04u8;
@@ -84,15 +87,21 @@ pub mod ecies {
             msgd[64..80].copy_from_slice(iv.as_bytes());
             {
                 let cipher = &mut msgd[(64 + 16)..(64 + 16 + plain.len())];
-                aes::encrypt_128_ctr(ekey, iv.as_bytes(), plain, cipher)?;
+                super::aes::encrypt_128_ctr(
+                    ekey,
+                    iv.as_bytes(),
+                    plain,
+                    cipher,
+                )?;
             }
-            let mut hmac = hmac::Signer::with(&mkey);
+            let mut hmac = HmacSha256::new_from_slice(mkey.as_slice())
+                .expect("output of Sha256 has invalid length");
             {
                 let cipher_iv = &msgd[64..(64 + 16 + plain.len())];
                 hmac.update(cipher_iv);
             }
             hmac.update(auth_data);
-            let sig = hmac.sign();
+            let sig = hmac.finalize().into_bytes();
             msgd[(64 + 16 + plain.len())..].copy_from_slice(&sig);
         }
         Ok(msg)
@@ -115,7 +124,7 @@ pub mod ecies {
         kdf(&z, &[0u8; 0], &mut key);
 
         let ekey = &key[0..16];
-        let mkey = hmac::SigKey::sha256(&digest::sha256(&key[16..32]));
+        let mkey = Sha256::digest(&key[16..32]);
 
         let clen = encrypted.len() - meta_len;
         let cipher_with_iv = &e[64..(64 + 16 + clen)];
@@ -124,17 +133,23 @@ pub mod ecies {
         let msg_mac = &e[(64 + 16 + clen)..];
 
         // Verify tag
-        let mut hmac = hmac::Signer::with(&mkey);
+        let mut hmac = HmacSha256::new_from_slice(mkey.as_slice())
+            .expect("output of Sha256 has invalid length");
         hmac.update(cipher_with_iv);
         hmac.update(auth_data);
-        let mac = hmac.sign();
+        let mac = hmac.finalize().into_bytes();
 
-        if !is_equal(&mac.as_ref()[..], msg_mac) {
+        if !is_equal(mac.as_slice(), msg_mac) {
             return Err(Error::InvalidMessage);
         }
 
         let mut msg = vec![0u8; clen];
-        aes::decrypt_128_ctr(ekey, cipher_iv, cipher_no_iv, &mut msg[..])?;
+        super::aes::decrypt_128_ctr(
+            ekey,
+            cipher_iv,
+            cipher_no_iv,
+            &mut msg[..],
+        )?;
         Ok(msg)
     }
 
@@ -145,7 +160,7 @@ pub mod ecies {
         let mut ctr = 1u32;
         let mut written = 0usize;
         while written < dest.len() {
-            let mut hasher = digest::Hasher::sha256();
+            let mut hasher = Sha256::new();
             let ctrs = [
                 (ctr >> 24) as u8,
                 (ctr >> 16) as u8,
@@ -155,10 +170,64 @@ pub mod ecies {
             hasher.update(&ctrs);
             hasher.update(secret.as_bytes());
             hasher.update(s1);
-            let d = hasher.finish();
+            let d = hasher.finalize();
             dest[written..(written + 32)].copy_from_slice(&d);
             written += 32;
             ctr += 1;
+        }
+    }
+
+    fn is_equal(a: &[u8], b: &[u8]) -> bool { a.ct_eq(b).into() }
+}
+
+mod aes {
+    use super::Error;
+    use aes::Aes128;
+    use ctr::{
+        cipher::{KeyIvInit, StreamCipher},
+        Ctr128BE,
+    };
+
+    type Aes128Ctr = Ctr128BE<Aes128>;
+
+    pub fn encrypt_128_ctr(
+        key: &[u8], iv: &[u8], plain: &[u8], ciphertext: &mut [u8],
+    ) -> Result<(), Error> {
+        let mut cipher = Aes128Ctr::new(key.into(), iv.into());
+        ciphertext[..plain.len()].copy_from_slice(plain);
+        cipher
+            .try_apply_keystream(ciphertext)
+            .map_err(|_| Error::Aes)?;
+        Ok(())
+    }
+
+    pub fn decrypt_128_ctr(
+        key: &[u8], iv: &[u8], ciphertext: &[u8], plain: &mut [u8],
+    ) -> Result<(), Error> {
+        let mut cipher = Aes128Ctr::new(key.into(), iv.into());
+        plain[..ciphertext.len()].copy_from_slice(ciphertext);
+        cipher.try_apply_keystream(plain).map_err(|_| Error::Aes)?;
+        Ok(())
+    }
+}
+
+pub mod keccak {
+    use tiny_keccak::{Hasher, Keccak};
+
+    pub trait Keccak256<T> {
+        fn keccak256(&self) -> T
+        where T: Sized;
+    }
+
+    impl<T> Keccak256<[u8; 32]> for T
+    where T: AsRef<[u8]>
+    {
+        fn keccak256(&self) -> [u8; 32] {
+            let mut keccak = Keccak::v256();
+            let mut result = [0u8; 32];
+            keccak.update(self.as_ref());
+            keccak.finalize(&mut result);
+            result
         }
     }
 }

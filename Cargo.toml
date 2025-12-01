@@ -354,6 +354,11 @@ blst = "0.3"
 #rustls = "0.21"
 hashbrown = "0.7"
 vrf = "0.2"
+hmac = "0.12.1"
+aes = "0.8.4"
+ctr = "0.9.2"
+sha2 = "0.10.9"
+subtle = "2.6.1"
 
 clap = "4"
 

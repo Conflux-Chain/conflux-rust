@@ -9,7 +9,6 @@ license-file.workspace = true
 [dependencies]
 cfx-types = { workspace = true }
 edit-distance = { workspace = true }
-parity-crypto = { workspace = true }
 parity-secp256k1 = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
@@ -22,4 +21,8 @@ zeroize = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 malloc_size_of = { workspace = true }
 thiserror = { workspace = true }
-
+aes = { workspace = true }
+hmac = { workspace = true }
+ctr = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }

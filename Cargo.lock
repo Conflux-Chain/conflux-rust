@@ -67,6 +67,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "aes"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
+dependencies = [
+ "cfg-if 1.0.0",
+ "cipher 0.4.4",
+ "cpufeatures",
+]
+
+[[package]]
 name = "aes-ctr"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -75,7 +86,7 @@ dependencies = [
  "aes-soft",
  "aesni",
  "cipher 0.2.5",
- "ctr",
+ "ctr 0.6.0",
 ]
 
 [[package]]
@@ -87,7 +98,7 @@ dependencies = [
  "aead",
  "aes 0.6.0",
  "cipher 0.2.5",
- "ctr",
+ "ctr 0.6.0",
  "ghash",
  "subtle",
 ]
@@ -175,7 +186,7 @@ dependencies = [
  "alloy-serde",
  "c-kzg",
  "serde",
- "sha2 0.10.6",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1963,18 +1974,22 @@ dependencies = [
 name = "cfxkey"
 version = "0.3.0"
 dependencies = [
+ "aes 0.8.4",
  "cfx-types",
+ "ctr 0.9.2",
  "edit-distance",
+ "hmac 0.12.1",
  "lazy_static",
  "log",
  "malloc_size_of",
  "malloc_size_of_derive",
- "parity-crypto",
  "parity-secp256k1",
  "parity-wordlist",
  "rand 0.7.3",
  "rustc-hex",
  "serde",
+ "sha2 0.10.9",
+ "subtle",
  "thiserror 2.0.11",
  "tiny-keccak 2.0.2",
  "zeroize",
@@ -2093,6 +2108,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ee52072ec15386f770805afd189a01c8841be8696bed250fa2f13c4c0d6dfb7"
 dependencies = [
  "generic-array 0.14.6",
+]
+
+[[package]]
+name = "cipher"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
+dependencies = [
+ "crypto-common",
+ "inout",
 ]
 
 [[package]]
@@ -2614,6 +2639,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb4a30d54f7443bf3d6191dcd486aca19e67cb3c49fa7a06a319966346707e7f"
 dependencies = [
  "cipher 0.2.5",
+]
+
+[[package]]
+name = "ctr"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
+dependencies = [
+ "cipher 0.4.4",
 ]
 
 [[package]]
@@ -4937,6 +4971,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inout"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
+dependencies = [
+ "generic-array 0.14.6",
+]
+
+[[package]]
 name = "instant"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5379,7 +5422,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "once_cell",
- "sha2 0.10.6",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -7801,7 +7844,7 @@ dependencies = [
  "revm-primitives",
  "ripemd",
  "secp256k1 0.28.2",
- "sha2 0.10.6",
+ "sha2 0.10.9",
  "substrate-bn 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -8287,7 +8330,7 @@ dependencies = [
  "hmac 0.12.1",
  "pbkdf2 0.10.1",
  "salsa20 0.9.0",
- "sha2 0.10.6",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -8617,9 +8660,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.6"
+version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82e6b795fe2e3b1e845bafcb27aa35405c4d47cdfc92af5fc8d3002f76cebdc0"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
