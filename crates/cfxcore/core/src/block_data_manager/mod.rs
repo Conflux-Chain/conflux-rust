@@ -1344,6 +1344,39 @@ impl BlockDataManager {
         }
         let me_height = self.block_height_by_hash(epoch_hash).unwrap();
         if pos_verifier.pos_option().is_some() && me_height != 0 {
+            // Check if stored pos reward is on pivot.
+            let pivot_block_header = self
+                .block_header_by_hash(epoch_hash)
+                .expect("header exists");
+            let maybe_parent_pos_ref = self
+                .block_header_by_hash(&pivot_block_header.parent_hash()) // `None` only for genesis.
+                .and_then(|parent| parent.pos_reference().clone());
+            if pos_verifier.is_enabled_at_height(me_height)
+                && maybe_parent_pos_ref.is_some()
+                && maybe_parent_pos_ref != *pivot_block_header.pos_reference()
+            {
+                if let Some((pos_epoch, _)) = pos_verifier
+                    .get_reward_distribution_event(
+                        pivot_block_header.pos_reference().as_ref().unwrap(),
+                        maybe_parent_pos_ref.as_ref().unwrap(),
+                    )
+                    .as_ref()
+                    .and_then(|x| x.first())
+                {
+                    if let Some(pos_reward) =
+                        self.pos_reward_by_pos_epoch(*pos_epoch)
+                    {
+                        if pos_reward.execution_epoch_hash != *epoch_hash {
+                            // The stored pos reward is executed in another
+                            // epoch, so we need to
+                            // reexecute this epoch to restore the pos reward of
+                            // the current pivot.
+                            return false;
+                        }
+                    }
+                }
+            }
+
             trace!(
                 "staking events update: height={}, new={}",
                 me_height,
