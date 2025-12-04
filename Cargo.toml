@@ -362,6 +362,9 @@ subtle = "2.6.1"
 cbc = "0.1.2"
 scrypt = "0.11.0"
 pbkdf2 = "0.12.0"
+digest = "0.10.7"
+ripemd = "0.1.3"
+
 
 clap = "4"
 
@@ -459,7 +462,6 @@ dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = 
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "09da4dfeecd754df2034d4e71a260277aaaf9783" }
 ethereum-types = "0.9"
 parity-wordlist = "1.3.0"
-parity-crypto = "0.9.0"
 parity-path = "0.1"
 parity-util-mem = { version = "0.5", default-features = false }
 parity-secp256k1 = { git = "https://github.com/paritytech/rust-secp256k1.git" }

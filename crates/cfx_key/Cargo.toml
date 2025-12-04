@@ -29,3 +29,6 @@ subtle = { workspace = true }
 cbc = { workspace = true }
 scrypt = { workspace = true }
 pbkdf2 = { workspace = true }
+digest = { workspace = true }
+typenum = { workspace = true }
+ripemd = { workspace = true }
