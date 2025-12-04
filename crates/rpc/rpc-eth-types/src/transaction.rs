@@ -19,10 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::{Bytes, SignedAuthorization};
-use cfx_types::{
-    cal_contract_address, CreateContractAddressType, H160, H256, H512, U256,
-    U64,
-};
+use cfx_types::{H160, H256, H512, U256, U64};
 use primitives::{
     transaction::eth_transaction::eip155_signature, AccessList, Action,
     SignedTransaction,
@@ -174,18 +171,6 @@ impl Transaction {
     }
 
     pub fn deployed_contract_address(t: &SignedTransaction) -> Option<H160> {
-        match t.action() {
-            Action::Create => {
-                let (new_contract_address, _) = cal_contract_address(
-                    CreateContractAddressType::FromSenderNonce,
-                    0,
-                    &t.sender().address,
-                    t.nonce(),
-                    t.data(),
-                );
-                Some(new_contract_address)
-            }
-            Action::Call(_) => None,
-        }
+        t.cal_created_address().map(|t| t.address)
     }
 }
