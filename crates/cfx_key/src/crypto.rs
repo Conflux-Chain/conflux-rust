@@ -14,6 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+// Copyright 2020 Parity Technologies
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 use std::io;
 use subtle::ConstantTimeEq;
 
@@ -332,14 +340,6 @@ pub mod pbkdf2 {
 }
 
 pub mod digest {
-    // Copyright 2020 Parity Technologies
-    //
-    // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-    // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-    // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-    // option. This file may not be copied, modified, or distributed
-    // except according to those terms.
-
     use std::{marker::PhantomData, ops::Deref};
 
     use digest::generic_array::{
