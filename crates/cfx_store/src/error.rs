@@ -14,9 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::crypto::{
-    self, publickey::Error as CryptoPublicKeyError, Error as EthCryptoError,
-};
 use cfxkey::{self, DerivationError, Error as EthKeyError};
 use std::{fmt, io::Error as IoError};
 
@@ -52,7 +49,7 @@ pub enum Error {
     /// `cfxkey::crypto::Error`
     EthKeyCrypto(cfxkey::crypto::Error),
     /// `EthCrypto` error
-    EthCrypto(EthCryptoError),
+    EthCrypto(String),
     /// Derivation error
     Derivation(DerivationError),
     /// Custom error
@@ -80,7 +77,9 @@ impl fmt::Display for Error {
             Error::CreationFailed => "Account creation failed".into(),
             Error::EthKey(ref err) => err.to_string(),
             Error::EthKeyCrypto(ref err) => err.to_string(),
-            Error::EthCrypto(ref err) => err.to_string(),
+            Error::EthCrypto(ref err) => {
+                format!("eth crypto: {}", err)
+            }
             Error::Derivation(ref err) => {
                 format!("Derivation error: {:?}", err)
             }
@@ -103,26 +102,6 @@ impl From<cfxkey::crypto::Error> for Error {
     fn from(err: cfxkey::crypto::Error) -> Self { Error::EthKeyCrypto(err) }
 }
 
-impl From<EthCryptoError> for Error {
-    fn from(err: EthCryptoError) -> Self { Error::EthCrypto(err) }
-}
-
-impl From<crypto::error::ScryptError> for Error {
-    fn from(err: crypto::error::ScryptError) -> Self {
-        Error::EthCrypto(err.into())
-    }
-}
-
-impl From<crypto::error::SymmError> for Error {
-    fn from(err: crypto::error::SymmError) -> Self {
-        Error::EthCrypto(err.into())
-    }
-}
-
 impl From<DerivationError> for Error {
     fn from(err: DerivationError) -> Self { Error::Derivation(err) }
-}
-
-impl From<CryptoPublicKeyError> for Error {
-    fn from(err: CryptoPublicKeyError) -> Self { Error::Custom(err.into()) }
 }

@@ -24,7 +24,6 @@ use std::{
 use crate::{
     account::SafeAccount,
     accounts_dir::{KeyDirectory, SetKeyError, VaultKey, VaultKeyDirectory},
-    crypto::KEY_ITERATIONS,
     import,
     json::{self, OpaqueKeyFile, Uuid},
     random::Random,
@@ -32,8 +31,8 @@ use crate::{
     SimpleSecretStore, StoreAccountRef,
 };
 use cfxkey::{
-    self, Address, ExtendedKeyPair, KeyPair, Message, Password, Public, Secret,
-    Signature,
+    self, crypto::KEY_ITERATIONS, Address, ExtendedKeyPair, KeyPair, Message,
+    Password, Public, Secret, Signature,
 };
 
 /// Accounts store.

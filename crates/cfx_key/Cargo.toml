@@ -26,3 +26,6 @@ hmac = { workspace = true }
 ctr = { workspace = true }
 sha2 = { workspace = true }
 subtle = { workspace = true }
+cbc = { workspace = true }
+scrypt = { workspace = true }
+pbkdf2 = { workspace = true }

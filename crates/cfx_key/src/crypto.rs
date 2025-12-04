@@ -15,6 +15,11 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::io;
+use subtle::ConstantTimeEq;
+
+pub const KEY_LENGTH: usize = 32;
+pub const KEY_ITERATIONS: usize = 10240;
+pub const KEY_LENGTH_AES: usize = KEY_LENGTH / 2;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -54,12 +59,11 @@ pub mod ecdh {
 
 /// ECIES function
 pub mod ecies {
-    use super::{ecdh, Error};
+    use super::{ecdh, is_equal, Error};
     use crate::{KeyPairGenerator, Public, Random, Secret};
     use cfx_types::H128;
     use hmac::{Hmac, Mac};
     use sha2::{Digest, Sha256};
-    use subtle::ConstantTimeEq;
 
     type HmacSha256 = Hmac<Sha256>;
 
@@ -176,19 +180,19 @@ pub mod ecies {
             ctr += 1;
         }
     }
-
-    fn is_equal(a: &[u8], b: &[u8]) -> bool { a.ct_eq(b).into() }
 }
 
-mod aes {
+pub mod aes {
     use super::Error;
     use aes::Aes128;
+    use cbc::{cipher::BlockDecryptMut, Decryptor};
     use ctr::{
-        cipher::{KeyIvInit, StreamCipher},
+        cipher::{KeyIvInit as CtrKeyIvInit, StreamCipher},
         Ctr128BE,
     };
 
     type Aes128Ctr = Ctr128BE<Aes128>;
+    type Aes128CbcDec = Decryptor<Aes128>;
 
     pub fn encrypt_128_ctr(
         key: &[u8], iv: &[u8], plain: &[u8], ciphertext: &mut [u8],
@@ -208,6 +212,39 @@ mod aes {
         plain[..ciphertext.len()].copy_from_slice(ciphertext);
         cipher.try_apply_keystream(plain).map_err(|_| Error::Aes)?;
         Ok(())
+    }
+
+    pub fn decrypt_128_cbc(
+        key: &[u8], iv: &[u8], data: &[u8], dest: &mut [u8],
+    ) -> Result<usize, String> {
+        if key.len() != 16 {
+            return Err("Key must be exactly 16 bytes for AES-128".to_string());
+        }
+
+        if iv.len() != 16 {
+            return Err("IV must be exactly 16 bytes".to_string());
+        }
+
+        if data.is_empty() {
+            return Err("Data cannot be empty".to_string());
+        }
+
+        if data.len() % 16 != 0 {
+            return Err(
+                "Data length must be a multiple of 16 bytes".to_string()
+            );
+        }
+
+        // Create decryptor
+        let decryptor = Aes128CbcDec::new(key.into(), iv.into());
+        dest[..data.len()].copy_from_slice(data);
+
+        // Decrypt and remove PKCS7 padding
+        let plaintext = decryptor
+            .decrypt_padded_mut::<cbc::cipher::block_padding::Pkcs7>(dest)
+            .map_err(|e| format!("Decryption failed: {}", e))?;
+
+        Ok(plaintext.len())
     }
 }
 
@@ -232,11 +269,85 @@ pub mod keccak {
     }
 }
 
+pub mod scrypt {
+    use crate::crypto::{KEY_LENGTH, KEY_LENGTH_AES};
+    use scrypt::{errors, scrypt, Params};
+
+    pub fn derive_key(
+        pass: &[u8], salt: &[u8], n: u32, p: u32, r: u32,
+    ) -> Result<(Vec<u8>, Vec<u8>), String> {
+        // sanity checks
+        let log_n = (32 - n.leading_zeros() - 1) as u8;
+        if log_n as u32 >= r * 16 {
+            return Err(errors::InvalidParams.to_string());
+        }
+
+        if p as u64 > ((u32::MAX as u64 - 1) * 32) / (128 * (r as u64)) {
+            return Err(errors::InvalidParams.to_string());
+        }
+
+        let mut derived_key = vec![0u8; KEY_LENGTH];
+        let scrypt_params =
+            Params::new(log_n, r, p, KEY_LENGTH).map_err(|e| e.to_string())?;
+        scrypt(pass, salt, &scrypt_params, &mut derived_key)
+            .map_err(|e| e.to_string())?;
+        let derived_right_bits = &derived_key[0..KEY_LENGTH_AES];
+        let derived_left_bits = &derived_key[KEY_LENGTH_AES..KEY_LENGTH];
+        Ok((derived_right_bits.to_vec(), derived_left_bits.to_vec()))
+    }
+}
+
+pub mod pbkdf2 {
+    use crate::crypto::{KEY_LENGTH, KEY_LENGTH_AES};
+    use hmac;
+    use pbkdf2;
+    use sha2;
+
+    pub struct Salt<'a>(pub &'a [u8]);
+    pub struct Secret<'a>(pub &'a [u8]);
+
+    pub fn sha256(
+        iter: u32, salt: Salt<'_>, sec: Secret<'_>, out: &mut [u8; 32],
+    ) -> Result<(), String> {
+        pbkdf2::pbkdf2::<hmac::Hmac<sha2::Sha256>>(sec.0, salt.0, iter, out)
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn sha512(
+        iter: u32, salt: Salt<'_>, sec: Secret<'_>, out: &mut [u8; 64],
+    ) -> Result<(), String> {
+        pbkdf2::pbkdf2::<hmac::Hmac<sha2::Sha512>>(sec.0, salt.0, iter, out)
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn derive_key_iterations(
+        password: &[u8], salt: &[u8], c: u32,
+    ) -> Result<(Vec<u8>, Vec<u8>), String> {
+        let mut derived_key = [0u8; KEY_LENGTH];
+        sha256(c, Salt(salt), Secret(password), &mut derived_key)?;
+        let derived_right_bits = &derived_key[0..KEY_LENGTH_AES];
+        let derived_left_bits = &derived_key[KEY_LENGTH_AES..KEY_LENGTH];
+        Ok((derived_right_bits.to_vec(), derived_left_bits.to_vec()))
+    }
+}
+
+pub fn derive_mac(derived_left_bits: &[u8], cipher_text: &[u8]) -> Vec<u8> {
+    let mut mac = vec![0u8; KEY_LENGTH_AES + cipher_text.len()];
+    mac[0..KEY_LENGTH_AES].copy_from_slice(derived_left_bits);
+    mac[KEY_LENGTH_AES..cipher_text.len() + KEY_LENGTH_AES]
+        .copy_from_slice(cipher_text);
+    mac
+}
+
+pub fn is_equal(a: &[u8], b: &[u8]) -> bool { a.ct_eq(b).into() }
+
 #[cfg(test)]
 mod tests {
     use super::{ecdh, ecies};
-    use crate::{KeyPairGenerator, Public, Random, Secret};
-    use std::str::FromStr;
+    use crate::{
+        crypto::scrypt::derive_key, KeyPairGenerator, Public, Random, Secret,
+    };
+    use std::{io::Error, str::FromStr};
 
     #[test]
     fn ecies_shared() {
@@ -246,7 +357,7 @@ mod tests {
         let shared = b"shared";
         let wrong_shared = b"incorrect";
         let encrypted = ecies::encrypt(kp.public(), shared, message).unwrap();
-        assert!(encrypted[..] != message[..]);
+        assert_ne!(encrypted[..], message[..]);
         assert_eq!(encrypted[0], 0x04);
 
         assert!(ecies::decrypt(kp.secret(), wrong_shared, &encrypted).is_err());
@@ -274,5 +385,39 @@ mod tests {
         )
         .unwrap();
         assert_eq!(agree_secret, expected);
+    }
+    // test is build from previous crypto lib behaviour, values may be incorrect
+    // if previous crypto lib got a bug.
+    #[test]
+    pub fn test_derive() -> Result<(), Error> {
+        let pass = [109, 121, 112, 97, 115, 115, 10];
+        let salt = [
+            109, 121, 115, 97, 108, 116, 115, 104, 111, 117, 108, 100, 102,
+            105, 108, 108, 115, 111, 109, 109, 101, 98, 121, 116, 101, 108,
+            101, 110, 103, 116, 104, 10,
+        ];
+        let r1 = [
+            93, 134, 79, 68, 223, 27, 44, 174, 236, 184, 179, 203, 74, 139, 73,
+            66,
+        ];
+        let r2 = [
+            2, 24, 239, 131, 172, 164, 18, 171, 132, 207, 22, 217, 150, 20,
+            203, 37,
+        ];
+        let l1 = [
+            6, 90, 119, 45, 67, 2, 99, 151, 81, 88, 166, 210, 244, 19, 123, 208,
+        ];
+        let l2 = [
+            253, 123, 132, 12, 188, 89, 196, 2, 107, 224, 239, 231, 135, 177,
+            125, 62,
+        ];
+
+        let (l, r) = derive_key(&pass[..], &salt, 262, 1, 8).unwrap();
+        assert_eq!(l, r1);
+        assert_eq!(r, l1);
+        let (l, r) = derive_key(&pass[..], &salt, 144, 4, 4).unwrap();
+        assert_eq!(l, r2);
+        assert_eq!(r, l2);
+        Ok(())
     }
 }

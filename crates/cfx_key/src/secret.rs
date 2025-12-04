@@ -64,6 +64,12 @@ impl Secret {
         Some(Secret { inner: h })
     }
 
+    pub fn import_key(key: &[u8]) -> Result<Self, Error> {
+        let k = Self::from_slice(key).ok_or(Error::InvalidSecret)?;
+        k.check_validity()?;
+        Ok(k)
+    }
+
     /// Creates zero key, which is invalid for crypto operations, but valid for
     /// math operation.
     pub fn zero() -> Self {

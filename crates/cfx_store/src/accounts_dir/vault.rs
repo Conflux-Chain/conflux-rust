@@ -19,7 +19,8 @@ use super::{
     disk::{self, DiskDirectory, KeyFileManager},
     KeyDirectory, SetKeyError, VaultKey, VaultKeyDirectory,
 };
-use crate::{crypto::Keccak256, json, Error, SafeAccount};
+use crate::{json, Error, SafeAccount};
+use cfxkey::crypto::keccak::Keccak256;
 use parking_lot::Mutex;
 use std::{
     fs, io,

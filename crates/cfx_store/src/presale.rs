@@ -14,15 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{
-    crypto::{
-        self, pbkdf2,
-        publickey::{Address, KeyPair, Secret},
-        Keccak256,
-    },
-    json, Error,
+use crate::{json, Error};
+use cfxkey::{
+    crypto::{aes, keccak::Keccak256, pbkdf2},
+    Address, KeyPair, Password, Secret,
 };
-use cfxkey::Password;
 use std::{fs, num::NonZeroU32, path::Path};
 
 /// Pre-sale wallet.
@@ -65,10 +61,11 @@ impl PresaleWallet {
         let salt = pbkdf2::Salt(password.as_bytes());
         let sec = pbkdf2::Secret(password.as_bytes());
         let iter = NonZeroU32::new(2000).expect("2000 > 0; qed");
-        pbkdf2::sha256(iter.get(), salt, sec, &mut derived_key);
+        pbkdf2::sha256(iter.get(), salt, sec, &mut derived_key)
+            .map_err(Error::EthCrypto)?;
 
         let mut key = vec![0; self.ciphertext.len()];
-        let len = crypto::aes::decrypt_128_cbc(
+        let len = aes::decrypt_128_cbc(
             &derived_key[0..16],
             &self.iv,
             &self.ciphertext,

@@ -19,7 +19,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::crypto::Crypto;
-use crate::{account::Version, crypto, json, Error};
+use crate::{account::Version, json, Error};
 use cfx_types::address_util::AddressUtil;
 use cfxkey::{
     self, crypto::ecdh::agree, sign, Address, KeyPair, Message, Password,
@@ -64,7 +64,7 @@ impl SafeAccount {
     pub fn create(
         keypair: &KeyPair, id: [u8; 16], password: &Password, iterations: u32,
         name: String, meta: String,
-    ) -> Result<Self, crypto::Error> {
+    ) -> Result<Self, Error> {
         Ok(SafeAccount {
             id,
             version: Version::V3,
