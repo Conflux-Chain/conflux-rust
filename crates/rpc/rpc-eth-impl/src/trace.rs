@@ -1,5 +1,7 @@
 use std::vec;
 
+use alloy_primitives::map::HashSet;
+use alloy_rpc_types_trace::parity::{TraceResults, TraceType};
 use cfx_addr::Network;
 use cfx_parity_trace_types::Action;
 use cfx_rpc_cfx_impl::TraceHandler;
@@ -10,7 +12,7 @@ use cfx_rpc_common_impl::trace::{
 use cfx_rpc_eth_api::TraceApiServer;
 use cfx_rpc_eth_types::{
     trace::{LocalizedSetAuthTrace, LocalizedTrace as EthLocalizedTrace},
-    BlockId, Index, LocalizedTrace, TraceFilter,
+    BlockId, Index, LocalizedTrace, TraceFilter, TransactionRequest,
 };
 use cfx_types::H256;
 use cfx_util_macros::unwrap_option_or_return_result_none as unwrap_or_return;
@@ -19,6 +21,7 @@ use jsonrpc_core::Error as RpcError;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use log::warn;
 use primitives::EpochNumber;
+
 pub struct TraceApi {
     trace_handler: TraceHandler,
 }
@@ -240,5 +243,16 @@ impl TraceApiServer for TraceApi {
         };
         let index = indices[0].value();
         Ok(traces.get(index).cloned())
+    }
+
+    async fn trace_call(
+        &self,
+        call: TransactionRequest,
+        trace_types: HashSet<TraceType>,
+        block_id: Option<BlockId>,
+        // state_overrides: Option<StateOverride>,
+        // block_overrides: Option<Box<BlockOverrides>>,
+    ) -> RpcResult<TraceResults> {
+        todo!()
     }
 }

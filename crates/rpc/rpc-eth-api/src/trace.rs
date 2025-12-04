@@ -1,5 +1,7 @@
+use alloy_primitives::map::HashSet;
+use alloy_rpc_types_trace::parity::{TraceResults, TraceType};
 use cfx_rpc_eth_types::{
-    BlockId, Index, LocalizedSetAuthTrace, LocalizedTrace, TraceFilter,
+    BlockId, Index, LocalizedSetAuthTrace, LocalizedTrace, TraceFilter, TransactionRequest,
 };
 use cfx_types::H256;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
@@ -34,4 +36,14 @@ pub trait TraceApi {
     async fn transaction_traces(
         &self, tx_hash: H256,
     ) -> RpcResult<Option<Vec<LocalizedTrace>>>;
+
+    #[method(name = "call")]
+    async fn trace_call(
+        &self,
+        call: TransactionRequest,
+        trace_types: HashSet<TraceType>,
+        block_id: Option<BlockId>,
+        // state_overrides: Option<StateOverride>,
+        // block_overrides: Option<Box<BlockOverrides>>,
+    ) -> RpcResult<TraceResults>;
 }
