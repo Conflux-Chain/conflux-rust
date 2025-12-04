@@ -202,7 +202,9 @@
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
-<a href="#204" id="204">204</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 </span><span class="kw">pub mod </span>executed;
@@ -226,7 +228,9 @@
 <span class="kw">use </span>pre_checked_executive::PreCheckedExecutive;
 
 <span class="kw">pub use </span>executed::Executed;
-<span class="kw">pub use </span>execution_outcome::{ExecutionError, ExecutionOutcome, TxDropError};
+<span class="kw">pub use </span>execution_outcome::{
+    ExecutionError, ExecutionOutcome, ToRepackError, TxDropError,
+};
 <span class="kw">pub use </span>transact_options::{
     ChargeCollateral, TransactOptions, TransactSettings,
 };
