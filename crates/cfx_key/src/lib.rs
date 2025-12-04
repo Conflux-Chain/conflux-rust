@@ -20,7 +20,6 @@ mod brain;
 mod brain_prefix;
 mod error;
 mod extended;
-mod keccak;
 mod keypair;
 mod password;
 mod prefix;

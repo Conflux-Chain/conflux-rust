@@ -205,7 +205,7 @@ impl ExtendedKeyPair {
 // https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 mod derivation {
     use super::{Derivation, Label};
-    use crate::{keccak, math::curve_order, SECP256K1};
+    use crate::{crypto::keccak::Keccak256, math::curve_order, SECP256K1};
     use cfx_types::{BigEndianHash, H256, H512, U256, U512};
     use hmac::{Hmac, Mac};
     use secp256k1::key::{PublicKey, SecretKey};
@@ -371,7 +371,7 @@ mod derivation {
         Ok((H512::from_slice(&serialized[1..65]), new_chain_code))
     }
 
-    fn sha3(slc: &[u8]) -> H256 { keccak::Keccak256::keccak256(slc).into() }
+    fn sha3(slc: &[u8]) -> H256 { slc.keccak256().into() }
 
     pub fn chain_code(secret: H256) -> H256 {
         // 10,000 rounds of sha3
