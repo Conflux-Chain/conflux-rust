@@ -294,11 +294,11 @@ alloy-sol-types = "1.4.1"
 alloy-primitives = "1.4.1"
 alloy-rpc-types = "1.1"
 alloy-rpc-types-trace = "1.1"
-revm = { version = "30.2.0", default-features = false }
+revm = { version = "33.1", default-features = false }
 revm-primitives = "21.0"
-revm-interpreter = "28.0.0"
-revm-context-interface = "11.1.2"
-revm-bytecode = "7.0.2"
+revm-interpreter = "31.1"
+revm-context-interface = "13.1"
+revm-bytecode = "7.1"
 
 # jsonrpc framework(old)
 jsonrpc-core = "18.0.0"
