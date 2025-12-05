@@ -1729,6 +1729,7 @@ name = "cfx-rpc-eth-types"
 version = "3.0.0"
 dependencies = [
  "alloy-rpc-types",
+ "alloy-rpc-types-trace",
  "cfx-bytes",
  "cfx-parameters",
  "cfx-parity-trace-types",
