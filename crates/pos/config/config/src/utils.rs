@@ -11,7 +11,7 @@ use diem_types::{
     network_address::{NetworkAddress, Protocol},
     transaction::{authenticator::AuthenticationKey, Transaction},
 };
-use get_if_addrs::get_if_addrs;
+use if_addrs::get_if_addrs;
 use std::net::{TcpListener, TcpStream};
 
 pub fn default_validator_owner_auth_key_from_name(
