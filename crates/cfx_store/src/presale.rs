@@ -65,20 +65,18 @@ impl PresaleWallet {
             .map_err(Error::EthCrypto)?;
 
         let mut key = vec![0; self.ciphertext.len()];
-        let len = aes::decrypt_128_cbc(
+        let unpadded = aes::decrypt_128_cbc(
             &derived_key[0..16],
             &self.iv,
             &self.ciphertext,
             &mut key,
         )
         .map_err(|_| Error::InvalidPassword)?;
-        let unpadded = &key[..len];
 
         let secret = Secret::import_key(&unpadded.keccak256())?;
-        if let Ok(kp) = KeyPair::from_secret(secret) {
-            if kp.address() == self.address {
-                return Ok(kp);
-            }
+        let kp = KeyPair::from_secret(secret)?;
+        if kp.evm_address() == self.address {
+            return Ok(kp);
         }
 
         Err(Error::InvalidPassword)
@@ -102,6 +100,7 @@ mod tests {
 
         let wallet = json::PresaleWallet::load(json.as_bytes()).unwrap();
         let wallet = PresaleWallet::from(wallet);
+        wallet.decrypt(&"123".into()).unwrap();
         assert!(wallet.decrypt(&"123".into()).is_ok());
         assert!(wallet.decrypt(&"124".into()).is_err());
     }

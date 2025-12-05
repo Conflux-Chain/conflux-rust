@@ -222,9 +222,9 @@ pub mod aes {
         Ok(())
     }
 
-    pub fn decrypt_128_cbc(
-        key: &[u8], iv: &[u8], data: &[u8], dest: &mut [u8],
-    ) -> Result<usize, String> {
+    pub fn decrypt_128_cbc<'a>(
+        key: &[u8], iv: &[u8], data: &[u8], dest: &'a mut [u8],
+    ) -> Result<&'a [u8], String> {
         if key.len() != 16 {
             return Err("Key must be exactly 16 bytes for AES-128".to_string());
         }
@@ -252,7 +252,7 @@ pub mod aes {
             .decrypt_padded_mut::<cbc::cipher::block_padding::Pkcs7>(dest)
             .map_err(|e| format!("Decryption failed: {}", e))?;
 
-        Ok(plaintext.len())
+        Ok(plaintext)
     }
 }
 
