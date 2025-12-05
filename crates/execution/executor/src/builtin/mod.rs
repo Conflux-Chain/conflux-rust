@@ -22,7 +22,6 @@
 
 mod blake2f;
 mod bls12_381;
-mod ethereum_trusted_setup_points;
 mod executable;
 mod kzg_point_evaluations;
 mod price_plan;
