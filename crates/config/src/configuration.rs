@@ -50,11 +50,10 @@ use diem_types::term_state::{
     pos_state_config::PosStateConfig, IN_QUEUE_LOCKED_VIEWS,
     OUT_QUEUE_LOCKED_VIEWS, ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
 };
-use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::server::ServerConfigBuilder;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use primitives::block_header::CIP112_TRANSITION_HEIGHT;
-use tower::layer::util::Identity;
 use txgen::TransactionGeneratorConfig;
 
 use crate::{HttpConfiguration, TcpConfiguration, WsConfiguration};
@@ -1186,10 +1185,8 @@ impl Configuration {
         TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
     }
 
-    pub fn jsonrpsee_server_builder(
-        &self,
-    ) -> ServerBuilder<Identity, Identity> {
-        let builder = ServerBuilder::default()
+    pub fn jsonrpsee_server_builder(&self) -> ServerConfigBuilder {
+        let builder = ServerConfigBuilder::default()
             .max_request_body_size(self.raw_conf.jsonrpc_max_request_body_size)
             .max_response_body_size(
                 self.raw_conf.jsonrpc_max_response_body_size,
