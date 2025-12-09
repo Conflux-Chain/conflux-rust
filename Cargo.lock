@@ -8532,16 +8532,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536f30e24c3c2bf0d3d7d20fa9cf99b93040ed0f021fd9301c78cddb0dacda13"
 dependencies = [
  "alloy-primitives",
- "auto_impl",
- "bitflags 2.10.0",
- "bitvec 1.0.1",
- "c-kzg",
- "cfg-if 1.0.0",
- "derive_more 0.99.17",
- "dyn-clone",
- "enumn",
- "hashbrown 0.14.3",
- "hex",
+ "num_enum",
  "once_cell",
  "serde",
 ]
@@ -10881,7 +10872,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 2.0.96",
+ "syn 2.0.107",
  "wasm-bindgen-shared",
 ]
 
