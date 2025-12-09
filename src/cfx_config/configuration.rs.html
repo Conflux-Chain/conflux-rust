@@ -1645,10 +1645,7 @@
 <a href="#1644" id="1644">1644</a>
 <a href="#1645" id="1645">1645</a>
 <a href="#1646" id="1646">1646</a>
-<a href="#1647" id="1647">1647</a>
-<a href="#1648" id="1648">1648</a>
-<a href="#1649" id="1649">1649</a>
-<a href="#1650" id="1650">1650</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1647" id="1647">1647</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1700,11 +1697,10 @@
     pos_state_config::PosStateConfig, IN_QUEUE_LOCKED_VIEWS,
     OUT_QUEUE_LOCKED_VIEWS, ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
 };
-<span class="kw">use </span>jsonrpsee::server::ServerBuilder;
+<span class="kw">use </span>jsonrpsee::server::ServerConfigBuilder;
 <span class="kw">use </span>metrics::MetricsConfiguration;
 <span class="kw">use </span>network::DiscoveryConfiguration;
 <span class="kw">use </span>primitives::block_header::CIP112_TRANSITION_HEIGHT;
-<span class="kw">use </span>tower::layer::util::Identity;
 <span class="kw">use </span>txgen::TransactionGeneratorConfig;
 
 <span class="kw">use crate</span>::{HttpConfiguration, TcpConfiguration, WsConfiguration};
@@ -2836,10 +2832,8 @@
         TcpConfiguration::new(<span class="prelude-val">None</span>, <span class="self">self</span>.raw_conf.jsonrpc_tcp_port)
     }
 
-    <span class="kw">pub fn </span>jsonrpsee_server_builder(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; ServerBuilder&lt;Identity, Identity&gt; {
-        <span class="kw">let </span>builder = ServerBuilder::default()
+    <span class="kw">pub fn </span>jsonrpsee_server_builder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerConfigBuilder {
+        <span class="kw">let </span>builder = ServerConfigBuilder::default()
             .max_request_body_size(<span class="self">self</span>.raw_conf.jsonrpc_max_request_body_size)
             .max_response_body_size(
                 <span class="self">self</span>.raw_conf.jsonrpc_max_response_body_size,

@@ -83,19 +83,46 @@
 <a href="#82" id="82">82</a>
 <a href="#83" id="83">83</a>
 <a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_rpc_utils::error::{
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a></pre></div><pre class="rust"><code><span class="kw">use </span>cfx_rpc_utils::error::{
     jsonrpc_error_helpers::request_rejected_too_many_request_error,
     jsonrpsee_error_helpers::jsonrpc_error_to_error_object_owned,
 };
 <span class="kw">use </span>cfx_util_macros::bail;
 <span class="kw">use </span>futures::FutureExt;
-<span class="kw">use </span>futures_util::future::BoxFuture;
 <span class="kw">use </span>jsonrpsee::{
     core::RpcResult,
-    server::{middleware::rpc::RpcServiceT, MethodResponse},
+    server::{
+        middleware::rpc::{Batch, Notification, RpcServiceT},
+        MethodResponse,
+    },
 };
 <span class="kw">use </span>jsonrpsee_types::Request;
 <span class="kw">use </span>log::debug;
+<span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 <span class="attr">#[derive(Clone)]
@@ -146,16 +173,23 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, S&gt; RpcServiceT&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>Throttle&lt;S&gt;
-<span class="kw">where </span>S: RpcServiceT&lt;<span class="lifetime">'a</span>&gt; + Send + Sync + Clone + <span class="lifetime">'static
+<span class="kw">impl</span>&lt;S&gt; RpcServiceT <span class="kw">for </span>Throttle&lt;S&gt;
+<span class="kw">where </span>S: RpcServiceT&lt;MethodResponse = MethodResponse&gt;
+        + Send
+        + Sync
+        + Clone
+        + <span class="lifetime">'static
 </span>{
-    <span class="kw">type </span>Future = BoxFuture&lt;<span class="lifetime">'a</span>, MethodResponse&gt;;
+    <span class="kw">type </span>BatchResponse = S::BatchResponse;
+    <span class="kw">type </span>MethodResponse = S::MethodResponse;
+    <span class="kw">type </span>NotificationResponse = S::NotificationResponse;
 
-    <span class="kw">fn </span>call(<span class="kw-2">&amp;</span><span class="self">self</span>, req: Request&lt;<span class="lifetime">'a</span>&gt;) -&gt; <span class="self">Self</span>::Future {
+    <span class="kw">fn </span>call&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, req: Request&lt;<span class="lifetime">'a</span>&gt;,
+    ) -&gt; <span class="kw">impl </span>Future&lt;Output = <span class="self">Self</span>::MethodResponse&gt; + Send + <span class="lifetime">'a </span>{
         <span class="kw">let </span>service = <span class="self">self</span>.service.clone();
         <span class="kw">let </span>throlltle_result = <span class="self">self</span>.before(<span class="kw-2">&amp;</span>req.method_name().to_string());
-        <span class="comment">// Box::pin(async move { service.call(req).await })
-        </span><span class="kw">match </span>throlltle_result {
+        <span class="kw">match </span>throlltle_result {
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
                 <span class="macro">debug!</span>(<span class="string">"throttle interceptor: method `{}` success"</span>, req.method);
                 Box::pin(<span class="kw">async move </span>{ service.call(req).<span class="kw">await </span>}).boxed()
@@ -166,6 +200,20 @@
                     .boxed()
             }
         }
+    }
+
+    <span class="kw">fn </span>batch&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, batch: Batch&lt;<span class="lifetime">'a</span>&gt;,
+    ) -&gt; <span class="kw">impl </span>Future&lt;Output = <span class="self">Self</span>::BatchResponse&gt; + Send + <span class="lifetime">'a </span>{
+        <span class="comment">// batch are not throtted
+        </span><span class="self">self</span>.service.batch(batch)
+    }
+
+    <span class="kw">fn </span>notification&lt;<span class="lifetime">'a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>, n: Notification&lt;<span class="lifetime">'a</span>&gt;,
+    ) -&gt; <span class="kw">impl </span>Future&lt;Output = <span class="self">Self</span>::NotificationResponse&gt; + Send + <span class="lifetime">'a </span>{
+        <span class="comment">// notifications are not throtted
+        </span><span class="self">self</span>.service.notification(n)
     }
 }
 </code></pre></div></section></main></body></html>
