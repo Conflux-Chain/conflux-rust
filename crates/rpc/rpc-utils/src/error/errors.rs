@@ -8,7 +8,7 @@ use alloy_rpc_types::error::EthRpcErrorCode;
 use alloy_sol_types::decode_revert_reason;
 use jsonrpc_core::{Error as JsonRpcError, ErrorCode};
 use jsonrpsee::types::ErrorObjectOwned;
-use revm_primitives::{HaltReason, OutOfGasError};
+use revm_context_interface::result::{HaltReason, OutOfGasError};
 use std::time::Duration;
 
 // The key point is the error code and message.
@@ -339,7 +339,7 @@ impl RpcInvalidTransactionError {
     /// Takes the configured gas limit of the transaction which is attached to
     /// the error
     #[allow(dead_code)]
-    pub(crate) const fn halt(reason: HaltReason, gas_limit: u64) -> Self {
+    pub(crate) fn halt(reason: HaltReason, gas_limit: u64) -> Self {
         match reason {
             HaltReason::OutOfGas(err) => Self::out_of_gas(err, gas_limit),
             HaltReason::NonceOverflow => Self::NonceMaxValue,
@@ -353,7 +353,9 @@ impl RpcInvalidTransactionError {
         reason: OutOfGasError, gas_limit: u64,
     ) -> Self {
         match reason {
-            OutOfGasError::Basic => Self::BasicOutOfGas(gas_limit),
+            OutOfGasError::Basic | OutOfGasError::ReentrancySentry => {
+                Self::BasicOutOfGas(gas_limit)
+            }
             OutOfGasError::Memory | OutOfGasError::MemoryLimit => {
                 Self::MemoryOutOfGas(gas_limit)
             }

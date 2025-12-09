@@ -25,6 +25,8 @@ cfx-vm-interpreter = { workspace = true }
 primitives = { workspace = true }
 revm-primitives = { workspace = true }
 revm-interpreter = { workspace = true }
+revm-bytecode = { workspace = true }
+alloy-primitives-wrapper = { workspace = true }
 
 [features]
 serde = []
