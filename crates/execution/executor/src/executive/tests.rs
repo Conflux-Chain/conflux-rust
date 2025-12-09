@@ -15,13 +15,13 @@ use cfx_parameters::{
     staking::*,
 };
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, U256,
+    address_util::AddressUtil, cal_contract_address_with_space, Address,
+    AddressSpaceUtil, BigEndianHash, CreateContractAddressType, Space, U256,
     U512,
 };
 use cfx_vm_interpreter::{FinalizationResult, GasPriceTier};
 use cfx_vm_types::{
-    self as vm, ActionParams, ActionValue, CallType, CreateContractAddress,
-    CreateType, Env,
+    self as vm, ActionParams, ActionValue, CallType, CreateType, Env,
 };
 use cfxkey::{Generator, Random};
 use primitives::{
@@ -59,8 +59,8 @@ fn test_contract_address() {
         Address::from_str("87ed868bd4e05f0be585961a5293a68cfb6ce60e").unwrap();
     assert_eq!(
         expected_address,
-        contract_address(
-            CreateContractAddress::FromSenderNonceAndCodeHash,
+        cal_contract_address_with_space(
+            CreateContractAddressType::FromSenderNonceAndCodeHash,
             /* block_number = */ 0,
             &address.with_native_space(),
             &U256::from(88),
@@ -76,8 +76,8 @@ fn test_sender_balance() {
     let sender =
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let sender_with_space = sender.with_native_space();
-    let address = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let address = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
@@ -183,8 +183,8 @@ fn test_create_contract_out_of_depth() {
     let sender =
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let sender_with_space = sender.with_native_space();
-    let address = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let address = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
@@ -238,8 +238,8 @@ fn test_suicide_when_creation() {
     let sender_addr =
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let sender_with_space = sender_addr.with_native_space();
-    let contract_addr = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let contract_addr = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
@@ -320,8 +320,8 @@ fn test_call_to_create() {
     let sender =
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let sender_with_space = sender.with_native_space();
-    let address = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let address = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
@@ -468,8 +468,8 @@ fn test_keccak() {
     let sender =
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let sender_with_space = sender.with_native_space();
-    let address = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let address = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
@@ -935,8 +935,8 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
 
     let sender = Random.generate().unwrap().address();
     let sender_with_space = sender.with_native_space();
-    let address = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let address = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
@@ -1122,8 +1122,8 @@ fn test_commission_privilege() {
     let caller1 = Random.generate().unwrap();
     let caller2 = Random.generate().unwrap();
     let caller3 = Random.generate().unwrap();
-    let address = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let address = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
@@ -1521,8 +1521,8 @@ fn test_storage_commission_privilege() {
     let caller1 = Random.generate().unwrap();
     let caller2 = Random.generate().unwrap();
     let caller3 = Random.generate().unwrap();
-    let address = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let address = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
@@ -2130,8 +2130,8 @@ fn test_push0() {
     let sender_addr =
         Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
     let sender_with_space = sender_addr.with_native_space();
-    let contract_addr = contract_address(
-        CreateContractAddress::FromSenderNonceAndCodeHash,
+    let contract_addr = cal_contract_address_with_space(
+        CreateContractAddressType::FromSenderNonceAndCodeHash,
         /* block_number = */ 0,
         &sender_with_space,
         &U256::zero(),
