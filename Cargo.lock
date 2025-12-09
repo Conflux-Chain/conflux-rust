@@ -5748,6 +5748,7 @@ dependencies = [
 name = "memory-cache"
 version = "0.1.0"
 dependencies = [
+ "cfx-mallocator-utils",
  "lru-cache",
  "malloc_size_of",
 ]
