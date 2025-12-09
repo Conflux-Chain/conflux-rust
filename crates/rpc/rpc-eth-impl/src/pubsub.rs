@@ -586,7 +586,7 @@ where
                         break  Ok(())
                     },
                 };
-                let msg = SubscriptionMessage::from_json(&item).map_err(SubscriptionSerializeError::new)?;
+                let msg = SubscriptionMessage::new(sink.method_name(), sink.subscription_id(), &item).map_err(SubscriptionSerializeError::new)?;
                 if sink.send(msg).await.is_err() {
                     break Ok(());
                 }
