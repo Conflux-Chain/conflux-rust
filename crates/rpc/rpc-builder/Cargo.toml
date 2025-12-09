@@ -21,7 +21,6 @@ thiserror = { workspace = true }
 jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server"] }
-tower = { workspace = true, features = ["full"] }
 rand = { workspace = true }
 cfx-rpc = { workspace = true }
 cfx-rpc-eth-api = { workspace = true }
