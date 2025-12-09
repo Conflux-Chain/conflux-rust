@@ -2771,11 +2771,11 @@
             <span class="kw">if </span>!force_retired.is_empty() {
                 <span class="comment">// `end_epoch` has been checked above and is excluded below.
                 </span><span class="kw">let </span>end_epoch = ledger_info_with_sigs.ledger_info().epoch();
-                <span class="kw">let </span>start_epoch = end_epoch
-                    - POS_STATE_CONFIG.force_retire_check_epoch_count(
+                <span class="kw">let </span>start_epoch = end_epoch.saturating_sub(
+                    POS_STATE_CONFIG.force_retire_check_epoch_count(
                         pos_state_to_commit.current_view(),
-                    )
-                    + <span class="number">1</span>;
+                    ),
+                ) + <span class="number">1</span>;
                 <span class="comment">// Check more past epochs to see if the nodes in `force_retired`
                 // have voted.
                 </span><span class="kw">for </span>end_ledger_info <span class="kw">in </span><span class="self">self

@@ -111,7 +111,11 @@
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
 <a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of Parity Ethereum.
 
 // Parity Ethereum is free software: you can redistribute it and/or modify
@@ -204,6 +208,10 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span>cfx_mallocator_utils;
+    <span class="attr">#[global_allocator]
+    </span><span class="kw">static </span>ALLOC: cfx_mallocator_utils::allocator::Allocator =
+        cfx_mallocator_utils::allocator::new_allocator();
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>it_works() {
