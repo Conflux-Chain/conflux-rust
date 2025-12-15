@@ -58,6 +58,11 @@ pub enum StorageKey<'a> {
     },
     DepositListKey(&'a [u8]),
     VoteListKey(&'a [u8]),
+    // Empty key is used to traverse all key and value pairs.
+    EmptyKey,
+    // Address prefix key is used to search all keys with the same address
+    // prefix, eg [1, 2](0x0102) will search all keys with prefix 0x0102
+    AddressPrefixKey(&'a [u8]),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -195,6 +200,16 @@ impl<'a> StorageKeyWithSpace<'a> {
             StorageKey::VoteListKey(address_bytes) => {
                 delta_mpt_storage_key::new_vote_list_key(address_bytes, padding)
             }
+            StorageKey::EmptyKey => {
+                return vec![];
+            }
+            StorageKey::AddressPrefixKey(_address_bytes) => {
+                // delta mpt trie does not support address prefix key search
+                // so we search all keys and filter them by address prefix
+                // due to delta mpt trie won't be very big, so the performance
+                // impact is not very big
+                return vec![];
+            }
         };
 
         return if self.space == Space::Native {
@@ -283,6 +298,14 @@ impl<'a> StorageKeyWithSpace<'a> {
                 key.extend_from_slice(Self::VOTE_LIST_PREFIX);
 
                 key
+            }
+            StorageKey::EmptyKey => {
+                return vec![];
+            }
+            StorageKey::AddressPrefixKey(address_bytes) => {
+                let mut key = Vec::with_capacity(address_bytes.len());
+                key.extend_from_slice(address_bytes);
+                return key;
             }
         };
 
@@ -713,6 +736,62 @@ mod delta_mpt_storage_key {
                 storage_key_no_space.with_space(space)
             }
         }
+    }
+}
+
+// This enum is used to filter only the wanted contract storage key when
+// traversal the trie for example, when traverse eth space key/value, we can
+// only filter the eSpace storage key/value to accelerate the traversal
+// speed
+// Native means filter(keep) the native space storage key/value
+// Ethereum means filter(keep) the ethereum space storage key/value
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpaceStorageFilter(pub Space);
+
+impl From<Space> for SpaceStorageFilter {
+    fn from(space: Space) -> Self { SpaceStorageFilter(space) }
+}
+
+impl From<SpaceStorageFilter> for Space {
+    fn from(filter: SpaceStorageFilter) -> Self { filter.0 }
+}
+
+impl SpaceStorageFilter {
+    pub fn is_native(&self) -> bool { matches!(self.0, Space::Native) }
+
+    pub fn is_ethereum(&self) -> bool { matches!(self.0, Space::Ethereum) }
+
+    // return the flag index according the trie type
+    // if is_delta_mpt is true, then the space flag is at the 32th index
+    // otherwise, the space flag is at the 20th index
+    pub fn space_flag_index(is_delta_mpt: bool) -> usize {
+        if is_delta_mpt {
+            delta_mpt_storage_key::KEY_PADDING_BYTES
+        } else {
+            StorageKeyWithSpace::ACCOUNT_BYTES
+        }
+    }
+
+    // return true if the key is filtered out
+    pub fn is_filtered(&self, is_delta_mpt: bool, key: &[u8]) -> bool {
+        let flag_index = Self::space_flag_index(is_delta_mpt);
+        if key.len() > flag_index {
+            match self.0 {
+                Space::Native => {
+                    if key[flag_index] == StorageKeyWithSpace::EVM_SPACE_TYPE[0]
+                    {
+                        return true;
+                    }
+                }
+                Space::Ethereum => {
+                    if key[flag_index] != StorageKeyWithSpace::EVM_SPACE_TYPE[0]
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 }
 

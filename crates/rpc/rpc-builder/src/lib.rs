@@ -31,7 +31,7 @@ mod error;
 mod id_provider;
 mod module;
 
-use cfx_rpc_middlewares::{Metrics, Throttle};
+use cfx_rpc_middlewares::{Logger, Metrics, Throttle};
 pub use error::*;
 pub use id_provider::EthSubscriptionIdProvider;
 use log::debug;
@@ -471,7 +471,8 @@ impl RpcServerConfig {
                     s,
                 )
             })
-            .layer_fn(|s| Metrics::new(s));
+            .layer_fn(|s| Metrics::new(s))
+            .layer_fn(|s| Logger::new(s));
 
         let http_socket_addr =
             self.http_addr.unwrap_or(SocketAddr::V4(SocketAddrV4::new(
@@ -489,23 +490,6 @@ impl RpcServerConfig {
             && self.http_server_config.is_some()
             && self.ws_server_config.is_some()
         {
-            // let cors = match (self.ws_cors_domains.as_ref(),
-            // self.http_cors_domains.as_ref()) {
-            //     (Some(ws_cors), Some(http_cors)) => {
-            //         if ws_cors.trim() != http_cors.trim() {
-            //             return
-            // Err(WsHttpSamePortError::ConflictingCorsDomains {
-            //                 http_cors_domains: Some(http_cors.clone()),
-            //                 ws_cors_domains: Some(ws_cors.clone()),
-            //             }
-            //             .into());
-            //         }
-            //         Some(ws_cors)
-            //     }
-            //     (a, b) => a.or(b),
-            // }
-            // .cloned();
-
             // we merge this into one server using the http setup
             modules.config.ensure_ws_http_identical()?;
 
