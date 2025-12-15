@@ -13,6 +13,7 @@ use cfx_executor::{
     spec::TransitionsEpochHeight,
 };
 use cfx_parameters::{block::*, consensus_internal::ELASTICITY_MULTIPLIER};
+use log::debug;
 use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
@@ -673,14 +674,29 @@ impl VerificationConfig {
         let (can_pack, later_pack) =
             Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
                 if !Self::check_eip1559_transaction(tx, cip1559, mode) {
+                    debug!(
+                        "fast_recheck: EIP-1559 transaction check failed at height {} txhash={:?}",
+                        height,
+                        tx.hash()
+                    );
                     return false;
                 }
 
                 if !Self::check_eip7702_transaction(tx, cip7702, mode) {
+                    debug!(
+                        "fast_recheck: EIP-7702 transaction check failed at height {} txhash={:?}",
+                        height,
+                        tx.hash()
+                    );
                     return false;
                 }
 
                 if !Self::check_eip3860(tx, cip645) {
+                    debug!(
+                        "fast_recheck: EIP-3860 transaction check failed at height {} txhash={:?}",
+                        height,
+                        tx.hash()
+                    );
                     return false;
                 }
 
