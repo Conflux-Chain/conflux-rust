@@ -272,6 +272,7 @@ serde = { version = "1.0", features = [
 ], default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_derive = { version = "1.0", default-features = false }
+serde_with = { version = "3", default-features = false, features = ["macros"] }
 hex = "0.4"
 rustc-hex = "2.1"
 hex-literal = "1.0"
