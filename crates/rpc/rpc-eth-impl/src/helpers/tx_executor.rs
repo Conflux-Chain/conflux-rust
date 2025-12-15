@@ -1,6 +1,6 @@
 use cfx_execute_helper::estimation::{EstimateExt, EstimateRequest};
 use cfx_executor::executive::{
-    Executed, ExecutionError, ExecutionOutcome, TxDropError,
+    Executed, ExecutionError, ExecutionOutcome, ToRepackError, TxDropError,
 };
 use cfx_rpc_eth_types::{
     AccountOverride, BlockId, BlockOverrides, Error, EvmOverrides,
@@ -180,6 +180,13 @@ impl TxExecutor {
             )) => bail!(invalid_input_rpc_err(
                 format! {"tx sender has contract code: {:?}", address}
             )),
+            ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::SenderDoesNotExist,
+            ) => {
+                bail!(RpcError::from(
+                    RpcInvalidTransactionError::InsufficientFunds
+                ))
+            }
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
