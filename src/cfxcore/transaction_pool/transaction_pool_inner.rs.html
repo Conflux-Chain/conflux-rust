@@ -1278,7 +1278,56 @@
 <a href="#1277" id="1277">1277</a>
 <a href="#1278" id="1278">1278</a>
 <a href="#1279" id="1279">1279</a>
-<a href="#1280" id="1280">1280</a></pre></div><pre class="rust"><code><span class="kw">use super</span>::{
+<a href="#1280" id="1280">1280</a>
+<a href="#1281" id="1281">1281</a>
+<a href="#1282" id="1282">1282</a>
+<a href="#1283" id="1283">1283</a>
+<a href="#1284" id="1284">1284</a>
+<a href="#1285" id="1285">1285</a>
+<a href="#1286" id="1286">1286</a>
+<a href="#1287" id="1287">1287</a>
+<a href="#1288" id="1288">1288</a>
+<a href="#1289" id="1289">1289</a>
+<a href="#1290" id="1290">1290</a>
+<a href="#1291" id="1291">1291</a>
+<a href="#1292" id="1292">1292</a>
+<a href="#1293" id="1293">1293</a>
+<a href="#1294" id="1294">1294</a>
+<a href="#1295" id="1295">1295</a>
+<a href="#1296" id="1296">1296</a>
+<a href="#1297" id="1297">1297</a>
+<a href="#1298" id="1298">1298</a>
+<a href="#1299" id="1299">1299</a>
+<a href="#1300" id="1300">1300</a>
+<a href="#1301" id="1301">1301</a>
+<a href="#1302" id="1302">1302</a>
+<a href="#1303" id="1303">1303</a>
+<a href="#1304" id="1304">1304</a>
+<a href="#1305" id="1305">1305</a>
+<a href="#1306" id="1306">1306</a>
+<a href="#1307" id="1307">1307</a>
+<a href="#1308" id="1308">1308</a>
+<a href="#1309" id="1309">1309</a>
+<a href="#1310" id="1310">1310</a>
+<a href="#1311" id="1311">1311</a>
+<a href="#1312" id="1312">1312</a>
+<a href="#1313" id="1313">1313</a>
+<a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a></pre></div><pre class="rust"><code><span class="kw">use super</span>::{
     deferred_pool::DeferredPool,
     garbage_collector::GarbageCollector,
     nonce_pool::{InsertResult, TxWithReadyInfo},
@@ -1555,6 +1604,13 @@
                 .remove_lowest_nonce(<span class="kw-2">&amp;</span>victim_address)
                 .unwrap();
             <span class="kw">let </span>to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
+            <span class="macro">debug!</span>(
+                <span class="string">"txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}"</span>,
+                to_remove_tx.hash(),
+                victim_address,
+                to_remove_tx.nonce(),
+                new_tx.hash()
+            );
 
             <span class="comment">// We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
@@ -1873,6 +1929,12 @@
         <span class="kw">let </span>(nonce, balance) =
             <span class="self">self</span>.get_and_update_nonce_and_balance_from_storage(addr, state)<span class="question-mark">?</span>;
         <span class="self">self</span>.recalculate_readiness(addr, nonce, balance);
+        <span class="macro">debug!</span>(
+            <span class="string">"txpool::recalculate_readiness_with_state addr={:?} nonce={:?} balance={:?}"</span>,
+            addr,
+            nonce,
+            balance
+        );
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -1883,6 +1945,22 @@
         <span class="kw">let </span>ret = <span class="self">self
             </span>.deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
+        <span class="kw">match </span><span class="kw-2">&amp;</span>ret {
+            <span class="prelude-val">Some</span>(tx) =&gt; <span class="macro">debug!</span>(
+                <span class="string">"txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}"</span>,
+                addr,
+                nonce,
+                tx.nonce(),
+                tx.hash(),
+                balance
+            ),
+            <span class="prelude-val">None </span>=&gt; <span class="macro">debug!</span>(
+                <span class="string">"txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}"</span>,
+                addr,
+                nonce,
+                balance
+            ),
+        }
         <span class="comment">// If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(tx) = <span class="self">self</span>.deferred_pool.get_lowest_nonce_tx(addr) {
@@ -1931,6 +2009,15 @@
         <span class="kw">if </span>num_txs == <span class="number">0 </span>{
             <span class="kw">return </span>packed_transactions;
         }
+        <span class="macro">debug!</span>(
+            <span class="string">"txpool::pack_transactions start best_epoch={} best_block={} block_gas_limit={} evm_gas_limit={} block_size_limit={} limit={}"</span>,
+            best_epoch_height,
+            best_block_number,
+            block_gas_limit,
+            evm_gas_limit,
+            block_size_limit,
+            num_txs
+        );
 
         <span class="kw">let </span>spec = machine.spec(best_block_number, best_epoch_height);
         <span class="kw">let </span>transitions = <span class="kw-2">&amp;</span>machine.params().transition_heights;
@@ -1953,6 +2040,12 @@
                 U256::zero(),
                 validity,
             );
+        <span class="macro">debug!</span>(
+            <span class="string">"txpool::pack_transactions espace selected={} gas_used={} size_used={}"</span>,
+            sampled_tx.len(),
+            used_gas,
+            used_size
+        );
         packed_transactions.extend_from_slice(<span class="kw-2">&amp;</span>sampled_tx);
 
         <span class="kw">let </span>(sampled_tx, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="self">self</span>.deferred_pool.packing_sampler(
@@ -1962,6 +2055,11 @@
             num_txs - sampled_tx.len(),
             U256::zero(),
             validity,
+        );
+        <span class="macro">debug!</span>(
+            <span class="string">"txpool::pack_transactions native selected={} total={}"</span>,
+            sampled_tx.len(),
+            packed_transactions.len() + sampled_tx.len()
         );
         packed_transactions.extend_from_slice(<span class="kw-2">&amp;</span>sampled_tx);
 

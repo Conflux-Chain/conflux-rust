@@ -1071,7 +1071,23 @@
 <a href="#1070" id="1070">1070</a>
 <a href="#1071" id="1071">1071</a>
 <a href="#1072" id="1072">1072</a>
-<a href="#1073" id="1073">1073</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1086,6 +1102,7 @@
     spec::TransitionsEpochHeight,
 };
 <span class="kw">use </span>cfx_parameters::{block::<span class="kw-2">*</span>, consensus_internal::ELASTICITY_MULTIPLIER};
+<span class="kw">use </span>log::debug;
 <span class="kw">use </span>cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
@@ -1746,14 +1763,29 @@
         <span class="kw">let </span>(can_pack, later_pack) =
             <span class="self">Self</span>::fast_recheck_inner(spec, |mode: <span class="kw-2">&amp;</span>VerifyTxMode| {
                 <span class="kw">if </span>!<span class="self">Self</span>::check_eip1559_transaction(tx, cip1559, mode) {
+                    <span class="macro">debug!</span>(
+                        <span class="string">"fast_recheck: EIP-1559 transaction check failed at height {} txhash={:?}"</span>,
+                        height,
+                        tx.hash()
+                    );
                     <span class="kw">return </span><span class="bool-val">false</span>;
                 }
 
                 <span class="kw">if </span>!<span class="self">Self</span>::check_eip7702_transaction(tx, cip7702, mode) {
+                    <span class="macro">debug!</span>(
+                        <span class="string">"fast_recheck: EIP-7702 transaction check failed at height {} txhash={:?}"</span>,
+                        height,
+                        tx.hash()
+                    );
                     <span class="kw">return </span><span class="bool-val">false</span>;
                 }
 
                 <span class="kw">if </span>!<span class="self">Self</span>::check_eip3860(tx, cip645) {
+                    <span class="macro">debug!</span>(
+                        <span class="string">"fast_recheck: EIP-3860 transaction check failed at height {} txhash={:?}"</span>,
+                        height,
+                        tx.hash()
+                    );
                     <span class="kw">return </span><span class="bool-val">false</span>;
                 }
 

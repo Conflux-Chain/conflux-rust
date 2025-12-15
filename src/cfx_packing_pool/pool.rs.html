@@ -639,7 +639,53 @@
 <a href="#638" id="638">638</a>
 <a href="#639" id="639">639</a>
 <a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
+<a href="#641" id="641">641</a>
+<a href="#642" id="642">642</a>
+<a href="#643" id="643">643</a>
+<a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 
 <span class="kw">use crate</span>::{
     packing_batch::{InsertError, PackInfo, PackingBatch, RemoveError},
@@ -652,6 +698,7 @@
     transaction::PackingPoolTransaction, treapmap_config::PackingPoolMap,
 };
 <span class="kw">use </span>cfx_types::U256;
+<span class="kw">use </span>log::debug;
 <span class="kw">use </span>malloc_size_of::MallocSizeOf;
 <span class="kw">use </span>primitives::block_header::{compute_next_price, estimate_max_possible_gas};
 <span class="kw">use </span>rand::RngCore;
@@ -696,6 +743,7 @@
     <span class="attr">#[inline]
     </span><span class="kw">pub fn </span>insert(<span class="kw-2">&amp;mut </span><span class="self">self</span>, tx: TX) -&gt; (Vec&lt;TX&gt;, <span class="prelude-ty">Result</span>&lt;(), InsertError&gt;) {
         <span class="kw">let </span>config = <span class="kw-2">&amp;</span><span class="self">self</span>.config;
+        <span class="kw">let </span>tx_hash = tx.hash();
         <span class="kw">let </span>tx_clone = tx.clone();
         <span class="kw">let </span>sender = tx.sender();
 
@@ -712,13 +760,29 @@
             <span class="prelude-val">Ok</span>((node, (<span class="macro">vec!</span>[], <span class="prelude-val">Ok</span>(()))))
         };
 
-        <span class="self">self</span>.treap_map.update(<span class="kw-2">&amp;</span>sender, update, insert).unwrap()
+        <span class="kw">let </span>(replaced, outcome) =
+            <span class="self">self</span>.treap_map.update(<span class="kw-2">&amp;</span>sender, update, insert).unwrap();
+        <span class="kw">match </span><span class="kw-2">&amp;</span>outcome {
+            <span class="prelude-val">Ok</span>(()) =&gt; {
+                <span class="macro">debug!</span>(<span class="string">"packing_pool::insert success hash={:?}"</span>, tx_hash);
+            }
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="macro">debug!</span>(<span class="string">"packing_pool::insert failed hash={:?} err={:?}"</span>, tx_hash, e);
+            }
+        }
+        <span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>replaced {
+            <span class="macro">debug!</span>(<span class="string">"packing_pool::insert evicted hash={:?}"</span>, tx.hash());
+        }
+        (replaced, outcome)
     }
 
     <span class="kw">pub fn </span>replace(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>packing_batch: PackingBatch&lt;TX&gt;) -&gt; Vec&lt;TX&gt; {
         <span class="kw">let </span>config = <span class="kw-2">&amp;</span><span class="self">self</span>.config;
         <span class="kw">let </span>sender = packing_batch.sender();
         <span class="kw">let </span>packing_batch_clone = packing_batch.clone();
+        <span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>packing_batch_clone.txs {
+            <span class="macro">debug!</span>(<span class="string">"packing_pool::replace incoming hash={:?}"</span>, tx.hash());
+        }
 
         <span class="kw">let </span>update = <span class="kw">move </span>|node: <span class="kw-2">&amp;mut </span>Node&lt;PackingPoolMap&lt;TX&gt;&gt;| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, Infallible&gt; {
             <span class="kw">let </span>old_info = node.value.pack_info();
@@ -734,10 +798,15 @@
             <span class="prelude-val">Ok</span>((node, <span class="macro">vec!</span>[]))
         };
 
-        <span class="self">self</span>.treap_map.update(<span class="kw-2">&amp;</span>sender, update, insert).unwrap()
+        <span class="kw">let </span>evicted = <span class="self">self</span>.treap_map.update(<span class="kw-2">&amp;</span>sender, update, insert).unwrap();
+        <span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>evicted {
+            <span class="macro">debug!</span>(<span class="string">"packing_pool::replace evicted hash={:?}"</span>, tx.hash());
+        }
+        evicted
     }
 
     <span class="kw">pub fn </span>remove(<span class="kw-2">&amp;mut </span><span class="self">self</span>, sender: TX::Sender) -&gt; Vec&lt;TX&gt; {
+        <span class="macro">debug!</span>(<span class="string">"packing_pool::remove sender={:?}"</span>, sender);
         <span class="self">self</span>.split_off_suffix(sender, <span class="kw-2">&amp;</span>U256::zero())
     }
 
@@ -757,6 +826,12 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>, sender: TX::Sender, start_nonce: <span class="kw-2">&amp;</span>U256, keep_prefix: bool,
     ) -&gt; Vec&lt;TX&gt; {
         <span class="kw">let </span>config = <span class="kw-2">&amp;</span><span class="self">self</span>.config;
+        <span class="macro">debug!</span>(
+            <span class="string">"packing_pool::split_off sender={:?} start_nonce={} keep_prefix={}"</span>,
+            sender,
+            start_nonce,
+            keep_prefix
+        );
         <span class="kw">let </span>update = <span class="kw">move </span>|node: <span class="kw-2">&amp;mut </span>Node&lt;PackingPoolMap&lt;TX&gt;&gt;| {
             <span class="kw">let </span>old_info = node.value.pack_info();
 
@@ -772,9 +847,26 @@
 
             <span class="prelude-val">Ok</span>(make_apply_outcome(old_info, new_info, node, config, out))
         };
-        <span class="self">self</span>.treap_map
+        <span class="kw">let </span>removed = <span class="self">self
+            </span>.treap_map
             .update(<span class="kw-2">&amp;</span>sender, update, |<span class="kw">_</span>| <span class="prelude-val">Err</span>(()))
-            .unwrap_or(<span class="macro">vec!</span>[])
+            .unwrap_or(<span class="macro">vec!</span>[]);
+        <span class="kw">if </span>removed.is_empty() {
+            <span class="macro">debug!</span>(
+                <span class="string">"packing_pool::split_off sender={:?} start_nonce={} keep_prefix={} nothing removed"</span>,
+                sender,
+                start_nonce,
+                keep_prefix
+            );
+        } <span class="kw">else </span>{
+            <span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>removed {
+                <span class="macro">debug!</span>(
+                    <span class="string">"packing_pool::split_off removed hash={:?}"</span>,
+                    tx.hash()
+                );
+            }
+        }
+        removed
     }
 
     <span class="kw">pub fn </span>tx_sampler&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, R: RngCore&gt;(

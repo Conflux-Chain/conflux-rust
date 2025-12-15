@@ -965,7 +965,36 @@
 <a href="#964" id="964">964</a>
 <a href="#965" id="965">965</a>
 <a href="#966" id="966">966</a>
-<a href="#967" id="967">967</a></pre></div><pre class="rust"><code><span class="attr">#![allow(dead_code)]
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a></pre></div><pre class="rust"><code><span class="attr">#![allow(dead_code)]
 
 </span><span class="kw">mod </span>nonce_pool_map;
 <span class="kw">mod </span>weight;
@@ -1259,7 +1288,16 @@
     </span><span class="kw">pub fn </span>recalculate_readiness_with_local_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>, nonce: U256, balance: U256,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="kw-2">&amp;</span>TxWithReadyInfo, U256)&gt; {
-        <span class="kw">let </span>tx = <span class="self">self</span>.map.query(<span class="kw-2">&amp;</span>nonce)<span class="question-mark">?</span>;
+        <span class="kw">let </span>tx = <span class="kw">match </span><span class="self">self</span>.map.query(<span class="kw-2">&amp;</span>nonce) {
+            <span class="prelude-val">Some</span>(tx) =&gt; tx,
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="macro">debug!</span>(
+                    <span class="string">"txpool::nonce_pool readiness nonce={:?} has no transaction starting from sender"</span>,
+                    nonce
+                );
+                <span class="kw">return </span><span class="prelude-val">None</span>;
+            }
+        };
 
         <span class="kw">let </span>a = <span class="kw">if </span>nonce == U256::from(<span class="number">0</span>) {
             NoncePoolWeight::default()
@@ -1275,9 +1313,22 @@
         // number of transactions in `[nonce, tx.nonce()]`
         </span><span class="kw">let </span>size_elapsed = b.size - a.size;
         <span class="kw">let </span>cost_elapsed = b.cost - a.cost;
-        <span class="kw">if </span>U256::from(size_elapsed - <span class="number">1</span>) != tx.nonce() - nonce
-            || cost_elapsed &gt; balance
-        {
+        <span class="kw">if </span>U256::from(size_elapsed - <span class="number">1</span>) != tx.nonce() - nonce {
+            <span class="macro">debug!</span>(
+                <span class="string">"txpool::nonce_pool readiness gap sender={:?} start_nonce={:?} first_missing_nonce={:?}"</span>,
+                tx.sender(),
+                nonce,
+                nonce + U256::from(size_elapsed - <span class="number">1</span>)
+            );
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        }
+        <span class="kw">if </span>cost_elapsed &gt; balance {
+            <span class="macro">debug!</span>(
+                <span class="string">"txpool::nonce_pool readiness insufficient balance sender={:?} need={:?} have={:?}"</span>,
+                tx.sender(),
+                cost_elapsed,
+                balance
+            );
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
 
@@ -1285,6 +1336,13 @@
             tx.nonce(),
             b,
             balance - cost_elapsed,
+        );
+        <span class="macro">debug!</span>(
+            <span class="string">"txpool::nonce_pool readiness range sender={:?} start_nonce={:?} end_nonce={:?} first_hash={:?}"</span>,
+            tx.sender(),
+            tx.nonce(),
+            end_nonce,
+            tx.transaction.hash()
         );
         <span class="prelude-val">Some</span>((tx, end_nonce))
     }
