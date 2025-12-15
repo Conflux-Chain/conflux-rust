@@ -1449,7 +1449,12 @@
 <a href="#1448" id="1448">1448</a>
 <a href="#1449" id="1449">1449</a>
 <a href="#1450" id="1450">1450</a>
-<a href="#1451" id="1451">1451</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::{Args, Parser, Subcommand, ValueEnum};
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a></pre></div><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::command::dump::DumpCommand;
+<span class="kw">use </span>clap::{Args, Parser, Subcommand, ValueEnum};
 
 <span class="doccomment">/// Conflux client
 </span><span class="attr">#[derive(Parser, Debug)]
@@ -1718,6 +1723,9 @@
     <span class="doccomment">/// Manage accounts
     </span><span class="attr">#[command(subcommand_required = <span class="bool-val">true</span>, arg_required_else_help = <span class="bool-val">true</span>)]
     </span>Account(AccountSubcommands),
+    <span class="doccomment">/// Dump eSpace account state at a given block number
+    </span><span class="attr">#[command(subcommand_required = <span class="bool-val">false</span>, arg_required_else_help = <span class="bool-val">false</span>)]
+    </span>Dump(DumpCommand),
     <span class="doccomment">/// RPC based subcommands to query blockchain information and send
     /// transactions
     </span><span class="attr">#[command(subcommand_required = <span class="bool-val">true</span>, arg_required_else_help = <span class="bool-val">true</span>)]

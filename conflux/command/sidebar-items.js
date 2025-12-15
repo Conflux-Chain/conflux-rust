@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["account","helpers","rpc"]};
+window.SIDEBAR_ITEMS = {"mod":["account","dump","helpers","rpc"]};

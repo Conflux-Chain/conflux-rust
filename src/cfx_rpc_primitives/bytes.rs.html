@@ -128,7 +128,33 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2015-2018 Parity Technologies (UK) Ltd.
 // This file is part of Parity.
 
 // Parity is free software: you can redistribute it and/or modify
@@ -150,7 +176,11 @@
 
 </span><span class="doccomment">//! Serializable wrapper around vector of bytes
 
-</span><span class="kw">use </span>rustc_hex::{FromHex, ToHex};
+</span><span class="kw">use </span>core::{
+    borrow::Borrow,
+    ops::{Deref, DerefMut},
+};
+<span class="kw">use </span>rustc_hex::{FromHex, ToHex};
 <span class="kw">use </span>serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -177,6 +207,28 @@
 
 <span class="kw">impl </span>Into&lt;Vec&lt;u8&gt;&gt; <span class="kw">for </span>Bytes {
     <span class="kw">fn </span>into(<span class="self">self</span>) -&gt; Vec&lt;u8&gt; { <span class="self">self</span>.<span class="number">0 </span>}
+}
+
+<span class="kw">impl </span>Deref <span class="kw">for </span>Bytes {
+    <span class="kw">type </span>Target = Vec&lt;u8&gt;;
+
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>deref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Target { <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>}
+}
+
+<span class="kw">impl </span>DerefMut <span class="kw">for </span>Bytes {
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>deref_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Target { <span class="kw-2">&amp;mut </span><span class="self">self</span>.<span class="number">0 </span>}
+}
+
+<span class="kw">impl </span>AsRef&lt;[u8]&gt; <span class="kw">for </span>Bytes {
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] { <span class="self">self</span>.<span class="number">0</span>.as_ref() }
+}
+
+<span class="kw">impl </span>Borrow&lt;[u8]&gt; <span class="kw">for </span>Bytes {
+    <span class="attr">#[inline]
+    </span><span class="kw">fn </span>borrow(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[u8] { <span class="self">self</span>.as_ref() }
 }
 
 <span class="kw">impl </span>Serialize <span class="kw">for </span>Bytes {

@@ -881,7 +881,86 @@
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -941,6 +1020,11 @@
     },
     DepositListKey(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8]),
     VoteListKey(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8]),
+    <span class="comment">// Empty key is used to traverse all key and value pairs.
+    </span>EmptyKey,
+    <span class="comment">// Address prefix key is used to search all keys with the same address
+    // prefix, eg [1, 2](0x0102) will search all keys with prefix 0x0102
+    </span>AddressPrefixKey(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>[u8]),
 }
 
 <span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1078,6 +1162,16 @@
             StorageKey::VoteListKey(address_bytes) =&gt; {
                 delta_mpt_storage_key::new_vote_list_key(address_bytes, padding)
             }
+            StorageKey::EmptyKey =&gt; {
+                <span class="kw">return </span><span class="macro">vec!</span>[];
+            }
+            StorageKey::AddressPrefixKey(_address_bytes) =&gt; {
+                <span class="comment">// delta mpt trie does not support address prefix key search
+                // so we search all keys and filter them by address prefix
+                // due to delta mpt trie won't be very big, so the performance
+                // impact is not very big
+                </span><span class="kw">return </span><span class="macro">vec!</span>[];
+            }
         };
 
         <span class="kw">return if </span><span class="self">self</span>.space == Space::Native {
@@ -1166,6 +1260,14 @@
                 key.extend_from_slice(<span class="self">Self</span>::VOTE_LIST_PREFIX);
 
                 key
+            }
+            StorageKey::EmptyKey =&gt; {
+                <span class="kw">return </span><span class="macro">vec!</span>[];
+            }
+            StorageKey::AddressPrefixKey(address_bytes) =&gt; {
+                <span class="kw">let </span><span class="kw-2">mut </span>key = Vec::with_capacity(address_bytes.len());
+                key.extend_from_slice(address_bytes);
+                <span class="kw">return </span>key;
             }
         };
 
@@ -1597,6 +1699,62 @@
             }
         }
     }
+}
+
+<span class="comment">// This enum is used to filter only the wanted contract storage key when
+// traversal the trie for example, when traverse eth space key/value, we can
+// only filter the eSpace storage key/value to accelerate the traversal
+// speed
+// Native means filter(keep) the native space storage key/value
+// Ethereum means filter(keep) the ethereum space storage key/value
+</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+</span><span class="kw">pub struct </span>SpaceStorageFilter(<span class="kw">pub </span>Space);
+
+<span class="kw">impl </span>From&lt;Space&gt; <span class="kw">for </span>SpaceStorageFilter {
+    <span class="kw">fn </span>from(space: Space) -&gt; <span class="self">Self </span>{ SpaceStorageFilter(space) }
+}
+
+<span class="kw">impl </span>From&lt;SpaceStorageFilter&gt; <span class="kw">for </span>Space {
+    <span class="kw">fn </span>from(filter: SpaceStorageFilter) -&gt; <span class="self">Self </span>{ filter.<span class="number">0 </span>}
+}
+
+<span class="kw">impl </span>SpaceStorageFilter {
+    <span class="kw">pub fn </span>is_native(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="macro">matches!</span>(<span class="self">self</span>.<span class="number">0</span>, Space::Native) }
+
+    <span class="kw">pub fn </span>is_ethereum(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool { <span class="macro">matches!</span>(<span class="self">self</span>.<span class="number">0</span>, Space::Ethereum) }
+
+    <span class="comment">// return the flag index according the trie type
+    // if is_delta_mpt is true, then the space flag is at the 32th index
+    // otherwise, the space flag is at the 20th index
+    </span><span class="kw">pub fn </span>space_flag_index(is_delta_mpt: bool) -&gt; usize {
+        <span class="kw">if </span>is_delta_mpt {
+            delta_mpt_storage_key::KEY_PADDING_BYTES
+        } <span class="kw">else </span>{
+            StorageKeyWithSpace::ACCOUNT_BYTES
+        }
+    }
+
+    <span class="comment">// return true if the key is filtered out
+    </span><span class="kw">pub fn </span>is_filtered(<span class="kw-2">&amp;</span><span class="self">self</span>, is_delta_mpt: bool, key: <span class="kw-2">&amp;</span>[u8]) -&gt; bool {
+        <span class="kw">let </span>flag_index = <span class="self">Self</span>::space_flag_index(is_delta_mpt);
+        <span class="kw">if </span>key.len() &gt; flag_index {
+            <span class="kw">match </span><span class="self">self</span>.<span class="number">0 </span>{
+                Space::Native =&gt; {
+                    <span class="kw">if </span>key[flag_index] == StorageKeyWithSpace::EVM_SPACE_TYPE[<span class="number">0</span>]
+                    {
+                        <span class="kw">return </span><span class="bool-val">true</span>;
+                    }
+                }
+                Space::Ethereum =&gt; {
+                    <span class="kw">if </span>key[flag_index] != StorageKeyWithSpace::EVM_SPACE_TYPE[<span class="number">0</span>]
+                    {
+                        <span class="kw">return </span><span class="bool-val">true</span>;
+                    }
+                }
+            }
+        }
+        <span class="bool-val">false
+    </span>}
 }
 
 <span class="kw">use super</span>::{MerkleHash, MERKLE_NULL_NODE};

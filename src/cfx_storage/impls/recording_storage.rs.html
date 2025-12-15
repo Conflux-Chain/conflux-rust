@@ -102,7 +102,8 @@
 <a href="#101" id="101">101</a>
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2020 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -158,6 +159,7 @@
             <span class="kw">fn </span>compute_state_root(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StateRootWithAuxInfo&gt;;
             <span class="kw">fn </span>get_state_root(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;StateRootWithAuxInfo&gt;;
             <span class="kw">fn </span>commit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, epoch_id: EpochId) -&gt; <span class="prelude-ty">Result</span>&lt;StateRootWithAuxInfo&gt;;
+            <span class="kw">fn </span>read_all_with_callback(<span class="kw-2">&amp;mut </span><span class="self">self</span>, access_key_prefix: StorageKeyWithSpace, callback: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>FnMut(MptKeyValue), only_account_key: bool) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
         }
     }
 

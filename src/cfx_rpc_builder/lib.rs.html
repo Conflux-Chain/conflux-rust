@@ -832,23 +832,7 @@
 <a href="#831" id="831">831</a>
 <a href="#832" id="832">832</a>
 <a href="#833" id="833">833</a>
-<a href="#834" id="834">834</a>
-<a href="#835" id="835">835</a>
-<a href="#836" id="836">836</a>
-<a href="#837" id="837">837</a>
-<a href="#838" id="838">838</a>
-<a href="#839" id="839">839</a>
-<a href="#840" id="840">840</a>
-<a href="#841" id="841">841</a>
-<a href="#842" id="842">842</a>
-<a href="#843" id="843">843</a>
-<a href="#844" id="844">844</a>
-<a href="#845" id="845">845</a>
-<a href="#846" id="846">846</a>
-<a href="#847" id="847">847</a>
-<a href="#848" id="848">848</a>
-<a href="#849" id="849">849</a>
-<a href="#850" id="850">850</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
+<a href="#834" id="834">834</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2023-2024 Paradigm.xyz
 // This file is part of reth.
 // Reth is a modular, contributor-friendly and blazing-fast implementation of
 // the Ethereum protocol
@@ -881,7 +865,7 @@
 <span class="kw">mod </span>id_provider;
 <span class="kw">mod </span>module;
 
-<span class="kw">use </span>cfx_rpc_middlewares::{Metrics, Throttle};
+<span class="kw">use </span>cfx_rpc_middlewares::{Logger, Metrics, Throttle};
 <span class="kw">pub use </span>error::<span class="kw-2">*</span>;
 <span class="kw">pub use </span>id_provider::EthSubscriptionIdProvider;
 <span class="kw">use </span>log::debug;
@@ -1319,7 +1303,8 @@
                     s,
                 )
             })
-            .layer_fn(|s| Metrics::new(s));
+            .layer_fn(|s| Metrics::new(s))
+            .layer_fn(|s| Logger::new(s));
 
         <span class="kw">let </span>http_socket_addr =
             <span class="self">self</span>.http_addr.unwrap_or(SocketAddr::V4(SocketAddrV4::new(
@@ -1337,24 +1322,7 @@
             &amp;&amp; <span class="self">self</span>.http_server_config.is_some()
             &amp;&amp; <span class="self">self</span>.ws_server_config.is_some()
         {
-            <span class="comment">// let cors = match (self.ws_cors_domains.as_ref(),
-            // self.http_cors_domains.as_ref()) {
-            //     (Some(ws_cors), Some(http_cors)) =&gt; {
-            //         if ws_cors.trim() != http_cors.trim() {
-            //             return
-            // Err(WsHttpSamePortError::ConflictingCorsDomains {
-            //                 http_cors_domains: Some(http_cors.clone()),
-            //                 ws_cors_domains: Some(ws_cors.clone()),
-            //             }
-            //             .into());
-            //         }
-            //         Some(ws_cors)
-            //     }
-            //     (a, b) =&gt; a.or(b),
-            // }
-            // .cloned();
-
-            // we merge this into one server using the http setup
+            <span class="comment">// we merge this into one server using the http setup
             </span>modules.config.ensure_ws_http_identical()<span class="question-mark">?</span>;
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = <span class="self">self</span>.http_server_config {

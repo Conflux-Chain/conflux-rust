@@ -33,7 +33,10 @@
 <a href="#32" id="32">32</a>
 <a href="#33" id="33">33</a>
 <a href="#34" id="34">34</a>
-<a href="#35" id="35">35</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -41,6 +44,9 @@
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
+
+<span class="kw">pub type </span>StorageKey = H256;
+<span class="kw">pub type </span>StorageValue = U256;
 
 <span class="kw">mod </span>space;
 <span class="kw">pub use </span>space::{Space, SpaceMap};
