@@ -1,26 +1,16 @@
 import json
 import subprocess
-from pydantic import BaseModel, Field, ConfigDict
 from pathlib import Path
 from typing import TypedDict
 from typing_extensions import NotRequired
 from web3 import Web3
 from hexbytes import HexBytes
+from eth_account import Account
+from eth_account.datastructures import SignedSetCodeAuthorization
 from eth_account.signers.local import LocalAccount
 
-class Authorization(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-    
-    chainId: int = Field(alias='chain_id')
-    nonce: int
-    contractAddress: str = Field(alias='contract_address')
-    r: str
-    s: str
-    v: int
-    yParity: int
-
 class EIP7702TransactionParams(TypedDict):
-    authorizationList: list[Authorization]
+    authorizationList: list[SignedSetCodeAuthorization]
     chainId: NotRequired[int]
     gas: NotRequired[int]
     nonce: NotRequired[int]
@@ -32,7 +22,7 @@ class EIP7702TransactionParams(TypedDict):
     data: NotRequired[str]
 
 class EIP7702Transaction(TypedDict):
-    authorizationList: list[Authorization]
+    authorizationList: list[SignedSetCodeAuthorization]
     chainId: int
     gas: int
     nonce: int
@@ -54,9 +44,9 @@ def _run_node_script(command: str, args: dict) -> dict:
     )
     return json.loads(result.stdout)
 
-def sign_authorization(contract_address: str, chain_id: int, nonce: int, private_key: str) -> Authorization:
+def sign_authorization(contract_address: str, chain_id: int, nonce: int, private_key: str) -> SignedSetCodeAuthorization:
     """
-    Sign an EIP-7702 authorization using viem
+    Sign an EIP-7702 authorization
     
     Args:
         contract_address: The contract address to authorize
@@ -67,23 +57,11 @@ def sign_authorization(contract_address: str, chain_id: int, nonce: int, private
     Returns:
         An Authorization object containing the signature
     """
-    args = {
-        'contractAddress': contract_address,
-        'chainId': chain_id,
-        'nonce': nonce,
-        'privateKey': private_key
-    }
-    
-    result = _run_node_script('signAuthorization', args)
-    return Authorization(
-        chain_id=chain_id,
-        nonce=nonce,
-        contract_address=contract_address,
-        r=result['r'],
-        s=result['s'],
-        v=result['v'],
-        yParity=result['yParity']
-    )
+    return Account.sign_authorization({
+        "chainId": chain_id,
+        "address": contract_address,
+        "nonce": nonce
+    }, private_key)
 
 def sign_eip7702_transaction(transaction: EIP7702Transaction, private_key: str) -> str:
     """
@@ -96,30 +74,7 @@ def sign_eip7702_transaction(transaction: EIP7702Transaction, private_key: str) 
     Returns:
         The signed transaction as a hex string
     """
-    # Convert Authorization objects to dict with camelCase keys
-    tx_dict = dict(transaction)
-    tx_dict['authorizationList'] = [
-        {
-            'chainId': auth.chainId,
-            'nonce': auth.nonce,
-            'contractAddress': auth.contractAddress,
-            'r': auth.r,
-            's': auth.s,
-            'v': auth.v,
-            'yParity': auth.yParity
-        }
-        for auth in transaction['authorizationList']
-    ] if transaction['authorizationList'] is not None else None
-    
-    args = {
-        'transaction': tx_dict,
-        'privateKey': private_key
-    }
-    
-    result = _run_node_script('signTransaction', args)
-    if isinstance(result, dict):
-        return result['signedTransaction']
-    return HexBytes(result)
+    return Account.sign_transaction(transaction, private_key).raw_transaction
 
 def construrct_eip7702_transaction(ew3: Web3, sender: str, transaction: EIP7702TransactionParams) -> EIP7702Transaction:
     assert "authorizationList" in transaction, "authorizationList is required"
@@ -150,12 +105,12 @@ def estimate_gas(ew3: Web3, from_address: str, transaction: EIP7702Transaction) 
         "data": transaction["data"],
         "authorizationList": [
             {
-                "chainId": hex(authorization.chainId),
+                "chainId": hex(authorization.chain_id),
                 "nonce": hex(authorization.nonce),
-                "address": authorization.contractAddress,
-                "r": authorization.r,
-                "s": authorization.s,
-                "yParity": hex(authorization.yParity)
+                "address": f"0x{authorization.address.hex()}",
+                "r": hex(authorization.r),
+                "s": hex(authorization.s),
+                "yParity": hex(authorization.y_parity)
             } for authorization in transaction["authorizationList"]
         ]
     }

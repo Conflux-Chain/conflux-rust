@@ -281,7 +281,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> TrieNodeTrait
     type ChildrenTableType = ChildrenTableDeltaMpt;
     type NodeRefType = NodeRefDeltaMptCompact;
 
-    fn compressed_path_ref(&self) -> CompressedPathRef {
+    fn compressed_path_ref(&self) -> CompressedPathRef<'_> {
         let size = self.path_size;
         CompressedPathRef::new(
             self.path.get_slice(size as usize),
@@ -488,7 +488,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> MemOptimizedTrieNode<CacheAlgoDataT> {
                 };
             }
         }
-        unsafe { unreachable_unchecked() }
+        unreachable!()
     }
 
     pub unsafe fn set_first_child_unchecked(
@@ -645,7 +645,6 @@ use primitives::{MerkleHash, MptValue};
 use rlp::*;
 use std::{
     fmt::{Debug, Formatter},
-    hint::unreachable_unchecked,
     marker::{Send, Sync},
     vec::Vec,
 };

@@ -40,29 +40,25 @@ pub use module::{EthRpcModule, RpcModuleSelection};
 use cfx_rpc::{helpers::ChainInfo, *};
 use cfx_rpc_cfx_types::RpcImplConfiguration;
 use cfx_rpc_eth_api::*;
+use cfx_tasks::TaskExecutor;
 use cfxcore::{
-    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+    Notifications, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
 };
 pub use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::{
     core::RegisterMethodError,
     server::{
-        // middleware::rpc::{RpcService, RpcServiceT},
-        AlreadyStoppedError,
-        IdProvider,
-        RpcServiceBuilder,
-        ServerHandle,
+        middleware::rpc::RpcServiceBuilder, AlreadyStoppedError, IdProvider,
+        ServerConfigBuilder, ServerHandle,
     },
     Methods, RpcModule,
 };
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    /* time::{Duration, SystemTime, UNIX_EPOCH}, */
+    sync::Arc,
 };
-pub use tower::layer::util::{Identity, Stack};
-// use tower::Layer;
-use cfx_tasks::TaskExecutor;
 
 /// A builder type to configure the RPC module: See [`RpcModule`]
 ///
@@ -74,13 +70,14 @@ pub struct RpcModuleBuilder {
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
     executor: TaskExecutor,
+    notifications: Arc<Notifications>,
 }
 
 impl RpcModuleBuilder {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor,
+        executor: TaskExecutor, notifications: Arc<Notifications>,
     ) -> Self {
         Self {
             config,
@@ -88,6 +85,7 @@ impl RpcModuleBuilder {
             sync,
             tx_pool,
             executor,
+            notifications,
         }
     }
 
@@ -108,10 +106,16 @@ impl RpcModuleBuilder {
                 sync,
                 tx_pool,
                 executor,
+                notifications,
             } = self;
 
             let mut registry = RpcRegistryInner::new(
-                config, consensus, sync, tx_pool, executor,
+                config,
+                consensus,
+                sync,
+                tx_pool,
+                executor,
+                notifications,
             );
 
             modules.config = module_config;
@@ -132,13 +136,14 @@ pub struct RpcRegistryInner {
     tx_pool: SharedTransactionPool,
     modules: HashMap<EthRpcModule, Methods>,
     executor: TaskExecutor,
+    notifications: Arc<Notifications>,
 }
 
 impl RpcRegistryInner {
     pub fn new(
         config: RpcImplConfiguration, consensus: SharedConsensusGraph,
         sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
-        executor: TaskExecutor,
+        executor: TaskExecutor, notifications: Arc<Notifications>,
     ) -> Self {
         Self {
             consensus,
@@ -147,6 +152,7 @@ impl RpcRegistryInner {
             tx_pool,
             modules: Default::default(),
             executor,
+            notifications,
         }
     }
 
@@ -230,15 +236,29 @@ impl RpcRegistryInner {
                     )
                     .into_rpc()
                     .into(),
-                    EthRpcModule::Eth => EthApi::new(
-                        self.config.clone(),
-                        self.consensus.clone(),
-                        self.sync.clone(),
-                        self.tx_pool.clone(),
-                        self.executor.clone(),
-                    )
-                    .into_rpc()
-                    .into(),
+                    EthRpcModule::Eth => {
+                        let mut module = EthApi::new(
+                            self.config.clone(),
+                            self.consensus.clone(),
+                            self.sync.clone(),
+                            self.tx_pool.clone(),
+                            self.executor.clone(),
+                        )
+                        .into_rpc();
+                        if self.config.poll_lifetime_in_seconds.is_some() {
+                            let filter_module = EthFilterApi::new(
+                                self.consensus.clone(),
+                                self.tx_pool.clone(),
+                                self.notifications.epochs_ordered.clone(),
+                                self.executor.clone(),
+                                self.config.poll_lifetime_in_seconds.unwrap(),
+                                self.config.get_logs_filter_max_limit,
+                            )
+                            .into_rpc();
+                            module.merge(filter_module).expect("No conflicts");
+                        }
+                        module.into()
+                    }
                     EthRpcModule::Net => NetApi::new(Box::new(ChainInfo::new(
                         self.consensus.clone(),
                     )))
@@ -267,6 +287,13 @@ impl RpcRegistryInner {
                     EthRpcModule::Txpool => {
                         TxPoolApi::new(self.tx_pool.clone()).into_rpc().into()
                     }
+                    EthRpcModule::PubSub => PubSubApi::new(
+                        self.consensus.clone(),
+                        self.notifications.clone(),
+                        self.executor.clone(),
+                    )
+                    .into_rpc()
+                    .into(),
                 })
                 .clone()
         };
@@ -294,20 +321,17 @@ impl RpcRegistryInner {
 #[derive(Debug)]
 pub struct RpcServerConfig {
     /// Configs for JSON-RPC Http.
-    http_server_config: Option<ServerBuilder<Identity, Identity>>,
+    http_server_config: Option<ServerConfigBuilder>,
     /// Allowed CORS Domains for http
     http_cors_domains: Option<String>,
     /// Address where to bind the http server to
     http_addr: Option<SocketAddr>,
     /// Configs for WS server
-    ws_server_config: Option<ServerBuilder<Identity, Identity>>,
+    ws_server_config: Option<ServerConfigBuilder>,
     /// Allowed CORS Domains for ws.
     ws_cors_domains: Option<String>,
     /// Address where to bind the ws server to
     ws_addr: Option<SocketAddr>,
-    // /// Configurable RPC middleware
-    // #[allow(dead_code)]
-    // rpc_middleware: RpcServiceBuilder<RpcMiddleware>,
 }
 
 impl Default for RpcServerConfig {
@@ -326,12 +350,12 @@ impl Default for RpcServerConfig {
 
 impl RpcServerConfig {
     /// Creates a new config with only http set
-    pub fn http(config: ServerBuilder<Identity, Identity>) -> Self {
+    pub fn http(config: ServerConfigBuilder) -> Self {
         Self::default().with_http(config)
     }
 
     /// Creates a new config with only ws set
-    pub fn ws(config: ServerBuilder<Identity, Identity>) -> Self {
+    pub fn ws(config: ServerConfigBuilder) -> Self {
         Self::default().with_ws(config)
     }
 
@@ -340,9 +364,7 @@ impl RpcServerConfig {
     /// Note: this always configures an [`EthSubscriptionIdProvider`]
     /// [`IdProvider`] for convenience. To set a custom [`IdProvider`],
     /// please use [`Self::with_id_provider`].
-    pub fn with_http(
-        mut self, config: ServerBuilder<Identity, Identity>,
-    ) -> Self {
+    pub fn with_http(mut self, config: ServerConfigBuilder) -> Self {
         self.http_server_config =
             Some(config.set_id_provider(EthSubscriptionIdProvider::default()));
         self
@@ -353,9 +375,7 @@ impl RpcServerConfig {
     /// Note: this always configures an [`EthSubscriptionIdProvider`]
     /// [`IdProvider`] for convenience. To set a custom [`IdProvider`],
     /// please use [`Self::with_id_provider`].
-    pub fn with_ws(
-        mut self, config: ServerBuilder<Identity, Identity>,
-    ) -> Self {
+    pub fn with_ws(mut self, config: ServerConfigBuilder) -> Self {
         self.ws_server_config =
             Some(config.set_id_provider(EthSubscriptionIdProvider::default()));
         self
@@ -363,21 +383,6 @@ impl RpcServerConfig {
 }
 
 impl RpcServerConfig {
-    /// Configure rpc middleware
-    // pub fn set_rpc_middleware<T>(
-    //     self, rpc_middleware: RpcServiceBuilder<T>,
-    // ) -> RpcServerConfig<T> {
-    //     RpcServerConfig {
-    //         http_server_config: self.http_server_config,
-    //         http_cors_domains: self.http_cors_domains,
-    //         http_addr: self.http_addr,
-    //         ws_server_config: self.ws_server_config,
-    //         ws_cors_domains: self.ws_cors_domains,
-    //         ws_addr: self.ws_addr,
-    //         rpc_middleware,
-    //     }
-    // }
-
     /// Configure the cors domains for http _and_ ws
     pub fn with_cors(self, cors_domain: Option<String>) -> Self {
         self.with_http_cors(cors_domain.clone())
@@ -502,9 +507,10 @@ impl RpcServerConfig {
             // we merge this into one server using the http setup
             modules.config.ensure_ws_http_identical()?;
 
-            if let Some(builder) = self.http_server_config {
-                let server = builder
+            if let Some(config) = self.http_server_config {
+                let server = ServerBuilder::new()
                     .set_rpc_middleware(rpc_middleware)
+                    .set_config(config.build())
                     .build(http_socket_addr)
                     .await
                     .map_err(|err| {
@@ -546,9 +552,9 @@ impl RpcServerConfig {
             http: None,
             ws: None,
         };
-        if let Some(builder) = self.ws_server_config {
-            let server = builder
-                .ws_only()
+        if let Some(config) = self.ws_server_config {
+            let server = ServerBuilder::new()
+                .set_config(config.ws_only().build())
                 .set_rpc_middleware(rpc_middleware.clone())
                 .build(ws_socket_addr)
                 .await
@@ -570,9 +576,9 @@ impl RpcServerConfig {
             result.ws_local_addr = ws_local_addr;
         }
 
-        if let Some(builder) = self.http_server_config {
-            let server = builder
-                .http_only()
+        if let Some(config) = self.http_server_config {
+            let server = ServerBuilder::new()
+                .set_config(config.http_only().build())
                 .set_rpc_middleware(rpc_middleware)
                 .build(http_socket_addr)
                 .await

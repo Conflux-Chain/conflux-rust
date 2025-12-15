@@ -7,14 +7,13 @@ edition = "2021"
 license-file.workspace = true
 
 [dependencies]
-docopt = { workspace = true }
 env_logger = { workspace = true }
 num_cpus = { workspace = true }
-serde = { workspace = true }
 parking_lot = { workspace = true }
 cfxstore = { workspace = true }
 panic_hook = { workspace = true }
 dir = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
 
 [[bin]]
 name = "cfxstore"

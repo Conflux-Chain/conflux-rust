@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::{H256, U64};
-use cfxcore::state_exposer::ConsensusGraphStates as PrimitiveConsensusGraphStates;
+use cfxcore_types::state_exposer::ConsensusGraphStates as PrimitiveConsensusGraphStates;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, Serialize, Deserialize)]

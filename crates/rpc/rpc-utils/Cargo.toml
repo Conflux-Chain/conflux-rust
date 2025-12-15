@@ -20,7 +20,7 @@ alloy-primitives = { workspace = true }
 alloy-rpc-types = { workspace = true }
 serde_json = { workspace = true }
 alloy-sol-types = { workspace = true }
-revm = { workspace = true }
+revm-primitives = { workspace = true }
 thiserror = { workspace = true }
 jsonrpsee-core = { workspace = true }
 futures.workspace = true

@@ -12,7 +12,7 @@ use std::{
 
 use crate::rpc::{
     errors::invalid_params_check,
-    helpers::MAX_FEE_HISTORY_CACHE_BLOCK_COUNT,
+    helpers::{build_block, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT},
     impls::pos::{convert_to_pos_epoch_reward, hash_value_to_h256},
     types::{
         cfx::check_rpc_address_network, pos::PoSEpochReward,
@@ -249,7 +249,7 @@ impl RpcImpl {
             .block_by_hash(&pivot_hash, false /* update_cache */);
         match maybe_block {
             None => Ok(None),
-            Some(b) => Ok(Some(RpcBlock::new(
+            Some(b) => Ok(Some(build_block(
                 &*b,
                 *self.network.get_network_type(),
                 consensus_graph,
@@ -376,7 +376,7 @@ impl RpcImpl {
 
         match maybe_block {
             None => Ok(None),
-            Some(b) => Ok(Some(RpcBlock::new(
+            Some(b) => Ok(Some(build_block(
                 &*b,
                 *self.network.get_network_type(),
                 consensus_graph,
@@ -429,7 +429,7 @@ impl RpcImpl {
             .ok_or_else(|| RpcError::invalid_params("Block not found"))?;
 
         debug!("Build RpcBlock {}", block.hash());
-        Ok(RpcBlock::new(
+        Ok(build_block(
             &*block,
             *self.network.get_network_type(),
             consensus_graph,
@@ -467,7 +467,7 @@ impl RpcImpl {
 
         match maybe_block {
             None => Ok(None),
-            Some(b) => Ok(Some(RpcBlock::new(
+            Some(b) => Ok(Some(build_block(
                 &*b,
                 *self.network.get_network_type(),
                 consensus_graph,
@@ -684,7 +684,7 @@ impl RpcImpl {
                 .block_by_hash(hash, false /* update_cache */)
                 .expect("Error to get block by hash");
 
-            RpcBlock::new(
+            build_block(
                 &*block,
                 *self.network.get_network_type(),
                 consensus_graph,

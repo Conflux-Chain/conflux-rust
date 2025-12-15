@@ -29,7 +29,12 @@ class Eip1559Test(Web3Base):
         self.rpc = RpcClient(self.nodes[0])
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
-        self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
+        self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/', request_kwargs={
+            "proxies": {
+                "http": "",
+                "https": "",
+            }
+        }))
         assert_equal(self.w3.is_connected(), True)
 
 

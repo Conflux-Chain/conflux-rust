@@ -17,7 +17,7 @@ use network::{
     node_table::NodeId, service::ProtocolVersion, Error as NetworkError,
 };
 use parking_lot::RwLock;
-use rand::prelude::SliceRandom;
+use rand::prelude::{IndexedRandom, SliceRandom};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,

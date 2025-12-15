@@ -52,7 +52,7 @@ fn test_sharded_iter_merger() -> Result<()> {
     let max_keys = 500000;
     let mut shard_sizes = vec![max_keys, max_keys, max_keys, 1, 1, 1, 1, 1];
     shard_sizes.resize_with(num_shards, || 0);
-    let mut rng = ChaChaRng::from_entropy();
+    let mut rng = ChaChaRng::from_os_rng();
     shard_sizes.shuffle(&mut rng);
     let mut shards = vec![];
     for _i in 0..num_shards {

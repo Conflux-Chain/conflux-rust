@@ -54,7 +54,7 @@ impl<K: Hash + Eq + Clone, V> SampleHashMap<K, V> {
             return None;
         }
 
-        let index = rng.gen_range(0, self.items.len());
+        let index = rng.random_range(0..self.items.len());
         Some(&self.items[index].1)
     }
 
@@ -100,7 +100,7 @@ impl<T: Hash + Eq + Clone> SampleHashSet<T> {
             return None;
         }
 
-        let index = rng.gen_range(0, self.items.len());
+        let index = rng.random_range(0..self.items.len());
         Some(self.items[index].clone())
     }
 
@@ -111,5 +111,5 @@ impl<T: Hash + Eq + Clone> SampleHashSet<T> {
     pub fn len(&self) -> usize { self.items.len() }
 
     #[inline]
-    pub fn iter(&self) -> Iter<T> { self.items.iter() }
+    pub fn iter(&self) -> Iter<'_, T> { self.items.iter() }
 }

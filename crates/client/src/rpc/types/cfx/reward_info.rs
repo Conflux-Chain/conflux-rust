@@ -1,6 +1,6 @@
 use super::RpcAddress;
 use cfx_types::{H256, U256};
-use cfxcore::block_data_manager::BlockRewardResult;
+use cfxcore_types::block_data_manager::block_data_types::BlockRewardResult;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Clone, Deserialize)]

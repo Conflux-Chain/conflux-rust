@@ -23,9 +23,9 @@ impl SubId {
 }
 
 pub mod random {
-    use rand;
+    use rand_07;
 
-    pub type Rng = rand::rngs::OsRng;
+    pub type Rng = rand_07::rngs::OsRng;
 
-    pub fn new() -> Rng { rand::rngs::OsRng }
+    pub fn new() -> Rng { rand_07::rngs::OsRng }
 }

@@ -2,7 +2,7 @@ use crate::helpers::{FeeHistoryCache, MAX_FEE_HISTORY_CACHE_BLOCK_COUNT};
 use async_trait::async_trait;
 use cfx_execute_helper::estimation::EstimateRequest;
 use cfx_executor::executive::{
-    Executed, ExecutionError, ExecutionOutcome, TxDropError,
+    Executed, ExecutionError, ExecutionOutcome, ToRepackError, TxDropError,
 };
 use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_rpc_cfx_types::{
@@ -11,10 +11,10 @@ use cfx_rpc_cfx_types::{
 use cfx_rpc_eth_api::EthApiServer;
 use cfx_rpc_eth_types::{
     AccessListResult, AccountOverride, AccountPendingTransactions, Block,
-    BlockNumber as BlockId, BlockOverrides, Bundle, Error, EthCallResponse,
-    EthRpcLogFilter, EthRpcLogFilter as Filter, EvmOverrides, FeeHistory,
-    Header, Log, Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock,
-    StateContext, SyncInfo, SyncStatus, Transaction, TransactionRequest,
+    BlockId, BlockOverrides, Bundle, Error, EthCallResponse, EthRpcLogFilter,
+    EthRpcLogFilter as Filter, EvmOverrides, FeeHistory, Header, Log, LogData,
+    Receipt, RpcStateOverride, SimulatePayload, SimulatedBlock, StateContext,
+    SyncInfo, SyncStatus, Transaction, TransactionRequest,
 };
 use cfx_rpc_primitives::{Bytes, Index, U64 as HexU64};
 use cfx_rpc_utils::{
@@ -36,6 +36,7 @@ use cfxcore::{
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
+use cfxcore_errors::ProviderBlockError;
 use jsonrpc_core::Error as RpcError;
 use jsonrpsee::{core::RpcResult, types::ErrorObjectOwned};
 use primitives::{
@@ -84,22 +85,28 @@ impl EthApi {
 
     pub fn fetch_block_by_height(
         &self, height: u64,
-    ) -> Result<PhantomBlock, String> {
+    ) -> Result<PhantomBlock, ProviderBlockError> {
         self.consensus_graph()
             .get_phantom_block_by_number(
                 EpochNumber::Number(height),
                 None,
                 false,
             )?
-            .ok_or("Specified block header does not exist".to_string())
+            .ok_or(
+                format!("Specified block does not exist, height={}", height)
+                    .into(),
+            )
     }
 
     pub fn fetch_block_by_hash(
         &self, hash: &H256,
-    ) -> Result<PhantomBlock, String> {
+    ) -> Result<PhantomBlock, ProviderBlockError> {
         self.consensus_graph()
             .get_phantom_block_by_hash(hash, false)?
-            .ok_or("Specified block header does not exist".into())
+            .ok_or(
+                format!("Specified block does not exist, hash={:?}", hash)
+                    .into(),
+            )
     }
 
     fn convert_block_number_to_epoch_number(
@@ -227,6 +234,13 @@ impl EthApi {
             )) => bail!(invalid_input_rpc_err(
                 format! {"tx sender has contract code: {:?}", address}
             )),
+            ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::SenderDoesNotExist,
+            ) => {
+                bail!(RpcError::from(
+                    RpcInvalidTransactionError::InsufficientFunds
+                ))
+            }
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(invalid_input_rpc_err(format! {"err: {:?}", e}))
             }
@@ -348,13 +362,16 @@ impl EthApi {
             .cloned()
             .enumerate()
             .map(|(idx, log)| Log {
-                address: log.address,
-                topics: log.topics,
-                data: Bytes(log.data),
+                inner: LogData {
+                    address: log.address,
+                    topics: log.topics,
+                    data: log.data.into(),
+                },
                 block_hash,
                 block_number: block_height,
                 transaction_hash,
                 transaction_index,
+                block_timestamp: Some(b.pivot_header.timestamp().into()),
                 log_index: Some((*prior_log_index + idx).into()),
                 transaction_log_index: Some(idx.into()),
                 removed: false,
@@ -606,13 +623,19 @@ impl EthApi {
                         .map_err(RpcError::invalid_params)?
                 }
                 _ => {
-                    self.consensus_graph()
-                        .get_phantom_block_by_number(
-                            block_num.try_into()?,
-                            None,
-                            false, /* include_traces */
-                        )
-                        .map_err(RpcError::invalid_params)?
+                    match self.consensus_graph().get_phantom_block_by_number(
+                        block_num.try_into()?,
+                        None,
+                        false, /* include_traces */
+                    ) {
+                        Ok(pb) => pb,
+                        Err(e) => match e {
+                            ProviderBlockError::Common(e) => {
+                                return Err(RpcError::invalid_params(e).into());
+                            }
+                            ProviderBlockError::EpochNumberTooLarge => None,
+                        },
+                    }
                 }
             }
         };
@@ -774,8 +797,9 @@ impl EthApi {
             .map_err(RpcError::invalid_params)?;
 
         if newest_block == BlockNumber::Latest {
-            let fetch_block_by_hash =
-                |height| self.fetch_block_by_hash(&height);
+            let fetch_block_by_hash = |height| {
+                self.fetch_block_by_hash(&height).map_err(|e| e.to_string())
+            };
 
             let latest_block = self
                 .fetch_block_by_height(newest_height)
@@ -829,13 +853,20 @@ impl EthApi {
             }
         }
 
-        let block = self
-            .fetch_block_by_height(end_block + 1)
-            .map_err(RpcError::invalid_params)?;
+        let last_hash = self
+            .consensus_graph()
+            .get_hash_from_epoch_number((end_block + 1).into())?;
+        let last_header = self
+            .consensus_graph()
+            .data_manager()
+            .block_header_by_hash(&last_hash)
+            .ok_or_else(|| {
+                format!("last block missing, height={}", end_block + 1)
+            })?;
 
         fee_history.finish(
             start_block,
-            block.pivot_header.base_price().as_ref(),
+            last_header.base_price().as_ref(),
             Space::Ethereum,
         );
 
@@ -956,7 +987,7 @@ impl EthApi {
                 return Ok(Some(receipt));
             }
 
-            // if the if-branch was not entered, we do the bookeeping here
+            // if the if-branch was not entered, we do the bookkeeping here
             prior_log_index += phantom_block.receipts[idx].logs.len();
         }
 
@@ -1066,6 +1097,7 @@ impl BlockProvider for &EthApi {
     ) -> Result<Vec<H256>, String> {
         self.consensus_graph()
             .get_block_hashes_by_epoch(epoch_number)
+            .map_err(|e| e.to_string())
     }
 }
 

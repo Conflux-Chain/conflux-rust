@@ -20,7 +20,7 @@
 
 use crate::{Bytes, Error};
 use cfx_rpc_cfx_types::traits::BlockProvider;
-use cfx_types::{H160, H256, U256};
+use cfx_types::{H160, H256, U256, U64};
 use primitives::{
     log_entry::{LocalizedLogEntry, LogEntry},
     EpochNumber,
@@ -31,12 +31,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Log {
-    /// H160
-    pub address: H160,
-    /// Topics
-    pub topics: Vec<H256>,
-    /// Data
-    pub data: Bytes,
+    #[serde(flatten)]
+    /// Consensus log object
+    pub inner: LogData,
     /// Block Hash
     pub block_hash: H256,
     /// Block Number
@@ -49,6 +46,8 @@ pub struct Log {
     pub log_index: Option<U256>,
     /// Log Index in Transaction
     pub transaction_log_index: Option<U256>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub block_timestamp: Option<U64>,
     /// Whether Log Type is Removed (Geth Compatibility Field)
     #[serde(default)]
     pub removed: bool,
@@ -81,12 +80,15 @@ impl Log {
 
         // construct RPC log
         Ok(Log {
-            address: e.entry.address,
-            topics: e.entry.topics.into_iter().map(Into::into).collect(),
-            data: e.entry.data.into(),
+            inner: LogData {
+                address: e.entry.address,
+                topics: e.entry.topics.into_iter().map(Into::into).collect(),
+                data: e.entry.data.into(),
+            },
             block_hash: *pivot_hash,
             // note: blocks in EVM space RPCs correspond to epochs
             block_number: e.epoch_number.into(),
+            block_timestamp: e.block_timestamp.map(Into::into),
             transaction_hash: e.transaction_hash.into(),
             transaction_index: e.transaction_index.into(),
             log_index: Some(e.log_index.into()),
@@ -109,4 +111,11 @@ impl Log {
         //     transaction_log_index: None,
         // })
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+pub struct LogData {
+    pub address: H160,
+    pub topics: Vec<H256>,
+    pub data: Bytes,
 }

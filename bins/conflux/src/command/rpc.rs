@@ -6,7 +6,6 @@ use crate::command::helpers::{input_password, password_prompt};
 use clap::ArgMatches;
 use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder};
 use serde_json::{Map, Value};
-use std::str::FromStr;
 
 pub struct RpcCommand {
     pub url: String,
@@ -16,17 +15,19 @@ pub struct RpcCommand {
 
 impl RpcCommand {
     pub fn parse(matches: &ArgMatches) -> Result<Option<RpcCommand>, String> {
-        let method = match matches.value_of("rpc-method") {
+        let method = match matches.get_one::<String>("rpc-method") {
             Some(method) => method,
             None => return Ok(None),
         };
 
-        let url = matches
-            .value_of("url")
-            .ok_or_else(|| String::from("RPC URL not specified"))?;
+        let url = match matches.get_one::<String>("url") {
+            Some(url) => url,
+            None => return Err(String::from("RPC URL not specified")),
+        };
 
-        let args = match matches.values_of("rpc-args") {
-            Some(args) => {
+        let args: Vec<Value> = match matches.try_get_many::<String>("rpc-args")
+        {
+            Ok(Some(args)) => {
                 let mut params = Vec::new();
 
                 for arg in args {
@@ -37,7 +38,8 @@ impl RpcCommand {
                 }
                 params
             }
-            None => Vec::new(),
+            Ok(None) => Vec::new(),
+            Err(_e) => Vec::new(),
         };
 
         Ok(Some(RpcCommand {
@@ -75,11 +77,11 @@ impl<'a> ArgSchema<'a> {
 
     fn value(&self, matches: &ArgMatches) -> Result<Option<Value>, String> {
         match self.arg_type {
-            "string" => match matches.value_of(self.arg_name) {
+            "string" => match matches.get_one::<String>(self.arg_name) {
                 Some(val) => Ok(Some(Value::String(val.into()))),
                 None => Ok(None),
             },
-            "bool" => Ok(Some(Value::Bool(matches.is_present(self.arg_name)))),
+            "bool" => Ok(Some(Value::Bool(matches.get_flag(self.arg_name)))),
             "u64" => self.u64(matches),
             "password" => Ok(Some(self.password()?)),
             "password2" => Ok(Some(self.password2()?)),
@@ -96,14 +98,10 @@ impl<'a> ArgSchema<'a> {
     }
 
     fn u64(&self, matches: &ArgMatches) -> Result<Option<Value>, String> {
-        let val = match matches.value_of(self.arg_name) {
+        let val = match matches.get_one::<u64>(self.arg_name) {
             Some(val) => val,
             None => return Ok(None),
         };
-
-        let val = u64::from_str(val).map_err(|e| {
-            format!("failed to parse argument [--{}]: {:?}", self.arg_name, e)
-        })?;
 
         Ok(Some(Value::String(format!("{:#x}", val))))
     }
@@ -140,7 +138,12 @@ impl<'a> ArgSchema<'a> {
 #[cfg(test)]
 
 mod tests {
+    use std::vec;
+
+    use crate::cli::Cli;
+
     use super::*;
+    use clap::CommandFactory;
     use mockito::{Matcher, Server};
     use serde_json::json;
     use tokio;
@@ -215,5 +218,160 @@ mod tests {
         let expected_result = json!("0x4350b21");
 
         run_rpc_test(method, args, expected_result).await;
+    }
+
+    #[test]
+    fn test_rpc_command_parse() {
+        #[derive(Debug)]
+        struct TestCase {
+            name: &'static str,
+            args: Vec<&'static str>,
+            expected_method: &'static str,
+            expected_url: &'static str,
+            expected_params: Vec<Value>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                name: "estimate-gas with many arguments",
+                args: vec![
+                    "conflux",
+                    "rpc",
+                    "estimate-gas",
+                    "--from",
+                    "addr_from",
+                    "--to",
+                    "addr_to",
+                    "--gas-price",
+                    "gp_val",
+                    "--type",
+                    "type_val",
+                    "--max-fee-per-gas",
+                    "mfpg_val",
+                    "--max-priority-fee-per-gas",
+                    "mpfpg_val",
+                    "--gas",
+                    "gas_val",
+                    "--value",
+                    "value_val",
+                    "--data",
+                    "data_val",
+                    "--nonce",
+                    "nonce_val",
+                    "--epoch",
+                    "epoch_val",
+                ],
+                expected_method: "cfx_estimateGas",
+                expected_url: "http://localhost:12539",
+                expected_params: vec![
+                    json!({
+                        "data": "data_val",
+                        "from": "addr_from",
+                        "gas": "gas_val",
+                        "gas-price": "gp_val",
+                        "max-fee-per-gas": "mfpg_val",
+                        "max-priority-fee-per-gas": "mpfpg_val",
+                        "nonce": "nonce_val",
+                        "to": "addr_to",
+                        "type": "type_val",
+                        "value": "value_val"
+                    }),
+                    json!("epoch_val"),
+                ],
+            },
+            TestCase {
+                name: "balance with custom URL",
+                args: vec![
+                    "conflux",
+                    "rpc",
+                    "balance",
+                    "--url",
+                    "http://0.0.0.0:8080",
+                    "--address",
+                    "test_address_001",
+                    "--epoch",
+                    "latest_state",
+                ],
+                expected_method: "cfx_getBalance",
+                expected_url: "http://0.0.0.0:8080",
+                expected_params: vec![
+                    json!("test_address_001"),
+                    json!("latest_state"),
+                ],
+            },
+            TestCase {
+                name: "block-by-hash",
+                args: vec![
+                    "conflux",
+                    "rpc",
+                    "block-by-hash",
+                    "--hash",
+                    "0x654321fedcba",
+                ],
+                expected_method: "cfx_getBlockByHash",
+                expected_url: "http://localhost:12539",
+                expected_params: vec![json!("0x654321fedcba"), json!(false)],
+            },
+            TestCase {
+                name: "voting_status",
+                args: vec!["conflux", "rpc", "local", "pos", "voting_status"],
+                expected_method: "test_posVotingStatus",
+                expected_params: vec![],
+                expected_url: "http://localhost:12539",
+            },
+            TestCase {
+                name: "voting_status_with_custom_url",
+                args: vec![
+                    "conflux",
+                    "rpc",
+                    "local",
+                    "pos",
+                    "voting_status",
+                    "--url",
+                    "http://localhost:9999",
+                ],
+                expected_method: "test_posVotingStatus",
+                expected_params: vec![],
+                expected_url: "http://localhost:9999",
+            },
+        ];
+
+        for test_case in test_cases {
+            let cli = Cli::command().get_matches_from(test_case.args);
+            let mut subcmd_matches = &cli;
+            while let Some(m) = subcmd_matches.subcommand() {
+                subcmd_matches = m.1;
+            }
+
+            let rpc_command = match RpcCommand::parse(subcmd_matches) {
+                Ok(Some(cmd)) => cmd,
+                Ok(None) => panic!(
+                    "Test case '{}': Expected RpcCommand but got None",
+                    test_case.name
+                ),
+                Err(e) => panic!(
+                    "Test case '{}': Error parsing RpcCommand: {}",
+                    test_case.name, e
+                ),
+            };
+
+            assert_eq!(
+                rpc_command.method, test_case.expected_method,
+                "Test case '{}': Method mismatch",
+                test_case.name
+            );
+
+            assert_eq!(
+                rpc_command.url, test_case.expected_url,
+                "Test case '{}': URL mismatch",
+                test_case.name
+            );
+
+            assert_eq!(
+                rpc_command.args, test_case.expected_params,
+                "Test case '{}': Parameters mismatch",
+                test_case.name
+            );
+        }
     }
 }

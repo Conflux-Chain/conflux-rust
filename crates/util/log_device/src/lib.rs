@@ -464,7 +464,7 @@ mod tests {
     ) {
         for i in start..end {
             let mut stripe: Vec<u8> = Vec::new();
-            let stripe_size = rand::thread_rng().gen_range(4, 1024 * 64);
+            let stripe_size = rand::rng().random_range(4..1024 * 64);
             stripe.resize(stripe_size, i as u8);
             let payload_size = stripe_size - 4;
             LittleEndian::write_u32(&mut stripe[0..4], payload_size as u32);

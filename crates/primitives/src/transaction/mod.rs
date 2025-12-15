@@ -131,7 +131,11 @@ pub enum TransactionError {
     InvalidRlp(String),
     ZeroGasPrice,
     /// Transaction types have not been activated
-    FutureTransactionType,
+    FutureTransactionType {
+        tx_type: u8,
+        enable_height: u64,
+        current_height: u64,
+    },
     /// Create transaction with too large init code size,
     CreateInitCodeSizeLimit,
     /// Receiver with invalid type bit.
@@ -203,7 +207,7 @@ impl fmt::Display for TransactionError {
                 format!("Transaction has invalid RLP structure: {}.", err)
             }
             ZeroGasPrice => "Zero gas price is not allowed".into(),
-            FutureTransactionType => "Ethereum like transaction should have u64::MAX storage limit".into(),
+            FutureTransactionType {tx_type, current_height, enable_height} => format!("Transaction type {tx_type} is not enabled, current height {current_height}, enable height {enable_height}"),
             InvalidReceiver => "Sending transaction to invalid address. The first four bits of address must be 0x0, 0x1, or 0x8.".into(),
             TooLargeNonce => "Transaction nonce is too large.".into(),
             CreateInitCodeSizeLimit => "Transaction initcode is too large.".into(),

@@ -30,7 +30,7 @@ use primitives::{
 };
 use rlp::*;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -275,6 +275,13 @@ impl TransactionPoolInner {
                 .remove_lowest_nonce(&victim_address)
                 .unwrap();
             let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
+            debug!(
+                "txpool::collect_garbage removed tx {:?} sender={:?} nonce={:?} new_tx={:?}",
+                to_remove_tx.hash(),
+                victim_address,
+                to_remove_tx.nonce(),
+                new_tx.hash()
+            );
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
@@ -587,15 +594,18 @@ impl TransactionPoolInner {
     }
 
     fn recalculate_readiness_with_state(
-        &mut self, addr: &AddressWithSpace, account_cache: &StateProvider,
+        &mut self, addr: &AddressWithSpace, state: &StateProvider,
     ) -> StateDbResult<()> {
         let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
-        let (nonce, balance) = self
-            .get_and_update_nonce_and_balance_from_storage(
-                addr,
-                account_cache,
-            )?;
+        let (nonce, balance) =
+            self.get_and_update_nonce_and_balance_from_storage(addr, state)?;
         self.recalculate_readiness(addr, nonce, balance);
+        debug!(
+            "txpool::recalculate_readiness_with_state addr={:?} nonce={:?} balance={:?}",
+            addr,
+            nonce,
+            balance
+        );
         Ok(())
     }
 
@@ -606,6 +616,22 @@ impl TransactionPoolInner {
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
+        match &ret {
+            Some(tx) => debug!(
+                "txpool::recalculate_readiness addr={:?} state_nonce={:?} ready_nonce={:?} ready_hash={:?} balance={:?}",
+                addr,
+                nonce,
+                tx.nonce(),
+                tx.hash(),
+                balance
+            ),
+            None => debug!(
+                "txpool::recalculate_readiness addr={:?} state_nonce={:?} no_ready_tx balance={:?}",
+                addr,
+                nonce,
+                balance
+            ),
+        }
         // If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
         if let Some(tx) = self.deferred_pool.get_lowest_nonce_tx(addr) {
@@ -654,6 +680,15 @@ impl TransactionPoolInner {
         if num_txs == 0 {
             return packed_transactions;
         }
+        debug!(
+            "txpool::pack_transactions start best_epoch={} best_block={} block_gas_limit={} evm_gas_limit={} block_size_limit={} limit={}",
+            best_epoch_height,
+            best_block_number,
+            block_gas_limit,
+            evm_gas_limit,
+            block_size_limit,
+            num_txs
+        );
 
         let spec = machine.spec(best_block_number, best_epoch_height);
         let transitions = &machine.params().transition_heights;
@@ -676,6 +711,12 @@ impl TransactionPoolInner {
                 U256::zero(),
                 validity,
             );
+        debug!(
+            "txpool::pack_transactions espace selected={} gas_used={} size_used={}",
+            sampled_tx.len(),
+            used_gas,
+            used_size
+        );
         packed_transactions.extend_from_slice(&sampled_tx);
 
         let (sampled_tx, _, _) = self.deferred_pool.packing_sampler(
@@ -685,6 +726,11 @@ impl TransactionPoolInner {
             num_txs - sampled_tx.len(),
             U256::zero(),
             validity,
+        );
+        debug!(
+            "txpool::pack_transactions native selected={} total={}",
+            sampled_tx.len(),
+            packed_transactions.len() + sampled_tx.len()
         );
         packed_transactions.extend_from_slice(&sampled_tx);
 
@@ -901,19 +947,47 @@ impl TransactionPoolInner {
         (ready_txs, deferred_txs)
     }
 
+    pub fn eth_content(
+        &self, space: Option<Space>,
+    ) -> (
+        BTreeMap<AddressWithSpace, BTreeMap<U256, Arc<SignedTransaction>>>,
+        BTreeMap<AddressWithSpace, BTreeMap<U256, Arc<SignedTransaction>>>,
+    ) {
+        let get_local_nonce_and_balance = |addr: &AddressWithSpace| {
+            self.ready_nonces_and_balances
+                .get(addr)
+                .map(|x| *x)
+                .unwrap_or_default()
+        };
+        self.deferred_pool
+            .eth_content(space, get_local_nonce_and_balance)
+    }
+
+    pub fn eth_content_from(
+        &self, from: AddressWithSpace,
+    ) -> (
+        BTreeMap<U256, Arc<SignedTransaction>>,
+        BTreeMap<U256, Arc<SignedTransaction>>,
+    ) {
+        let (local_nonce, local_balance) =
+            self.get_local_nonce_and_balance(&from).unwrap_or_default();
+        self.deferred_pool
+            .eth_content_from(from, local_nonce, local_balance)
+    }
+
     // Add transaction into deferred pool and maintain its readiness
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
     pub fn insert_transaction_with_readiness_check(
-        &mut self, account_cache: &StateProvider,
-        transaction: Arc<SignedTransaction>, packed: bool, force: bool,
+        &mut self, state: &StateProvider, transaction: Arc<SignedTransaction>,
+        packed: bool, force: bool,
     ) -> Result<(), TransactionPoolError> {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
         let (sponsored_gas, sponsored_storage) =
-            self.get_sponsored_gas_and_storage(account_cache, &transaction)?;
+            self.get_sponsored_gas_and_storage(state, &transaction)?;
 
         let (state_nonce, state_balance) =
-            account_cache.get_nonce_and_balance(&transaction.sender())?;
+            state.get_nonce_and_balance(&transaction.sender())?;
 
         if transaction.hash[0] & 254 == 0 {
             trace!(
@@ -997,10 +1071,7 @@ impl TransactionPoolInner {
             return Err(err);
         }
 
-        self.recalculate_readiness_with_state(
-            &transaction.sender(),
-            account_cache,
-        )?;
+        self.recalculate_readiness_with_state(&transaction.sender(), state)?;
 
         Ok(())
     }
@@ -1018,7 +1089,7 @@ impl TransactionPoolInner {
     }
 
     pub fn get_sponsored_gas_and_storage(
-        &self, account_cache: &StateProvider, transaction: &SignedTransaction,
+        &self, state: &StateProvider, transaction: &SignedTransaction,
     ) -> StateDbResult<(U256, u64)> {
         let sender = transaction.sender();
 
@@ -1039,7 +1110,7 @@ impl TransactionPoolInner {
 
         // Get sponsor info
         let sponsor_info = if let Some(sponsor_info) =
-            account_cache.get_sponsor_info(&contract_address)?
+            state.get_sponsor_info(&contract_address)?
         {
             sponsor_info
         } else {
@@ -1047,7 +1118,7 @@ impl TransactionPoolInner {
         };
 
         // Check if sender is eligible for sponsor
-        if !account_cache
+        if !state
             .check_commission_privilege(&contract_address, &sender.address)?
         {
             return Ok(Default::default());

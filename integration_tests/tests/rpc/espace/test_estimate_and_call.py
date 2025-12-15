@@ -15,8 +15,9 @@ def test_estimate_and_call_basic(ew3, evm_accounts, network):
     new_account = ew3.eth.account.create()
 
     call_request["from"] = new_account.address
-    assert_raises_web3_rpc_error(-32000, "SenderDoesNotExist", ew3.eth.estimate_gas, call_request)
-    assert_raises_web3_rpc_error(-32000, "SenderDoesNotExist", ew3.eth.call, call_request)
+    # After fix for issue #3340, non-existent accounts return InsufficientFunds instead of SenderDoesNotExist
+    assert_raises_web3_rpc_error(-32003, "insufficient funds", ew3.eth.estimate_gas, call_request)
+    assert_raises_web3_rpc_error(-32003, "insufficient funds", ew3.eth.call, call_request)
 
 def test_revert(ew3):
     contract_meta = load_contract_metadata("Error")

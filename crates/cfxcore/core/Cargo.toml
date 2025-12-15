@@ -29,7 +29,6 @@ futures = { workspace = true, features = ["compat"] }
 hashbrown = { workspace = true }
 hibitset = { workspace = true }
 itertools = { workspace = true }
-io = { workspace = true }
 jsonrpc-core = { workspace = true }
 keccak-hash = { workspace = true }
 kvdb = { workspace = true }
@@ -42,7 +41,6 @@ malloc_size_of = { workspace = true }
 malloc_size_of_derive = { workspace = true }
 metrics = { workspace = true }
 network = { workspace = true }
-num = { workspace = true }
 num-traits = { workspace = true, default-features = false }
 parking_lot = { workspace = true }
 primal = { workspace = true }
@@ -79,7 +77,6 @@ bcs = { workspace = true }
 async-trait = { workspace = true }
 num-derive = { workspace = true }
 thiserror = { workspace = true }
-fallible = { workspace = true }
 mirai-annotations = { workspace = true, default-features = false }
 bounded-executor = { workspace = true }
 diem-config = { workspace = true }
@@ -117,6 +114,9 @@ cfx-rpc-eth-types = { workspace = true }
 jsonrpsee = { workspace = true, features = ["jsonrpsee-types"] }
 cfx-rpc-utils = { workspace = true }
 cfx-util-macros = { workspace = true }
+cfxcore-types = { workspace = true }
+cfxcore-pow = { workspace = true }
+cfxcore-errors = { workspace = true}
 
 [dev-dependencies]
 cfx-storage = { workspace = true, features = ["testonly_code"] }
@@ -134,5 +134,5 @@ testonly_code = []
 consensus_bench = []
 fuzzing = ["proptest", "proptest-derive"]
 
-# [lints.rust]
-# unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(mirai)'] }

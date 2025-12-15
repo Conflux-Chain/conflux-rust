@@ -1,11 +1,12 @@
-## Project Layout
+# Project Layout
 
 This repository contains several Rust crates that implement the different building blocks of an Conflux node. The high-level structure of the repository is as follows:
 
 - [bins](../../bins): All binary crates located in this folder
 - [crates](../../crates): All crates library
+- [tools](../../tools/): Tools for benchmark, testing (These crates are stand-alone and not included in the whole workspace)
 - [internal_contract](../../internal_contract): Internal contracts's abi and interface
-- [tests](../../tests): The python integration tests
+- [integration_tests] and [tests](../../tests): The python integration tests
 - [run](../../run): Node run misc, include default config file and start scripts
 - [dev-support](../../dev-support): Dev support scripts
 - [docs](../../docs): Documentation
@@ -34,11 +35,44 @@ The [primitives crate](../../crates/primitives) contains the core data structure
 
 ### cfxcore
 
-The Conflux Protocol's core code located at [cfxcore](../../crates/cfxcore) directory. Including `consensus`, `EVM machine` etc.
+The Conflux Protocol's core code located at [cfxcore](../../crates/cfxcore) directory. Including `consensus`, `pow`, `transaction pool` etc.
+
+### execution
+
+The [execution](../../crates/execution) directory contains the execution engine, which is responsible for executing transactions and managing the state of the blockchain. It includes the following core crates:
+
+- [vm-types](../../crates/execution/vm-types/)
+- [vm-interpreter](../../crates/execution/vm-interpreter/)
+- [executor](../../crates/execution/executor/)
+- [execute-helper](../../crates/execution/execute-helper/)
+
+And tracer crates:
+
+- [parity-trace-types](../../crates/execution/parity-trace-types/)
+- [geth-tracer](../../crates/execution/geth-tracer/)
+
+Other utility crates:
+
+- [cfx-vm-tracer-derive](../../crates/execution/cfx-vm-tracer-derive/)
+- [solidity-abi](../../crates/execution/solidity-abi/)
+- [solidity-abi-derive](../../crates/execution/solidity-abi-derive/)
 
 ### dbs
 
-The [dbs](../../crates/dbs) directory contains the database crates.
+All database-related code is located under [dbs](../../crates/dbs), which contains the core logic for the entire node's data storage. Specifically, it mainly includes two major categories of data: blockchain (block header, block body, receipt) and state (state trie, storage trie), as well as some indexing and development data (trace).
+
+The underlying layer primarily uses rocksdb, and also uses sqlite to store some snapshot-related data.
+
+1. kvdb-rocksdb: Rust wrapper for rocksdb, which depends on third-party crates (kvdb, rocksdb) at the underlying layer
+2. db: Mainly provides the open_database method, which returns a db instance that can be used for data reading and writing
+3. db-errors: Database operation error definitions
+4. **storage**: The main implementation of the state database, including mpt, mpt snapshot and other logic, providing lower-level read/write interfaces `StateTrait`. This crate is the core code for state storage
+5. statedb: Simple wrapper around storage, providing higher-level read interfaces `StateDbExt`
+
+Additionally, the upper-level modules that call the db module mainly consist of two parts:
+
+1. crates/cfxcore/core/src/block_data_manager: Encapsulates all data read/write interfaces
+2. crates/execution/executor/src/state: The state object of the execution module, which essentially wraps StateDb and provides account state reading and updating interfaces for EVM.
 
 ### network
 

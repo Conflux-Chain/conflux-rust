@@ -1,4 +1,4 @@
-use cfx_rpc_eth_types::{BlockNumber as BlockId, Receipt};
+use cfx_rpc_eth_types::{BlockId, Receipt};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(server, namespace = "parity")]

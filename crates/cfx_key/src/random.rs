@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use super::{KeyPair, KeyPairGenerator, SECP256K1};
-use rand::rngs::OsRng;
+use rand_07::rngs::OsRng;
 
 /// Randomly generates new keypair, instantiating the RNG each time.
 pub struct Random;

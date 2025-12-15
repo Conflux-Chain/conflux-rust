@@ -1,4 +1,4 @@
-use crate::{BlockNumber as BlockId, BlockOverrides, TransactionRequest};
+use crate::{BlockId, BlockOverrides, TransactionRequest};
 use cfx_bytes::Bytes;
 
 /// Bundle of transactions

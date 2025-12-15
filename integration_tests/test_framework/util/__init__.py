@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from conflux.rpc import RpcClient
 
 CONFLUX_RPC_WAIT_TIMEOUT = 60
-CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
+CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 120
 
 logger = logging.getLogger("TestFramework.utils")
 
@@ -414,7 +414,7 @@ def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict 
             "jsonrpc_http_port": str(remote_rpc_port(n)),
             "jsonrpc_http_eth_port": str(evm_rpc_port(n)),
             "jsonrpc_ws_eth_port": str(evm_rpc_ws_port(n)),
-            "jsonrpc_http_eth_port_v2": str(evm_rpc_port_v2(n)), # the async espace rpc port
+            # "jsonrpc_http_eth_port_v2": str(evm_rpc_port_v2(n)), # the async espace rpc port
             "pos_config_path": "\'{}\'".format(os.path.join(datadir, "validator_full_node.yaml")),
             "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.json")),
             "pos_private_key_path": "'{}'".format(os.path.join(datadir, "blockchain_data", "net_config", "pos_key"))
@@ -918,7 +918,7 @@ def generate_single_block_for_base_fee_manipulation(rpc: "RpcClient", acct: CfxL
     return new_block, starting_nonce + tx_per_block
 
 # for transactions in either pivot/non-pivot block
-# checks priority fee is calculated as expeted
+# checks priority fee is calculated as expected
 def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, burnt_ratio=0.5):
     def get_gas_charged(rpc: "RpcClient", tx_hash: str) -> int:
         gas_limit = int(rpc.get_tx(tx_hash)["gas"], 16)

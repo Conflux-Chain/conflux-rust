@@ -18,7 +18,7 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{BlockNumber, Error as SelfError, Log};
+use crate::{BlockId, Error as SelfError, Log};
 use cfx_rpc_cfx_types::traits::BlockProvider;
 use cfx_rpc_primitives::VariadicValue;
 use cfx_types::{Space, H160, H256};
@@ -41,9 +41,9 @@ pub type Topic = VariadicValue<H256>;
 #[serde(rename_all = "camelCase")]
 pub struct EthRpcLogFilter {
     /// From Block
-    pub from_block: Option<BlockNumber>,
+    pub from_block: Option<BlockId>,
     /// To Block
-    pub to_block: Option<BlockNumber>,
+    pub to_block: Option<BlockId>,
     /// Block hash
     pub block_hash: Option<H256>,
     /// Address

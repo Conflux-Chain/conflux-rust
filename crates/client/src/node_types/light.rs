@@ -69,7 +69,6 @@ impl LightClient {
             accounts,
             notifications,
             pubsub,
-            _eth_pubsub,
             _tokio_runtime,
         ) = initialize_common_modules(
             &mut conf,

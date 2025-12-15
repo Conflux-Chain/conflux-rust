@@ -19,18 +19,15 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    mio_util::{EventLoop, EventLoopBuilder, Handler, Sender},
     worker::{SocketWorker, Work, WorkType, Worker},
     IoError, IoHandler,
 };
-use crossbeam_deque;
 use lazy_static::lazy_static;
 use log::{debug, error, trace, warn};
 use metrics::{register_meter_with_group, Meter, MeterTimer};
-use mio::{
-    deprecated::{EventLoop, EventLoopBuilder, Handler, Sender},
-    timer::Timeout,
-    *,
-};
+use mio::{Events, Poll, Registry, Token, Waker};
+use mio_timer::Timeout;
 use parking_lot::{Mutex, RwLock};
 use slab::Slab;
 use std::{
@@ -43,7 +40,7 @@ use std::{
 // FIXME: Use a enum type instead for function calls.
 /// Timer ID
 pub type TimerToken = usize;
-/// Timer ID
+/// Stream ID
 pub type StreamToken = usize;
 /// IO Handler ID
 pub type HandlerId = usize;
@@ -59,9 +56,7 @@ lazy_static! {
 
 /// Messages used to communicate with the event loop from other threads.
 #[derive(Clone)]
-pub enum IoMessage<Message>
-where Message: Send + Sized
-{
+pub enum IoMessage<Message: Send + Sized> {
     /// Shutdown the event loop
     Shutdown,
     /// Register a new protocol handler.
@@ -112,7 +107,7 @@ pub struct IoContext<Message>
 where Message: Send + Sync + 'static
 {
     channel: IoChannel<Message>,
-    handler: HandlerId,
+    handler_id: HandlerId,
 }
 
 impl<Message> IoContext<Message>
@@ -123,7 +118,10 @@ where Message: Send + Sync + 'static
     pub fn new(
         channel: IoChannel<Message>, handler: HandlerId,
     ) -> IoContext<Message> {
-        IoContext { handler, channel }
+        IoContext {
+            handler_id: handler,
+            channel,
+        }
     }
 
     /// Register a new recurring IO timer. 'IoHandler::timeout' will be called
@@ -134,7 +132,7 @@ where Message: Send + Sync + 'static
         self.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
             once: false,
             cancel_all: false,
         })?;
@@ -149,7 +147,7 @@ where Message: Send + Sync + 'static
         self.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
             once: true,
             cancel_all: true,
         })?;
@@ -165,7 +163,7 @@ where Message: Send + Sync + 'static
         self.channel.send_io(IoMessage::AddTimer {
             token,
             delay,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
             once: true,
             cancel_all: false,
         })?;
@@ -176,7 +174,7 @@ where Message: Send + Sync + 'static
     pub fn clear_timer(&self, token: TimerToken) -> Result<(), IoError> {
         self.channel.send_io(IoMessage::RemoveTimer {
             token,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         })?;
         Ok(())
     }
@@ -185,7 +183,7 @@ where Message: Send + Sync + 'static
     pub fn register_stream(&self, token: StreamToken) -> Result<(), IoError> {
         self.channel.send_io(IoMessage::RegisterStream {
             token,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         })?;
         Ok(())
     }
@@ -194,7 +192,7 @@ where Message: Send + Sync + 'static
     pub fn deregister_stream(&self, token: StreamToken) -> Result<(), IoError> {
         self.channel.send_io(IoMessage::DeregisterStream {
             token,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         })?;
         Ok(())
     }
@@ -205,7 +203,7 @@ where Message: Send + Sync + 'static
     ) -> Result<(), IoError> {
         self.channel.send_io(IoMessage::UpdateStreamRegistration {
             token,
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         })?;
         Ok(())
     }
@@ -236,7 +234,7 @@ where Message: Send + Sync + 'static
         // the handler is no longer active and can be considered as
         // unregistered.
         let _ = self.channel.send_io(IoMessage::RemoveHandler {
-            handler_id: self.handler,
+            handler_id: self.handler_id,
         });
     }
 }
@@ -263,7 +261,7 @@ where Message: Send + Sync
     work_ready: Arc<SCondvar>,
     socket_workers:
         Vec<(crossbeam_channel::Sender<Work<Message>>, SocketWorker)>,
-    network_poll: Arc<Poll>,
+    network_poll_registry: Arc<Registry>,
 }
 
 impl<Message> IoManager<Message>
@@ -273,7 +271,7 @@ where Message: Send + Sync + 'static
     pub fn start(
         event_loop: &mut EventLoop<IoManager<Message>>,
         handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
-        network_poll: Arc<Poll>,
+        network_poll_registry: Arc<Registry>,
     ) -> Result<(), IoError> {
         let worker = crossbeam_deque::Worker::new_fifo();
         let stealer = worker.stealer();
@@ -320,7 +318,7 @@ where Message: Send + Sync + 'static
             workers,
             work_ready,
             socket_workers,
-            network_poll,
+            network_poll_registry,
         };
         event_loop.run(&mut io)?;
         Ok(())
@@ -331,7 +329,7 @@ impl<Message> Handler for IoManager<Message>
 where Message: Send + Sync + 'static
 {
     type Message = IoMessage<Message>;
-    type Timeout = Token;
+    type TimeoutState = Token;
 
     // All network reading and writing is now handled by the network_poll, so
     // this event loop will not have any ready event.
@@ -349,9 +347,7 @@ where Message: Send + Sync + 'static
                         event_loop.clear_timeout(&timer.timeout);
                     }
                 } else {
-                    event_loop
-                        .timeout(token, timer.delay)
-                        .expect("Error re-registering user timer");
+                    event_loop.timeout(token, timer.delay);
                 }
                 self.worker_channel.push(Work {
                     work_type: WorkType::Timeout,
@@ -412,9 +408,7 @@ where Message: Send + Sync + 'static
                 cancel_all,
             } => {
                 let timer_id = token + handler_id * TOKENS_PER_HANDLER;
-                let timeout = event_loop
-                    .timeout(Token(timer_id), delay)
-                    .expect("Error registering user timer");
+                let timeout = event_loop.timeout(Token(timer_id), delay);
                 self.timers.write().insert(
                     timer_id,
                     UserTimer {
@@ -435,17 +429,18 @@ where Message: Send + Sync + 'static
                 trace!("register stream {} {}", handler_id, token);
                 if let Some(handler) = self.handlers.read().get(handler_id) {
                     trace!("do register stream {} {}", handler_id, token);
+                    let registry = self.network_poll_registry.as_ref();
                     handler.register_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
-                        self.network_poll.as_ref(),
+                        registry,
                     );
                 }
             }
             IoMessage::DeregisterStream { handler_id, token } => {
                 if let Some(handler) = self.handlers.read().get(handler_id) {
-                    handler
-                        .deregister_stream(token, self.network_poll.as_ref());
+                    let registry = self.network_poll_registry.as_ref();
+                    handler.deregister_stream(token, registry);
                     // unregister a timer associated with the token (if any)
                     let timer_id = token + handler_id * TOKENS_PER_HANDLER;
                     if let Some(timer) = self.timers.write().remove(&timer_id) {
@@ -455,10 +450,11 @@ where Message: Send + Sync + 'static
             }
             IoMessage::UpdateStreamRegistration { handler_id, token } => {
                 if let Some(handler) = self.handlers.read().get(handler_id) {
+                    let registry = self.network_poll_registry.as_ref();
                     handler.update_stream(
                         token,
                         Token(token + handler_id * TOKENS_PER_HANDLER),
-                        self.network_poll.as_ref(),
+                        registry,
                     );
                 }
             }
@@ -499,9 +495,7 @@ where Message: Send + Sync + 'static
     }
 }
 
-enum Handlers<Message>
-where Message: Send
-{
+enum Handlers<Message: Send> {
     SharedCollection(Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>),
     Single(Weak<dyn IoHandler<Message>>),
 }
@@ -519,9 +513,7 @@ impl<Message: Send> Clone for Handlers<Message> {
 
 /// Allows sending messages into the event loop. All the IO handlers will get
 /// the message in the `message` callback.
-pub struct IoChannel<Message>
-where Message: Send
-{
+pub struct IoChannel<Message: Send> {
     channel: Option<Sender<IoMessage<Message>>>,
     handlers: Handlers<Message>,
 }
@@ -625,16 +617,16 @@ where Message: Send + Sync + 'static
     host_channel: Mutex<Sender<IoMessage<Message>>>,
     handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>,
     network_poll_thread: Mutex<Option<JoinHandle<()>>>,
-    network_poll_stopped: Arc<(Registration, SetReadiness)>,
+    network_poll_stopped: Arc<Waker>,
+    network_poll: Arc<Mutex<Poll>>,
+    stop_token: usize,
 }
 
 impl<Message> IoService<Message>
 where Message: Send + Sync + 'static
 {
     /// Starts IO event loop
-    pub fn start(
-        network_poll: Arc<Poll>,
-    ) -> Result<IoService<Message>, IoError> {
+    pub fn start(stop_token: usize) -> Result<IoService<Message>, IoError> {
         debug!("start IoService");
         let mut config = EventLoopBuilder::new();
         config.messages_per_tick(1024);
@@ -644,11 +636,24 @@ where Message: Send + Sync + 'static
         let handlers = Arc::new(RwLock::new(Slab::with_capacity(MAX_HANDLERS)));
         let h = handlers.clone();
 
+        let network_poll = Poll::new().expect("Failed to create Poll instance");
+        let registry = network_poll
+            .registry()
+            .try_clone()
+            .expect("Failed to clone registry for event loop");
+
+        let waker = Waker::new(network_poll.registry(), Token(stop_token))
+            .expect("Failed to create Waker");
+
         let thread = thread::Builder::new()
             .name("io_service".into())
             .spawn(move || {
-                IoManager::<Message>::start(&mut event_loop, h, network_poll)
-                    .expect("Error starting IO service");
+                IoManager::<Message>::start(
+                    &mut event_loop,
+                    h,
+                    Arc::new(registry),
+                )
+                .expect("Error starting IO service");
             })
             .expect("only one io_service thread, so it should not fail");
         Ok(IoService {
@@ -656,7 +661,9 @@ where Message: Send + Sync + 'static
             host_channel: Mutex::new(channel),
             handlers,
             network_poll_thread: Mutex::new(None),
-            network_poll_stopped: Arc::new(Registration::new2()),
+            network_poll_stopped: Arc::new(waker),
+            network_poll: Arc::new(Mutex::new(network_poll)),
+            stop_token,
         })
     }
 
@@ -665,9 +672,9 @@ where Message: Send + Sync + 'static
         // Network poll should be closed before the main EventLoop, otherwise it
         // will send messages to a closed EventLoop.
         self.network_poll_stopped
-            .1
-            .set_readiness(Ready::readable())
-            .expect("Set network_poll_stopped readiness failure");
+            .wake()
+            .expect("Failed to wake network poll thread");
+
         if let Some(thread) = self.network_poll_thread.lock().take() {
             thread.join().unwrap_or_else(|e| match e.downcast_ref::<&'static str>() {
                 Some(e) => error!("Error joining network poll thread: {}", e),
@@ -691,38 +698,33 @@ where Message: Send + Sync + 'static
     }
 
     pub fn start_network_poll(
-        &self, network_poll: Arc<Poll>, handler: Arc<dyn IoHandler<Message>>,
-        main_event_loop_channel: IoChannel<Message>, max_sessions: usize,
-        stop_token: usize,
+        &self, handler: Arc<dyn IoHandler<Message>>, max_sessions: usize,
     ) {
-        network_poll
-            .register(
-                &self.network_poll_stopped.0,
-                Token(stop_token),
-                Ready::readable(),
-                PollOpt::edge(),
-            )
-            .expect("network_poll register failure");
+        let main_event_loop_channel = self.channel().clone();
+        let network_poll = self.network_poll.clone();
+        let stop_token = self.stop_token;
         let thread = thread::Builder::new()
             .name("network_eventloop".into())
             .spawn(move || {
                 let mut events = Events::with_capacity(max_sessions);
                 loop {
-                    network_poll
-                        .poll(&mut events, None)
-                        .expect("Network poll failure");
                     let _timer =
                         MeterTimer::time_func(NET_POLL_THREAD_TIMER.as_ref());
+
+                    {
+                        let mut poll = network_poll.lock();
+                        poll.poll(&mut events, Some(Duration::from_secs(1)))
+                            .expect("Network poll failure");
+                    }
+
                     for event in &events {
-                        // IoService is dropped and we should stop this thread
                         if event.token().0 == stop_token {
-                            assert!(event.readiness().is_readable());
                             return;
                         }
 
                         let handler_id = 0;
                         let token_id = event.token().0 % TOKENS_PER_HANDLER;
-                        if event.readiness().is_readable() {
+                        if event.is_readable() {
                             handler.stream_readable(
                                 &IoContext::new(
                                     main_event_loop_channel.clone(),
@@ -731,7 +733,7 @@ where Message: Send + Sync + 'static
                                 token_id,
                             );
                         }
-                        if event.readiness().is_writable() {
+                        if event.is_writable() {
                             handler.stream_writable(
                                 &IoContext::new(
                                     main_event_loop_channel.clone(),
@@ -740,7 +742,7 @@ where Message: Send + Sync + 'static
                                 token_id,
                             );
                         }
-                        if event.readiness().is_hup() {
+                        if event.is_read_closed() || event.is_write_closed() {
                             handler.stream_hup(
                                 &IoContext::new(
                                     main_event_loop_channel.clone(),

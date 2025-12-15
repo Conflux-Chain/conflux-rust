@@ -39,7 +39,7 @@ pub fn report_async<R: 'static + Reporter>(reporter: R, interval: Duration) {
     thread::spawn(move || loop {
         // sleep random time on different nodes to reduce competition.
         thread::sleep(
-            interval.mul_f64(0.5 + rand::thread_rng().gen_range(0.0, 1.0)),
+            interval.mul_f64(0.5 + rand::rng().random_range(0.0..1.0)),
         );
 
         let start = Instant::now();

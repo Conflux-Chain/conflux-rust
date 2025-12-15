@@ -82,7 +82,7 @@ class Create2EvmTest(SmartContractBenchBase):
         
         self.rpc = RpcClient(self.nodes[0])
         
-        w3 = Web3(Web3.HTTPProvider(f"http://localhost:{self.nodes[0].ethrpcport}"))
+        w3 = self.ew3
         assert w3.is_connected()
         self.priv_key = default_config["GENESIS_PRI_KEY"]
         account = w3.eth.account.from_key(self.priv_key)

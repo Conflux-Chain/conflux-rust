@@ -16,25 +16,23 @@ use keccak_hash as hash;
 pub mod message;
 
 pub mod block_data_manager;
-pub mod cache_config;
-pub mod cache_manager;
-pub mod channel;
 pub mod client;
 pub mod consensus;
-mod core_error;
 pub mod db;
 pub mod errors;
 pub mod genesis_block;
 pub mod light_protocol;
-pub mod node_type;
 pub mod pos;
-pub mod pow;
-pub mod state_exposer;
 pub mod statistics;
 pub mod sync;
 pub mod transaction_pool;
-pub mod unique_id;
 pub mod verification;
+
+pub use cfxcore_pow as pow;
+pub use cfxcore_types::{
+    cache_config, cache_manager, channel, core_error, node_type, state_exposer,
+    unique_id,
+};
 
 pub use crate::{
     block_data_manager::BlockDataManager,

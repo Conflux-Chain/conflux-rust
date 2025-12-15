@@ -174,7 +174,7 @@ fn test_snapshot_random_read_performance() {
         2 * EPOCHS
     );
     let mut rng = get_rng_for_test();
-    let range = Uniform::from(0..keys.len());
+    let range = Uniform::new(0, keys.len()).unwrap();
     const TXS: u32 = 20000;
     let mut epoch_keys = Vec::with_capacity(EPOCHS as usize * 2);
     for _epoch in 0..EPOCHS * 2 {
@@ -534,7 +534,7 @@ fn test_set_delete_all() {
     println!("Testing with {} delete_all operations.", keys.len());
     let mut values = Vec::with_capacity(keys.len());
     for key in &keys {
-        let key_prefix = &key[0..(2 + rng.gen::<usize>() % 2)];
+        let key_prefix = &key[0..(2 + rng.random_range(0..2))];
 
         let value = state
             .delete_all(StorageKey::AccountKey(key_prefix).with_native_space())
@@ -758,7 +758,7 @@ use cfx_types::{
 };
 use primitives::{Account, StorageKey, StorageKeyWithSpace};
 use rand::{
-    distributions::{Distribution, Uniform},
+    distr::{Distribution, Uniform},
     seq::SliceRandom,
     Rng,
 };

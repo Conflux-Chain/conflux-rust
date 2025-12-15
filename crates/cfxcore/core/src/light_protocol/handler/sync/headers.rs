@@ -459,7 +459,7 @@ mod tests {
         headers.push(h5.clone());
         headers.push(h6.clone());
 
-        headers.shuffle(&mut rand::thread_rng());
+        headers.shuffle(&mut rand::rng());
         let mut queue = PriorityQueue::new();
         queue.extend(headers);
 

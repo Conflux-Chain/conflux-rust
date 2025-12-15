@@ -9,7 +9,7 @@ cfx-addr = { workspace = true }
 cfx-bytes = { workspace = true }
 cfx-types = { workspace = true }
 cfxkey = { workspace = true }
-mio = { workspace = true }
+mio = { workspace = true, features = ["os-ext", "net", "os-poll"] }
 parking_lot = { workspace = true }
 log = { workspace = true }
 slab = { workspace = true }

@@ -14,6 +14,7 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{Bloom, Space, H256};
+pub use cfxcore_types::block_data_manager::block_data_types;
 use db::SystemDB;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -30,7 +31,6 @@ use std::{
     sync::Arc,
 };
 use threadpool::ThreadPool;
-pub mod block_data_types;
 pub mod db_gc_manager;
 pub mod db_manager;
 pub mod tx_data_manager;
@@ -475,6 +475,7 @@ impl BlockDataManager {
 
     /// Get the traces for a single block without checking the assumed pivot
     /// block
+    /// Return `BlockTracesWithEpoch`.
     pub fn block_traces_by_hash(
         &self, hash: &H256,
     ) -> Option<BlockTracesWithEpoch> {
@@ -506,7 +507,7 @@ impl BlockDataManager {
     }
 
     /// Return `(pivot_hash, tx_traces)`.
-    pub fn transactions_traces_by_block_hash(
+    pub fn block_tx_traces_by_hash(
         &self, hash: &H256,
     ) -> Option<(H256, Vec<TransactionExecTraces>)> {
         self.block_traces_by_hash(hash).map(
@@ -1343,6 +1344,39 @@ impl BlockDataManager {
         }
         let me_height = self.block_height_by_hash(epoch_hash).unwrap();
         if pos_verifier.pos_option().is_some() && me_height != 0 {
+            // Check if stored pos reward is on pivot.
+            let pivot_block_header = self
+                .block_header_by_hash(epoch_hash)
+                .expect("header exists");
+            let maybe_parent_pos_ref = self
+                .block_header_by_hash(&pivot_block_header.parent_hash()) // `None` only for genesis.
+                .and_then(|parent| parent.pos_reference().clone());
+            if pos_verifier.is_enabled_at_height(me_height)
+                && maybe_parent_pos_ref.is_some()
+                && maybe_parent_pos_ref != *pivot_block_header.pos_reference()
+            {
+                if let Some((pos_epoch, _)) = pos_verifier
+                    .get_reward_distribution_event(
+                        pivot_block_header.pos_reference().as_ref().unwrap(),
+                        maybe_parent_pos_ref.as_ref().unwrap(),
+                    )
+                    .as_ref()
+                    .and_then(|x| x.first())
+                {
+                    if let Some(pos_reward) =
+                        self.pos_reward_by_pos_epoch(*pos_epoch)
+                    {
+                        if pos_reward.execution_epoch_hash != *epoch_hash {
+                            // The stored pos reward is executed in another
+                            // epoch, so we need to
+                            // reexecute this epoch to restore the pos reward of
+                            // the current pivot.
+                            return false;
+                        }
+                    }
+                }
+            }
+
             trace!(
                 "staking events update: height={}, new={}",
                 me_height,

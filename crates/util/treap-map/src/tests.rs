@@ -11,7 +11,7 @@ use primitives::{
     transaction::native_transaction::NativeTransaction, Action,
     SignedTransaction, Transaction,
 };
-use rand::{seq::SliceRandom, thread_rng, Rng, RngCore, SeedableRng};
+use rand::{rng, seq::SliceRandom, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rand_xorshift::XorShiftRng;
 use std::{
@@ -198,7 +198,7 @@ fn test_insert_query_random() {
     let mut tx_vec: Vec<SignedTransaction> = vec![];
 
     for _ in 0..operation_num {
-        let operation = match operation_rng.gen::<u32>() % 4 {
+        let operation = match operation_rng.random::<u32>() % 4 {
             0 => Operation::Len,
             1 => Operation::ContainsKey,
             2 => Operation::Insert,
@@ -267,7 +267,7 @@ fn test_insert_remove_query_random() {
     let mut tx_vec: Vec<SignedTransaction> = vec![];
 
     for _ in 0..operation_num {
-        let operation = match operation_rng.gen::<u32>() % 7 {
+        let operation = match operation_rng.random::<u32>() % 7 {
             0 => Operation::Len,
             1 => Operation::ContainsKey,
             2..=3 => Operation::Insert,
@@ -391,7 +391,7 @@ fn test_apply_op_change_value() {
     }
     // Test update value
     let mut indicies: Vec<_> = (0u32..200).collect();
-    indicies.shuffle(&mut thread_rng());
+    indicies.shuffle(&mut rng());
     for i in indicies {
         let should_fail = i % 3 == 0;
         let update = |node: &mut Node<_>| {
@@ -439,7 +439,7 @@ fn test_apply_op_change_weight() {
     }
     // Test update value
     let mut indicies: Vec<_> = (0u32..200).collect();
-    indicies.shuffle(&mut thread_rng());
+    indicies.shuffle(&mut rng());
     for i in indicies {
         let should_fail = i % 3 == 0;
         let update = |node: &mut Node<_>| {
@@ -489,7 +489,7 @@ fn test_apply_op_change_key() {
     }
     // Test update value
     let mut indicies: Vec<_> = (0u32..200).collect();
-    indicies.shuffle(&mut thread_rng());
+    indicies.shuffle(&mut rng());
     for i in indicies {
         let should_fail = i % 3 == 0;
         let delete_item = i % 5 == 0;
@@ -578,7 +578,7 @@ fn test_apply_op_change_key_for_shared_key() {
     }
     // Test update value
     let mut indicies: Vec<_> = (0u32..200).collect();
-    indicies.shuffle(&mut thread_rng());
+    indicies.shuffle(&mut rng());
     for i in indicies {
         let should_fail = i % 3 == 0;
         let delete_item = i % 5 == 0;

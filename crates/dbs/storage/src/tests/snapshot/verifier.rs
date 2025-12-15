@@ -42,7 +42,7 @@ fn test_slice_verifier_zero_or_one_chunk() {
                 (
                     k[..].into(),
                     [&k[..], &k[..], &k[..], &k[..]].concat()
-                        [0..(6 + rng.gen::<usize>() % 10)]
+                        [0..(6 + rng.random_range(0..10))]
                         .into(),
                 )
             })
@@ -95,7 +95,7 @@ fn test_slice_verifier() {
                 (
                     k[..].into(),
                     [&k[..], &k[..], &k[..], &k[..]].concat()
-                        [0..(6 + rng.gen::<usize>() % 10)]
+                        [0..(6 + rng.random_range(0..10))]
                         .into(),
                 )
             })
@@ -336,6 +336,7 @@ impl KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>
         &mut self, lower_bound_incl: &[u8], upper_bound_excl: Option<&[u8]>,
     ) -> Result<
         Wrap<
+            '_,
             KvdbIterIterator<(Vec<u8>, Box<[u8]>), [u8], FakeSnapshotDb>,
             dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
         >,
@@ -359,6 +360,7 @@ impl KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>
         &mut self, lower_bound_excl: &[u8], upper_bound_excl: &[u8],
     ) -> Result<
         Wrap<
+            '_,
             KvdbIterIterator<(Vec<u8>, Box<[u8]>), [u8], FakeSnapshotDb>,
             dyn FallibleIterator<Item = (Vec<u8>, Box<[u8]>), Error = Error>,
         >,
@@ -480,6 +482,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         &self,
     ) -> Result<
         Wrap<
+            '_,
             Self::SnapshotKvdbIterType,
             dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>,
         >,
@@ -595,7 +598,7 @@ fn test_full_sync_verifier_one_chunk() {
                 (
                     k[..].into(),
                     [&k[..], &k[..], &k[..], &k[..]].concat()
-                        [0..(6 + rng.gen::<usize>() % 10)]
+                        [0..(6 + rng.random_range(0..10))]
                         .into(),
                 )
             })
@@ -657,7 +660,7 @@ fn test_full_sync_verifier() {
                 (
                     k[..].into(),
                     [&k[..], &k[..], &k[..], &k[..]].concat()
-                        [0..(6 + rng.gen::<usize>() % 10)]
+                        [0..(6 + rng.random_range(0..10))]
                         .into(),
                 )
             })

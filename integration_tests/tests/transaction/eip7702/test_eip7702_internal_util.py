@@ -1,8 +1,8 @@
 import pytest
+from eth_account.datastructures import SignedSetCodeAuthorization
 from integration_tests.test_framework.util.eip7702.eip7702 import (
     sign_authorization,
     sign_eip7702_transaction,
-    Authorization,
     EIP7702Transaction
 )
 
@@ -10,7 +10,7 @@ from integration_tests.test_framework.util.eip7702.eip7702 import (
 TEST_PRIVATE_KEY = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
 
 @pytest.fixture
-def authorization() -> Authorization:
+def authorization() -> SignedSetCodeAuthorization:
     contract_address = '0x1234567890123456789012345678901234567890'
     chain_id = 1
     nonce = 0
@@ -23,13 +23,13 @@ def authorization() -> Authorization:
     )
     return result
 
-def test_sign_authorization(authorization: Authorization):
-    assert authorization.chainId == 1
+def test_sign_authorization(authorization: SignedSetCodeAuthorization):
+    assert authorization.chain_id == 1
     assert authorization.nonce == 0
-    assert authorization.contractAddress == '0x1234567890123456789012345678901234567890'
-    assert isinstance(authorization, Authorization)
+    assert authorization.address.hex() == '1234567890123456789012345678901234567890'
+    assert isinstance(authorization, SignedSetCodeAuthorization)
 
-def test_sign_eip7702_transaction(authorization: Authorization):
+def test_sign_eip7702_transaction(authorization: SignedSetCodeAuthorization):
     transaction: EIP7702Transaction = {
         'authorizationList': [authorization],
         'chainId': 1,

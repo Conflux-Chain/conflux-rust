@@ -2,14 +2,27 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
+#[global_allocator]
+static ALLOC: cfx_mallocator_utils::allocator::Allocator =
+    cfx_mallocator_utils::allocator::new_allocator();
+// jemalloc profiling config
+#[allow(non_upper_case_globals)]
+#[export_name = "malloc_conf"]
+#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-prof"))]
+pub static malloc_conf: &[u8] =
+    b"prof:true,prof_active:true,lg_prof_sample:19\0"; // 512kb
+
 #[cfg(test)]
 mod test;
 
+mod cli;
 mod command;
 
 use crate::command::rpc::RpcCommand;
 use cfxcore::NodeType;
-use clap::{crate_version, load_yaml, App, ArgMatches};
+use clap::{crate_version, ArgMatches, CommandFactory};
+use cli::Cli;
 use client::{
     archive::ArchiveClient,
     common::{shutdown_handler, ClientTrait},
@@ -26,7 +39,13 @@ use log4rs::{
 };
 use network::throttling::THROTTLING_SERVICE;
 use parking_lot::{Condvar, Mutex};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+
+static VERSION: OnceLock<String> = OnceLock::new();
+
+fn get_version() -> &'static str {
+    VERSION.get_or_init(|| parity_version::version(crate_version!()))
+}
 
 fn main() -> Result<(), String> {
     #[cfg(feature = "deadlock-detection")]
@@ -54,9 +73,7 @@ fn main() -> Result<(), String> {
         });
     } // only for #[cfg]
 
-    let yaml = load_yaml!("cli.yaml");
-    let version = parity_version::version(crate_version!());
-    let matches = App::from_yaml(yaml).version(version.as_str()).get_matches();
+    let matches = Cli::command().version(get_version()).get_matches();
 
     if let Some(output) = handle_sub_command(&matches)? {
         println!("{}", output);
@@ -87,7 +104,7 @@ fn main() -> Result<(), String> {
 :......::::.......:::..::::..::..::::::::........:::.......:::..:::::..::
 Current Version: {}
 ",
-        version
+        get_version()
     );
 
     let client_handle: Box<dyn ClientTrait>;
@@ -121,15 +138,15 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
     }
 
     // account sub-commands
-    if let ("account", Some(account_matches)) = matches.subcommand() {
+    if let Some(("account", account_matches)) = matches.subcommand() {
         let account_cmd = match account_matches.subcommand() {
-            ("new", Some(new_acc_matches)) => {
+            Some(("new", new_acc_matches)) => {
                 AccountCmd::New(NewAccount::new(new_acc_matches))
             }
-            ("list", Some(list_acc_matches)) => {
+            Some(("list", list_acc_matches)) => {
                 AccountCmd::List(ListAccounts::new(list_acc_matches))
             }
-            ("import", Some(import_acc_matches)) => {
+            Some(("import", import_acc_matches)) => {
                 AccountCmd::Import(ImportAccounts::new(import_acc_matches))
             }
             _ => unreachable!(),
@@ -140,8 +157,8 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
 
     // general RPC commands
     let mut subcmd_matches = matches;
-    while let Some(m) = subcmd_matches.subcommand().1 {
-        subcmd_matches = m;
+    while let Some(m) = subcmd_matches.subcommand() {
+        subcmd_matches = m.1;
     }
 
     if let Some(cmd) = RpcCommand::parse(subcmd_matches)? {

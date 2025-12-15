@@ -64,7 +64,10 @@ impl LedgerInfo {
     #[inline]
     fn pivot_hash_of(&self, height: u64) -> Result<H256, Error> {
         let epoch = EpochNumber::Number(height);
-        Ok(self.consensus.get_hash_from_epoch_number(epoch)?)
+        Ok(self
+            .consensus
+            .get_hash_from_epoch_number(epoch)
+            .map_err(|e| e.to_string())?)
     }
 
     /// Get header at `height` on the pivot chain, if it exists.
@@ -79,7 +82,10 @@ impl LedgerInfo {
     #[inline]
     pub fn block_hashes_in(&self, height: u64) -> Result<Vec<H256>, Error> {
         let epoch = EpochNumber::Number(height);
-        Ok(self.consensus.get_block_hashes_by_epoch(epoch)?)
+        Ok(self
+            .consensus
+            .get_block_hashes_by_epoch(epoch)
+            .map_err(|e| e.to_string())?)
     }
 
     /// Get the correct deferred state root of the block at `height` on the

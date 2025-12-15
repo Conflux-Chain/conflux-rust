@@ -1,7 +1,7 @@
 use crate::EthApi;
 use async_trait::async_trait;
 use cfx_rpc_eth_api::ParityApiServer;
-use cfx_rpc_eth_types::{BlockNumber as BlockId, Receipt};
+use cfx_rpc_eth_types::{BlockId, Receipt};
 use jsonrpsee::core::RpcResult;
 
 pub struct ParityApi {

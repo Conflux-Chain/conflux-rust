@@ -74,7 +74,12 @@ class FilterLogTest(Web3Base):
 
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
-        self.w3 = Web3(Web3.HTTPProvider(f"http://{ip}:{port}/"))
+        self.w3 = Web3(Web3.HTTPProvider(f"http://{ip}:{port}/", request_kwargs={
+            "proxies": {
+                "http": "",
+                "https": "",
+            }
+        }))
         assert_equal(self.w3.is_connected(), True)
 
         # initialize EVM account

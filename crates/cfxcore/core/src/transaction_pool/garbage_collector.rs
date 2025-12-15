@@ -294,7 +294,7 @@ mod garbage_collector_test {
 
     #[test]
     fn test_correctness() {
-        let mut rng = XorShiftRng::from_entropy();
+        let mut rng = XorShiftRng::from_os_rng();
         let mut addr = Vec::new();
         for _ in 0..10000 {
             addr.push(Address::random().with_native_space());

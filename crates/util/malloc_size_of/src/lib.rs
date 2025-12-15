@@ -10,15 +10,6 @@
 
 //! A reduced fork of Firefox's malloc_size_of crate, for bundling with
 //! WebRender.
-
-#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
-use jemallocator;
-#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
-use jemallocator::Jemalloc;
-#[cfg(all(not(target_env = "msvc"), feature = "jemalloc-global"))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
-
 use cfg_if::cfg_if;
 use cfx_types::{
     AddressWithSpace, AllChainID, Space, SpaceMap, H160, H256, H512, U256, U512,
@@ -557,11 +548,11 @@ mod usable_size {
                 HeapSize(heap, 0, ptr) as usize
             }
 
-        } else if #[cfg(feature = "jemalloc-global")] {
+        } else if #[cfg(feature = "jemalloc")] {
 
             /// Use of jemalloc usable size C function through jemallocator crate call.
             pub unsafe extern "C" fn malloc_usable_size(ptr: *const c_void) -> usize {
-                jemallocator::usable_size(ptr)
+                tikv_jemallocator::usable_size(ptr)
             }
 
         } else if #[cfg(target_os = "linux")] {

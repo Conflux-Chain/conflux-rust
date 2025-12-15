@@ -46,6 +46,7 @@ const NAT_PMP_PORT_MAPPING_RETRY_WAITING_DURATION_MS: u64 = 250;
 /// API
 pub trait SocketAddrExt {
     /// Returns true if the address appears to be globally routable.
+    #[allow(dead_code)]
     fn is_global_s(&self) -> bool;
 
     // Ipv4 specific

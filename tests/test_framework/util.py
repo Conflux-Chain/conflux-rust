@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from conflux.rpc import RpcClient
 
 CONFLUX_RPC_WAIT_TIMEOUT = 60
-CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 1220
+CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT = 120
 
 logger = logging.getLogger("TestFramework.utils")
 
@@ -896,7 +896,7 @@ def generate_single_block_for_base_fee_manipulation(rpc: "RpcClient", acct: CfxL
     return new_block, starting_nonce + tx_per_block
 
 # for transactions in either pivot/non-pivot block
-# checks priority fee is calculated as expeted
+# checks priority fee is calculated as expected
 def assert_correct_fee_computation_for_core_tx(rpc: "RpcClient", tx_hash: str, burnt_ratio=0.5):
     def get_gas_charged(rpc: "RpcClient", tx_hash: str) -> int:
         gas_limit = int(rpc.get_tx(tx_hash)["gas"], 16)

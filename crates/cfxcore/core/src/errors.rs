@@ -6,6 +6,7 @@ use cfx_rpc_eth_types::Error as EthRpcError;
 pub use cfx_rpc_utils::error::error_codes::EXCEPTION_ERROR;
 use cfx_statedb::Error as StateDbError;
 use cfx_storage::Error as StorageError;
+use cfxcore_errors::ProviderBlockError;
 use jsonrpc_core::{futures::future, Error as JsonRpcError, ErrorCode};
 use jsonrpsee::types::ErrorObjectOwned;
 use primitives::{account::AccountError, filter::FilterError};
@@ -88,6 +89,10 @@ impl From<&str> for Error {
 
 impl From<String> for Error {
     fn from(s: String) -> Error { Error::Msg(s) }
+}
+
+impl From<ProviderBlockError> for Error {
+    fn from(e: ProviderBlockError) -> Error { Error::from(e.to_string()) }
 }
 
 impl From<EthRpcError> for Error {

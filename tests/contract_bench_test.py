@@ -348,7 +348,7 @@ class ContractBenchTest(SmartContractBenchBase):
         result = self.call_contract(self.pub[0], self.pri[0], contractAddr, data, storage_limit=128)
         assert(result["outcomeStatus"] != "0x0")
 
-        # insuffcient allowance 
+        # insufficient allowance 
         data = contract.functions.transferFrom(Web3.to_checksum_address(self.pub[0]), self.sender_checksum, 10000).build_transaction(self.tx_conf)["data"]
         result = self.call_contract(self.pub[1], self.pri[1], contractAddr, data, storage_limit=128)
         assert(result["outcomeStatus"] != "0x0")
@@ -527,7 +527,7 @@ class ContractBenchTest(SmartContractBenchBase):
         assert(len(erc1820_code) > 2)
         result = self.call_contract(self.sender, self.priv_key, create2factory_addr, data, 0, storage_limit=2048)
         assert(result["outcomeStatus"] == "0x1")
-        # destory erc1820
+        # deploy erc1820
         data = "0x00f55d9d000000000000000000000000861bfca161e8c9f314f6128d142d852905f52d05"
         result = self.call_contract(self.sender, self.priv_key, "0x0888000000000000000000000000000000000000", data, 0, storage_limit=2048)
         assert(result["outcomeStatus"] == "0x0")

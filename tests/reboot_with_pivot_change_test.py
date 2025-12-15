@@ -3,7 +3,7 @@
 1. Node 1 generate chain 1
 2. Node 2 generate chain 2, longer than chain 1
 3. Node 1, node 2 synced, pivot chain is chain 2
-4. Node 1 stoped
+4. Node 1 stopped
 5. Node 2 changed pivot chain to chain 1
 6. Node 1 start
 7. Blocks in node 1 since fork point should be reexecuted

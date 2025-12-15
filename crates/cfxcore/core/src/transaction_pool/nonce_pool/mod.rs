@@ -14,7 +14,7 @@ use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::{SignedTransaction, Transaction};
-use std::{ops::Deref, sync::Arc};
+use std::{collections::BTreeMap, ops::Deref, sync::Arc};
 
 use self::{nonce_pool_map::NoncePoolMap, weight::NoncePoolWeight};
 
@@ -238,9 +238,9 @@ impl NoncePool {
     }
 
     /// Return unpacked transactions from `nonce`.
-    pub fn get_pending_transactions<'a>(
-        &'a self, nonce: &U256,
-    ) -> Vec<&'a TxWithReadyInfo> {
+    pub fn get_pending_transactions(
+        &self, nonce: &U256,
+    ) -> Vec<&TxWithReadyInfo> {
         let mut pending_txs = Vec::new();
         for tx_info in self.map.iter_range(&nonce) {
             if !tx_info.packed {
@@ -250,6 +250,30 @@ impl NoncePool {
             }
         }
         pending_txs
+    }
+
+    pub fn eth_content(
+        &self, local_nonce: U256, local_balance: U256,
+    ) -> (
+        BTreeMap<U256, Arc<SignedTransaction>>,
+        BTreeMap<U256, Arc<SignedTransaction>>,
+    ) {
+        let mut pending_txs = BTreeMap::new();
+        let mut queued_txs = BTreeMap::new();
+        let Some((first_tx, last_pending_nonce)) = self
+            .recalculate_readiness_with_local_info(local_nonce, local_balance)
+        else {
+            return (pending_txs, queued_txs);
+        };
+        for tx_info in self.iter_tx_by_nonce(first_tx.nonce()) {
+            let tx = tx_info.transaction.clone();
+            if tx.nonce() <= &last_pending_nonce {
+                pending_txs.insert(*tx.nonce(), tx);
+            } else {
+                queued_txs.insert(*tx.nonce(), tx);
+            }
+        }
+        (pending_txs, queued_txs)
     }
 
     /// First, find a transaction `tx` such that
@@ -268,7 +292,16 @@ impl NoncePool {
     pub fn recalculate_readiness_with_local_info(
         &self, nonce: U256, balance: U256,
     ) -> Option<(&TxWithReadyInfo, U256)> {
-        let tx = self.map.query(&nonce)?;
+        let tx = match self.map.query(&nonce) {
+            Some(tx) => tx,
+            None => {
+                debug!(
+                    "txpool::nonce_pool readiness nonce={:?} has no transaction starting from sender",
+                    nonce
+                );
+                return None;
+            }
+        };
 
         let a = if nonce == U256::from(0) {
             NoncePoolWeight::default()
@@ -284,9 +317,22 @@ impl NoncePool {
         // number of transactions in `[nonce, tx.nonce()]`
         let size_elapsed = b.size - a.size;
         let cost_elapsed = b.cost - a.cost;
-        if U256::from(size_elapsed - 1) != tx.nonce() - nonce
-            || cost_elapsed > balance
-        {
+        if U256::from(size_elapsed - 1) != tx.nonce() - nonce {
+            debug!(
+                "txpool::nonce_pool readiness gap sender={:?} start_nonce={:?} first_missing_nonce={:?}",
+                tx.sender(),
+                nonce,
+                nonce + U256::from(size_elapsed - 1)
+            );
+            return None;
+        }
+        if cost_elapsed > balance {
+            debug!(
+                "txpool::nonce_pool readiness insufficient balance sender={:?} need={:?} have={:?}",
+                tx.sender(),
+                cost_elapsed,
+                balance
+            );
             return None;
         }
 
@@ -294,6 +340,13 @@ impl NoncePool {
             tx.nonce(),
             b,
             balance - cost_elapsed,
+        );
+        debug!(
+            "txpool::nonce_pool readiness range sender={:?} start_nonce={:?} end_nonce={:?} first_hash={:?}",
+            tx.sender(),
+            tx.nonce(),
+            end_nonce,
+            tx.transaction.hash()
         );
         Some((tx, end_nonce))
     }
@@ -810,7 +863,7 @@ mod nonce_pool_test {
     #[test]
     fn test_correctness() {
         let me = Random.generate().unwrap();
-        let mut rng = XorShiftRng::from_entropy();
+        let mut rng = XorShiftRng::from_os_rng();
         let mut tx = Vec::new();
         let storage_limit = 5000;
         let gas_price = U256::from(10);

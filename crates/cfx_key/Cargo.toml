@@ -14,7 +14,7 @@ parity-secp256k1 = { workspace = true }
 lazy_static = { workspace = true }
 log = { workspace = true }
 parity-wordlist = { workspace = true }
-rand = { workspace = true }
+rand_07 = { workspace = true }
 rustc-hex = { workspace = true }
 serde = { workspace = true }
 tiny-keccak = { workspace = true }

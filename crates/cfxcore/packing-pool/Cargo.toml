@@ -17,10 +17,11 @@ malloc_size_of_derive = { workspace = true }
 rand_xorshift = { workspace = true }
 typenum = { workspace = true }
 rand = { workspace = true }
+log = { workspace = true }
 
 [dev-dependencies]
 treap-map = { workspace = true, features = ["testonly_code"] }
-rand = { workspace = true, features = ["getrandom"] }
+rand = { workspace = true, features = ["os_rng"] }
 criterion = { workspace = true }
 
 [[bench]]

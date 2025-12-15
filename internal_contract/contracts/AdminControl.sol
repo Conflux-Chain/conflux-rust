@@ -17,7 +17,7 @@ contract AdminControl {
 
    /**
      * @dev Contract admin destroy contract `contractAddr`.
-     * @param contractAddr The contract to be destroied
+     * @param contractAddr The contract to be destroyed
      */
     function destroy(address contractAddr) public {}
 }

@@ -15,7 +15,7 @@ use crate::message::MsgId;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, service::ProtocolVersion};
-use rand::prelude::SliceRandom;
+use rand::prelude::IndexedRandom;
 use smart_default::SmartDefault;
 use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
@@ -121,9 +121,7 @@ impl FullPeerFilter {
     }
 
     pub fn select(self, peers: Arc<Peers<FullPeerState>>) -> Option<NodeId> {
-        self.select_all(peers)
-            .choose(&mut rand::thread_rng())
-            .cloned()
+        self.select_all(peers).choose(&mut rand::rng()).cloned()
     }
 
     pub fn select_all(self, peers: Arc<Peers<FullPeerState>>) -> Vec<NodeId> {

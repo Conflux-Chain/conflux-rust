@@ -6,7 +6,7 @@ use super::{
     super::{recent_lfu::*, *},
     *,
 };
-use rand::distributions::{uniform::*, *};
+use rand::distr::{uniform::*, *};
 
 struct CacheUtil<'a> {
     cache_algo_data: &'a mut [RecentLFUHandle<u32>],
@@ -124,8 +124,8 @@ fn r_lfu_algorithm_smoke_test() {
 
     let mut rng = get_rng_for_test();
 
-    let candidate_sampler = Uniform::new(0, key_range);
-    let probability_sampler = Uniform::new(0.0, 1.0);
+    let candidate_sampler = Uniform::new(0, key_range).unwrap();
+    let probability_sampler = Uniform::new(0.0, 1.0).unwrap();
     let delete_probability = 0.1;
     for _actions in 1..10000 {
         let key = candidate_sampler.sample(&mut rng);

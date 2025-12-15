@@ -10,7 +10,7 @@ PORT_MIN = 11000
 PORT_MAX = 65535
 PORT_RANGE = 100
 
-# 64 to 113 is recommanded for user defined error code (https://tldp.org/LDP/abs/html/exitcodes.html). 
+# 64 to 113 is recommended for user defined error code (https://tldp.org/LDP/abs/html/exitcodes.html). 
 # 64 to 77 has been reserved in /usr/include/sysexits.h (https://stackoverflow.com/questions/1101957/are-there-any-standard-exit-status-codes-in-linux)
 TEST_FAILURE_ERROR_CODE = 80
 
@@ -67,7 +67,7 @@ def run():
     parser.add_argument(
         "--max-nodes",
         dest="max_nodes",
-        default=24,
+        default=0,
         type=int,
     )
     parser.add_argument(
@@ -96,6 +96,10 @@ def run():
             "../target/release/conflux"),
         type=str)
     options = parser.parse_args()
+    
+    if options.max_nodes == 0:
+        options.max_nodes = os.cpu_count()
+        print(f"Max nodes not specified, using {options.max_nodes} nodes")
 
     all_failed = set()
 

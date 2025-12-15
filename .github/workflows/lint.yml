@@ -24,42 +24,40 @@ on:
       - "cargo_fmt.sh"
       - "CODEOWNERS"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
 jobs:
   lint:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Setup Cargo Cache
         uses: ./.github/actions/setup-cargo-cache
-
-      - name: Cache build artifacts
-        uses: actions/cache@v4
-        with:
-          path: |
-            target/release/deps
-            target/release/.fingerprint
-            target/release/build
-            !target/release/build/**/out
-            !target/release/incremental
-            !target/release/.cargo-lock
-          key: ${{ runner.os }}-build-lint-release-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-lint-release-
-
       - name: Install Dependencies
         uses: ./.github/actions/install-dependencies
 
       - name: Check format and run clippy
         run: |
-          ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && cargo clippy --release --all -- -A warnings
-          
+          ./cargo_fmt.sh --install && ./cargo_fmt.sh -- --check && ./dev-support/cargo_all.sh clippy --release --all -- -A warnings
   cargo-deny:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       # - uses: EmbarkStudios/cargo-deny-action@v2
+      - name: Setup Cargo Cache
+        uses: ./.github/actions/setup-cargo-cache
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: cargo-deny
         run: |
-          cargo install --locked cargo-deny --version 0.15.1
-          cargo deny check
+          cargo install --locked cargo-deny --version 0.18.3
+          ./dev-support/cargo_all.sh deny check

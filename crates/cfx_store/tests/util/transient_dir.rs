@@ -18,12 +18,16 @@ use cfxstore::{
     accounts_dir::{KeyDirectory, RootDiskDirectory},
     Error, SafeAccount,
 };
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::OsRng, TryRngCore};
 use std::{env, fs, path::PathBuf};
 
 pub fn random_dir() -> PathBuf {
     let mut dir = env::temp_dir();
-    dir.push(format!("{:x}-{:x}", OsRng.next_u64(), OsRng.next_u64()));
+    dir.push(format!(
+        "{:x}-{:x}",
+        OsRng.try_next_u64().unwrap(),
+        OsRng.try_next_u64().unwrap()
+    ));
     dir
 }
 

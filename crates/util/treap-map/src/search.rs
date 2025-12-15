@@ -120,7 +120,7 @@ impl<'a, C: TreapMapConfig, W: ConsoliableWeight> SearchResult<'a, C, W> {
 #[inline]
 pub fn accumulate_weight_search<C, W, F, E>(
     root: &Node<C>, mut f: F, extract: E,
-) -> SearchResult<C, W>
+) -> SearchResult<'_, C, W>
 where
     C: TreapMapConfig,
     F: FnMut(&W, &Node<C>) -> SearchDirection<W>,

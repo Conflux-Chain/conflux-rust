@@ -42,14 +42,14 @@ impl Default for KeyContainer {
 }
 
 impl KeyContainer {
-    pub fn read(&self, msg_type: MsgId) -> RwLockReadGuard<HashSet<Key>> {
+    pub fn read(&self, msg_type: MsgId) -> RwLockReadGuard<'_, HashSet<Key>> {
         self.keys[msg_type as usize]
             .as_ref()
             .expect("msg not supported")
             .read()
     }
 
-    pub fn write(&self, msg_type: MsgId) -> RwLockWriteGuard<HashSet<Key>> {
+    pub fn write(&self, msg_type: MsgId) -> RwLockWriteGuard<'_, HashSet<Key>> {
         self.keys[msg_type as usize]
             .as_ref()
             .expect("msg not supported")

@@ -66,13 +66,13 @@ impl NodeBucket {
 
         // evict out-of-date node with high priority
         if !long_time_nodes.is_empty() {
-            let index = rng.gen_range(0, long_time_nodes.len());
+            let index = rng.random_range(0..long_time_nodes.len());
             return Some(long_time_nodes[index].clone());
         }
 
         // randomly evict one
         if !evictable_nodes.is_empty() {
-            let index = rng.gen_range(0, evictable_nodes.len());
+            let index = rng.random_range(0..evictable_nodes.len());
             return Some(evictable_nodes[index].clone());
         }
 

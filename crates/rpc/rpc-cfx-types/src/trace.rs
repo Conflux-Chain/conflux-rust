@@ -2,22 +2,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{trace_eth::LocalizedTrace as EthLocalizedTrace, RpcAddress};
+use crate::RpcAddress;
 use cfx_addr::Network;
-use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_parity_trace_types::{
     Action as VmAction, ActionType as VmActionType, BlockExecTraces,
     Call as VmCall, CallResult as VmCallResult, Create as VmCreate,
     CreateResult as VmCreateResult, ExecTrace,
     InternalTransferAction as VmInternalTransferAction,
-    LocalizedTrace as PrimitiveLocalizedTrace, Outcome, TransactionExecTraces,
+    LocalizedTrace as PrimitiveLocalizedTrace, Outcome,
+    SelfDestructAction as VmSelfDestruction, SetAuth as VmSetAuth,
+    SetAuthOutcome, TransactionExecTraces,
 };
 use cfx_rpc_primitives::Bytes;
-use cfx_types::{address_util::AddressUtil, Space, H160, H256, U256, U64};
+use cfx_types::{Space, H256, U256, U64};
 use cfx_vm_types::{CallType, CreateType};
 use primitives::SignedTransaction;
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use strum_macros::EnumDiscriminants;
 
 #[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
@@ -30,6 +31,8 @@ pub enum Action {
     CallResult(CallResult),
     CreateResult(CreateResult),
     InternalTransferAction(InternalTransferAction),
+    SetAuth(SetAuth),
+    SelfDestruct(SelfDestructAction),
 }
 
 impl Action {
@@ -50,6 +53,12 @@ impl Action {
                     InternalTransferAction::try_from(x, network)?,
                 )
             }
+            VmAction::SetAuth(action) => {
+                Action::SetAuth(SetAuth::try_from(action, network)?)
+            }
+            VmAction::SelfDestruct(selfdestruct) => Action::SelfDestruct(
+                SelfDestructAction::try_from(selfdestruct, network)?,
+            ),
         })
     }
 }
@@ -64,6 +73,8 @@ impl Into<VmActionType> for ActionType {
             Self::InternalTransferAction => {
                 VmActionType::InternalTransferAction
             }
+            Self::SetAuth => VmActionType::SetAuth,
+            Self::SelfDestruct => VmActionType::SelfDestruct,
         }
     }
 }
@@ -192,6 +203,77 @@ impl InternalTransferAction {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAuth {
+    pub space: Space,
+    /// The address of the impl.
+    pub address: RpcAddress,
+    pub chain_id: U256,
+    pub nonce: U256,
+    /// The outcome of the create
+    pub outcome: SetAuthOutcome,
+    /// The address of the author.
+    pub author: Option<RpcAddress>,
+}
+
+impl SetAuth {
+    fn try_from(action: VmSetAuth, network: Network) -> Result<Self, String> {
+        let VmSetAuth {
+            space,
+            address,
+            chain_id,
+            nonce,
+            outcome,
+            author,
+        } = action;
+        Ok(Self {
+            space,
+            address: RpcAddress::try_from_h160(address, network)?,
+            chain_id,
+            nonce,
+            outcome,
+            author: match author {
+                Some(a) => Some(RpcAddress::try_from_h160(a, network)?),
+                None => None,
+            },
+        })
+    }
+}
+
+/// Represents a _selfdestruct_ action fka `suicide`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SelfDestructAction {
+    // / The space of the contract.
+    pub space: Space,
+    /// destroyed/suicided address.
+    pub address: RpcAddress,
+    /// Balance of the contract just before it was destroyed.
+    pub balance: U256,
+    /// destroyed contract heir.
+    pub refund_address: RpcAddress,
+}
+
+impl SelfDestructAction {
+    fn try_from(
+        action: VmSelfDestruction, network: Network,
+    ) -> Result<Self, String> {
+        let VmSelfDestruction {
+            space,
+            address,
+            balance,
+            refund_address,
+        } = action;
+        Ok(Self {
+            space,
+            address: RpcAddress::try_from_h160(address, network)?,
+            refund_address: RpcAddress::try_from_h160(refund_address, network)?,
+            balance,
+        })
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LocalizedBlockTrace {
@@ -255,6 +337,14 @@ impl Serialize for LocalizedTrace {
             Action::InternalTransferAction(ref internal_action) => {
                 struc.serialize_field("type", "internal_transfer_action")?;
                 struc.serialize_field("action", internal_action)?;
+            }
+            Action::SetAuth(ref set_auth) => {
+                struc.serialize_field("type", "set_auth")?;
+                struc.serialize_field("action", set_auth)?;
+            }
+            Action::SelfDestruct(ref selfdestruct) => {
+                struc.serialize_field("type", "suicide")?;
+                struc.serialize_field("action", selfdestruct)?;
             }
         }
 
@@ -366,36 +456,5 @@ impl LocalizedBlockTrace {
             epoch_number: epoch_number.into(),
             block_hash,
         })
-    }
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EpochTrace {
-    cfx_traces: Vec<LocalizedTrace>,
-    eth_traces: Vec<EthLocalizedTrace>,
-    mirror_address_map: HashMap<H160, RpcAddress>,
-}
-
-impl EpochTrace {
-    pub fn new(
-        cfx_traces: Vec<LocalizedTrace>, eth_traces: Vec<EthLocalizedTrace>,
-    ) -> Self {
-        let mut mirror_address_map = HashMap::new();
-        for t in &cfx_traces {
-            if let Action::Call(action) = &t.action {
-                if action.to.hex_address == CROSS_SPACE_CONTRACT_ADDRESS {
-                    mirror_address_map.insert(
-                        action.from.hex_address.evm_map().address,
-                        action.from.clone(),
-                    );
-                }
-            }
-        }
-        Self {
-            cfx_traces,
-            eth_traces,
-            mirror_address_map,
-        }
     }
 }

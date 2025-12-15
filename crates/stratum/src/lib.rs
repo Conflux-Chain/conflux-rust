@@ -529,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_can_submit() {
-        let addr = "127.0.0.1:19972".parse().unwrap();
+        let addr = "127.0.0.1:19973".parse().unwrap();
 
         struct TestDispatcher {
             submissions: Arc<RwLock<Vec<Vec<String>>>>,

@@ -16,7 +16,7 @@
 
 //! Trace filter deserialization.
 
-use crate::BlockNumber;
+use crate::BlockId;
 use cfx_parity_trace_types::TraceFilter as PrimitiveTraceFilter;
 use cfx_types::{Space, H160};
 use jsonrpc_core::Error as RpcError;
@@ -30,9 +30,9 @@ use std::convert::TryInto;
 #[serde(rename_all = "camelCase")]
 pub struct TraceFilter {
     /// From block
-    pub from_block: Option<BlockNumber>,
+    pub from_block: Option<BlockId>,
     /// To block
-    pub to_block: Option<BlockNumber>,
+    pub to_block: Option<BlockId>,
     /// From address
     pub from_address: Option<Vec<H160>>,
     /// To address

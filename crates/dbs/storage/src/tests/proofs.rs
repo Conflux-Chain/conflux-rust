@@ -247,7 +247,7 @@ fn get_invalid_hash(rng: &mut ChaChaRng, hash: H256) -> H256 {
     let mut new_hash = hash;
 
     while new_hash == hash {
-        new_hash.as_bytes_mut()[rng.gen_range(0, 32)] = rng.gen::<u8>();
+        new_hash.as_bytes_mut()[rng.random_range(0..32)] = rng.gen::<u8>();
     }
 
     new_hash
@@ -281,7 +281,7 @@ fn get_invalid_state_root(
     // trie), we only mutate the delta root. if two or three were provided, we
     // randomly mutate one of the corresponding roots.
 
-    match rng.gen_range(0, num_proofs) {
+    match rng.random_range(0..num_proofs) {
         0 => root.delta_root = get_invalid_hash(rng, root.delta_root),
         1 => {
             root.intermediate_delta_root =

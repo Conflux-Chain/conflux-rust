@@ -12,7 +12,7 @@ cfx-db-errors = { workspace = true }
 cfx-internal-common = { workspace = true }
 cfx-types = { workspace = true }
 delegate = "0.5.0"
-derivative = { workspace = true }
+derive_more = { workspace = true }
 fallible-iterator = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true, features = ["compat"] }

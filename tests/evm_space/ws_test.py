@@ -18,7 +18,7 @@ class EthWsTest(Web3Base):
     async def test_ws(self):
         url = "ws://%s:%d" % ("127.0.0.1", self.nodes[0].ethwsport)
         self.log.info(url)
-        self.ws = await websockets.connect(url)
+        self.ws = await websockets.connect(url, proxy=None)
 
         # eth RPC works
         req = request_json("web3_clientVersion")

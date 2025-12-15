@@ -67,7 +67,7 @@ impl From<TransactionPoolError> for EthApiError {
                 TransactionError::TooBig => Self::InvalidTransaction(RpcInvalidTransactionError::MaxInitCodeSizeExceeded),
                 TransactionError::InvalidRlp(_) => Self::FailedToDecodeSignedTransaction,
                 TransactionError::ZeroGasPrice => Self::PoolError(RpcPoolError::Underpriced),
-                TransactionError::FutureTransactionType => Self::InvalidTransaction(RpcInvalidTransactionError::TxTypeNotSupported),
+                TransactionError::FutureTransactionType { .. } => Self::InvalidTransaction(RpcInvalidTransactionError::TxTypeNotSupported),
                 TransactionError::InvalidReceiver => Self::Other("Invalid receiver".to_string()),
                 TransactionError::TooLargeNonce => Self::InvalidTransaction(RpcInvalidTransactionError::NonceMaxValue),
                 TransactionError::CreateInitCodeSizeLimit => Self::InvalidTransaction(RpcInvalidTransactionError::MaxInitCodeSizeExceeded),

@@ -13,7 +13,7 @@ use cfx_storage::{
 };
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, H256};
 use cfxcore::sync::Error;
-use clap::{App, Arg, ArgMatches};
+use clap::{value_parser, Arg, ArgMatches, Command};
 use log::LevelFilter;
 use log4rs::{
     append::console::ConsoleAppender,
@@ -24,8 +24,8 @@ use primitives::{
     MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::{
-    cmp::min, collections::HashMap, fmt::Debug, fs::remove_dir_all,
-    path::PathBuf, str::FromStr, sync::Arc, time::Instant,
+    cmp::min, collections::HashMap, fs::remove_dir_all, path::PathBuf,
+    str::FromStr, sync::Arc, time::Instant,
 };
 
 // cargo run --release -p cfxcore --example snapshot_merge_test
@@ -35,9 +35,9 @@ fn main() -> Result<(), Error> {
     let matches = parse_args();
 
     // setup test directory
-    let test_dir: PathBuf = arg_val(&matches, "test-dir");
+    let test_dir: &PathBuf = matches.get_one::<PathBuf>("test-dir").unwrap();
     if test_dir.exists() {
-        remove_dir_all(&test_dir)?;
+        remove_dir_all(test_dir)?;
     }
 
     // setup node 1
@@ -55,8 +55,11 @@ fn main() -> Result<(), Error> {
     // not matter.
     let mut accounts_map = HashMap::new();
     let (genesis_hash, _) = initialize_genesis(&state_manager)?;
-    let accounts = arg_val(&matches, "accounts");
-    let accounts_per_epoch = arg_val(&matches, "accounts-per-epoch");
+    let accounts = matches.get_one::<usize>("accounts").unwrap().clone();
+    let accounts_per_epoch = matches
+        .get_one::<usize>("accounts-per-epoch")
+        .unwrap()
+        .clone();
     let state_root_1 = StateRootWithAuxInfo::genesis(&MERKLE_NULL_NODE);
     let mut height = 0;
     let (snapshot1_epoch, snapshot1_delta_root) = prepare_state(
@@ -248,52 +251,42 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn parse_args<'a>() -> ArgMatches<'a> {
-    App::new("restore_checkpoint_delta")
+fn parse_args<'a>() -> ArgMatches {
+    Command::new("restore_checkpoint_delta")
         .arg(
-            Arg::with_name("test-dir")
+            Arg::new("test-dir")
                 .long("test-dir")
-                .takes_value(true)
                 .value_name("PATH")
+                .value_parser(value_parser!(PathBuf))
                 .help("Root directory for test")
                 .default_value("test_restore_checkpoint_delta"),
         )
         .arg(
-            Arg::with_name("accounts")
+            Arg::new("accounts")
                 .long("accounts")
-                .takes_value(true)
                 .value_name("NUM")
+                .value_parser(value_parser!(usize))
                 .help("Number of accounts in checkpoint")
                 .default_value("10000"),
         )
         .arg(
-            Arg::with_name("accounts-per-epoch")
+            Arg::new("accounts-per-epoch")
                 .long("accounts-per-epoch")
-                .takes_value(true)
                 .value_name("NUM")
+                .value_parser(value_parser!(usize))
                 .help("Number of accounts in each epoch")
                 .default_value("1000"),
         )
         .arg(
-            Arg::with_name("max-chunk-size")
+            Arg::new("max-chunk-size")
                 .long("max-chunk-size")
-                .takes_value(true)
                 .value_name("NUM")
+                .value_parser(value_parser!(usize))
                 .help("Maximum chunk size in bytes")
                 .default_value("4000000"),
         )
         .get_matches()
 }
-
-fn arg_val<T>(matches: &ArgMatches, arg_name: &str) -> T
-where
-    T: FromStr,
-    <T as FromStr>::Err: Debug,
-{
-    let val = matches.value_of(arg_name).unwrap();
-    T::from_str(val).unwrap()
-}
-
 fn new_state_manager(
     conflux_data_dir: &str,
 ) -> Result<Arc<StateManager>, Error> {

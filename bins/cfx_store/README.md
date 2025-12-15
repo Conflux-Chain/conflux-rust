@@ -6,59 +6,37 @@ Conflux key management. It is built on top of the Parity Ethereum counterpart.
 
 ```
 Conflux key management tool.
-  Copyright 2020 Conflux Foundation
+Copyright 2020 Conflux Foundation
 
-Usage:
-    cfxstore insert <secret> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore change-pwd <address> <old-pwd> <new-pwd> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore list [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore import [--src DIR] [--dir DIR]
-    cfxstore import-wallet <path> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore find-wallet-pass <path> <password>
-    cfxstore remove <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore sign <address> <password> <message> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore public <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore list-vaults [--dir DIR]
-    cfxstore create-vault <vault> <password> [--dir DIR]
-    cfxstore change-vault-pwd <vault> <old-pwd> <new-pwd> [--dir DIR]
-    cfxstore move-to-vault <address> <vault> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]
-    cfxstore move-from-vault <address> <vault> <password> [--dir DIR]
-    cfxstore [-h | --help]
-
-Options:
-    -h, --help               Display this message and exit.
-    --dir DIR                Specify the secret store directory. It may be either
-                             parity, parity-(chain), geth, geth-test
-                             or a path [default: parity].
-    --vault VAULT            Specify vault to use in this operation.
-    --vault-pwd VAULTPWD     Specify vault password to use in this operation. Please note
-                             that this option is required when vault option is set.
-                             Otherwise it is ignored.
-    --src DIR                Specify import source. It may be either
-                             parity, parity-(chain), geth, geth-test
-                             or a path [default: geth].
+Usage: cfxstore <COMMAND>
 
 Commands:
-    insert             Save account with password.
-    change-pwd         Change password.
-    list               List accounts.
-    import             Import accounts from src.
-    import-wallet      Import presale wallet.
-    find-wallet-pass   Tries to open a wallet with list of passwords given.
-    remove             Remove account.
-    sign               Sign message.
-    public             Displays public key for an address.
-    list-vaults        List vaults.
-    create-vault       Create new vault.
-    change-vault-pwd   Change vault password.
-    move-to-vault      Move account to vault from another vault/root directory.
-    move-from-vault    Move account to root directory from given vault.
+  insert            Save account with password
+  change-pwd        Change password
+  list              List accounts
+  import            Import accounts from src
+  import-wallet     Import presale wallet
+  find-wallet-pass  Tries to open a wallet with list of passwords given
+  remove            Remove account
+  sign              Sign message
+  public            Displays public key for an address
+  list-vaults       List vaults
+  create-vault      Create new vault
+  change-vault-pwd  Change vault password
+  move-to-vault     Move account to vault from another vault/root directory
+  move-from-vault   Move account to root directory from given vault
+  help              Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
 ```
 
 ### Examples
 
 #### `insert <secret> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
-*Encrypt secret with a password and save it in secret store.*
+
+_Encrypt secret with a password and save it in secret store._
 
 - `<secret>` - conflux secret, 32 bytes long
 - `<password>` - account password, file path
@@ -87,7 +65,8 @@ cfxstore insert `cfxkey generate random -s` "this is sparta"
 --
 
 #### `change-pwd <address> <old-pwd> <new-pwd> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
-*Change account password.*
+
+_Change account password._
 
 - `<address>` - conflux address, 20 bytes long
 - `<old-pwd>` - old account password, file path
@@ -107,7 +86,8 @@ true
 --
 
 #### `list [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
-*List secret store accounts.*
+
+_List secret store accounts._
 
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 - `[--vault VAULT]` - vault to use in this operation
@@ -126,7 +106,8 @@ cfxstore list
 --
 
 #### `import [--src DIR] [--dir DIR]`
-*Import accounts from src.*
+
+_Import accounts from src._
 
 - `[--src DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: geth
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
@@ -143,7 +124,8 @@ cfxstore import
 --
 
 #### `import-wallet <path> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
-*Import account from presale wallet.*
+
+_Import account from presale wallet._
 
 - `<path>` - presale wallet path
 - `<password>` - account password, file path
@@ -159,10 +141,10 @@ cfxstore import-wallet ethwallet.json password.txt
 e6a3d25a7cb7cd21cb720df5b5e8afd154af1bbb
 ```
 
-
 --
 
 #### `find-wallet-pass <path> <password>`
+
 Try to open presale wallet given a list of passwords from a file.
 The list of passwords can be generated using e.g. [Phildo/brutedist](https://github.com/Phildo/brutedist).
 
@@ -177,11 +159,11 @@ cfxstore find-wallet-pass ethwallet.json passwords.txt
 Found password: test
 ```
 
-
 --
 
 #### `remove <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
-*Remove account from secret store.*
+
+_Remove account from secret store._
 
 - `<address>` - conflux address, 20 bytes long
 - `<password>` - account password, file path
@@ -200,7 +182,8 @@ true
 --
 
 #### `sign <address> <password> <message> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
-*Sign message with account's secret.*
+
+_Sign message with account's secret._
 
 - `<address>` - conflux address, 20 bytes long
 - `<password>` - account password, file path
@@ -220,7 +203,8 @@ c6649f9555232d90ff716d7e552a744c5af771574425a74860e12f763479eb1b708c1f3a7dc0a0a7
 --
 
 #### `public <address> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
-*Displays public key for an address.*
+
+_Displays public key for an address._
 
 - `<address>` - conflux address, 20 bytes long
 - `<password>` - account password, file path
@@ -239,7 +223,8 @@ cfxstore public 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea account_password.txt --
 --
 
 #### `list-vaults [--dir DIR]`
-*List vaults.*
+
+_List vaults._
 
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 
@@ -256,7 +241,8 @@ vault3
 --
 
 #### `create-vault <vault> <password> [--dir DIR]`
-*Create new vault.*
+
+_Create new vault._
 
 - `<vault>` - name of new vault. This can only contain letters, digits, whitespaces, dashes and underscores
 - `<password>` - vault password, file path
@@ -273,7 +259,8 @@ OK
 --
 
 #### `change-vault-pwd <vault> <old-pwd> <new-pwd> [--dir DIR]`
-*Change vault password.*
+
+_Change vault password._
 
 - `<vault>` - name of existing vault
 - `<old-pwd>` - old vault password, file path
@@ -291,7 +278,8 @@ OK
 --
 
 #### `move-to-vault <address> <vault> <password> [--dir DIR] [--vault VAULT] [--vault-pwd VAULTPWD]`
-*Move account to vault from another vault/root directory.*
+
+_Move account to vault from another vault/root directory._
 
 - `<address>` - conflux address, 20 bytes long
 - `<vault>` - name of existing vault to move account to
@@ -299,7 +287,6 @@ OK
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
 - `[--vault VAULT]` - current vault of the `<address>` argument, if set
 - `[--vault-pwd VAULTPWD]` - password for the current vault of the `<address>` argument, if any. file path
-
 
 ```
 cfxstore move-to-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault3 vault3_password.txt
@@ -314,13 +301,13 @@ OK
 --
 
 #### `move-from-vault <address> <vault> <password> [--dir DIR]`
-*Move account to root directory from given vault.*
+
+_Move account to root directory from given vault._
 
 - `<address>` - conflux address, 20 bytes long
 - `<vault>` - name of existing vault to move account to
 - `<password>` - password of existing `<vault>` to move account to, file path
 - `[--dir DIR]` - secret store directory, It may be either parity, parity-test, geth, geth-test or a path. default: parity
-
 
 ```
 cfxstore move-from-vault 00e63fdb87ceb815ec96ae185b8f7381a0b4a5ea vault1 vault1_password.txt

@@ -131,7 +131,7 @@ enum StateOperation {
 }
 
 impl StateOperation {
-    fn get_key(&self) -> Option<StorageKeyWithSpace> {
+    fn get_key(&self) -> Option<StorageKeyWithSpace<'_>> {
         match self {
             StateOperation::Set { access_key, .. }
             | StateOperation::Delete { access_key, .. }
@@ -163,7 +163,7 @@ enum OwnedStorageKey {
 }
 
 impl OwnedStorageKey {
-    fn as_storage_key(&self) -> StorageKey {
+    fn as_storage_key(&self) -> StorageKey<'_> {
         match &self {
             OwnedStorageKey::AccountKey(k) => {
                 StorageKey::AccountKey(k.as_slice())
@@ -205,7 +205,7 @@ struct OwnedStorageKeyWithSpace {
 }
 
 impl OwnedStorageKeyWithSpace {
-    fn as_storage_key(&self) -> StorageKeyWithSpace {
+    fn as_storage_key(&self) -> StorageKeyWithSpace<'_> {
         StorageKeyWithSpace {
             key: self.key.as_storage_key(),
             space: self.space,

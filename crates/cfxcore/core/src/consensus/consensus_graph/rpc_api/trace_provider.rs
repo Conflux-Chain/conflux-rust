@@ -56,7 +56,8 @@ impl ConsensusGraph {
 
     fn filter_block_receipts<'a>(
         &self, filter: &'a LogFilter, epoch_number: u64, block_hash: H256,
-        mut receipts: Vec<Receipt>, mut tx_hashes: Vec<H256>,
+        block_timestamp: Option<u64>, mut receipts: Vec<Receipt>,
+        mut tx_hashes: Vec<H256>,
     ) -> impl Iterator<Item = LocalizedLogEntry> + 'a {
         // sanity check
         if receipts.len() != tx_hashes.len() {
@@ -97,6 +98,7 @@ impl ConsensusGraph {
                         entry: log,
                         block_hash,
                         epoch_number,
+                        block_timestamp,
                         transaction_hash,
                         // iterating in reverse order
                         transaction_index: receipts_len - index - 1,
@@ -166,6 +168,7 @@ impl ConsensusGraph {
             &filter,
             epoch,
             block_hash,
+            Some(block.block_header.timestamp()),
             receipts,
             block.transaction_hashes(/* space filter */ None),
         )))
@@ -225,6 +228,7 @@ impl ConsensusGraph {
             &filter,
             epoch,
             pivot_hash,
+            Some(pb.pivot_header.timestamp()),
             pb.receipts,
             pb.transactions.iter().map(|t| t.hash()).collect(),
         )))

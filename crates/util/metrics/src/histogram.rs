@@ -7,7 +7,7 @@ use crate::{
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
 };
 use parking_lot::RwLock;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use std::{
     cmp::Ordering,
     collections::BinaryHeap,
@@ -209,8 +209,8 @@ impl Histogram for UniformSample {
         if data.values.len() < self.reservoir_size {
             data.values.push(v);
         } else {
-            let mut rng = thread_rng();
-            let r = rng.gen_range(0, data.count);
+            let mut rng = rng();
+            let r = rng.random_range(0..data.count);
 
             // replace probability is reservoir_size/1+count
             if let Some(replaced) = data.values.get_mut(r) {
@@ -323,7 +323,7 @@ impl Histogram for ExpDecaySample {
         let k = (now - data.t0).as_nanos() as f64
             / Duration::from_secs(1).as_nanos() as f64
             * self.alpha;
-        let k = k.exp() * rand::thread_rng().gen_range(0.0, 1.0);
+        let k = k.exp() * rand::rng().random_range(0.0..1.0);
         if k.is_normal() {
             data.values.push(ExpDecaySampleItem { k, v });
         }

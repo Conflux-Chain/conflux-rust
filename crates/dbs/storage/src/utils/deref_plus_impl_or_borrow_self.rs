@@ -168,6 +168,7 @@ mod test {
     }
     struct Test {}
     mod my_vec {
+        #[allow(dead_code)]
         pub struct MyVec<T>(#[allow(unused)] pub Vec<T>);
     }
 

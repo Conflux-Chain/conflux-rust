@@ -22,7 +22,7 @@ fn initialize_heap(
         let mut hole: Hole<TrivialValueWithHeapHandle<i64, u32>> =
             Hole::<_>::new_uninit_pointer(
                 TrivialValueWithHeapHandle::<i64, u32>::new(
-                    rng.gen_range(-100, -1),
+                    rng.random_range(-100..-1),
                 ),
             );
         unsafe {
@@ -34,7 +34,7 @@ fn initialize_heap(
     // Save the sum in the last value.
     let mut sum = 0i64;
     for _i in non_heap_size..capacity - 1 {
-        let value = rng.gen_range(0, 1000000);
+        let value = rng.random_range(0..1000000);
         sum += value;
         heap.insert(
             TrivialValueWithHeapHandle::<i64, u32>::new(value),
@@ -163,7 +163,7 @@ fn initialize_heap_with_removals_and_updates(
 
     let mut sum = 0i64;
     for _i in 0..init_size + insert_size {
-        let value = rng.gen_range(0, 1000000);
+        let value = rng.random_range(0..1000000);
         sum += value;
         values.push(TrivialValueWithHeapHandle::new(value));
     }
@@ -172,7 +172,7 @@ fn initialize_heap_with_removals_and_updates(
         let mut removals_set = HashSet::new();
         for _i in 0..kept_removals {
             loop {
-                let pos = rng.gen_range(0, init_size as usize);
+                let pos = rng.random_range(0..init_size as usize);
                 if removals_set.get(&pos).is_none() {
                     removals_set.insert(pos);
                     sum -= *values[pos].as_ref();
@@ -184,7 +184,8 @@ fn initialize_heap_with_removals_and_updates(
 
         for _i in 0..removals {
             loop {
-                let pos = rng.gen_range(0, (init_size + insert_size) as usize);
+                let pos =
+                    rng.random_range(0..(init_size + insert_size) as usize);
                 if removals_set.get(&pos).is_none() {
                     removals_set.insert(pos);
                     sum -= *values[pos].as_ref();
@@ -196,7 +197,8 @@ fn initialize_heap_with_removals_and_updates(
 
         for _i in 0..updates {
             loop {
-                let pos = rng.gen_range(0, (init_size + insert_size) as usize);
+                let pos =
+                    rng.random_range(0..(init_size + insert_size) as usize);
                 if removals_set.get(&pos).is_none() {
                     removals_set.insert(pos);
                     sum -= *values[pos].as_ref();

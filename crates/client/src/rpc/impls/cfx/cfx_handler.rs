@@ -17,12 +17,13 @@ use crate::rpc::{
         VoteParamsInfo, WrapTransaction, U64 as HexU64,
     },
 };
-use blockgen::BlockGenerator;
+use blockgen::BlockGeneratorTestApi;
 use cfx_execute_helper::estimation::{decode_error, EstimateExt};
 use cfx_executor::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     internal_contract::storage_point_prop,
 };
+use cfx_rpc_eth_types::Transaction as EthTransaction;
 use cfx_statedb::{
     global_params::{
         AccumulateInterestRate, BaseFeeProp, DistributablePoSInterest,
@@ -83,8 +84,7 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            eth::Transaction as EthTransaction, pos::Block as PosBlock,
-            Account as RpcAccount, AccountPendingInfo,
+            pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CfxRpcLogFilter,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
@@ -128,7 +128,7 @@ pub struct RpcImpl {
     pub config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
     pub sync: SharedSynchronizationService,
-    block_gen: Arc<BlockGenerator>,
+    block_gen: BlockGeneratorTestApi,
     pub tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
@@ -138,7 +138,7 @@ pub struct RpcImpl {
 impl RpcImpl {
     pub fn new(
         consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        block_gen: Arc<BlockGenerator>, tx_pool: SharedTransactionPool,
+        block_gen: BlockGeneratorTestApi, tx_pool: SharedTransactionPool,
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
         config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
@@ -1090,14 +1090,16 @@ impl RpcImpl {
         timestamp: u64, adaptive: bool,
     ) -> CoreResult<H256> {
         let transactions = self.decode_raw_txs(raw, 0)?;
-        Ok(self.block_gen.generate_block_with_nonce_and_timestamp(
-            parent,
-            referees,
-            transactions,
-            nonce,
-            timestamp,
-            adaptive,
-        )?)
+        self.block_gen
+            .generate_block_with_nonce_and_timestamp(
+                parent,
+                referees,
+                transactions,
+                nonce,
+                timestamp,
+                adaptive,
+            )
+            .map_err(Into::into)
     }
 
     fn decode_raw_txs(
@@ -1699,44 +1701,9 @@ impl RpcImpl {
     ) -> CoreResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
-        let hashes = match epoch {
-            BlockHashOrEpochNumber::EpochNumber(e) => {
-                self.consensus.get_block_hashes_by_epoch(e.into())?
-            }
-            BlockHashOrEpochNumber::BlockHashWithOption {
-                hash: h,
-                require_pivot,
-            } => {
-                if self
-                    .consensus
-                    .data_manager()
-                    .block_header_by_hash(&h)
-                    .is_none()
-                {
-                    bail!(invalid_params("block_hash", "block not found"));
-                }
-
-                let e = match self.get_block_epoch_number(&h) {
-                    Some(e) => e,
-                    None => return Ok(None), // not executed
-                };
-
-                let hashes = self.consensus.get_block_hashes_by_epoch(
-                    primitives::EpochNumber::Number(e),
-                )?;
-
-                // if the provided hash is not the pivot hash,
-                // and require_pivot is true or None(default to true)
-                // abort
-                let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
-
-                if require_pivot.unwrap_or(true) && (h != pivot_hash) {
-                    bail!(pivot_assumption_failed(h, pivot_hash));
-                }
-
-                hashes
-            }
-        };
+        let hashes = self
+            .consensus
+            .get_block_hashes_by_epoch_or_block_hash(epoch.into())?;
 
         let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
         let mut epoch_receipts = vec![];

@@ -1,0 +1,35 @@
+[package]
+name = "cfxcore-types"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+repository.workspace = true
+license-file.workspace = true
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfx-types = { workspace = true }
+malloc_size_of = { workspace = true }
+malloc_size_of_derive = { workspace = true }
+rlp = { workspace = true }
+rlp_derive = { workspace = true }
+cfx-internal-common = { workspace = true }
+parking_lot = { workspace = true }
+lazy_static = { workspace = true }
+primitives = { workspace = true }
+cfx-execute-helper = { workspace = true }
+smart-default = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+futures = { workspace = true, features = ["compat"] }
+log = { workspace = true }
+cfx-bytes = { workspace = true }
+thiserror = { workspace = true }
+unexpected = { workspace = true }
+
+[dev-dependencies]
+rand = { workspace = true }

@@ -6,9 +6,11 @@ use super::{
     super::{lru::*, *},
     *,
 };
-use rand::distributions::{uniform::*, *};
+use rand::distr::{uniform::*, weighted::WeightedIndex};
 
 mod test_lru_algorithm_size_1 {
+    use rand::distr::Distribution;
+
     use super::*;
 
     #[derive(Default)]
@@ -170,7 +172,7 @@ mod test_lru_algorithm_size_1 {
 
 mod test_lru_algorithm {
     use super::*;
-    use rand::prelude::SliceRandom;
+    use rand::{distr::Distribution, prelude::SliceRandom};
 
     struct CacheUtil<'a> {
         cache_algo_data: &'a mut [LRUHandle<u32>],
@@ -252,8 +254,8 @@ mod test_lru_algorithm {
 
         let mut considered_keys = vec![0; key_range as usize];
 
-        let candidate_sampler = Uniform::new(0, key_range);
-        let probability_sampler = Uniform::new(0.0, 1.0);
+        let candidate_sampler = Uniform::new(0, key_range).unwrap();
+        let probability_sampler = Uniform::new(0.0, 1.0).unwrap();
         while most_recent_keys.len() < cache_size as usize {
             let key = loop {
                 let key = candidate_sampler.sample(&mut rng);

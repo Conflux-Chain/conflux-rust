@@ -27,7 +27,12 @@ class CIP98Test(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         ip = self.nodes[0].ip
         port = self.nodes[0].ethrpcport
-        w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
+        w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/', request_kwargs={
+            "proxies": {
+                "http": "",
+                "https": "",
+            }
+        }))
         start_p2p_connection(self.nodes)
         priv = default_config["GENESIS_PRI_KEY"]
         account = w3.eth.account.from_key(priv)

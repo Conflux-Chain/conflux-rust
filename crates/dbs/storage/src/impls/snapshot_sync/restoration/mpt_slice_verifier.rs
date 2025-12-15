@@ -257,7 +257,7 @@ impl SnapshotMptTraitReadAndIterate for SliceMptRebuilder {
     ) -> Result<Box<dyn SnapshotMptIteraterTrait>> {
         // The validator runs the MptCursorRW in in-place mode, where subtree
         // iteration is unnecessary.
-        unsafe { unreachable_unchecked() }
+        unreachable!()
     }
 }
 
@@ -354,5 +354,4 @@ use primitives::MerkleHash;
 use std::{
     borrow::Borrow,
     collections::{hash_map::RandomState, HashMap},
-    hint::unreachable_unchecked,
 };

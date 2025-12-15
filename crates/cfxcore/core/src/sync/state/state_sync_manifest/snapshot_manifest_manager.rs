@@ -29,7 +29,11 @@ use primitives::{
     BlockHeaderBuilder, BlockReceipts, EpochId, EpochNumber, StateRoot,
     StorageKey, StorageKeyWithSpace, NULL_EPOCH,
 };
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{
+    rng,
+    seq::{IndexedRandom, SliceRandom},
+};
+
 use std::{
     collections::HashSet,
     fmt::{Debug, Formatter},
@@ -247,7 +251,7 @@ impl SnapshotManifestManager {
         let available_peers = PeerFilter::new(msgid::GET_SNAPSHOT_MANIFEST)
             .choose_from(&self.active_peers)
             .select_all(&sync_handler.syn);
-        let maybe_peer = available_peers.choose(&mut thread_rng()).map(|p| *p);
+        let maybe_peer = available_peers.choose(&mut rng()).map(|p| *p);
         if let Some(peer) = maybe_peer {
             self.manifest_request_status = Some((Instant::now(), peer));
             sync_handler.request_manager.request_with_delay(

@@ -10,6 +10,7 @@ use cfx_rpc_eth_types::{
     Header, Log,
 };
 use cfx_rpc_utils::error::jsonrpsee_error_helpers::internal_rpc_err;
+use cfx_tasks::TaskExecutor;
 use cfx_types::{Space, H256};
 use cfxcore::{
     BlockDataManager, ConsensusGraph, Notifications, SharedConsensusGraph,
@@ -31,14 +32,14 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::{runtime::Runtime, sync::broadcast, time::sleep};
+use tokio::{sync::broadcast, time::sleep};
 use tokio_stream::{wrappers::BroadcastStream, Stream};
 
 const BROADCAST_CHANNEL_SIZE: usize = 1000;
 
 #[derive(Clone)]
 pub struct PubSubApi {
-    executor: Arc<Runtime>,
+    executor: TaskExecutor,
     chain_data_provider: Arc<ChainDataProvider>,
     notifications: Arc<Notifications>,
     heads_loop_started: Arc<RwLock<bool>>,
@@ -50,7 +51,7 @@ pub struct PubSubApi {
 impl PubSubApi {
     pub fn new(
         consensus: SharedConsensusGraph, notifications: Arc<Notifications>,
-        executor: Arc<Runtime>,
+        executor: TaskExecutor,
     ) -> PubSubApi {
         let (head_sender, _) = broadcast::channel(BROADCAST_CHANNEL_SIZE);
         let log_senders = Arc::new(RwLock::new(HashMap::new()));
@@ -518,6 +519,7 @@ impl ChainDataProvider {
                     entry,
                     block_hash: pivot,
                     epoch_number,
+                    block_timestamp: Some(pb.pivot_header.timestamp()),
                     transaction_hash: tx.hash,
                     transaction_index: txid,
                     log_index,
@@ -540,7 +542,9 @@ impl BlockProvider for &ChainDataProvider {
     fn get_block_hashes_by_epoch(
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String> {
-        self.consensus.get_block_hashes_by_epoch(epoch_number)
+        self.consensus
+            .get_block_hashes_by_epoch(epoch_number)
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -582,7 +586,7 @@ where
                         break  Ok(())
                     },
                 };
-                let msg = SubscriptionMessage::from_json(&item).map_err(SubscriptionSerializeError::new)?;
+                let msg = SubscriptionMessage::new(sink.method_name(), sink.subscription_id(), &item).map_err(SubscriptionSerializeError::new)?;
                 if sink.send(msg).await.is_err() {
                     break Ok(());
                 }
