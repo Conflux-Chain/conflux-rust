@@ -13,7 +13,7 @@ metrics_enabled=true
 # Enable metrics for RPC
 rpc_enable_metrics=true
 
-# INfluxDb settings:
+# InfluxDB settings:
 metrics_influxdb_host=x.x.x.x # change to your influxdb host
 metrics_influxdb_db=db_name
 metrics_influxdb_username=user_name
@@ -27,7 +27,7 @@ metrics_influxdb_node="a custom node name e.g. rpc1"
 We provide a Grafana template that can be directly imported into Grafana to display the node's metrics data.
 
 - [TransactionPool](https://github.com/Conflux-Chain/conflux-docker/blob/master/misc/grafana-config-template/TransactionPool.json)
-- [ConfluxNode](https://github.com/Conflux-Chain/conflux-docker/blob/master/misc/grafana-config-template/TransactionPool.json)
+- [ConfluxNode](https://github.com/Conflux-Chain/conflux-docker/blob/master/misc/grafana-config-template/ConfluxNode.json)
 
 Please refer to the documentation for setting up InfluxDB and Grafana services.
 
