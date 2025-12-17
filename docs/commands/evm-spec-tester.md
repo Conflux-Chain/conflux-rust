@@ -1,6 +1,6 @@
 # evm
 
-The `evm-spec-tester` command is primarily used to run tests related to the Ethereum Virtual Machine (EVM), in order to verify the compatibility of the Conflux eSpace VM.
+The `evm-spec-tester` command is primarily used to run tests related to the Ethereum Virtual Machine (EVM), in order to verify the compatibility of the Conflux eSpace VM. The source codes for it are located in `tools/evm-spec-tester`.
 
 Currently, it supports: 
 
