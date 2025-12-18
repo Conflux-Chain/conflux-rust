@@ -8,7 +8,9 @@ use once_cell::sync::OnceCell;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
-pub static USE_VERBOSE_RPC_ADDRESS: OnceCell<bool> = OnceCell::new();
+/// Global flag to indicate whether to use simple mode for RpcAddress
+/// encoding/decoding.
+pub static USE_SIMPLE_RPC_ADDRESS: OnceCell<bool> = OnceCell::new();
 
 /// This is the address type used in Rpc. It deserializes user's Rpc input, or
 /// it prepares the base32 address for Rpc output.
@@ -24,11 +26,11 @@ impl RpcAddress {
     pub fn try_from_h160(
         hex_address: H160, network: Network,
     ) -> Result<Self, String> {
-        let verbose = *USE_VERBOSE_RPC_ADDRESS.get().unwrap_or(&true);
-        let mode = if verbose {
-            EncodingOptions::QrCode
-        } else {
+        let simple_mode = *USE_SIMPLE_RPC_ADDRESS.get().unwrap_or(&false);
+        let mode = if simple_mode {
             EncodingOptions::Simple
+        } else {
+            EncodingOptions::QrCode
         };
         let base32_address = cfx_addr_encode(&hex_address.0, network, mode)
             .map_err(|e| e.to_string())?;
