@@ -238,7 +238,8 @@ impl DeferredPool {
                 );
                 if to_pack_txs.len() >= tx_num_limit {
                     debug!(
-                        "txpool::packing_sampler reached tx limit {}", tx_num_limit
+                        "txpool::packing_sampler reached tx limit {}",
+                        tx_num_limit
                     );
                     break 'all;
                 }
@@ -268,8 +269,7 @@ impl DeferredPool {
             gas_used,
             size_used
         );
-        if to_pack_txs.is_empty()
-            && self.packing_pool.in_space(space).len() > 0
+        if to_pack_txs.is_empty() && self.packing_pool.in_space(space).len() > 0
         {
             debug!(
                 "txpool::packing_sampler no_tx_selected space={:?} ready_entries={} block_gas_limit={} block_size_limit={} tx_limit={} remaining_gas={} remaining_size={}",
@@ -493,7 +493,7 @@ impl DeferredPool {
                         );
                     }
                 }
-                
+
                 if res.is_err() {
                     break;
                 }

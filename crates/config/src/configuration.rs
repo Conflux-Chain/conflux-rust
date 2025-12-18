@@ -18,7 +18,9 @@ use cfx_internal_common::{
 use cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
-use cfx_rpc_cfx_types::{apis::ApiSet, RpcImplConfiguration};
+use cfx_rpc_cfx_types::{
+    address::USE_VERBOSE_RPC_ADDRESS, apis::ApiSet, RpcImplConfiguration,
+};
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -240,6 +242,7 @@ build_config! {
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
         (max_estimation_gas_limit, (Option<u64>), None)
+        (core_space_rpc_address_verbose_mode, (bool), true)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
@@ -479,6 +482,10 @@ impl Configuration {
 
         CIP112_TRANSITION_HEIGHT
             .set(config.raw_conf.cip112_transition_height.unwrap_or(u64::MAX))
+            .expect("called once");
+
+        USE_VERBOSE_RPC_ADDRESS
+            .set(config.raw_conf.core_space_rpc_address_verbose_mode)
             .expect("called once");
 
         Ok(config)
