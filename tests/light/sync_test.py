@@ -111,7 +111,15 @@ class LightSyncTest(ConfluxTestFramework):
 
         logs_full = self.rpc[FULLNODE0].get_logs(filter)
         logs_light = self.rpc[LIGHTNODE].get_logs(filter)
-        assert_equal(logs_full, logs_light)
+        # remove blockTimestamp from full node logs before comparing
+        # because light node does not return it in get_logs response
+        processed_full_logs = []
+        for entry in logs_full:
+            e = entry.copy()
+            e.pop("blockTimestamp", None)
+            processed_full_logs.append(e)
+            
+        assert_equal(processed_full_logs, logs_light)
 
     def deploy_contract(self, sender, priv_key, data_hex):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=1000)

@@ -124,7 +124,15 @@ class LogFilteringTest(ConfluxTestFramework):
         self.log.info("Pass")
 
     def check_filter(self, filter):
-        assert_equal(self.rpc[LIGHTNODE].get_logs(filter), self.rpc[FULLNODE0].get_logs(filter))
+        full_logs = self.rpc[FULLNODE0].get_logs(filter)
+        # remove blockTimestamp from full node logs before comparing
+        # because light node does not return it in get_logs response
+        processed_full_logs = []
+        for entry in full_logs:
+            e = entry.copy()
+            e.pop("blockTimestamp", None)
+            processed_full_logs.append(e)
+        assert_equal(self.rpc[LIGHTNODE].get_logs(filter), processed_full_logs)
 
     def check_code(self, address, epoch):
         assert_equal(self.rpc[LIGHTNODE].get_code(address, epoch), self.rpc[FULLNODE0].get_code(address, epoch))
