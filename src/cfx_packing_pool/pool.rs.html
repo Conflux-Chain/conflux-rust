@@ -683,9 +683,7 @@
 <a href="#682" id="682">682</a>
 <a href="#683" id="683">683</a>
 <a href="#684" id="684">684</a>
-<a href="#685" id="685">685</a>
-<a href="#686" id="686">686</a>
-<a href="#687" id="687">687</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
+<a href="#685" id="685">685</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 
 <span class="kw">use crate</span>::{
     packing_batch::{InsertError, PackInfo, PackingBatch, RemoveError},
@@ -767,7 +765,10 @@
                 <span class="macro">debug!</span>(<span class="string">"packing_pool::insert success hash={:?}"</span>, tx_hash);
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
-                <span class="macro">debug!</span>(<span class="string">"packing_pool::insert failed hash={:?} err={:?}"</span>, tx_hash, e);
+                <span class="macro">debug!</span>(
+                    <span class="string">"packing_pool::insert failed hash={:?} err={:?}"</span>,
+                    tx_hash, e
+                );
             }
         }
         <span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>replaced {
@@ -828,9 +829,7 @@
         <span class="kw">let </span>config = <span class="kw-2">&amp;</span><span class="self">self</span>.config;
         <span class="macro">debug!</span>(
             <span class="string">"packing_pool::split_off sender={:?} start_nonce={} keep_prefix={}"</span>,
-            sender,
-            start_nonce,
-            keep_prefix
+            sender, start_nonce, keep_prefix
         );
         <span class="kw">let </span>update = <span class="kw">move </span>|node: <span class="kw-2">&amp;mut </span>Node&lt;PackingPoolMap&lt;TX&gt;&gt;| {
             <span class="kw">let </span>old_info = node.value.pack_info();
@@ -860,10 +859,7 @@
             );
         } <span class="kw">else </span>{
             <span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>removed {
-                <span class="macro">debug!</span>(
-                    <span class="string">"packing_pool::split_off removed hash={:?}"</span>,
-                    tx.hash()
-                );
+                <span class="macro">debug!</span>(<span class="string">"packing_pool::split_off removed hash={:?}"</span>, tx.hash());
             }
         }
         removed

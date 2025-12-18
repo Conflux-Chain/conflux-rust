@@ -1645,7 +1645,14 @@
 <a href="#1644" id="1644">1644</a>
 <a href="#1645" id="1645">1645</a>
 <a href="#1646" id="1646">1646</a>
-<a href="#1647" id="1647">1647</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1665,7 +1672,9 @@
 <span class="kw">use </span>cfx_parameters::{
     block::DEFAULT_TARGET_BLOCK_GAS_LIMIT, tx_pool::TXPOOL_DEFAULT_NONCE_BITS,
 };
-<span class="kw">use </span>cfx_rpc_cfx_types::{apis::ApiSet, RpcImplConfiguration};
+<span class="kw">use </span>cfx_rpc_cfx_types::{
+    address::USE_SIMPLE_RPC_ADDRESS, apis::ApiSet, RpcImplConfiguration,
+};
 <span class="kw">use </span>cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
@@ -1887,6 +1896,7 @@
         (public_address, (<span class="prelude-ty">Option</span>&lt;String&gt;), <span class="prelude-val">None</span>)
         (udp_port, (<span class="prelude-ty">Option</span>&lt;u16&gt;), <span class="prelude-val">Some</span>(<span class="number">32323</span>))
         (max_estimation_gas_limit, (<span class="prelude-ty">Option</span>&lt;u64&gt;), <span class="prelude-val">None</span>)
+        (rpc_address_simple_mode, (bool), <span class="bool-val">false</span>)
 
         <span class="comment">// Network parameters section.
         </span>(blocks_request_timeout_ms, (u64), <span class="number">20_000</span>)
@@ -2126,6 +2136,10 @@
 
         CIP112_TRANSITION_HEIGHT
             .set(config.raw_conf.cip112_transition_height.unwrap_or(u64::MAX))
+            .expect(<span class="string">"called once"</span>);
+
+        USE_SIMPLE_RPC_ADDRESS
+            .set(config.raw_conf.rpc_address_simple_mode)
             .expect(<span class="string">"called once"</span>);
 
         <span class="prelude-val">Ok</span>(config)

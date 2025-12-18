@@ -1087,7 +1087,9 @@
 <a href="#1086" id="1086">1086</a>
 <a href="#1087" id="1087">1087</a>
 <a href="#1088" id="1088">1088</a>
-<a href="#1089" id="1089">1089</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
@@ -1102,7 +1104,6 @@
     spec::TransitionsEpochHeight,
 };
 <span class="kw">use </span>cfx_parameters::{block::<span class="kw-2">*</span>, consensus_internal::ELASTICITY_MULTIPLIER};
-<span class="kw">use </span>log::debug;
 <span class="kw">use </span>cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
@@ -1112,6 +1113,7 @@
     H256, U256,
 };
 <span class="kw">use </span>cfx_vm_types::{ConsensusGasSpec, Spec};
+<span class="kw">use </span>log::debug;
 <span class="kw">use </span>primitives::{
     block::BlockHeight,
     block_header::compute_next_price_tuple,
@@ -1760,8 +1762,9 @@
         <span class="kw">let </span>cip7702 = height &gt;= transitions.cip7702;
         <span class="kw">let </span>cip645 = height &gt;= transitions.cip645;
 
-        <span class="kw">let </span>(can_pack, later_pack) =
-            <span class="self">Self</span>::fast_recheck_inner(spec, |mode: <span class="kw-2">&amp;</span>VerifyTxMode| {
+        <span class="kw">let </span>(can_pack, later_pack) = <span class="self">Self</span>::fast_recheck_inner(
+            spec,
+            |mode: <span class="kw-2">&amp;</span>VerifyTxMode| {
                 <span class="kw">if </span>!<span class="self">Self</span>::check_eip1559_transaction(tx, cip1559, mode) {
                     <span class="macro">debug!</span>(
                         <span class="string">"fast_recheck: EIP-1559 transaction check failed at height {} txhash={:?}"</span>,
@@ -1800,7 +1803,8 @@
                 } <span class="kw">else </span>{
                     <span class="self">Self</span>::check_eip155_transaction(tx, cip90a, mode)
                 }
-            });
+            },
+        );
 
         <span class="kw">match </span>(can_pack, later_pack) {
             (<span class="bool-val">true</span>, <span class="kw">_</span>) =&gt; PackingCheckResult::Pack,

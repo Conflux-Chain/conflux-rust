@@ -223,14 +223,29 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a></pre></div><pre class="rust"><code><span class="comment">// Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
 </span><span class="kw">use </span>cfx_addr::{cfx_addr_decode, cfx_addr_encode, EncodingOptions, Network};
 <span class="kw">use </span>cfx_types::H160;
+<span class="kw">use </span>once_cell::sync::OnceCell;
 <span class="kw">use </span>serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>std::fmt;
+
+<span class="doccomment">/// Global flag to indicate whether to use simple mode for RpcAddress
+/// encoding/decoding.
+</span><span class="kw">pub static </span>USE_SIMPLE_RPC_ADDRESS: OnceCell&lt;bool&gt; = OnceCell::new();
 
 <span class="doccomment">/// This is the address type used in Rpc. It deserializes user's Rpc input, or
 /// it prepares the base32 address for Rpc output.
@@ -246,9 +261,14 @@
     <span class="kw">pub fn </span>try_from_h160(
         hex_address: H160, network: Network,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, String&gt; {
-        <span class="kw">let </span>base32_address =
-            cfx_addr_encode(<span class="kw-2">&amp;</span>hex_address.<span class="number">0</span>, network, EncodingOptions::QrCode)
-                .map_err(|e| e.to_string())<span class="question-mark">?</span>;
+        <span class="kw">let </span>simple_mode = <span class="kw-2">*</span>USE_SIMPLE_RPC_ADDRESS.get().unwrap_or(<span class="kw-2">&amp;</span><span class="bool-val">false</span>);
+        <span class="kw">let </span>mode = <span class="kw">if </span>simple_mode {
+            EncodingOptions::Simple
+        } <span class="kw">else </span>{
+            EncodingOptions::QrCode
+        };
+        <span class="kw">let </span>base32_address = cfx_addr_encode(<span class="kw-2">&amp;</span>hex_address.<span class="number">0</span>, network, mode)
+            .map_err(|e| e.to_string())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             base32_address,
             hex_address,

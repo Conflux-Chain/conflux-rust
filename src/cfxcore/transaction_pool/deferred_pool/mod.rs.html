@@ -905,7 +905,8 @@
                 );
                 <span class="kw">if </span>to_pack_txs.len() &gt;= tx_num_limit {
                     <span class="macro">debug!</span>(
-                        <span class="string">"txpool::packing_sampler reached tx limit {}"</span>, tx_num_limit
+                        <span class="string">"txpool::packing_sampler reached tx limit {}"</span>,
+                        tx_num_limit
                     );
                     <span class="kw">break </span><span class="lifetime">'all</span>;
                 }
@@ -935,8 +936,7 @@
             gas_used,
             size_used
         );
-        <span class="kw">if </span>to_pack_txs.is_empty()
-            &amp;&amp; <span class="self">self</span>.packing_pool.in_space(space).len() &gt; <span class="number">0
+        <span class="kw">if </span>to_pack_txs.is_empty() &amp;&amp; <span class="self">self</span>.packing_pool.in_space(space).len() &gt; <span class="number">0
         </span>{
             <span class="macro">debug!</span>(
                 <span class="string">"txpool::packing_sampler no_tx_selected space={:?} ready_entries={} block_gas_limit={} block_size_limit={} tx_limit={} remaining_gas={} remaining_size={}"</span>,
@@ -1160,7 +1160,7 @@
                         );
                     }
                 }
-                
+
                 <span class="kw">if </span>res.is_err() {
                     <span class="kw">break</span>;
                 }
