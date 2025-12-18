@@ -1534,6 +1534,7 @@ dependencies = [
  "diem-types",
  "jsonrpc-core",
  "log",
+ "once_cell",
  "parity-version",
  "primitives",
  "rand 0.7.3",

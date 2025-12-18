@@ -80,7 +80,10 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
                 debug!("packing_pool::insert success hash={:?}", tx_hash);
             }
             Err(e) => {
-                debug!("packing_pool::insert failed hash={:?} err={:?}", tx_hash, e);
+                debug!(
+                    "packing_pool::insert failed hash={:?} err={:?}",
+                    tx_hash, e
+                );
             }
         }
         for tx in &replaced {
@@ -141,9 +144,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
         let config = &self.config;
         debug!(
             "packing_pool::split_off sender={:?} start_nonce={} keep_prefix={}",
-            sender,
-            start_nonce,
-            keep_prefix
+            sender, start_nonce, keep_prefix
         );
         let update = move |node: &mut Node<PackingPoolMap<TX>>| {
             let old_info = node.value.pack_info();
@@ -173,10 +174,7 @@ impl<TX: PackingPoolTransaction> PackingPool<TX> {
             );
         } else {
             for tx in &removed {
-                debug!(
-                    "packing_pool::split_off removed hash={:?}",
-                    tx.hash()
-                );
+                debug!("packing_pool::split_off removed hash={:?}", tx.hash());
             }
         }
         removed
