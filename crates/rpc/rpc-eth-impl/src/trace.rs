@@ -24,8 +24,10 @@ pub struct TraceApi {
 }
 
 impl TraceApi {
-    pub fn new(consensus: SharedConsensusGraph, network: Network) -> TraceApi {
-        let trace_handler = TraceHandler::new(network, consensus);
+    pub fn new(
+        consensus: SharedConsensusGraph, network: Network, verbose: bool,
+    ) -> TraceApi {
+        let trace_handler = TraceHandler::new(network, verbose, consensus);
         TraceApi { trace_handler }
     }
 

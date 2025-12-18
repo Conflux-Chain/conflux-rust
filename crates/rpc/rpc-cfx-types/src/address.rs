@@ -15,24 +15,30 @@ pub struct RpcAddress {
     pub base32_address: String,
     pub hex_address: H160,
     pub network: Network,
+    pub verbose: bool,
 }
 
 impl RpcAddress {
     pub fn try_from_h160(
-        hex_address: H160, network: Network,
+        hex_address: H160, network: Network, verbose: bool,
     ) -> Result<Self, String> {
-        let base32_address =
-            cfx_addr_encode(&hex_address.0, network, EncodingOptions::QrCode)
-                .map_err(|e| e.to_string())?;
+        let mode = if verbose {
+            EncodingOptions::QrCode
+        } else {
+            EncodingOptions::Simple
+        };
+        let base32_address = cfx_addr_encode(&hex_address.0, network, mode)
+            .map_err(|e| e.to_string())?;
         Ok(Self {
             base32_address,
             hex_address,
             network,
+            verbose,
         })
     }
 
-    pub fn null(network: Network) -> Result<Self, String> {
-        Self::try_from_h160(H160::default(), network)
+    pub fn null(network: Network, verbose: bool) -> Result<Self, String> {
+        Self::try_from_h160(H160::default(), network, verbose)
     }
 }
 
@@ -60,6 +66,7 @@ impl<'a> Deserialize<'a> for RpcAddress {
                 base32_address: parsed_address.input_base32_address,
                 hex_address,
                 network: parsed_address.network,
+                verbose: parsed_address.address_type.is_some(),
             }),
         }
     }

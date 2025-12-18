@@ -13,7 +13,6 @@ use cfx_executor::{
     spec::TransitionsEpochHeight,
 };
 use cfx_parameters::{block::*, consensus_internal::ELASTICITY_MULTIPLIER};
-use log::debug;
 use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
@@ -23,6 +22,7 @@ use cfx_types::{
     H256, U256,
 };
 use cfx_vm_types::{ConsensusGasSpec, Spec};
+use log::debug;
 use primitives::{
     block::BlockHeight,
     block_header::compute_next_price_tuple,
@@ -671,8 +671,9 @@ impl VerificationConfig {
         let cip7702 = height >= transitions.cip7702;
         let cip645 = height >= transitions.cip645;
 
-        let (can_pack, later_pack) =
-            Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
+        let (can_pack, later_pack) = Self::fast_recheck_inner(
+            spec,
+            |mode: &VerifyTxMode| {
                 if !Self::check_eip1559_transaction(tx, cip1559, mode) {
                     debug!(
                         "fast_recheck: EIP-1559 transaction check failed at height {} txhash={:?}",
@@ -711,7 +712,8 @@ impl VerificationConfig {
                 } else {
                     Self::check_eip155_transaction(tx, cip90a, mode)
                 }
-            });
+            },
+        );
 
         match (can_pack, later_pack) {
             (true, _) => PackingCheckResult::Pack,

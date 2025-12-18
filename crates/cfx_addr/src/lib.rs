@@ -217,5 +217,6 @@ pub fn cfx_addr_decode(
         parsed_address_bytes: body.to_vec(),
         hex_address,
         network,
+        address_type,
     })
 }

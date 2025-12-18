@@ -28,14 +28,18 @@ pub struct TraceHandler {
     pub data_man: Arc<BlockDataManager>,
     pub consensus: SharedConsensusGraph,
     pub network: Network,
+    pub address_verbose_mode: bool,
 }
 
 impl TraceHandler {
-    pub fn new(network: Network, consensus: SharedConsensusGraph) -> Self {
+    pub fn new(
+        network: Network, verbose: bool, consensus: SharedConsensusGraph,
+    ) -> Self {
         TraceHandler {
             data_man: consensus.data_manager().clone(),
             consensus,
             network,
+            address_verbose_mode: verbose,
         }
     }
 
@@ -68,6 +72,7 @@ impl TraceHandler {
                     epoch_number,
                     &block.transactions,
                     self.network,
+                    self.address_verbose_mode,
                 ) {
                     Ok(t) => Ok(Some(t)),
                     Err(e) => bail!(format!(
@@ -87,8 +92,12 @@ impl TraceHandler {
             .filter_traces(filter)?
             .into_iter()
             .map(|trace| {
-                RpcLocalizedTrace::from(trace, self.network)
-                    .expect("Local address conversion should succeed")
+                RpcLocalizedTrace::from(
+                    trace,
+                    self.network,
+                    self.address_verbose_mode,
+                )
+                .expect("Local address conversion should succeed")
             })
             .collect();
         if traces.is_empty() {
@@ -154,8 +163,12 @@ impl TraceHandler {
         let answer = traces
             .into_iter()
             .map(|trace| RpcLocalizedTrace {
-                action: RpcAction::try_from(trace.action, self.network)
-                    .expect("local address convert error"),
+                action: RpcAction::try_from(
+                    trace.action,
+                    self.network,
+                    self.address_verbose_mode,
+                )
+                .expect("local address convert error"),
                 valid: trace.valid,
                 epoch_hash: Some(pivot_hash),
                 epoch_number: Some(epoch_number.into()),
@@ -183,8 +196,12 @@ impl TraceHandler {
             .space_epoch_traces(Space::Native, epoch_hash)?
             .into_iter()
             .map(|trace| {
-                RpcLocalizedTrace::from(trace, self.network)
-                    .expect("Local address conversion should succeed")
+                RpcLocalizedTrace::from(
+                    trace,
+                    self.network,
+                    self.address_verbose_mode,
+                )
+                .expect("Local address conversion should succeed")
             })
             .collect();
 

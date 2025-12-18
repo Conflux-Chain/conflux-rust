@@ -27,10 +27,10 @@ pub struct StorageChange {
 
 impl StorageChange {
     pub fn try_from(
-        sc: PrimitiveStorageChange, network: Network,
+        sc: PrimitiveStorageChange, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         Ok(Self {
-            address: RpcAddress::try_from_h160(sc.address, network)?,
+            address: RpcAddress::try_from_h160(sc.address, network, verbose)?,
             collaterals: sc.collaterals,
         })
     }
@@ -99,7 +99,7 @@ impl Receipt {
         epoch_number: Option<u64>, block_number: u64,
         maybe_base_price: Option<SpaceMap<U256>>,
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
-        network: Network, include_eth_receipt: bool,
+        network: Network, verbose: bool, include_eth_receipt: bool,
         include_accumulated_gas_used: bool,
     ) -> Result<Receipt, String> {
         let PrimitiveReceipt {
@@ -131,6 +131,7 @@ impl Receipt {
                     let address = Some(RpcAddress::try_from_h160(
                         created_address,
                         network,
+                        verbose,
                     )?);
                     (address, unsigned.action().clone(), Space::Native)
                 } else {
@@ -152,6 +153,7 @@ impl Receipt {
                         let address = Some(RpcAddress::try_from_h160(
                             created_address,
                             network,
+                            verbose,
                         )?);
                         (address, unsigned.action().clone(), Space::Ethereum)
                     } else {
@@ -203,12 +205,18 @@ impl Receipt {
             gas_fee: gas_fee.into(),
             burnt_gas_fee: receipt.burnt_gas_fee,
             effective_gas_price,
-            from: RpcAddress::try_from_h160(transaction.sender, network)?,
+            from: RpcAddress::try_from_h160(
+                transaction.sender,
+                network,
+                verbose,
+            )?,
             to: match &action {
                 Action::Create => None,
-                Action::Call(address) => {
-                    Some(RpcAddress::try_from_h160(address.clone(), network)?)
-                }
+                Action::Call(address) => Some(RpcAddress::try_from_h160(
+                    address.clone(),
+                    network,
+                    verbose,
+                )?),
             },
             outcome_status: U64::from(outcome_status.in_space(space)),
             contract_created: address,
@@ -221,7 +229,9 @@ impl Receipt {
                         l.space == Space::Native
                     }
                 })
-                .map(|l| Log::try_from(l, network, include_eth_receipt))
+                .map(|l| {
+                    Log::try_from(l, network, verbose, include_eth_receipt)
+                })
                 .collect::<Result<_, _>>()?,
             logs_bloom: log_bloom,
             state_root: maybe_state_root
@@ -233,7 +243,7 @@ impl Receipt {
             storage_collateralized,
             storage_released: storage_released
                 .into_iter()
-                .map(|sc| StorageChange::try_from(sc, network))
+                .map(|sc| StorageChange::try_from(sc, network, verbose))
                 .collect::<Result<_, _>>()?,
             space: if include_eth_receipt {
                 Some(space)

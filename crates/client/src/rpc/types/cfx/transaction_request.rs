@@ -332,6 +332,7 @@ mod tests {
                 RpcAddress::try_from_h160(
                     H160::from_low_u64_be(1),
                     Network::Main,
+                    true,
                 )
                 .unwrap(),
             ),
@@ -339,6 +340,7 @@ mod tests {
                 RpcAddress::try_from_h160(
                     H160::from_low_u64_be(2),
                     Network::Main,
+                    true,
                 )
                 .unwrap(),
             ),
@@ -373,8 +375,8 @@ mod tests {
     #[test]
     fn call_request_deserialize2() {
         let expected = TransactionRequest {
-            from: Some(RpcAddress::try_from_h160(H160::from_str("160e8dd61c5d32be8058bb8eb970870f07233155").unwrap(),  Network::Main ).unwrap()),
-            to: Some(RpcAddress::try_from_h160(H160::from_str("846e8dd67c5d32be8058bb8eb970870f07244567").unwrap(), Network::Main).unwrap()),
+            from: Some(RpcAddress::try_from_h160(H160::from_str("160e8dd61c5d32be8058bb8eb970870f07233155").unwrap(),  Network::Main, true ).unwrap()),
+            to: Some(RpcAddress::try_from_h160(H160::from_str("846e8dd67c5d32be8058bb8eb970870f07244567").unwrap(), Network::Main, true).unwrap()),
             gas_price: Some(U256::from_str("9184e72a000").unwrap()),
             gas: Some(U256::from_str("76c0").unwrap()),
             value: Some(U256::from_str("9184e72a").unwrap()),
@@ -409,6 +411,7 @@ mod tests {
                 RpcAddress::try_from_h160(
                     H160::from_low_u64_be(1),
                     Network::Main,
+                    true,
                 )
                 .unwrap(),
             ),

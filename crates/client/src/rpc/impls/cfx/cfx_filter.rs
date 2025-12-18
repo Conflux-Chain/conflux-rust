@@ -79,6 +79,7 @@ pub struct CfxFilterClient {
     unfinalized_epochs: Arc<RwLock<UnfinalizedEpochs>>,
     logs_filter_max_limit: Option<usize>,
     network: Network,
+    address_verbose_mode: bool,
 }
 
 pub struct UnfinalizedEpochs {
@@ -101,7 +102,7 @@ impl CfxFilterClient {
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
         epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Arc<Runtime>,
         poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
-        network: Network,
+        network: Network, verbose: bool,
     ) -> Self {
         let filter_client = CfxFilterClient {
             consensus,
@@ -110,6 +111,7 @@ impl CfxFilterClient {
             unfinalized_epochs: Default::default(),
             logs_filter_max_limit,
             network,
+            address_verbose_mode: verbose,
         };
 
         // start loop to receive epochs, to avoid re-org during filter query
@@ -201,7 +203,13 @@ impl Filterable for CfxFilterClient {
         Ok(logs
             .iter()
             .cloned()
-            .map(|l| Log::try_from_localized(l, self.network))
+            .map(|l| {
+                Log::try_from_localized(
+                    l,
+                    self.network,
+                    self.address_verbose_mode,
+                )
+            })
             .collect::<Result<_, _>>()
             .map_err(|_| invalid_params("filter", "retrieve logs error"))?)
     }
@@ -225,7 +233,13 @@ impl Filterable for CfxFilterClient {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| Log::try_from_localized(l, self.network))
+            .map(|l| {
+                Log::try_from_localized(
+                    l,
+                    self.network,
+                    self.address_verbose_mode,
+                )
+            })
             .collect::<Result<_, _>>()
             .map_err(|_| {
                 invalid_params("filter", "retrieve logs for epoch error")

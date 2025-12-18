@@ -246,10 +246,11 @@ mod tests {
 
     #[test]
     fn test_serialize_block_transactions() {
-        let t =
-            BlockTransactions::Full(vec![
-                Transaction::default(Network::Main).unwrap()
-            ]);
+        let t = BlockTransactions::Full(vec![Transaction::default(
+            Network::Main,
+            true,
+        )
+        .unwrap()]);
         let serialized = serde_json::to_string(&t).unwrap();
         assert_eq!(
             serialized,
@@ -273,9 +274,12 @@ mod tests {
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);
 
-        let result_block_transactions = BlockTransactions::Full(vec![
-            Transaction::default(Network::Main).unwrap(),
-        ]);
+        let result_block_transactions =
+            BlockTransactions::Full(vec![Transaction::default(
+                Network::Main,
+                true,
+            )
+            .unwrap()]);
         let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x1","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
@@ -288,7 +292,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: RpcAddress::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main, true).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -325,7 +329,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: RpcAddress::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main, true).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),
@@ -358,7 +362,7 @@ mod tests {
             hash: H256::default(),
             parent_hash: H256::default(),
             height: 0.into(),
-            miner: RpcAddress::null(Network::Main).unwrap(),
+            miner: RpcAddress::null(Network::Main, true).unwrap(),
             deferred_state_root: Default::default(),
             deferred_receipts_root: KECCAK_EMPTY_LIST_RLP.into(),
             deferred_logs_bloom_hash: cfx_types::KECCAK_EMPTY_BLOOM.into(),

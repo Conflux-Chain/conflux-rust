@@ -456,6 +456,7 @@ pub fn initialize_common_modules(
         txpool.clone(),
         accounts.clone(),
         pos_verifier.clone(),
+        conf.rpc_impl_config().address_verbose_mode,
     ));
     let tokio_runtime =
         Arc::new(TokioRuntime::new().map_err(|e| e.to_string())?);
@@ -465,6 +466,7 @@ pub fn initialize_common_modules(
         consensus.clone(),
         notifications.clone(),
         *network.get_network_type(),
+        conf.rpc_impl_config().address_verbose_mode,
     );
 
     Ok((

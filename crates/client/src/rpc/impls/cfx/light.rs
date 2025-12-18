@@ -93,18 +93,22 @@ pub struct RpcImpl {
 
     // helper API for retrieving verified information from peers
     light: Arc<LightQueryService>,
+
+    address_verbose_mode: bool,
 }
 
 impl RpcImpl {
     pub fn new(
         light: Arc<LightQueryService>, accounts: Arc<AccountProvider>,
         consensus: SharedConsensusGraph, data_man: Arc<BlockDataManager>,
+        verbose: bool,
     ) -> Self {
         RpcImpl {
             accounts,
             consensus,
             data_man,
             light,
+            address_verbose_mode: verbose,
         }
     }
 
@@ -153,6 +157,7 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let verbose = self.address_verbose_mode;
 
         let fut = async move {
             Self::check_address_network(address.network, &light)?;
@@ -172,7 +177,7 @@ impl RpcImpl {
                 )),
             )?);
 
-            Ok(RpcAccount::try_from(account, network)?)
+            Ok(RpcAccount::try_from(account, network, verbose)?)
         };
 
         fut.boxed()
@@ -220,6 +225,7 @@ impl RpcImpl {
     ) -> CoreBoxFuture<Option<RpcAddress>> {
         let epoch = num.unwrap_or(EpochNumber::LatestState).into();
         let network = address.network;
+        let verbose = self.address_verbose_mode;
 
         info!(
             "RPC Request: cfx_getAdmin address={:?} epoch={:?}",
@@ -239,9 +245,9 @@ impl RpcImpl {
 
             match account {
                 None => Ok(None),
-                Some(acc) => {
-                    Ok(Some(RpcAddress::try_from_h160(acc.admin, network)?))
-                }
+                Some(acc) => Ok(Some(RpcAddress::try_from_h160(
+                    acc.admin, network, verbose,
+                )?)),
             }
         };
 
@@ -260,6 +266,7 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let verbose = self.address_verbose_mode;
 
         let fut = async move {
             Self::check_address_network(address.network, &light)?;
@@ -271,10 +278,12 @@ impl RpcImpl {
             )?;
 
             match account {
-                None => Ok(SponsorInfo::default(network)?),
-                Some(acc) => {
-                    Ok(SponsorInfo::try_from(acc.sponsor_info, network)?)
-                }
+                None => Ok(SponsorInfo::default(network, verbose)?),
+                Some(acc) => Ok(SponsorInfo::try_from(
+                    acc.sponsor_info,
+                    network,
+                    verbose,
+                )?),
             }
         };
 
@@ -456,6 +465,7 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let verbose = self.address_verbose_mode;
 
         let fut = async move {
             // all addresses specified should be for the correct network
@@ -482,7 +492,11 @@ impl RpcImpl {
             Ok(logs
                 .into_iter()
                 .map(|l| {
-                    RpcLog::try_from_localized(l, *light.get_network_type())
+                    RpcLog::try_from_localized(
+                        l,
+                        *light.get_network_type(),
+                        verbose,
+                    )
                 })
                 .collect::<Result<_, _>>()?)
         };
@@ -645,6 +659,7 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let verbose = self.address_verbose_mode;
 
         let fut = async move {
             let tx = light
@@ -657,6 +672,7 @@ impl RpcImpl {
                 &tx,
                 None,
                 *light.get_network_type(),
+                verbose,
             )?))
         };
 
@@ -671,6 +687,7 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let verbose = self.address_verbose_mode;
         let data_man = self.data_man.clone();
 
         let fut = async move {
@@ -718,6 +735,7 @@ impl RpcImpl {
                 // Can not offer error_message from light node.
                 None,
                 *light.get_network_type(),
+                verbose,
                 false,
                 false,
             )?;
@@ -787,6 +805,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus.clone();
         let data_man = self.data_man.clone();
         let light = self.light.clone();
+        let verbose = self.address_verbose_mode;
 
         let fut = async move {
             let block = match light.retrieve_block(hash).await? {
@@ -799,6 +818,7 @@ impl RpcImpl {
             Ok(Some(build_block(
                 &block,
                 *light.get_network_type(),
+                verbose,
                 &*consensus_graph,
                 &*inner,
                 &data_man,
@@ -826,6 +846,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus.clone();
         let data_man = self.data_man.clone();
         let light = self.light.clone();
+        let verbose = self.address_verbose_mode;
 
         let fut = async move {
             // check pivot assumption
@@ -847,6 +868,7 @@ impl RpcImpl {
             Ok(build_block(
                 &block,
                 *light.get_network_type(),
+                verbose,
                 &*consensus_graph,
                 &*inner,
                 &data_man,
@@ -870,6 +892,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus.clone();
         let data_man = self.data_man.clone();
         let light = self.light.clone();
+        let verbose = self.address_verbose_mode;
 
         let fut = async move {
             let epoch: u64 = light
@@ -895,6 +918,7 @@ impl RpcImpl {
             Ok(Some(build_block(
                 &block,
                 *light.get_network_type(),
+                verbose,
                 &*consensus_graph,
                 &*inner,
                 &data_man,

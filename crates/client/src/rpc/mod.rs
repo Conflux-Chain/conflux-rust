@@ -138,6 +138,7 @@ fn setup_rpc_apis(
                             poll_lifetime,
                             rpc.config.get_logs_filter_max_limit,
                             h.network.clone(),
+                            rpc.config.address_verbose_mode,
                         )
                         .to_delegate();
 
@@ -174,6 +175,7 @@ fn setup_rpc_apis(
             Api::Trace => {
                 let trace = TraceHandler::new(
                     *rpc.sync.network.get_network_type(),
+                    rpc.config.address_verbose_mode,
                     rpc.consensus.clone(),
                 )
                 .to_delegate();
@@ -201,6 +203,7 @@ fn setup_rpc_apis(
                     common.pos_handler.clone(),
                     rpc.consensus.data_manager().clone(),
                     *rpc.sync.network.get_network_type(),
+                    rpc.config.address_verbose_mode,
                     rpc.consensus.clone(),
                 )
                 .to_delegate();

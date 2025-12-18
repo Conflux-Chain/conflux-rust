@@ -74,14 +74,16 @@ pub enum PackedOrExecuted {
 }
 
 impl Transaction {
-    pub fn default(network: Network) -> Result<Transaction, String> {
+    pub fn default(
+        network: Network, verbose: bool,
+    ) -> Result<Transaction, String> {
         Ok(Transaction {
             space: None,
             hash: Default::default(),
             nonce: Default::default(),
             block_hash: Default::default(),
             transaction_index: Default::default(),
-            from: RpcAddress::null(network)?,
+            from: RpcAddress::null(network, verbose)?,
             to: Default::default(),
             value: Default::default(),
             gas_price: Default::default(),
@@ -106,6 +108,7 @@ impl Transaction {
     pub fn from_signed(
         t: &SignedTransaction,
         maybe_packed_or_executed: Option<PackedOrExecuted>, network: Network,
+        verbose: bool,
     ) -> Result<Transaction, String> {
         let mut contract_created = None;
         let mut status: Option<U64> = None;
@@ -146,12 +149,18 @@ impl Transaction {
             transaction_index,
             status,
             contract_created,
-            from: RpcAddress::try_from_h160(t.sender().address, network)?,
+            from: RpcAddress::try_from_h160(
+                t.sender().address,
+                network,
+                verbose,
+            )?,
             to: match t.action() {
                 Action::Create => None,
-                Action::Call(ref address) => {
-                    Some(RpcAddress::try_from_h160(address.clone(), network)?)
-                }
+                Action::Call(ref address) => Some(RpcAddress::try_from_h160(
+                    address.clone(),
+                    network,
+                    verbose,
+                )?),
             },
             value: t.value().into(),
             gas_price: t.gas_price().into(),
@@ -163,7 +172,7 @@ impl Transaction {
             access_list: t
                 .access_list()
                 .cloned()
-                .map(|list| from_primitive_access_list(list, network)),
+                .map(|list| from_primitive_access_list(list, network, verbose)),
             max_fee_per_gas: t.after_1559().then_some(*t.gas_price()),
             max_priority_fee_per_gas: t
                 .after_1559()

@@ -18,4 +18,6 @@ pub struct RpcImplConfiguration {
     pub enable_metrics: bool,
 
     pub poll_lifetime_in_seconds: Option<u32>,
+
+    pub address_verbose_mode: bool,
 }

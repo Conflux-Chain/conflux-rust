@@ -20,9 +20,10 @@ use primitives::{
 use std::sync::Arc;
 
 pub fn build_block(
-    b: &PrimitiveBlock, network: Network, consensus: &ConsensusGraph,
-    consensus_inner: &ConsensusGraphInner, data_man: &Arc<BlockDataManager>,
-    include_txs: bool, tx_space_filter: Option<Space>,
+    b: &PrimitiveBlock, network: Network, verbose: bool,
+    consensus: &ConsensusGraph, consensus_inner: &ConsensusGraphInner,
+    data_man: &Arc<BlockDataManager>, include_txs: bool,
+    tx_space_filter: Option<Space>,
 ) -> Result<Block, String> {
     let block_hash = b.block_header.hash();
 
@@ -142,16 +143,18 @@ pub fn build_block(
                                                         )
                                                     },
                                                     network,
+                                                    verbose,
                                                     false,
                                                     false,
                                                 )?,
                                             )),
                                             network,
+                                            verbose,
                                         )
                                     }
                                     TransactionStatus::Skipped => {
                                         Transaction::from_signed(
-                                            tx, None, network,
+                                            tx, None, network, verbose,
                                         )
                                     }
                                 }
@@ -165,7 +168,9 @@ pub fn build_block(
                             tx_space_filter.is_none()
                                 || tx.space() == tx_space_filter.unwrap()
                         })
-                        .map(|x| Transaction::from_signed(x, None, network))
+                        .map(|x| {
+                            Transaction::from_signed(x, None, network, verbose)
+                        })
                         .collect::<Result<_, _>>()?,
                 };
                 BlockTransactions::Full(tx_vec)
@@ -186,7 +191,11 @@ pub fn build_block(
         hash: H256::from(block_hash),
         parent_hash: H256::from(b.block_header.parent_hash().clone()),
         height: b.block_header.height().into(),
-        miner: RpcAddress::try_from_h160(*b.block_header.author(), network)?,
+        miner: RpcAddress::try_from_h160(
+            *b.block_header.author(),
+            network,
+            verbose,
+        )?,
         deferred_state_root: H256::from(
             b.block_header.deferred_state_root().clone(),
         ),
@@ -235,7 +244,8 @@ pub fn build_block(
 }
 
 pub fn build_header(
-    h: &PrimitiveBlockHeader, network: Network, consensus: SharedConsensusGraph,
+    h: &PrimitiveBlockHeader, network: Network, verbose: bool,
+    consensus: SharedConsensusGraph,
 ) -> Result<Header, String> {
     let hash = h.hash();
 
@@ -256,7 +266,7 @@ pub fn build_header(
         hash: H256::from(hash),
         parent_hash: H256::from(*h.parent_hash()),
         height: h.height().into(),
-        miner: RpcAddress::try_from_h160(*h.author(), network)?,
+        miner: RpcAddress::try_from_h160(*h.author(), network, verbose)?,
         deferred_state_root: H256::from(*h.deferred_state_root()),
         deferred_receipts_root: H256::from(*h.deferred_receipts_root()),
         deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),

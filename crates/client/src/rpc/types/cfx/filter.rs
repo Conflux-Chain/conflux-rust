@@ -273,8 +273,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main, true).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main, true).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -345,8 +345,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main, true).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main, true).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -371,8 +371,8 @@ mod tests {
             to_block: None,
             block_hashes: None,
             address: Some(VariadicValue::Multiple(vec![
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main, true).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main, true).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -416,8 +416,8 @@ mod tests {
             to_block: Some(U64::from(2)),
             block_hashes: None,
             address: Some(VariadicValue::Multiple(vec![
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main, true).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main, true).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -467,8 +467,8 @@ mod tests {
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
             address: Some(VariadicValue::Multiple(vec![
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
-                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main, true).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main, true).unwrap(),
             ])),
             topics: Some(vec![
                 VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
@@ -513,7 +513,7 @@ mod tests {
     fn test_serialize_cfx_filter_log() {
         let mut logs = vec![];
         let log = Log {
-            address: RpcAddress::try_from_h160(H160::from_str("13990122638b9132ca29c723bdf037f1a891a70c").unwrap(), Network::Test).unwrap(),
+            address: RpcAddress::try_from_h160(H160::from_str("13990122638b9132ca29c723bdf037f1a891a70c").unwrap(), Network::Test, true).unwrap(),
             topics: vec![
                 H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
                 H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap(),

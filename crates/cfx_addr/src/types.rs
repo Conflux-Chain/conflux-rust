@@ -37,6 +37,8 @@ pub struct DecodedRawAddress {
     pub hex_address: Option<Address>,
     /// Network
     pub network: Network,
+    /// Address type
+    pub address_type: Option<AddressType>,
 }
 
 #[derive(Copy, Clone)]
@@ -115,7 +117,7 @@ impl fmt::Display for Network {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Copy)]
 pub enum AddressType {
     Builtin,
     Contract,

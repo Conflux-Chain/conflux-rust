@@ -240,6 +240,7 @@ build_config! {
         (public_address, (Option<String>), None)
         (udp_port, (Option<u16>), Some(32323))
         (max_estimation_gas_limit, (Option<u64>), None)
+        (core_space_rpc_address_verbose_mode, (bool), true)
 
         // Network parameters section.
         (blocks_request_timeout_ms, (u64), 20_000)
@@ -1133,6 +1134,10 @@ impl Configuration {
                 .raw_conf
                 .max_estimation_gas_limit
                 .map(U256::from),
+
+            address_verbose_mode: self
+                .raw_conf
+                .core_space_rpc_address_verbose_mode,
         }
     }
 

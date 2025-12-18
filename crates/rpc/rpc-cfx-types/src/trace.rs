@@ -37,27 +37,29 @@ pub enum Action {
 
 impl Action {
     pub fn try_from(
-        action: VmAction, network: Network,
+        action: VmAction, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         Ok(match action {
-            VmAction::Call(x) => Action::Call(Call::try_from(x, network)?),
+            VmAction::Call(x) => {
+                Action::Call(Call::try_from(x, network, verbose)?)
+            }
             VmAction::Create(x) => {
-                Action::Create(Create::try_from(x, network)?)
+                Action::Create(Create::try_from(x, network, verbose)?)
             }
             VmAction::CallResult(x) => Action::CallResult(x.into()),
-            VmAction::CreateResult(x) => {
-                Action::CreateResult(CreateResult::try_from(x, network)?)
-            }
+            VmAction::CreateResult(x) => Action::CreateResult(
+                CreateResult::try_from(x, network, verbose)?,
+            ),
             VmAction::InternalTransferAction(x) => {
                 Action::InternalTransferAction(
-                    InternalTransferAction::try_from(x, network)?,
+                    InternalTransferAction::try_from(x, network, verbose)?,
                 )
             }
             VmAction::SetAuth(action) => {
-                Action::SetAuth(SetAuth::try_from(action, network)?)
+                Action::SetAuth(SetAuth::try_from(action, network, verbose)?)
             }
             VmAction::SelfDestruct(selfdestruct) => Action::SelfDestruct(
-                SelfDestructAction::try_from(selfdestruct, network)?,
+                SelfDestructAction::try_from(selfdestruct, network, verbose)?,
             ),
         })
     }
@@ -92,11 +94,13 @@ pub struct Call {
 }
 
 impl Call {
-    fn try_from(call: VmCall, network: Network) -> Result<Self, String> {
+    fn try_from(
+        call: VmCall, network: Network, verbose: bool,
+    ) -> Result<Self, String> {
         Ok(Self {
             space: call.space,
-            from: RpcAddress::try_from_h160(call.from, network)?,
-            to: RpcAddress::try_from_h160(call.to, network)?,
+            from: RpcAddress::try_from_h160(call.from, network, verbose)?,
+            to: RpcAddress::try_from_h160(call.to, network, verbose)?,
             value: call.value,
             gas: call.gas,
             input: call.input.into(),
@@ -135,10 +139,12 @@ pub struct Create {
 }
 
 impl Create {
-    fn try_from(create: VmCreate, network: Network) -> Result<Self, String> {
+    fn try_from(
+        create: VmCreate, network: Network, verbose: bool,
+    ) -> Result<Self, String> {
         Ok(Self {
             space: create.space,
-            from: RpcAddress::try_from_h160(create.from, network)?,
+            from: RpcAddress::try_from_h160(create.from, network, verbose)?,
             value: create.value,
             gas: create.gas,
             init: create.init.into(),
@@ -158,11 +164,11 @@ pub struct CreateResult {
 
 impl CreateResult {
     fn try_from(
-        result: VmCreateResult, network: Network,
+        result: VmCreateResult, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         Ok(Self {
             outcome: result.outcome,
-            addr: RpcAddress::try_from_h160(result.addr, network)?,
+            addr: RpcAddress::try_from_h160(result.addr, network, verbose)?,
             gas_left: result.gas_left,
             return_data: result.return_data.into(),
         })
@@ -183,18 +189,20 @@ pub struct InternalTransferAction {
 
 impl InternalTransferAction {
     fn try_from(
-        action: VmInternalTransferAction, network: Network,
+        action: VmInternalTransferAction, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         Ok(Self {
             from: RpcAddress::try_from_h160(
                 action.from.inner_address_or_default(),
                 network,
+                verbose,
             )?,
             from_pocket: action.from.pocket().into(),
             from_space: action.from.space().into(),
             to: RpcAddress::try_from_h160(
                 action.to.inner_address_or_default(),
                 network,
+                verbose,
             )?,
             to_pocket: action.to.pocket().into(),
             to_space: action.to.space().into(),
@@ -218,7 +226,9 @@ pub struct SetAuth {
 }
 
 impl SetAuth {
-    fn try_from(action: VmSetAuth, network: Network) -> Result<Self, String> {
+    fn try_from(
+        action: VmSetAuth, network: Network, verbose: bool,
+    ) -> Result<Self, String> {
         let VmSetAuth {
             space,
             address,
@@ -229,12 +239,14 @@ impl SetAuth {
         } = action;
         Ok(Self {
             space,
-            address: RpcAddress::try_from_h160(address, network)?,
+            address: RpcAddress::try_from_h160(address, network, verbose)?,
             chain_id,
             nonce,
             outcome,
             author: match author {
-                Some(a) => Some(RpcAddress::try_from_h160(a, network)?),
+                Some(a) => {
+                    Some(RpcAddress::try_from_h160(a, network, verbose)?)
+                }
                 None => None,
             },
         })
@@ -257,7 +269,7 @@ pub struct SelfDestructAction {
 
 impl SelfDestructAction {
     fn try_from(
-        action: VmSelfDestruction, network: Network,
+        action: VmSelfDestruction, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         let VmSelfDestruction {
             space,
@@ -267,8 +279,12 @@ impl SelfDestructAction {
         } = action;
         Ok(Self {
             space,
-            address: RpcAddress::try_from_h160(address, network)?,
-            refund_address: RpcAddress::try_from_h160(refund_address, network)?,
+            address: RpcAddress::try_from_h160(address, network, verbose)?,
+            refund_address: RpcAddress::try_from_h160(
+                refund_address,
+                network,
+                verbose,
+            )?,
             balance,
         })
     }
@@ -379,10 +395,10 @@ impl Serialize for LocalizedTrace {
 
 impl LocalizedTrace {
     pub fn from(
-        trace: PrimitiveLocalizedTrace, network: Network,
+        trace: PrimitiveLocalizedTrace, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         Ok(LocalizedTrace {
-            action: Action::try_from(trace.action, network)?,
+            action: Action::try_from(trace.action, network, verbose)?,
             epoch_number: Some(trace.epoch_number),
             epoch_hash: Some(trace.epoch_hash),
             block_hash: Some(trace.block_hash),
@@ -396,7 +412,7 @@ impl LocalizedTrace {
 impl LocalizedTransactionTrace {
     pub fn from(
         traces: TransactionExecTraces, transaction_hash: H256,
-        transaction_position: usize, network: Network,
+        transaction_position: usize, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         let traces: Vec<ExecTrace> = traces.into();
 
@@ -405,7 +421,7 @@ impl LocalizedTransactionTrace {
                 .into_iter()
                 .map(|t| {
                     let valid = t.valid;
-                    Action::try_from(t.action, network).map(|action| {
+                    Action::try_from(t.action, network, verbose).map(|action| {
                         LocalizedTrace {
                             action,
                             valid,
@@ -431,7 +447,7 @@ impl LocalizedBlockTrace {
     pub fn from(
         traces: BlockExecTraces, block_hash: H256, epoch_hash: H256,
         epoch_number: u64, transactions: &Vec<Arc<SignedTransaction>>,
-        network: Network,
+        network: Network, verbose: bool,
     ) -> Result<Self, String> {
         let traces: Vec<TransactionExecTraces> = traces.into();
         if traces.len() != transactions.len() {
@@ -446,7 +462,9 @@ impl LocalizedBlockTrace {
             })
             .enumerate()
             .map(|(rpc_index, (tx_hash, t))| {
-                LocalizedTransactionTrace::from(t, tx_hash, rpc_index, network)
+                LocalizedTransactionTrace::from(
+                    t, tx_hash, rpc_index, network, verbose,
+                )
             })
             .collect::<Result<_, _>>()?;
 

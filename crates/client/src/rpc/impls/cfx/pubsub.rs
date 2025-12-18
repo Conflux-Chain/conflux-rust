@@ -57,7 +57,7 @@ impl PubSubClient {
     /// Creates new `PubSubClient`.
     pub fn new(
         executor: Arc<Runtime>, consensus: SharedConsensusGraph,
-        notifications: Arc<Notifications>, network: Network,
+        notifications: Arc<Notifications>, network: Network, verbose: bool,
     ) -> Self {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
         let epochs_subscribers = Arc::new(RwLock::new(Subscribers::default()));
@@ -67,6 +67,7 @@ impl PubSubClient {
             consensus: consensus.clone(),
             data_man: consensus.data_manager().clone(),
             network,
+            address_verbose_mode: verbose,
         });
 
         PubSubClient {
@@ -297,12 +298,18 @@ pub struct ChainNotificationHandler {
     consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
     pub network: Network,
+    pub address_verbose_mode: bool,
 }
 
 impl ChainNotificationHandler {
     fn get_header_by_hash(&self, hash: &H256) -> Result<RpcHeader, String> {
         let header = match self.data_man.block_header_by_hash(hash) {
-            Some(h) => build_header(&*h, self.network, self.consensus.clone()),
+            Some(h) => build_header(
+                &*h,
+                self.network,
+                self.address_verbose_mode,
+                self.consensus.clone(),
+            ),
             None => return Err("Header not found".to_string()),
         };
 
@@ -355,7 +362,13 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| RpcLog::try_from_localized(l, self.network));
+            .map(|l| {
+                RpcLog::try_from_localized(
+                    l,
+                    self.network,
+                    self.address_verbose_mode,
+                )
+            });
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.

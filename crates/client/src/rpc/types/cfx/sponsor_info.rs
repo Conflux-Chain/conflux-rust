@@ -29,10 +29,10 @@ pub struct SponsorInfo {
 }
 
 impl SponsorInfo {
-    pub fn default(network: Network) -> Result<Self, String> {
+    pub fn default(network: Network, verbose: bool) -> Result<Self, String> {
         Ok(Self {
-            sponsor_for_gas: RpcAddress::null(network)?,
-            sponsor_for_collateral: RpcAddress::null(network)?,
+            sponsor_for_gas: RpcAddress::null(network, verbose)?,
+            sponsor_for_collateral: RpcAddress::null(network, verbose)?,
             sponsor_gas_bound: Default::default(),
             sponsor_balance_for_gas: Default::default(),
             sponsor_balance_for_collateral: Default::default(),
@@ -42,16 +42,18 @@ impl SponsorInfo {
     }
 
     pub fn try_from(
-        sponsor_info: PrimitiveSponsorInfo, network: Network,
+        sponsor_info: PrimitiveSponsorInfo, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         Ok(Self {
             sponsor_for_gas: RpcAddress::try_from_h160(
                 sponsor_info.sponsor_for_gas,
                 network,
+                verbose,
             )?,
             sponsor_for_collateral: RpcAddress::try_from_h160(
                 sponsor_info.sponsor_for_collateral,
                 network,
+                verbose,
             )?,
             sponsor_gas_bound: sponsor_info.sponsor_gas_bound,
             sponsor_balance_for_gas: sponsor_info.sponsor_balance_for_gas,

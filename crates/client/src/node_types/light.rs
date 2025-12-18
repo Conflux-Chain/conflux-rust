@@ -93,6 +93,7 @@ impl LightClient {
             accounts,
             consensus.clone(),
             data_man.clone(),
+            conf.rpc_impl_config().address_verbose_mode,
         ));
 
         let debug_rpc_http_server = crate::rpc::start_http(

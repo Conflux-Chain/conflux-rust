@@ -24,7 +24,7 @@ pub struct Account {
 
 impl Account {
     pub fn try_from(
-        account: PrimitiveAccount, network: Network,
+        account: PrimitiveAccount, network: Network, verbose: bool,
     ) -> Result<Self, String> {
         let collateral_for_storage = account.collateral_for_storage
             + account
@@ -36,6 +36,7 @@ impl Account {
             address: RpcAddress::try_from_h160(
                 account.address().address,
                 network,
+                verbose,
             )?,
             balance: account.balance.into(),
             nonce: account.nonce.into(),
@@ -45,7 +46,7 @@ impl Account {
             accumulated_interest_return: account
                 .accumulated_interest_return
                 .into(),
-            admin: RpcAddress::try_from_h160(account.admin, network)?,
+            admin: RpcAddress::try_from_h160(account.admin, network, verbose)?,
         })
     }
 }

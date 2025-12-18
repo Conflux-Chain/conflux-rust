@@ -51,10 +51,14 @@ pub struct Log {
 
 impl Log {
     pub fn try_from_localized(
-        e: LocalizedLogEntry, network: Network,
+        e: LocalizedLogEntry, network: Network, verbose: bool,
     ) -> Result<Log, String> {
         Ok(Log {
-            address: RpcAddress::try_from_h160(e.entry.address, network)?,
+            address: RpcAddress::try_from_h160(
+                e.entry.address,
+                network,
+                verbose,
+            )?,
             topics: e.entry.topics.into_iter().map(Into::into).collect(),
             data: e.entry.data.into(),
             block_hash: Some(e.block_hash.into()),
@@ -68,10 +72,10 @@ impl Log {
     }
 
     pub fn try_from(
-        e: LogEntry, network: Network, include_space: bool,
+        e: LogEntry, network: Network, verbose: bool, include_space: bool,
     ) -> Result<Log, String> {
         Ok(Log {
-            address: RpcAddress::try_from_h160(e.address, network)?,
+            address: RpcAddress::try_from_h160(e.address, network, verbose)?,
             topics: e.topics.into_iter().map(Into::into).collect(),
             data: e.data.into(),
             block_hash: None,
@@ -98,7 +102,7 @@ mod tests {
         let s = r#"{"address":"CFXTEST:TYPE.USER:AAK3WAKCPSF3CP0MFHDWHTTUG924VERHBUV9NMM3YC","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1","space":"evm"}"#;
 
         let log = Log {
-            address: RpcAddress::try_from_h160(H160::from_str("13990122638b9132ca29c723bdf037f1a891a70c").unwrap(), Network::Test).unwrap(),
+            address: RpcAddress::try_from_h160(H160::from_str("13990122638b9132ca29c723bdf037f1a891a70c").unwrap(), Network::Test, true).unwrap(),
             topics: vec![
                 H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
                 H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap(),

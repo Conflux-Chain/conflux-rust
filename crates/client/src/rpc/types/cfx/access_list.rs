@@ -28,11 +28,12 @@ pub fn to_primitive_access_list(list: CfxAccessList) -> AccessList {
 }
 
 pub fn from_primitive_access_list(
-    list: AccessList, network: Network,
+    list: AccessList, network: Network, verbose: bool,
 ) -> CfxAccessList {
     list.into_iter()
         .map(|item| CfxAccessListItem {
-            address: RpcAddress::try_from_h160(item.address, network).unwrap(),
+            address: RpcAddress::try_from_h160(item.address, network, verbose)
+                .unwrap(),
             storage_keys: item.storage_keys,
         })
         .collect()

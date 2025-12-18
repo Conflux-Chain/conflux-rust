@@ -26,9 +26,11 @@ pub struct TraceHandler {
 }
 
 impl TraceHandler {
-    pub fn new(network: Network, consensus: SharedConsensusGraph) -> Self {
+    pub fn new(
+        network: Network, verbose: bool, consensus: SharedConsensusGraph,
+    ) -> Self {
         TraceHandler {
-            inner: CfxTraceHandler::new(network, consensus),
+            inner: CfxTraceHandler::new(network, verbose, consensus),
         }
     }
 }

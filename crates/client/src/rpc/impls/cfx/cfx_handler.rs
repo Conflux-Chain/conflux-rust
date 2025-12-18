@@ -269,9 +269,11 @@ impl RpcImpl {
 
         match state_db.get_account(&address.hex_address.with_native_space())? {
             None => Ok(None),
-            Some(acc) => {
-                Ok(Some(RpcAddress::try_from_h160(acc.admin, network)?))
-            }
+            Some(acc) => Ok(Some(RpcAddress::try_from_h160(
+                acc.admin,
+                network,
+                self.config.address_verbose_mode,
+            )?)),
         }
     }
 
@@ -292,8 +294,15 @@ impl RpcImpl {
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         match state_db.get_account(&address.hex_address.with_native_space())? {
-            None => Ok(SponsorInfo::default(network)?),
-            Some(acc) => Ok(SponsorInfo::try_from(acc.sponsor_info, network)?),
+            None => Ok(SponsorInfo::default(
+                network,
+                self.config.address_verbose_mode,
+            )?),
+            Some(acc) => Ok(SponsorInfo::try_from(
+                acc.sponsor_info,
+                network,
+                self.config.address_verbose_mode,
+            )?),
         }
     }
 
@@ -417,7 +426,11 @@ impl RpcImpl {
                 )?,
             };
 
-        Ok(RpcAccount::try_from(account, network)?)
+        Ok(RpcAccount::try_from(
+            account,
+            network,
+            self.config.address_verbose_mode,
+        )?)
     }
 
     /// Returns interest rate of the given epoch
@@ -750,6 +763,7 @@ impl RpcImpl {
                         maybe_state_root,
                         tx_exec_error_msg,
                         *self.sync.network.get_network_type(),
+                        self.config.address_verbose_mode,
                         false,
                         false,
                     )?)
@@ -759,6 +773,7 @@ impl RpcImpl {
                 &tx,
                 Some(packed_or_executed),
                 *self.sync.network.get_network_type(),
+                self.config.address_verbose_mode,
             )?;
 
             return Ok(Some(rpc_tx));
@@ -773,6 +788,7 @@ impl RpcImpl {
                 &tx,
                 None,
                 *self.sync.network.get_network_type(),
+                self.config.address_verbose_mode,
             )?;
             return Ok(Some(rpc_tx));
         }
@@ -882,6 +898,7 @@ impl RpcImpl {
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
+            self.config.address_verbose_mode,
             include_eth_receipt,
             include_accumulated_gas_used,
         )?;
@@ -1187,6 +1204,7 @@ impl RpcImpl {
                 RpcLog::try_from_localized(
                     l,
                     *self.sync.network.get_network_type(),
+                    self.config.address_verbose_mode,
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -1247,6 +1265,7 @@ impl RpcImpl {
                     let author = RpcAddress::try_from_h160(
                         *block_header.author(),
                         *self.sync.network.get_network_type(),
+                        self.config.address_verbose_mode,
                     )?;
 
                     ret.push(RpcRewardInfo::new(b, author, reward_result));
@@ -1361,9 +1380,13 @@ impl RpcImpl {
                 let network_type = *self.sync.network.get_network_type();
                 let (revert_error, innermost_error, errors) =
                     decode_error(&executed, |addr| {
-                        RpcAddress::try_from_h160(addr.clone(), network_type)
-                            .unwrap()
-                            .base32_address
+                        RpcAddress::try_from_h160(
+                            addr.clone(),
+                            network_type,
+                            self.config.address_verbose_mode,
+                        )
+                        .unwrap()
+                        .base32_address
                     });
 
                 bail!(call_execution_error(
@@ -2118,7 +2141,12 @@ impl RpcImpl {
 
         let make_cfx_wrap_tx = |tx| -> Result<WrapTransaction, String> {
             Ok(WrapTransaction::NativeTransaction(
-                RpcTransaction::from_signed(tx, None, network)?,
+                RpcTransaction::from_signed(
+                    tx,
+                    None,
+                    network,
+                    self.config.address_verbose_mode,
+                )?,
             ))
         };
 
@@ -2178,7 +2206,12 @@ impl RpcImpl {
             if receipt.outcome_status == TransactionStatus::Skipped {
                 cfx_transaction_index += 1;
                 return Ok(WrapTransaction::NativeTransaction(
-                    RpcTransaction::from_signed(tx, None, network)?,
+                    RpcTransaction::from_signed(
+                        tx,
+                        None,
+                        network,
+                        self.config.address_verbose_mode,
+                    )?,
                 ));
             }
 
@@ -2206,13 +2239,19 @@ impl RpcImpl {
                     Some(tx_exec_error_msg.clone())
                 },
                 network,
+                self.config.address_verbose_mode,
                 false,
                 false,
             )?;
             cfx_transaction_index += 1;
             let executed = Some(PackedOrExecuted::Executed(receipt));
             Ok(WrapTransaction::NativeTransaction(
-                RpcTransaction::from_signed(tx, executed, network)?,
+                RpcTransaction::from_signed(
+                    tx,
+                    executed,
+                    network,
+                    self.config.address_verbose_mode,
+                )?,
             ))
         };
 

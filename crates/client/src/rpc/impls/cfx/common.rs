@@ -162,6 +162,7 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
     pub pos_handler: Arc<PosVerifier>,
+    address_verbose_mode: bool,
 }
 
 impl RpcImpl {
@@ -169,6 +170,7 @@ impl RpcImpl {
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
+        verbose: bool,
     ) -> Self {
         let data_man = consensus.data_manager().clone();
 
@@ -180,6 +182,7 @@ impl RpcImpl {
             tx_pool,
             accounts,
             pos_handler: pos_verifier,
+            address_verbose_mode: verbose,
         }
     }
 
@@ -252,6 +255,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(build_block(
                 &*b,
                 *self.network.get_network_type(),
+                self.address_verbose_mode,
                 consensus_graph,
                 inner,
                 &self.data_man,
@@ -326,6 +330,7 @@ impl RpcImpl {
                 let reward_info: PoSEpochReward = convert_to_pos_epoch_reward(
                     epoch_rewards,
                     *self.network.get_network_type(),
+                    self.address_verbose_mode,
                 )
                 .map_err(|_| RpcError::internal_error())?;
                 Ok(Some(reward_info))
@@ -379,6 +384,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(build_block(
                 &*b,
                 *self.network.get_network_type(),
+                self.address_verbose_mode,
                 consensus_graph,
                 inner,
                 &self.data_man,
@@ -432,6 +438,7 @@ impl RpcImpl {
         Ok(build_block(
             &*block,
             *self.network.get_network_type(),
+            self.address_verbose_mode,
             consensus_graph,
             inner,
             &self.data_man,
@@ -470,6 +477,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(build_block(
                 &*b,
                 *self.network.get_network_type(),
+                self.address_verbose_mode,
                 consensus_graph,
                 inner,
                 &self.data_man,
@@ -687,6 +695,7 @@ impl RpcImpl {
             build_block(
                 &*block,
                 *self.network.get_network_type(),
+                self.address_verbose_mode,
                 consensus_graph,
                 inner,
                 &self.data_man,
@@ -1140,6 +1149,7 @@ impl RpcImpl {
                     &tx,
                     None,
                     *self.network.get_network_type(),
+                    self.address_verbose_mode,
                 )
             };
         let result = ready_txs
@@ -1164,6 +1174,7 @@ impl RpcImpl {
                     &tx,
                     None,
                     *self.network.get_network_type(),
+                    self.address_verbose_mode,
                 )
                 .unwrap() // TODO check the unwrap()
             });
@@ -1190,7 +1201,7 @@ impl RpcImpl {
             .tx_pool
             .content(address.map(AddressSpaceUtil::with_native_space));
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
-            RpcTransaction::from_signed(&tx, None, *self.network.get_network_type())
+            RpcTransaction::from_signed(&tx, None, *self.network.get_network_type(), self.address_verbose_mode)
                 .expect("transaction conversion with correct network id should not fail")
         };
 
@@ -1268,6 +1279,7 @@ impl RpcImpl {
                 RpcAddress::try_from_h160(
                     addr,
                     *self.network.get_network_type(),
+                    self.address_verbose_mode,
                 )
             })
             .collect::<Result<_, _>>()?)
@@ -1282,6 +1294,7 @@ impl RpcImpl {
         Ok(RpcAddress::try_from_h160(
             address,
             *self.network.get_network_type(),
+            self.address_verbose_mode,
         )?)
     }
 
@@ -1448,6 +1461,7 @@ impl RpcImpl {
                         &tx,
                         None,
                         *self.network.get_network_type(),
+                        self.address_verbose_mode,
                     )
                 })
                 .collect::<Result<Vec<RpcTransaction>, String>>()?,

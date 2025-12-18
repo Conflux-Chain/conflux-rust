@@ -74,18 +74,20 @@ pub struct PosHandler {
     pos_handler: Arc<PosVerifier>,
     pow_data_manager: Arc<BlockDataManager>,
     network_type: Network,
+    address_verbose_mode: bool,
     consensus: SharedConsensusGraph,
 }
 
 impl PosHandler {
     pub fn new(
         pos_handler: Arc<PosVerifier>, pow_data_manager: Arc<BlockDataManager>,
-        network_type: Network, consensus: SharedConsensusGraph,
+        network_type: Network, verbose: bool, consensus: SharedConsensusGraph,
     ) -> Self {
         PosHandler {
             pos_handler,
             pow_data_manager,
             network_type,
+            address_verbose_mode: verbose,
             consensus,
         }
     }
@@ -699,7 +701,12 @@ impl Pos for PosHandler {
             .pow_data_manager
             .pos_reward_by_pos_epoch(epoch.as_u64())
             .map(|reward_info| {
-                convert_to_pos_epoch_reward(reward_info, self.network_type).ok()
+                convert_to_pos_epoch_reward(
+                    reward_info,
+                    self.network_type,
+                    self.address_verbose_mode,
+                )
+                .ok()
             })
             .unwrap_or(None);
         Ok(reward)
@@ -707,7 +714,7 @@ impl Pos for PosHandler {
 }
 
 pub fn convert_to_pos_epoch_reward(
-    reward: PosRewardInfo, network_type: Network,
+    reward: PosRewardInfo, network_type: Network, verbose: bool,
 ) -> Result<PoSEpochReward, String> {
     let default_value = U256::from(0);
     let mut account_reward_map = HashMap::new();
@@ -718,7 +725,8 @@ pub fn convert_to_pos_epoch_reward(
         let merged_reward = r.reward + r1;
         account_reward_map.insert(key, merged_reward);
 
-        let rpc_address = RpcAddress::try_from_h160(r.address, network_type)?;
+        let rpc_address =
+            RpcAddress::try_from_h160(r.address, network_type, verbose)?;
         account_address_map.insert(key, rpc_address);
     }
     let account_rewards = account_reward_map
