@@ -189,11 +189,6 @@ fn handle_sub_command(matches: &ArgMatches) -> Result<Option<String>, String> {
 fn setup_logger(conf: &Configuration) -> Result<(), String> {
     match conf.raw_conf.log_conf {
         Some(ref log_conf) => {
-            if !std::path::Path::new(log_conf).exists() {
-                std::fs::File::create(log_conf).map_err(|e| {
-                    format!("failed to create log config file: {:?}", e)
-                })?;
-            }
             log4rs::init_file(log_conf, Default::default()).map_err(|e| {
                 format!(
                     "failed to initialize log with log config file: {:?}",
