@@ -118,7 +118,7 @@ impl<NodeRefT: 'static + NodeRefTrait> VanillaChildrenTable<NodeRefT> {
         self.table.get_unchecked_mut(child_index as usize)
     }
 
-    pub fn iter(&self) -> VanillaChildrenTableIterator<NodeRefT> {
+    pub fn iter(&self) -> VanillaChildrenTableIterator<'_, NodeRefT> {
         VanillaChildrenTableIterator {
             next_child_index: 0,
             table: &self.table,
@@ -436,7 +436,7 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
         }
     }
 
-    pub fn to_ref(&self) -> ChildrenTableRef<NodeRefT> {
+    pub fn to_ref(&self) -> ChildrenTableRef<'_, NodeRefT> {
         debug_assert!(!self.table_ptr.is_null() || self.children_count == 0);
         ChildrenTableRef {
             table: unsafe {
@@ -497,7 +497,7 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
 }
 
 impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
-    pub fn iter(&self) -> CompactedChildrenTableIterator<NodeRefT> {
+    pub fn iter(&self) -> CompactedChildrenTableIterator<'_, NodeRefT> {
         CompactedChildrenTableIterator {
             elements: self.table_ptr,
             bitmap: self.bitmap,
@@ -505,7 +505,9 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
         }
     }
 
-    pub fn iter_mut(&mut self) -> CompactedChildrenTableIteratorMut<NodeRefT> {
+    pub fn iter_mut(
+        &mut self,
+    ) -> CompactedChildrenTableIteratorMut<'_, NodeRefT> {
         CompactedChildrenTableIteratorMut {
             elements: self.table_ptr,
             bitmap: self.bitmap,
@@ -515,7 +517,7 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
 
     pub fn iter_non_skip(
         &self,
-    ) -> CompactedChildrenTableIteratorNonSkip<NodeRefT> {
+    ) -> CompactedChildrenTableIteratorNonSkip<'_, NodeRefT> {
         CompactedChildrenTableIteratorNonSkip {
             next_child_index: 0,
             elements: self.table_ptr,
@@ -526,7 +528,7 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
 
     pub fn iter_non_skip_mut(
         &mut self,
-    ) -> CompactedChildrenTableIteratorNonSkipMut<NodeRefT> {
+    ) -> CompactedChildrenTableIteratorNonSkipMut<'_, NodeRefT> {
         CompactedChildrenTableIteratorNonSkipMut {
             next_child_index: 0,
             elements: self.table_ptr,

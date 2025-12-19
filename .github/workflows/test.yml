@@ -1,7 +1,7 @@
 name: Tests
 
 env:
-  RUST_VERSION: 1.86.0
+  RUST_VERSION: 1.90.0
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
 
@@ -96,7 +96,7 @@ jobs:
         env:
           RUSTFLAGS: -D warnings
         run: |
-          cargo install cargo-nextest --version "0.9.85" --locked
+          cargo install cargo-nextest --version "0.9.104" --locked
           cargo nextest run --no-fail-fast --release --workspace
 
   cfx-addr-tests:

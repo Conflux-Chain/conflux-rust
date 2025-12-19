@@ -31,4 +31,8 @@ impl PackingPoolTransaction for MockTransaction {
     fn gas_price(&self) -> cfx_types::U256 { self.gas_price.into() }
 
     fn gas_limit(&self) -> cfx_types::U256 { self.gas_limit.into() }
+
+    fn hash(&self) -> cfx_types::H256 {
+        cfx_types::H256::from_low_u64_be(self.id as u64)
+    }
 }

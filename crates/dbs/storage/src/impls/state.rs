@@ -312,6 +312,17 @@ impl StateTrait for State {
         self.delete_all_impl::<access_mode::Read>(access_key_prefix)
     }
 
+    fn read_all_with_callback(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+        callback: &mut dyn FnMut(MptKeyValue), only_account_key: bool,
+    ) -> Result<()> {
+        self.read_all_with_callback_impl(
+            access_key_prefix,
+            callback,
+            only_account_key,
+        )
+    }
+
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
         self.ensure_temp_slab_for_db_load();
 
@@ -907,6 +918,14 @@ impl State {
             snapshot_kvs.push((key, value));
         }
 
+        let is_address_search_prefix =
+            if let StorageKey::AddressPrefixKey(prefix) = access_key_prefix.key
+            {
+                Some(prefix)
+            } else {
+                None
+            };
+
         let mut result = Vec::new();
         // This is used to keep track of the deleted keys.
         let mut deleted_keys = HashSet::new();
@@ -914,6 +933,15 @@ impl State {
             for (k, v) in kvs {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
                 let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        continue;
+                    }
+                }
+
                 deleted_keys.insert(k.clone());
                 if v.len() > 0 {
                     result.push((k, v));
@@ -924,11 +952,21 @@ impl State {
         if let Some(kvs) = intermediate_trie_kvs {
             for (k, v) in kvs {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        continue;
+                    }
+                }
+
                 // Only delete non-empty keys.
                 if v.len() > 0 && !AM::READ_ONLY {
                     self.delete(storage_key)?;
                 }
-                let k = storage_key.to_key_bytes();
+
                 if !deleted_keys.contains(&k) {
                     deleted_keys.insert(k.clone());
                     if v.len() > 0 {
@@ -956,6 +994,121 @@ impl State {
         } else {
             Ok(Some(result))
         }
+    }
+
+    pub fn read_all_with_callback_impl(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+        callback: &mut dyn FnMut(MptKeyValue), only_account_key: bool,
+    ) -> Result<()> {
+        self.ensure_temp_slab_for_db_load();
+
+        let is_address_search_prefix =
+            if let StorageKey::AddressPrefixKey(prefix) = access_key_prefix.key
+            {
+                Some(prefix)
+            } else {
+                None
+            };
+
+        // This is used to keep track of the deleted keys.
+        let mut deleted_keys = HashSet::new();
+
+        // Retrieve and delete key/value pairs from delta trie
+        if let Some(old_root_node) = &self.delta_trie_root {
+            let mut inner_callback = |(k, v): MptKeyValue| {
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        return;
+                    }
+                }
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    callback((k, v));
+                }
+            };
+            let delta_mpt_key_prefix = access_key_prefix
+                .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
+            SubTrieVisitor::new(
+                &self.delta_trie,
+                old_root_node.clone(),
+                &mut self.owned_node_set,
+            )?
+            .traversal_with_callback(
+                &delta_mpt_key_prefix,
+                &delta_mpt_key_prefix,
+                &mut inner_callback,
+                true,
+                only_account_key,
+            )?;
+        };
+
+        // Retrieve key/value pairs from intermediate trie
+        if let Some(root_node) = &self.intermediate_trie_root {
+            let mut inner_callback = |(k, v): MptKeyValue| {
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+
+                // If it's an address search prefix, and k is not start with
+                // prefix, skip the key.
+                if let Some(prefix) = is_address_search_prefix {
+                    if !k.starts_with(prefix) {
+                        return;
+                    }
+                }
+
+                if !deleted_keys.contains(&k) {
+                    deleted_keys.insert(k.clone());
+                    if v.len() > 0 {
+                        callback((k, v));
+                    }
+                }
+            };
+            if self.maybe_intermediate_trie_key_padding.is_some()
+                && self.maybe_intermediate_trie.is_some()
+            {
+                let intermediate_trie_key_padding =
+                    self.maybe_intermediate_trie_key_padding.as_ref().unwrap();
+                let intermediate_mpt_key_prefix = access_key_prefix
+                    .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
+                SubTrieVisitor::new(
+                    self.maybe_intermediate_trie.as_ref().unwrap(),
+                    root_node.clone(),
+                    &mut self.owned_node_set,
+                )?
+                .traversal_with_callback(
+                    &intermediate_mpt_key_prefix,
+                    &intermediate_mpt_key_prefix,
+                    &mut inner_callback,
+                    true,
+                    only_account_key,
+                )?;
+            }
+        }
+
+        // Retrieve key/value pairs from snapshot
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
+        let lower_bound_incl = access_key_prefix.to_key_bytes();
+        let upper_bound_excl =
+            to_key_prefix_iter_upper_bound(&lower_bound_incl);
+        let mut kvs = kv_iterator
+            .iter_range(
+                lower_bound_incl.as_slice(),
+                upper_bound_excl.as_ref().map(|v| &**v),
+            )?
+            .take();
+
+        while let Some((k, v)) = kvs.next()? {
+            if !deleted_keys.contains(&k) {
+                callback((k, v));
+            }
+        }
+
+        Ok(())
     }
 }
 
